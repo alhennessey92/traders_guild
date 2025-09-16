@@ -9,13 +9,24 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, Al!")
+        ZStack {
+            LinearGradient(
+                colors: [Color.tgGradientBackground1, Color.tgGradientBackground2],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea() // Optional: make it fill the screen
+
+            VStack {
+                Text("Traders Guild!")
+                    .font(.largeTitle)
+                    .foregroundColor(.white)
+                    .bold()
+            }
+            
+            
         }
-        .padding()
+        
     }
 }
 
