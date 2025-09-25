@@ -10,8 +10,6 @@
 // I have commented the fade animation for dev
 // v43 claude code is best so far
 
-
-
 import SwiftUI
 
 // MARK: - Constants
@@ -20,9 +18,6 @@ enum LayoutConstants {
     static let drawerWidthRatio: CGFloat = 0.8              // Drawer width as % of screen width (80%)
     static let dragThreshold: CGFloat = 50                   // General drag threshold for gestures
     static let drawerDismissThreshold: CGFloat = 100         // How far user must drag to dismiss drawer
-    static let bottomSheetMinRatio: CGFloat = 0.1            // Bottom sheet minimum height (10% of screen)
-    static let bottomSheetMidRatio: CGFloat = 0.4            // Bottom sheet middle position (40% of screen)
-    static let bottomSheetMaxRatio: CGFloat = 0.7            // Bottom sheet maximum height (70% of screen)
     static let overlayOpacity: CGFloat = 0.4                 // Darkness of overlay behind drawers
     static let topBarOpacity: CGFloat = 0.8                  // Opacity of top navigation bar
     static let cornerRadius: CGFloat = 20                    // Standard corner radius for rounded elements
@@ -36,7 +31,7 @@ enum AnimationConstants {
 }
 
 // MARK: - RootView
-// Main container view that manages the entire app layout including drawers, charts, and bottom sheet
+// Main container view that manages the entire app layout including drawers and charts
 struct RootView: View {
     // Environment object for session management across the app
     @EnvironmentObject var session: SessionStore
@@ -54,10 +49,11 @@ struct RootView: View {
     // Chart and content state
     @State private var selectedSymbol: String = "AAPL"       // Currently selected stock symbol
     
-    // Bottom sheet state management
-    @State private var bottomSheetOffset: CGFloat = 0        // Current vertical position of bottom sheet
-    @State private var isBottomSheetInitialized: Bool = false // Prevents re-initialization on view updates
-    @GestureState private var dragOffset: CGFloat = 0        // Temporary drag offset for bottom sheet (auto-resets)
+    // Bottom sheet state management - using native .sheet()
+    @State private var showBottomSheet: Bool = false         // Controls native bottom sheet visibility (starts hidden for entrance animation)
+    @State private var hasAppeared: Bool = false             // Track if view has appeared for entrance animation
+    @State private var fadeIn: Bool = false                  // Controls elegant fade-in animation on first app launch
+    @State private var bottomSheetBounce: Bool = false       // Controls bottom sheet bounce animation when returning from background
     
     // Stock symbols array - could be moved to SessionStore for dynamic data
     let symbols: [String] = ["AAPL", "TSLA", "GOOG", "MSFT", "AMZN", "NVDA", "META", "NFLX"]
@@ -73,69 +69,84 @@ struct RootView: View {
         screenSize.width * LayoutConstants.drawerWidthRatio
     }
     
-    // Bottom sheet position calculations based on screen height and predefined ratios
-    private func bottomSheetMinOffset(for height: CGFloat) -> CGFloat {
-        height * LayoutConstants.bottomSheetMinRatio
-    }
-    private func bottomSheetMidOffset(for height: CGFloat) -> CGFloat {
-        height * LayoutConstants.bottomSheetMidRatio
-    }
-    private func bottomSheetMaxOffset(for height: CGFloat) -> CGFloat {
-        height * LayoutConstants.bottomSheetMaxRatio
-    }
-    
     // MARK: - Body
     var body: some View {
-        // GeometryReader provides access to parent size for responsive layout
-        GeometryReader { geo in
-            // Calculate bottom sheet positions based on current geometry
-            let minOffset = bottomSheetMinOffset(for: geo.size.height)
-            let midOffset = bottomSheetMidOffset(for: geo.size.height)
-            let maxOffset = bottomSheetMaxOffset(for: geo.size.height)
+        // ZStack layers all UI elements with proper z-ordering
+        ZStack {
+            // MARK: - Background Layer
+            backgroundGradient
             
-            // ZStack layers all UI elements with proper z-ordering
-            ZStack {
-                // MARK: - Background Layer
-                backgroundGradient
-                
-                // MARK: - Main Content Layer
-                // Disable interaction when drawers are open to prevent conflicts
-                mainContentStack(minOffset: minOffset, midOffset: midOffset, maxOffset: maxOffset)
-                    .disabled(showLeftDrawer || showRightDrawer)
-                
-                // MARK: - Overlay Layer
-                // Semi-transparent overlay that appears behind open drawers
-                // Separate state allows for smooth fade-out animation
-                if showOverlay {
-                    overlayView
-                        .opacity(showLeftDrawer || showRightDrawer ? 1 : 0)           // Animate opacity based on drawer state
-                        .animation(.easeOut(duration: 0.4), value: showLeftDrawer)    // Smooth fade animation for left drawer
-                        .animation(.easeOut(duration: 0.4), value: showRightDrawer)   // Smooth fade animation for right drawer
-                        .gesture(
-                            // Allow dragging from anywhere on the overlay to dismiss drawers
-                            DragGesture()
-                                .onChanged { value in
-                                    // Update drag translation based on which drawer is open and drag direction
-                                    if showLeftDrawer && value.translation.width < 0 {
-                                        leftDragTranslation = value.translation.width
-                                    } else if showRightDrawer && value.translation.width > 0 {
-                                        rightDragTranslation = value.translation.width
-                                    }
+            // MARK: - Main Content Layer
+            // Disable interaction when drawers are open to prevent conflicts
+            mainContentStack
+                .disabled(showLeftDrawer || showRightDrawer)
+            
+            // MARK: - Overlay Layer
+            // Semi-transparent overlay that appears behind open drawers
+            if showOverlay {
+                overlayView
+                    .opacity(showLeftDrawer || showRightDrawer ? 1 : 0)           // Animate opacity based on drawer state
+                    .animation(.easeOut(duration: 0.4), value: showLeftDrawer)    // Smooth fade animation for left drawer
+                    .animation(.easeOut(duration: 0.4), value: showRightDrawer)   // Smooth fade animation for right drawer
+                    .gesture(
+                        // Allow dragging from anywhere on the overlay to dismiss drawers
+                        DragGesture()
+                            .onChanged { value in
+                                // Update drag translation based on which drawer is open and drag direction
+                                if showLeftDrawer && value.translation.width < 0 {
+                                    leftDragTranslation = value.translation.width
+                                } else if showRightDrawer && value.translation.width > 0 {
+                                    rightDragTranslation = value.translation.width
                                 }
-                                .onEnded { value in
-                                    // Handle drag end with current position to allow "change of mind" gestures
-                                    handleDrawerDragEnd(currentPosition: showLeftDrawer ? leftDragTranslation : rightDragTranslation)
-                                }
-                        )
+                            }
+                            .onEnded { value in
+                                // Handle drag end with current position to allow "change of mind" gestures
+                                handleDrawerDragEnd(currentPosition: showLeftDrawer ? leftDragTranslation : rightDragTranslation)
+                            }
+                    )
+            }
+            
+            // MARK: - Drawer Layers
+            leftDrawerView       // Left side navigation drawer
+            rightDrawerView      // Right side options drawer
+        }
+        .opacity(fadeIn ? 1 : 0)    // Elegant fade-in animation from invisible to visible on first launch
+        .animation(.easeIn(duration: 1.5), value: fadeIn)  // 1.5 second smooth fade for premium feel
+        // Native bottom sheet using Apple's .sheet modifier
+        // Conditionally hidden when drawers are open to prevent layering conflicts
+        .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer)) {
+            BottomSheetView()
+                .presentationDetents([.fraction(0.1), .fraction(0.4), .fraction(0.7)])  // Three snap positions: 10%, 40%, 70%
+                .presentationDragIndicator(.visible)                                     // Show system drag handle
+                .presentationBackgroundInteraction(.enabled)                            // Allow interaction with background content
+                .interactiveDismissDisabled(true)                                       // Prevent accidental dismissal by dragging down
+                .scaleEffect(bottomSheetBounce ? 1.12 : 1.0)                            // 12% scale-up bounce for background returns
+                .animation(.spring(response: 0.5, dampingFraction: 0.5), value: bottomSheetBounce) // Bouncy spring animation
+        }
+        // Layered entrance animation sequence on app launch
+        .onAppear {
+            if !hasAppeared {
+                hasAppeared = true
+                
+                // Start elegant fade-in animation immediately for premium first impression
+                withAnimation(.easeIn(duration: 1.5)) {
+                    fadeIn = true
                 }
                 
-                // MARK: - Drawer Layers
-                leftDrawerView       // Left side navigation drawer
-                rightDrawerView      // Right side options drawer
+                // Delay bottom sheet entrance for layered effect (content fades in, then sheet slides up)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                        showBottomSheet = true
+                    }
+                }
             }
-            .onAppear {
-                // Initialize bottom sheet to middle position on first appearance
-                initializeBottomSheet(midOffset: midOffset)
+        }
+        // Subtle "welcome back" bounce animation when returning from background
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            // Focused animation - only bottom sheet bounces, main content stays stable
+            bottomSheetBounce = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                bottomSheetBounce = false  // Return to normal size after 0.4 seconds
             }
         }
         // Haptic feedback for user interactions
@@ -156,19 +167,14 @@ struct RootView: View {
         .ignoresSafeArea()  // Extend gradient behind safe areas
     }
     
-    // Main content stack containing navigation bar, ticker, chart, and bottom sheet
-    private func mainContentStack(minOffset: CGFloat, midOffset: CGFloat, maxOffset: CGFloat) -> some View {
-        ZStack(alignment: .bottom) {  // Align bottom sheet to bottom of stack
-            // Main content in vertical stack
-            VStack(spacing: 0) {
-                topBarView                                                          // Navigation bar with menu buttons
-                TickerView(symbols: symbols, selectedSymbol: $selectedSymbol)       // Horizontal scrolling stock ticker
-                ChartView(symbol: selectedSymbol)                                   // Main chart display
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)               // Fill remaining space
-            }
-            
-            // Bottom sheet overlaid on top of main content
-            bottomSheetView(minOffset: minOffset, midOffset: midOffset, maxOffset: maxOffset)
+    // Main content stack containing navigation bar, ticker, and chart
+    private var mainContentStack: some View {
+        // Main content in vertical stack
+        VStack(spacing: 0) {
+            topBarView                                                          // Navigation bar with menu buttons
+            TickerView(symbols: symbols, selectedSymbol: $selectedSymbol)       // Horizontal scrolling stock ticker
+            ChartView(symbol: selectedSymbol)                                   // Main chart display
+                .frame(maxWidth: .infinity, maxHeight: .infinity)               // Fill remaining space
         }
     }
     
@@ -309,79 +315,39 @@ struct RootView: View {
         .animation(AnimationConstants.standard, value: showRightDrawer)  // Animate position changes
     }
     
-    // Bottom sheet with drag-to-resize functionality
-    private func bottomSheetView(minOffset: CGFloat, midOffset: CGFloat, maxOffset: CGFloat) -> some View {
-        BottomSheetView()
-            .offset(y: bottomSheetOffset + dragOffset)  // Apply both persistent and temporary offsets
-            .gesture(
-                DragGesture()
-                    .updating($dragOffset) { value, state, _ in
-                        // Update temporary drag offset (auto-resets when gesture ends)
-                        state = value.translation.height
-                    }
-                    .onEnded { value in
-                        // Snap to nearest position based on final drag location
-                        handleBottomSheetDrag(value: value, minOffset: minOffset, midOffset: midOffset, maxOffset: maxOffset)
-                    }
-            )
-            .animation(AnimationConstants.standard, value: bottomSheetOffset)  // Animate position snapping
-    }
-    
     // MARK: - Helper Functions
     
-    // Initialize bottom sheet position to middle on first appearance
-    private func initializeBottomSheet(midOffset: CGFloat) {
-        if !isBottomSheetInitialized {
-            bottomSheetOffset = midOffset
-            isBottomSheetInitialized = true
-        }
-    }
-    
-    // Handle bottom sheet drag ending - snap to nearest predefined position
-    private func handleBottomSheetDrag(value: DragGesture.Value, minOffset: CGFloat, midOffset: CGFloat, maxOffset: CGFloat) {
-        let newOffset = bottomSheetOffset + value.translation.height
-        
-        // Determine which position is closest and snap to it
-        if newOffset < (minOffset + midOffset) / 2 {
-            bottomSheetOffset = minOffset      // Snap to collapsed state
-        } else if newOffset < (midOffset + maxOffset) / 2 {
-            bottomSheetOffset = midOffset      // Snap to middle state
-        } else {
-            bottomSheetOffset = maxOffset      // Snap to expanded state
-        }
-    }
-    
     // Handle drawer drag ending - dismiss or snap back based on current position
-    // This function allows users to "change their mind" during a drag gesture
+    // This function enables "change of mind" gestures where users can drag to dismiss then drag back to cancel
     private func handleDrawerDragEnd(currentPosition: CGFloat) {
         if showLeftDrawer {
-            // Check if left drawer is dragged far enough to dismiss
+            // Check if left drawer is dragged far enough past threshold to dismiss
             if currentPosition < -LayoutConstants.drawerDismissThreshold {
-                // Close the drawer smoothly
+                // Close the drawer smoothly - user dragged far enough
                 showLeftDrawer = false
                 leftDragTranslation = 0
-                // Delay hiding overlay for smooth fade-out animation
+                // Delay hiding overlay for smooth 0.4s fade-out animation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     showOverlay = false
                 }
             } else {
-                // Snap back to open position - user didn't drag far enough or changed mind
+                // Snap back to open position - user didn't drag far enough or changed their mind
                 withAnimation(AnimationConstants.quick) {
                     leftDragTranslation = 0
                 }
             }
         } else if showRightDrawer {
-            // Check if right drawer is dragged far enough to dismiss
+            // Check if right drawer is dragged far enough past threshold to dismiss
             if currentPosition > LayoutConstants.drawerDismissThreshold {
-                // Close the drawer smoothly
+                // Close the drawer smoothly - user dragged far enough
                 showRightDrawer = false
                 rightDragTranslation = 0
-                // Delay hiding overlay for smooth fade-out animation
+                // Delay hiding overlay for smooth 0.4s fade-out animation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     showOverlay = false
                 }
             } else {
-                // Snap back to open position - user didn't drag far enough or changed mind
+                // Snap back to open position - user didn't drag far enough or changed their mind
                 withAnimation(AnimationConstants.quick) {
                     rightDragTranslation = 0
                 }
@@ -490,27 +456,23 @@ struct ChartView: View {
 }
 
 // MARK: - Bottom Sheet
-// Draggable bottom sheet for additional information and controls
+// Native iOS bottom sheet for additional information and controls
 struct BottomSheetView: View {
     var body: some View {
         VStack {
-            // Drag handle indicator at top of sheet
-            Capsule()
-                .frame(width: 40, height: 5)
-                .foregroundColor(.secondary)
-                .padding(.top, 8)
-            
-            // Sheet content
+            // Content for the bottom sheet
             Text("Chart Info")
                 .font(.title3)
                 .padding()
             
-            Spacer()  // Fill remaining space (where actual content would go)
+            Text("Additional chart details and controls would go here")
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+            
+            Spacer()  // Fill remaining space
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)   // Fill available space
-        .background(.thinMaterial)                          // Translucent material background
-        .cornerRadius(LayoutConstants.cornerRadius)         // Rounded top corners
-        .ignoresSafeArea(edges: .bottom)                    // Extend to bottom edge
+        .background(Color(.systemBackground))               // System background color
     }
 }
 
