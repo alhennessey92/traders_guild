@@ -4,46 +4,49 @@
 //
 //  Created by Al Hennessey on 16/09/2025.
 //
-
 import SwiftUI
 
-/// A reusable primary button for your app.
-/// - Styled consistently (so all primary actions look the same).
-/// - Can be reused across signup/login and anywhere else.
-/// - Takes a title (string) and an action (closure).
-struct PrimaryButton: View {
-    
-    /// The text shown inside the button (e.g. "Continue", "Sign Up").
+/// Generic full-width button for login/signup
+struct LoginButton: View {
     let title: String
-    
-    /// The action (function) to run when the button is tapped.
-    let action: () -> Void
+    let iconName: String?
+    let backgroundColor: Color
+    let foregroundColor: Color
+     // Optional navigation
+    let action: (() -> Void)? = nil // ✅ default to nil
     
     var body: some View {
-        Button(action: action) {
-            // Text label inside the button
+        HStack {
+            if let icon = iconName {
+                Image(systemName: icon)
+                    .font(.title2)
+            }
             Text(title)
-                .font(.headline)          // Medium-bold font, readable size
-                .foregroundColor(.white)  // White text for contrast
-                .padding()                // Add some space inside the button
-                .frame(maxWidth: .infinity) // Button stretches full width of parent container
-                .background(Color.blue)   // Background color (changeable later if needed)
-                .cornerRadius(12)         // Rounded corners for a modern look
-                .shadow(radius: 2)        // Small shadow to make it pop
+                .font(.headline)
+                .scaleEffect(0.9)
         }
-        .padding(.horizontal) // Space around the button (so it doesn’t touch screen edges)
+        .foregroundColor(foregroundColor)
+        .frame(maxWidth: .infinity, maxHeight: 50)
+        .background(backgroundColor)
+    //  .cornerRadius(12)
+        .clipShape(Capsule())
+        .padding(.horizontal)
     }
+    
+
 }
 
 #Preview {
     // Example usage of PrimaryButton in previews
     VStack(spacing: 20) {
-        PrimaryButton(title: "Continue") {
-            print("Continue tapped")
-        }
-        PrimaryButton(title: "Sign Up") {
-            print("Sign Up tapped")
-        }
+        LoginButton(
+            title: "Sign in with Email",
+            iconName: "envelope.fill",
+            backgroundColor: AppColors.whiteText,
+            foregroundColor: AppColors.gradientBackgroundDark,
+            
+        )
+
     }
     .padding()
 }

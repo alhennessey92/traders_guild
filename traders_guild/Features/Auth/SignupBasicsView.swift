@@ -8,7 +8,7 @@
 import SwiftUI
 
 // Step 1: Collect basic account info
-struct SignupTopicsView: View {
+struct SignupBasicsView: View {
     @Binding var data: SignupData
     @Binding var path: [SignupStep]
     
@@ -30,7 +30,7 @@ struct SignupTopicsView: View {
                 
                 VStack() {
                     // Description
-                    Text("Ok \(data.username), what Topics are you interested in?")
+                    Text("Ok \(data.username), let's take a look at the Basics")
                         .font(.title.bold())
                         .foregroundColor(AppColors.whiteText)
                         .multilineTextAlignment(.leading)
@@ -39,20 +39,31 @@ struct SignupTopicsView: View {
                         .padding(.leading, 20)
                     
                     
+                    LearnBasicsBox(title: "Guilds", iconName: "shield.pattern.checkered", description: "The basics are part of this and i will describe all the stuff relating to the app for the users to lear")
+                    
+                    LearnBasicsBox(title: "Markers", iconName: "star.bubble", description: "The basics are part of this and i will describe all the stuff relating to the app for the users to lear")
+                    
+                    LearnBasicsBox(title: "Reputation", iconName: "globe", description: "The basics are part of this and i will describe all the stuff relating to the app for the users to lear")
+                    
+                    LearnBasicsBox(title: "Social", iconName: "person.line.dotted.person", description: "The basics are part of this and i will describe all the stuff relating to the app for the users to lear")
+                    
+                    LearnBasicsBox(title: "Future", iconName: "chart.line.uptrend.xyaxis", description: "The basics are part of this and i will describe all the stuff relating to the app for the users to lear")
+                    
+                    
                     
                     
                     
                     
                         
                     
-                    VStack(spacing: 0) {
-                        Divider()
-                            .frame(height: 1)
-
-                            .background(Color.gray.opacity(0.3)) // color
-                    }
-                    .padding(.horizontal, 16)  // horizontal inset
-                    .background(Color.blue.opacity(0.2))
+//                    VStack(spacing: 0) {
+//                        Divider()
+//                            .frame(height: 1)
+//
+//                            .background(Color.gray.opacity(0.3)) // color
+//                    }
+//                    .padding(.horizontal, 16)  // horizontal inset
+//                    .background(Color.blue.opacity(0.2))
                     
                     
                 }
@@ -106,14 +117,15 @@ struct SignupTopicsView: View {
                         )
                         .padding(.top)
                         .padding(.trailing)
-                        .disabled(username.isEmpty) // ✅ only enabled when not empty
-                        .opacity(username.isEmpty ? 0.6 : 1.0)
+//                        
                     }
                 }
+                .background(AppColors.gradientBackgroundLight)
                 
                 
                 
             }
+            
 
         }
             
@@ -121,15 +133,15 @@ struct SignupTopicsView: View {
     }
 }
 
-#Preview {
-    SignupTopicsView(
-        data: .constant(SignupData(
-            name: "Preview User",
-            email: "test@example.com",
-            dob: Date(),
-            password: "password123",
-            username: "alhennessey92"
-        )),
-        path: .constant([.topics]) // starting at topics step
-    )
-}
+//#Preview {
+//    SignupBasicsView(
+//        data: .constant(SignupData(
+//            name: "Preview User",
+//            email: "test@example.com",
+//            dob: Date(),
+//            password: "password123",
+//            username: "alhennessey92"
+//        )),
+//        path: .constant([.guild]) // starting at topics step
+//    )
+//}

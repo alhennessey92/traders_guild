@@ -14,29 +14,60 @@
 import SwiftUI
 
 /// Generic full-width button for login/signup
-struct TextBoxView: View {
-    let title: String
-    let backgroundColor: Color
-    let foregroundColor: Color
-    
+struct StandardTextFieldView: View {
+    let title: String                 // Placeholder / label
+    @Binding var text: String         // Two-way binding
+    var isSecure: Bool = false        // Password field?
+    // Track focus
+    @FocusState private var isFocused: Bool
     
     var body: some View {
+        ZStack (alignment: .leading){
+            if text.isEmpty {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.greyText)   // placeholder color
+                    .padding(.leading, 12)
+            }
+            
+            // TextField vs SecureField
+            if isSecure {
+                SecureField("", text: $text)
+                    .font(.body)
+                    .textInputAutocapitalization(.never) // email, username safe
+                    .autocorrectionDisabled()
+                    .foregroundColor(AppColors.whiteText)
+                    .accentColor(AppColors.whiteText)
+                    .focused($isFocused)
+                    .padding(.leading, 12)
+                    
+            } else {
+                TextField("", text: $text)
+                    .font(.body)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .foregroundColor(AppColors.whiteText)
+                    .accentColor(AppColors.whiteText)
+                    .focused($isFocused)
+                    .padding(.leading, 12)
+                    
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.unhighlightedTextBoxBackground)
+                .opacity(isFocused ? 1.0 : 0.6)
+        )
+        .animation(.easeInOut(duration: 0.2), value: isFocused)
         
+        .padding(.horizontal)
     }
-    
 }
 
 #Preview {
-    // Example usage of PrimaryButton in previews
     VStack(spacing: 20) {
-        TextBoxView(
-            title: "Sign in with Email",
-            iconName: "envelope.fill",
-            backgroundColor: AppColors.whiteText,
-            foregroundColor: AppColors.gradientBackgroundDark,
-            destination: LoginView()
-        )
-
+        StandardTextFieldView(title: "Email", text: .constant(""))
+        StandardTextFieldView(title: "Password", text: .constant(""), isSecure: true)
     }
-    .padding()
 }
