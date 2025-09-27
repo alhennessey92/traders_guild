@@ -11,6 +11,8 @@ struct ContentView: View {
     @EnvironmentObject var session: SessionStore// shared signup data
 
     var body: some View {
+        
+        RootView()
         if let _ = session.currentUser {
             if session.showingTransition {
                 TransitionView()

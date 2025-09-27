@@ -29,6 +29,7 @@ struct WelcomeView: View {
             .ignoresSafeArea()
             
             VStack(spacing: 20) {
+                
                 // Title
                 Text("Traders Guild")
                     .font(AppFonts.title(size: 66))
@@ -40,6 +41,14 @@ struct WelcomeView: View {
                     .padding(.top, 40)
                     .padding(.bottom, 40)
                     .padding(.leading, 20)
+                
+                
+                    /// TESTING PURPOSES ONLY TO GET TO ROOTVIEW DIRECT
+                    .onAppear() {
+                        let user = User(id: UUID().uuidString, name: data.name, email: data.email)
+                        session.setUser(user) // ✅ This flips the root to MainAppView
+                        session.showingTransition = false // trigger the TransitionView
+                    }
                    
 
                     

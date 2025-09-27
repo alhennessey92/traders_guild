@@ -16,6 +16,8 @@ struct traders_guildApp: App {
     
     var body: some Scene {
         WindowGroup {
+            
+            
             if session.currentUser == nil {
                 ContentView()
                     .environmentObject(session)
