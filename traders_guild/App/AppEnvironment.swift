@@ -11,7 +11,7 @@ import Foundation
 // This class can hold settings or global flags that multiple parts of the app might care about.
 class AppEnvironment: ObservableObject {
     // Example flag: dark mode toggle
-    @Published var darkModeEnabled: Bool = false
+    @Published var darkModeEnabled: Bool = true
     
     // Could add more global settings here in the future, like:
     // - isTutorialCompleted

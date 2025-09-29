@@ -16,7 +16,9 @@ enum AppColors {
     static let fadedBackground = Color("TGFadedBackground") // #2F303A
     static let greyText = Color("TGMidGrey") // #7A7878
     static let accentColor = Color("TGAccent") //#0F9EB4
-    
+    static let accentDarkColor = Color("TGAccentDark") //026675
+    static let bullCandleGreen = Color("TGBull") //0E854D
+    static let gradientBackgroundMid = Color("TGGradientBackgroundMid") //#101018
     static let toolbarBackground = Color("TGToolbarBackground") //#00000E
     
 }

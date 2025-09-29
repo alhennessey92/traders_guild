@@ -12,12 +12,12 @@ struct ContentView: View {
 
     var body: some View {
         
-        RootView()
+        
         if let _ = session.currentUser {
             if session.showingTransition {
                 TransitionView()
             } else {
-                RootView()
+                MainView()
             }
         }  else {
             // 👋 No user, show the signup flow

@@ -21,6 +21,7 @@ struct ToolbarIconButton: View {
     var fontType: Font
     var symbolRenderingMode: SymbolRenderingMode
     private var foregroundStyles: [AnyShapeStyle]
+    var padding: CGFloat = 8
     
 
     // MARK: - Initializers
@@ -32,6 +33,7 @@ struct ToolbarIconButton: View {
         fontType: Font = .headline,
         symbolRenderingMode: SymbolRenderingMode = .monochrome,
         foregroundStyle: Color = .white,
+        padding: CGFloat = 8,
         action: @escaping () -> Void
     ) {
         self.systemName = systemName
@@ -39,6 +41,7 @@ struct ToolbarIconButton: View {
         self.fontType = fontType
         self.symbolRenderingMode = symbolRenderingMode
         self.foregroundStyles = [AnyShapeStyle(foregroundStyle)]
+        self.padding = padding
         self.action = action
     }
 
@@ -49,6 +52,7 @@ struct ToolbarIconButton: View {
         fontType: Font = .headline,
         symbolRenderingMode: SymbolRenderingMode = .palette,
         foregroundStyles: [Color],
+        padding: CGFloat = 8,
         action: @escaping () -> Void
     ) {
         self.systemName = systemName
@@ -56,6 +60,7 @@ struct ToolbarIconButton: View {
         self.fontType = fontType
         self.symbolRenderingMode = symbolRenderingMode
         self.foregroundStyles = foregroundStyles.map { AnyShapeStyle($0) }
+        self.padding = padding
         self.action = action
     }
 
@@ -66,7 +71,7 @@ struct ToolbarIconButton: View {
                 .symbolRenderingMode(symbolRenderingMode)
                 .font(fontType)
                 .applyForegroundStyles(foregroundStyles)
-                .padding(8)
+                .padding(padding)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.small)

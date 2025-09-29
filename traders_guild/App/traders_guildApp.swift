@@ -18,6 +18,7 @@ struct traders_guildApp: App {
         WindowGroup {
             
             
+            
             if session.currentUser == nil {
                 ContentView()
                     .environmentObject(session)
@@ -25,8 +26,9 @@ struct traders_guildApp: App {
                 TransitionView()
                     .environmentObject(session)
             } else {
-                RootView()
+                MainView()
                     .environmentObject(session)
+                    .preferredColorScheme(.dark)
             }
         }
     }
