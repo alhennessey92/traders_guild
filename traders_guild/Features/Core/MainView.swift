@@ -1,7 +1,13 @@
 //
 //  MainView.swift
 //  traders_guild
-//
+//ZStack {
+
+// Darker translucent material
+//AppColors.gradientBackgroundDark.opacity(0.7)
+//    .background(.ultraThinMaterial.opacity(0.9))
+//    
+//}
 //  Created by Al Hennessey on 28/09/2025.
 //
 
@@ -52,7 +58,7 @@ struct MainView: View {
     /// Controls bottom sheet presentation
     @State private var showBottomSheet: Bool = false
     /// Currently selected detent for the bottom sheet
-    @State private var selectedDetent: PresentationDetent = .fraction(0.1)
+    @State private var selectedDetent: PresentationDetent = .fraction(0.11)
     
     // MARK: - Computed Properties
     /// Get current screen size for responsive layout calculations
@@ -69,17 +75,11 @@ struct MainView: View {
     var body: some View {
         // ZStack layers all UI elements with proper z-ordering
         ZStack {
-            // MARK: - Background Layer
-            /// Gradient background that fills the entire screen
-            backgroundGradient
-            
             // MARK: - Main Content Layer
             /// Chart content with fade-in animation
             /// Disabled when drawers are open to prevent interaction conflicts
             mainContentStack
                 .disabled(showLeftDrawer || showRightDrawer)
-                .opacity(fadeIn ? 1 : 0)
-                .animation(.easeIn(duration: 1.5), value: fadeIn)
             
             // MARK: - Overlay Layer
             /// Semi-transparent overlay that appears behind open drawers
@@ -123,13 +123,20 @@ struct MainView: View {
         /// Native bottom sheet using Apple's .sheet modifier
         /// Conditionally hidden when drawers are open to prevent layering conflicts
         .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer)) {
-            ChartBottomSheet()
-                .presentationDetents([.fraction(0.1), .fraction(0.5), .fraction(0.9)],
+            ChartBottomSheet(selectedDetent: $selectedDetent)
+                .presentationDetents([.fraction(0.11), .fraction(0.5), .fraction(0.9)],
                                       selection: $selectedDetent)
                 .presentationDragIndicator(.visible)
                 .presentationBackgroundInteraction(.enabled)
                 .interactiveDismissDisabled(true)
                 .presentationContentInteraction(.resizes)
+                .presentationBackground {
+                    ZStack {
+                        Color.clear
+                            .background(.thinMaterial)
+                        AppColors.drawerBackground.opacity(0.4)
+                    }
+                }
         }
         .onAppear {
             // Start fade-in animation
@@ -151,24 +158,19 @@ struct MainView: View {
     
     // MARK: - View Components
     
-    /// Gradient background that covers the entire screen
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [AppColors.gradientBackgroundDark, AppColors.gradientBackgroundDark],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
-    }
-    
     /// Main content stack containing toolbar and chart
     private var mainContentStack: some View {
         NavigationStack {
             ZStack {
+                // Pattern background inside NavigationStack
+                StaticBackgroundView()
+                
                 VStack(spacing: 0) {
                     chartView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .opacity(fadeIn ? 1 : 0)
+                .animation(.easeIn(duration: 1.5), value: fadeIn)
             }
             .toolbar {
                 // MARK: - Guild/App Level Toolbar
@@ -178,13 +180,15 @@ struct MainView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     ToolbarIconButton(
                         systemName: "shield.pattern.checkered",
-                        backgroundTint: AppColors.accentDarkColor.opacity(0.5),
+                        backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
                         fontType: .headline,
                         symbolRenderingMode: .monochrome,
                         foregroundStyle: AppColors.whiteText,
                         padding: 8
                     ) {
                         withAnimation(AnimationConstants.standard) {
+                            // Reset bottom sheet to first detent when opening drawer
+                            selectedDetent = .fraction(0.11)
                             showLeftDrawer.toggle()
                             showRightDrawer = false
                             showOverlay = showLeftDrawer
@@ -211,6 +215,8 @@ struct MainView: View {
                         padding: 8
                     ) {
                         withAnimation(AnimationConstants.standard) {
+                            // Reset bottom sheet to first detent when opening drawer
+                            selectedDetent = .fraction(0.11)
                             showRightDrawer.toggle()
                             showLeftDrawer = false
                             showOverlay = showRightDrawer
@@ -218,7 +224,7 @@ struct MainView: View {
                     }
                 }
             }
-            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .tint(.white)
             .navigationBarTitleDisplayMode(.inline)
@@ -247,7 +253,7 @@ struct MainView: View {
     /// Left drawer view with swipe-to-dismiss functionality
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            DrawerView(side: .left) {
+            LeftDrawerMainView() {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false
@@ -285,7 +291,7 @@ struct MainView: View {
     private var rightDrawerView: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            DrawerView(side: .right) {
+            RightDrawerMainView() {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showRightDrawer = false
@@ -357,6 +363,33 @@ struct MainView: View {
     }
 }
 
+// MARK: - Static Background View
+/// Background view that is completely isolated from animations
+struct StaticBackgroundView: View {
+    @State private var patternOpacity: Double = 0
+    
+    var body: some View {
+        ZStack {
+            // Base gradient
+            LinearGradient(
+                colors: [AppColors.gradientBackgroundDark, AppColors.gradientBackgroundMid],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            
+            // Pattern overlay - fades in smoothly
+            PatternOverlay(patternType: .honeycomb, hexSize: 18)
+                .opacity(patternOpacity)
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            withAnimation(.easeIn(duration: 1.5)) {
+                patternOpacity = 0.025
+            }
+        }
+    }
+}
+
 // MARK: - Chart View
 /// Placeholder for the main chart component
 struct chartView: View {
@@ -373,169 +406,139 @@ struct chartView: View {
 /// Enum to specify which side a drawer appears on (affects corner rounding)
 enum DrawerSide { case left, right }
 
-// MARK: - Drawer View
-/// Individual drawer view with content and close functionality
-/// Uses translucent material for modern iOS glass effect
-struct DrawerView: View {
-    let side: DrawerSide
-    let onClose: () -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header section with title and close button
-            HStack {
-                Text(side == .left ? "Guild Settings" : "Friends & Guild")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                Spacer()
-                Button(action: {
-                    withAnimation(AnimationConstants.standard) { onClose() }
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.primary)
-                }
-            }
-            .padding()
-            .padding(.bottom, 8)
-            .padding(.top, 60)
-            
-            // Placeholder content area
-            ScrollView {
-                VStack(spacing: 16) {
-                    Text("Drawer content goes here")
-                        .foregroundColor(.secondary)
-                        .padding()
-                    
-                    // Add your drawer-specific content here
-                    ForEach(1...10, id: \.self) { index in
-                        HStack {
-                            Text("Item \(index)")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
-                        .padding(.horizontal)
-                    }
-                }
-            }
-            
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.thinMaterial)  // Translucent glass effect - lighter than ultraThinMaterial
-        .clipShape(
-            // Custom corner rounding - only round corners opposite to the edge
-            UnevenRoundedRectangle(
-                cornerRadii: .init(
-                    topLeading: side == .left ? 0 : LayoutConstants.cornerRadius,
-                    bottomLeading: side == .left ? 0 : LayoutConstants.cornerRadius,
-                    bottomTrailing: side == .left ? LayoutConstants.cornerRadius : 0,
-                    topTrailing: side == .left ? LayoutConstants.cornerRadius : 0
-                )
-            )
-        )
-        .shadow(radius: LayoutConstants.shadowRadius)
-        .ignoresSafeArea()
-    }
-}
-
 // MARK: - Chart Bottom Sheet
 /// Main chart interface hub containing all chart-related functionality
 struct ChartBottomSheet: View {
-    @State private var selectedView: ChartView = .info
+    @State private var selectedView: ChartView = .symbol
+    @Binding var selectedDetent: PresentationDetent
     
     enum ChartView: String, CaseIterable {
-        case info = "Info"
+        case symbol = "Symbol"
         case chat = "Chat"
-        case timeframes = "Time"
-        case tools = "Tools"
+        case indicator = "Indicator"
+        case markers = "Markers"
         
         var icon: String {
             switch self {
-            case .info: return "chart.bar.fill"
+            case .symbol: return "chart.bar.fill"
             case .chat: return "message.fill"
-            case .timeframes: return "clock.fill"
-            case .tools: return "wrench.and.screwdriver.fill"
+            case .indicator: return "chart.line.uptrend.xyaxis.circle"
+            case .markers: return "mappin.circle.fill"
             }
         }
     }
     
+    // Computed property to determine if expanded based on detent
+    private var isExpanded: Bool {
+        selectedDetent != .fraction(0.11)
+    }
+    
     var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Content Area (only visible when sheet is pulled up)
-                if geometry.size.height > 100 {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            switch selectedView {
-                            case .info:
-                                chartInfoContent
-                            case .chat:
-                                chatContent
-                            case .timeframes:
-                                timeframesContent
-                            case .tools:
-                                toolsContent
-                            }
+        VStack(spacing: 0) {
+            // Content Area (only visible when sheet is pulled up)
+            if isExpanded {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        switch selectedView {
+                        case .symbol:
+                            chartInfoContent
+                        case .chat:
+                            chatContent
+                        case .indicator:
+                            indicatorContent
+                        case .markers:
+                            toolsContent
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 20)
-                        .padding(.bottom, 20)
-                        .animation(.easeInOut(duration: 0.3), value: selectedView)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    Spacer()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 20)
+                    .animation(.easeInOut(duration: 0.3), value: selectedView)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Spacer()
+            }
+            
+            // Fixed Button Bar at Bottom
+            VStack(spacing: 0) {
+                // Divider (only show when sheet is pulled up)
+                if isExpanded {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(height: 0.5)
                 }
                 
-                // Fixed Button Bar at Bottom
-                VStack(spacing: 0) {
-                    // Divider (only show when sheet is pulled up)
-                    if geometry.size.height > 100 {
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 0.5)
-                    }
-                    
-                    // Navigation buttons
-                    HStack(spacing: 8) {
-                        ForEach(ChartView.allCases, id: \.self) { view in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    selectedView = view
-                                }
-                            } label: {
-                                VStack(spacing: 4) {
-                                    Image(systemName: view.icon)
-                                        .font(.system(size: 18, weight: .medium))
-                                        .foregroundColor(selectedView == view ? .blue : .gray)
-                                    
-                                    Text(view.rawValue)
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(selectedView == view ? .blue : .gray)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(selectedView == view ? Color.blue.opacity(0.1) : Color.clear)
-                                )
-                            }
-                            .buttonStyle(.plain)
+                // Navigation buttons using custom button components
+                HStack(spacing: 4) {
+                    // Symbol button (capsule style)
+                    RootBottomBarSymbolButton(
+                        symbol: "EUR/USD",
+                        backgroundColor: selectedView == .symbol ?
+                            AppColors.gradientBackgroundDark :
+                            AppColors.gradientBackgroundMid.opacity(0.9),
+                        foregroundColor: selectedView == .symbol ?
+                            .white :
+                            AppColors.whiteText.opacity(0.8)
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            selectedView = .symbol
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    .padding(.bottom, 2)
+                    
+                    Spacer()
+                    HStack(spacing: 4) {
+                        // Chat button
+                        RootBottomBarIconButton(
+                            systemName: "message.fill",
+                            backgroundColor: selectedView == .chat ?
+                                AppColors.gradientBackgroundDark :
+                                AppColors.gradientBackgroundMid.opacity(0.9),
+                            foregroundColor: selectedView == .chat ?
+                                .white :
+                                AppColors.whiteText.opacity(0.8)
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                selectedView = .chat
+                            }
+                        }
+                        RootBottomBarIconButton(
+                            systemName: "chart.line.uptrend.xyaxis.circle",
+                            fontSize: 25,
+                            backgroundColor: selectedView == .indicator ?
+                                AppColors.gradientBackgroundDark :
+                                AppColors.gradientBackgroundMid.opacity(0.9),
+                            foregroundColor: selectedView == .indicator ?
+                                .white :
+                                AppColors.whiteText.opacity(0.8)
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                selectedView = .indicator
+                            }
+                        }
+                        
+                        // Markers button on the right
+                        RootBottomBarIconButton(
+                            systemName: "target",
+                            fontSize: 25,
+                            backgroundColor: selectedView == .markers ?
+                                AppColors.whiteText :
+                                AppColors.whiteText.opacity(0.5),
+                            foregroundColor: selectedView == .markers ?
+                            AppColors.gradientBackgroundDark :
+                                AppColors.gradientBackgroundDark.opacity(0.8)
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                selectedView = .markers
+                            }
+                        }
+                    }
                 }
-                .frame(height: geometry.size.height > 100 ? 60 : 58)
+                .padding(.horizontal, 16)
+                .padding(.top, isExpanded ? 16 : 0)
+                .padding(.bottom, 2)
             }
+            .frame(height: isExpanded ? 70 : 68)
         }
     }
     
@@ -619,24 +622,18 @@ struct ChartBottomSheet: View {
         }
     }
     
-    private var timeframesContent: some View {
+    private var indicatorContent: some View {
         VStack(spacing: 16) {
-            Text("Select Timeframe")
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
-                ForEach(["1m", "5m", "15m", "1h", "4h", "1D", "1W", "1M"], id: \.self) { timeframe in
-                    Button(timeframe) { }
-                    .frame(height: 50)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(timeframe == "1D" ? Color.blue : Color.white.opacity(0.1))
-                    )
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Indicators")
+                    .font(.headline)
                     .foregroundColor(.white)
-                    .fontWeight(.medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                VStack(spacing: 8) {
+                    ToolItem(title: "Support Line", icon: "minus", color: .green)
+                    ToolItem(title: "Resistance Line", icon: "minus", color: .red)
+                    ToolItem(title: "Trend Line", icon: "line.diagonal", color: .blue)
                 }
             }
         }
@@ -710,6 +707,8 @@ struct ToolItem: View {
         .buttonStyle(.plain)
     }
 }
+
+
 
 #Preview {
     MainView()

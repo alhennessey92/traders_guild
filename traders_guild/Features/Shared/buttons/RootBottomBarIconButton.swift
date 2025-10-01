@@ -1,0 +1,40 @@
+//
+//  RootBottomBarIconButton.swift
+//  traders_guild
+//
+//  Created by Al Hennessey on 29/09/2025.
+//
+
+import SwiftUI
+
+struct RootBottomBarIconButton: View {
+    let systemName: String
+    var fontSize: CGFloat = 20
+    let backgroundColor: Color
+    let foregroundColor: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundColor(foregroundColor)
+                .frame(width: 50, height: 50)
+                .background(backgroundColor)
+                .clipShape(Circle())
+                .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+//
+#Preview {
+    RootBottomBarIconButton(
+        systemName: "message.fill",
+        fontSize: 20,
+        backgroundColor: AppColors.fadedBackground.opacity(0.1),
+        foregroundColor: AppColors.fadedBackground,
+        action: { print("Tapped message") }
+    )
+}
