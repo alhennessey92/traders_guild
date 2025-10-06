@@ -37,6 +37,79 @@ struct MainView: View {
     // MARK: - Properties
     /// Environment object for session management across the app
     @EnvironmentObject var session: SessionStore
+    @EnvironmentObject var currentUser: UserStore
+    
+    
+    // MARK: - Sample data
+    
+    
+    // FRIENDS
+    @State private var friends: [GuildUser] = [
+        GuildUser(name: "SeanPain", reputation: 50, isOnline: true, isFriend: true, status: "Always online", role: .moderator, newMessage: false),
+        GuildUser(name: "OldFriend", reputation: 44, isOnline: false, isFriend: true, status: "Busy IRL", role: .member, newMessage: true)
+    ]
+    
+    // CHATROOM
+    @State private var chatrooms: [Chatroom] = [
+        Chatroom(name: "General Discussion", memberCount: 42, isActive: true, lastMessage: "Great analysis on BTC!"),
+        Chatroom(name: "Trading Talk", memberCount: 28, isActive: true, lastMessage: "AAPL looking bullish"),
+        Chatroom(name: "Market Analysis", memberCount: 15, isActive: false, lastMessage: "Chart patterns forming"),
+        Chatroom(name: "Off Topic", memberCount: 8, isActive: false, lastMessage: "Anyone watching the game?"),
+        Chatroom(name: "Announcements", memberCount: 52, isActive: false, lastMessage: "New guild event tomorrow!"),
+    ]
+    
+    // ONLINE USERS
+    @State private var onlineUsers: [GuildUser] = [
+        GuildUser(name: "TradeMaster", reputation: 45, isOnline: true, isFriend: true, status: "Trading AAPL", role: .member, newMessage: false),
+        GuildUser(name: "ChartWizard", reputation: 38, isOnline: true, isFriend: false, status: "Analyzing markets", role: .admin, newMessage: true),
+        GuildUser(name: "BullRunner", reputation: 52, isOnline: true, isFriend: true, status: nil, role: .member, newMessage: false),
+        GuildUser(name: "MarketGuru", reputation: 41, isOnline: true, isFriend: false, status: "In a meeting", role: .moderator, newMessage: true),
+        GuildUser(name: "StockHawk", reputation: 33, isOnline: true, isFriend: true, status: nil, role: .member, newMessage: true)
+    ]
+    
+    // OFFLINE USERS
+    @State private var offlineUsers: [GuildUser] = [
+        GuildUser(name: "SleepyTrader", reputation: 29, isOnline: false, isFriend: false, status: nil, role: .member, newMessage: true),
+        GuildUser(name: "NightOwl", reputation: 47, isOnline: false, isFriend: true, status: "Away", role: .admin, newMessage: true),
+        GuildUser(name: "QuietInvestor", reputation: 36, isOnline: false, isFriend: false, status: nil, role: .member, newMessage: false)
+    ]
+    
+    // ANNOUNCEMENTS
+    @State private var announcements: [GuildAnnouncement] = [
+        GuildAnnouncement(
+            title: "New Trading Tournament Announced",
+            content: "We're excited to announce our biggest trading tournament yet! Starting next Monday, all guild members can participate in a week-long competition to see who can achieve the highest returns.\n\nPrizes include:\n• 1st Place: 1000 reputation points + Special badge\n• 2nd Place: 500 reputation points\n• 3rd Place: 250 reputation points\n\nAll trades must be documented with screenshots and verified by moderators. Good luck to everyone participating!",
+            author: "Guild Master",
+            authorRole: .admin,
+            postedAt: Date().addingTimeInterval(-3600), // 1 hour ago
+            isImportant: true
+        ),
+        GuildAnnouncement(
+            title: "Market Analysis Session - This Friday",
+            content: "Join us this Friday at 7 PM EST for our weekly market analysis session. We'll be reviewing the latest market trends, discussing upcoming earnings reports, and sharing trading strategies.\n\nTopics to cover:\n• SPY technical analysis\n• Earnings plays for next week\n• Crypto market outlook\n• Q&A session\n\nAll guild members are welcome to join and share their insights!",
+            author: "ChartMaster",
+            authorRole: .moderator,
+            postedAt: Date().addingTimeInterval(-7200), // 2 hours ago
+            isImportant: false
+        ),
+        GuildAnnouncement(
+            title: "Guild Rules Update",
+            content: "Please review the updated guild rules in the #rules channel. Key changes include:\n\n• Updated posting guidelines for trade ideas\n• New reputation system rules\n• Community conduct standards\n\nAll members are expected to follow these guidelines. Violations may result in temporary or permanent removal from the guild.",
+            author: "Moderator Team",
+            authorRole: .moderator,
+            postedAt: Date().addingTimeInterval(-14400), // 4 hours ago
+            isImportant: true
+        ),
+        GuildAnnouncement(
+            title: "Weekly Leaderboard Results",
+            content: "Congratulations to this week's top performers!\n\n🥇 TradeMaster - 85% win rate\n🥈 ChartWizard - 82% win rate\n🥉 BullRunner - 78% win rate\n\nGreat work everyone! Keep up the excellent trading and analysis. Remember, consistency is key in trading success.",
+            author: "System",
+            authorRole: .admin,
+            postedAt: Date().addingTimeInterval(-21600), // 6 hours ago
+            isImportant: false
+        )
+       
+    ]
     
     /// Controls fade-in animation on view appearance
     @State private var fadeIn: Bool = false
@@ -59,6 +132,11 @@ struct MainView: View {
     @State private var showBottomSheet: Bool = false
     /// Currently selected detent for the bottom sheet
     @State private var selectedDetent: PresentationDetent = .fraction(0.11)
+    
+    // MARK: - Sheet Overlay State
+    /// Controls overlay when chat sheets are presented
+    @State private var showSheetOverlay: Bool = false
+    @State private var dismissRightSheetsSignal: Bool = false
     
     // MARK: - Computed Properties
     /// Get current screen size for responsive layout calculations
@@ -92,6 +170,8 @@ struct MainView: View {
                         // Allow dragging from anywhere on the overlay to dismiss drawers
                         DragGesture()
                             .onChanged { value in
+                                // Dismiss any right-drawer sheets when interacting with the overlay
+                                dismissRightSheetsSignal = true
                                 // Update drag translation based on which drawer is open
                                 if showLeftDrawer && value.translation.width < 0 {
                                     leftDragTranslation = value.translation.width
@@ -116,6 +196,14 @@ struct MainView: View {
             rightDrawerView
                 .opacity(fadeIn ? 1 : 0)
                 .animation(.easeIn(duration: 1.5), value: fadeIn)
+            
+            // MARK: - Sheet Overlay Layer
+            /// Overlay that appears when chat sheets are presented over everything
+            if showSheetOverlay {
+                sheetOverlayView
+                    .opacity(showSheetOverlay ? 1 : 0)
+                    .animation(.linear(duration: 0.05), value: showSheetOverlay)
+            }
         }
         .ignoresSafeArea()
         
@@ -205,9 +293,11 @@ struct MainView: View {
                 }
                 
                 // Right Drawer Button (Friends/Guild Members)
+                
+                //  MARK: - Need to handle coloring the message icon when there is new messages
                 ToolbarItem(placement: .topBarTrailing) {
                     ToolbarIconButton(
-                        systemName: "person.2.fill",
+                        systemName: "message.badge.filled.fill",
                         backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
                         fontType: .subheadline,
                         symbolRenderingMode: .monochrome,
@@ -242,6 +332,7 @@ struct MainView: View {
                     showRightDrawer = false
                     leftDragTranslation = 0
                     rightDragTranslation = 0
+                    dismissRightSheetsSignal = true
                 }
                 // Delay hiding overlay to allow smooth fade-out animation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -250,10 +341,23 @@ struct MainView: View {
             }
     }
     
+    /// Semi-transparent overlay that appears when chat sheets are presented
+    private var sheetOverlayView: some View {
+        Color.black.opacity(LayoutConstants.overlayOpacity * 0.8)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture {
+                dismissRightSheetsSignal = true
+            }
+            .simultaneousGesture(DragGesture().onChanged { _ in
+                dismissRightSheetsSignal = true
+            })
+    }
+    
     /// Left drawer view with swipe-to-dismiss functionality
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView() {
+            LeftDrawerMainView(announcements: announcements) {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false
@@ -291,17 +395,25 @@ struct MainView: View {
     private var rightDrawerView: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            RightDrawerMainView() {
-                // Closure called when drawer close button is tapped
-                withAnimation(AnimationConstants.standard) {
-                    showRightDrawer = false
-                    rightDragTranslation = 0
-                }
-                // Delay hiding overlay for smooth animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    showOverlay = false
-                }
-            }
+            RightDrawerMainView(
+                onClose: {
+                    // Closure called when drawer close button is tapped
+                    withAnimation(AnimationConstants.standard) {
+                        showRightDrawer = false
+                        rightDragTranslation = 0
+                    }
+                    // Delay hiding overlay for smooth animation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        showOverlay = false
+                    }
+                },
+                chatrooms: chatrooms,
+                onlineUsers: onlineUsers,
+                offlineUsers: offlineUsers,
+                friends: friends,
+                sheetOverlayVisible: $showSheetOverlay,
+                dismissSheetsSignal: $dismissRightSheetsSignal
+            )
             .frame(width: drawerWidth)
             .frame(maxHeight: .infinity)
             .offset(x: rightDragTranslation)
@@ -323,6 +435,41 @@ struct MainView: View {
         .offset(x: showRightDrawer ? 0 : drawerWidth)
         .animation(AnimationConstants.standard, value: showRightDrawer)
     }
+//    private var rightDrawerView: some View {
+//        HStack(spacing: 0) {
+//            Spacer(minLength: 0)
+//            RightDrawerMainView(friends: friends) {
+//                // Closure called when drawer close button is tapped
+//                withAnimation(AnimationConstants.standard) {
+//                    showRightDrawer = false
+//                    rightDragTranslation = 0
+//                }
+//                // Delay hiding overlay for smooth animation
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+//                    showOverlay = false
+//                }
+//            }
+//            .frame(width: drawerWidth)
+//            .frame(maxHeight: .infinity)
+//            .offset(x: rightDragTranslation)
+//            .gesture(
+//                // Drag gesture for swipe-to-dismiss functionality
+//                DragGesture()
+//                    .onChanged { value in
+//                        // Only allow rightward drags (positive translation)
+//                        if value.translation.width > 0 {
+//                            rightDragTranslation = value.translation.width
+//                        }
+//                    }
+//                    .onEnded { value in
+//                        handleDrawerDragEnd(currentPosition: rightDragTranslation)
+//                    }
+//            )
+//        }
+//        .frame(maxHeight: .infinity)
+//        .offset(x: showRightDrawer ? 0 : drawerWidth)
+//        .animation(AnimationConstants.standard, value: showRightDrawer)
+//    }
     
     // MARK: - Helper Functions
     
@@ -712,5 +859,7 @@ struct ToolItem: View {
 
 #Preview {
     MainView()
+        .environmentObject(UserStore())
+        .environmentObject(SessionStore())
 }
 

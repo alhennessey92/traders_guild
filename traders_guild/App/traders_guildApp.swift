@@ -13,23 +13,39 @@ struct traders_guildApp: App {
     // SessionStore is our global state object that keeps track of the logged-in user.
     // Using @StateObject ensures it lives for the lifetime of the app and is observable by all child views.
     @StateObject var session = SessionStore()
+    @StateObject var currentUser = UserStore()
     
     var body: some Scene {
         WindowGroup {
-            
-            
-            
-            if session.currentUser == nil {
-                ContentView()
-                    .environmentObject(session)
-            } else if session.showingTransition {
-                TransitionView()
-                    .environmentObject(session)
-            } else {
-                MainView()
-                    .environmentObject(session)
-                    .preferredColorScheme(.dark)
+            Group {
+                if session.currentUser == nil {
+                    ContentView()
+                } else if session.showingTransition {
+                    TransitionView()
+                } else {
+                    MainView()
+                        .preferredColorScheme(.dark)
+                }
+            }
+            .environmentObject(session)
+            .environmentObject(currentUser)
+            .onAppear {
+                // Keep UserStore in sync with SessionStore at launch
+                if let user = session.currentUser {
+                    currentUser.login(user: user)
+                } else {
+                    currentUser.logout()
+                }
+            }
+            .onChange(of: session.currentUser) { oldValue, newValue in
+                // Keep UserStore in sync with SessionStore whenever the session user changes
+                if let user = newValue {
+                    currentUser.login(user: user)
+                } else {
+                    currentUser.logout()
+                }
             }
         }
     }
 }
+

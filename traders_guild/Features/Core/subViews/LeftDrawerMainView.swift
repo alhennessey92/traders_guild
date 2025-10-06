@@ -11,7 +11,6 @@ import SwiftUI
 enum DrawerNavigationState: Equatable {
     case main
     case announcements
-    case chatrooms
     case topMarkers
     case leaderboard
     case guildWatchlist
@@ -22,14 +21,12 @@ enum DrawerNavigationState: Equatable {
 
 // MARK: - Bottom Sheet Content
 enum BottomSheetContent: Identifiable {
-    case chatroom(name: String)
     case announcement(id: Int, title: String)
     case userProfile(name: String)
     case event(id: Int)
     
     var id: String {
         switch self {
-        case .chatroom(let name): return "chatroom-\(name)"
         case .announcement(let id, _): return "announcement-\(id)"
         case .userProfile(let name): return "profile-\(name)"
         case .event(let id): return "event-\(id)"
@@ -39,6 +36,7 @@ enum BottomSheetContent: Identifiable {
 
 // MARK: - Main Drawer View
 struct LeftDrawerMainView: View {
+    let announcements: [GuildAnnouncement]
     let onClose: () -> Void
     
     @State private var dragTranslation: CGFloat = 0
@@ -63,6 +61,7 @@ struct LeftDrawerMainView: View {
                     navigationState: $navigationState,
                     currentSection: navigationState,
                     bottomSheetContent: $bottomSheetContent,
+                    announcements: announcements,
                     onClose: onClose,
                     dragTranslation: $dragTranslation
                 )
@@ -103,6 +102,10 @@ struct LeftDrawerMainView: View {
         .ignoresSafeArea()
         .sheet(item: $bottomSheetContent) { content in
             BottomSheetView(content: content)
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Color.clear)
+                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                .presentationCornerRadius(20)
         }
     }
 }
@@ -113,14 +116,15 @@ struct MainDrawerView: View {
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
+    @EnvironmentObject var currentUser: UserStore 
+    
     let menuItems: [(icon: String, title: String, state: DrawerNavigationState)] = [
         ("megaphone.fill", "Announcements", .announcements),
-        ("bubble.left.and.bubble.right.fill", "Chatrooms", .chatrooms),
         ("chart.line.uptrend.xyaxis", "Today's Top Markers", .topMarkers),
         ("trophy.fill", "Leaderboard", .leaderboard),
         ("star.fill", "Guild Watchlist", .guildWatchlist),
         ("calendar.badge.clock", "Events", .events),
-        ("person.3.fill", "User List", .userList),
+        ("person.2.fill", "User List", .userList),
         ("chart.bar.fill", "Statistics", .statistics)
     ]
     
@@ -260,6 +264,14 @@ struct MainDrawerView: View {
             
             // Footer
             VStack(spacing: 16) {
+                if let user = currentUser.user {
+                    UserRowView(user: user, onTap: {})
+                    
+                }
+                
+                
+                
+                
                 Rectangle()
                     .fill(Color.gray.opacity(0.4))
                     .frame(height: 0.5)
@@ -295,6 +307,7 @@ struct MainDrawerView: View {
                     .padding(.bottom, 3)
                 }
             }
+            .padding(.top, 20)
             .padding(.bottom, 40)
             .padding(.leading, 25)
             .padding(.trailing, 25)
@@ -307,6 +320,7 @@ struct SectionDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let currentSection: DrawerNavigationState
     @Binding var bottomSheetContent: BottomSheetContent?
+    let announcements: [GuildAnnouncement]
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
@@ -323,11 +337,14 @@ struct SectionDrawerView: View {
                         Image(systemName: "chevron.left")
                             .font(.title3)
                             .fontWeight(.semibold)
-                        Text("Guild")
+                        Text("KAOS")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                        + Text(" Guild")
                             .font(.headline)
                             .fontWeight(.medium)
                     }
-                    .foregroundColor(AppColors.accentColor)
+                    .foregroundColor(AppColors.whiteText.opacity(0.95))
                 }
                 
                 Spacer()
@@ -338,7 +355,8 @@ struct SectionDrawerView: View {
                     Image(systemName: "xmark")
                         .font(.title3)
                         .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        .foregroundColor(AppColors.whiteText.opacity(0.8))
+                        
                 }
             }
             .padding(.horizontal, 20)
@@ -346,19 +364,25 @@ struct SectionDrawerView: View {
             .padding(.bottom, 16)
             
             // Section title
-            HStack {
-                Image(systemName: sectionIcon)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-                Text(sectionTitle)
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.whiteText)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
+//            HStack {
+////                Image(systemName: sectionIcon)
+////                    .font(.title2)
+////                    .fontWeight(.bold)
+////                    .foregroundColor(AppColors.accentColor)
+//                Text(sectionTitle)
+//                    .font(.title)
+//                    .fontWeight(.bold)
+//                    .foregroundColor(AppColors.whiteText)
+//                Spacer()
+//            }
+            Text(sectionTitle)
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundColor(AppColors.whiteText)
+//                .frame(width: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
             
             Rectangle()
                 .fill(Color.gray.opacity(0.4))
@@ -374,25 +398,23 @@ struct SectionDrawerView: View {
         }
     }
     
-    private var sectionIcon: String {
-        switch currentSection {
-        case .main: return ""
-        case .announcements: return "megaphone.fill"
-        case .chatrooms: return "bubble.left.and.bubble.right.fill"
-        case .topMarkers: return "chart.line.uptrend.xyaxis"
-        case .leaderboard: return "trophy.fill"
-        case .guildWatchlist: return "star.fill"
-        case .events: return "calendar.badge.clock"
-        case .userList: return "person.3.fill"
-        case .statistics: return "chart.bar.fill"
-        }
-    }
+//    private var sectionIcon: String {
+//        switch currentSection {
+//        case .main: return ""
+//        case .announcements: return "megaphone.fill"
+//        case .topMarkers: return "chart.line.uptrend.xyaxis"
+//        case .leaderboard: return "trophy.fill"
+//        case .guildWatchlist: return "star.fill"
+//        case .events: return "calendar.badge.clock"
+//        case .userList: return "person.2.fill"
+//        case .statistics: return "chart.bar.fill"
+//        }
+//    }
     
     private var sectionTitle: String {
         switch currentSection {
         case .main: return ""
         case .announcements: return "Announcements"
-        case .chatrooms: return "Chatrooms"
         case .topMarkers: return "Top Markers"
         case .leaderboard: return "Leaderboard"
         case .guildWatchlist: return "Watchlist"
@@ -406,9 +428,7 @@ struct SectionDrawerView: View {
     private var sectionContent: some View {
         switch currentSection {
         case .announcements:
-            AnnouncementsListView(bottomSheetContent: $bottomSheetContent)
-        case .chatrooms:
-            ChatroomsListView(bottomSheetContent: $bottomSheetContent)
+            AnnouncementsListView(bottomSheetContent: $bottomSheetContent, announcements: announcements)
         case .topMarkers:
             TopMarkersView()
         case .leaderboard:
@@ -437,154 +457,34 @@ struct DrawerMenuButton: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.title3)
+                    .font(.headline)
                     .fontWeight(.medium)
-                    .foregroundColor(AppColors.accentColor)
-                    .frame(width: 28)
+                    .foregroundColor(AppColors.whiteText)
+                    .frame(width: 38, alignment: .leading)
                 
                 Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.title3)
+                    .fontWeight(.semibold)
                     .foregroundColor(AppColors.whiteText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.whiteText.opacity(0.4))
+//                Image(systemName: "chevron.right")
+//                    .font(.caption)
+//                    .fontWeight(.semibold)
+//                    .foregroundColor(AppColors.whiteText.opacity(0.4))
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.08))
-            )
+            .padding(.vertical, 8)
+//            .background(
+//                RoundedRectangle(cornerRadius: 10)
+//                    .fill(Color.white.opacity(0.08))
+//            )
         }
         .buttonStyle(PlainButtonStyle())
     }
 }
 
 // MARK: - Section List Views with Bottom Sheet Triggers
-struct AnnouncementsListView: View {
-    @Binding var bottomSheetContent: BottomSheetContent?
-    
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(1...8, id: \.self) { index in
-                Button(action: {
-                    bottomSheetContent = .announcement(id: index, title: "Important Guild Update \(index)")
-                }) {
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: "megaphone.fill")
-                            .font(.title3)
-                            .foregroundColor(AppColors.accentColor)
-                            .frame(width: 24)
-                        
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Important Guild Update \(index)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.whiteText)
-                                .multilineTextAlignment(.leading)
-                            
-                            Text("Tap to read the full announcement and details...")
-                                .font(.caption)
-                                .foregroundColor(AppColors.whiteText.opacity(0.6))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                            
-                            HStack {
-                                Text("Posted by Admin")
-                                    .font(.caption2)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.5))
-                                Circle()
-                                    .fill(AppColors.whiteText.opacity(0.5))
-                                    .frame(width: 3, height: 3)
-                                Text("\(index)h ago")
-                                    .font(.caption2)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.5))
-                            }
-                            .padding(.top, 2)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.3))
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
-
-struct ChatroomsListView: View {
-    @Binding var bottomSheetContent: BottomSheetContent?
-    
-    let chatrooms = [
-        ("general", "General Discussion", 42, true),
-        ("trading", "Trading Talk", 28, true),
-        ("analysis", "Market Analysis", 15, false),
-        ("off-topic", "Off Topic", 8, false),
-        ("announcements", "Announcements Only", 3, false),
-        ("resources", "Learning Resources", 12, false)
-    ]
-    
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(chatrooms, id: \.0) { room in
-                Button(action: {
-                    bottomSheetContent = .chatroom(name: room.1)
-                }) {
-                    HStack(spacing: 12) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(AppColors.accentColor.opacity(0.2))
-                                .frame(width: 44, height: 44)
-                            Image(systemName: "number")
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.accentColor)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(room.1)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.whiteText)
-                            
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(room.3 ? AppColors.bullCandleGreen : Color.gray.opacity(0.5))
-                                    .frame(width: 8, height: 8)
-                                Text("\(room.2) members")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.6))
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.3))
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
 
 struct EventsListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
@@ -939,8 +839,6 @@ struct BottomSheetView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     switch content {
-                    case .chatroom(let name):
-                        ChatroomDetailView(name: name)
                     case .announcement(let id, let title):
                         AnnouncementDetailView(id: id, title: title)
                     case .userProfile(let name):
@@ -951,6 +849,7 @@ struct BottomSheetView: View {
                 }
                 .padding()
             }
+            .background(Color.black.opacity(0.3))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -965,89 +864,6 @@ struct BottomSheetView: View {
 }
 
 // MARK: - Bottom Sheet Detail Views
-struct ChatroomDetailView: View {
-    let name: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "number")
-                    .font(.title)
-                    .foregroundColor(AppColors.accentColor)
-                Text(name)
-                    .font(.title2)
-                    .fontWeight(.bold)
-            }
-            
-            Text("This is where the full chat interface would go. You'd have message history, input field, user avatars, timestamps, etc.")
-                .foregroundColor(.secondary)
-            
-            // Placeholder for chat messages
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(1...10, id: \.self) { index in
-                    HStack(alignment: .top, spacing: 12) {
-                        Circle()
-                            .fill(AppColors.accentColor)
-                            .frame(width: 32, height: 32)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("User \(index)")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                Text("2:3\(index) PM")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            Text("This is a sample chat message in the \(name) room.")
-                                .font(.subheadline)
-                        }
-                    }
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(10)
-                }
-            }
-        }
-    }
-}
-
-struct AnnouncementDetailView: View {
-    let id: Int
-    let title: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "megaphone.fill")
-                    .font(.title)
-                    .foregroundColor(AppColors.accentColor)
-                Text(title)
-                    .font(.title2)
-                    .fontWeight(.bold)
-            }
-            
-            HStack {
-                Text("Posted by Guild Admin")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text("•")
-                    .foregroundColor(.secondary)
-                Text("\(id) hours ago")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Divider()
-            
-            Text("This is the full announcement content. You can include rich text, images, links, and more here. This view has all the space it needs to display detailed information.")
-                .font(.body)
-            
-            Text("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.")
-                .font(.body)
-                .padding(.top, 8)
-        }
-    }
-}
 
 struct UserProfileView: View {
     let name: String
@@ -1191,290 +1007,3 @@ extension View {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//import SwiftUI
-//
-//
-//struct LeftDrawerMainView: View {
-//    let onClose: () -> Void
-//    
-//    @State private var dragTranslation: CGFloat = 0
-//    
-//    var body: some View {
-//        VStack(alignment: .leading, spacing: 0) {
-//            // Header section with title and close button
-//            VStack {
-//                HStack {
-//                    Text("Guild")
-//                        .font(.title)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(.primary)
-//                    Spacer()
-//                    Button(action: {
-//                        withAnimation(AnimationConstants.standard) { onClose() }
-//                    }) {
-//                        Image(systemName: "chevron.left.chevron.left.dotted")
-//                            .font(.title2)
-//                            .fontWeight(.bold)
-//                            .foregroundColor(.primary)
-//                    }
-//                }
-//                
-//                // Guild Name and icon
-//                HStack {
-//                    Image(systemName: "shield.pattern.checkered")
-//                        .font(.title2)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(AppColors.accentColor)
-//                    Text("KAOS")
-//                        .font(.title2)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(AppColors.accentColor)
-//                    + Text(" Guild")
-//                        .font(.title2)
-//                        .fontWeight(.medium)
-//                        .foregroundColor(AppColors.accentColor)
-//                    Spacer()
-//                    
-//                }
-//                
-//                
-//                //Member counts
-//                HStack(spacing: 2) {
-//                    
-//                    Text("12")
-//                        .font(.caption)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(AppColors.whiteText)
-//                    + Text(" Members")
-//                        .font(.caption)
-//                        .foregroundColor(AppColors.whiteText.opacity(0.7))
-//                    Circle()
-//                        .fill(AppColors.whiteText.opacity(0.7))
-//                        .frame(width: 5, height: 5)
-//                        .padding(.top, 1)
-//                        .padding(.leading, 3)
-//                        .padding(.trailing, 3)
-//                    Text("52")
-//                        .font(.caption)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(AppColors.whiteText)
-//                    + Text(" Online")
-//                        .font(.caption)
-//                        .foregroundColor(AppColors.whiteText.opacity(0.7))
-//                    Circle()
-//                        .fill(AppColors.bullCandleGreen)
-//                        .frame(width: 7, height: 7)
-//                        .padding(.top, 0)
-//                        .padding(.leading, 3)
-//                        .padding(.trailing, 3)
-//                    
-//                    Spacer()
-//                }
-//                .padding(.top, 6)
-//                
-//                //Guild Stats
-//                HStack(spacing: 2) {
-//                    Image(systemName: "shield.pattern.checkered")
-//                        .font(.footnote)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(AppColors.accentColor)
-//                    Text("3456")
-//                        .font(.caption)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(AppColors.accentColor)
-//                    + Text(" Guild Reputation")
-//                        .font(.caption)
-//                        .foregroundColor(AppColors.whiteText.opacity(0.7))
-//                    Circle()
-//                        .fill(AppColors.whiteText.opacity(0.7))
-//                        .frame(width: 5, height: 5)
-//                        .padding(.top, 1)
-//                        .padding(.leading, 3)
-//                        .padding(.trailing, 3)
-//                    Text("78%")
-//                        .font(.caption)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(AppColors.whiteText)
-//                    + Text(" Guild Accuracy")
-//                        .font(.caption)
-//                        .foregroundColor(AppColors.whiteText.opacity(0.7))
-//                    
-//                    
-//                    Spacer()
-//                }
-//                .padding(.top, 6)
-//                
-//                    
-//                Text("Tagline describing the main content and premis of the guild, or a short description of the guild")
-//                    .font(.caption)
-//                    .foregroundColor(AppColors.whiteText.opacity(0.7))
-//                    .frame(maxWidth: .infinity, alignment: .leading)
-//                    .padding(.top, 4)
-//                    .multilineTextAlignment(.leading)
-//                        //.animation(nil, value: UUID())
-//                
-//                
-//                
-//               
-//                
-//                Rectangle()
-//                    .fill(Color.gray.opacity(0.4))
-//                    .frame(height: 0.5)
-//                    .padding(.top, 6)
-//                
-//                
-//            }
-//            .padding(.leading, 25)
-//            .padding(.trailing, 25)
-//            .padding(.bottom, 4)
-//            .padding(.top, 60)
-//            
-//            
-//            
-//            // Placeholder content area with gesture support
-//            ScrollView {
-//                VStack(spacing: 16) {
-//                    Text("Drawer content goes here")
-//                        .foregroundColor(.secondary)
-//                        .padding()
-//                    
-//                    // Add your drawer-specific content here
-////                    ForEach(1...10, id: \.self) { index in
-////                        HStack {
-////                            Text("Item \(index)")
-////                                .foregroundColor(.primary)
-////                            Spacer()
-////                            Image(systemName: "chevron.right")
-////                                .foregroundColor(.secondary)
-////                        }
-////                        .padding()
-////                        .background(Color.gray.opacity(0.1))
-////                        .cornerRadius(8)
-////                        .padding(.horizontal)
-////                    }
-//                }
-//            }
-//            .simultaneousGesture(
-//                // Add drag gesture to ScrollView so it works inside drawer content
-//                DragGesture()
-//                    .onChanged { value in
-//                        // Only allow dismissal drags (left for left drawer, right for right drawer)
-//                        if (value.translation.width < 0) {
-//                            dragTranslation = value.translation.width
-//                        }
-//                    }
-//                    .onEnded { value in
-//                        // Check if dragged far enough to dismiss
-//                        let threshold = LayoutConstants.drawerDismissThreshold
-//                        if (dragTranslation < -threshold) {
-//                            onClose()
-//                        }
-//                        dragTranslation = 0
-//                    }
-//            )
-//            
-//            Spacer()
-//            
-//            VStack(spacing: 16) {
-//                Rectangle()
-//                    .fill(Color.gray.opacity(0.4))
-//                    .frame(height: 0.5)
-//                    .padding(.top, 0)
-//                    .padding(.bottom, 6)
-//                HStack {
-//                    Button(action: {
-//                        
-//                    }) {
-//                        HStack{
-//                            Image(systemName: "arrow.trianglehead.2.counterclockwise")
-//                                .font(.callout)
-//                                .fontWeight(.medium)
-//                                .foregroundColor(AppColors.whiteText.opacity(0.7))
-//                            Text("Switch Guild")
-//                                .font(.subheadline)
-//                                .fontWeight(.medium)
-//                                .foregroundColor(AppColors.whiteText)
-//                            
-//                        }
-//                        
-//                    }
-//                    Spacer()
-//                    Button(action: {
-//                        
-//                    }) {
-//                        Image(systemName: "gearshape.fill")
-//                            .font(.callout)
-//                            .fontWeight(.medium)
-//                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-//                    }
-//                    .padding(.trailing, 6)
-//                    Button(action: {
-//                        
-//                    }) {
-//                        Image(systemName: "square.and.arrow.up.fill")
-//                            .font(.callout)
-//                            .fontWeight(.medium)
-//                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-//                    }
-//                    .padding(.bottom, 3)
-//                    
-//                }
-//            }
-//            .padding(.bottom, 40)
-//            .padding(.leading, 25)
-//            .padding(.trailing, 25)
-//        
-//        }
-//        .frame(maxWidth: .infinity, maxHeight: .infinity)
-//        .background(
-//            ZStack {
-//                // the frosted glass base
-//                Rectangle()
-//                    .fill(.ultraThinMaterial)
-//                    .ignoresSafeArea()
-//
-//                // darken/tint the material
-//                AppColors.drawerBackground.opacity(0.6)               // tweak opacity
-//            }
-//        )
-//        .overlay(
-//            // Subtle border on the side facing the content
-//            Rectangle()
-//                .fill(Color.white.opacity(0.1))
-//                .frame(width: 1)
-//                .frame(maxHeight: .infinity),
-//            alignment: .trailing        )
-//        .clipShape(
-//            // Custom corner rounding - only round corners opposite to the edge
-//            UnevenRoundedRectangle(
-//                cornerRadii: .init(
-//                    topLeading: 0,
-//                    bottomLeading: 0,
-//                    bottomTrailing: LayoutConstants.cornerRadius,
-//                    topTrailing: LayoutConstants.cornerRadius
-//                )
-//            )
-//        )
-//        .shadow(radius: LayoutConstants.shadowRadius)
-//        .ignoresSafeArea()
-//    }
-//}

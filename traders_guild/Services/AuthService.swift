@@ -23,7 +23,7 @@ class AuthService {
         // Simulate network delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             // Create a mock user object
-            let user = User(id: UUID().uuidString, name: "Demo User", email: email)
+            let user = User(id: UUID(), name: "Demo User", email: email, reputation: 100, isOnline: true , role: .member)
             completion(.success(user))
         }
     }
@@ -37,7 +37,7 @@ class AuthService {
     func signup(data: SignupData, completion: @escaping (Result<User, Error>) -> Void) {
         // Simulate network delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            let user = User(id: UUID().uuidString, name: data.name, email: data.email)
+            let user = User(id: UUID(), name: data.name, email: data.email, reputation: 100, isOnline: true , role: .member)
             completion(.success(user))
         }
     }

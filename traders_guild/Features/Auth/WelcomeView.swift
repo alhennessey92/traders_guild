@@ -45,9 +45,10 @@ struct WelcomeView: View {
                 
                     /// TESTING PURPOSES ONLY TO GET TO ROOTVIEW DIRECT
                     .onAppear() {
-                        let user = User(id: UUID().uuidString, name: data.name, email: data.email)
-                        session.setUser(user) // ✅ This flips the root to MainAppView
-                        session.showingTransition = false // trigger the TransitionView
+                        let displayName = !data.username.isEmpty ? data.username : (!data.name.isEmpty ? data.name : "Demo User")
+                        let user = User(id: UUID(), name: displayName, email: data.email, reputation: 100, isOnline: true, role: .member)
+                        session.setUser(user)
+                        session.showingTransition = false
                     }
                    
 

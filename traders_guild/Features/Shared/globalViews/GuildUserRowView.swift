@@ -9,7 +9,7 @@ import SwiftUI
 
 
 // MARK: - User Row View
-struct UserRowView: View {
+struct GuildUserRowView: View {
     let user: GuildUser
     let onTap: () -> Void
     

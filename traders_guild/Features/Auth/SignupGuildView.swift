@@ -100,7 +100,7 @@ struct SignupGuildView: View {
                             
                         ){
                             // Save signup data → create User object
-                            let user = User(id: UUID().uuidString, name: data.name, email: data.email)
+                            let user = User(id: UUID(), name: data.name, email: data.email, reputation: 100, isOnline: true , role: .member)
                             session.setUser(user) // ✅ This flips the root to MainAppView
                             session.showingTransition = true // trigger the TransitionView
                         }
