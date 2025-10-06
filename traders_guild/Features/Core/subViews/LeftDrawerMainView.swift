@@ -7,7 +7,16 @@
 
 import SwiftUI
 
-// MARK: - Navigation State
+/// High-level navigation state for the left drawer.
+/// Determines which full-screen section the drawer is showing.
+/// - main: Home menu for the drawer
+/// - announcements: Guild announcements list
+/// - topMarkers: Daily highlights/markers
+/// - leaderboard: Guild leaderboard section
+/// - guildWatchlist: Guild watchlist
+/// - events: Upcoming events
+/// - userList: Members list
+/// - statistics: Guild statistics
 enum DrawerNavigationState: Equatable {
     case main
     case announcements
@@ -19,8 +28,10 @@ enum DrawerNavigationState: Equatable {
     case statistics
 }
 
-// MARK: - Bottom Sheet Content
-enum BottomSheetContent: Identifiable {
+/// Identifies which bottom sheet content to present from the left drawer.
+/// Conforms to `Identifiable` for `.sheet(item:)` and `Equatable` to support `.onChange`.
+/// Each case carries the minimal data needed to render its detail view.
+enum BottomSheetContent: Identifiable, Equatable {
     case announcement(id: Int, title: String)
     case userProfile(name: String)
     case event(id: Int)
@@ -34,14 +45,32 @@ enum BottomSheetContent: Identifiable {
     }
 }
 
-// MARK: - Main Drawer View
+/// The main container for the left-side drawer.
+/// Handles navigation between drawer sections and presents bottom sheets for detail views.
+/// This view mirrors sheet presentation behavior with the right drawer (clear background, overlay, and dismissal).
 struct LeftDrawerMainView: View {
+    // MARK: - Bindings & State
+    // announcements: Data source for the Announcements section
+    // sheetOverlayVisible: Controls the global dimming overlay shown behind sheets
+    // dismissSheetsSignal: External signal used to programmatically dismiss any presented sheet
+    // onClose: Callback to close the drawer
+    // dragTranslation: Current drag offset for swipe-to-dismiss
+    // navigationState: Which section is currently shown inside the drawer
+    // bottomSheetContent: Which detail sheet is currently presented (if any)
     let announcements: [GuildAnnouncement]
+    @Binding var sheetOverlayVisible: Bool
+    @Binding var dismissSheetsSignal: Bool
     let onClose: () -> Void
     
     @State private var dragTranslation: CGFloat = 0
     @State private var navigationState: DrawerNavigationState = .main
     @State private var bottomSheetContent: BottomSheetContent? = nil
+    
+    /// Dismisses any currently presented sheet from the left drawer.
+    /// Used when the global overlay is tapped/dragged or the drawer closes.
+    private func dismissAllSheets() {
+        bottomSheetContent = nil
+    }
     
     var body: some View {
         ZStack {
@@ -100,6 +129,7 @@ struct LeftDrawerMainView: View {
         )
         .shadow(radius: LayoutConstants.shadowRadius)
         .ignoresSafeArea()
+        // Present detail sheets with a clear background and consistent detents (matches right drawer)
         .sheet(item: $bottomSheetContent) { content in
             BottomSheetView(content: content)
                 .presentationDetents([.medium, .large])
@@ -107,17 +137,29 @@ struct LeftDrawerMainView: View {
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                 .presentationCornerRadius(20)
         }
+        // Keep the global overlay in sync with whether a sheet is presented
+        .onChange(of: bottomSheetContent) { oldValue, newValue in
+            sheetOverlayVisible = newValue != nil
+        }
+        // Respond to external dismissal requests (e.g., tapping the overlay)
+        .onChange(of: dismissSheetsSignal) { oldValue, newValue in
+            if newValue {
+                dismissAllSheets()
+                dismissSheetsSignal = false
+            }
+        }
     }
 }
 
-// MARK: - Main Drawer View (Home Screen)
+/// Drawer home screen showing guild header and navigation menu for sections.
+/// Selecting a menu item updates `navigationState` to replace the content area.
 struct MainDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
-    @EnvironmentObject var currentUser: UserStore 
-    
+    /// Menu configuration for the left drawer home screen.
+    /// Each entry maps to a destination `DrawerNavigationState`.
     let menuItems: [(icon: String, title: String, state: DrawerNavigationState)] = [
         ("megaphone.fill", "Announcements", .announcements),
         ("chart.line.uptrend.xyaxis", "Today's Top Markers", .topMarkers),
@@ -127,6 +169,8 @@ struct MainDrawerView: View {
         ("person.2.fill", "User List", .userList),
         ("chart.bar.fill", "Statistics", .statistics)
     ]
+    
+    @EnvironmentObject var currentUser: UserStore 
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -315,7 +359,8 @@ struct MainDrawerView: View {
     }
 }
 
-// MARK: - Section Drawer View (Full Drawer Replacement)
+/// Full-screen replacement content inside the left drawer for a specific section.
+/// Includes its own header with back/close controls and hosts the section content.
 struct SectionDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let currentSection: DrawerNavigationState
@@ -411,6 +456,7 @@ struct SectionDrawerView: View {
 //        }
 //    }
     
+    /// Human-readable title for the current section header.
     private var sectionTitle: String {
         switch currentSection {
         case .main: return ""
@@ -424,6 +470,7 @@ struct SectionDrawerView: View {
         }
     }
     
+    /// Section content switcher that renders the appropriate view for the current section.
     @ViewBuilder
     private var sectionContent: some View {
         switch currentSection {
@@ -447,7 +494,7 @@ struct SectionDrawerView: View {
     }
 }
 
-// MARK: - Menu Button Component
+/// Reusable row-styled button used in the drawer's main menu.
 struct DrawerMenuButton: View {
     let icon: String
     let title: String
@@ -484,8 +531,7 @@ struct DrawerMenuButton: View {
     }
 }
 
-// MARK: - Section List Views with Bottom Sheet Triggers
-
+/// Events list that triggers a bottom sheet when an item is tapped.
 struct EventsListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     
@@ -545,6 +591,7 @@ struct EventsListView: View {
     }
 }
 
+/// Members list that triggers a bottom sheet for a user profile.
 struct UserListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     
@@ -611,7 +658,7 @@ struct UserListView: View {
     }
 }
 
-// MARK: - Simple List Views (No Bottom Sheets Needed)
+/// Simple list showcasing top markers/performers.
 struct TopMarkersView: View {
     var body: some View {
         VStack(spacing: 10) {
@@ -659,6 +706,7 @@ struct TopMarkersView: View {
     }
 }
 
+/// Leaderboard summary for the guild.
 struct LeaderboardView: View {
     var body: some View {
         VStack(spacing: 10) {
@@ -697,6 +745,7 @@ struct LeaderboardView: View {
     }
 }
 
+/// Guild watchlist preview.
 struct WatchlistView: View {
     var body: some View {
         VStack(spacing: 10) {
@@ -744,6 +793,7 @@ struct WatchlistView: View {
     }
 }
 
+/// Statistics overview cards for the guild.
 struct StatisticsView: View {
     var body: some View {
         VStack(spacing: 12) {
@@ -811,6 +861,7 @@ struct StatisticsView: View {
     }
 }
 
+/// One-line label/value row used in statistics cards.
 struct StatRow: View {
     let label: String
     let value: String
@@ -829,7 +880,7 @@ struct StatRow: View {
     }
 }
 
-// MARK: - Bottom Sheet View
+/// Container for detail content presented as a sheet from the left drawer.
 struct BottomSheetView: View {
     let content: BottomSheetContent
     @Environment(\.dismiss) private var dismiss
@@ -849,7 +900,6 @@ struct BottomSheetView: View {
                 }
                 .padding()
             }
-            .background(Color.black.opacity(0.3))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -863,8 +913,7 @@ struct BottomSheetView: View {
     }
 }
 
-// MARK: - Bottom Sheet Detail Views
-
+/// Detail content for a user profile presented in a sheet.
 struct UserProfileView: View {
     let name: String
     
@@ -935,6 +984,7 @@ struct UserProfileView: View {
     }
 }
 
+/// Detail content for an event presented in a sheet.
 struct EventDetailView: View {
     let id: Int
     
@@ -995,7 +1045,8 @@ struct EventDetailView: View {
     }
 }
 
-// MARK: - Press Events Helper
+/// Gesture helper to detect press-and-release interactions.
+/// Useful for custom button press states.
 extension View {
     func pressEvents(onPress: @escaping (() -> Void), onRelease: @escaping (() -> Void)) -> some View {
         self.simultaneousGesture(
@@ -1005,5 +1056,4 @@ extension View {
         )
     }
 }
-
 

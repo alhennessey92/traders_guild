@@ -8,7 +8,8 @@
 import SwiftUI
 
 
-// MARK: - Sheet Content Type
+/// Identifies which sheet content to present from the right drawer (user or chatroom).
+/// Conforms to `Identifiable` and `Equatable` for use with `.sheet(item:)` and `.onChange`.
 enum RightDrawerSheetContent: Identifiable, Equatable {
     case user(GuildUser)
     case chatroom(Chatroom)
@@ -25,8 +26,20 @@ enum RightDrawerSheetContent: Identifiable, Equatable {
     }
 }
 
-// MARK: - Right Drawer Main View
+/// The main container for the right-side drawer.
+/// Hosts search/filter UI, lists for chatrooms and users, and presents detail sheets.
 struct RightDrawerMainView: View {
+    // MARK: - Bindings & State
+    // onClose: Callback to close the drawer
+    // chatrooms / onlineUsers / offlineUsers / friends: Data sources for lists
+    // sheetOverlayVisible: Controls the global overlay when a sheet is presented
+    // dismissSheetsSignal: External signal to programmatically dismiss any sheet
+    // dragTranslation: Current drag offset for swipe-to-dismiss
+    // searchText: Current text in the search field
+    // showFilterSheet: Controls filter options sheet presentation
+    // sheetContent: Which detail sheet is currently shown (user or chatroom)
+    // isSearchFocused: Tracks keyboard focus for search
+
     let onClose: () -> Void
     let chatrooms: [Chatroom]
     let onlineUsers: [GuildUser]
@@ -51,6 +64,7 @@ struct RightDrawerMainView: View {
     
     
     
+    /// Filters the respective lists by `searchText` (case-insensitive).
     var filteredChatrooms: [Chatroom] {
         if searchText.isEmpty {
             return chatrooms
@@ -58,6 +72,7 @@ struct RightDrawerMainView: View {
         return chatrooms.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
+    /// Filters the respective lists by `searchText` (case-insensitive).
     var filteredOnlineUsers: [GuildUser] {
         if searchText.isEmpty {
             return onlineUsers
@@ -65,6 +80,7 @@ struct RightDrawerMainView: View {
         return onlineUsers.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
+    /// Filters the respective lists by `searchText` (case-insensitive).
     var filteredOfflineUsers: [GuildUser] {
         if searchText.isEmpty {
             return offlineUsers
@@ -72,6 +88,7 @@ struct RightDrawerMainView: View {
         return offlineUsers.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
+    /// Filters the respective lists by `searchText` (case-insensitive).
     var filteredFriends: [GuildUser] {
         if searchText.isEmpty {
             return friends
@@ -299,6 +316,8 @@ struct RightDrawerMainView: View {
         )
         .shadow(radius: LayoutConstants.shadowRadius)
         .ignoresSafeArea()
+        
+        // Present detail sheets with clear background and consistent detents (matches left drawer)
         .sheet(item: $sheetContent) { content in
             switch content {
             case .user(let user):
@@ -315,15 +334,20 @@ struct RightDrawerMainView: View {
                     .presentationCornerRadius(20)
             }
         }
+        
+        // Keep the global overlay in sync with whether a sheet is presented
         .onChange(of: sheetContent) { oldValue, newValue in
             sheetOverlayVisible = newValue != nil
         }
+        
+        // Respond to external dismissal requests (e.g., tapping the overlay)
         .onChange(of: dismissSheetsSignal) { oldValue, newValue in
             if newValue {
                 dismissAllSheets()
                 dismissSheetsSignal = false
             }
         }
+        
         .sheet(isPresented: $showFilterSheet) {
             FilterOptionsView()
                 .presentationDetents([.fraction(0.8)])
@@ -338,7 +362,7 @@ struct RightDrawerMainView: View {
     }
 }
 
-// MARK: - Chatroom Disclosure Group
+/// Collapsible section listing chatrooms; tapping opens a chatroom sheet.
 struct ChatroomDisclosureGroup: View {
     let chatrooms: [Chatroom]
     let onChatroomTap: (Chatroom) -> Void
@@ -397,8 +421,7 @@ struct ChatroomDisclosureGroup: View {
 }
 
 
-
-// MARK: - User Disclosure Group
+/// Collapsible section listing users; tapping opens a user chat sheet.
 struct UserDisclosureGroup: View {
     let title: String
     let count: Int
@@ -460,8 +483,7 @@ struct UserDisclosureGroup: View {
 }
 
 
-
-// MARK: - Chatroom Sheet
+/// Sheet container for chatroom content with a compact header and dismiss action.
 struct ChatroomSheet: View {
     let chatroom: Chatroom
     @Environment(\.dismiss) private var dismiss
@@ -514,7 +536,7 @@ struct ChatroomSheet: View {
     }
 }
 
-// MARK: - Chatroom Content View
+/// Mocked chatroom content: messages list and input field.
 struct ChatroomContentView: View {
     let chatroom: Chatroom
     @State private var messageText = ""
@@ -630,7 +652,7 @@ struct ChatroomContentView: View {
     }
 }
 
-// MARK: - User Chat Sheet
+/// Sheet container for 1:1 user chat content with a compact header and dismiss action.
 struct UserChatSheet: View {
     let user: GuildUser
     @Environment(\.dismiss) private var dismiss
@@ -681,7 +703,7 @@ struct UserChatSheet: View {
     }
 }
 
-// MARK: - Chat Content View
+/// Mocked 1:1 chat content: messages list and input field.
 struct ChatContentView: View {
     let user: GuildUser
     @State private var messageText = ""
@@ -779,7 +801,7 @@ struct ChatContentView: View {
     }
 }
 
-// MARK: - Filter Options View
+/// Filter options presented as a sheet from the right drawer.
 struct FilterOptionsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showOnlineOnly = false

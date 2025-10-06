@@ -137,6 +137,7 @@ struct MainView: View {
     /// Controls overlay when chat sheets are presented
     @State private var showSheetOverlay: Bool = false
     @State private var dismissRightSheetsSignal: Bool = false
+    @State private var dismissLeftSheetsSignal: Bool = false
     
     // MARK: - Computed Properties
     /// Get current screen size for responsive layout calculations
@@ -348,16 +349,18 @@ struct MainView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 dismissRightSheetsSignal = true
+                dismissLeftSheetsSignal = true
             }
             .simultaneousGesture(DragGesture().onChanged { _ in
                 dismissRightSheetsSignal = true
+                dismissLeftSheetsSignal = true
             })
     }
     
     /// Left drawer view with swipe-to-dismiss functionality
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView(announcements: announcements) {
+            LeftDrawerMainView(announcements: announcements, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false
