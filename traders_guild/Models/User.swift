@@ -9,31 +9,6 @@ import Foundation
 import SwiftUI
 
 
-enum UserRole: String, Codable {
-    case member = "Member"
-    case admin = "Admin"
-    case moderator = "Moderator"
-}
-
-// MARK: - UserRole UI Extensions
-extension UserRole {
-    var foregroundColor: Color {
-        switch self {
-        case .admin: return .orange
-        case .moderator: return .blue
-        case .member: return AppColors.whiteText.opacity(0.7)
-        }
-    }
-    
-    var fontWeight: Font.Weight {
-        switch self {
-        case .admin: return .bold
-        case .moderator: return .bold
-        case .member: return .regular
-        }
-    }
-}
-
 
 
 // Represents a logged-in user
@@ -50,17 +25,54 @@ struct User: Identifiable, Codable, Equatable {
 }
 
 
-
-
-// MARK: - User Model
-struct GuildUser: Identifiable, Equatable {
-    let id = UUID()
-    let name: String
-    let reputation: Int
-    let isOnline: Bool
-    let isFriend: Bool
-    let status: String?
-    let role: UserRole
-    let newMessage: Bool
+// MARK: - User Friends Model
+struct UserFriends: Identifiable, Codable, Equatable {
+    var id: UUID
+    var friendID: UUID
+    var dateFriendAdded: Date
+    
+    init(
+        id: UUID = UUID(),
+        friendID: UUID,
+        dateFriendAdded: Date = Date()
+    ) {
+        self.id = id
+        self.friendID = friendID
+        self.dateFriendAdded = dateFriendAdded
+    }
 }
+
+
+
+extension UserFriends {
+    static let sampleFriends: [UserFriends] = [
+        UserFriends(
+            friendID: UserIDs.seanPain,
+            dateFriendAdded: Date().addingTimeInterval(-86400 * 30) // 30 days ago
+        ),
+        UserFriends(
+            friendID: UserIDs.oldFriend,
+            dateFriendAdded: Date().addingTimeInterval(-86400 * 60) // 60 days ago
+        ),
+        UserFriends(
+            friendID: UserIDs.tradeMaster,
+            dateFriendAdded: Date().addingTimeInterval(-86400 * 15) // 15 days ago
+        ),
+        UserFriends(
+            friendID: UserIDs.bullRunner,
+            dateFriendAdded: Date().addingTimeInterval(-86400 * 7) // 7 days ago
+        ),
+        UserFriends(
+            friendID: UserIDs.stockHawk,
+            dateFriendAdded: Date().addingTimeInterval(-86400 * 3) // 3 days ago
+        ),
+        UserFriends(
+            friendID: UserIDs.nightOwl,
+            dateFriendAdded: Date().addingTimeInterval(-86400 * 45) // 45 days ago
+        )
+    ]
+}
+
+
+
 

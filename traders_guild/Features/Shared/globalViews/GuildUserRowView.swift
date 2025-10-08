@@ -44,12 +44,12 @@ struct GuildUserRowView: View {
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
                     HStack (spacing: 2){
-                        if user.isFriend {
-                            Image(systemName: "star.fill")
-                                .font(.caption2)
-                                .foregroundColor(AppColors.accentColor)
-                            
-                        }
+//                        if user.isFriend {
+//                            Image(systemName: "star.fill")
+//                                .font(.caption2)
+//                                .foregroundColor(AppColors.accentColor)
+//                            
+//                        }
                         Text(user.name)
                             .font(.subheadline)
                             .fontWeight(.medium)

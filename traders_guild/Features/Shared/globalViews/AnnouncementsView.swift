@@ -37,10 +37,7 @@ struct AnnouncementsListView: View {
                     AnnouncementRowView(
                         announcement: announcement,
                         onTap: {
-                            bottomSheetContent = .announcement(
-                                id: announcement.id.hashValue,
-                                title: announcement.title
-                            )
+                            bottomSheetContent = .announcement(announcement)
                         }
                     )
                 }
@@ -69,7 +66,7 @@ struct AnnouncementRowView: View {
                     
                     if announcement.isImportant {
                         Circle()
-                            .fill(Color.red.opacity(0.7))
+                            .fill(Color.red.opacity(0.9))
                             .frame(width: 8, height: 8)
                             .offset(x: 8, y: -8)
                     }
@@ -198,22 +195,7 @@ struct AnnouncementRowView: View {
 // MARK: - Enhanced Announcement Detail View
 struct AnnouncementDetailView: View {
     let announcement: GuildAnnouncement
-    
-    init(id: Int, title: String) {
-        // This is a temporary solution - in a real app you'd fetch the announcement by ID
-        // For now, we'll create a sample announcement
-        // Use modulo to keep the time offset reasonable and prevent overflow
-        let safeTimeOffset = abs(id % 168) // Limit to 0-167 hours (about a week)
-        self.announcement = GuildAnnouncement(
-            title: title,
-            content: "This is the full announcement content. You can include rich text, images, links, and more here. This view has all the space it needs to display detailed information.\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.\n\nImportant trading updates and guild information will be posted here regularly.",
-            author: "Guild Admin",
-            authorRole: .admin,
-            postedAt: Date().addingTimeInterval(TimeInterval(-safeTimeOffset * 3600)),
-            isImportant: (id % 10) <= 3 // Use modulo to determine importance safely
-        )
-    }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header with icon and title

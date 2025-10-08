@@ -32,15 +32,15 @@ enum DrawerNavigationState: Equatable {
 /// Conforms to `Identifiable` for `.sheet(item:)` and `Equatable` to support `.onChange`.
 /// Each case carries the minimal data needed to render its detail view.
 enum BottomSheetContent: Identifiable, Equatable {
-    case announcement(id: Int, title: String)
+    case announcement(GuildAnnouncement)
     case userProfile(name: String)
-    case event(id: Int)
+    case event(GuildEvent)
     
     var id: String {
         switch self {
-        case .announcement(let id, _): return "announcement-\(id)"
+        case .announcement(let announcement): return "announcement-\(announcement.id)"
         case .userProfile(let name): return "profile-\(name)"
-        case .event(let id): return "event-\(id)"
+        case .event(let event): return "event-\(event.id)"
         }
     }
 }
@@ -58,6 +58,7 @@ struct LeftDrawerMainView: View {
     // navigationState: Which section is currently shown inside the drawer
     // bottomSheetContent: Which detail sheet is currently presented (if any)
     let announcements: [GuildAnnouncement]
+    let events: [GuildEvent]
     @Binding var sheetOverlayVisible: Bool
     @Binding var dismissSheetsSignal: Bool
     let onClose: () -> Void
@@ -91,6 +92,7 @@ struct LeftDrawerMainView: View {
                     currentSection: navigationState,
                     bottomSheetContent: $bottomSheetContent,
                     announcements: announcements,
+                    events: events,
                     onClose: onClose,
                     dragTranslation: $dragTranslation
                 )
@@ -366,6 +368,7 @@ struct SectionDrawerView: View {
     let currentSection: DrawerNavigationState
     @Binding var bottomSheetContent: BottomSheetContent?
     let announcements: [GuildAnnouncement]
+    let events: [GuildEvent]
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
@@ -483,7 +486,7 @@ struct SectionDrawerView: View {
         case .guildWatchlist:
             WatchlistView()
         case .events:
-            EventsListView(bottomSheetContent: $bottomSheetContent)
+            EventsListView(bottomSheetContent: $bottomSheetContent, events: events)
         case .userList:
             UserListView(bottomSheetContent: $bottomSheetContent)
         case .statistics:
@@ -531,65 +534,7 @@ struct DrawerMenuButton: View {
     }
 }
 
-/// Events list that triggers a bottom sheet when an item is tapped.
-struct EventsListView: View {
-    @Binding var bottomSheetContent: BottomSheetContent?
-    
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(1...6, id: \.self) { index in
-                Button(action: {
-                    bottomSheetContent = .event(id: index)
-                }) {
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(spacing: 4) {
-                            Text("OCT")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                            Text("\(index + 5)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.whiteText)
-                        }
-                        .frame(width: 50)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(8)
-                        
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Guild Tournament \(index)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.whiteText)
-                            
-                            Text("Join us for an exciting competition!")
-                                .font(.caption)
-                                .foregroundColor(AppColors.whiteText.opacity(0.6))
-                                .lineLimit(2)
-                            
-                            Text("7:00 PM EST • 34 attending")
-                                .font(.caption2)
-                                .foregroundColor(AppColors.accentColor)
-                                .padding(.top, 2)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.3))
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
+
 
 /// Members list that triggers a bottom sheet for a user profile.
 struct UserListView: View {
@@ -890,12 +835,12 @@ struct BottomSheetView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     switch content {
-                    case .announcement(let id, let title):
-                        AnnouncementDetailView(id: id, title: title)
+                    case .announcement(let announcement):
+                        AnnouncementDetailView(announcement: announcement)
                     case .userProfile(let name):
                         UserProfileView(name: name)
-                    case .event(let id):
-                        EventDetailView(id: id)
+                    case .event(let event):
+                        EventDetailView(event: event)
                     }
                 }
                 .padding()
@@ -984,66 +929,7 @@ struct UserProfileView: View {
     }
 }
 
-/// Detail content for an event presented in a sheet.
-struct EventDetailView: View {
-    let id: Int
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(spacing: 4) {
-                    Text("OCT")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("\(id + 5)")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                }
-                .frame(width: 80)
-                .padding(.vertical, 12)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(10)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Guild Tournament \(id)")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                    Text("7:00 PM EST")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Label("34 members attending", systemImage: "person.3.fill")
-                    .foregroundColor(AppColors.accentColor)
-                Label("Guild Hall", systemImage: "location.fill")
-                    .foregroundColor(.secondary)
-            }
-            
-            Text("Event Description")
-                .font(.headline)
-                .padding(.top, 8)
-            
-            Text("Join us for an exciting guild tournament! Compete against other members, earn reputation points, and climb the leaderboard. Prizes for top performers!")
-                .font(.body)
-            
-            Button(action: {}) {
-                Text("RSVP to Event")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(AppColors.accentColor)
-                    .cornerRadius(10)
-            }
-            .padding(.top, 8)
-        }
-    }
-}
+
 
 /// Gesture helper to detect press-and-release interactions.
 /// Useful for custom button press states.

@@ -42,74 +42,17 @@ struct MainView: View {
     
     // MARK: - Sample data
     
+    @State private var allUsers: [GuildUser] = GuildUser.sampleUsers
+    @State private var userFriends: [UserFriends] = UserFriends.sampleFriends
+    @State private var chatrooms: [Chatroom] = Chatroom.sampleChatrooms
+    @State private var announcements: [GuildAnnouncement] = GuildAnnouncement.sampleGuildAnnouncment
+    @State private var events: [GuildEvent] = GuildEvent.sampleGuildEvents
     
-    // FRIENDS
-    @State private var friends: [GuildUser] = [
-        GuildUser(name: "SeanPain", reputation: 50, isOnline: true, isFriend: true, status: "Always online", role: .moderator, newMessage: false),
-        GuildUser(name: "OldFriend", reputation: 44, isOnline: false, isFriend: true, status: "Busy IRL", role: .member, newMessage: true)
-    ]
+
     
-    // CHATROOM
-    @State private var chatrooms: [Chatroom] = [
-        Chatroom(name: "General Discussion", memberCount: 42, isActive: true, lastMessage: "Great analysis on BTC!"),
-        Chatroom(name: "Trading Talk", memberCount: 28, isActive: true, lastMessage: "AAPL looking bullish"),
-        Chatroom(name: "Market Analysis", memberCount: 15, isActive: false, lastMessage: "Chart patterns forming"),
-        Chatroom(name: "Off Topic", memberCount: 8, isActive: false, lastMessage: "Anyone watching the game?"),
-        Chatroom(name: "Announcements", memberCount: 52, isActive: false, lastMessage: "New guild event tomorrow!"),
-    ]
     
-    // ONLINE USERS
-    @State private var onlineUsers: [GuildUser] = [
-        GuildUser(name: "TradeMaster", reputation: 45, isOnline: true, isFriend: true, status: "Trading AAPL", role: .member, newMessage: false),
-        GuildUser(name: "ChartWizard", reputation: 38, isOnline: true, isFriend: false, status: "Analyzing markets", role: .admin, newMessage: true),
-        GuildUser(name: "BullRunner", reputation: 52, isOnline: true, isFriend: true, status: nil, role: .member, newMessage: false),
-        GuildUser(name: "MarketGuru", reputation: 41, isOnline: true, isFriend: false, status: "In a meeting", role: .moderator, newMessage: true),
-        GuildUser(name: "StockHawk", reputation: 33, isOnline: true, isFriend: true, status: nil, role: .member, newMessage: true)
-    ]
     
-    // OFFLINE USERS
-    @State private var offlineUsers: [GuildUser] = [
-        GuildUser(name: "SleepyTrader", reputation: 29, isOnline: false, isFriend: false, status: nil, role: .member, newMessage: true),
-        GuildUser(name: "NightOwl", reputation: 47, isOnline: false, isFriend: true, status: "Away", role: .admin, newMessage: true),
-        GuildUser(name: "QuietInvestor", reputation: 36, isOnline: false, isFriend: false, status: nil, role: .member, newMessage: false)
-    ]
-    
-    // ANNOUNCEMENTS
-    @State private var announcements: [GuildAnnouncement] = [
-        GuildAnnouncement(
-            title: "New Trading Tournament Announced",
-            content: "We're excited to announce our biggest trading tournament yet! Starting next Monday, all guild members can participate in a week-long competition to see who can achieve the highest returns.\n\nPrizes include:\n• 1st Place: 1000 reputation points + Special badge\n• 2nd Place: 500 reputation points\n• 3rd Place: 250 reputation points\n\nAll trades must be documented with screenshots and verified by moderators. Good luck to everyone participating!",
-            author: "Guild Master",
-            authorRole: .admin,
-            postedAt: Date().addingTimeInterval(-3600), // 1 hour ago
-            isImportant: true
-        ),
-        GuildAnnouncement(
-            title: "Market Analysis Session - This Friday",
-            content: "Join us this Friday at 7 PM EST for our weekly market analysis session. We'll be reviewing the latest market trends, discussing upcoming earnings reports, and sharing trading strategies.\n\nTopics to cover:\n• SPY technical analysis\n• Earnings plays for next week\n• Crypto market outlook\n• Q&A session\n\nAll guild members are welcome to join and share their insights!",
-            author: "ChartMaster",
-            authorRole: .moderator,
-            postedAt: Date().addingTimeInterval(-7200), // 2 hours ago
-            isImportant: false
-        ),
-        GuildAnnouncement(
-            title: "Guild Rules Update",
-            content: "Please review the updated guild rules in the #rules channel. Key changes include:\n\n• Updated posting guidelines for trade ideas\n• New reputation system rules\n• Community conduct standards\n\nAll members are expected to follow these guidelines. Violations may result in temporary or permanent removal from the guild.",
-            author: "Moderator Team",
-            authorRole: .moderator,
-            postedAt: Date().addingTimeInterval(-14400), // 4 hours ago
-            isImportant: true
-        ),
-        GuildAnnouncement(
-            title: "Weekly Leaderboard Results",
-            content: "Congratulations to this week's top performers!\n\n🥇 TradeMaster - 85% win rate\n🥈 ChartWizard - 82% win rate\n🥉 BullRunner - 78% win rate\n\nGreat work everyone! Keep up the excellent trading and analysis. Remember, consistency is key in trading success.",
-            author: "System",
-            authorRole: .admin,
-            postedAt: Date().addingTimeInterval(-21600), // 6 hours ago
-            isImportant: false
-        )
-       
-    ]
+
     
     /// Controls fade-in animation on view appearance
     @State private var fadeIn: Bool = false
@@ -149,6 +92,68 @@ struct MainView: View {
     private var drawerWidth: CGFloat {
         screenSize.width * LayoutConstants.drawerWidthRatio
     }
+    
+    
+    
+    // MARK: - Computed Properties for User Filtering
+
+    /// Set of all friend IDs for quick lookup
+    private var friendIDs: Set<UUID> {
+        Set(userFriends.map { $0.friendID })
+    }
+
+    /// All users who are friends (based on UserFriends relationship)
+    private var friends: [GuildUser] {
+        allUsers.filter { friendIDs.contains($0.id) }
+    }
+
+    /// Online users who are NOT friends
+    private var onlineUsers: [GuildUser] {
+        allUsers.filter { $0.isOnline && !friendIDs.contains($0.id) }
+    }
+
+    /// Offline users who are NOT friends
+    private var offlineUsers: [GuildUser] {
+        allUsers.filter { !$0.isOnline && !friendIDs.contains($0.id) }
+    }
+    
+    
+    
+    
+    
+    // MARK: - Helper Functions for Friend Management
+
+    /// Check if a specific user is a friend
+    func isFriend(_ userId: UUID) -> Bool {
+        friendIDs.contains(userId)
+    }
+
+    /// Add a new friend
+    func addFriend(_ userId: UUID) {
+        guard !isFriend(userId) else { return }
+        let newFriend = UserFriends(friendID: userId)
+        userFriends.append(newFriend)
+    }
+
+    /// Remove a friend
+    func removeFriend(_ userId: UUID) {
+        userFriends.removeAll { $0.friendID == userId }
+    }
+
+    /// Get the date a user was added as a friend
+    func friendAddedDate(_ userId: UUID) -> Date? {
+        userFriends.first { $0.friendID == userId }?.dateFriendAdded
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     // MARK: - Body
     var body: some View {
@@ -360,7 +365,7 @@ struct MainView: View {
     /// Left drawer view with swipe-to-dismiss functionality
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView(announcements: announcements, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
+            LeftDrawerMainView(announcements: announcements, events: events, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false

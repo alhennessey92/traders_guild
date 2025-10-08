@@ -72,28 +72,25 @@ struct RightDrawerMainView: View {
         return chatrooms.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
-    /// Filters the respective lists by `searchText` (case-insensitive).
+    var filteredFriends: [GuildUser] {
+        if searchText.isEmpty {
+            return friends
+        }
+        return friends.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
     var filteredOnlineUsers: [GuildUser] {
         if searchText.isEmpty {
             return onlineUsers
         }
         return onlineUsers.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
-    
-    /// Filters the respective lists by `searchText` (case-insensitive).
+
     var filteredOfflineUsers: [GuildUser] {
         if searchText.isEmpty {
             return offlineUsers
         }
         return offlineUsers.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-    
-    /// Filters the respective lists by `searchText` (case-insensitive).
-    var filteredFriends: [GuildUser] {
-        if searchText.isEmpty {
-            return friends
-        }
-        return friends.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
     var body: some View {
@@ -207,21 +204,7 @@ struct RightDrawerMainView: View {
                         )
                     }
                     
-                    // Online Users
-                    if !filteredOnlineUsers.isEmpty {
-                        UserDisclosureGroup(
-                            title: "Online",
-                            count: filteredOnlineUsers.count,
-                            icon: "circle.fill",
-                            iconColor: AppColors.bullCandleGreen,
-                            users: filteredOnlineUsers,
-                            onUserTap: { user in
-                                sheetContent = .user(user)
-                            }
-                        )
-                    }
-                    
-                    // Friends
+                    // Friends Section (now properly filtered)
                     if !filteredFriends.isEmpty {
                         UserDisclosureGroup(
                             title: "Friends",
@@ -235,7 +218,21 @@ struct RightDrawerMainView: View {
                         )
                     }
                     
-                    // Offline Users
+                    // Online Users (excludes friends)
+                    if !filteredOnlineUsers.isEmpty {
+                        UserDisclosureGroup(
+                            title: "Online",
+                            count: filteredOnlineUsers.count,
+                            icon: "circle.fill",
+                            iconColor: AppColors.bullCandleGreen,
+                            users: filteredOnlineUsers,
+                            onUserTap: { user in
+                                sheetContent = .user(user)
+                            }
+                        )
+                    }
+                    
+                    // Offline Users (excludes friends)
                     if !filteredOfflineUsers.isEmpty {
                         UserDisclosureGroup(
                             title: "Offline",
@@ -249,7 +246,11 @@ struct RightDrawerMainView: View {
                         )
                     }
                     
-                    if filteredChatrooms.isEmpty && filteredOnlineUsers.isEmpty && filteredOfflineUsers.isEmpty && filteredFriends.isEmpty {
+                    // No results state
+                    if filteredChatrooms.isEmpty &&
+                       filteredOnlineUsers.isEmpty &&
+                       filteredOfflineUsers.isEmpty &&
+                       filteredFriends.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")
                                 .font(.largeTitle)
