@@ -109,7 +109,7 @@ struct UserRowView: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.accentColor.opacity(isPressed ? 0.3 : 0.15))
+                    .fill(AppColors.accentColor.opacity(isPressed ? 0.3 : 0.1))
                     .stroke(AppColors.accentDarkColor.opacity(isPressed ? 0.8 : 0.5), lineWidth: 1)
             )
             

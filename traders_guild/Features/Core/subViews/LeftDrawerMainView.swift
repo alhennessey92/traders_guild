@@ -33,13 +33,13 @@ enum DrawerNavigationState: Equatable {
 /// Each case carries the minimal data needed to render its detail view.
 enum BottomSheetContent: Identifiable, Equatable {
     case announcement(GuildAnnouncement)
-    case userProfile(name: String)
+    case guildUserProfile(GuildUser)
     case event(GuildEvent)
     
     var id: String {
         switch self {
         case .announcement(let announcement): return "announcement-\(announcement.id)"
-        case .userProfile(let name): return "profile-\(name)"
+        case .guildUserProfile(let user): return "profile-\(user.id)"
         case .event(let event): return "event-\(event.id)"
         }
     }
@@ -59,6 +59,7 @@ struct LeftDrawerMainView: View {
     // bottomSheetContent: Which detail sheet is currently presented (if any)
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
+    let guildUsers: [GuildUser]
     @Binding var sheetOverlayVisible: Bool
     @Binding var dismissSheetsSignal: Bool
     let onClose: () -> Void
@@ -93,6 +94,7 @@ struct LeftDrawerMainView: View {
                     bottomSheetContent: $bottomSheetContent,
                     announcements: announcements,
                     events: events,
+                    guildUsers: guildUsers,
                     onClose: onClose,
                     dragTranslation: $dragTranslation
                 )
@@ -369,6 +371,7 @@ struct SectionDrawerView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
+    let guildUsers: [GuildUser]
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
@@ -488,7 +491,7 @@ struct SectionDrawerView: View {
         case .events:
             EventsListView(bottomSheetContent: $bottomSheetContent, events: events)
         case .userList:
-            UserListView(bottomSheetContent: $bottomSheetContent)
+            UserListView(bottomSheetContent: $bottomSheetContent, guildUsers: guildUsers)
         case .statistics:
             StatisticsView()
         default:
@@ -536,72 +539,7 @@ struct DrawerMenuButton: View {
 
 
 
-/// Members list that triggers a bottom sheet for a user profile.
-struct UserListView: View {
-    @Binding var bottomSheetContent: BottomSheetContent?
-    
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(1...20, id: \.self) { index in
-                Button(action: {
-                    bottomSheetContent = .userProfile(name: "User \(index)")
-                }) {
-                    HStack(spacing: 12) {
-                        ZStack(alignment: .bottomTrailing) {
-                            Circle()
-                                .fill(AppColors.accentColor)
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    Text("U\(index)")
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                )
-                            
-                            Circle()
-                                .fill(index % 2 == 0 ? AppColors.bullCandleGreen : Color.gray)
-                                .frame(width: 12, height: 12)
-                                .overlay(
-                                    Circle()
-                                        .stroke(AppColors.drawerBackground, lineWidth: 2)
-                                )
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("User \(index)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.whiteText)
-                            
-                            HStack(spacing: 6) {
-                                Text("Level \(index * 5)")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.accentColor)
-                                Circle()
-                                    .fill(AppColors.whiteText.opacity(0.5))
-                                    .frame(width: 3, height: 3)
-                                Text("\(1000 + index * 50) Rep")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.6))
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.3))
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
+
 
 /// Simple list showcasing top markers/performers.
 struct TopMarkersView: View {
@@ -837,8 +775,8 @@ struct BottomSheetView: View {
                     switch content {
                     case .announcement(let announcement):
                         AnnouncementDetailView(announcement: announcement)
-                    case .userProfile(let name):
-                        UserProfileView(name: name)
+                    case .guildUserProfile(let user):
+                        GuildUserDetailView(user: user)
                     case .event(let event):
                         EventDetailView(event: event)
                     }
@@ -854,77 +792,6 @@ struct BottomSheetView: View {
                     }
                 }
             }
-        }
-    }
-}
-
-/// Detail content for a user profile presented in a sheet.
-struct UserProfileView: View {
-    let name: String
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Circle()
-                .fill(AppColors.accentColor)
-                .frame(width: 100, height: 100)
-                .overlay(
-                    Text(String(name.prefix(2)))
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
-            
-            Text(name)
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            HStack(spacing: 30) {
-                VStack {
-                    Text("Level 45")
-                        .font(.headline)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Level")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                VStack {
-                    Text("2,450")
-                        .font(.headline)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Reputation")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                VStack {
-                    Text("87%")
-                        .font(.headline)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Accuracy")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(10)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Recent Activity")
-                    .font(.headline)
-                ForEach(1...5, id: \.self) { index in
-                    HStack {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .foregroundColor(AppColors.accentColor)
-                        Text("Made a prediction on AAPL")
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(index)d ago")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
