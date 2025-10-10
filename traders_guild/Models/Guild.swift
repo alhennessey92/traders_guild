@@ -16,26 +16,33 @@ enum UserRole: String, Codable {
     case moderator = "Moderator"
 }
 
-// MARK: - UserRole UI Extensions such as color and weight
-extension UserRole {
-    var foregroundColor: Color {
-        switch self {
-        case .admin: return .orange
-        case .moderator: return .blue
-        case .member: return AppColors.whiteText.opacity(0.7)
-        }
-    }
+
+
+// MARK: - Guild Model
+struct Guild: Identifiable, Codable, Equatable {
+    let id: UUID
+    let name: String
+    let description: String
+    let reputation: Int
+    let accuracy: Int
     
-    var fontWeight: Font.Weight {
-        switch self {
-        case .admin: return .bold
-        case .moderator: return .bold
-        case .member: return .regular
-        }
+    
+    init(
+        id: UUID = UUID(),
+        name: String,
+        description: String = "No description",
+        reputation: Int = 0,
+        accuracy: Int = 0
+        
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.reputation = reputation
+        self.accuracy = accuracy
+        
     }
 }
-
-
 
 
 // MARK: - User Model
@@ -66,13 +73,14 @@ struct GuildUser: Identifiable, Codable, Equatable {
         self.newMessage = newMessage
     }
 }
+
+
 // MARK: - Announcement Models
 struct GuildAnnouncement: Identifiable, Codable, Equatable {
     let id: UUID
     let title: String
     let content: String
-    let author: String
-    let authorRole: UserRole
+    let guildUserID: UUID
     let postedAt: Date
     let isImportant: Bool
     let readBy: Set<UUID>
@@ -82,8 +90,7 @@ struct GuildAnnouncement: Identifiable, Codable, Equatable {
         id: UUID = UUID(),           // Default for sample data
         title: String,
         content: String,
-        author: String,
-        authorRole: UserRole,
+        guildUserID: UUID,
         postedAt: Date,
         isImportant: Bool,
         readBy: Set<UUID> = []       // Default for sample data
@@ -91,8 +98,7 @@ struct GuildAnnouncement: Identifiable, Codable, Equatable {
         self.id = id
         self.title = title
         self.content = content
-        self.author = author
-        self.authorRole = authorRole
+        self.guildUserID = guildUserID
         self.postedAt = postedAt
         self.isImportant = isImportant
         self.readBy = readBy
@@ -112,6 +118,13 @@ struct GuildAnnouncement: Identifiable, Codable, Equatable {
         }
         return content
     }
+    
+    // Convenience lookup using sample users (replace with real data source in app layer)
+    var authorUser: GuildUser? {
+        GuildUser.sampleUsers.first { $0.id == guildUserID }
+    }
+    var authorRole: UserRole? { authorUser?.role }
+    var authorName: String? { authorUser?.name }
 }
 
 
@@ -121,8 +134,7 @@ struct GuildEvent: Identifiable, Codable, Equatable {
     let id: UUID
     let title: String
     let content: String
-    let author: String
-    let authorRole: UserRole
+    let guildUserID: UUID
     let postedAt: Date
     let eventDate: Date
     let isImportant: Bool
@@ -134,8 +146,7 @@ struct GuildEvent: Identifiable, Codable, Equatable {
         id: UUID = UUID(),           // Default for sample data
         title: String,
         content: String,
-        author: String,
-        authorRole: UserRole,
+        guildUserID: UUID,
         postedAt: Date,
         eventDate: Date,
         isImportant: Bool,
@@ -145,8 +156,7 @@ struct GuildEvent: Identifiable, Codable, Equatable {
         self.id = id
         self.title = title
         self.content = content
-        self.author = author
-        self.authorRole = authorRole
+        self.guildUserID = guildUserID
         self.postedAt = postedAt
         self.eventDate = eventDate
         self.isImportant = isImportant
@@ -168,11 +178,79 @@ struct GuildEvent: Identifiable, Codable, Equatable {
         }
         return content
     }
+    
+    var authorUser: GuildUser? {
+        GuildUser.sampleUsers.first { $0.id == guildUserID }
+    }
+    var authorRole: UserRole? { authorUser?.role }
+    var authorName: String? { authorUser?.name }
+}
+
+// MARK: - Guild Watchlist - a single watchlist setup by the admins for users to focus on
+struct GuildWatchlist: Identifiable, Codable, Equatable {
+    let id: UUID
+    let guildId: UUID
+    let name: String
+    let dateCreated: Date
+    let author: UUID
+    var symbols: [UUID]
+
+    init(
+        id: UUID = UUID(),
+        guildId: UUID,
+        name: String,
+        dateCreated: Date = Date(),
+        author: UUID,
+        symbols: [UUID] = []
+    ) {
+        self.id = id
+        self.guildId = guildId
+        self.name = name
+        self.dateCreated = dateCreated
+        self.author = author
+        self.symbols = symbols
+    }
+    
+    //Demo usage only
+    var authorUser: GuildUser? {
+        GuildUser.sampleUsers.first { $0.id == author }
+    }
+    var authorRole: UserRole? { authorUser?.role }
+    var authorName: String? { authorUser?.name }
+    
+    
+    var currentGuild: Guild? {
+        Guild.sampleGuild.first { $0.id == guildId }
+    }
+    
+    var firstWatchlistSymbol: Symbol? {
+        Symbol.sampleSymbol.first { symbols.contains($0.id) }
+    }
 }
 
 
 
 
+// EXTENSIONS
+
+// MARK: - UserRole UI Extensions such as color and weight
+extension UserRole {
+    var foregroundColor: Color {
+        switch self {
+        case .admin: return .orange
+        case .moderator: return .blue
+        case .member: return AppColors.whiteText.opacity(0.7)
+        }
+    }
+    
+    var fontWeight: Font.Weight {
+        switch self {
+        case .admin: return .bold
+        case .moderator: return .bold
+        case .member: return .regular
+        }
+    }
+}
 
 
 
@@ -194,7 +272,29 @@ struct UserIDs {
     static let quietInvestor = UUID()
 }
 
+struct GuildIDs{
+    static let kaosGuild = UUID()
+}
 
+
+
+// MARK: -  Sample Guild
+
+extension Guild{
+    static let sampleGuild: [Guild] = [
+        Guild(
+            id: GuildIDs.kaosGuild,
+            name: "KAOS Guild",
+            description: "A great description of the kaos guild",
+            reputation: 1293,
+            accuracy: 34
+            
+            
+            
+        )
+    ]
+    
+}
 
 // MARK: - Sample Data
 extension GuildUser {
@@ -302,32 +402,28 @@ extension GuildAnnouncement {
         GuildAnnouncement(
             title: "New Trading Tournament Announced",
             content: "We're excited to announce our biggest trading tournament yet! Starting next Monday, all guild members can participate in a week-long competition to see who can achieve the highest returns.\n\nPrizes include:\n• 1st Place: 1000 reputation points + Special badge\n• 2nd Place: 500 reputation points\n• 3rd Place: 250 reputation points\n\nAll trades must be documented with screenshots and verified by moderators. Good luck to everyone participating!",
-            author: "Guild Master",
-            authorRole: .admin,
+            guildUserID: UserIDs.chartWizard,
             postedAt: Date().addingTimeInterval(-3600), // 1 hour ago
             isImportant: true
         ),
         GuildAnnouncement(
             title: "Market Analysis Session - This Friday",
             content: "Join us this Friday at 7 PM EST for our weekly market analysis session. We'll be reviewing the latest market trends, discussing upcoming earnings reports, and sharing trading strategies.\n\nTopics to cover:\n• SPY technical analysis\n• Earnings plays for next week\n• Crypto market outlook\n• Q&A session\n\nAll guild members are welcome to join and share their insights!",
-            author: "ChartMaster",
-            authorRole: .moderator,
+            guildUserID: UserIDs.seanPain,
             postedAt: Date().addingTimeInterval(-7200), // 2 hours ago
             isImportant: false
         ),
         GuildAnnouncement(
             title: "Guild Rules Update",
             content: "Please review the updated guild rules in the #rules channel. Key changes include:\n\n• Updated posting guidelines for trade ideas\n• New reputation system rules\n• Community conduct standards\n\nAll members are expected to follow these guidelines. Violations may result in temporary or permanent removal from the guild.",
-            author: "Moderator Team",
-            authorRole: .moderator,
+            guildUserID: UserIDs.marketGuru,
             postedAt: Date().addingTimeInterval(-14400), // 4 hours ago
             isImportant: true
         ),
         GuildAnnouncement(
             title: "Weekly Leaderboard Results",
             content: "Congratulations to this week's top performers!\n\n🥇 TradeMaster - 85% win rate\n🥈 ChartWizard - 82% win rate\n🥉 BullRunner - 78% win rate\n\nGreat work everyone! Keep up the excellent trading and analysis. Remember, consistency is key in trading success.",
-            author: "System",
-            authorRole: .admin,
+            guildUserID: UserIDs.chartWizard,
             postedAt: Date().addingTimeInterval(-21600), // 6 hours ago
             isImportant: false
         )
@@ -335,18 +431,13 @@ extension GuildAnnouncement {
     ]
 }
 
-
-
-
-
 // EVENTS
 extension GuildEvent {
     static let sampleGuildEvents: [GuildEvent] = [
         GuildEvent(
             title: "New Trading Tournament Event",
             content: "Big new event",
-            author: "Guild Master",
-            authorRole: .admin,
+            guildUserID: UserIDs.chartWizard,
             postedAt: Date().addingTimeInterval(-3600), // 1 hour ago
             eventDate: Date().addingTimeInterval(+50600),
             isImportant: true,
@@ -354,3 +445,18 @@ extension GuildEvent {
         )
     ]
 }
+
+
+// EVENTS
+extension GuildWatchlist {
+    static let sampleGuildWatchlist: [GuildWatchlist] = [
+        GuildWatchlist(
+            guildId: GuildIDs.kaosGuild,
+            name: "Main Watchlist",
+            dateCreated: Date().addingTimeInterval(-3600),
+            author: UserIDs.chartWizard,
+            symbols: [SymbolIDs.eurusd, SymbolIDs.audusd]
+        )
+    ]
+}
+

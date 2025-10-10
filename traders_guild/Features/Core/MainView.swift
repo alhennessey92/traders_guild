@@ -42,11 +42,13 @@ struct MainView: View {
     
     // MARK: - Sample data
     
+    @State private var currentGuild: [Guild] = Guild.sampleGuild
     @State private var allUsers: [GuildUser] = GuildUser.sampleUsers
     @State private var userFriends: [UserFriends] = UserFriends.sampleFriends
     @State private var chatrooms: [Chatroom] = Chatroom.sampleChatrooms
     @State private var announcements: [GuildAnnouncement] = GuildAnnouncement.sampleGuildAnnouncment
     @State private var events: [GuildEvent] = GuildEvent.sampleGuildEvents
+    @State private var guildWatchlist: [GuildWatchlist] = GuildWatchlist.sampleGuildWatchlist
     
 
     
@@ -365,7 +367,7 @@ struct MainView: View {
     /// Left drawer view with swipe-to-dismiss functionality
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView(announcements: announcements, events: events, guildUsers: allUsers, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
+            LeftDrawerMainView(currentGuild: currentGuild, announcements: announcements, events: events, guildUsers: allUsers, guildWatchlist: guildWatchlist, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false

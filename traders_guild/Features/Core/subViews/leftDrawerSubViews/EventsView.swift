@@ -112,6 +112,29 @@ struct EventRowView: View {
                     .font(.caption2)
                     .foregroundColor(AppColors.accentColor)
                     .padding(.top, 2)
+                    
+                    let role = event.authorRole ?? .member
+                    let authorName = event.authorName ?? "Unknown"
+                    HStack(spacing: 4) {
+                        Text("Hosted by")
+                            .font(.caption2)
+                            .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        Text(authorName)
+                            .font(.caption2)
+                            .foregroundColor(AppColors.whiteText)
+                            .fontWeight(.medium)
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.7))
+                            .frame(width: 3, height: 3)
+                            .padding(.top, 1)
+                            .padding(.leading, 3)
+                            .padding(.trailing, 3)
+                        Text(role.rawValue)
+                            .font(.caption2)
+                            .foregroundColor(role.foregroundColor)
+                            .fontWeight(role.fontWeight)
+                        Spacer(minLength: 0)
+                    }
                 }
 
                 Spacer()
@@ -179,6 +202,26 @@ struct EventDetailView: View {
                     Text(timeFormatter.string(from: event.eventDate))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                    
+                    let role = event.authorRole ?? .member
+                    let authorName = event.authorName ?? "Unknown"
+                    HStack(spacing: 8) {
+                        if role != .member {
+                            Text(role.rawValue.uppercased())
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    role == .admin ? Color.red.opacity(0.8) : AppColors.accentColor.opacity(0.8)
+                                )
+                                .cornerRadius(4)
+                        }
+                        Text("Hosted by \(authorName)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
 

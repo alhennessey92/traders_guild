@@ -57,9 +57,11 @@ struct LeftDrawerMainView: View {
     // dragTranslation: Current drag offset for swipe-to-dismiss
     // navigationState: Which section is currently shown inside the drawer
     // bottomSheetContent: Which detail sheet is currently presented (if any)
+    let currentGuild: [Guild]
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
     let guildUsers: [GuildUser]
+    let guildWatchlist: [GuildWatchlist]
     @Binding var sheetOverlayVisible: Bool
     @Binding var dismissSheetsSignal: Bool
     let onClose: () -> Void
@@ -92,9 +94,11 @@ struct LeftDrawerMainView: View {
                     navigationState: $navigationState,
                     currentSection: navigationState,
                     bottomSheetContent: $bottomSheetContent,
+                    currentGuild: currentGuild,
                     announcements: announcements,
                     events: events,
                     guildUsers: guildUsers,
+                    guildWatchlist: guildWatchlist,
                     onClose: onClose,
                     dragTranslation: $dragTranslation
                 )
@@ -369,9 +373,11 @@ struct SectionDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let currentSection: DrawerNavigationState
     @Binding var bottomSheetContent: BottomSheetContent?
+    let currentGuild: [Guild]
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
     let guildUsers: [GuildUser]
+    let guildWatchlist: [GuildWatchlist]
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
@@ -485,9 +491,9 @@ struct SectionDrawerView: View {
         case .topMarkers:
             TopMarkersView()
         case .leaderboard:
-            LeaderboardView()
+            LeaderboardView(guildUsers: guildUsers)
         case .guildWatchlist:
-            WatchlistView()
+            WatchlistView(guildWatchlist: guildWatchlist)
         case .events:
             EventsListView(bottomSheetContent: $bottomSheetContent, events: events)
         case .userList:
@@ -589,47 +595,10 @@ struct TopMarkersView: View {
     }
 }
 
-/// Leaderboard summary for the guild.
-struct LeaderboardView: View {
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(1...15, id: \.self) { index in
-                HStack(spacing: 12) {
-                    Text("\(index)")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(index <= 3 ? AppColors.accentColor : AppColors.whiteText.opacity(0.6))
-                        .frame(width: 30)
-                    
-                    if index <= 3 {
-                        Image(systemName: index == 1 ? "crown.fill" : "medal.fill")
-                            .foregroundColor(index == 1 ? .yellow : (index == 2 ? .gray : Color.orange))
-                            .font(.title3)
-                    }
-                    
-                    Text("Player \(index)")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.whiteText)
-                    
-                    Spacer()
-                    
-                    Text("\(5000 - index * 200)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                }
-                .padding()
-                .background(Color.white.opacity(index <= 3 ? 0.12 : 0.08))
-                .cornerRadius(10)
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
 
 /// Guild watchlist preview.
 struct WatchlistView: View {
+    let guildWatchlist: [GuildWatchlist]
     var body: some View {
         VStack(spacing: 10) {
             ForEach(["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX"], id: \.self) { ticker in

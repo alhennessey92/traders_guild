@@ -118,7 +118,8 @@ struct AnnouncementRowView: View {
                                 .foregroundColor(AppColors.whiteText.opacity(0.5))
                         }
                         HStack(spacing: 4) {
-                            Text(announcement.author)
+                            let role = announcement.authorRole ?? .member
+                            Text(announcement.authorName ?? "Unknown")
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundColor(AppColors.whiteText)
@@ -128,11 +129,10 @@ struct AnnouncementRowView: View {
                                 .padding(.top, 1)
                                 .padding(.leading, 3)
                                 .padding(.trailing, 3)
-                            
-                            Text(announcement.authorRole.rawValue)
+                            Text(role.rawValue)
                                 .font(.caption)
-                                .foregroundColor(announcement.authorRole.foregroundColor)
-                                .fontWeight(announcement.authorRole.fontWeight)
+                                .foregroundColor(role.foregroundColor)
+                                .fontWeight(role.fontWeight)
                                 .lineLimit(1)
                             Circle()
                                 .fill(AppColors.whiteText.opacity(0.7))
@@ -151,7 +151,6 @@ struct AnnouncementRowView: View {
                                 .fontWeight(.semibold)
                                 .foregroundColor(AppColors.accentColor)
                             Spacer()
-                            
                         }
                         
 
@@ -234,24 +233,24 @@ struct AnnouncementDetailView: View {
                 Spacer()
             }
             
+            let role = announcement.authorRole ?? .member
+            let authorName = announcement.authorName ?? "Unknown"
             // Author and timestamp info
             HStack(spacing: 8) {
-                if announcement.authorRole != .member {
-                    Text(announcement.authorRole.rawValue.uppercased())
+                if role != .member {
+                    Text(role.rawValue.uppercased())
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(
-                            announcement.authorRole == .admin ? 
-                            Color.red.opacity(0.8) : 
-                            AppColors.accentColor.opacity(0.8)
+                            role == .admin ? Color.red.opacity(0.8) : AppColors.accentColor.opacity(0.8)
                         )
                         .cornerRadius(4)
                 }
                 
-                Text("Posted by \(announcement.author)")
+                Text("Posted by \(authorName)")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -277,3 +276,4 @@ struct AnnouncementDetailView: View {
         }
     }
 }
+
