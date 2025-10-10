@@ -42,13 +42,13 @@ struct MainView: View {
     
     // MARK: - Sample data
     
-    @State private var currentGuild: [Guild] = Guild.sampleGuild
+    @State private var currentGuild: Guild = Guild.sampleGuild[0] //only 1 guild
     @State private var allUsers: [GuildUser] = GuildUser.sampleUsers
     @State private var userFriends: [UserFriends] = UserFriends.sampleFriends
     @State private var chatrooms: [Chatroom] = Chatroom.sampleChatrooms
     @State private var announcements: [GuildAnnouncement] = GuildAnnouncement.sampleGuildAnnouncment
     @State private var events: [GuildEvent] = GuildEvent.sampleGuildEvents
-    @State private var guildWatchlist: [GuildWatchlist] = GuildWatchlist.sampleGuildWatchlist
+    @State private var guildWatchlist: GuildWatchlist = GuildWatchlist.sampleGuildWatchlist[0] // only 1 watchlist
     
 
     

@@ -57,11 +57,11 @@ struct LeftDrawerMainView: View {
     // dragTranslation: Current drag offset for swipe-to-dismiss
     // navigationState: Which section is currently shown inside the drawer
     // bottomSheetContent: Which detail sheet is currently presented (if any)
-    let currentGuild: [Guild]
+    let currentGuild: Guild
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
     let guildUsers: [GuildUser]
-    let guildWatchlist: [GuildWatchlist]
+    let guildWatchlist: GuildWatchlist
     @Binding var sheetOverlayVisible: Bool
     @Binding var dismissSheetsSignal: Bool
     let onClose: () -> Void
@@ -81,6 +81,7 @@ struct LeftDrawerMainView: View {
             // Main content that changes based on navigation state
             if navigationState == .main {
                 MainDrawerView(
+                    currentGuild: currentGuild,
                     navigationState: $navigationState,
                     onClose: onClose,
                     dragTranslation: $dragTranslation
@@ -162,6 +163,7 @@ struct LeftDrawerMainView: View {
 /// Drawer home screen showing guild header and navigation menu for sections.
 /// Selecting a menu item updates `navigationState` to replace the content area.
 struct MainDrawerView: View {
+    let currentGuild: Guild
     @Binding var navigationState: DrawerNavigationState
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
@@ -205,7 +207,7 @@ struct MainDrawerView: View {
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("KAOS")
+                    Text(currentGuild.name)
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -252,7 +254,7 @@ struct MainDrawerView: View {
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("3456")
+                    Text("\(currentGuild.reputation)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -373,11 +375,11 @@ struct SectionDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let currentSection: DrawerNavigationState
     @Binding var bottomSheetContent: BottomSheetContent?
-    let currentGuild: [Guild]
+    let currentGuild: Guild
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
     let guildUsers: [GuildUser]
-    let guildWatchlist: [GuildWatchlist]
+    let guildWatchlist: GuildWatchlist
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
@@ -588,56 +590,6 @@ struct TopMarkersView: View {
                 }
                 .padding()
                 .background(Color.white.opacity(index <= 3 ? 0.12 : 0.08))
-                .cornerRadius(10)
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
-
-
-/// Guild watchlist preview.
-struct WatchlistView: View {
-    let guildWatchlist: [GuildWatchlist]
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX"], id: \.self) { ticker in
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(AppColors.accentColor.opacity(0.2))
-                            .frame(width: 44, height: 44)
-                        Text(String(ticker.prefix(2)))
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(ticker)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText)
-                        Text("Technology")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("$\(Int.random(in: 100...500))")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText)
-                        Text("+\(String(format: "%.2f", Double.random(in: 0.5...5.0)))%")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.bullCandleGreen)
-                    }
-                }
-                .padding()
-                .background(Color.white.opacity(0.08))
                 .cornerRadius(10)
             }
         }

@@ -226,6 +226,13 @@ struct GuildWatchlist: Identifiable, Codable, Equatable {
     var firstWatchlistSymbol: Symbol? {
         Symbol.sampleSymbol.first { symbols.contains($0.id) }
     }
+    
+    // Add this to GuildWatchlist struct
+    var symbolObjects: [Symbol] {
+        symbols.compactMap { symbolID in
+            Symbol.sampleSymbol.first(where: { $0.id == symbolID })
+        }
+    }
 }
 
 
@@ -284,7 +291,7 @@ extension Guild{
     static let sampleGuild: [Guild] = [
         Guild(
             id: GuildIDs.kaosGuild,
-            name: "KAOS Guild",
+            name: "KAOS",
             description: "A great description of the kaos guild",
             reputation: 1293,
             accuracy: 34
