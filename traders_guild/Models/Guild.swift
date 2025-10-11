@@ -54,6 +54,7 @@ struct GuildUser: Identifiable, Codable, Equatable {
     let status: String?
     let role: UserRole
     let newMessage: Bool
+    let dateJoined: Date
     
     init(
         id: UUID = UUID(),
@@ -62,7 +63,8 @@ struct GuildUser: Identifiable, Codable, Equatable {
         isOnline: Bool,
         status: String?,
         role: UserRole,
-        newMessage: Bool
+        newMessage: Bool,
+        dateJoined: Date
     ) {
         self.id = id
         self.name = name
@@ -71,6 +73,7 @@ struct GuildUser: Identifiable, Codable, Equatable {
         self.status = status
         self.role = role
         self.newMessage = newMessage
+        self.dateJoined = dateJoined
     }
 }
 
@@ -314,7 +317,8 @@ extension GuildUser {
             isOnline: true,
             status: "Always online",
             role: .moderator,
-            newMessage: false
+            newMessage: false,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         GuildUser(
             id: UserIDs.tradeMaster,
@@ -323,7 +327,8 @@ extension GuildUser {
             isOnline: true,
             status: "Trading AAPL",
             role: .member,
-            newMessage: false
+            newMessage: false,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         GuildUser(
             id: UserIDs.bullRunner,
@@ -332,7 +337,8 @@ extension GuildUser {
             isOnline: true,
             status: nil,
             role: .member,
-            newMessage: false
+            newMessage: false,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         GuildUser(
             id: UserIDs.stockHawk,
@@ -341,7 +347,8 @@ extension GuildUser {
             isOnline: true,
             status: nil,
             role: .member,
-            newMessage: true
+            newMessage: true,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         GuildUser(
             id: UserIDs.chartWizard,
@@ -350,7 +357,8 @@ extension GuildUser {
             isOnline: true,
             status: "Analyzing markets",
             role: .admin,
-            newMessage: true
+            newMessage: true,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         GuildUser(
             id: UserIDs.marketGuru,
@@ -359,7 +367,8 @@ extension GuildUser {
             isOnline: true,
             status: "In a meeting",
             role: .moderator,
-            newMessage: true
+            newMessage: true,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         
         // Offline users
@@ -370,7 +379,8 @@ extension GuildUser {
             isOnline: false,
             status: "Busy IRL",
             role: .member,
-            newMessage: true
+            newMessage: true,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         GuildUser(
             id: UserIDs.nightOwl,
@@ -379,7 +389,8 @@ extension GuildUser {
             isOnline: false,
             status: "Away",
             role: .admin,
-            newMessage: true
+            newMessage: true,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         GuildUser(
             id: UserIDs.sleepyTrader,
@@ -388,7 +399,8 @@ extension GuildUser {
             isOnline: false,
             status: nil,
             role: .member,
-            newMessage: true
+            newMessage: true,
+            dateJoined: Date().addingTimeInterval(-3600)
         ),
         GuildUser(
             id: UserIDs.quietInvestor,
@@ -397,7 +409,8 @@ extension GuildUser {
             isOnline: false,
             status: nil,
             role: .member,
-            newMessage: false
+            newMessage: false,
+            dateJoined: Date().addingTimeInterval(-3600)
         )
     ]
 }

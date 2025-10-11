@@ -7,6 +7,29 @@
 
 import Foundation
 
+// MARK: - Symbol Type
+enum SymbolType: String, Codable {
+    case forex = "Forex"
+    case commodities = "Commodities"
+    case stocks = "Stocks"
+    case cryptocurrency = "Cryptocurrency"
+}
+
+// MARK: - Symbol Status
+enum SymbolStatus: String, Codable {
+    case open = "Open"
+    case closed = "Closed"
+}
+
+// MARK: - Change Direction
+enum ChangeDirection: String, Codable {
+    case up = "+"
+    case down = "-"
+}
+
+
+
+
 struct Symbol: Identifiable, Codable, Equatable {
     let id: UUID
     let ticker: String
@@ -14,6 +37,11 @@ struct Symbol: Identifiable, Codable, Equatable {
     let fullName: String?     // optional, e.g. "Apple Inc."
     let addedDate: Date
     let notes: String?
+    let symbolType: SymbolType
+    let symbolStatus: SymbolStatus
+    let currentPrice: Double
+    let currentChange: Double
+    let changeDirection: ChangeDirection
     
     init(
         id: UUID = UUID(),
@@ -21,7 +49,13 @@ struct Symbol: Identifiable, Codable, Equatable {
         symbol: String,
         fullName: String? = nil,
         addedDate: Date = Date(),
-        notes: String? = nil
+        notes: String? = nil,
+        symbolType: SymbolType,
+        symbolStatus: SymbolStatus,
+        currentPrice: Double,
+        currentChange: Double = 0.0,
+        changeDirection: ChangeDirection
+        
     ) {
         self.id = id
         self.ticker = ticker
@@ -29,6 +63,11 @@ struct Symbol: Identifiable, Codable, Equatable {
         self.fullName = fullName
         self.addedDate = addedDate
         self.notes = notes
+        self.symbolType = symbolType
+        self.symbolStatus = symbolStatus
+        self.currentPrice = currentPrice
+        self.currentChange = currentChange
+        self.changeDirection = changeDirection
     }
 }
 
@@ -50,7 +89,12 @@ extension Symbol {
             symbol: "EUR/USD",
             fullName: "Euro / US Dollar",
             addedDate: Date().addingTimeInterval(-3600),
-            notes: "Forex" // 1 hour ago
+            notes: "Forex", // 1 hour ago
+            symbolType: .forex,
+            symbolStatus: .open,
+            currentPrice: 1.242342,
+            currentChange: 45.342,
+            changeDirection: .down
             
         ),
         
@@ -60,8 +104,14 @@ extension Symbol {
             symbol: "AUD/USD",
             fullName: "Australian Dollar / US Dollar",
             addedDate: Date().addingTimeInterval(-3600),
-            notes: "Forex" // 1 hour ago
+            notes: "Forex",// 1 hour ago
+            symbolType: .forex,
+            symbolStatus: .closed,
+            currentPrice: 2.342113,
+            currentChange: 86.2342,
+            changeDirection: .up
             
+        
         ),
         Symbol(
             id: SymbolIDs.gold,
@@ -69,7 +119,12 @@ extension Symbol {
             symbol: "Gold",
             fullName: "Gold",
             addedDate: Date().addingTimeInterval(-3600),
-            notes: "Commodities" // 1 hour ago
+            notes: "Commodities", // 1 hour ago
+            symbolType: .commodities,
+            symbolStatus: .open,
+            currentPrice: 23.2342,
+            currentChange: 34.4332,
+            changeDirection: .up
             
         )
     ]

@@ -51,64 +51,98 @@ struct WatchlistView: View {
 struct WatchlistRowView: View {
     let symbol: Symbol
     let onTap: () -> Void
+
     
     @State private var isPressed = false
+    
+    // Computed properties to simplify the complex expressions
+    private var isMarketOpen: Bool {
+        symbol.symbolStatus == .open
+    }
+    
+    private var statusIcon: String {
+        isMarketOpen ? "circle.circle.fill" : "moon.fill"
+    }
+    
+    private var statusColor: Color {
+        isMarketOpen ? AppColors.bullCandleGreen : AppColors.accentDarkColor
+    }
+    
+    
+    private var statusView: some View {
+        Group {
+            if isMarketOpen {
+                Image(systemName: statusIcon)
+                    .foregroundColor(statusColor)
+            } else {
+                Image(systemName: statusIcon)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(statusColor, .white)
+            }
+        }
+        .font(.caption2)
+        .fontWeight(.regular)
+    }
+    
+    private var isDirectionPositive: Bool{
+        symbol.changeDirection == .up
+    }
     
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.accentColor.opacity(0.2))
-                        .frame(width: 44, height: 44)
+                VStack(spacing: 4) {
                     Text(String(symbol.ticker.prefix(2)))
-                        .font(.caption)
+                        .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    
                 }
-                
+                .frame(width: 40, height: 40)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(8)
+
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(symbol.symbol)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText)
-                    Text("Technology")
+                    HStack {
+                        Text(symbol.symbol)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.whiteText)
+                        
+                        statusView
+                    }
+                    
+                    Text(symbol.symbolType.rawValue)
                         .font(.caption)
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
                 }
-                
+
                 Spacer()
-                
+
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("$\(Int.random(in: 100...500))")
-                        .font(.subheadline)
+                    Text("$\(Double(symbol.currentPrice))")
+                        .font(.footnote)
                         .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText)
-                    Text("+\(String(format: "%.2f", Double.random(in: 0.5...5.0)))%")
-                        .font(.caption)
+                        .foregroundColor(isDirectionPositive ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                    Text("\(isDirectionPositive ? "+" : "-") \(symbol.currentChange)")
+                        .font(.caption2)
                         .fontWeight(.medium)
-                    
-                    
+                        .foregroundColor(isDirectionPositive ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
                 }
-                .padding()
-//                .background(
-//                    RoundedRectangle(cornerRadius: 14)
-//                        .fill(
-//                            Color.white
-//                                .opacity(isPressed ? 0.1 : 0.02)
-//                        )
-//                    
-//                )
-                .cornerRadius(14)
+                .padding(.leading, 4)
             }
+            .padding(.trailing, 16)
+            .padding(.leading, 8)
+            .padding(.vertical, 8)
+            .frame(minHeight: 56, alignment: .center)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        Color.white
-                            .opacity(isPressed ? 0.1 : 0.02)
+                    .fill(Color.white.opacity(isPressed ? 0.1 : 0.02))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(AppColors.accentColor.opacity(0.3), lineWidth: 1)
                     )
-                    
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -119,3 +153,4 @@ struct WatchlistRowView: View {
         }, perform: {})
     }
 }
+

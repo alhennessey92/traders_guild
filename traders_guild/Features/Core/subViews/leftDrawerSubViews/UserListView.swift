@@ -179,68 +179,131 @@ struct GuildUserDetailView: View {
     let user: GuildUser
 
     var body: some View {
-        VStack(spacing: 20) {
-            Circle()
-                .fill(AppColors.accentColor)
-                .frame(width: 100, height: 100)
-                .overlay(
-                    Text(String(user.name.prefix(2)))
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
-            
-            Text(user.name)
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            HStack(spacing: 30) {
-                VStack {
-                    Text("Level 45")
-                        .font(.headline)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Level")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                VStack {
-                    Text("2,450")
-                        .font(.headline)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Reputation")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                VStack {
-                    Text("87%")
-                        .font(.headline)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Accuracy")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(10)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Recent Activity")
-                    .font(.headline)
-                ForEach(1...5, id: \.self) { index in
-                    HStack {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .foregroundColor(AppColors.accentColor)
-                        Text("Made a prediction on AAPL")
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(index)d ago")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 15){
+                // Avatar with online indicator
+                ZStack(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(AppColors.accentColor.opacity(0.3))
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Text(String(user.name.prefix(2)))
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.accentColor)
+                        )
+                    
+                    if user.isOnline {
+                        Circle()
+                            .fill(AppColors.bullCandleGreen)
+                            .frame(width: 12, height: 12)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppColors.drawerBackground, lineWidth: 2)
+                            )
                     }
                 }
+                
+                // User info
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(user.name)
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                    Text(user.role.rawValue)
+                        .font(.caption)
+                        .foregroundColor(roleForegroundColor(for: user.role))
+                        .fontWeight(roleWeight(for: user.role))
+                        .lineLimit(1)
+                }
+                
+            }//hstack
+            
+            VStack(alignment: .leading, spacing: 6){
+                
+                // member since
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.greyText)
+                    Text("Member Since")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                    Text(user.dateJoined, format: Date.FormatStyle().day().month(.twoDigits).year())
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                }
+                
+                // User guild reputation
+                
+                HStack(alignment: .center, spacing: 1) {
+                    Image(systemName: "shield.pattern.checkered")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                    Text("\(user.reputation)")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.accentColor)
+                    Text("Guild Reputation")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                        .padding(.leading, 6)
+                }
+                
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            
+            
+            Divider()
+            
+            HStack(spacing: 8) {
+                StandardActionButton(
+                    title: "Block",
+                    backgroundColor: AppColors.whiteText,
+                    foregroundColor: AppColors.gradientBackgroundDark,
+                    action: { }
+                )
+                Spacer()
+                
+
+                StandardActionButton(
+                    title: "Block",
+                    backgroundColor: AppColors.whiteText,
+                    foregroundColor: AppColors.gradientBackgroundDark,
+                    action: { }
+                )
+                
+                .padding(.trailing)
+
+                
+            }
+            
+            
+        } //vstack
+        .padding(.top, 8).padding(.horizontal)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        
+    }
+    private func roleForegroundColor(for role: UserRole) -> Color {
+        switch role {
+        case .admin: return .orange
+        case .moderator: return .blue
+        case .member: return AppColors.whiteText.opacity(0.7)
+        }
+    }
+    
+    private func roleWeight(for role: UserRole) -> Font.Weight {
+        switch role {
+        case .admin: return .bold
+        case .moderator: return .bold
+        case .member: return .regular
         }
     }
 }
+

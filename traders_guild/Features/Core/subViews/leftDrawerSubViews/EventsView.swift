@@ -148,7 +148,7 @@ struct EventRowView: View {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white.opacity(isPressed ? 0.1 : 0.02))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: 14) // Change this to is viewed by the user to show the vorder, indicating a new unseen event
                             .strokeBorder(AppColors.accentColor.opacity(0.3), lineWidth: 1)
                     )
             )

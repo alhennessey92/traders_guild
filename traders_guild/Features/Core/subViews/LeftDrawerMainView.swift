@@ -141,8 +141,9 @@ struct LeftDrawerMainView: View {
         // Present detail sheets with a clear background and consistent detents (matches right drawer)
         .sheet(item: $bottomSheetContent) { content in
             BottomSheetView(content: content)
-                .presentationDetents([.medium, .large])
-                .presentationBackground(Color.clear)
+                .presentationDetents([.small, .large])
+                
+                .presentationBackground(AppColors.drawerBackground.opacity(0.3))
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                 .presentationCornerRadius(20)
         }
@@ -685,6 +686,8 @@ struct StatRow: View {
 }
 
 /// Container for detail content presented as a sheet from the left drawer.
+///
+
 struct BottomSheetView: View {
     let content: BottomSheetContent
     @Environment(\.dismiss) private var dismiss
@@ -702,7 +705,7 @@ struct BottomSheetView: View {
                         EventDetailView(event: event)
                     }
                 }
-                .padding()
+                .padding(.horizontal)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
