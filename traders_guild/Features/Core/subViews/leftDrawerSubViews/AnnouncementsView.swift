@@ -194,85 +194,109 @@ struct AnnouncementRowView: View {
 // MARK: - Enhanced Announcement Detail View
 struct AnnouncementDetailView: View {
     let announcement: GuildAnnouncement
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header with icon and title
-            HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    Image(systemName: announcement.isImportant ? "megaphone.fill" : "megaphone.fill")
-                        .font(.title)
-                        .foregroundColor(AppColors.accentColor)
-                    
-                    if announcement.isImportant {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 12, height: 12)
-                            .offset(x: 12, y: -12)
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 16) {
+                
+                
+                
+                // START OF CONTENT
+                
+                
+                // Header with icon and title
+                HStack(alignment: .top, spacing: 12) {
+                    ZStack {
+                        Image(systemName: announcement.isImportant ? "megaphone.fill" : "megaphone.fill")
+                            .font(.title)
+                            .foregroundColor(AppColors.accentColor)
+                        
+                        if announcement.isImportant {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 12, height: 12)
+                                .offset(x: 12, y: -12)
+                        }
                     }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(announcement.title)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                        
+                        if announcement.isImportant {
+                            Text("IMPORTANT ANNOUNCEMENT")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.red)
+                                .cornerRadius(6)
+                        }
+                    }
+                    
+                    Spacer()
                 }
                 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(announcement.title)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                    
-                    if announcement.isImportant {
-                        Text("IMPORTANT ANNOUNCEMENT")
-                            .font(.caption)
+                let role = announcement.authorRole ?? .member
+                let authorName = announcement.authorName ?? "Unknown"
+                // Author and timestamp info
+                HStack(spacing: 8) {
+                    if role != .member {
+                        Text(role.rawValue.uppercased())
+                            .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.red)
-                            .cornerRadius(6)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                role == .admin ? Color.red.opacity(0.8) : AppColors.accentColor.opacity(0.8)
+                            )
+                            .cornerRadius(4)
                     }
+                    
+                    Text("Posted by \(authorName)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("•")
+                        .foregroundColor(.secondary)
+                    
+                    Text(announcement.timeAgo)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Divider()
+                
+                // Content
+                ScrollView {
+                    Text(announcement.content)
+                        .font(.body)
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 
                 Spacer()
+                
+                
+                // END OF CONTENT
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 30)
+            .padding(.horizontal)
             
-            let role = announcement.authorRole ?? .member
-            let authorName = announcement.authorName ?? "Unknown"
-            // Author and timestamp info
-            HStack(spacing: 8) {
-                if role != .member {
-                    Text(role.rawValue.uppercased())
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            role == .admin ? Color.red.opacity(0.8) : AppColors.accentColor.opacity(0.8)
-                        )
-                        .cornerRadius(4)
-                }
-                
-                Text("Posted by \(authorName)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text("•")
-                    .foregroundColor(.secondary)
-                
-                Text(announcement.timeAgo)
-                    .font(.caption)
+            // Floating dismiss button overlaid on top
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
                     .foregroundColor(.secondary)
             }
-            
-            Divider()
-            
-            // Content
-            ScrollView {
-                Text(announcement.content)
-                    .font(.body)
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            
-            Spacer()
+            .padding(.top, 20)
+            .padding(.trailing, 16)
         }
     }
 }

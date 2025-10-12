@@ -163,94 +163,130 @@ struct EventRowView: View {
 struct EventDetailView: View {
 //    let id: Int
     let event: GuildEvent
-
-//    init(id: Int) {
-//        let safeTimeOffset = abs(id % 168)
-//        self.event = GuildEvent(
-//            title: "Guild Tournament \(id)",
-//            content: "Join us for an exciting guild tournament! Compete against other members, earn reputation points, and climb the leaderboard. Prizes for top performers!",
-//            author: "Guild Admin",
-//            authorRole: .admin,
-//            postedAt: Date().addingTimeInterval(TimeInterval(-safeTimeOffset * 3600)),
-//            isImportant: (id % 10) <= 3,
-//            noAttending: 34
-//        )
-//        self.id = id
-//    }
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(spacing: 4) {
-                    Text(monthFormatter.string(from: event.eventDate))
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text(dayFormatter.string(from: event.eventDate))
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                }
-                .frame(width: 80)
-                .padding(.vertical, 12)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(10)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(event.title)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                    Text(timeFormatter.string(from: event.eventDate))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    let role = event.authorRole ?? .member
-                    let authorName = event.authorName ?? "Unknown"
-                    HStack(spacing: 8) {
-                        if role != .member {
-                            Text(role.rawValue.uppercased())
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    role == .admin ? Color.red.opacity(0.8) : AppColors.accentColor.opacity(0.8)
-                                )
-                                .cornerRadius(4)
-                        }
-                        Text("Hosted by \(authorName)")
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 16) {
+                
+                
+                // start of content
+                HStack {
+                    VStack(spacing: 4) {
+                        Text(monthFormatter.string(from: event.eventDate))
                             .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text(dayFormatter.string(from: event.eventDate))
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                    }
+                    .frame(width: 80)
+                    .padding(.vertical, 12)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(10)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(event.title)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Text(timeFormatter.string(from: event.eventDate))
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
+                        
+                        let role = event.authorRole ?? .member
+                        let authorName = event.authorName ?? "Unknown"
+                        HStack(spacing: 8) {
+                            if role != .member {
+                                Text(role.rawValue.uppercased())
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        role == .admin ? Color.red.opacity(0.8) : AppColors.accentColor.opacity(0.8)
+                                    )
+                                    .cornerRadius(4)
+                            }
+                            Text("Hosted by \(authorName)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("\(event.noAttending) members attending", systemImage: "person.3.fill")
+                        .foregroundColor(AppColors.accentColor)
+                    Label("Guild Hall", systemImage: "location.fill")
+                        .foregroundColor(.secondary)
+                }
+                
+                Text("Event Description")
+                    .font(.headline)
+                    .padding(.top, 8)
+                
+                Text(event.content)
+                    .font(.body)
+                
+                
+                Spacer(minLength: 0)
+                
+                Divider()
+                    
+                
+                HStack(spacing: 8) {
+                    DrawerActionButton(
+                        imageName: "nosign",
+                        backgroundColor: AppColors.bearCandleRed.opacity(0.3),
+                        foregroundColor: AppColors.whiteText,
+                        strokeColor: AppColors.bearCandleRed.opacity(0.6),
+                        strokeWidth: 0.5,
+                        action: { }
+                    )
+                    
+                    Spacer()
+                    
+                    DrawerActionButton(
+                        imageName: "person.fill.badge.plus",
+                        backgroundColor: AppColors.whiteText.opacity(0.05),
+                        foregroundColor: AppColors.whiteText.opacity(0.8),
+                        strokeColor: AppColors.whiteText.opacity(0.3),
+                        strokeWidth: 0.5,
+                        action: { }
+                    )
+
+                    DrawerActionButton(
+                        title: "Chat",
+                        imageName: "message.fill",
+                        backgroundColor: AppColors.whiteText.opacity(0.05),
+                        foregroundColor: AppColors.whiteText.opacity(0.8),
+                        strokeColor: AppColors.whiteText.opacity(0.3),
+                        strokeWidth: 0.5,
+                        action: { }
+                    )
+                }
+                
+                .padding(.bottom, 20)
+                
+                
+                // END OF CONTENT 
             }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 12) {
-                Label("\(event.noAttending) members attending", systemImage: "person.3.fill")
-                    .foregroundColor(AppColors.accentColor)
-                Label("Guild Hall", systemImage: "location.fill")
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 30)
+            .padding(.horizontal)
+            
+            // Floating dismiss button overlaid on top
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
                     .foregroundColor(.secondary)
             }
-
-            Text("Event Description")
-                .font(.headline)
-                .padding(.top, 8)
-
-            Text(event.content)
-                .font(.body)
-
-            Button(action: {}) {
-                Text("RSVP to Event")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(AppColors.accentColor)
-                    .cornerRadius(10)
-            }
-            .padding(.top, 8)
+            .padding(.top, 20)
+            .padding(.trailing, 16)
         }
     }
 }

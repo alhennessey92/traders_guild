@@ -35,12 +35,14 @@ enum BottomSheetContent: Identifiable, Equatable {
     case announcement(GuildAnnouncement)
     case guildUserProfile(GuildUser)
     case event(GuildEvent)
+    case profile(User)
     
     var id: String {
         switch self {
         case .announcement(let announcement): return "announcement-\(announcement.id)"
         case .guildUserProfile(let user): return "profile-\(user.id)"
         case .event(let event): return "event-\(event.id)"
+        case .profile(let user): return "profile-\(user.id)"
         }
     }
 }
@@ -66,6 +68,8 @@ struct LeftDrawerMainView: View {
     @Binding var dismissSheetsSignal: Bool
     let onClose: () -> Void
     
+    
+    
     @State private var dragTranslation: CGFloat = 0
     @State private var navigationState: DrawerNavigationState = .main
     @State private var bottomSheetContent: BottomSheetContent? = nil
@@ -84,7 +88,10 @@ struct LeftDrawerMainView: View {
                     currentGuild: currentGuild,
                     navigationState: $navigationState,
                     onClose: onClose,
-                    dragTranslation: $dragTranslation
+                    dragTranslation: $dragTranslation,
+                    presentProfile: { user in
+                        bottomSheetContent = .profile(user)
+                    }
                 )
                 .transition(.asymmetric(
                     insertion: .move(edge: .leading),
@@ -141,9 +148,15 @@ struct LeftDrawerMainView: View {
         // Present detail sheets with a clear background and consistent detents (matches right drawer)
         .sheet(item: $bottomSheetContent) { content in
             BottomSheetView(content: content)
-                .presentationDetents([.small, .large])
+                .presentationDetents(detentsForContent(content))
                 
-                .presentationBackground(AppColors.drawerBackground.opacity(0.3))
+                .presentationBackground {
+                    ZStack {
+                        Color.clear
+                            .background(.thinMaterial)
+                        AppColors.drawerBackground.opacity(0.4)
+                    }
+                }
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                 .presentationCornerRadius(20)
         }
@@ -159,6 +172,17 @@ struct LeftDrawerMainView: View {
             }
         }
     }
+    
+    private func detentsForContent(_ content: BottomSheetContent) -> Set<PresentationDetent> {
+        switch content {
+        case .announcement:
+            return [.medium, .large]
+        case .guildUserProfile, .profile:
+            return [.height(300)]
+        case .event:
+            return [.height(380), .large]
+        }
+    }
 }
 
 /// Drawer home screen showing guild header and navigation menu for sections.
@@ -168,6 +192,7 @@ struct MainDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
+    let presentProfile: (User) -> Void
     
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
@@ -320,7 +345,9 @@ struct MainDrawerView: View {
             // Footer
             VStack(spacing: 16) {
                 if let user = currentUser.user {
-                    UserRowView(user: user, onTap: {})
+                    UserRowView(user: user, onTap: {
+                        presentProfile(user)
+                    })
                     
                 }
                 
@@ -690,35 +717,58 @@ struct StatRow: View {
 
 struct BottomSheetView: View {
     let content: BottomSheetContent
-    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    switch content {
-                    case .announcement(let announcement):
-                        AnnouncementDetailView(announcement: announcement)
-                    case .guildUserProfile(let user):
-                        GuildUserDetailView(user: user)
-                    case .event(let event):
-                        EventDetailView(event: event)
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            switch content {
+            case .announcement(let announcement):
+                AnnouncementDetailView(announcement: announcement)
+            case .guildUserProfile(let user):
+                GuildUserDetailView(user: user)
+            case .event(let event):
+                EventDetailView(event: event)
+            case .profile(let user):
+                UserProfileDetailView(user: user)
             }
         }
+        //.background(.thinMaterial(color: .black.opacity(0.95)))
     }
 }
+//struct BottomSheetView: View {
+//    let content: BottomSheetContent
+//    @Environment(\.dismiss) private var dismiss
+//    
+//    var body: some View {
+//        NavigationView {
+//            ScrollView {
+//                VStack(alignment: .leading, spacing: 20) {
+//                    switch content {
+//                    case .announcement(let announcement):
+//                        AnnouncementDetailView(announcement: announcement)
+//                    case .guildUserProfile(let user):
+//                        GuildUserDetailView(user: user)
+//                    case .event(let event):
+//                        EventDetailView(event: event)
+//                    case .profile(let user):
+//                        UserProfileDetailView(user: user)
+//                    }
+//                    
+//                }
+//                
+//                .padding(.horizontal)
+//            }
+//            .navigationBarTitleDisplayMode(.inline)
+//            .toolbar {
+//                ToolbarItem(placement: .navigationBarTrailing) {
+//                    Button(action: { dismiss() }) {
+//                        Image(systemName: "xmark.circle.fill")
+//                            .foregroundColor(.secondary)
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
 
 
 
