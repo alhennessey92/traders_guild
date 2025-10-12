@@ -48,7 +48,7 @@ struct SwitchGuildView: View {
 
 
 
-
+// Handle individual guild switch
 struct GuildSwitchRow: View {
     let guildName: String
     
@@ -84,3 +84,21 @@ struct GuildSwitchRow: View {
         }
     }
 }
+
+
+//MARK: - Join a guild main view + search for guild
+
+
+// MARK: - Join a guild - Expanded Row
+
+
+// MARK: - Join a guild - sign up sheet
+
+
+// MARK: - Create a guild main view
+
+
+// MARK: - Create a guild add watchlist
+
+
+// MARK: - Create a guild Invite Users

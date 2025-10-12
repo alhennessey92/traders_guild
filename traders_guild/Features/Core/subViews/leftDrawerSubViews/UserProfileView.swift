@@ -39,10 +39,7 @@ struct UserProfileDetailView: View {
                             selectedDetent = .fraction(0.35)  // Shrink back
                         }
                     })
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .trailing)
-                    ))
+                    .transition(.opacity)
                 case .settings:
                     UserSettingsSheetView(onBack: {
                         withAnimation(.easeInOut(duration: 0.3)) {
@@ -159,6 +156,7 @@ struct UserProfileDetailView: View {
                     action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentContent = .switchGuild
+                            selectedDetent = .large 
                             // Keep current detent for switch guild
                         }
                     }

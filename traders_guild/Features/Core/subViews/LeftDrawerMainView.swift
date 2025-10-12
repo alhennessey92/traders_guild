@@ -20,6 +20,7 @@ import SwiftUI
 enum DrawerNavigationState: Equatable {
     case main
     case announcements
+    case notifications
     case topMarkers
     case leaderboard
     case guildWatchlist
@@ -64,6 +65,7 @@ struct LeftDrawerMainView: View {
     let events: [GuildEvent]
     let guildUsers: [GuildUser]
     let guildWatchlist: GuildWatchlist
+    let notificationsList: [Notification]
     @Binding var sheetOverlayVisible: Bool
     @Binding var dismissSheetsSignal: Bool
     let onClose: () -> Void
@@ -108,6 +110,7 @@ struct LeftDrawerMainView: View {
                     events: events,
                     guildUsers: guildUsers,
                     guildWatchlist: guildWatchlist,
+                    notificationsList: notificationsList,
                     onClose: onClose,
                     dragTranslation: $dragTranslation
                 )
@@ -229,6 +232,7 @@ struct MainDrawerView: View {
     /// Each entry maps to a destination `DrawerNavigationState`.
     let menuItems: [(icon: String, title: String, state: DrawerNavigationState)] = [
         ("megaphone.fill", "Announcements", .announcements),
+        ("bell.fill", "Notifications", .notifications),
         ("chart.line.uptrend.xyaxis", "Today's Top Markers", .topMarkers),
         ("trophy.fill", "Leaderboard", .leaderboard),
         ("star.fill", "Guild Watchlist", .guildWatchlist),
@@ -413,6 +417,7 @@ struct SectionDrawerView: View {
     let events: [GuildEvent]
     let guildUsers: [GuildUser]
     let guildWatchlist: GuildWatchlist
+    let notificationsList: [Notification]
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
@@ -508,6 +513,7 @@ struct SectionDrawerView: View {
         switch currentSection {
         case .main: return ""
         case .announcements: return "Announcements"
+        case .notifications: return "Notifications"
         case .topMarkers: return "Top Markers"
         case .leaderboard: return "Leaderboard"
         case .guildWatchlist: return "Watchlist"
@@ -523,6 +529,8 @@ struct SectionDrawerView: View {
         switch currentSection {
         case .announcements:
             AnnouncementsListView(bottomSheetContent: $bottomSheetContent, announcements: announcements)
+        case .notifications:
+            NotificationsView(notificationsList: notificationsList)
         case .topMarkers:
             TopMarkersView()
         case .leaderboard:
