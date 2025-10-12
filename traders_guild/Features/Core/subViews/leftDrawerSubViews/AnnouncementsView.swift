@@ -296,8 +296,9 @@ struct AnnouncementDetailView: View {
                     .foregroundColor(.secondary)
             }
             .padding(.top, 20)
-            .padding(.trailing, 16)
+            .padding(.trailing, 20)
         }
+        .background(AppColors.drawerBackground.opacity(0.2))
     }
 }
 

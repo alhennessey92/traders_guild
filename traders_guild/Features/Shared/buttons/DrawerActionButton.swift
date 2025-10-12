@@ -37,7 +37,7 @@ struct DrawerActionButton: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 if let imageName = imageName {
                     Image(systemName: imageName)
                         .font(.headline)
@@ -45,7 +45,7 @@ struct DrawerActionButton: View {
                 
                 if let title = title {
                     Text(title)
-                        .font(.headline)
+                        .font(.subheadline)
                         .lineLimit(1)  // ADD THIS
                 }
             }

@@ -14,7 +14,7 @@ struct Divider: View {
         Rectangle()
             .fill(Color.gray.opacity(0.4))
             .frame(height: 0.5)
-            .padding(.top, 6)
+            
     }
     
     

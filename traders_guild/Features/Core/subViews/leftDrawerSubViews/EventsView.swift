@@ -217,20 +217,23 @@ struct EventDetailView: View {
                 }
                 
                 Divider()
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("\(event.noAttending) members attending", systemImage: "person.3.fill")
-                        .foregroundColor(AppColors.accentColor)
-                    Label("Guild Hall", systemImage: "location.fill")
-                        .foregroundColor(.secondary)
+                VStack{
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("\(event.noAttending) members attending", systemImage: "person.3.fill")
+                            .foregroundColor(AppColors.accentColor)
+                        Label("Guild Hall", systemImage: "location.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Text("Event Description")
+                        .font(.headline)
+                        .padding(.top, 8)
+                    
+                    Text(event.content)
+                        .font(.body)
                 }
-                
-                Text("Event Description")
-                    .font(.headline)
-                    .padding(.top, 8)
-                
-                Text(event.content)
-                    .font(.body)
+                .padding(.horizontal)
                 
                 
                 Spacer(minLength: 0)
@@ -269,8 +272,10 @@ struct EventDetailView: View {
                         action: { }
                     )
                 }
+                .padding(.horizontal)
                 
-                .padding(.bottom, 20)
+                
+
                 
                 
                 // END OF CONTENT 
@@ -286,8 +291,9 @@ struct EventDetailView: View {
                     .foregroundColor(.secondary)
             }
             .padding(.top, 20)
-            .padding(.trailing, 16)
+            .padding(.trailing, 20)
         }
+        .background(AppColors.drawerBackground.opacity(0.2))
     }
 }
 

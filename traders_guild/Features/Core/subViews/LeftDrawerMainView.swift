@@ -73,6 +73,7 @@ struct LeftDrawerMainView: View {
     @State private var dragTranslation: CGFloat = 0
     @State private var navigationState: DrawerNavigationState = .main
     @State private var bottomSheetContent: BottomSheetContent? = nil
+    @State private var selectedDetent: PresentationDetent = .fraction(0.35)
     
     /// Dismisses any currently presented sheet from the left drawer.
     /// Used when the global overlay is tapped/dragged or the drawer closes.
@@ -146,25 +147,45 @@ struct LeftDrawerMainView: View {
         .shadow(radius: LayoutConstants.shadowRadius)
         .ignoresSafeArea()
         // Present detail sheets with a clear background and consistent detents (matches right drawer)
+//        .sheet(item: $bottomSheetContent) { content in
+//            BottomSheetView(content: content)
+//                .presentationDetents(detentsForContent(content))
+//                
+//                .presentationBackground {Color.clear
+////                    ZStack {
+////                        Color.clear
+////                            .background(.ultraThinMaterial)
+////                        AppColors.drawerBackground.opacity(0.4)
+////                    }
+//                }
+//                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+//                .presentationCornerRadius(33)
+//        }
+//        // Keep the global overlay in sync with whether a sheet is presented
+//        .onChange(of: bottomSheetContent) { oldValue, newValue in
+//            sheetOverlayVisible = newValue != nil
+//        }
+//        // Respond to external dismissal requests (e.g., tapping the overlay)
+//        .onChange(of: dismissSheetsSignal) { oldValue, newValue in
+//            if newValue {
+//                dismissAllSheets()
+//                dismissSheetsSignal = false
+//            }
+//        }
         .sheet(item: $bottomSheetContent) { content in
-            BottomSheetView(content: content)
-                .presentationDetents(detentsForContent(content))
-                
-                .presentationBackground {
-                    ZStack {
-                        Color.clear
-                            .background(.thinMaterial)
-                        AppColors.drawerBackground.opacity(0.4)
-                    }
-                }
+            BottomSheetView(content: content, selectedDetent: $selectedDetent)  // PASS BINDING
+                .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
+                .presentationBackground { Color.clear }
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                .presentationCornerRadius(20)
+                .presentationCornerRadius(33)
         }
-        // Keep the global overlay in sync with whether a sheet is presented
         .onChange(of: bottomSheetContent) { oldValue, newValue in
             sheetOverlayVisible = newValue != nil
+            // Reset detent when opening new sheet
+            if newValue != nil {
+                selectedDetent = .fraction(0.35)
+            }
         }
-        // Respond to external dismissal requests (e.g., tapping the overlay)
         .onChange(of: dismissSheetsSignal) { oldValue, newValue in
             if newValue {
                 dismissAllSheets()
@@ -173,14 +194,24 @@ struct LeftDrawerMainView: View {
         }
     }
     
+//    private func detentsForContent(_ content: BottomSheetContent) -> Set<PresentationDetent> {
+//        switch content {
+//        case .announcement:
+//            return [.fraction(0.6), .large]
+//        case .guildUserProfile, .profile:
+//            return [.fraction(0.35), .large]
+//        case .event:
+//            return [.fraction(0.6), .large]
+//        }
+//    }
     private func detentsForContent(_ content: BottomSheetContent) -> Set<PresentationDetent> {
         switch content {
         case .announcement:
-            return [.medium, .large]
+            return [.fraction(0.6), .large]
         case .guildUserProfile, .profile:
-            return [.height(300)]
+            return [.fraction(0.35), .large]  // ADD .large
         case .event:
-            return [.height(380), .large]
+            return [.fraction(0.6), .large]
         }
     }
 }
@@ -344,6 +375,16 @@ struct MainDrawerView: View {
             
             // Footer
             VStack(spacing: 16) {
+                
+                
+                
+                
+                
+                Divider()
+                    .padding(.top, 2)
+                    .padding(.bottom, 2)
+                
+                
                 if let user = currentUser.user {
                     UserRowView(user: user, onTap: {
                         presentProfile(user)
@@ -352,42 +393,6 @@ struct MainDrawerView: View {
                 }
                 
                 
-                
-                
-                Rectangle()
-                    .fill(Color.gray.opacity(0.4))
-                    .frame(height: 0.5)
-                    .padding(.top, 0)
-                    .padding(.bottom, 6)
-                HStack {
-                    Button(action: {}) {
-                        HStack{
-                            Image(systemName: "arrow.trianglehead.2.counterclockwise")
-                                .font(.callout)
-                                .fontWeight(.medium)
-                                .foregroundColor(AppColors.whiteText.opacity(0.7))
-                            Text("Switch Guild")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(AppColors.whiteText)
-                        }
-                    }
-                    Spacer()
-                    Button(action: {}) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.callout)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-                    }
-                    .padding(.trailing, 6)
-                    Button(action: {}) {
-                        Image(systemName: "square.and.arrow.up.fill")
-                            .font(.callout)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-                    }
-                    .padding(.bottom, 3)
-                }
             }
             .padding(.top, 20)
             .padding(.bottom, 40)
@@ -717,6 +722,7 @@ struct StatRow: View {
 
 struct BottomSheetView: View {
     let content: BottomSheetContent
+    @Binding var selectedDetent: PresentationDetent
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -728,7 +734,7 @@ struct BottomSheetView: View {
             case .event(let event):
                 EventDetailView(event: event)
             case .profile(let user):
-                UserProfileDetailView(user: user)
+                UserProfileDetailView(user: user, selectedDetent: $selectedDetent)
             }
         }
         //.background(.thinMaterial(color: .black.opacity(0.95)))
