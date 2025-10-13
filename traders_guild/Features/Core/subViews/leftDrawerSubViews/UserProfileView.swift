@@ -33,12 +33,15 @@ struct UserProfileDetailView: View {
                             removal: .identity  // Instant removal
                         ))
                 case .switchGuild:
-                    SwitchGuildView(onBack: {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            currentContent = .profile
-                            selectedDetent = .fraction(0.35)  // Shrink back
-                        }
-                    })
+                    SwitchGuildView(
+                        onBack: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                currentContent = .profile
+                                selectedDetent = .fraction(0.35)  // Shrink back
+                            }
+                        },
+                        selectedDetent: $selectedDetent
+                    )
                     .transition(.opacity)
                 case .settings:
                     UserSettingsSheetView(onBack: {
@@ -149,14 +152,14 @@ struct UserProfileDetailView: View {
                 DrawerActionButton(
                     title: "Switch Guild",
                     imageName: "arrow.trianglehead.2.counterclockwise",
-                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
-                    foregroundColor: AppColors.whiteText.opacity(0.8),
-                    strokeColor: AppColors.whiteText.opacity(0.3),
+                    backgroundColor: AppColors.whiteText.opacity(0.6),
+                    foregroundColor: Color.black,
+                    strokeColor: Color.black,
                     strokeWidth: 0.5,
                     action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentContent = .switchGuild
-                            selectedDetent = .large 
+                            //selectedDetent = .large 
                             // Keep current detent for switch guild
                         }
                     }
@@ -167,7 +170,7 @@ struct UserProfileDetailView: View {
                 DrawerActionButton(
                     imageName: "gear",
                     backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
-                    foregroundColor: AppColors.whiteText.opacity(0.8),
+                    foregroundColor: AppColors.whiteText.opacity(0.9),
                     strokeColor: AppColors.whiteText.opacity(0.3),
                     strokeWidth: 0.5,
                     action: {
