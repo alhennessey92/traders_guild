@@ -25,6 +25,8 @@ struct Guild: Identifiable, Codable, Equatable {
     let description: String
     let reputation: Int
     let accuracy: Int
+    let owner: UUID
+    let dateCreated: Date
     
     
     init(
@@ -32,7 +34,9 @@ struct Guild: Identifiable, Codable, Equatable {
         name: String,
         description: String = "No description",
         reputation: Int = 0,
-        accuracy: Int = 0
+        accuracy: Int = 0,
+        owner: UUID,
+        dateCreated: Date
         
     ) {
         self.id = id
@@ -40,8 +44,16 @@ struct Guild: Identifiable, Codable, Equatable {
         self.description = description
         self.reputation = reputation
         self.accuracy = accuracy
+        self.owner = owner
+        self.dateCreated = dateCreated
         
     }
+    // Convenience lookup using sample users (replace with real data source in app layer)
+    var authorUser: GuildUser? {
+        GuildUser.sampleUsers.first { $0.id == owner }
+    }
+    var authorRole: UserRole? { authorUser?.role }
+    var authorName: String? { authorUser?.name }
 }
 
 
@@ -284,6 +296,7 @@ struct UserIDs {
 
 struct GuildIDs{
     static let kaosGuild = UUID()
+    static let megaGuild = UUID()
 }
 
 
@@ -297,7 +310,21 @@ extension Guild{
             name: "KAOS",
             description: "A great description of the kaos guild",
             reputation: 1293,
-            accuracy: 34
+            accuracy: 34,
+            owner: UserIDs.seanPain,
+            dateCreated: Date().addingTimeInterval(-3600)
+            
+            
+            
+        ),
+        Guild(
+            id: GuildIDs.megaGuild,
+            name: "MEGA",
+            description: "A great description of the kaos guild",
+            reputation: 12312,
+            accuracy: 43,
+            owner: UserIDs.bullRunner,
+            dateCreated: Date().addingTimeInterval(-3600)
             
             
             

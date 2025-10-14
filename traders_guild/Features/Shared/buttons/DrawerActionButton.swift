@@ -46,7 +46,7 @@ struct DrawerActionButton: View {
                 if let title = title {
                     Text(title)
                         .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .fontWeight(.bold)
                         .lineLimit(1)  // ADD THIS
                 }
             }

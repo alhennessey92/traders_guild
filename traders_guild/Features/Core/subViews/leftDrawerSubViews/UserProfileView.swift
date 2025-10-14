@@ -63,7 +63,9 @@ struct UserProfileDetailView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        
+        
+//        .background(AppColors.drawerBackground.opacity(0.8))
     }
     
     private var profileView: some View {
@@ -152,7 +154,7 @@ struct UserProfileDetailView: View {
                 DrawerActionButton(
                     title: "Switch Guild",
                     imageName: "arrow.trianglehead.2.counterclockwise",
-                    backgroundColor: AppColors.whiteText.opacity(0.6),
+                    backgroundColor: AppColors.whiteText.opacity(0.8),
                     foregroundColor: Color.black,
                     strokeColor: Color.black,
                     strokeWidth: 0.5,
@@ -180,11 +182,15 @@ struct UserProfileDetailView: View {
                         }
                     }
                 )
+                
             }
             .padding(.horizontal)
+            
+            
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, 20)
+        
         .padding(.horizontal)
     }
     

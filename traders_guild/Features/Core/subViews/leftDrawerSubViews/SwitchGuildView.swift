@@ -104,7 +104,7 @@ struct SwitchGuildView: View {
                 // 🆕 NEW: Updated to navigate to Join Guild view
                 DrawerActionButton(
                     title: "Join a Guild",
-                    imageName: "person.2.shield",
+                   // imageName: "person.2.shield",
                     backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
                     foregroundColor: AppColors.whiteText.opacity(0.9),
                     strokeColor: AppColors.whiteText.opacity(0.3),
@@ -138,8 +138,8 @@ struct SwitchGuildView: View {
                 // 🆕 NEW: Updated to navigate to Create Guild view with new icon
                 DrawerActionButton(
                     title: "Create a Guild",
-                    imageName: "xmark.shield",
-                    backgroundColor: AppColors.whiteText.opacity(0.6),
+                    //imageName: "xmark.shield",
+                    backgroundColor: AppColors.whiteText.opacity(0.8),
                     foregroundColor: Color.black,
                     strokeColor: Color.black,
                     strokeWidth: 0.5,
@@ -205,6 +205,11 @@ struct JoinGuildView: View {
     let onBack: () -> Void
     @State private var searchText: String = ""
     
+    @FocusState private var isSearchFocused: Bool
+    
+    @State private var allGuilds: [Guild] = Guild.sampleGuild
+    
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Back button
@@ -221,10 +226,7 @@ struct JoinGuildView: View {
             .padding(.horizontal)
            
             HStack (spacing: 8){
-                Image(systemName: "person.2.shield")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.whiteText)
+                
                 Text("Join a Guild")
                     .font(.title3)
                     .fontWeight(.bold)
@@ -234,88 +236,191 @@ struct JoinGuildView: View {
             .padding(.horizontal)
             
             // Search bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(AppColors.greyText)
-                TextField("Search for guilds...", text: $searchText)
-                    .foregroundColor(AppColors.whiteText)
+            // Search bar with filter
+            HStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        .font(.subheadline)
+                    
+                    TextField("Search...", text: $searchText)
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .submitLabel(.done)
+                        .focused($isSearchFocused)
+                        .onTapGesture {
+                            isSearchFocused = true
+                        }
+                    
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(AppColors.whiteText.opacity(0.6))
+                                .font(.subheadline)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(AppColors.whiteText.opacity(0.06))
+                .clipShape(Capsule())
+                .onTapGesture {
+                    isSearchFocused = true
+                }
+                
+                Button(action: {}) {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.title3)
+                        .foregroundColor(AppColors.whiteText.opacity(0.8))
+                        .frame(width: 40, height: 40)
+                        .background(AppColors.whiteText.opacity(0.04))
+                        .clipShape(Circle())
+                }
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.gradientBackgroundDark.opacity(0.3))
-                    .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
-            )
             .padding(.top, 10)
             .padding(.horizontal)
             
             // Guild search results
             ScrollView {
-                VStack(spacing: 12) {
-                    ForEach(0..<8) { index in
-                        JoinGuildRow(guildName: "Guild \(index + 1)", memberCount: Int.random(in: 10...500))
+                VStack(spacing: 30) {
+                    ForEach(allGuilds) { guild in
+                        JoinGuildRow(
+                            guild: guild,
+                            onTap: {
+                                //bottomSheetContent = .guildUserProfile(user)
+                            }
+                        )
                     }
                 }
             }
             .padding(.top, 10)
             .padding(.horizontal)
+            .scrollDismissesKeyboard(.interactively)
+            .onTapGesture {
+                isSearchFocused = false
+                hideKeyboard()
+            }
             
             Spacer()
         }
         .padding(.horizontal)
     }
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
 }
 
 // 🆕 NEW: Individual guild row for join guild list
 struct JoinGuildRow: View {
-    let guildName: String
-    let memberCount: Int
+    
+    
+    let guild: Guild
+    let onTap: () -> Void
+    
+    
+    
+    @State private var isPressed = false
+    
+    
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Guild icon
-            Image(systemName: "shield.pattern.checkered")
-                .font(.title2)
-                .foregroundColor(AppColors.accentColor.opacity(0.6))
+        Button(action: onTap) {
+            let role = guild.authorRole ?? .member
+            let authorName = guild.authorName ?? "Unknown"
             
-            VStack(alignment: .leading, spacing: 2) {
-                Text(guildName)
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.whiteText)
-                
-                HStack(spacing: 4) {
-                    Image(systemName: "person.2")
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 6){
+                    HStack{
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.title2)
+                            .foregroundColor(AppColors.accentColor.opacity(0.6))
+                        
+                        Text("\(guild.name)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        + Text(" Guild")
+                            .font(.title2)
+                            .fontWeight(.medium)
+                            .foregroundColor(AppColors.accentColor)
+                    }
+                    Text("48 Members - Open")
                         .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                    Text("\(memberCount) members")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
+                        .foregroundColor(AppColors.whiteText)
+                        .padding(.leading, 15)
+                    
+                    HStack(spacing: 3){
+                        Text("\(authorName)")
+                            .font(.caption)
+                            .foregroundColor(AppColors.whiteText)
+                            .lineLimit(1)
+                        
+                        Text("-")
+                            .font(.caption)
+                            .foregroundColor(AppColors.whiteText)
+                            .lineLimit(1)
+                        
+                        Text(role.rawValue)
+                            .font(.caption)
+                            .foregroundColor(roleForegroundColor(for: role))
+                            .fontWeight(roleWeight(for: role))
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, 15)
+                    HStack(spacing:2){
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("\(guild.reputation)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text(" Guild Reputation")
+                            .font(.caption)
+                            .foregroundColor(AppColors.whiteText.opacity(0.6))
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, 15)
+                    
                 }
+                
+                Spacer()
+                
+                Image(systemName: "checkmark.square")
+                    .font(.title2)
+                    .foregroundColor(AppColors.accentColor.opacity(0.6))
+                
+                
+                
             }
             
-            Spacer()
-            
-            Button(action: {
-                // Handle join request
-            }) {
-                Text("Join")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(AppColors.accentColor)
-                    .cornerRadius(6)
-            }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.1))
-                .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
-        )
+        .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }, perform: {})
+        
       
+    }
+    private func roleForegroundColor(for role: UserRole) -> Color {
+        switch role {
+        case .admin: return .orange
+        case .moderator: return .blue
+        case .member: return AppColors.whiteText.opacity(0.7)
+        }
+    }
+    
+    private func roleWeight(for role: UserRole) -> Font.Weight {
+        switch role {
+        case .admin: return .bold
+        case .moderator: return .bold
+        case .member: return .regular
+        }
     }
 }
 
