@@ -178,7 +178,14 @@ struct LeftDrawerMainView: View {
         .sheet(item: $bottomSheetContent) { content in
             BottomSheetView(content: content, selectedDetent: $selectedDetent)  // PASS BINDING
                 .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
-                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
+//                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
+                .presentationBackground {
+                    ZStack {
+                        Color.clear
+                            .background(.ultraThinMaterial)
+                        AppColors.drawerBackground.opacity(0.4)
+                    }
+                }
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                 .presentationCornerRadius(33)
         }
@@ -752,7 +759,7 @@ struct BottomSheetView: View {
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.1),
+                            Color.white.opacity(0.15),
                             Color.white.opacity(0.0)
                         ],
                         startPoint: .top,
@@ -767,82 +774,6 @@ struct BottomSheetView: View {
 }
 
 
-// Custom shape for top and sides only
-struct TopAndSidesStroke: Shape {
-    let cornerRadius: CGFloat
-    let lineWidth: CGFloat
-    
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        
-        // Start from bottom left
-        path.move(to: CGPoint(x: 0, y: rect.maxY))
-        
-        // Left side up
-        path.addLine(to: CGPoint(x: 0, y: cornerRadius))
-        
-        // Top left corner
-        path.addArc(
-            center: CGPoint(x: cornerRadius, y: cornerRadius),
-            radius: cornerRadius,
-            startAngle: .degrees(180),
-            endAngle: .degrees(270),
-            clockwise: false
-        )
-        
-        // Top edge
-        path.addLine(to: CGPoint(x: rect.maxX - cornerRadius, y: 0))
-        
-        // Top right corner
-        path.addArc(
-            center: CGPoint(x: rect.maxX - cornerRadius, y: cornerRadius),
-            radius: cornerRadius,
-            startAngle: .degrees(270),
-            endAngle: .degrees(0),
-            clockwise: false
-        )
-        
-        // Right side down
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        
-        return path
-    }
-}
-//struct BottomSheetView: View {
-//    let content: BottomSheetContent
-//    @Environment(\.dismiss) private var dismiss
-//    
-//    var body: some View {
-//        NavigationView {
-//            ScrollView {
-//                VStack(alignment: .leading, spacing: 20) {
-//                    switch content {
-//                    case .announcement(let announcement):
-//                        AnnouncementDetailView(announcement: announcement)
-//                    case .guildUserProfile(let user):
-//                        GuildUserDetailView(user: user)
-//                    case .event(let event):
-//                        EventDetailView(event: event)
-//                    case .profile(let user):
-//                        UserProfileDetailView(user: user)
-//                    }
-//                    
-//                }
-//                
-//                .padding(.horizontal)
-//            }
-//            .navigationBarTitleDisplayMode(.inline)
-//            .toolbar {
-//                ToolbarItem(placement: .navigationBarTrailing) {
-//                    Button(action: { dismiss() }) {
-//                        Image(systemName: "xmark.circle.fill")
-//                            .foregroundColor(.secondary)
-//                    }
-//                }
-//            }
-//        }
-//    }
-//}
 
 
 

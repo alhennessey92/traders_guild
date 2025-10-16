@@ -312,7 +312,7 @@ struct GuildUserDetailView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+       // .background(AppColors.drawerBackground.opacity(0.2))
     }
     
     private func roleForegroundColor(for role: UserRole) -> Color {

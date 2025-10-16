@@ -230,7 +230,7 @@ struct MainView: View {
                 .presentationBackground {
                     ZStack {
                         Color.clear
-                            .background(.thinMaterial)
+                            .background(.ultraThinMaterial)
                         AppColors.drawerBackground.opacity(0.4)
                     }
                 }

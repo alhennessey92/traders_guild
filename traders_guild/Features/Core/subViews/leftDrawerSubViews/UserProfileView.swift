@@ -171,7 +171,7 @@ struct UserProfileDetailView: View {
                 
                 DrawerActionButton(
                     imageName: "gear",
-                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
+                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.2),
                     foregroundColor: AppColors.whiteText.opacity(0.9),
                     strokeColor: AppColors.whiteText.opacity(0.3),
                     strokeWidth: 0.5,

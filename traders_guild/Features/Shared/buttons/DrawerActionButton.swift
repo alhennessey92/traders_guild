@@ -51,7 +51,7 @@ struct DrawerActionButton: View {
                 }
             }
             .foregroundColor(foregroundColor)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
             .padding(.horizontal, 20)
             .background(backgroundColor)
             .clipShape(Capsule())
