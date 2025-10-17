@@ -13,6 +13,7 @@ struct UserListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     let guildUsers: [GuildUser]
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var messagingManager: MessagingManager // Add messaging manager
     
     var body: some View {
         VStack(spacing: 10) {
@@ -179,69 +180,105 @@ struct GuildUserListRowView: View {
 struct GuildUserDetailView: View {
     let user: GuildUser
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var messagingManager: MessagingManager // Add messaging manager
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            // Main content - starts higher
+            // Main content
             VStack(alignment: .leading, spacing: 20) {
-                // User header (no spacer at top now)
-                HStack(spacing: 15) {
-                    // Avatar with online indicator
-                    ZStack(alignment: .bottomTrailing) {
-                        Circle()
-                            .fill(AppColors.accentColor.opacity(0.3))
-                            .frame(width: 60, height: 60)
-                            .overlay(
-                                Text(String(user.name.prefix(2)))
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(AppColors.accentColor)
-                            )
-                        
-                        if user.isOnline {
+                // Top header section with gradient background
+                VStack(alignment: .leading, spacing: 20) {
+                    // User header
+                    HStack(spacing: 15) {
+                        // Avatar with online indicator
+                        ZStack(alignment: .bottomTrailing) {
                             Circle()
-                                .fill(AppColors.bullCandleGreen)
-                                .frame(width: 12, height: 12)
+                                .fill(AppColors.accentColor.opacity(0.3))
+                                .frame(width: 60, height: 60)
                                 .overlay(
-                                    Circle()
-                                        .stroke(AppColors.drawerBackground, lineWidth: 2)
+                                    Text(String(user.name.prefix(2)))
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(AppColors.accentColor)
                                 )
+                            
+                            if user.isOnline {
+                                Circle()
+                                    .fill(AppColors.bullCandleGreen)
+                                    .frame(width: 12, height: 12)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(AppColors.drawerBackground, lineWidth: 2)
+                                    )
+                            }
+                        }
+                        
+                        // User info
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(user.name)
+                                .font(.title3)
+                                .fontWeight(.medium)
+                                .foregroundColor(AppColors.whiteText)
+                            
+                            Text(user.role.rawValue)
+                                .font(.caption)
+                                .foregroundColor(roleForegroundColor(for: user.role))
+                                .fontWeight(roleWeight(for: user.role))
+                                .lineLimit(1)
+                        }
+                        
+                        Spacer(minLength: 60) // Leave space for dismiss button
+                    }
+                    .padding(.horizontal, 25)
+                    .padding(.top, 25)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        // member since
+                        HStack(spacing: 6) {
+                            Image(systemName: "calendar")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.greyText)
+                            Text("Member Since")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        
+                        // User guild reputation
+                        HStack(alignment: .center, spacing: 1) {
+                            Image(systemName: "shield.pattern.checkered")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.accentColor)
+                            Text("\(user.reputation)")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.accentColor)
+                            Text("Guild Reputation")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.greyText)
+                                .padding(.leading, 6)
                         }
                     }
+                    .padding(.horizontal, 25)
                     
-                    // User info
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(user.name)
-                            .font(.title3)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.whiteText)
-                        
-                        Text(user.role.rawValue)
-                            .font(.caption)
-                            .foregroundColor(roleForegroundColor(for: user.role))
-                            .fontWeight(roleWeight(for: user.role))
-                            .lineLimit(1)
-                    }
-                    
-                    Spacer(minLength: 60) // Leave space for dismiss button
+                    Divider()
+                        .padding(.horizontal)
                 }
-                .padding(.horizontal)
-                .padding(.top, 20)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            AppColors.gradientBackgroundDark.opacity(0.3),
+                            AppColors.sheetBackground
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
                 
-                VStack(alignment: .leading, spacing: 6) {
-                    // member since
-                    HStack(spacing: 6) {
-                        Image(systemName: "calendar")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.greyText)
-                        Text("Member Since")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.greyText)
-                    }
-                    
-                    // User guild reputation
+                ScrollView(.vertical, showsIndicators: false) {
                     HStack(alignment: .center, spacing: 1) {
                         Image(systemName: "shield.pattern.checkered")
                             .font(.caption)
@@ -258,13 +295,13 @@ struct GuildUserDetailView: View {
                             .padding(.leading, 6)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 25)
                 
                 Spacer(minLength: 0)
                 
                 Divider()
-                   
-                
+                    .padding(.horizontal)
+
                 HStack(spacing: 8) {
                     DrawerActionButton(
                         imageName: "nosign",
@@ -293,15 +330,14 @@ struct GuildUserDetailView: View {
                         foregroundColor: AppColors.whiteText.opacity(0.8),
                         strokeColor: AppColors.whiteText.opacity(0.3),
                         strokeWidth: 0.5,
-                        action: { }
+                        action: {
+                            dismiss() // If in a sheet
+                            messagingManager.openUserChat(user) }
                     )
                 }
- 
-                .padding(.horizontal)
+                .padding(.horizontal, 25)
             }
-            .padding(.horizontal)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.top, 20)
             
             // Floating dismiss button overlaid on top
             Button(action: { dismiss() }) {

@@ -23,4 +23,7 @@ enum AppColors {
     static let toolbarBackground = Color("TGToolbarBackground") //#00000E
     static let drawerBackground = Color("TGDrawerBackground")
     
+    static let sheetBackground = Color("TGSheetBackground")
+    static let sheetBackgroundDark = Color("TGSheetBackgroundDark")
+    
 }

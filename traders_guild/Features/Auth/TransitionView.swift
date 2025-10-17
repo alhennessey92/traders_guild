@@ -17,7 +17,7 @@ struct TransitionView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [AppColors.gradientBackgroundDark, AppColors.gradientBackgroundLight],
+                colors: [AppColors.gradientBackgroundDark, AppColors.sheetBackground],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -52,7 +52,7 @@ struct TransitionView: View {
                     }
 
                     // After 6 seconds, fade out the whole screen
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                         withAnimation(.easeInOut(duration: 1.0)) {
                             fadeIn = false
                             opacity = 0

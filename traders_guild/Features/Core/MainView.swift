@@ -38,6 +38,7 @@ struct MainView: View {
     /// Environment object for session management across the app
     @EnvironmentObject var session: SessionStore
     @EnvironmentObject var currentUser: UserStore
+    @EnvironmentObject var messagingManager: MessagingManager // Get from app-level environment
     
     
     // MARK: - Sample data
@@ -215,6 +216,7 @@ struct MainView: View {
             }
         }
         .ignoresSafeArea()
+        .globalMessaging() // Apply global messaging to MainView only
         
         // MARK: - Bottom Sheet
         /// Native bottom sheet using Apple's .sheet modifier
@@ -866,11 +868,10 @@ struct ToolItem: View {
     }
 }
 
-
-
 #Preview {
     MainView()
         .environmentObject(UserStore())
         .environmentObject(SessionStore())
+        .environmentObject(MessagingManager())
 }
 

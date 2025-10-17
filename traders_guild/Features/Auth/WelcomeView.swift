@@ -43,13 +43,7 @@ struct WelcomeView: View {
                     .padding(.leading, 20)
                 
                 
-                    /// TESTING PURPOSES ONLY TO GET TO ROOTVIEW DIRECT
-                    .onAppear() {
-                        let displayName = !data.username.isEmpty ? data.username : (!data.name.isEmpty ? data.name : "Demo User")
-                        let user = User(id: UUID(), name: displayName, email: data.email, reputation: 100, isOnline: true, role: .member)
-                        session.setUser(user)
-                        session.showingTransition = false
-                    }
+
                    
 
                     

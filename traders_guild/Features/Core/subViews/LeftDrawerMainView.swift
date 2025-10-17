@@ -75,7 +75,7 @@ struct LeftDrawerMainView: View {
     @State private var dragTranslation: CGFloat = 0
     @State private var navigationState: DrawerNavigationState = .main
     @State private var bottomSheetContent: BottomSheetContent? = nil
-    @State private var selectedDetent: PresentationDetent = .fraction(0.35)
+    @State private var selectedDetent: PresentationDetent = .fraction(0.6)
     
     /// Dismisses any currently presented sheet from the left drawer.
     /// Used when the global overlay is tapped/dragged or the drawer closes.
@@ -183,7 +183,7 @@ struct LeftDrawerMainView: View {
                     ZStack {
                         Color.clear
                             .background(.ultraThinMaterial)
-                        AppColors.drawerBackground.opacity(0.4)
+                        AppColors.sheetBackground
                     }
                 }
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
@@ -193,7 +193,7 @@ struct LeftDrawerMainView: View {
             sheetOverlayVisible = newValue != nil
             // Reset detent when opening new sheet
             if newValue != nil {
-                selectedDetent = .fraction(0.35)
+                selectedDetent = .fraction(0.6)
             }
         }
         .onChange(of: dismissSheetsSignal) { oldValue, newValue in
@@ -219,7 +219,7 @@ struct LeftDrawerMainView: View {
         case .announcement:
             return [.fraction(0.6), .large]
         case .guildUserProfile, .profile:
-            return [.fraction(0.35), .large]  // ADD .large
+            return [.fraction(0.6), .large]  // ADD .large
         case .event:
             return [.fraction(0.6), .large]
         }

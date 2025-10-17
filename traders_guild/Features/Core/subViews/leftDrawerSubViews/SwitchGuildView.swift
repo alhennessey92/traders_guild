@@ -73,7 +73,7 @@ struct SwitchGuildView: View {
                     }
                 )
                 
-//                Spacer()
+                Spacer()
                 
                 DrawerActionButton(
                     title: "Create a Guild",
@@ -87,7 +87,7 @@ struct SwitchGuildView: View {
                 )
                 Spacer()
             }
-            .padding(.horizontal)
+//            .padding(.horizontal)
             .padding(.top, 10)
         }
         .padding(.horizontal)
@@ -150,7 +150,7 @@ struct JoinGuildFlowView: View {
                 LinearGradient(
                     gradient: Gradient(colors: [
                         AppColors.gradientBackgroundDark,
-                        AppColors.gradientBackgroundMid
+                        AppColors.sheetBackground,
                     ]),
                     startPoint: .top,
                     endPoint: .bottom

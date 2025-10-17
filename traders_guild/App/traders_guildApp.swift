@@ -14,6 +14,7 @@ struct traders_guildApp: App {
     // Using @StateObject ensures it lives for the lifetime of the app and is observable by all child views.
     @StateObject var session = SessionStore()
     @StateObject var currentUser = UserStore()
+    @StateObject var messagingManager = MessagingManager() // Add global messaging manager
     
     var body: some Scene {
         WindowGroup {
@@ -29,7 +30,14 @@ struct traders_guildApp: App {
             }
             .environmentObject(session)
             .environmentObject(currentUser)
+            .environmentObject(messagingManager) // Provide messaging manager to all views
             .onAppear {
+                // TESTING: Auto-login for development - remove this when ready for production
+                if session.currentUser == nil {
+                    let testUser = User(id: UUID(), name: "Test User", email: "test@example.com", reputation: 100, isOnline: true, role: .member)
+                    session.setUser(testUser)
+                }
+                
                 // Keep UserStore in sync with SessionStore at launch
                 if let user = session.currentUser {
                     currentUser.login(user: user)
