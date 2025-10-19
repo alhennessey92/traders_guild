@@ -34,7 +34,7 @@ struct traders_guildApp: App {
             .onAppear {
                 // TESTING: Auto-login for development - remove this when ready for production
                 if session.currentUser == nil {
-                    let testUser = User(id: UUID(), name: "Test User", email: "test@example.com", reputation: 100, isOnline: true, role: .member)
+                    let testUser = User(id: UserIDs.currentUser, name: "Alhennessey92", email: "test@example.com", globalReputation: 100, isOnline: true, role: .member)
                     session.setUser(testUser)
                 }
                 

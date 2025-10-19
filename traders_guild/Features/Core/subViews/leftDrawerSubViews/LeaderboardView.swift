@@ -11,7 +11,7 @@ import SwiftUI
 
 // MARK: - Announcements List View
 struct LeaderboardView: View {
-    let guildUsers: [GuildUser]
+    let guildUsers: [GuildMembership]
     
     var body: some View {
         VStack(spacing: 10) {
@@ -50,7 +50,7 @@ struct LeaderboardView: View {
 
 // MARK: - Announcement Row View
 struct LeaderBoardRowView: View {
-    let user: GuildUser
+    let user: GuildMembership
     let rank: Int
     let onTap: () -> Void
     
@@ -75,21 +75,21 @@ struct LeaderBoardRowView: View {
                     .fill(AppColors.accentColor.opacity(0.3))
                     .frame(width: 40, height: 40)
                     .overlay(
-                        Text(String(user.name.prefix(2)))
+                        Text(String(user.userName?.prefix(2) ?? "??"))
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
                     )
                 VStack (alignment: .leading, spacing: 3){
-                    Text("\(user.name)")
+                    Text("\(user.userName ?? "Unknown")")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
                     
-                    Text(user.role.rawValue)
+                    Text(user.roleInGuild.rawValue)
                         .font(.caption)
-                        .foregroundColor(user.role.foregroundColor)
-                        .fontWeight(user.role.fontWeight)
+                        .foregroundColor(user.roleInGuild.foregroundColor)
+                        .fontWeight(user.roleInGuild.fontWeight)
                         .lineLimit(1)
                 }
                 
@@ -135,21 +135,7 @@ struct LeaderBoardRowView: View {
         
     }
     
-    private func roleForegroundColor(for role: UserRole) -> Color {
-        switch role {
-        case .admin: return .orange
-        case .moderator: return .blue
-        case .member: return AppColors.whiteText.opacity(0.7)
-        }
-    }
-    
-    private func roleWeight(for role: UserRole) -> Font.Weight {
-        switch role {
-        case .admin: return .bold
-        case .moderator: return .bold
-        case .member: return .regular
-        }
-    }
+  
  
     
 }

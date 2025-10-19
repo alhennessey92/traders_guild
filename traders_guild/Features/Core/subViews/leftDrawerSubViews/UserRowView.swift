@@ -17,7 +17,7 @@ import SwiftUI
 
 // MARK: - User Row View button for left drawer
 struct UserRowView: View {
-    let user: User
+    let user: GuildMembership
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -31,13 +31,13 @@ struct UserRowView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 40, height: 40)
                         .overlay(
-                            Text(String(user.name.prefix(2)))
+                            Text(String(user.userName?.prefix(2) ?? "unKnown"))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
                         )
                     
-                    if user.isOnline {
+                    if user.isUserOnline {
                         Circle()
                             .fill(AppColors.bullCandleGreen)
                             .frame(width: 12, height: 12)
@@ -52,7 +52,7 @@ struct UserRowView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack (spacing: 2){
 
-                        Text(user.name)
+                        Text(user.userName ?? "Unknown")
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(AppColors.whiteText)
@@ -61,10 +61,10 @@ struct UserRowView: View {
                     
                     
                     HStack (spacing:2){
-                        Text(user.role.rawValue)
+                        Text(user.roleInGuild.rawValue)
                             .font(.caption)
-                            .foregroundColor(user.role.foregroundColor)
-                            .fontWeight(user.role.fontWeight)
+                            .foregroundColor(user.roleInGuild.foregroundColor)
+                            .fontWeight(user.roleInGuild.fontWeight)
                             .lineLimit(1)
                         Circle()
                             .fill(AppColors.whiteText.opacity(0.7))

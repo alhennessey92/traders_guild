@@ -17,8 +17,9 @@ enum UserSheetContent {
 
 
 struct UserProfileDetailView: View {
-    let user: User
+    let user: GuildMembership
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var currentUser: UserStore
     @State private var currentContent: UserSheetContent = .profile
     @Binding var selectedDetent: PresentationDetent  // ADD THIS
 
@@ -90,13 +91,13 @@ struct UserProfileDetailView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 60, height: 60)
                         .overlay(
-                            Text(String(user.name.prefix(2)))
+                            Text(String(currentUser.user?.name.prefix(2) ?? "Unknown"))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
                         )
                     
-                    if user.isOnline {
+                    if currentUser.user?.isOnline == true {
                         Circle()
                             .fill(AppColors.bullCandleGreen)
                             .frame(width: 12, height: 12)
@@ -109,15 +110,15 @@ struct UserProfileDetailView: View {
                 
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(user.name)
+                    Text(currentUser.user?.name ?? "Unknown")
                         .font(.title3)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
                     
-                    Text(user.role.rawValue)
+                    Text(user.roleInGuild.rawValue)
                         .font(.caption)
-                        .foregroundColor(roleForegroundColor(for: user.role))
-                        .fontWeight(roleWeight(for: user.role))
+                        .foregroundColor(user.roleInGuild.foregroundColor)
+                        .fontWeight(user.roleInGuild.fontWeight)
                         .lineLimit(1)
                 }
                 
@@ -133,7 +134,7 @@ struct UserProfileDetailView: View {
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.greyText)
-                    Text("Member Since")
+                    Text("Member for \(user.timeInGuild)")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.greyText)
@@ -175,15 +176,15 @@ struct UserProfileDetailView: View {
             
             ScrollView(.vertical, showsIndicators: false) {
                 HStack(alignment: .center, spacing: 2) {
-                    Image(systemName: "shield.pattern.checkered")
+                    Image(systemName: "globe")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("\(user.reputation)")
+                    Text("\(currentUser.user?.globalReputation ?? 0)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("Guild Reputation")
+                    Text("Global Reputation")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.greyText)
@@ -252,19 +253,4 @@ struct UserProfileDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
-    private func roleForegroundColor(for role: UserRole) -> Color {
-        switch role {
-        case .admin: return .orange
-        case .moderator: return .blue
-        case .member: return AppColors.whiteText.opacity(0.7)
-        }
-    }
-    
-    private func roleWeight(for role: UserRole) -> Font.Weight {
-        switch role {
-        case .admin: return .bold
-        case .moderator: return .bold
-        case .member: return .regular
-        }
-    }
 }

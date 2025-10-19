@@ -23,11 +23,12 @@ struct RightDrawerMainView: View {
 
     let onClose: () -> Void
     let chatrooms: [Chatroom]
-    let onlineUsers: [GuildUser]
-    let offlineUsers: [GuildUser]
-    let friends: [GuildUser]
+    let onlineUsers: [GuildMembership]
+    let offlineUsers: [GuildMembership]
+    let friends: [GuildMembership]
     
     @EnvironmentObject var messagingManager: MessagingManager
+    @EnvironmentObject var currentUser: UserStore
     
     @State private var dragTranslation: CGFloat = 0
     @State private var searchText: String = ""
@@ -42,27 +43,50 @@ struct RightDrawerMainView: View {
         }
         return chatrooms.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
+    var filteredFriends: [GuildMembership] {
+        let friendsWithoutCurrentUser = friends.filter { $0.userId != currentUser.user?.id }
+        guard !searchText.isEmpty else { return friendsWithoutCurrentUser }
+        return friendsWithoutCurrentUser.filter {
+            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
+        }
+    }
+
+    var filteredOnlineUsers: [GuildMembership] {
+        let onlineWithoutCurrentUser = onlineUsers.filter { $0.userId != currentUser.user?.id }
+        guard !searchText.isEmpty else { return onlineWithoutCurrentUser }
+        return onlineWithoutCurrentUser.filter {
+            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
+        }
+    }
+
+    var filteredOfflineUsers: [GuildMembership] {
+        let offlineWithoutCurrentUser = offlineUsers.filter { $0.userId != currentUser.user?.id }
+        guard !searchText.isEmpty else { return offlineWithoutCurrentUser }
+        return offlineWithoutCurrentUser.filter {
+            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
+        }
+    }
     
-    var filteredFriends: [GuildUser] {
-        if searchText.isEmpty {
-            return friends
-        }
-        return friends.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    var filteredOnlineUsers: [GuildUser] {
-        if searchText.isEmpty {
-            return onlineUsers
-        }
-        return onlineUsers.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    var filteredOfflineUsers: [GuildUser] {
-        if searchText.isEmpty {
-            return offlineUsers
-        }
-        return offlineUsers.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
+//    var filteredFriends: [GuildMembership] {
+//        guard !searchText.isEmpty else { return friends }
+//        return friends.filter {
+//            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
+//        }
+//    }
+//
+//    var filteredOnlineUsers: [GuildMembership] {
+//        guard !searchText.isEmpty else { return onlineUsers }
+//        return onlineUsers.filter {
+//            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
+//        }
+//    }
+//
+//    var filteredOfflineUsers: [GuildMembership] {
+//        guard !searchText.isEmpty else { return offlineUsers }
+//        return offlineUsers.filter {
+//            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
+//        }
+//    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -169,8 +193,6 @@ struct RightDrawerMainView: View {
                         ChatroomDisclosureGroup(
                             chatrooms: filteredChatrooms,
                             onChatroomTap: { chatroom in
-                                // TODO: Check if MessagingManager has openChatroomChat method
-                                // For now, using openUserChat - you may need to add openChatroomChat method
                                 messagingManager.openChatroom(chatroom)
                             }
                         )
@@ -369,8 +391,8 @@ struct UserDisclosureGroup: View {
     let count: Int
     let icon: String
     let iconColor: Color
-    let users: [GuildUser]
-    let onUserTap: (GuildUser) -> Void
+    let users: [GuildMembership]
+    let onUserTap: (GuildMembership) -> Void
     
     @State private var isExpanded: Bool = true
     

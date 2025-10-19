@@ -44,10 +44,10 @@ struct MainView: View {
     // MARK: - Sample data
     
     @State private var currentGuild: Guild = Guild.sampleGuild[0] //only 1 guild
-    @State private var allUsers: [GuildUser] = GuildUser.sampleUsers
+    @State private var allGuildMembers: [GuildMembership] = GuildMembership.sampleMemberships
     @State private var userFriends: [UserFriends] = UserFriends.sampleFriends
     @State private var chatrooms: [Chatroom] = Chatroom.sampleChatrooms
-    @State private var announcements: [GuildAnnouncement] = GuildAnnouncement.sampleGuildAnnouncment
+    @State private var announcements: [GuildAnnouncement] = GuildAnnouncement.sampleGuildAnnouncements
     @State private var events: [GuildEvent] = GuildEvent.sampleGuildEvents
     @State private var guildWatchlist: GuildWatchlist = GuildWatchlist.sampleGuildWatchlist[0] // only 1 watchlist
     @State private var notificationsList: [Notification] = Notification.sampleNotifications
@@ -107,18 +107,18 @@ struct MainView: View {
     }
 
     /// All users who are friends (based on UserFriends relationship)
-    private var friends: [GuildUser] {
-        allUsers.filter { friendIDs.contains($0.id) }
+    private var friends: [GuildMembership] {
+        allGuildMembers.filter { friendIDs.contains($0.userId) }
     }
 
     /// Online users who are NOT friends
-    private var onlineUsers: [GuildUser] {
-        allUsers.filter { $0.isOnline && !friendIDs.contains($0.id) }
+    private var onlineUsers: [GuildMembership] {
+        allGuildMembers.filter { $0.isUserOnline && !friendIDs.contains($0.userId) }
     }
 
     /// Offline users who are NOT friends
-    private var offlineUsers: [GuildUser] {
-        allUsers.filter { !$0.isOnline && !friendIDs.contains($0.id) }
+    private var offlineUsers: [GuildMembership] {
+        allGuildMembers.filter { !$0.isUserOnline && !friendIDs.contains($0.userId) }
     }
     
     
@@ -128,26 +128,26 @@ struct MainView: View {
     // MARK: - Helper Functions for Friend Management
 
     /// Check if a specific user is a friend
-    func isFriend(_ userId: UUID) -> Bool {
-        friendIDs.contains(userId)
-    }
+//    func isFriend(_ userId: UUID) -> Bool {
+//        friendIDs.contains(userId)
+//    }
 
-    /// Add a new friend
-    func addFriend(_ userId: UUID) {
-        guard !isFriend(userId) else { return }
-        let newFriend = UserFriends(friendID: userId)
-        userFriends.append(newFriend)
-    }
-
-    /// Remove a friend
-    func removeFriend(_ userId: UUID) {
-        userFriends.removeAll { $0.friendID == userId }
-    }
+//    /// Add a new friend
+//    func addFriend(_ userId: UUID) {
+//        guard !isFriend(userId) else { return }
+//        let newFriend = UserFriends(friendID: userId)
+//        userFriends.append(newFriend)
+//    }
+//
+//    /// Remove a friend
+//    func removeFriend(_ userId: UUID) {
+//        userFriends.removeAll { $0.friendID == userId }
+//    }
 
     /// Get the date a user was added as a friend
-    func friendAddedDate(_ userId: UUID) -> Date? {
-        userFriends.first { $0.friendID == userId }?.dateFriendAdded
-    }
+//    func friendAddedDate(_ userId: UUID) -> Date? {
+//        userFriends.first { $0.friendID == userId }?.dateFriendAdded
+//    }
     
     
     
@@ -370,7 +370,7 @@ struct MainView: View {
     /// Left drawer view with swipe-to-dismiss functionality
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView(currentGuild: currentGuild, announcements: announcements, events: events, guildUsers: allUsers, guildWatchlist: guildWatchlist, notificationsList: notificationsList, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
+            LeftDrawerMainView(currentGuild: currentGuild, announcements: announcements, events: events, memberships: allGuildMembers, guildWatchlist: guildWatchlist, notificationsList: notificationsList, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false

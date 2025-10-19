@@ -8,7 +8,7 @@ import SwiftUI
 
 // MARK: - Message Content Types
 enum MessageContentType {
-    case user(GuildUser)
+    case user(GuildMembership)
     case chatroom(Chatroom)
 }
 
@@ -19,8 +19,8 @@ class MessagingManager: ObservableObject {
     @Published var activeMessage: MessageContentType? = nil
     
     /// Open a user chat from anywhere in the app
-    func openUserChat(_ user: GuildUser) {
-        activeMessage = .user(user)
+    func openUserChat(_ membership: GuildMembership) {
+        activeMessage = .user(membership)
     }
     
     /// Open a chatroom from anywhere in the app
@@ -54,7 +54,7 @@ struct GlobalMessagingOverlay: ViewModifier {
             )) { item in
                 MessagingSheet(contentType: item.contentType)
                     .environmentObject(messagingManager) // Pass the messaging manager to the sheet
-                    .presentationDetents([.large])
+                    .presentationDetents([.fraction(0.9)])
                     .presentationBackground {
                         ZStack {
                             Color.clear
@@ -110,8 +110,8 @@ struct MessagingSheet: View {
                     switch contentType {
                         case .chatroom(let chatroom):
                             ChatroomHeaderView(chatroom: chatroom)
-                        case .user(let user):
-                            UserChatHeaderView(user: user)
+                        case .user(let membership):
+                            UserChatHeaderView(membership: membership)
                         }
                         
                     
@@ -130,6 +130,7 @@ struct MessagingSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 .padding(.bottom, 16)
+                .background(AppColors.sheetBackground)
                 
                 
                 Divider()
@@ -142,9 +143,9 @@ struct MessagingSheet: View {
             
             switch contentType {
                 case .chatroom(let chatroom):
-                ChatroomFooterView(chatroom: chatroom, messageText: $messageText)
-                case .user(let user):
-                    UserChatFooterView(user: user, messageText: $messageText)
+                    ChatroomFooterView(chatroom: chatroom, messageText: $messageText)
+                case .user(let membership):
+                    UserChatFooterView(membership: membership, messageText: $messageText)
                 }
             
             // Message input footer
@@ -158,6 +159,8 @@ struct MessagingSheet: View {
                 Color.clear
                     .background(.ultraThinMaterial)
                 AppColors.sheetBackground
+                StaticPatternView()
+                
             }
         )
         
@@ -166,7 +169,7 @@ struct MessagingSheet: View {
 
 // MARK: - User Chat Header Component
 struct UserChatHeaderView: View {
-    let user: GuildUser
+    let membership: GuildMembership
     
     var body: some View {
         HStack(spacing: 8) {
@@ -174,15 +177,15 @@ struct UserChatHeaderView: View {
             ZStack(alignment: .bottomTrailing) {
                 Circle()
                     .fill(AppColors.accentColor.opacity(0.3))
-                    .frame(width: 30, height: 30)
+                    .frame(width: 40, height: 40)
                     .overlay(
-                        Text(String(user.name.prefix(2)))
+                        Text(String(membership.userName?.prefix(2) ?? "unKnown"))
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
                     )
                 
-                if user.isOnline {
+                if membership.isUserOnline {
                     Circle()
                         .fill(AppColors.bullCandleGreen)
                         .frame(width: 10, height: 10)
@@ -197,7 +200,7 @@ struct UserChatHeaderView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack (spacing: 2){
 
-                    Text(user.name)
+                    Text(membership.userName ?? "Unknown")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
@@ -206,10 +209,10 @@ struct UserChatHeaderView: View {
                 
                 
                 HStack (spacing:2){
-                    Text(user.role.rawValue)
+                    Text(membership.roleInGuild.rawValue)
                         .font(.caption2)
-                        .foregroundColor(user.role.foregroundColor)
-                        .fontWeight(user.role.fontWeight)
+                        .foregroundColor(membership.roleInGuild.foregroundColor)
+                        .fontWeight(membership.roleInGuild.fontWeight)
                         .lineLimit(1)
                     Circle()
                         .fill(AppColors.whiteText.opacity(0.7))
@@ -221,7 +224,7 @@ struct UserChatHeaderView: View {
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("\(user.reputation)")
+                    Text("\(membership.reputation)")
                         .font(.caption2)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.accentColor)
@@ -231,7 +234,8 @@ struct UserChatHeaderView: View {
             }
             
         }
-        .padding(.top, 4)
+   
+        
     }
     
 }
@@ -247,7 +251,7 @@ struct ChatroomHeaderView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(AppColors.gradientBackgroundDark.opacity(0.4))
-                    .frame(width: 34, height: 34)
+                    .frame(width: 40, height: 40)
                 Image(systemName: "number")
                     .font(.headline)
                     .fontWeight(.semibold)
@@ -272,12 +276,14 @@ struct ChatroomHeaderView: View {
             }
             
         }
-        .padding(.top, 4)
+        
+        
     }
     
 }
 
 
+// MARK: - Scrollable Messages Content
 // MARK: - Scrollable Messages Content
 struct MessagingScrollView: View {
     let contentType: MessageContentType
@@ -286,8 +292,9 @@ struct MessagingScrollView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 switch contentType {
-                case .chatroom(_):
-                    ForEach(Array(ChatroomSampleData.messages.enumerated()), id: \.offset) { index, message in
+                case .chatroom(let chatroom):
+                    // Filter messages for this specific chatroom
+                    ForEach(chatroomMessages(for: chatroom)) { message in
                         ChatroomMessageView(message: message)
                     }
                     
@@ -303,6 +310,11 @@ struct MessagingScrollView: View {
         .onTapGesture {
             hideKeyboard()
         }
+    }
+    
+    // Helper to get messages for specific chatroom
+    private func chatroomMessages(for chatroom: Chatroom) -> [ChatroomMessage] {
+        ChatroomMessage.sampleChatroomMessages.filter { $0.roomId == chatroom.id }
     }
     
     private func hideKeyboard() {
@@ -352,17 +364,25 @@ struct ChatroomFooterView: View {
                     
                     // Send button
                     Button(action: sendMessage) {
-                        Image(systemName: messageText.isEmpty ? "paperplane" : "paperplane.fill")
+                        Image(systemName: "chevron.forward.2")
                             .font(.title3)
-                            .foregroundColor(messageText.isEmpty ? .secondary : AppColors.accentColor)
-                            .frame(width: 32, height: 32)
+                            .fontWeight(.bold)
+                            .foregroundColor(messageText.isEmpty ? .secondary : AppColors.gradientBackgroundDark.opacity(0.8))
+                            .frame(width: 40, height: 40)
+                            .padding(.leading, 2)
+                            .background(messageText.isEmpty ? AppColors.whiteText.opacity(0.3) : AppColors.whiteText)
+                            .clipShape(Capsule())
+//                            .overlay(
+//                                Capsule()
+//                                    .strokeBorder(strokeColor ?? Color.clear, lineWidth: strokeWidth)
+//                            )
                     }
                     .disabled(messageText.isEmpty)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.gray.opacity(0.1))
+            .padding(.leading, 10)
+            .frame(height: 40)
+            .background(AppColors.whiteText.opacity(0.08))
             .cornerRadius(25)
         }
         .padding()
@@ -383,7 +403,7 @@ struct ChatroomFooterView: View {
 
 // MARK: - User Chat Footer Component
 struct UserChatFooterView: View {
-    let user: GuildUser
+    let membership: GuildMembership
     @Binding var messageText: String
     
     var body: some View {
@@ -394,14 +414,14 @@ struct UserChatFooterView: View {
                 Button(action: {
                     // Handle emoji picker
                 }) {
-                    Image(systemName: "face.smiling")
+                    Image(systemName: "plus")
                         .font(.title3)
                         .foregroundColor(.secondary)
                         .frame(width: 32, height: 32)
                 }
                 
                 // Text input field (expands to fill available space)
-                TextField("Message \(user.name.lowercased().replacingOccurrences(of: " ", with: "-"))...", text: $messageText)
+                TextField("Message \(membership.userName?.lowercased().replacingOccurrences(of: " ", with: "-") ?? "user")...", text: $messageText)
                     .font(.subheadline)
                     .submitLabel(.send)
                     .onSubmit {
@@ -422,17 +442,25 @@ struct UserChatFooterView: View {
                     
                     // Send button
                     Button(action: sendMessage) {
-                        Image(systemName: messageText.isEmpty ? "paperplane" : "paperplane.fill")
+                        Image(systemName: "chevron.forward.2")
                             .font(.title3)
-                            .foregroundColor(messageText.isEmpty ? .secondary : AppColors.accentColor)
-                            .frame(width: 32, height: 32)
+                            .fontWeight(.bold)
+                            .foregroundColor(messageText.isEmpty ? .secondary : AppColors.gradientBackgroundDark.opacity(0.8))
+                            .frame(width: 40, height: 40)
+                            .padding(.leading, 2)
+                            .background(messageText.isEmpty ? AppColors.whiteText.opacity(0.3) : AppColors.whiteText)
+                            .clipShape(Capsule())
+//                            .overlay(
+//                                Capsule()
+//                                    .strokeBorder(strokeColor ?? Color.clear, lineWidth: strokeWidth)
+//                            )
                     }
                     .disabled(messageText.isEmpty)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.gray.opacity(0.1))
+            .padding(.leading, 10)
+            .frame(height: 44)
+            .background(AppColors.whiteText.opacity(0.08))
             .cornerRadius(25)
         }
         .padding()
@@ -449,13 +477,18 @@ struct UserChatFooterView: View {
     }
 }
 
-// MARK: - Message Views
+// MARK: - Chatroom Message View
 struct ChatroomMessageView: View {
-    let message: (message: String, user: String, isFromCurrentUser: Bool, timestamp: String)
+    let message: ChatroomMessage
+    @EnvironmentObject var currentUser: UserStore // To check if message is from current user
+    
+    var isFromCurrentUser: Bool {
+        message.senderMembershipId == MembershipIDs.currentUserKaos
+    }
     
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            if message.isFromCurrentUser {
+            if isFromCurrentUser {
                 Spacer()
             } else {
                 // Avatar for other users
@@ -463,41 +496,115 @@ struct ChatroomMessageView: View {
                     .fill(AppColors.accentColor.opacity(0.3))
                     .frame(width: 32, height: 32)
                     .overlay(
-                        Text(String(message.user.prefix(2)))
+                        Text(String(message.authorName?.prefix(2) ?? "?"))
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
                     )
             }
             
-            VStack(alignment: message.isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                if !message.isFromCurrentUser {
-                    Text(message.user)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+            VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
+                if !isFromCurrentUser {
+                    // User info header
+                    HStack(spacing: 2) {
+                        Text(message.authorName ?? "Unknown")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.whiteText.opacity(0.9))
+                        
+                        if let role = message.authorRole {
+                            Circle()
+                                .fill(AppColors.whiteText.opacity(0.7))
+                                .frame(width: 3, height: 3)
+                                .padding(.horizontal, 3)
+                            
+                            Text(role.rawValue)
+                                .font(.caption)
+                                .foregroundColor(role.foregroundColor)
+                                .fontWeight(role.fontWeight)
+                            
+                            Circle()
+                                .fill(AppColors.whiteText.opacity(0.7))
+                                .frame(width: 3, height: 3)
+                                .padding(.horizontal, 3)
+                            
+                            Image(systemName: "shield.pattern.checkered")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.accentColor)
+                            
+                            Text("\(message.authorGuildReputation ?? 0)")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.accentColor)
+                        }
+                    }
                 }
                 
-                Text(message.message)
+                // Message bubble
+                Text(message.content)
                     .font(.subheadline)
-                    .foregroundColor(message.isFromCurrentUser ? .white : .primary)
+                    .foregroundColor(isFromCurrentUser ? .white : .primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
-                        message.isFromCurrentUser ?
-                        AppColors.accentColor :
+                        isFromCurrentUser ?
+                        AppColors.accentDarkColor :
                         Color.gray.opacity(0.2)
                     )
-                    .cornerRadius(16)
+                    .clipShape(chatRoomMessageBubbleShape(isFromCurrentUser: isFromCurrentUser))
                 
-                Text(message.timestamp)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                // Timestamp and edited indicator
+                HStack(spacing: 4) {
+                    Text(message.timeAgo)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    
+                    
+                }
+                
+                // Reactions (if any)
+//                if !message.reactions.isEmpty {
+//                    HStack(spacing: 6) {
+//                        ForEach(Array(Set(message.reactions.map { $0.emoji })), id: \.self) { emoji in
+//                            let count = message.reactions.filter { $0.emoji == emoji }.count
+//                            HStack(spacing: 2) {
+//                                Text(emoji)
+//                                    .font(.caption2)
+//                                Text("\(count)")
+//                                    .font(.caption2)
+//                                    .foregroundColor(.secondary)
+//                            }
+//                            .padding(.horizontal, 6)
+//                            .padding(.vertical, 2)
+//                            .background(Color.gray.opacity(0.2))
+//                            .cornerRadius(10)
+//                        }
+//                    }
+//                }
             }
             
-            if !message.isFromCurrentUser {
+            if !isFromCurrentUser {
                 Spacer()
             }
+        }
+    }
+    
+    private func chatRoomMessageBubbleShape(isFromCurrentUser: Bool) -> UnevenRoundedRectangle {
+        if isFromCurrentUser {
+            return UnevenRoundedRectangle(
+                topLeadingRadius: 16,
+                bottomLeadingRadius: 16,
+                bottomTrailingRadius: 4,
+                topTrailingRadius: 16
+            )
+        } else {
+            return UnevenRoundedRectangle(
+                topLeadingRadius: 4,
+                bottomLeadingRadius: 16,
+                bottomTrailingRadius: 16,
+                topTrailingRadius: 16
+            )
         }
     }
 }
@@ -519,10 +626,10 @@ struct UserChatMessageView: View {
                     .padding(.vertical, 8)
                     .background(
                         message.isFromCurrentUser ?
-                        AppColors.accentColor :
+                        AppColors.accentDarkColor :
                         Color.gray.opacity(0.2)
                     )
-                    .cornerRadius(16)
+                    .clipShape(userChatMessageBubbleShape(isFromCurrentUser: message.isFromCurrentUser))
                 
                 Text(message.timestamp)
                     .font(.caption2)
@@ -534,23 +641,44 @@ struct UserChatMessageView: View {
             }
         }
     }
+    private func userChatMessageBubbleShape(isFromCurrentUser: Bool) -> UnevenRoundedRectangle {
+        if isFromCurrentUser {
+            // Current user: pointed on bottom right
+            return UnevenRoundedRectangle(
+                topLeadingRadius: 16,
+                bottomLeadingRadius: 16,
+                bottomTrailingRadius: 4,
+                topTrailingRadius: 16
+            )
+        } else {
+            // Other user: pointed on bottom left
+            return UnevenRoundedRectangle(
+                topLeadingRadius: 4,
+                bottomLeadingRadius: 16,
+                bottomTrailingRadius: 16,
+                topTrailingRadius: 16
+            )
+        }
+    }
 }
 
 // MARK: - Sample Data
-struct ChatroomSampleData {
-    static let messages = [
-        (message: "Hey everyone! What's the market looking like today?", user: "User1", isFromCurrentUser: false, timestamp: "9:15 AM"),
-        (message: "BTC broke resistance, looking bullish!", user: "User2", isFromCurrentUser: false, timestamp: "9:18 AM"),
-        (message: "I caught that move! Entry at 45.2k", user: "You", isFromCurrentUser: true, timestamp: "9:20 AM"),
-        (message: "Nice entry! What's your target?", user: "User3", isFromCurrentUser: false, timestamp: "9:21 AM"),
-        (message: "Aiming for 47k, stop at 44.5k", user: "You", isFromCurrentUser: true, timestamp: "9:22 AM"),
-        (message: "Smart play. I'm watching ETH right now", user: "User1", isFromCurrentUser: false, timestamp: "9:25 AM"),
-        (message: "ETH looks good too, check the 4h chart", user: "User4", isFromCurrentUser: false, timestamp: "9:27 AM")
-    ]
-}
+
 
 struct UserChatSampleData {
     static let messages = [
+        (message: "Hi! How's the trading going today?", isFromCurrentUser: false, timestamp: "10:23 AM"),
+        (message: "Pretty good! Just caught a nice move on AAPL", isFromCurrentUser: true, timestamp: "10:24 AM"),
+        (message: "Nice! What was your entry?", isFromCurrentUser: false, timestamp: "10:25 AM"),
+        (message: "Got in at 175.20, targeting 178", isFromCurrentUser: true, timestamp: "10:26 AM"),
+        (message: "Solid trade! I'm watching TSLA right now", isFromCurrentUser: false, timestamp: "10:28 AM"),
+        (message: "Yeah TSLA looks interesting. Check the 4h chart", isFromCurrentUser: true, timestamp: "10:29 AM"),
+        (message: "Hi! How's the trading going today?", isFromCurrentUser: false, timestamp: "10:23 AM"),
+        (message: "Pretty good! Just caught a nice move on AAPL", isFromCurrentUser: true, timestamp: "10:24 AM"),
+        (message: "Nice! What was your entry?", isFromCurrentUser: false, timestamp: "10:25 AM"),
+        (message: "Got in at 175.20, targeting 178", isFromCurrentUser: true, timestamp: "10:26 AM"),
+        (message: "Solid trade! I'm watching TSLA right now", isFromCurrentUser: false, timestamp: "10:28 AM"),
+        (message: "Yeah TSLA looks interesting. Check the 4h chart", isFromCurrentUser: true, timestamp: "10:29 AM"),
         (message: "Hi! How's the trading going today?", isFromCurrentUser: false, timestamp: "10:23 AM"),
         (message: "Pretty good! Just caught a nice move on AAPL", isFromCurrentUser: true, timestamp: "10:24 AM"),
         (message: "Nice! What was your entry?", isFromCurrentUser: false, timestamp: "10:25 AM"),

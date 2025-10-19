@@ -34,14 +34,12 @@ enum DrawerNavigationState: Equatable {
 /// Each case carries the minimal data needed to render its detail view.
 enum BottomSheetContent: Identifiable, Equatable {
     case announcement(GuildAnnouncement)
-    case guildUserProfile(GuildUser)
     case event(GuildEvent)
-    case profile(User)
+    case profile(GuildMembership)
     
     var id: String {
         switch self {
         case .announcement(let announcement): return "announcement-\(announcement.id)"
-        case .guildUserProfile(let user): return "profile-\(user.id)"
         case .event(let event): return "event-\(event.id)"
         case .profile(let user): return "profile-\(user.id)"
         }
@@ -63,7 +61,7 @@ struct LeftDrawerMainView: View {
     let currentGuild: Guild
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
-    let guildUsers: [GuildUser]
+    let memberships: [GuildMembership]
     let guildWatchlist: GuildWatchlist
     let notificationsList: [Notification]
     @Binding var sheetOverlayVisible: Bool
@@ -92,8 +90,8 @@ struct LeftDrawerMainView: View {
                     navigationState: $navigationState,
                     onClose: onClose,
                     dragTranslation: $dragTranslation,
-                    presentProfile: { user in
-                        bottomSheetContent = .profile(user)
+                    presentProfile: { membership in  // Change parameter type
+                        bottomSheetContent = .profile(membership)
                     }
                 )
                 .transition(.asymmetric(
@@ -108,7 +106,7 @@ struct LeftDrawerMainView: View {
                     currentGuild: currentGuild,
                     announcements: announcements,
                     events: events,
-                    guildUsers: guildUsers,
+                    memberships: memberships,
                     guildWatchlist: guildWatchlist,
                     notificationsList: notificationsList,
                     onClose: onClose,
@@ -150,31 +148,6 @@ struct LeftDrawerMainView: View {
         .shadow(radius: LayoutConstants.shadowRadius)
         .ignoresSafeArea()
         // Present detail sheets with a clear background and consistent detents (matches right drawer)
-//        .sheet(item: $bottomSheetContent) { content in
-//            BottomSheetView(content: content)
-//                .presentationDetents(detentsForContent(content))
-//                
-//                .presentationBackground {Color.clear
-////                    ZStack {
-////                        Color.clear
-////                            .background(.ultraThinMaterial)
-////                        AppColors.drawerBackground.opacity(0.4)
-////                    }
-//                }
-//                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-//                .presentationCornerRadius(33)
-//        }
-//        // Keep the global overlay in sync with whether a sheet is presented
-//        .onChange(of: bottomSheetContent) { oldValue, newValue in
-//            sheetOverlayVisible = newValue != nil
-//        }
-//        // Respond to external dismissal requests (e.g., tapping the overlay)
-//        .onChange(of: dismissSheetsSignal) { oldValue, newValue in
-//            if newValue {
-//                dismissAllSheets()
-//                dismissSheetsSignal = false
-//            }
-//        }
         .sheet(item: $bottomSheetContent) { content in
             BottomSheetView(content: content, selectedDetent: $selectedDetent)  // PASS BINDING
                 .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
@@ -218,7 +191,7 @@ struct LeftDrawerMainView: View {
         switch content {
         case .announcement:
             return [.fraction(0.6), .large]
-        case .guildUserProfile, .profile:
+        case .profile:
             return [.fraction(0.6), .large]  // ADD .large
         case .event:
             return [.fraction(0.6), .large]
@@ -233,7 +206,7 @@ struct MainDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
-    let presentProfile: (User) -> Void
+    let presentProfile: (GuildMembership) -> Void
     
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
@@ -396,11 +369,13 @@ struct MainDrawerView: View {
                     .padding(.bottom, 2)
                 
                 
-                if let user = currentUser.user {
-                    UserRowView(user: user, onTap: {
-                        presentProfile(user)
+                if let user = currentUser.user,
+                   let membership = GuildMembership.sampleMemberships.first(where: {
+                       $0.userId == user.id && $0.guildId == currentGuild.id
+                   }) {
+                    UserRowView(user: membership, onTap: {  // Pass membership, not user
+                        presentProfile(membership)
                     })
-                    
                 }
                 
                 
@@ -422,7 +397,7 @@ struct SectionDrawerView: View {
     let currentGuild: Guild
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
-    let guildUsers: [GuildUser]
+    let memberships: [GuildMembership]
     let guildWatchlist: GuildWatchlist
     let notificationsList: [Notification]
     let onClose: () -> Void
@@ -541,13 +516,13 @@ struct SectionDrawerView: View {
         case .topMarkers:
             TopMarkersView()
         case .leaderboard:
-            LeaderboardView(guildUsers: guildUsers)
+            LeaderboardView(guildUsers: memberships)
         case .guildWatchlist:
             WatchlistView(guildWatchlist: guildWatchlist)
         case .events:
             EventsListView(bottomSheetContent: $bottomSheetContent, events: events)
         case .userList:
-            UserListView(bottomSheetContent: $bottomSheetContent, guildUsers: guildUsers)
+            UserListView(bottomSheetContent: $bottomSheetContent, memberships: memberships)
         case .statistics:
             StatisticsView()
         default:
@@ -738,18 +713,24 @@ struct StatRow: View {
 struct BottomSheetView: View {
     let content: BottomSheetContent
     @Binding var selectedDetent: PresentationDetent
+    @EnvironmentObject var currentUser: UserStore
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             switch content {
             case .announcement(let announcement):
                 AnnouncementDetailView(announcement: announcement)
-            case .guildUserProfile(let user):
-                GuildUserDetailView(user: user)
             case .event(let event):
                 EventDetailView(event: event)
-            case .profile(let user):
-                UserProfileDetailView(user: user, selectedDetent: $selectedDetent)
+            case .profile(let membership):  // Changed from 'user' to 'membership'
+                // Check if viewing own profile or another user's profile
+                if membership.userId == currentUser.user?.id {
+                    // Current user's own profile
+                    UserProfileDetailView(user: membership, selectedDetent: $selectedDetent)
+                } else {
+                    // Another user's profile
+                    GuildUserDetailView(user: membership)
+                }
             }
         }
         
