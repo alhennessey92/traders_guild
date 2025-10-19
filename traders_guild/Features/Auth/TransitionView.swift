@@ -16,11 +16,12 @@ struct TransitionView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [AppColors.gradientBackgroundDark, AppColors.sheetBackground],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            StaticBackgroundView()
+//            LinearGradient(
+//                colors: [AppColors.gradientBackgroundDark, AppColors.sheetBackground],
+//                startPoint: .top,
+//                endPoint: .bottom
+//            )
             .ignoresSafeArea()
             VStack{
                 VStack{
@@ -38,7 +39,7 @@ struct TransitionView: View {
                 .scaleEffect(scale)
                 .onAppear {
                     // Fade in both view and text
-                    withAnimation(.easeIn(duration: 2.0)) {
+                    withAnimation(.easeIn(duration: 1.0)) {
                         fadeIn = true
                         opacity = 1
                     }

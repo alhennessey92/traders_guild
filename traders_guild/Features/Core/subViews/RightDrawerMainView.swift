@@ -8,36 +8,17 @@
 import SwiftUI
 
 
-/// Identifies which sheet content to present from the right drawer (user or chatroom).
-/// Conforms to `Identifiable` and `Equatable` for use with `.sheet(item:)` and `.onChange`.
-enum RightDrawerSheetContent: Identifiable, Equatable {
-    case user(GuildUser)
-    case chatroom(Chatroom)
-    
-    var id: String {
-        switch self {
-        case .user(let user): return "user-\(user.id)"
-        case .chatroom(let chatroom): return "chatroom-\(chatroom.id)"
-        }
-    }
-    
-    static func == (lhs: RightDrawerSheetContent, rhs: RightDrawerSheetContent) -> Bool {
-        lhs.id == rhs.id
-    }
-}
+
 
 /// The main container for the right-side drawer.
-/// Hosts search/filter UI, lists for chatrooms and users, and presents detail sheets.
+/// Hosts search/filter UI, lists for chatrooms and users, and opens chats via MessagingManager.
 struct RightDrawerMainView: View {
     // MARK: - Bindings & State
     // onClose: Callback to close the drawer
     // chatrooms / onlineUsers / offlineUsers / friends: Data sources for lists
-    // sheetOverlayVisible: Controls the global overlay when a sheet is presented
-    // dismissSheetsSignal: External signal to programmatically dismiss any sheet
     // dragTranslation: Current drag offset for swipe-to-dismiss
     // searchText: Current text in the search field
     // showFilterSheet: Controls filter options sheet presentation
-    // sheetContent: Which detail sheet is currently shown (user or chatroom)
     // isSearchFocused: Tracks keyboard focus for search
 
     let onClose: () -> Void
@@ -45,24 +26,14 @@ struct RightDrawerMainView: View {
     let onlineUsers: [GuildUser]
     let offlineUsers: [GuildUser]
     let friends: [GuildUser]
-    @Binding var sheetOverlayVisible: Bool
-    @Binding var dismissSheetsSignal: Bool
+    
+    @EnvironmentObject var messagingManager: MessagingManager
     
     @State private var dragTranslation: CGFloat = 0
     @State private var searchText: String = ""
     @State private var showFilterSheet: Bool = false
-    @State private var sheetContent: RightDrawerSheetContent? = nil
     @FocusState private var isSearchFocused: Bool
-    
-    // Add a function to dismiss all sheets
-    private func dismissAllSheets() {
-        sheetContent = nil
-        showFilterSheet = false
-    }
-    
-    
-    
-    
+
     
     /// Filters the respective lists by `searchText` (case-insensitive).
     var filteredChatrooms: [Chatroom] {
@@ -99,7 +70,6 @@ struct RightDrawerMainView: View {
             VStack {
                 HStack (spacing: 10){
                     Button(action: {
-                        dismissAllSheets()
                         withAnimation(AnimationConstants.standard) { onClose() }
                     }) {
                         Image(systemName: "chevron.right.dotted.chevron.right")
@@ -199,7 +169,9 @@ struct RightDrawerMainView: View {
                         ChatroomDisclosureGroup(
                             chatrooms: filteredChatrooms,
                             onChatroomTap: { chatroom in
-                                sheetContent = .chatroom(chatroom)
+                                // TODO: Check if MessagingManager has openChatroomChat method
+                                // For now, using openUserChat - you may need to add openChatroomChat method
+                                messagingManager.openChatroom(chatroom)
                             }
                         )
                     }
@@ -213,7 +185,7 @@ struct RightDrawerMainView: View {
                             iconColor: AppColors.accentColor,
                             users: filteredFriends,
                             onUserTap: { user in
-                                sheetContent = .user(user)
+                                messagingManager.openUserChat(user)
                             }
                         )
                     }
@@ -227,7 +199,7 @@ struct RightDrawerMainView: View {
                             iconColor: AppColors.bullCandleGreen,
                             users: filteredOnlineUsers,
                             onUserTap: { user in
-                                sheetContent = .user(user)
+                                messagingManager.openUserChat(user)
                             }
                         )
                     }
@@ -241,7 +213,7 @@ struct RightDrawerMainView: View {
                             iconColor: Color.gray,
                             users: filteredOfflineUsers,
                             onUserTap: { user in
-                                sheetContent = .user(user)
+                                messagingManager.openUserChat(user)
                             }
                         )
                     }
@@ -282,7 +254,6 @@ struct RightDrawerMainView: View {
                     .onEnded { value in
                         let threshold = LayoutConstants.drawerDismissThreshold
                         if (dragTranslation > threshold) {
-                            dismissAllSheets()
                             onClose()
                         }
                         dragTranslation = 0
@@ -318,49 +289,7 @@ struct RightDrawerMainView: View {
         .shadow(radius: LayoutConstants.shadowRadius)
         .ignoresSafeArea()
         
-        // Present detail sheets with clear background and consistent detents (matches left drawer)
-        .sheet(item: $sheetContent) { content in
-            switch content {
-            case .user(let user):
-                MessagingSheet(contentType: .user(user))
-                    .presentationDetents([.medium, .large])
-                    .presentationBackground {
-                        ZStack {
-                            Color.clear
-                                .background(.ultraThinMaterial)
-                            AppColors.sheetBackground
-                        }
-                    }
-                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                    .presentationCornerRadius(33)
-            case .chatroom(let chatroom):
-                MessagingSheet(contentType: .chatroom(chatroom))
-                    .presentationDetents([.medium, .large])
-                    .presentationBackground {
-                        ZStack {
-                            Color.clear
-                                .background(.ultraThinMaterial)
-                            AppColors.sheetBackground
-                        }
-                    }
-                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                    .presentationCornerRadius(20)
-            }
-        }
-        
-        // Keep the global overlay in sync with whether a sheet is presented
-        .onChange(of: sheetContent) { oldValue, newValue in
-            sheetOverlayVisible = newValue != nil
-        }
-        
-        // Respond to external dismissal requests (e.g., tapping the overlay)
-        .onChange(of: dismissSheetsSignal) { oldValue, newValue in
-            if newValue {
-                dismissAllSheets()
-                dismissSheetsSignal = false
-            }
-        }
-        
+        // Filter options sheet
         .sheet(isPresented: $showFilterSheet) {
             FilterOptionsView()
                 .presentationDetents([.fraction(0.8)])

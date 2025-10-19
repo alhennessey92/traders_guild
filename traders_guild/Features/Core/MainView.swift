@@ -423,9 +423,9 @@ struct MainView: View {
                 chatrooms: chatrooms,
                 onlineUsers: onlineUsers,
                 offlineUsers: offlineUsers,
-                friends: friends,
-                sheetOverlayVisible: $showSheetOverlay,
-                dismissSheetsSignal: $dismissRightSheetsSignal
+                friends: friends
+                //sheetOverlayVisible: $showSheetOverlay,
+                //dismissSheetsSignal: $dismissRightSheetsSignal
             )
             .frame(width: drawerWidth)
             .frame(maxHeight: .infinity)
@@ -523,32 +523,7 @@ struct MainView: View {
     }
 }
 
-// MARK: - Static Background View
-/// Background view that is completely isolated from animations
-struct StaticBackgroundView: View {
-    @State private var patternOpacity: Double = 0
-    
-    var body: some View {
-        ZStack {
-            // Base gradient
-            LinearGradient(
-                colors: [AppColors.gradientBackgroundDark, AppColors.gradientBackgroundMid],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            
-            // Pattern overlay - fades in smoothly
-            PatternOverlay(patternType: .honeycomb, hexSize: 18)
-                .opacity(patternOpacity)
-        }
-        .ignoresSafeArea()
-        .onAppear {
-            withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = 0.025
-            }
-        }
-    }
-}
+
 
 // MARK: - Chart View
 /// Placeholder for the main chart component
@@ -561,6 +536,10 @@ struct chartView: View {
         }
     }
 }
+
+
+
+
 
 // MARK: - Drawer Side
 /// Enum to specify which side a drawer appears on (affects corner rounding)

@@ -150,7 +150,8 @@ struct JoinGuildFlowView: View {
                 LinearGradient(
                     gradient: Gradient(colors: [
                         AppColors.gradientBackgroundDark,
-                        AppColors.sheetBackground,
+                        AppColors.gradientBackgroundDark,
+                        AppColors.fadedBackground.opacity(0.6),
                     ]),
                     startPoint: .top,
                     endPoint: .bottom
@@ -180,7 +181,8 @@ struct JoinGuildFlowView: View {
                         LinearGradient(
                             gradient: Gradient(colors: [
                                 AppColors.gradientBackgroundDark,
-                                AppColors.gradientBackgroundMid
+                                AppColors.gradientBackgroundDark,
+                                AppColors.fadedBackground.opacity(0.6)
                             ]),
                             startPoint: .top,
                             endPoint: .bottom
@@ -535,7 +537,8 @@ struct CreateGuildFlowView: View {
                 LinearGradient(
                     gradient: Gradient(colors: [
                         AppColors.gradientBackgroundDark,
-                        AppColors.gradientBackgroundMid
+                        AppColors.gradientBackgroundDark,
+                        AppColors.fadedBackground.opacity(0.6)
                     ]),
                     startPoint: .top,
                     endPoint: .bottom

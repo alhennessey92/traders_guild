@@ -54,7 +54,7 @@ struct GlobalMessagingOverlay: ViewModifier {
             )) { item in
                 MessagingSheet(contentType: item.contentType)
                     .environmentObject(messagingManager) // Pass the messaging manager to the sheet
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
                     .presentationBackground {
                         ZStack {
                             Color.clear
@@ -62,8 +62,8 @@ struct GlobalMessagingOverlay: ViewModifier {
                             AppColors.sheetBackground
                         }
                     }
-                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .presentationCornerRadius(33)
+                    .interactiveDismissDisabled(true)
             }
     }
 }
@@ -107,8 +107,13 @@ struct MessagingSheet: View {
                     }
                     Spacer()
                     // Header content
-                    MessagingHeaderView(contentType: contentType)
-                        .padding(.top, 4)
+                    switch contentType {
+                        case .chatroom(let chatroom):
+                            ChatroomHeaderView(chatroom: chatroom)
+                        case .user(let user):
+                            UserChatHeaderView(user: user)
+                        }
+                        
                     
                     Spacer()
                     
@@ -135,11 +140,18 @@ struct MessagingSheet: View {
             
             Divider()
             
+            switch contentType {
+                case .chatroom(let chatroom):
+                ChatroomFooterView(chatroom: chatroom, messageText: $messageText)
+                case .user(let user):
+                    UserChatFooterView(user: user, messageText: $messageText)
+                }
+            
             // Message input footer
-            MessagingFooterView(
-                contentType: contentType,
-                messageText: $messageText
-            )
+//            MessagingFooterView(
+//                contentType: contentType,
+//                messageText: $messageText
+//            )
         }
         .background(
             ZStack {
@@ -148,70 +160,123 @@ struct MessagingSheet: View {
                 AppColors.sheetBackground
             }
         )
-    }
-}
-
-// MARK: - Header Component
-struct MessagingHeaderView: View {
-    let contentType: MessageContentType
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            // Icon container
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(AppColors.accentColor.opacity(0.2))
-                    .frame(width: 32, height: 32)
-                
-                Group {
-                    switch contentType {
-                    case .chatroom:
-                        Image(systemName: "number")
-                    case .user:
-                        Image(systemName: "person")
-                    }
-                }
-                .font(.body)
-                .fontWeight(.semibold)
-                .foregroundColor(AppColors.accentColor)
-            }
-            
-            // Title and subtitle
-            VStack(alignment: .leading, spacing: 2) {
-                switch contentType {
-                case .chatroom(let chatroom):
-                    Text(chatroom.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(chatroom.isActive ? AppColors.bullCandleGreen : Color.gray)
-                            .frame(width: 6, height: 6)
-                        Text("\(chatroom.memberCount) members")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                case .user(let user):
-                    Text(user.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(user.isOnline ? AppColors.bullCandleGreen : Color.gray)
-                            .frame(width: 6, height: 6)
-                        Text(user.isOnline ? "Online" : "Offline")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-        }
         
     }
 }
+
+// MARK: - User Chat Header Component
+struct UserChatHeaderView: View {
+    let user: GuildUser
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            // Avatar with online indicator
+            ZStack(alignment: .bottomTrailing) {
+                Circle()
+                    .fill(AppColors.accentColor.opacity(0.3))
+                    .frame(width: 30, height: 30)
+                    .overlay(
+                        Text(String(user.name.prefix(2)))
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                    )
+                
+                if user.isOnline {
+                    Circle()
+                        .fill(AppColors.bullCandleGreen)
+                        .frame(width: 10, height: 10)
+                        .overlay(
+                            Circle()
+                                .stroke(AppColors.sheetBackground, lineWidth: 2)
+                        )
+                }
+            }
+            
+            // User info
+            VStack(alignment: .leading, spacing: 3) {
+                HStack (spacing: 2){
+
+                    Text(user.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                }
+                
+                
+                HStack (spacing:2){
+                    Text(user.role.rawValue)
+                        .font(.caption2)
+                        .foregroundColor(user.role.foregroundColor)
+                        .fontWeight(user.role.fontWeight)
+                        .lineLimit(1)
+                    Circle()
+                        .fill(AppColors.whiteText.opacity(0.7))
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 1)
+                        .padding(.leading, 3)
+                        .padding(.trailing, 3)
+                    Image(systemName: "shield.pattern.checkered")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                    Text("\(user.reputation)")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.accentColor)
+                    
+                    
+                }
+            }
+            
+        }
+        .padding(.top, 4)
+    }
+    
+}
+
+
+// MARK: - Chatroom Header Component
+struct ChatroomHeaderView: View {
+    let chatroom: Chatroom
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            // Chatroom icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(AppColors.gradientBackgroundDark.opacity(0.4))
+                    .frame(width: 34, height: 34)
+                Image(systemName: "number")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText.opacity(0.4))
+            }
+            
+            // Chatroom info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(chatroom.name)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(chatroom.isActive ? AppColors.bullCandleGreen : Color.gray.opacity(0.5))
+                        .frame(width: 6, height: 6)
+                    Text("\(chatroom.memberCount) members")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                }
+            }
+            
+        }
+        .padding(.top, 4)
+    }
+    
+}
+
 
 // MARK: - Scrollable Messages Content
 struct MessagingScrollView: View {
@@ -245,61 +310,134 @@ struct MessagingScrollView: View {
     }
 }
 
-// MARK: - Footer Input Component
-struct MessagingFooterView: View {
-    let contentType: MessageContentType
+
+// MARK: - Chatroom Footer Component
+struct ChatroomFooterView: View {
+    let chatroom: Chatroom
     @Binding var messageText: String
     
-    var placeholder: String {
-        switch contentType {
-        case .chatroom(let chatroom):
-            return "Message #\(chatroom.name.lowercased().replacingOccurrences(of: " ", with: "-"))..."
-        case .user(let user):
-            return "Message \(user.name)..."
-        }
-    }
-    
     var body: some View {
-        HStack(spacing: 12) {
-            // Emoji button
-            Button(action: {
-                // Handle emoji picker
-            }) {
-                Image(systemName: "face.smiling")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-                    .frame(width: 40, height: 40)
-                    .background(Color.gray.opacity(0.1))
-                    .clipShape(Circle())
-            }
-            
-            // Text input
-            TextField(placeholder, text: $messageText)
-                .font(.subheadline)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(20)
-                .submitLabel(.send)
-                .onSubmit {
-                    sendMessage()
+        HStack(spacing: 0) {
+            // Full-width capsule container with embedded buttons
+            HStack(spacing: 12) {
+                // Plus button (left side)
+                Button(action: {
+                    // Handle attachment/plus action
+                }) {
+                    Image(systemName: "plus")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                        .frame(width: 32, height: 32)
                 }
-            
-            // Send button
-            Button(action: sendMessage) {
-                Image(systemName: messageText.isEmpty ? "paperplane" : "paperplane.fill")
-                    .font(.title3)
-                    .foregroundColor(messageText.isEmpty ? .secondary : AppColors.accentColor)
-                    .frame(width: 40, height: 40)
-                    .background(Color.gray.opacity(0.1))
-                    .clipShape(Circle())
+                
+                // Text input field (expands to fill available space)
+                TextField("Message #\(chatroom.name.lowercased().replacingOccurrences(of: " ", with: "-"))...", text: $messageText)
+                    .font(.subheadline)
+                    .submitLabel(.send)
+                    .onSubmit {
+                        sendMessage()
+                    }
+                
+                // Right side buttons
+                HStack(spacing: 8) {
+                    // Microphone button
+                    Button(action: {
+                        // Handle voice message
+                    }) {
+                        Image(systemName: "mic.fill")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                            .frame(width: 32, height: 32)
+                    }
+                    
+                    // Send button
+                    Button(action: sendMessage) {
+                        Image(systemName: messageText.isEmpty ? "paperplane" : "paperplane.fill")
+                            .font(.title3)
+                            .foregroundColor(messageText.isEmpty ? .secondary : AppColors.accentColor)
+                            .frame(width: 32, height: 32)
+                    }
+                    .disabled(messageText.isEmpty)
+                }
             }
-            .disabled(messageText.isEmpty)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(25)
         }
         .padding()
         .background(AppColors.sheetBackground) // Add consistent background
         .safeAreaInset(edge: .bottom, spacing: 0) {
             // This ensures the safe area is handled properly
+            Color.clear.frame(height: 0)
+        }
+    }
+    
+    private func sendMessage() {
+        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // Handle sending message
+        messageText = ""
+    }
+}
+
+
+// MARK: - User Chat Footer Component
+struct UserChatFooterView: View {
+    let user: GuildUser
+    @Binding var messageText: String
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // Full-width capsule container with embedded buttons
+            HStack(spacing: 12) {
+                // Emoji button (left side)
+                Button(action: {
+                    // Handle emoji picker
+                }) {
+                    Image(systemName: "face.smiling")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                        .frame(width: 32, height: 32)
+                }
+                
+                // Text input field (expands to fill available space)
+                TextField("Message \(user.name.lowercased().replacingOccurrences(of: " ", with: "-"))...", text: $messageText)
+                    .font(.subheadline)
+                    .submitLabel(.send)
+                    .onSubmit {
+                        sendMessage()
+                    }
+                
+                // Right side buttons
+                HStack(spacing: 8) {
+                    // Microphone button
+                    Button(action: {
+                        // Handle voice message
+                    }) {
+                        Image(systemName: "mic.fill")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                            .frame(width: 32, height: 32)
+                    }
+                    
+                    // Send button
+                    Button(action: sendMessage) {
+                        Image(systemName: messageText.isEmpty ? "paperplane" : "paperplane.fill")
+                            .font(.title3)
+                            .foregroundColor(messageText.isEmpty ? .secondary : AppColors.accentColor)
+                            .frame(width: 32, height: 32)
+                    }
+                    .disabled(messageText.isEmpty)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(25)
+        }
+        .padding()
+        .background(AppColors.sheetBackground)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear.frame(height: 0)
         }
     }
