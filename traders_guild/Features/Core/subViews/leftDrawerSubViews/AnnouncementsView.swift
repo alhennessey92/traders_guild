@@ -146,7 +146,7 @@ struct AnnouncementRowView: View {
                                 .foregroundColor(AppColors.accentColor)
                             
                             // MARK: - need to fetch this based on author id
-                            Text("345")
+                            Text("\(announcement.authorGuildReputation ?? 0)")
                                 .font(.caption2)
                                 .fontWeight(.semibold)
                                 .foregroundColor(AppColors.accentColor)

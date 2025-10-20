@@ -43,16 +43,24 @@ struct MainView: View {
     
     // MARK: - Sample data
     
-    @State private var currentGuild: Guild = Guild.sampleGuild[0] //only 1 guild
-    @State private var allGuildMembers: [GuildMembership] = GuildMembership.sampleMemberships
-    @State private var userFriends: [UserFriends] = UserFriends.sampleFriends
-    @State private var chatrooms: [Chatroom] = Chatroom.sampleChatrooms
-    @State private var announcements: [GuildAnnouncement] = GuildAnnouncement.sampleGuildAnnouncements
-    @State private var events: [GuildEvent] = GuildEvent.sampleGuildEvents
-    @State private var guildWatchlist: GuildWatchlist = GuildWatchlist.sampleGuildWatchlist[0] // only 1 watchlist
-    @State private var notificationsList: [Notification] = Notification.sampleNotifications
+    // Current guild user is in /api/guilds/
+    @State private var currentGuild: Guild = Guild.allGuilds[0] //only 1 guild
+    @State private var allGuilds: [Guild] = Guild.allGuilds // all guilds
+    @State private var allGuildMembers: [GuildMembership] = GuildMembership.currentGuildMemberships // all guild members
+    @State private var guildFriends: [GuildFriends] = GuildFriends.guildFriends // guild members that are friends
+    @State private var chatrooms: [Chatroom] = Chatroom.sampleChatrooms // all guild chatrooms
+    @State private var userDMs: [UserDM] = UserDM.userDMs // user dm rooms
+    @State private var announcements: [GuildAnnouncement] = GuildAnnouncement.guildAnnouncements // guild announcements
+    @State private var events: [GuildEvent] = GuildEvent.guildEvents // guild events
+    @State private var guildWatchlist: GuildWatchlist = GuildWatchlist.guildWatchlist[0] // guild watchlists - atm only 1 but will expand to more
+    @State private var notificationsList: [Notification] = Notification.sampleNotifications // user notifications, this needs work
     
-
+    // UserDMs
+    @State private var guildFriendsDMs: [UserDM] = UserDM.friendGuildDMs // /api/dm/friends/{id}
+    @State private var guildOnlineNonFriendsDMs: [UserDM] = UserDM.onlineNonFriendGuildDMs // /api/dm/online/{id}
+    @State private var guildOfflineNonFriendsDMs: [UserDM] = UserDM.offlineNonFriendGuildDMs // /api/dm/offline/{id}
+    
+    
     
     
     
@@ -101,64 +109,44 @@ struct MainView: View {
     
     // MARK: - Computed Properties for User Filtering
 
-    /// Set of all friend IDs for quick lookup
-    private var friendIDs: Set<UUID> {
-        Set(userFriends.map { $0.friendID })
-    }
-
-    /// All users who are friends (based on UserFriends relationship)
-    private var friends: [GuildMembership] {
-        allGuildMembers.filter { friendIDs.contains($0.userId) }
-    }
-
-    /// Online users who are NOT friends
-    private var onlineUsers: [GuildMembership] {
-        allGuildMembers.filter { $0.isUserOnline && !friendIDs.contains($0.userId) }
-    }
-
-    /// Offline users who are NOT friends
-    private var offlineUsers: [GuildMembership] {
-        allGuildMembers.filter { !$0.isUserOnline && !friendIDs.contains($0.userId) }
-    }
-    
-    
-    
-    
-    
-    // MARK: - Helper Functions for Friend Management
-
-    /// Check if a specific user is a friend
-//    func isFriend(_ userId: UUID) -> Bool {
-//        friendIDs.contains(userId)
-//    }
-
-//    /// Add a new friend
-//    func addFriend(_ userId: UUID) {
-//        guard !isFriend(userId) else { return }
-//        let newFriend = UserFriends(friendID: userId)
-//        userFriends.append(newFriend)
+    /// Set of all friend IDs for quick lookup using the new GuildFriends model
+    /// Assumes GuildFriends stores pairs of userId <-> friendId for the current user
+//    private var friendIDs: Set<UUID> {
+//        guard let currentUserId = currentUser.user?.id else { return [] }
+//        // Include both directions in case the relationship is stored asymmetrically
+//        let outgoing = guildFriends.filter { $0.userID == currentUserId }.map { $0.friendID }
+//        let incoming = guildFriends.filter { $0.friendID == currentUserId }.map { $0.userID }
+//        return Set(outgoing + incoming)
 //    }
 //
-//    /// Remove a friend
-//    func removeFriend(_ userId: UUID) {
-//        userFriends.removeAll { $0.friendID == userId }
+//    /// All users who are friends (based on GuildFriends relationship)
+//    private var friends: [GuildMembership] {
+//        let currentUserId = currentUser.user?.id
+//        return allGuildMembers.filter { membership in
+//            if let currentUserId = currentUserId, membership.userId == currentUserId { return false }
+//            return friendIDs.contains(membership.userId)
+//        }
 //    }
+//
+//    /// Online users who are NOT friends
+//    private var onlineUsers: [GuildMembership] {
+//        let currentUserId = currentUser.user?.id
+//        return allGuildMembers.filter { membership in
+//            if let currentUserId = currentUserId, membership.userId == currentUserId { return false }
+//            return membership.isUserOnline && !friendIDs.contains(membership.userId)
+//        }
+//    }
+//
+//    /// Offline users who are NOT friends
+//    private var offlineUsers: [GuildMembership] {
+//        let currentUserId = currentUser.user?.id
+//        return allGuildMembers.filter { membership in
+//            if let currentUserId = currentUserId, membership.userId == currentUserId { return false }
+//            return !membership.isUserOnline && !friendIDs.contains(membership.userId)
+//        }
+//    }
+    
 
-    /// Get the date a user was added as a friend
-//    func friendAddedDate(_ userId: UUID) -> Date? {
-//        userFriends.first { $0.friendID == userId }?.dateFriendAdded
-//    }
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     // MARK: - Body
     var body: some View {
         // ZStack layers all UI elements with proper z-ordering
@@ -421,9 +409,10 @@ struct MainView: View {
                     }
                 },
                 chatrooms: chatrooms,
-                onlineUsers: onlineUsers,
-                offlineUsers: offlineUsers,
-                friends: friends
+                onlineUsers: guildOnlineNonFriendsDMs,
+                offlineUsers: guildOfflineNonFriendsDMs,
+                friends: guildFriendsDMs,
+                
                 //sheetOverlayVisible: $showSheetOverlay,
                 //dismissSheetsSignal: $dismissRightSheetsSignal
             )
@@ -448,41 +437,7 @@ struct MainView: View {
         .offset(x: showRightDrawer ? 0 : drawerWidth)
         .animation(AnimationConstants.standard, value: showRightDrawer)
     }
-//    private var rightDrawerView: some View {
-//        HStack(spacing: 0) {
-//            Spacer(minLength: 0)
-//            RightDrawerMainView(friends: friends) {
-//                // Closure called when drawer close button is tapped
-//                withAnimation(AnimationConstants.standard) {
-//                    showRightDrawer = false
-//                    rightDragTranslation = 0
-//                }
-//                // Delay hiding overlay for smooth animation
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-//                    showOverlay = false
-//                }
-//            }
-//            .frame(width: drawerWidth)
-//            .frame(maxHeight: .infinity)
-//            .offset(x: rightDragTranslation)
-//            .gesture(
-//                // Drag gesture for swipe-to-dismiss functionality
-//                DragGesture()
-//                    .onChanged { value in
-//                        // Only allow rightward drags (positive translation)
-//                        if value.translation.width > 0 {
-//                            rightDragTranslation = value.translation.width
-//                        }
-//                    }
-//                    .onEnded { value in
-//                        handleDrawerDragEnd(currentPosition: rightDragTranslation)
-//                    }
-//            )
-//        }
-//        .frame(maxHeight: .infinity)
-//        .offset(x: showRightDrawer ? 0 : drawerWidth)
-//        .animation(AnimationConstants.standard, value: showRightDrawer)
-//    }
+
     
     // MARK: - Helper Functions
     

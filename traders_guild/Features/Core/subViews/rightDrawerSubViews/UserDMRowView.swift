@@ -24,13 +24,13 @@ struct UserDMRowView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 40, height: 40)
                         .overlay(
-                            Text(String(user.userName?.prefix(2) ?? "unKnown"))
+                            Text(String(userDM.participantName?.prefix(2) ?? "unKnown"))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
                         )
                     
-                    if user.isUserOnline {
+                    if ((userDM.participantMembership?.isUserOnline) != nil) {
                         Circle()
                             .fill(AppColors.bullCandleGreen)
                             .frame(width: 12, height: 12)
@@ -50,7 +50,7 @@ struct UserDMRowView: View {
 //                                .foregroundColor(AppColors.accentColor)
 //                            
 //                        }
-                        Text(user.userName ?? "Unknown")
+                        Text(userDM.participantName ?? "Unknown")
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(AppColors.whiteText)
@@ -59,25 +59,27 @@ struct UserDMRowView: View {
             
                     
                     HStack (spacing:2){
-                        Text(user.roleInGuild.rawValue)
-                            .font(.caption)
-                            .foregroundColor(user.roleInGuild.foregroundColor)
-                            .fontWeight(user.roleInGuild.fontWeight)
-                            .lineLimit(1)
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 5, height: 5)
-                            .padding(.top, 1)
-                            .padding(.leading, 3)
-                            .padding(.trailing, 3)
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text("\(user.reputation)")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
+                        if let role = userDM.participantRole {
+                            Text(role.rawValue)
+                                .font(.caption)
+                                .foregroundColor(role.foregroundColor)
+                                .fontWeight(role.fontWeight)
+                                .lineLimit(1)
+                            Circle()
+                                .fill(AppColors.whiteText.opacity(0.7))
+                                .frame(width: 5, height: 5)
+                                .padding(.top, 1)
+                                .padding(.leading, 3)
+                                .padding(.trailing, 3)
+                            Image(systemName: "shield.pattern.checkered")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.accentColor)
+                            Text("\(userDM.participantGuildReputation ?? 0)")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.accentColor)
+                        }
                         
                         
                     }

@@ -295,7 +295,7 @@ struct GuildUserDetailView: View {
                         strokeWidth: 0.5,
                         action: {
                             dismiss() // If in a sheet
-                            messagingManager.openUserChat(user)
+                            messagingManager.openUserChat(with: user)
                         }
                     )
                 }

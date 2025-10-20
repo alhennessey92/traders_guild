@@ -202,7 +202,7 @@ struct JoinGuildView: View {
     let onSelectGuild: (Guild) -> Void
     @State private var searchText: String = ""
     @FocusState private var isSearchFocused: Bool
-    @State private var allGuilds: [Guild] = Guild.sampleGuild
+    @State private var allGuilds: [Guild] = Guild.allGuilds
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

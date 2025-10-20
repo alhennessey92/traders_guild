@@ -8,7 +8,7 @@ import SwiftUI
 
 // MARK: - Message Content Types
 enum MessageContentType {
-    case user(GuildMembership)
+    case userDM(UserDM)
     case chatroom(Chatroom)
 }
 
@@ -19,8 +19,17 @@ class MessagingManager: ObservableObject {
     @Published var activeMessage: MessageContentType? = nil
     
     /// Open a user chat from anywhere in the app
-    func openUserChat(_ membership: GuildMembership) {
-        activeMessage = .user(membership)
+    func openUserDM(_ userDM: UserDM) {
+        activeMessage = .userDM(userDM)
+    }
+    
+    /// Open a user chat by membership - finds or creates the DM
+    func openUserChat(with membership: GuildMembership) {
+        guard let userDM = UserDM.find(with: membership) else {
+            print("⚠️ No DM found for membership: \(membership.id)")
+            return
+        }
+        openUserDM(userDM)
     }
     
     /// Open a chatroom from anywhere in the app
@@ -110,8 +119,8 @@ struct MessagingSheet: View {
                     switch contentType {
                         case .chatroom(let chatroom):
                             ChatroomHeaderView(chatroom: chatroom)
-                        case .user(let membership):
-                            UserChatHeaderView(membership: membership)
+                        case .userDM(let userDM):
+                            UserDMHeaderView(userDM: userDM)
                         }
                         
                     
@@ -144,8 +153,8 @@ struct MessagingSheet: View {
             switch contentType {
                 case .chatroom(let chatroom):
                     ChatroomFooterView(chatroom: chatroom, messageText: $messageText)
-                case .user(let membership):
-                    UserChatFooterView(membership: membership, messageText: $messageText)
+                case .userDM(let userDM):
+                    UserDMFooterView(userDM: userDM, messageText: $messageText)
                 }
             
             // Message input footer
@@ -167,9 +176,9 @@ struct MessagingSheet: View {
     }
 }
 
-// MARK: - User Chat Header Component
-struct UserChatHeaderView: View {
-    let membership: GuildMembership
+// MARK: - User DM Header Component
+struct UserDMHeaderView: View {
+    let userDM: UserDM
     
     var body: some View {
         HStack(spacing: 8) {
@@ -179,13 +188,13 @@ struct UserChatHeaderView: View {
                     .fill(AppColors.accentColor.opacity(0.3))
                     .frame(width: 40, height: 40)
                     .overlay(
-                        Text(String(membership.userName?.prefix(2) ?? "unKnown"))
+                        Text(String(userDM.participantName?.prefix(2) ?? "unKnown"))
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
                     )
                 
-                if membership.isUserOnline {
+                if ((userDM.participantMembership?.isUserOnline) != nil) {
                     Circle()
                         .fill(AppColors.bullCandleGreen)
                         .frame(width: 10, height: 10)
@@ -200,7 +209,7 @@ struct UserChatHeaderView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack (spacing: 2){
 
-                    Text(membership.userName ?? "Unknown")
+                    Text(userDM.participantName ?? "Unknown")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
@@ -209,25 +218,27 @@ struct UserChatHeaderView: View {
                 
                 
                 HStack (spacing:2){
-                    Text(membership.roleInGuild.rawValue)
-                        .font(.caption2)
-                        .foregroundColor(membership.roleInGuild.foregroundColor)
-                        .fontWeight(membership.roleInGuild.fontWeight)
-                        .lineLimit(1)
-                    Circle()
-                        .fill(AppColors.whiteText.opacity(0.7))
-                        .frame(width: 5, height: 5)
-                        .padding(.top, 1)
-                        .padding(.leading, 3)
-                        .padding(.trailing, 3)
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("\(membership.reputation)")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.accentColor)
+                    if let role = userDM.participantRole {
+                        Text(role.rawValue)
+                            .font(.caption2)
+                            .foregroundColor(role.foregroundColor)
+                            .fontWeight(role.fontWeight)
+                            .lineLimit(1)
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.7))
+                            .frame(width: 5, height: 5)
+                            .padding(.top, 1)
+                            .padding(.leading, 3)
+                            .padding(.trailing, 3)
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("\(userDM.participantGuildReputation ?? 0)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                    }
                     
                     
                 }
@@ -298,9 +309,9 @@ struct MessagingScrollView: View {
                         ChatroomMessageView(message: message)
                     }
                     
-                case .user(_):
-                    ForEach(Array(UserChatSampleData.messages.enumerated()), id: \.offset) { index, message in
-                        UserChatMessageView(message: message)
+                case .userDM(let userDM):
+                    ForEach(userDMMessages(for: userDM)) { message in
+                        UserDMMessageView(message: message)
                     }
                 }
             }
@@ -315,6 +326,11 @@ struct MessagingScrollView: View {
     // Helper to get messages for specific chatroom
     private func chatroomMessages(for chatroom: Chatroom) -> [ChatroomMessage] {
         ChatroomMessage.sampleChatroomMessages.filter { $0.roomId == chatroom.id }
+    }
+    
+    // Helper to get messages for specific user DM
+    private func userDMMessages(for userDM: UserDM) -> [UserDMMessage] {
+        UserDMMessage.userDMMessages.filter { $0.threadId == userDM.id }
     }
     
     private func hideKeyboard() {
@@ -381,7 +397,7 @@ struct ChatroomFooterView: View {
                 }
             }
             .padding(.leading, 10)
-            .frame(height: 40)
+            .frame(height: 44)
             .background(AppColors.whiteText.opacity(0.08))
             .cornerRadius(25)
         }
@@ -401,9 +417,9 @@ struct ChatroomFooterView: View {
 }
 
 
-// MARK: - User Chat Footer Component
-struct UserChatFooterView: View {
-    let membership: GuildMembership
+// MARK: - User DM Footer Component
+struct UserDMFooterView: View {
+    let userDM: UserDM
     @Binding var messageText: String
     
     var body: some View {
@@ -421,7 +437,7 @@ struct UserChatFooterView: View {
                 }
                 
                 // Text input field (expands to fill available space)
-                TextField("Message \(membership.userName?.lowercased().replacingOccurrences(of: " ", with: "-") ?? "user")...", text: $messageText)
+                TextField("Message \(userDM.participantName?.lowercased().replacingOccurrences(of: " ", with: "-") ?? "user")...", text: $messageText)
                     .font(.subheadline)
                     .submitLabel(.send)
                     .onSubmit {
@@ -609,38 +625,44 @@ struct ChatroomMessageView: View {
     }
 }
 
-struct UserChatMessageView: View {
-    let message: (message: String, isFromCurrentUser: Bool, timestamp: String)
+struct UserDMMessageView: View {
+    let message: UserDMMessage  // FIX: Accept UserDMMessage instead of tuple
+    @EnvironmentObject var currentUser: UserStore
+    
+    var isFromCurrentUser: Bool {
+        message.senderMembershipId == MembershipIDs.currentUserKaos
+    }
     
     var body: some View {
         HStack {
-            if message.isFromCurrentUser {
+            if isFromCurrentUser {
                 Spacer()
             }
             
-            VStack(alignment: message.isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                Text(message.message)
+            VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
+                Text(message.content)
                     .font(.subheadline)
-                    .foregroundColor(message.isFromCurrentUser ? .white : .primary)
+                    .foregroundColor(isFromCurrentUser ? .white : .primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
-                        message.isFromCurrentUser ?
+                        isFromCurrentUser ?
                         AppColors.accentDarkColor :
                         Color.gray.opacity(0.2)
                     )
-                    .clipShape(userChatMessageBubbleShape(isFromCurrentUser: message.isFromCurrentUser))
+                    .clipShape(userChatMessageBubbleShape(isFromCurrentUser: isFromCurrentUser))
                 
-                Text(message.timestamp)
+                Text(message.timeAgo)
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
             
-            if !message.isFromCurrentUser {
+            if !isFromCurrentUser {
                 Spacer()
             }
         }
     }
+    
     private func userChatMessageBubbleShape(isFromCurrentUser: Bool) -> UnevenRoundedRectangle {
         if isFromCurrentUser {
             // Current user: pointed on bottom right
@@ -662,30 +684,6 @@ struct UserChatMessageView: View {
     }
 }
 
-// MARK: - Sample Data
 
-
-struct UserChatSampleData {
-    static let messages = [
-        (message: "Hi! How's the trading going today?", isFromCurrentUser: false, timestamp: "10:23 AM"),
-        (message: "Pretty good! Just caught a nice move on AAPL", isFromCurrentUser: true, timestamp: "10:24 AM"),
-        (message: "Nice! What was your entry?", isFromCurrentUser: false, timestamp: "10:25 AM"),
-        (message: "Got in at 175.20, targeting 178", isFromCurrentUser: true, timestamp: "10:26 AM"),
-        (message: "Solid trade! I'm watching TSLA right now", isFromCurrentUser: false, timestamp: "10:28 AM"),
-        (message: "Yeah TSLA looks interesting. Check the 4h chart", isFromCurrentUser: true, timestamp: "10:29 AM"),
-        (message: "Hi! How's the trading going today?", isFromCurrentUser: false, timestamp: "10:23 AM"),
-        (message: "Pretty good! Just caught a nice move on AAPL", isFromCurrentUser: true, timestamp: "10:24 AM"),
-        (message: "Nice! What was your entry?", isFromCurrentUser: false, timestamp: "10:25 AM"),
-        (message: "Got in at 175.20, targeting 178", isFromCurrentUser: true, timestamp: "10:26 AM"),
-        (message: "Solid trade! I'm watching TSLA right now", isFromCurrentUser: false, timestamp: "10:28 AM"),
-        (message: "Yeah TSLA looks interesting. Check the 4h chart", isFromCurrentUser: true, timestamp: "10:29 AM"),
-        (message: "Hi! How's the trading going today?", isFromCurrentUser: false, timestamp: "10:23 AM"),
-        (message: "Pretty good! Just caught a nice move on AAPL", isFromCurrentUser: true, timestamp: "10:24 AM"),
-        (message: "Nice! What was your entry?", isFromCurrentUser: false, timestamp: "10:25 AM"),
-        (message: "Got in at 175.20, targeting 178", isFromCurrentUser: true, timestamp: "10:26 AM"),
-        (message: "Solid trade! I'm watching TSLA right now", isFromCurrentUser: false, timestamp: "10:28 AM"),
-        (message: "Yeah TSLA looks interesting. Check the 4h chart", isFromCurrentUser: true, timestamp: "10:29 AM")
-    ]
-}
 
 

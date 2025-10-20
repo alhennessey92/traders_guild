@@ -50,7 +50,7 @@ struct Guild: Identifiable, Codable, Equatable {
     var authorRole: UserRole? { authorUser?.role }
     var authorName: String? { authorUser?.name }
     var authorMembership: GuildMembership? {
-        GuildMembership.sampleMemberships.first { $0.userId == owner && $0.guildId == id }
+        GuildMembership.currentGuildMemberships.first { $0.userId == owner && $0.guildId == id }
     }
 }
 
@@ -89,7 +89,7 @@ struct GuildMembership: Identifiable, Codable, Equatable {
     
     // GET Guild from guildId
     var guild: Guild? {
-        Guild.sampleGuild.first { $0.id == guildId }
+        Guild.allGuilds.first { $0.id == guildId }
     }
     
     // Convenience properties
@@ -121,6 +121,26 @@ struct GuildMembership: Identifiable, Codable, Equatable {
     }
 }
 
+
+// MARK: - User Friends Model
+struct GuildFriends: Identifiable, Codable, Equatable {
+    var id: UUID
+    var userID: UUID
+    var friendID: UUID
+    var dateFriendAdded: Date
+    
+    init(
+        id: UUID = UUID(),
+        userID: UUID,
+        friendID: UUID,
+        dateFriendAdded: Date = Date()
+    ) {
+        self.id = id
+        self.userID = userID
+        self.friendID = friendID
+        self.dateFriendAdded = dateFriendAdded
+    }
+}
 
 
 
@@ -173,12 +193,12 @@ struct GuildAnnouncement: Identifiable, Codable, Equatable {
     
     // GET Guild
     var announcementGuild: Guild? {
-        Guild.sampleGuild.first { $0.id == guildId }
+        Guild.allGuilds.first { $0.id == guildId }
     }
     
     // GET Membership
     var authorMembership: GuildMembership? {
-        GuildMembership.sampleMemberships.first { $0.id == membershipId }
+        GuildMembership.currentGuildMemberships.first { $0.id == membershipId }
     }
     
     // GET User through membership (chain lookup)
@@ -195,6 +215,11 @@ struct GuildAnnouncement: Identifiable, Codable, Equatable {
     // GET Name from user
     var authorName: String? {
         authorUser?.name
+    }
+    
+    // GET guild reputation from user
+    var authorGuildReputation: Int? {
+        authorMembership?.reputation
     }
 }
 
@@ -253,12 +278,12 @@ struct GuildEvent: Identifiable, Codable, Equatable {
     
     // GET Guild
     var eventGuild: Guild? {
-        Guild.sampleGuild.first { $0.id == guildId }
+        Guild.allGuilds.first { $0.id == guildId }
     }
     
     // GET Membership
     var authorMembership: GuildMembership? {
-        GuildMembership.sampleMemberships.first { $0.id == authorMembershipId }
+        GuildMembership.currentGuildMemberships.first { $0.id == authorMembershipId }
     }
     
     // GET User through membership (chain lookup)
@@ -307,12 +332,12 @@ struct GuildWatchlist: Identifiable, Codable, Equatable {
     
     // GET Guild
     var currentGuild: Guild? {
-        Guild.sampleGuild.first { $0.id == guildId }
+        Guild.allGuilds.first { $0.id == guildId }
     }
     
     // GET Membership
     var authorMembership: GuildMembership? {
-        GuildMembership.sampleMemberships.first { $0.id == authorMembershipId }
+        GuildMembership.currentGuildMemberships.first { $0.id == authorMembershipId }
     }
     
     // GET User through membership (chain lookup)
@@ -362,7 +387,7 @@ struct GuildIDs{
 // MARK: -  Sample Guild
 
 extension Guild{
-    static let sampleGuild: [Guild] = [
+    static let allGuilds: [Guild] = [
         Guild(
             id: GuildIDs.kaosGuild,
             name: "KAOS",
@@ -371,9 +396,7 @@ extension Guild{
             accuracy: 34,
             owner: UserIDs.seanPain,
             dateCreated: Date().addingTimeInterval(-3600)
-            
-            
-            
+    
         ),
         Guild(
             id: GuildIDs.megaGuild,
@@ -383,9 +406,7 @@ extension Guild{
             accuracy: 43,
             owner: UserIDs.bullRunner,
             dateCreated: Date().addingTimeInterval(-3600)
-            
-            
-            
+ 
         )
     ]
     
@@ -408,8 +429,10 @@ struct MembershipIDs {
 }
 
 extension GuildMembership {
-    static let sampleMemberships: [GuildMembership] = [
-        // KAOS Guild members
+    
+    // KAOS Guild members
+    static let currentGuildMemberships: [GuildMembership] = [
+        
         GuildMembership(
             id: MembershipIDs.currentUserKaos,
             guildId: GuildIDs.kaosGuild,
@@ -473,47 +496,102 @@ extension GuildMembership {
             roleInGuild: .member,
             dateJoined: Date().addingTimeInterval(-3600*24*25),
             reputation: 56635
-        ),
+        )
+    ]
+    
+    
+    // KAOS Guild members that are online and not friends
+    static let onlineNonFriendGuildMembers: [GuildMembership] = [
         
-        // MEGA Guild members (existing)
         GuildMembership(
-            id: MembershipIDs.chartWizardMega,
-            guildId: GuildIDs.megaGuild,
-            userId: UserIDs.chartWizard,
-            roleInGuild: .admin,
-            dateJoined: Date().addingTimeInterval(-3600*24*90),
-            reputation: 75
-        ),
-        GuildMembership(
-            id: MembershipIDs.marketGuruMega,
-            guildId: GuildIDs.megaGuild,
-            userId: UserIDs.marketGuru,
+            id: MembershipIDs.seanPainKaos,
+            guildId: GuildIDs.kaosGuild,
+            userId: UserIDs.seanPain,
             roleInGuild: .moderator,
-            dateJoined: Date().addingTimeInterval(-3600*24*20),
-            reputation: 52
+            dateJoined: Date().addingTimeInterval(-3600*24*60),
+            reputation: 6
         ),
         GuildMembership(
-            id: MembershipIDs.oldFriendMega,
-            guildId: GuildIDs.megaGuild,
-            userId: UserIDs.oldFriend,
+            id: MembershipIDs.bullRunnerKaos,
+            guildId: GuildIDs.kaosGuild,
+            userId: UserIDs.bullRunner,
             roleInGuild: .member,
-            dateJoined: Date().addingTimeInterval(-3600*24*10),
+            dateJoined: Date().addingTimeInterval(-3600*24*7),
+            reputation: 45
+        ),
+        GuildMembership(
+            id: MembershipIDs.stockHawkKaos,
+            guildId: GuildIDs.kaosGuild,
+            userId: UserIDs.stockHawk,
+            roleInGuild: .member,
+            dateJoined: Date().addingTimeInterval(-3600*24*3),
+            reputation: 567
+        ),
+        GuildMembership(
+            id: MembershipIDs.marketGuruKaos,  // ADD THIS
+            guildId: GuildIDs.kaosGuild,
+            userId: UserIDs.marketGuru,
+            roleInGuild: .member,
+            dateJoined: Date().addingTimeInterval(-3600*24*25),
+            reputation: 56635
+        )
+    ]
+    
+    
+    // KAOS Guild members that are offline and not friends
+    static let offlineNonFriendGuildMembers: [GuildMembership] = [
+        
+        GuildMembership(
+            id: MembershipIDs.chartWizardKaos,  // ADD THIS
+            guildId: GuildIDs.kaosGuild,
+            userId: UserIDs.chartWizard,
+            roleInGuild: .moderator,
+            dateJoined: Date().addingTimeInterval(-3600*24*50),
+            reputation: 345
+        )
+    ]
+    
+    // KAOS Guild members that are offline and not friends
+    static let friendGuildMembers: [GuildMembership] = [
+        
+        GuildMembership(
+            id: MembershipIDs.nightOwlKaos,
+            guildId: GuildIDs.kaosGuild,
+            userId: UserIDs.nightOwl,
+            roleInGuild: .admin,
+            dateJoined: Date().addingTimeInterval(-3600*24*45),
             reputation: 234
         ),
         GuildMembership(
-            id: MembershipIDs.quietInvestorMega,
-            guildId: GuildIDs.megaGuild,
-            userId: UserIDs.quietInvestor,
+            id: MembershipIDs.tradeMasterKaos,
+            guildId: GuildIDs.kaosGuild,
+            userId: UserIDs.tradeMaster,
             roleInGuild: .member,
-            dateJoined: Date().addingTimeInterval(-3600*24*5),
-            reputation: 634
+            dateJoined: Date().addingTimeInterval(-3600*24*15),
+            reputation: 345
         )
     ]
+    
+    
 }
-// ANNOUNCEMENTS
+
+
+
+// MARK: - Guild Friends
+extension GuildFriends{
+    static let guildFriends: [GuildFriends] = [
+        GuildFriends(userID: UserIDs.currentUser, friendID: UserIDs.nightOwl, dateFriendAdded: Date().addingTimeInterval(-7200)),
+        GuildFriends(userID: UserIDs.currentUser, friendID: UserIDs.tradeMaster, dateFriendAdded: Date().addingTimeInterval(-7200))
+    ]
+}
+
+
+
+
+// MARK: - Guild Announcements
 // Note: GuildUser sample data removed, reference User.sampleUsers instead
 extension GuildAnnouncement {
-    static let sampleGuildAnnouncements: [GuildAnnouncement] = [
+    static let guildAnnouncements: [GuildAnnouncement] = [
         GuildAnnouncement(
             guildId: GuildIDs.kaosGuild,
             membershipId: MembershipIDs.nightOwlKaos,  // nightOwl is admin in KAOS
@@ -531,22 +609,6 @@ extension GuildAnnouncement {
             isImportant: false
         ),
         GuildAnnouncement(
-            guildId: GuildIDs.megaGuild,
-            membershipId: MembershipIDs.marketGuruMega,  // marketGuru is moderator in MEGA
-            title: "Guild Rules Update",
-            content: "Please review the updated guild rules in the #rules channel. Key changes include:\n\n• Updated posting guidelines for trade ideas\n• New reputation system rules\n• Community conduct standards\n\nAll members are expected to follow these guidelines. Violations may result in temporary or permanent removal from the guild.",
-            postedAt: Date().addingTimeInterval(-14400), // 4 hours ago
-            isImportant: true
-        ),
-        GuildAnnouncement(
-            guildId: GuildIDs.megaGuild,
-            membershipId: MembershipIDs.chartWizardMega,  // chartWizard is admin in MEGA
-            title: "Weekly Leaderboard Results",
-            content: "Congratulations to this week's top performers!\n\n🥇 TradeMaster - 85% win rate\n🥈 ChartWizard - 82% win rate\n🥉 BullRunner - 78% win rate\n\nGreat work everyone! Keep up the excellent trading and analysis. Remember, consistency is key in trading success.",
-            postedAt: Date().addingTimeInterval(-21600), // 6 hours ago
-            isImportant: false
-        ),
-        GuildAnnouncement(
             guildId: GuildIDs.kaosGuild,
             membershipId: MembershipIDs.currentUserKaos,  // Current user posting
             title: "New Member Welcome",
@@ -559,7 +621,7 @@ extension GuildAnnouncement {
 
 // EVENTS
 extension GuildEvent {
-    static let sampleGuildEvents: [GuildEvent] = [
+    static let guildEvents: [GuildEvent] = [
         GuildEvent(
             guildId: GuildIDs.kaosGuild,
             authorMembershipId: MembershipIDs.nightOwlKaos,
@@ -581,16 +643,6 @@ extension GuildEvent {
             noAttending: 18
         ),
         GuildEvent(
-            guildId: GuildIDs.megaGuild,
-            authorMembershipId: MembershipIDs.chartWizardMega,
-            title: "Options Strategy Workshop",
-            content: "Learn advanced options strategies including spreads, iron condors, and butterflies. Perfect for intermediate to advanced traders.",
-            postedAt: Date().addingTimeInterval(-10800), // 3 hours ago
-            eventDate: Date().addingTimeInterval(86400 * 7), // 7 days from now
-            isImportant: true,
-            noAttending: 42
-        ),
-        GuildEvent(
             guildId: GuildIDs.kaosGuild,
             authorMembershipId: MembershipIDs.currentUserKaos,
             title: "Beginner Trading Q&A",
@@ -606,20 +658,13 @@ extension GuildEvent {
 
 // EVENTS
 extension GuildWatchlist {
-    static let sampleGuildWatchlist: [GuildWatchlist] = [
+    static let guildWatchlist: [GuildWatchlist] = [
         GuildWatchlist(
             guildId: GuildIDs.kaosGuild,
             authorMembershipId: MembershipIDs.nightOwlKaos,
             name: "Main Watchlist",
             dateCreated: Date().addingTimeInterval(-3600),
             symbols: [SymbolIDs.eurusd, SymbolIDs.audusd, SymbolIDs.gold]
-        ),
-        GuildWatchlist(
-            guildId: GuildIDs.megaGuild,
-            authorMembershipId: MembershipIDs.chartWizardMega,
-            name: "High Priority Setups",
-            dateCreated: Date().addingTimeInterval(-7200),
-            symbols: [SymbolIDs.eurusd, SymbolIDs.gold]
         )
     ]
 }

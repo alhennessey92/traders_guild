@@ -370,7 +370,7 @@ struct MainDrawerView: View {
                 
                 
                 if let user = currentUser.user,
-                   let membership = GuildMembership.sampleMemberships.first(where: {
+                   let membership = GuildMembership.currentGuildMemberships.first(where: {
                        $0.userId == user.id && $0.guildId == currentGuild.id
                    }) {
                     UserRowView(user: membership, onTap: {  // Pass membership, not user

@@ -51,49 +51,31 @@ struct User: Identifiable, Codable, Equatable {
     
 }
 
-extension User {
-    static func friendIDs(for userId: UUID) -> Set<UUID> {
-        UserFriends.friendIDs(for: userId)
-    }
-}
+//extension User {
+//    static func friendIDs(for userId: UUID) -> Set<UUID> {
+//        UserFriends.friendIDs(for: userId)
+//    }
+//}
 
 
-// MARK: - User Friends Model
-struct UserFriends: Identifiable, Codable, Equatable {
-    var id: UUID
-    var userID: UUID
-    var friendID: UUID
-    var dateFriendAdded: Date
-    
-    init(
-        id: UUID = UUID(),
-        userID: UUID,
-        friendID: UUID,
-        dateFriendAdded: Date = Date()
-    ) {
-        self.id = id
-        self.userID = userID
-        self.friendID = friendID
-        self.dateFriendAdded = dateFriendAdded
-    }
-}
 
-extension UserFriends {
-    // Get all friend IDs for a specific user
-    static func friendIDs(for userId: UUID) -> Set<UUID> {
-        Set(sampleFriends
-            .filter { $0.userID == userId }
-            .map { $0.friendID })
-    }
-    
-    // Check if two users are friends
-    static func areFriends(userId: UUID, friendId: UUID) -> Bool {
-        sampleFriends.contains {
-            ($0.userID == userId && $0.friendID == friendId) ||
-            ($0.userID == friendId && $0.friendID == userId)
-        }
-    }
-}
+
+//extension UserFriends {
+//    // Get all friend IDs for a specific user
+//    static func friendIDs(for userId: UUID) -> Set<UUID> {
+//        Set(sampleFriends
+//            .filter { $0.userID == userId }
+//            .map { $0.friendID })
+//    }
+//    
+//    // Check if two users are friends
+//    static func areFriends(userId: UUID, friendId: UUID) -> Bool {
+//        sampleFriends.contains {
+//            ($0.userID == userId && $0.friendID == friendId) ||
+//            ($0.userID == friendId && $0.friendID == userId)
+//        }
+//    }
+//}
 
 // MARK: - UI helpers for UserRole
 extension UserRole {
@@ -182,7 +164,7 @@ extension User {
             name: "ChartWizard",
             email: "chartwizard@example.com",
             globalReputation: 38,
-            isOnline: true,
+            isOnline: false,
             status: "Analyzing markets",
             role: .admin
         ),
@@ -234,9 +216,4 @@ extension User {
     ]
 }
 
-extension UserFriends{
-    static let sampleFriends: [UserFriends] = [
-        UserFriends(userID: UserIDs.currentUser, friendID: UserIDs.nightOwl, dateFriendAdded: Date().addingTimeInterval(-7200)),
-        UserFriends(userID: UserIDs.currentUser, friendID: UserIDs.tradeMaster, dateFriendAdded: Date().addingTimeInterval(-7200))
-    ]
-}
+

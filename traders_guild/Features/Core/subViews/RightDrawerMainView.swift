@@ -23,9 +23,9 @@ struct RightDrawerMainView: View {
 
     let onClose: () -> Void
     let chatrooms: [Chatroom]
-    let onlineUsers: [GuildMembership]
-    let offlineUsers: [GuildMembership]
-    let friends: [GuildMembership]
+    let onlineUsers: [UserDM]
+    let offlineUsers: [UserDM]
+    let friends: [UserDM]
     
     @EnvironmentObject var messagingManager: MessagingManager
     @EnvironmentObject var currentUser: UserStore
@@ -43,50 +43,30 @@ struct RightDrawerMainView: View {
         }
         return chatrooms.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
-    var filteredFriends: [GuildMembership] {
-        let friendsWithoutCurrentUser = friends.filter { $0.userId != currentUser.user?.id }
-        guard !searchText.isEmpty else { return friendsWithoutCurrentUser }
-        return friendsWithoutCurrentUser.filter {
-            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
-        }
-    }
-
-    var filteredOnlineUsers: [GuildMembership] {
-        let onlineWithoutCurrentUser = onlineUsers.filter { $0.userId != currentUser.user?.id }
-        guard !searchText.isEmpty else { return onlineWithoutCurrentUser }
-        return onlineWithoutCurrentUser.filter {
-            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
-        }
-    }
-
-    var filteredOfflineUsers: [GuildMembership] {
-        let offlineWithoutCurrentUser = offlineUsers.filter { $0.userId != currentUser.user?.id }
-        guard !searchText.isEmpty else { return offlineWithoutCurrentUser }
-        return offlineWithoutCurrentUser.filter {
-            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
-        }
-    }
-    
 //    var filteredFriends: [GuildMembership] {
-//        guard !searchText.isEmpty else { return friends }
-//        return friends.filter {
+//        let friendsWithoutCurrentUser = friends.filter { $0.userId != currentUser.user?.id }
+//        guard !searchText.isEmpty else { return friendsWithoutCurrentUser }
+//        return friendsWithoutCurrentUser.filter {
 //            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
 //        }
 //    }
 //
 //    var filteredOnlineUsers: [GuildMembership] {
-//        guard !searchText.isEmpty else { return onlineUsers }
-//        return onlineUsers.filter {
+//        let onlineWithoutCurrentUser = onlineUsers.filter { $0.userId != currentUser.user?.id }
+//        guard !searchText.isEmpty else { return onlineWithoutCurrentUser }
+//        return onlineWithoutCurrentUser.filter {
 //            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
 //        }
 //    }
 //
 //    var filteredOfflineUsers: [GuildMembership] {
-//        guard !searchText.isEmpty else { return offlineUsers }
-//        return offlineUsers.filter {
+//        let offlineWithoutCurrentUser = offlineUsers.filter { $0.userId != currentUser.user?.id }
+//        guard !searchText.isEmpty else { return offlineWithoutCurrentUser }
+//        return offlineWithoutCurrentUser.filter {
 //            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
 //        }
 //    }
+    
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -199,52 +179,79 @@ struct RightDrawerMainView: View {
                     }
                     
                     // Friends Section (now properly filtered)
-                    if !filteredFriends.isEmpty {
-                        UserDisclosureGroup(
-                            title: "Friends",
-                            count: filteredFriends.count,
-                            icon: "star.fill",
-                            iconColor: AppColors.accentColor,
-                            users: filteredFriends,
-                            onUserTap: { user in
-                                messagingManager.openUserChat(user)
-                            }
-                        )
-                    }
+                    DMDisclosureGroup(
+                        title: "Friends",
+                        count: friends.count,
+                        icon: "star.fill",
+                        iconColor: AppColors.accentColor,
+                        userDMs: friends,
+                        onUserTap: { userDM in
+                            messagingManager.openUserDM(userDM)
+                        }
+                    )
+//                    if !filteredFriends.isEmpty {
+//                        UserDisclosureGroup(
+//                            title: "Friends",
+//                            count: filteredFriends.count,
+//                            icon: "star.fill",
+//                            iconColor: AppColors.accentColor,
+//                            users: filteredFriends,
+//                            onUserTap: { user in
+//                                messagingManager.openUserChat(user)
+//                            }
+//                        )
+//                    }
                     
                     // Online Users (excludes friends)
-                    if !filteredOnlineUsers.isEmpty {
-                        UserDisclosureGroup(
-                            title: "Online",
-                            count: filteredOnlineUsers.count,
-                            icon: "circle.fill",
-                            iconColor: AppColors.bullCandleGreen,
-                            users: filteredOnlineUsers,
-                            onUserTap: { user in
-                                messagingManager.openUserChat(user)
-                            }
-                        )
-                    }
+                    DMDisclosureGroup(
+                        title: "Online",
+                        count: onlineUsers.count,
+                        icon: "circle.fill",
+                        iconColor: AppColors.bullCandleGreen,
+                        userDMs: onlineUsers,
+                        onUserTap: { userDM in
+                            messagingManager.openUserDM(userDM)
+                        }
+                    )
+//                    if !filteredOnlineUsers.isEmpty {
+//                        UserDisclosureGroup(
+//                            title: "Online",
+//                            count: filteredOnlineUsers.count,
+//                            icon: "circle.fill",
+//                            iconColor: AppColors.bullCandleGreen,
+//                            users: filteredOnlineUsers,
+//                            onUserTap: { user in
+//                                messagingManager.openUserChat(user)
+//                            }
+//                        )
+//                    }
                     
                     // Offline Users (excludes friends)
-                    if !filteredOfflineUsers.isEmpty {
-                        UserDisclosureGroup(
-                            title: "Offline",
-                            count: filteredOfflineUsers.count,
-                            icon: "circle.fill",
-                            iconColor: Color.gray,
-                            users: filteredOfflineUsers,
-                            onUserTap: { user in
-                                messagingManager.openUserChat(user)
-                            }
-                        )
-                    }
+                    DMDisclosureGroup(
+                        title: "Offline",
+                        count: offlineUsers.count,
+                        icon: "circle.fill",
+                        iconColor: Color.gray,
+                        userDMs: offlineUsers,
+                        onUserTap: { userDM in
+                            messagingManager.openUserDM(userDM)
+                        }
+                    )
+//                    if !filteredOfflineUsers.isEmpty {
+//                        UserDisclosureGroup(
+//                            title: "Offline",
+//                            count: filteredOfflineUsers.count,
+//                            icon: "circle.fill",
+//                            iconColor: Color.gray,
+//                            users: filteredOfflineUsers,
+//                            onUserTap: { user in
+//                                messagingManager.openUserChat(user)
+//                            }
+//                        )
+//                    }
                     
                     // No results state
-                    if filteredChatrooms.isEmpty &&
-                       filteredOnlineUsers.isEmpty &&
-                       filteredOfflineUsers.isEmpty &&
-                       filteredFriends.isEmpty {
+                    if filteredChatrooms.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")
                                 .font(.largeTitle)
@@ -386,13 +393,13 @@ struct ChatroomDisclosureGroup: View {
 
 
 /// Collapsible section listing users; tapping opens a user chat sheet.
-struct UserDisclosureGroup: View {
+struct DMDisclosureGroup: View {
     let title: String
     let count: Int
     let icon: String
     let iconColor: Color
-    let users: [GuildMembership]
-    let onUserTap: (GuildMembership) -> Void
+    let userDMs: [UserDM]
+    let onUserTap: (UserDM) -> Void
     
     @State private var isExpanded: Bool = true
     
@@ -437,8 +444,8 @@ struct UserDisclosureGroup: View {
             // User list
             if isExpanded {
                 VStack(spacing: 6) {
-                    ForEach(users) { user in
-                        GuildUserRowView(user: user, onTap: { onUserTap(user) })
+                    ForEach(userDMs) { userDM in
+                        UserDMRowView(userDM: userDM, onTap: { onUserTap(userDM) })
                     }
                 }
             }

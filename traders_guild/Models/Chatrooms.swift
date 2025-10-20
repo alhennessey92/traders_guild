@@ -32,7 +32,7 @@ struct Chatroom: Identifiable, Codable, Equatable {
         self.lastMessage = lastMessage
     }
     var currentGuild: Guild? {
-        Guild.sampleGuild.first { $0.id == guildId }
+        Guild.allGuilds.first { $0.id == guildId }
     }
 }
 
@@ -70,7 +70,7 @@ struct ChatroomMessage: Identifiable, Codable, Equatable {
     
     // GET Membership
     var authorMembership: GuildMembership? {
-        GuildMembership.sampleMemberships.first { $0.id == senderMembershipId }
+        GuildMembership.currentGuildMemberships.first { $0.id == senderMembershipId }
     }
     
     // GET User through membership (chain lookup)
