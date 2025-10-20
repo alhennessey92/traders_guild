@@ -8,9 +8,9 @@
 import SwiftUI
 
 
-// MARK: - User Row View
-struct GuildUserRowView: View {
-    let user: GuildMembership
+// MARK: - User Direct Message Row View
+struct UserDMRowView: View {
+    let userDM: UserDM
     let onTap: () -> Void
     
     @State private var isPressed = false
