@@ -176,17 +176,7 @@ struct LeftDrawerMainView: View {
             }
         }
     }
-    
-//    private func detentsForContent(_ content: BottomSheetContent) -> Set<PresentationDetent> {
-//        switch content {
-//        case .announcement:
-//            return [.fraction(0.6), .large]
-//        case .guildUserProfile, .profile:
-//            return [.fraction(0.35), .large]
-//        case .event:
-//            return [.fraction(0.6), .large]
-//        }
-//    }
+
     private func detentsForContent(_ content: BottomSheetContent) -> Set<PresentationDetent> {
         switch content {
         case .announcement:

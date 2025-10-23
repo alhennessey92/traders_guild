@@ -15,7 +15,7 @@ struct PatternOverlay: View {
     }
     
     let patternType: PatternType
-    var hexSize: CGFloat = 40
+    var hexSize: CGFloat = 10
     
     var body: some View {
         GeometryReader { geometry in

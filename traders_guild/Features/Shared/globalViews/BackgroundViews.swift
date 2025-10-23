@@ -20,13 +20,13 @@ struct StaticBackgroundView: View {
             )
             
             // Pattern overlay - fades in smoothly
-            PatternOverlay(patternType: .honeycomb, hexSize: 18)
+            PatternOverlay(patternType: .honeycomb, hexSize: 16)
                 .opacity(patternOpacity)
         }
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = 0.025
+                patternOpacity = 0.02
             }
         }
     }
@@ -40,13 +40,13 @@ struct StaticPatternView: View {
             
             
             // Pattern overlay - fades in smoothly
-            PatternOverlay(patternType: .honeycomb, hexSize: 18)
+            PatternOverlay(patternType: .honeycomb, hexSize: 16)
                 .opacity(patternOpacity)
         }
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = 0.025
+                patternOpacity = 0.02
             }
         }
     }
