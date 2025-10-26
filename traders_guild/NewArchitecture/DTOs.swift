@@ -152,6 +152,8 @@ struct GuildSummaryDTO: Codable, Equatable {
 /// Complete guild information for detail views
 /// Contains everything about a guild including the current user's relationship to it
 /// Used in: guild detail page, guild discovery, guild management
+///
+///  MAY ADAPT THIS TO OWNER:GUILDMEMBER TO GET ROLES ETC... BUT WILL BE RECURSIVE BECAUSE OF GUILD
 struct GuildDTO: Identifiable, Codable, Equatable {
     let id: UUID                    // Guild's unique identifier from backend
     let name: String                // Guild name (e.g., "Tech Traders United")

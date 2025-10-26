@@ -4,29 +4,32 @@
 //
 //  Created by Al Hennessey on 21/09/2025.
 //
-import SwiftUI
 
+import SwiftUI
 
 struct SigninEmailView: View {
     // MARK: - State
-    @State private var username: String = ""
+    @EnvironmentObject var appState: AppState  // ✅ Add AppState
+    
+    @State private var emailOrUsername: String = ""
     @State private var password: String = ""
     @State private var showPassword: Bool = false
+    @State private var isLoggingIn: Bool = false
+    
     @Environment(\.dismiss) var dismiss
     
-    // Validate form before allowing next progression
+    // Validate form before allowing login
     var isFormValid: Bool {
-        !username.isEmpty &&
+        !emailOrUsername.trimmingCharacters(in: .whitespaces).isEmpty &&
         password.count >= 6
     }
 
     var body: some View {
-        
         ZStack {
             StaticAuthBackgroundView()
-            ScrollView (showsIndicators: false){
-                
-                VStack() {
+            
+            ScrollView(showsIndicators: false) {
+                VStack {
                     // Description
                     Text("Sign In")
                         .font(.largeTitle.bold())
@@ -36,47 +39,55 @@ struct SigninEmailView: View {
                         .padding(.bottom, 20)
                         .padding(.leading, 20)
                     
-                    // Email TextField
-                    StandardTextFieldView(title: "Email or Username", text: $username)
+                    // Email/Username TextField
+                    StandardTextFieldView(title: "Email or Username", text: $emailOrUsername)
                         .padding(.bottom, 10)
+                        .disabled(isLoggingIn)
                     
-                    
+                    // Password TextField
                     StandardTextFieldView(title: "Password", text: $password, isSecure: true)
                         .padding(.bottom, 10)
-                        
+                        .disabled(isLoggingIn)
                     
                     VStack(spacing: 0) {
                         Divider()
                             .frame(height: 1)
-
-                            .background(Color.gray.opacity(0.3)) // color
+                            .background(Color.gray.opacity(0.3))
                     }
-                    .padding(.horizontal, 16)  // horizontal inset
+                    .padding(.horizontal, 16)
                     .padding(.top, 16)
                     
-                    // Login button
-                    // Login button
-                    NavigationLink(destination: TestView()) {
-                        StandardButton(
-                            title: "Sign In",
-                            backgroundColor: AppColors.whiteText,
-                            foregroundColor: AppColors.gradientBackgroundDark
-                            
-                        ){}
+                    // ✅ Login button with AppState integration
+                    StandardButton(
+                        title: isLoggingIn ? "Signing In..." : "Sign In",
+                        backgroundColor: AppColors.whiteText,
+                        foregroundColor: AppColors.gradientBackgroundDark
+                    ) {
+                        Task {
+                            await handleLogin()
+                        }
                     }
                     .frame(maxWidth: .infinity)
-//                    .disabled(!isFormValid) // ✅ disable until valid
-//                    .opacity(isFormValid ? 1.0 : 0.5)
+                    .disabled(!isFormValid || isLoggingIn)
+                    .opacity(isFormValid && !isLoggingIn ? 1.0 : 0.5)
+                    .overlay {
+                        if isLoggingIn {
+                            HStack {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: AppColors.gradientBackgroundDark))
+                                    .scaleEffect(0.8)
+                                Spacer()
+                            }
+                            .padding(.leading, 40)
+                        }
+                    }
                     
-                    Spacer() // push content up a bit
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
-              
-                
             }
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
-            
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
@@ -84,7 +95,7 @@ struct SigninEmailView: View {
                             .font(.headline)
                             .foregroundColor(AppColors.unhighlightedButtonBackground)
                     }
-                   
+                    .disabled(isLoggingIn)  // ✅ Disable back during login
                 }
                 
                 ToolbarItem(placement: .principal) {
@@ -92,40 +103,53 @@ struct SigninEmailView: View {
                         .font(.largeTitle)
                         .fontWeight(.heavy)
                         .foregroundColor(AppColors.fadedBackground)
-                      
                 }
-                
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0){
-                    
+                VStack(spacing: 0) {
                     Divider()
-                        .frame(height: 1)                  // thickness
-                        .background(Color.gray.opacity(0.3)) // color
+                        .frame(height: 1)
+                        .background(Color.gray.opacity(0.3))
                     
                     NavigationLink(destination: ForgotPasswordView()) {
                         Text("Forgot your password?")
                             .font(AppFonts.smallNotice())
                             .foregroundColor(AppColors.whiteText)
                             .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, alignment: .center) // full width
+                            .frame(maxWidth: .infinity, alignment: .center)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding()
                     }
+                    .disabled(isLoggingIn)  // ✅ Disable during login
                 }
-                
-                
-                
             }
-
         }
-            
+    }
+    
+    // MARK: - Actions
+    
+    private func handleLogin() async {
+        isLoggingIn = true
         
+        do {
+            // For now, we'll use emailOrUsername as email
+            // In production, backend determines if it's email or username
+            try await appState.login(email: emailOrUsername, password: password)
+            
+            // ✅ Login successful - AppState handles navigation
+            // Dismiss back to welcome/main view
+            dismiss()
+            
+        } catch {
+            // ✅ Error automatically shown by global alert
+            isLoggingIn = false
+        }
     }
 }
 
-//struct LoginView_Previews: PreviewProvider {
-//    static var previews: some View {
-//        SigninEmailView()
-//    }
-//}
+#Preview {
+    NavigationStack {
+        SigninEmailView()
+            .environmentObject(AppState())
+    }
+}

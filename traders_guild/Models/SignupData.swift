@@ -17,4 +17,5 @@ struct SignupData {
     var username: String = ""      // Chosen username
     var topics: [String] = []      // List of favorite topics selected by user
     var guild: String = ""         // First guild user joins
+    var selectedGuildId: UUID? = nil     // ID of selected guild during signup
 }

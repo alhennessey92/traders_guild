@@ -240,14 +240,17 @@ struct MainDrawerView: View {
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text(currentGuild.name)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    + Text(" Guild")
-                        .font(.title2)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.accentColor)
+                    if let guild = appState.currentGuild {
+                        Text(guild.name)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        + Text(" Guild")
+                            .font(.title2)
+                            .fontWeight(.medium)
+                            .foregroundColor(AppColors.accentColor)
+                    }
+                    
                     Spacer()
                 }
                 

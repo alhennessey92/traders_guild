@@ -62,6 +62,81 @@ struct SampleData {
         )
     )
     
+    static let sampleGuild = GuildDTO(
+        id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+        name: "KAOS",
+        description: "Premier guild for forex and cryptocurrency traders. We focus on technical analysis, risk management, and collaborative learning. All skill levels welcome!",
+        reputation: 45000,
+        accuracy: 78,
+        memberCount: 156,
+        owner: GlobalMemberDTO(
+            id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+            email: "sarah.masters@email.com",
+            name: "Sarah Masters",
+            username: "tradingqueen",
+            avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+            isOnline: true,
+            globalReputation: 5820
+        ),
+        dateCreated: Date(timeIntervalSince1970: 1705314600),
+        imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+        isJoined: true,
+        currentMemberRole: .moderator,
+        isOpen: true
+    )
+    
+    
+    
+    // MARK: - Open Guilds (with embedded GlobalMemberDTO owner)
+    static let openGuilds: [GuildDTO] = [
+        
+        GuildDTO(
+            id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426614174004")!,
+            name: "Crypto Warriors",
+            description: "Cryptocurrency enthusiasts unite! Day trading, swing trading, and long-term investing strategies.",
+            reputation: 38000,
+            accuracy: 72,
+            memberCount: 203,
+            owner: GlobalMemberDTO(
+                id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
+                email: "crypto.king@email.com",
+                name: "Crypto King",
+                username: "cryptoking",
+                avatarURL: nil,
+                isOnline: false,
+                globalReputation: 4200
+            ),
+            dateCreated: Date(timeIntervalSince1970: 1710936900),
+            imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
+            isJoined: false,
+            currentMemberRole: nil,
+            isOpen: true
+        ),
+        GuildDTO(
+            id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426345174004")!,
+            name: "KAOS Guild",
+            description: "Cryptocurrency enthusiasts unite! Day trading, swing trading, and long-term investing strategies.",
+            reputation: 38000,
+            accuracy: 72,
+            memberCount: 203,
+            owner: GlobalMemberDTO(
+                id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
+                email: "crypto.king@email.com",
+                name: "Crypto King",
+                username: "cryptoking",
+                avatarURL: nil,
+                isOnline: false,
+                globalReputation: 4200
+            ),
+            dateCreated: Date(timeIntervalSince1970: 1710936900),
+            imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
+            isJoined: false,
+            currentMemberRole: nil,
+            isOpen: true
+        )
+        
+    ]
+    
     // MARK: - Guilds (with embedded GlobalMemberDTO owner)
     static let guilds: [GuildDTO] = [
         GuildDTO(

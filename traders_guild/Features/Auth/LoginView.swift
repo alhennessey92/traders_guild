@@ -2,9 +2,12 @@ import SwiftUI
 
 struct LoginView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var appState: AppState  // ✅ Add AppState
+    
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var showPassword: Bool = false
+    @State private var isLoggingIn: Bool = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -24,6 +27,7 @@ struct LoginView: View {
                             .font(.title2)
                             .foregroundColor(.blue)
                     }
+                    .disabled(isLoggingIn)  // ✅ Disable during login
 
                     Spacer()
 
@@ -43,7 +47,7 @@ struct LoginView: View {
                 .padding(.horizontal)
             }
 
-                // MARK: - Scrollable login content
+            // MARK: - Scrollable login content
             ScrollView {
                 VStack(spacing: 20) {
                     Spacer().frame(height: 44)
@@ -59,6 +63,7 @@ struct LoginView: View {
                         .keyboardType(.emailAddress)
                         .textContentType(.emailAddress)
                         .autocapitalization(.none)
+                        .disabled(isLoggingIn)
                         .padding()
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(10)
@@ -67,12 +72,14 @@ struct LoginView: View {
                     // Password field
                     if showPassword {
                         TextField("Password", text: $password)
+                            .disabled(isLoggingIn)
                             .padding()
                             .background(Color(.secondarySystemBackground))
                             .cornerRadius(10)
                             .padding(.horizontal)
                     } else {
                         SecureField("Password", text: $password)
+                            .disabled(isLoggingIn)
                             .padding()
                             .background(Color(.secondarySystemBackground))
                             .cornerRadius(10)
@@ -85,36 +92,62 @@ struct LoginView: View {
                             .font(.footnote)
                             .foregroundColor(.blue)
                     }
+                    .disabled(isLoggingIn)
 
                     // Login button
                     Button(action: {
-                        print("Perform login with \(email) / \(password)")
+                        Task {
+                            await handleLogin()
+                        }
                     }) {
-                        Text("Login")
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .cornerRadius(10)
-                            .padding(.horizontal)
+                        HStack {
+                            if isLoggingIn {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            }
+                            Text(isLoggingIn ? "Logging in..." : "Login")
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(canLogin ? Color.blue : Color.gray)
+                        .cornerRadius(10)
+                        .padding(.horizontal)
                     }
+                    .disabled(!canLogin || isLoggingIn)  // ✅ Disable if fields empty or logging in
 
                     Spacer(minLength: 50)
                 }
                 .padding(.bottom, 32)
             }
-            
-            
-            
             .navigationBarBackButtonHidden(true)
             .navigationBarHidden(true)
         }
+    }
+    
+    // MARK: - Helpers
+    
+    private var canLogin: Bool {
+        !email.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !password.isEmpty
+    }
+    
+    private func handleLogin() async {
+        isLoggingIn = true
         
+        do {
+            try await appState.login(email: email, password: password)
+            // Login successful - AppState will handle navigation
+            dismiss()
+        } catch {
+            // Error automatically shown by global alert
+            isLoggingIn = false
+        }
     }
 }
 
 // MARK: - Blur helper for SwiftUI
-// Works like UIVisualEffectView
 struct VisualEffectBlur: UIViewRepresentable {
     var blurStyle: UIBlurEffect.Style
 
@@ -127,5 +160,5 @@ struct VisualEffectBlur: UIViewRepresentable {
 
 #Preview {
     LoginView()
-        .environmentObject(SessionStore()) // fake logged-out session
+        .environmentObject(AppState())
 }

@@ -10,13 +10,6 @@
 //
 
 
-//
-//  AppState.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 23/10/2025.
-//
-
 import Foundation
 import SwiftUI
 
@@ -51,8 +44,17 @@ class AppState: ObservableObject {
         }
     }
     
-    /// Currently selected guild
-    @Published var currentGuild: GuildDTO?
+    /// Currently selected/active guild the user is viewing
+    /// This represents which guild's content is currently being displayed
+    @Published var currentGuild: GuildDTO? {
+        didSet {
+            if let guild = currentGuild {
+                saveCurrentGuildToKeychain(guild)
+            } else {
+                clearCurrentGuild()
+            }
+        }
+    }
     
     // ================================================================================================
     // MARK: - UI State
@@ -105,17 +107,20 @@ class AppState: ObservableObject {
         
         do {
             // TODO: Replace with real API call
-            // let response = try await api.post("/auth/signup", body: ["email": email, "password": password]) FROM DATA
-            // self.currentUser = response.user
-            // self.authToken = response.token
+            let response = try await api.signUp(data: data)
+            self.currentUser = response.user
+            self.authToken = response.token
             
-            // Mock implementation
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-            
-            self.currentUser = SampleData.currentUser
-            self.authToken = "mock-jwt-token"
-            
-//            showLoginSheet = false
+            // If user selected a guild during signup, set it as current guild
+            if let selectedGuildId = data.selectedGuildId {
+                // Join the guild
+                try await joinGuild(guildId: selectedGuildId)
+                
+                // Fetch and set as current guild
+                if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
+                    self.currentGuild = joinedGuild
+                }
+            }
             
         } catch {
             errorMessage = "Signup failed: \(error.localizedDescription)"
@@ -133,15 +138,15 @@ class AppState: ObservableObject {
         }
         
         do {
-            // TODO: Replace with real API call
-            // let response = try await api.post("/auth/login", body: ["email": email, "password": password])
-            // self.currentUser = response.user
-            // self.authToken = response.token
+            let response = try await api.login(email: email, password: password)
+            self.currentUser = response.user
+            self.authToken = response.token
             
-            // Mock implementation
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-            self.currentUser = SampleData.currentUser
-            self.authToken = "mock-jwt-token"
+            // ✅ Fetch and set user's current guild after login
+            // In production, this would come from the user's last active guild
+            // For now, we'll use sample data
+            let userGuild = try await fetchUserGuilds()
+            self.currentGuild = userGuild.first
             
             showLoginSheet = false
             
@@ -168,6 +173,11 @@ class AppState: ObservableObject {
             self.authToken = savedToken
             self.currentUser = savedUser
             
+            // Restore current guild if exists
+            if let savedGuild = getCurrentGuildFromKeychain() {
+                self.currentGuild = savedGuild
+            }
+            
             // TODO: Validate token with backend
             
         } else {
@@ -181,7 +191,7 @@ class AppState: ObservableObject {
     // MARK: - Transition Management
     // ================================================================================================
 
-   /// Called when the transition/welcome animation completes
+    /// Called when the transition/welcome animation completes
     func finishTransition() {
         showingTransition = false
     }
@@ -193,6 +203,82 @@ class AppState: ObservableObject {
     /// Switch to a different guild
     func selectGuild(_ guild: GuildDTO) {
         currentGuild = guild
+    }
+    
+    /// Fetch all open/available guilds
+    func fetchOpenGuilds() async throws -> [GuildDTO] {
+        isLoading = true
+        errorMessage = nil
+        
+        defer { isLoading = false }
+        
+        do {
+            let guilds = try await api.fetchOpenGuilds()
+            return guilds
+        } catch {
+            errorMessage = "Failed to fetch guilds: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    
+    /// Fetch all guilds the user is a member of
+    func fetchUserGuilds() async throws -> [GuildDTO] {
+        errorMessage = nil
+        
+        do {
+            let guilds = try await api.fetchUserGuilds()
+            return guilds
+        } catch {
+            errorMessage = "Failed to fetch user guilds: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    
+    /// Fetch a specific guild by ID
+    func fetchGuildById(guildId: UUID) async throws -> GuildDTO? {
+        errorMessage = nil
+        
+        do {
+            let guild = try await api.fetchGuildById(guildId: guildId)
+            return guild
+        } catch {
+            errorMessage = "Failed to fetch guild: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    /// Join a guild
+    func joinGuild(guildId: UUID) async throws {
+        errorMessage = nil
+        
+        do {
+            try await api.joinGuild(guildId: guildId)
+        } catch {
+            errorMessage = "Failed to join guild: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    /// Leave current guild
+    func leaveCurrentGuild() async throws {
+        guard let guild = currentGuild else {
+            throw AppError.noGuildSelected
+        }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        defer { isLoading = false }
+        
+        do {
+            try await api.leaveGuild(guildId: guild.id)
+            currentGuild = nil
+        } catch {
+            errorMessage = "Failed to leave guild: \(error.localizedDescription)"
+            throw error
+        }
     }
     
     // ================================================================================================
@@ -218,9 +304,52 @@ class AppState: ObservableObject {
         return try? JSONDecoder().decode(CurrentUserDTO.self, from: data)
     }
     
+    private func saveCurrentGuildToKeychain(_ guild: GuildDTO) {
+        if let data = try? JSONEncoder().encode(guild) {
+            UserDefaults.standard.set(data, forKey: "currentGuild")
+        }
+    }
+    
+    private func getCurrentGuildFromKeychain() -> GuildDTO? {
+        guard let data = UserDefaults.standard.data(forKey: "currentGuild") else { return nil }
+        return try? JSONDecoder().decode(GuildDTO.self, from: data)
+    }
+    
+    private func clearCurrentGuild() {
+        UserDefaults.standard.removeObject(forKey: "currentGuild")
+    }
+    
     private func clearKeychain() {
         UserDefaults.standard.removeObject(forKey: "authToken")
         UserDefaults.standard.removeObject(forKey: "currentUser")
+        UserDefaults.standard.removeObject(forKey: "currentGuild")
+    }
+}
+
+// ================================================================================================
+// MARK: - App Errors
+// ================================================================================================
+
+enum AppError: LocalizedError {
+    case noGuildSelected
+    case networkError
+    case unauthorized
+    case invalidResponse
+    case guildNotFound
+    
+    var errorDescription: String? {
+        switch self {
+        case .noGuildSelected:
+            return "No guild selected. Please select a guild first."
+        case .networkError:
+            return "Network error occurred. Please try again."
+        case .unauthorized:
+            return "Unauthorized. Please log in again."
+        case .invalidResponse:
+            return "Invalid response from server."
+        case .guildNotFound:
+            return "Guild not found."
+        }
     }
 }
 
