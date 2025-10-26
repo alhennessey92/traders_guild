@@ -32,12 +32,7 @@ struct SignupUsernameView: View {
     var body: some View {
         
         ZStack {
-            LinearGradient(
-                colors: [AppColors.gradientBackgroundDark, AppColors.gradientBackgroundLight],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            StaticAuthBackgroundView()
             ScrollView (showsIndicators: false){
                 
                 VStack() {

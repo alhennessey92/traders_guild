@@ -15,18 +15,15 @@ struct WelcomeView: View {
     @Binding var data: SignupData
     @EnvironmentObject var appState: AppState // Observe current user  // Change to AppState
     
+    @State private var opacity: Double = 0
+    
 //    let onTap: () -> Void
     
     var body: some View {
         
             
         ZStack {
-            LinearGradient(
-                colors: [AppColors.gradientBackgroundDark, AppColors.gradientBackgroundLight],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            StaticAuthBackgroundView()
             
             VStack(spacing: 20) {
                 
@@ -67,7 +64,7 @@ struct WelcomeView: View {
                         LoginButton(
                             title: "Sign in with Apple",
                             iconName: "apple.logo",
-                            backgroundColor: AppColors.whiteText,
+                            backgroundColor: AppColors.whiteText.opacity(0.8),
                             foregroundColor: AppColors.gradientBackgroundDark,
                             
                         )
@@ -78,7 +75,7 @@ struct WelcomeView: View {
                     HStack(alignment: .center) {
                         Rectangle()
                                 .fill(Color.gray.opacity(0.5))
-                                .frame(height: 2)
+                                .frame(height: 1)
                                 .frame(maxWidth: .infinity)
 
                         Text("OR")              // middle text
@@ -88,7 +85,7 @@ struct WelcomeView: View {
 
                         Rectangle()
                                 .fill(Color.gray.opacity(0.5))
-                                .frame(height: 2)
+                                .frame(height: 1)
                                 .frame(maxWidth: .infinity)
                     }
                     .padding(.vertical)
@@ -100,7 +97,7 @@ struct WelcomeView: View {
                         LoginButton(
                             title: "Sign in with Email",
                             iconName: "envelope.fill",
-                            backgroundColor: AppColors.whiteText,
+                            backgroundColor: AppColors.whiteText.opacity(0.8),
                             foregroundColor: AppColors.gradientBackgroundDark,
                             // no action needed
                         )
@@ -112,7 +109,7 @@ struct WelcomeView: View {
                         LoginButton(
                             title: "Sign in with Google",
                             iconName: "g.circle.fill",
-                            backgroundColor: AppColors.whiteText,
+                            backgroundColor: AppColors.whiteText.opacity(0.8),
                             foregroundColor: AppColors.gradientBackgroundDark,
                             
                         )
@@ -134,9 +131,10 @@ struct WelcomeView: View {
                 // Title
                 
                 
+//                Divider()
+//                    .frame(height: 1)                  // thickness
+//                    .background(Color.gray.opacity(0.5)) // color
                 Divider()
-                    .frame(height: 1)                  // thickness
-                    .background(Color.gray.opacity(0.5)) // color
                 
                 
                 Text("By signing in, you agree to our Terms Of Use, Privacy Policy and Cookies Policy")
@@ -184,6 +182,12 @@ struct WelcomeView: View {
                 
             }
             .padding()
+        }
+        .opacity(opacity)
+        .onAppear {
+            withAnimation(.easeIn(duration: 0.5)) {
+                opacity = 1
+            }
         }
         
     }

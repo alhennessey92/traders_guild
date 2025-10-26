@@ -5,8 +5,12 @@
 //  Created by Al Hennessey on 12/10/2025.
 //
 import SwiftUI
+
 struct UserSettingsSheetView: View {
+    @EnvironmentObject var appState: AppState
     let onBack: () -> Void
+    
+    @State private var showLogoutConfirmation = false
     
     var body: some View {
         ScrollView {
@@ -36,17 +40,49 @@ struct UserSettingsSheetView: View {
                     SettingsRow(title: "Appearance", icon: "paintbrush.fill")
                     SettingsRow(title: "Language", icon: "globe")
                     SettingsRow(title: "Help & Support", icon: "questionmark.circle.fill")
+                    
+                    // Logout button
+                    Button(action: {
+                        showLogoutConfirmation = true
+                    }) {
+                        HStack {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.headline)
+                                .foregroundColor(.red)
+                                .frame(width: 30)
+                            
+                            Text("Logout")
+                                .font(.subheadline)
+                                .foregroundColor(.red)
+                            
+                            Spacer()
+                        }
+                        .padding()
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .padding(.top, 20)
                 }
                 
                 Spacer(minLength: 100)
             }
             .padding(.horizontal)
         }
+        .alert("Logout", isPresented: $showLogoutConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Logout", role: .destructive) {
+                appState.logout()
+                onBack() // Close settings sheet
+            }
+        } message: {
+            Text("Are you sure you want to logout?")
+        }
     }
 }
-
-
-
 
 struct SettingsRow: View {
     let title: String
@@ -77,4 +113,10 @@ struct SettingsRow: View {
             .cornerRadius(10)
         }
     }
+}
+
+#Preview {
+    UserSettingsSheetView(onBack: {})
+        .environmentObject(AppState())
+        .preferredColorScheme(.dark)
 }

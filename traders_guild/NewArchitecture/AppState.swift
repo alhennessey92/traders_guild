@@ -66,7 +66,12 @@ class AppState: ObservableObject {
     
     /// Show/hide login sheet
     @Published var showLoginSheet: Bool = false
-    @Published var showingTransition: Bool = false
+    
+    /// Show transition/loading view on app launch
+    @Published var showingTransition: Bool = true
+
+    /// Track if initial load is complete
+    @Published var hasCompletedInitialLoad: Bool = false
     
     
     // ================================================================================================
@@ -168,6 +173,17 @@ class AppState: ObservableObject {
         } else {
             showLoginSheet = true
         }
+        // Mark initial load as complete
+        hasCompletedInitialLoad = true
+    }
+    
+    // ================================================================================================
+    // MARK: - Transition Management
+    // ================================================================================================
+
+   /// Called when the transition/welcome animation completes
+    func finishTransition() {
+        showingTransition = false
     }
     
     // ================================================================================================

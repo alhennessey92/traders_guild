@@ -9,12 +9,7 @@ struct LoginView: View {
     var body: some View {
         ZStack(alignment: .top) {
             // Background behind everything
-            LinearGradient(
-                colors: [AppColors.gradientBackgroundDark, AppColors.gradientBackgroundLight],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            StaticAuthBackgroundView()
             
             ZStack {
                 // Blur-only background
