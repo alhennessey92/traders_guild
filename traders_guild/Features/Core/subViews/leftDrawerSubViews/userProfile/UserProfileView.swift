@@ -219,8 +219,8 @@ struct UserProfileHeaderView: View {
                     
                     Text(appState.currentUser?.guildMembership.roleInGuild.displayName ?? "Unknown")
                         .font(.caption)
-                        .foregroundColor(appState.currentUser?.guildMembership.roleInGuild.foregroundColor)
-                        .fontWeight(appState.currentUser?.guildMembership.roleInGuild.fontWeight)
+                        .foregroundColor(appState.currentUser?.guildMembership.roleInGuild.roleForegroundColor)
+                        .fontWeight(appState.currentUser?.guildMembership.roleInGuild.roleFontWeight)
                         .lineLimit(1)
                 }
                 

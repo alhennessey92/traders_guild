@@ -23,55 +23,58 @@ struct GuildSelectionFullView: View {
             StaticAuthBackgroundView()
             
             VStack(spacing: 0) {
-                // Header with back button (only if not required)
-                HStack {
-                    if !isRequired {
-                        Button {
-                            appState.showGuildSelectionSheet = false
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.title3)
-                                .foregroundColor(AppColors.whiteText)
-                                .padding()
+                VStack(spacing:0){
+                    // Header with back button (only if not required)
+                    HStack {
+                        if !isRequired {
+                            Button {
+                                appState.showGuildSelectionSheet = false
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.title3)
+                                    .foregroundColor(AppColors.whiteText)
+                                    .padding()
+                            }
+                        } else {
+                            Spacer()
+                                .frame(width: 44, height: 44)
                         }
-                    } else {
+                        
+                        Spacer()
+                        
+                        Text("TG")
+                            .font(.largeTitle)
+                            .fontWeight(.heavy)
+                            .foregroundColor(AppColors.fadedBackground)
+                        
+                        Spacer()
+                        
+                        // Placeholder for symmetry
                         Spacer()
                             .frame(width: 44, height: 44)
                     }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
                     
-                    Spacer()
+                    // Title Section
+                    VStack(spacing: 8) {
+                        Text(isRequired ? "Select Your Guild" : "Switch Guild")
+                            .font(.title.bold())
+                            .foregroundColor(AppColors.whiteText)
+                        
+                        Text(isRequired ? "Choose which guild you'd like to view" : "Select a different guild to switch to")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .padding(.horizontal)
                     
-                    Text("TG")
-                        .font(.largeTitle)
-                        .fontWeight(.heavy)
-                        .foregroundColor(AppColors.fadedBackground)
-                    
-                    Spacer()
-                    
-                    // Placeholder for symmetry
-                    Spacer()
-                        .frame(width: 44, height: 44)
+                    Divider()
+                        .background(Color.gray.opacity(0.3))
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
-                
-                // Title Section
-                VStack(spacing: 8) {
-                    Text(isRequired ? "Select Your Guild" : "Switch Guild")
-                        .font(.title.bold())
-                        .foregroundColor(AppColors.whiteText)
-                    
-                    Text(isRequired ? "Choose which guild you'd like to view" : "Select a different guild to switch to")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.greyText)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-                .padding(.horizontal)
-                
-                Divider()
-                    .background(Color.gray.opacity(0.3))
+                .background(AppColors.gradientBackgroundDark.opacity(0.6))
                 
                 // Guild List
                 ScrollView(showsIndicators: false) {
@@ -111,7 +114,7 @@ struct GuildSelectionFullView: View {
                     .padding(.top)
                     .padding(.trailing)
                 }
-            }
+            }.background(AppColors.gradientBackgroundDark.opacity(0.6))
         }
         .onAppear {
             // Pre-select current guild if switching
@@ -142,86 +145,69 @@ struct GuildSelectionRowFull: View {
     
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Guild Image
-                AsyncImage(url: URL(string: guild.imageURL ?? "")) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle()
-                        .fill(AppColors.greyText.opacity(0.3))
-                        .overlay(
-                            Text(guild.name.prefix(1).uppercased())
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.whiteText)
-                        )
-                }
-                .frame(width: 60, height: 60)
-                .clipShape(Circle())
-                
-                // Guild Info
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(guild.name)
-                            .font(.headline)
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.title2)
+                            .foregroundColor(AppColors.accentColor.opacity(0.6))
+                        
+                        Text("\(guild.name)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        + Text(" Guild")
+                            .font(.title2)
+                            .fontWeight(.medium)
+                            .foregroundColor(AppColors.accentColor)
+                    }
+                    
+                    Text("\(guild.memberCount) Members - \(guild.statusText)")
+                        .font(.caption)
+                        .foregroundColor(AppColors.whiteText)
+                        .padding(.leading, 15)
+                    
+                    HStack(spacing: 3) {
+                        Text("\(guild.owner.name)")
+                            .font(.caption)
                             .foregroundColor(AppColors.whiteText)
                             .lineLimit(1)
                         
-                        if isCurrent {
-                            Text("CURRENT")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.gradientBackgroundDark)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(AppColors.whiteText)
-                                .cornerRadius(4)
-                        }
-                    }
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.2.fill")
+                        Text("-")
                             .font(.caption)
-                            .foregroundColor(AppColors.greyText)
+                            .foregroundColor(AppColors.whiteText)
                         
-                        Text("\(guild.memberCount) members")
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
-                        
-                        // Online indicator
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                            .padding(.leading, 4)
-                        
-                        Text("\(mockOnlineCount(for: guild)) online")
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
+                        Text("Admin")
+                            .font(.caption)
+                            .foregroundColor(guild.ownerRole.roleForegroundColor)
+                            .fontWeight(guild.ownerRole.roleFontWeight)
+                            .lineLimit(1)
                     }
+                    .padding(.leading, 15)
+                    
+                    HStack(spacing: 2) {
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("\(guild.reputationDisplay)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text(" Guild Reputation")
+                            .font(.caption)
+                            .foregroundColor(AppColors.whiteText.opacity(0.6))
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, 15)
                 }
                 
                 Spacer()
                 
                 // Selection indicator
-                Circle()
-                    .strokeBorder(
-                        isSelected ? AppColors.whiteText : AppColors.greyText.opacity(0.4),
-                        lineWidth: 2
-                    )
-                    .background(
-                        Circle()
-                            .fill(isSelected ? AppColors.whiteText : Color.clear)
-                    )
-                    .frame(width: 24, height: 24)
-                    .overlay {
-                        if isSelected {
-                            Image(systemName: "checkmark")
-                                .font(.caption.bold())
-                                .foregroundColor(AppColors.gradientBackgroundDark)
-                        }
-                    }
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? AppColors.whiteText : AppColors.greyText.opacity(0.6))
+                    .font(.system(size: 20))
             }
             .padding(16)
             .background(

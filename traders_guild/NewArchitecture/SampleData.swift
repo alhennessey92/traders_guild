@@ -47,11 +47,13 @@ struct SampleData {
                     isOnline: true,
                     globalReputation: 5820
                 ),
+                ownerRole: .admin,
                 dateCreated: Date(timeIntervalSince1970: 1705314600),
                 imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                 isJoined: true,
                 currentMemberRole: .moderator,
-                isOpen: true
+                isOpen: true,
+                membersOnline: 12
             ),
             roleInGuild: .moderator,
             dateJoined: Date(timeIntervalSince1970: 1718712300),
@@ -78,11 +80,13 @@ struct SampleData {
             isOnline: true,
             globalReputation: 5820
         ),
+        ownerRole: .admin,
         dateCreated: Date(timeIntervalSince1970: 1705314600),
         imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
         isJoined: true,
         currentMemberRole: .moderator,
-        isOpen: true
+        isOpen: true,
+        membersOnline: 12
     )
     
     
@@ -106,11 +110,13 @@ struct SampleData {
                 isOnline: false,
                 globalReputation: 4200
             ),
+            ownerRole: .admin,
             dateCreated: Date(timeIntervalSince1970: 1710936900),
             imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
             isJoined: false,
             currentMemberRole: nil,
-            isOpen: true
+            isOpen: true,
+            membersOnline: 12
         ),
         GuildDTO(
             id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426345174004")!,
@@ -128,11 +134,13 @@ struct SampleData {
                 isOnline: false,
                 globalReputation: 4200
             ),
+            ownerRole: .admin,
             dateCreated: Date(timeIntervalSince1970: 1710936900),
             imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
             isJoined: false,
             currentMemberRole: nil,
-            isOpen: true
+            isOpen: true,
+            membersOnline: 12
         )
         
     ]
@@ -155,11 +163,13 @@ struct SampleData {
                 isOnline: true,
                 globalReputation: 5820
             ),
+            ownerRole: .admin,
             dateCreated: Date(timeIntervalSince1970: 1705314600),
             imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
             isJoined: true,
             currentMemberRole: .moderator,
-            isOpen: true
+            isOpen: true,
+            membersOnline: 12
         ),
         GuildDTO(
             id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426614174004")!,
@@ -177,11 +187,13 @@ struct SampleData {
                 isOnline: false,
                 globalReputation: 4200
             ),
+            ownerRole: .admin,
             dateCreated: Date(timeIntervalSince1970: 1710936900),
             imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
             isJoined: false,
             currentMemberRole: nil,
-            isOpen: true
+            isOpen: true,
+            membersOnline: 12
         ),
         GuildDTO(
             id: UUID(uuidString: "f23e4567-e89b-12d3-a456-426614174006")!,
@@ -199,11 +211,13 @@ struct SampleData {
                 isOnline: false,
                 globalReputation: 3200
             ),
+            ownerRole: .admin,
             dateCreated: Date(timeIntervalSince1970: 1698249000),
             imageURL: "https://cdn.tradersguild.com/guilds/forex.jpg",
             isJoined: true,
             currentMemberRole: .member,
-            isOpen: false
+            isOpen: false,
+            membersOnline: 12
         )
     ]
     
@@ -242,11 +256,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .admin,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .admin,
                 dateJoined: Date(timeIntervalSince1970: 1705314600),
@@ -290,11 +306,13 @@ struct SampleData {
                         isOnline: false,
                         globalReputation: 4200
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1710936900),
                     imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
                     isJoined: false,
                     currentMemberRole: nil,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .admin,
                 dateJoined: Date(timeIntervalSince1970: 1710936900),
@@ -336,11 +354,13 @@ struct SampleData {
                     isOnline: true,
                     globalReputation: 5820
                 ),
+                ownerRole: .admin,
                 dateCreated: Date(timeIntervalSince1970: 1705314600),
                 imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                 isJoined: true,
                 currentMemberRole: .admin,
-                isOpen: true
+                isOpen: true,
+                membersOnline: 12
             ),
             roleInGuild: .admin,
             dateJoined: Date(timeIntervalSince1970: 1705314600),
@@ -376,11 +396,13 @@ struct SampleData {
                     isOnline: true,
                     globalReputation: 5820
                 ),
+                ownerRole: .admin,
                 dateCreated: Date(timeIntervalSince1970: 1705314600),
                 imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                 isJoined: true,
                 currentMemberRole: .moderator,
-                isOpen: true
+                isOpen: true,
+                membersOnline: 12
             ),
             roleInGuild: .moderator,
             dateJoined: Date(timeIntervalSince1970: 1710063600),
@@ -416,11 +438,13 @@ struct SampleData {
                     isOnline: true,
                     globalReputation: 5820
                 ),
+                ownerRole: .admin,
                 dateCreated: Date(timeIntervalSince1970: 1705314600),
                 imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                 isJoined: true,
                 currentMemberRole: .moderator,
-                isOpen: true
+                isOpen: true,
+                membersOnline: 12
             ),
             roleInGuild: .moderator,
             dateJoined: Date(timeIntervalSince1970: 1718712300),
@@ -456,11 +480,13 @@ struct SampleData {
                     isOnline: true,
                     globalReputation: 5820
                 ),
+                ownerRole: .admin,
                 dateCreated: Date(timeIntervalSince1970: 1705314600),
                 imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                 isJoined: true,
                 currentMemberRole: .member,
-                isOpen: true
+                isOpen: true,
+                membersOnline: 12
             ),
             roleInGuild: .member,
             dateJoined: Date(timeIntervalSince1970: 1721131200),
@@ -496,11 +522,13 @@ struct SampleData {
                     isOnline: true,
                     globalReputation: 5820
                 ),
+                ownerRole: .admin,
                 dateCreated: Date(timeIntervalSince1970: 1705314600),
                 imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                 isJoined: true,
                 currentMemberRole: .member,
-                isOpen: true
+                isOpen: true,
+                membersOnline: 12
             ),
             roleInGuild: .member,
             dateJoined: Date(timeIntervalSince1970: 1724054400),
@@ -543,11 +571,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .admin,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .admin,
                 dateJoined: Date(timeIntervalSince1970: 1705314600),
@@ -603,11 +633,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .moderator,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .moderator,
                 dateJoined: Date(timeIntervalSince1970: 1710063600),
@@ -668,11 +700,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .moderator,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .moderator,
                 dateJoined: Date(timeIntervalSince1970: 1710063600),
@@ -734,11 +768,13 @@ struct SampleData {
                             isOnline: true,
                             globalReputation: 5820
                         ),
+                        ownerRole: .admin,
                         dateCreated: Date(timeIntervalSince1970: 1705314600),
                         imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                         isJoined: true,
                         currentMemberRole: .member,
-                        isOpen: true
+                        isOpen: true,
+                        membersOnline: 12
                     ),
                     roleInGuild: .member,
                     dateJoined: Date(timeIntervalSince1970: 1721131200),
@@ -774,11 +810,13 @@ struct SampleData {
                             isOnline: true,
                             globalReputation: 5820
                         ),
+                        ownerRole: .admin,
                         dateCreated: Date(timeIntervalSince1970: 1705314600),
                         imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                         isJoined: true,
                         currentMemberRole: .member,
-                        isOpen: true
+                        isOpen: true,
+                        membersOnline: 12
                     ),
                     roleInGuild: .member,
                     dateJoined: Date(timeIntervalSince1970: 1724054400),
@@ -821,11 +859,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .admin,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .admin,
                 dateJoined: Date(timeIntervalSince1970: 1705314600),
@@ -1000,11 +1040,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .admin,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .admin,
                 dateJoined: Date(timeIntervalSince1970: 1705314600),
@@ -1049,11 +1091,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .member,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .member,
                 dateJoined: Date(timeIntervalSince1970: 1721131200),
@@ -1101,11 +1145,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .member,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .member,
                 dateJoined: Date(timeIntervalSince1970: 1721131200),
@@ -1152,11 +1198,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .moderator,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .moderator,
                 dateJoined: Date(timeIntervalSince1970: 1718712300),
@@ -1203,11 +1251,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .moderator,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .moderator,
                 dateJoined: Date(timeIntervalSince1970: 1710063600),
@@ -1263,11 +1313,13 @@ struct SampleData {
                             isOnline: true,
                             globalReputation: 5820
                         ),
+                        ownerRole: .admin,
                         dateCreated: Date(timeIntervalSince1970: 1705314600),
                         imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                         isJoined: true,
                         currentMemberRole: .moderator,
-                        isOpen: true
+                        isOpen: true,
+                        membersOnline: 12
                     ),
                     roleInGuild: .moderator,
                     dateJoined: Date(timeIntervalSince1970: 1710063600),
@@ -1342,11 +1394,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .member,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .member,
                 dateJoined: Date(timeIntervalSince1970: 1721131200),
@@ -1394,11 +1448,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .moderator,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .moderator,
                 dateJoined: Date(timeIntervalSince1970: 1718712300),
@@ -1450,11 +1506,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .member,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .member,
                 dateJoined: Date(timeIntervalSince1970: 1721131200),
@@ -1493,11 +1551,13 @@ struct SampleData {
                             isOnline: true,
                             globalReputation: 5820
                         ),
+                        ownerRole: .admin,
                         dateCreated: Date(timeIntervalSince1970: 1705314600),
                         imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                         isJoined: true,
                         currentMemberRole: .moderator,
-                        isOpen: true
+                        isOpen: true,
+                        membersOnline: 12
                     ),
                     roleInGuild: .moderator,
                     dateJoined: Date(timeIntervalSince1970: 1718712300),
@@ -1550,11 +1610,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .moderator,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .moderator,
                 dateJoined: Date(timeIntervalSince1970: 1710063600),
@@ -1593,11 +1655,13 @@ struct SampleData {
                             isOnline: true,
                             globalReputation: 5820
                         ),
+                        ownerRole: .admin,
                         dateCreated: Date(timeIntervalSince1970: 1705314600),
                         imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                         isJoined: true,
                         currentMemberRole: .moderator,
-                        isOpen: true
+                        isOpen: true,
+                        membersOnline: 12
                     ),
                     roleInGuild: .moderator,
                     dateJoined: Date(timeIntervalSince1970: 1710063600),
@@ -1654,11 +1718,13 @@ struct SampleData {
                         isOnline: true,
                         globalReputation: 5820
                     ),
+                    ownerRole: .admin,
                     dateCreated: Date(timeIntervalSince1970: 1705314600),
                     imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                     isJoined: true,
                     currentMemberRole: .member,
-                    isOpen: true
+                    isOpen: true,
+                    membersOnline: 12
                 ),
                 roleInGuild: .member,
                 dateJoined: Date(timeIntervalSince1970: 1721131200),
@@ -1703,11 +1769,13 @@ struct SampleData {
                                 isOnline: true,
                                 globalReputation: 5820
                             ),
+                            ownerRole: .admin,
                             dateCreated: Date(timeIntervalSince1970: 1705314600),
                             imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
                             isJoined: true,
                             currentMemberRole: .admin,
-                            isOpen: true
+                            isOpen: true,
+                            membersOnline: 12
                         ),
                         roleInGuild: .admin,
                         dateJoined: Date(timeIntervalSince1970: 1705314600),

@@ -63,6 +63,9 @@ class AppState: ObservableObject {
     /// Loading indicator
     @Published var isLoading: Bool = false
     
+    // In UI State section
+    @Published var isCompletingSignup: Bool = false
+    
     /// Error message for alerts
     @Published var errorMessage: String?
     
@@ -103,12 +106,15 @@ class AppState: ObservableObject {
     // ================================================================================================
     
     /// Signup with email and password
+    /// /// Signup with email and password
     func signUp(data: SignupData) async throws {
         isLoading = true
         errorMessage = nil
+        isCompletingSignup = true  // ✅ Set flag
         
         defer {
             isLoading = false
+            isCompletingSignup = false  // ✅ Clear flag
         }
         
         do {
@@ -116,17 +122,12 @@ class AppState: ObservableObject {
             self.currentUser = response.user
             self.authToken = response.token
             
-            // ✅ If user selected a guild during signup, set it as current guild
             if let selectedGuildId = data.selectedGuildId {
-                // Join the guild
                 try await joinGuild(guildId: selectedGuildId)
                 
-                // ✅ Use the guild from availableGuilds (already fetched in SignupGuildView!)
-                // No need to fetch again
                 if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
                     self.currentGuild = selectedGuild
                 } else {
-                    // Fallback: fetch if somehow not in list
                     if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
                         self.currentGuild = joinedGuild
                     }
@@ -140,6 +141,43 @@ class AppState: ObservableObject {
             throw error
         }
     }
+//    func signUp(data: SignupData) async throws {
+//        isLoading = true
+//        errorMessage = nil
+//        
+//        defer {
+//            isLoading = false
+//        }
+//        
+//        do {
+//            let response = try await api.signUp(data: data)
+//            self.currentUser = response.user
+//            self.authToken = response.token
+//            
+//            // ✅ If user selected a guild during signup, set it as current guild
+//            if let selectedGuildId = data.selectedGuildId {
+//                // Join the guild
+//                try await joinGuild(guildId: selectedGuildId)
+//                
+//                // ✅ Use the guild from availableGuilds (already fetched in SignupGuildView!)
+//                // No need to fetch again
+//                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
+//                    self.currentGuild = selectedGuild
+//                } else {
+//                    // Fallback: fetch if somehow not in list
+//                    if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
+//                        self.currentGuild = joinedGuild
+//                    }
+//                }
+//            }
+//            
+//        } catch is CancellationError {
+//            throw CancellationError()
+//        } catch {
+//            errorMessage = "Signup failed: \(error.localizedDescription)"
+//            throw error
+//        }
+//    }
     /// Login with email and password
     func login(email: String, password: String) async throws {
         isLoading = true
@@ -239,6 +277,19 @@ class AppState: ObservableObject {
     /// Switch to a different guild
     func selectGuild(_ guild: GuildDTO) {
         currentGuild = guild
+    }
+    
+    /// Open guild selection sheet (for switching guilds)  // ✅ Add this
+    func openGuildSelector() async {
+        do {
+            let guilds = try await fetchUserGuilds()
+            self.availableGuildsForSelection = guilds
+            showGuildSelectionSheet = true
+        } catch is CancellationError {
+            return
+        } catch {
+            errorMessage = "Failed to load guilds: \(error.localizedDescription)"
+        }
     }
     
     /// Fetch all open/available guilds

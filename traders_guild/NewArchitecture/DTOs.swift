@@ -35,7 +35,7 @@ enum MemberRole: String, Codable, CaseIterable {
     }
     
     /// Color for roles in UI
-    var foregroundColor: Color {
+    var roleForegroundColor: Color {
         switch self {
         case .member: return .blue
         case .moderator: return .orange
@@ -44,7 +44,7 @@ enum MemberRole: String, Codable, CaseIterable {
     }
     
     /// Font Weight for roles
-    var fontWeight: Font.Weight {
+    var roleFontWeight: Font.Weight {
         switch self {
         case .admin: return .bold
         case .moderator: return .bold
@@ -162,11 +162,13 @@ struct GuildDTO: Identifiable, Codable, Equatable {
     let accuracy: Int               // Trading accuracy percentage (0-100)
     let memberCount: Int            // Current number of members
     let owner: GlobalMemberDTO       // EMBEDDED owner data (no lookup needed!)
+    let ownerRole: MemberRole       // Owner Role
     let dateCreated: Date           // When guild was founded
     let imageURL: String?           // Guild logo/banner from CDN
     let isJoined: Bool              // Is current user a member? (personalized)
     let currentMemberRole: MemberRole?  // Current user's role IF member (nil = not member)
     let isOpen: Bool                // Guild Status - Open/Closed
+    let membersOnline: Int          // No of users online
     
     /// Formatted creation date for display
     var formattedDate: String {

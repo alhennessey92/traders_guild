@@ -234,8 +234,8 @@ struct GuildSelectionRow: View {
                         
                         Text("Admin")
                             .font(.caption)
-                            .foregroundColor(roleForegroundColor(for: .admin))
-                            .fontWeight(roleWeight(for: .admin))
+                            .foregroundColor(guild.ownerRole.roleForegroundColor)
+                            .fontWeight(guild.ownerRole.roleFontWeight)
                             .lineLimit(1)
                     }
                     .padding(.leading, 15)
@@ -276,21 +276,7 @@ struct GuildSelectionRow: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    private func roleForegroundColor(for role: UserRole) -> Color {
-        switch role {
-        case .admin: return .orange
-        case .moderator: return .blue
-        case .member: return AppColors.whiteText.opacity(0.7)
-        }
-    }
-    
-    private func roleWeight(for role: UserRole) -> Font.Weight {
-        switch role {
-        case .admin: return .bold
-        case .moderator: return .bold
-        case .member: return .regular
-        }
-    }
+
     
 //    var body: some View {
 //        Button(action: onTap) {

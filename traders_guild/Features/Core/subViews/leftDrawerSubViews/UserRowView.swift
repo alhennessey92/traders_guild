@@ -17,7 +17,7 @@ import SwiftUI
 
 // MARK: - User Row View button for left drawer
 struct UserRowView: View {
-    @EnvironmentObject var appState: AppState
+    let user: CurrentUserDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -31,7 +31,7 @@ struct UserRowView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 40, height: 40)
                         .overlay(
-                            Text(String(appState.currentUser?.name.prefix(2) ?? "Unknown"))
+                            Text(user.name)
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
@@ -52,7 +52,7 @@ struct UserRowView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack (spacing: 2){
 
-                        Text(appState.currentUser?.username ?? "Unknown")
+                        Text(user.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(AppColors.whiteText)
@@ -61,10 +61,10 @@ struct UserRowView: View {
                     
                     
                     HStack (spacing:2){
-                        Text(appState.currentUser?.guildMembership.roleInGuild.displayName ?? "Unknown")
+                        Text(user.guildMembership.roleInGuild.displayName)
                             .font(.caption)
-                            .foregroundColor(appState.currentUser?.guildMembership.roleInGuild.foregroundColor)
-                            .fontWeight(appState.currentUser?.guildMembership.roleInGuild.fontWeight)
+                            .foregroundColor(user.guildMembership.roleInGuild.roleForegroundColor)
+                            .fontWeight(user.guildMembership.roleInGuild.roleFontWeight)
                             .lineLimit(1)
                         Circle()
                             .fill(AppColors.whiteText.opacity(0.7))
@@ -76,7 +76,7 @@ struct UserRowView: View {
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
-                        Text("\(appState.currentUser?.guildMembership.reputation ?? 0)")
+                        Text("\(user.guildMembership.reputation)")
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.accentColor)
