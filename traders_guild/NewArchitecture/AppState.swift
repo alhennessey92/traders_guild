@@ -66,14 +66,20 @@ class AppState: ObservableObject {
     /// Error message for alerts
     @Published var errorMessage: String?
     
-    /// Show/hide login sheet
-    @Published var showLoginSheet: Bool = false
+//    /// Show/hide login sheet
+//    @Published var showLoginSheet: Bool = false
     
     /// Show transition/loading view on app launch
     @Published var showingTransition: Bool = true
 
     /// Track if initial load is complete
     @Published var hasCompletedInitialLoad: Bool = false
+    
+    /// Show guild selection sheet after login
+    @Published var showGuildSelectionSheet: Bool = false
+
+    /// Available guilds for selection
+    @Published var availableGuildsForSelection: [GuildDTO] = []
     
     
     // ================================================================================================
@@ -106,28 +112,34 @@ class AppState: ObservableObject {
         }
         
         do {
-            // TODO: Replace with real API call
             let response = try await api.signUp(data: data)
             self.currentUser = response.user
             self.authToken = response.token
             
-            // If user selected a guild during signup, set it as current guild
+            // ✅ If user selected a guild during signup, set it as current guild
             if let selectedGuildId = data.selectedGuildId {
                 // Join the guild
                 try await joinGuild(guildId: selectedGuildId)
                 
-                // Fetch and set as current guild
-                if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
-                    self.currentGuild = joinedGuild
+                // ✅ Use the guild from availableGuilds (already fetched in SignupGuildView!)
+                // No need to fetch again
+                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
+                    self.currentGuild = selectedGuild
+                } else {
+                    // Fallback: fetch if somehow not in list
+                    if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
+                        self.currentGuild = joinedGuild
+                    }
                 }
             }
             
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             errorMessage = "Signup failed: \(error.localizedDescription)"
             throw error
         }
     }
-    
     /// Login with email and password
     func login(email: String, password: String) async throws {
         isLoading = true
@@ -142,19 +154,45 @@ class AppState: ObservableObject {
             self.currentUser = response.user
             self.authToken = response.token
             
-            // ✅ Fetch and set user's current guild after login
-            // In production, this would come from the user's last active guild
-            // For now, we'll use sample data
-            let userGuild = try await fetchUserGuilds()
-            self.currentGuild = userGuild.first
+            // ✅ Fetch user's guilds
+            let userGuilds = try await fetchUserGuilds()
+            self.availableGuildsForSelection = userGuilds
             
-            showLoginSheet = false
+            // ✅ Show guild selection sheet (currentGuild is still nil)
+            showGuildSelectionSheet = true
             
         } catch {
             errorMessage = "Login failed: \(error.localizedDescription)"
             throw error
         }
     }
+//    /// Login with email and password
+//    func login(email: String, password: String) async throws {
+//        isLoading = true
+//        errorMessage = nil
+//        
+//        defer {
+//            isLoading = false
+//        }
+//        
+//        do {
+//            let response = try await api.login(email: email, password: password)
+//            self.currentUser = response.user
+//            self.authToken = response.token
+//            
+//            // ✅ Fetch and set user's current guild after login
+//            // In production, this would come from the user's last active guild
+//            // For now, we'll use sample data
+//            let userGuild = try await fetchUserGuilds()
+//            self.currentGuild = userGuild.first
+//            
+//            showLoginSheet = false
+//            
+//        } catch {
+//            errorMessage = "Login failed: \(error.localizedDescription)"
+//            throw error
+//        }
+//    }
     
     /// Logout and clear session
     func logout() {
@@ -162,7 +200,7 @@ class AppState: ObservableObject {
         authToken = nil
         currentGuild = nil
         clearKeychain()
-        showLoginSheet = true
+        //showLoginSheet = true
     }
     
     /// Restore saved session from storage
@@ -180,8 +218,6 @@ class AppState: ObservableObject {
             
             // TODO: Validate token with backend
             
-        } else {
-            showLoginSheet = true
         }
         // Mark initial load as complete
         hasCompletedInitialLoad = true

@@ -14,7 +14,7 @@
 
 import SwiftUI
 
-// Step 3: Guild Selection
+
 struct SignupGuildView: View {
     @Binding var data: SignupData
     @Binding var path: [SignupStep]
@@ -30,7 +30,7 @@ struct SignupGuildView: View {
             StaticAuthBackgroundView()
             
             VStack(spacing: 0) {
-                // Fixed header text
+                // Header text
                 Text("Now you got the info, let's join a Guild!")
                     .font(.title.bold())
                     .foregroundColor(AppColors.whiteText)
@@ -39,7 +39,6 @@ struct SignupGuildView: View {
                     .padding(.vertical, 20)
                     .padding(.horizontal, 20)
                 
-                // Fixed divider
                 Rectangle()
                     .fill(Color.gray.opacity(0.4))
                     .frame(height: 0.5)
@@ -48,7 +47,6 @@ struct SignupGuildView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
                         if isLoadingGuilds {
-                            // Loading state
                             VStack(spacing: 16) {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: AppColors.whiteText))
@@ -62,7 +60,6 @@ struct SignupGuildView: View {
                             .padding(.top, 60)
                             
                         } else if availableGuilds.isEmpty {
-                            // Empty state
                             VStack(spacing: 16) {
                                 Image(systemName: "building.2")
                                     .font(.system(size: 48))
@@ -82,7 +79,6 @@ struct SignupGuildView: View {
                             .padding(.top, 60)
                             
                         } else {
-                            // Guild list
                             LazyVStack(spacing: 12) {
                                 ForEach(availableGuilds) { guild in
                                     GuildSelectionRow(
@@ -96,7 +92,7 @@ struct SignupGuildView: View {
                             .padding(.horizontal, 20)
                         }
                         
-                        Spacer(minLength: 100) // Space for bottom button
+                        Spacer(minLength: 100)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 20)
@@ -124,20 +120,7 @@ struct SignupGuildView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 8) {
-                // ✅ Helper text when nothing selected
-                if selectedGuild == nil {
-                    HStack {
-                        Image(systemName: "info.circle")
-                            .foregroundColor(AppColors.greyText)
-                        Text("Please select a guild to continue")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                }
-                
+            VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
                     .background(Color.gray.opacity(0.3))
@@ -145,11 +128,11 @@ struct SignupGuildView: View {
                 HStack {
                     Spacer()
                     StandardActionButton(
-                        title: selectedGuild != nil ? "Join \(selectedGuild!.name)" : "Select a Guild",
+                        title: selectedGuild != nil ? "Join \(selectedGuild!.name)" : "Select a guild to continue",
                         backgroundColor: AppColors.whiteText,
                         foregroundColor: AppColors.gradientBackgroundDark
                     ) {
-                        Task {
+                        Task {  // ✅ Wrap in Task
                             await handleSignup()
                         }
                     }
@@ -160,11 +143,13 @@ struct SignupGuildView: View {
                 }
             }
         }
-        .task {
-            await loadGuilds()
-        }
-        .refreshable {
-            await loadGuilds()
+        // ✅ Use onAppear with condition instead of .task
+        .onAppear {
+            if availableGuilds.isEmpty {
+                Task {
+                    await loadGuilds()
+                }
+            }
         }
     }
     
@@ -176,8 +161,13 @@ struct SignupGuildView: View {
         
         do {
             availableGuilds = try await appState.fetchOpenGuilds()
+            // ✅ Store in appState so signup can reuse them
+            appState.availableGuildsForSelection = availableGuilds
+        } catch is CancellationError {
+            // Silently ignore cancellation
+            return
         } catch {
-            // Error automatically shown by global alert
+            // Error already handled by appState
         }
     }
     
@@ -189,12 +179,11 @@ struct SignupGuildView: View {
     private func handleSignup() async {
         do {
             try await appState.signUp(data: data)
-            
-            // TODO: Add guild joining functionality when backend is ready
-            // If a guild was selected, join it after signup
-            // if let guildId = data.selectedGuildId {
-            //     try await appState.joinGuild(guildId: guildId)  
-            // }
+            // ✅ Signup complete - AppState has set currentGuild
+            // No need to show guild selection sheet
+        } catch is CancellationError {
+            // Task was cancelled, ignore
+            return
         } catch {
             // Error automatically shown by global alert
         }
