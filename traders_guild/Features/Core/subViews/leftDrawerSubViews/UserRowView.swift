@@ -17,7 +17,7 @@ import SwiftUI
 
 // MARK: - User Row View button for left drawer
 struct UserRowView: View {
-    let user: GuildMembership
+    @EnvironmentObject var appState: AppState
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -31,28 +31,28 @@ struct UserRowView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 40, height: 40)
                         .overlay(
-                            Text(String(user.userName?.prefix(2) ?? "unKnown"))
+                            Text(String(appState.currentUser?.name.prefix(2) ?? "Unknown"))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
                         )
                     
-                    if user.isUserOnline {
-                        Circle()
-                            .fill(AppColors.bullCandleGreen)
-                            .frame(width: 12, height: 12)
-                            .overlay(
-                                Circle()
-                                    .stroke(AppColors.drawerBackground, lineWidth: 2)
-                            )
-                    }
+                    
+                    Circle()
+                        .fill(AppColors.bullCandleGreen)
+                        .frame(width: 12, height: 12)
+                        .overlay(
+                            Circle()
+                                .stroke(AppColors.drawerBackground, lineWidth: 2)
+                        )
+                    
                 }
                 
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
                     HStack (spacing: 2){
 
-                        Text(user.userName ?? "Unknown")
+                        Text(appState.currentUser?.username ?? "Unknown")
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(AppColors.whiteText)
@@ -61,10 +61,10 @@ struct UserRowView: View {
                     
                     
                     HStack (spacing:2){
-                        Text(user.roleInGuild.rawValue)
+                        Text(appState.currentUser?.guildMembership.roleInGuild.displayName ?? "Unknown")
                             .font(.caption)
-                            .foregroundColor(user.roleInGuild.foregroundColor)
-                            .fontWeight(user.roleInGuild.fontWeight)
+                            .foregroundColor(appState.currentUser?.guildMembership.roleInGuild.foregroundColor)
+                            .fontWeight(appState.currentUser?.guildMembership.roleInGuild.fontWeight)
                             .lineLimit(1)
                         Circle()
                             .fill(AppColors.whiteText.opacity(0.7))
@@ -76,7 +76,7 @@ struct UserRowView: View {
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
-                        Text("\(user.reputation)")
+                        Text("\(appState.currentUser?.guildMembership.reputation ?? 0)")
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.accentColor)

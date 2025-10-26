@@ -21,10 +21,10 @@ class MockAPIService {
         return SampleData.guilds
     }
     
-    func fetchAnnouncements(guildId: UUID) async -> [GuildAnnouncementDTO] {
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        return SampleData.announcements(for: guildId)
-    }
+//    func fetchAnnouncements() async -> [GuildAnnouncementDTO] {
+//        try? await Task.sleep(nanoseconds: 300_000_000)
+//        return SampleData.announcements()
+//    }
     
     func fetchEvents(guildId: UUID) async -> [GuildEventDTO] {
         return [] // Add sample events as needed

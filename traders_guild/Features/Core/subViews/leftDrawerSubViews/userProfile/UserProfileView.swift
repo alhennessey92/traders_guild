@@ -17,9 +17,8 @@ enum UserSheetContent {
 
 
 struct UserProfileDetailView: View {
-    let user: GuildMembership
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var currentUser: UserStore
+    @EnvironmentObject var appState: AppState
     @State private var currentContent: UserSheetContent = .profile
     @Binding var selectedDetent: PresentationDetent  // ADD THIS
 
@@ -82,7 +81,7 @@ struct UserProfileDetailView: View {
     private var profileView: some View {
         VStack(alignment: .leading, spacing: 0) {
             
-            UserProfileHeaderView(user: user)
+            UserProfileHeaderView()
             
             ScrollView(.vertical, showsIndicators: false) {
                 HStack(alignment: .center, spacing: 2) {
@@ -90,7 +89,7 @@ struct UserProfileDetailView: View {
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("\(currentUser.user?.globalReputation ?? 0)")
+                    Text("\(appState.currentUser?.globalReputation ?? 0)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -180,9 +179,8 @@ struct UserProfileDetailView: View {
 
 // MARK: - User Profile Header Component
 struct UserProfileHeaderView: View {
-    let user: GuildMembership
     
-    @EnvironmentObject var currentUser: UserStore
+    @EnvironmentObject var appState: AppState
     
     var body: some View {
         // Top header section with gradient background
@@ -195,34 +193,34 @@ struct UserProfileHeaderView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 60, height: 60)
                         .overlay(
-                            Text(String(currentUser.user?.name.prefix(2) ?? "Unknown"))
+                            Text(String(appState.currentUser?.name.prefix(2) ?? "Unknown"))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
                         )
                     
-                    if currentUser.user?.isOnline == true {
-                        Circle()
-                            .fill(AppColors.bullCandleGreen)
-                            .frame(width: 12, height: 12)
-                            .overlay(
-                                Circle()
-                                    .stroke(AppColors.drawerBackground, lineWidth: 2)
-                            )
-                    }
+                    //always going to be online as is current user
+                    Circle()
+                        .fill(AppColors.bullCandleGreen)
+                        .frame(width: 12, height: 12)
+                        .overlay(
+                            Circle()
+                                .stroke(AppColors.drawerBackground, lineWidth: 2)
+                        )
+                    
                 }
                 
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(currentUser.user?.name ?? "Unknown")
+                    Text(appState.currentUser?.name ?? "Unknown")
                         .font(.title3)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
                     
-                    Text(user.roleInGuild.rawValue)
+                    Text(appState.currentUser?.guildMembership.roleInGuild.displayName ?? "Unknown")
                         .font(.caption)
-                        .foregroundColor(user.roleInGuild.foregroundColor)
-                        .fontWeight(user.roleInGuild.fontWeight)
+                        .foregroundColor(appState.currentUser?.guildMembership.roleInGuild.foregroundColor)
+                        .fontWeight(appState.currentUser?.guildMembership.roleInGuild.fontWeight)
                         .lineLimit(1)
                 }
                 
@@ -238,7 +236,7 @@ struct UserProfileHeaderView: View {
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.greyText)
-                Text("Member for \(user.timeInGuild)")
+                Text("\(appState.currentUser?.guildMembership.memberSince ?? "Member Since - Unknown")")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.greyText)
@@ -250,7 +248,7 @@ struct UserProfileHeaderView: View {
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.accentColor)
-                Text("\(user.reputation)")
+                Text("\(appState.currentUser?.guildMembership.reputation ?? 0)")
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.accentColor)

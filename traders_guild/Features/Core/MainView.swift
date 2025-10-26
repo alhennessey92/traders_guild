@@ -36,8 +36,7 @@ enum AnimationConstants {
 struct MainView: View {
     // MARK: - Properties
     /// Environment object for session management across the app
-    @EnvironmentObject var session: SessionStore
-    @EnvironmentObject var currentUser: UserStore
+    @EnvironmentObject var appState: AppState
     @EnvironmentObject var messagingManager: MessagingManager // Get from app-level environment
     
     
@@ -804,8 +803,7 @@ struct ToolItem: View {
 
 #Preview {
     MainView()
-        .environmentObject(UserStore())
-        .environmentObject(SessionStore())
+        .environmentObject(AppState())
         .environmentObject(MessagingManager())
 }
 

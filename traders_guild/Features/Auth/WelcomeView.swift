@@ -13,7 +13,7 @@ import AuthenticationServices
 struct WelcomeView: View {
     @Binding var path: [SignupStep]
     @Binding var data: SignupData
-    @EnvironmentObject var session: SessionStore // Observe current user
+    @EnvironmentObject var appState: AppState // Observe current user  // Change to AppState
     
 //    let onTap: () -> Void
     

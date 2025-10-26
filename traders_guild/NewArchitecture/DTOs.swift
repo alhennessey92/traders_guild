@@ -78,6 +78,7 @@ struct CurrentUserDTO: Codable, Equatable {
    //let isPremium: Bool             // Premium subscription status (unlocks features)
     let notificationCount: Int      // Unread notifications for tab badge
     let unreadMessages: Int         // Total unread DMs for tab badge
+    let guildMembership: GuildMembershipDTO // Users Guild Membership
     
     /// Formatted username with @ symbol for display
     var displayUsername: String {
@@ -108,6 +109,7 @@ struct GlobalMemberDTO: Codable, Equatable, Identifiable {
     let avatarURL: String?          // Profile picture URL (nil = use default)
     let isOnline: Bool              // Real-time online status for presence indicator
     let globalReputation: Int       // Total reputation across entire platform
+    // Need to add date of birth and topics
     
 
     

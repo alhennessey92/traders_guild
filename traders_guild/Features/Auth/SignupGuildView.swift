@@ -11,7 +11,7 @@ import SwiftUI
 struct SignupGuildView: View {
     @Binding var data: SignupData
     @Binding var path: [SignupStep]
-    @EnvironmentObject var session: SessionStore
+    @EnvironmentObject var appState: AppState // Change to appstate
     // MARK: - State
     @State private var username: String = ""
     
@@ -100,9 +100,10 @@ struct SignupGuildView: View {
                             
                         ){
                             // Save signup data → create User object
-                            let user = User(id: UUID(), name: data.name, email: data.email, globalReputation: 100, isOnline: true , role: .member)
-                            session.setUser(user) // ✅ This flips the root to MainAppView
-                            session.showingTransition = true // trigger the TransitionView
+                            //let user = User(id: UUID(), name: data.name, email: data.email, globalReputation: 100, isOnline: true , role: .member)
+                            Task{
+                                try await appState.signUp(data: data)
+                            }
                         }
                         .padding(.top)
                         .padding(.trailing)

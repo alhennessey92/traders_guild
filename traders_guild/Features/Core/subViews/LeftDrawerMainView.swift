@@ -35,13 +35,15 @@ enum DrawerNavigationState: Equatable {
 enum BottomSheetContent: Identifiable, Equatable {
     case announcement(GuildAnnouncement)
     case event(GuildEvent)
-    case profile(GuildMembership)
+    case profile
+    case guildMember(GuildMembership)
     
     var id: String {
         switch self {
         case .announcement(let announcement): return "announcement-\(announcement.id)"
         case .event(let event): return "event-\(event.id)"
-        case .profile(let user): return "profile-\(user.id)"
+        case .profile: return "profile"
+        case .guildMember(let user): return "profile-\(user.id)"
         }
     }
 }
@@ -90,9 +92,7 @@ struct LeftDrawerMainView: View {
                     navigationState: $navigationState,
                     onClose: onClose,
                     dragTranslation: $dragTranslation,
-                    presentProfile: { membership in  // Change parameter type
-                        bottomSheetContent = .profile(membership)
-                    }
+                    presentProfile: { bottomSheetContent = .profile }
                 )
                 .transition(.asymmetric(
                     insertion: .move(edge: .leading),
@@ -185,6 +185,8 @@ struct LeftDrawerMainView: View {
             return [.fraction(0.6), .large]  // ADD .large
         case .event:
             return [.fraction(0.6), .large]
+        case .guildMember:
+            return [.fraction(0.6), .large]
         }
     }
 }
@@ -196,7 +198,7 @@ struct MainDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
-    let presentProfile: (GuildMembership) -> Void
+    let presentProfile: () -> Void
     
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
@@ -211,7 +213,7 @@ struct MainDrawerView: View {
         ("chart.bar.fill", "Statistics", .statistics)
     ]
     
-    @EnvironmentObject var currentUser: UserStore 
+    @EnvironmentObject var appState: AppState
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -359,13 +361,16 @@ struct MainDrawerView: View {
                     .padding(.bottom, 2)
                 
                 
-                if let user = currentUser.user,
-                   let membership = GuildMembership.currentGuildMemberships.first(where: {
-                       $0.userId == user.id && $0.guildId == currentGuild.id
-                   }) {
-                    UserRowView(user: membership, onTap: {  // Pass membership, not user
-                        presentProfile(membership)
-                    })
+                if let user = appState.currentUser{
+                   UserRowView(onTap: {  // Pass membership, not user
+                       presentProfile()
+                   })
+//                   let membership = GuildMembership.currentGuildMemberships.first(where: {
+//                       $0.userId == user.id && $0.guildId == currentGuild.id
+//                   }) {
+//                    UserRowView(user: membership, onTap: {  // Pass membership, not user
+//                        presentProfile(membership)
+//                    })
                 }
                 
                 
@@ -703,7 +708,7 @@ struct StatRow: View {
 struct BottomSheetView: View {
     let content: BottomSheetContent
     @Binding var selectedDetent: PresentationDetent
-    @EnvironmentObject var currentUser: UserStore
+    @EnvironmentObject var appState: AppState
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -712,16 +717,13 @@ struct BottomSheetView: View {
                 AnnouncementDetailView(announcement: announcement)
             case .event(let event):
                 EventDetailView(event: event)
-            case .profile(let membership):  // Changed from 'user' to 'membership'
-                // Check if viewing own profile or another user's profile
-                if membership.userId == currentUser.user?.id {
-                    // Current user's own profile
-                    UserProfileDetailView(user: membership, selectedDetent: $selectedDetent)
-                } else {
-                    // Another user's profile
-                    GuildUserDetailView(user: membership)
-                }
+            case .profile:  // Changed from 'user' to 'membership'
+                UserProfileDetailView(selectedDetent: $selectedDetent)
+            case .guildMember(let user):
+                GuildUserDetailView(user: user)
+                
             }
+
         }
         
         

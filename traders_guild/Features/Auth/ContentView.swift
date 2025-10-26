@@ -8,17 +8,13 @@ import SwiftUI
 struct ContentView: View {
     @State private var path: [SignupStep] = []   // navigation path
     @State private var data = SignupData()
-    @EnvironmentObject var session: SessionStore// shared signup data
+    @EnvironmentObject var appState: AppState// shared signup data // change to app state
 
     var body: some View {
         
         
-        if let _ = session.currentUser {
-            if session.showingTransition {
-                TransitionView()
-            } else {
-                MainView()
-            }
+        if let _ = appState.currentUser {
+            MainView()
         }  else {
             // 👋 No user, show the signup flow
             NavigationStack(path: $path) {

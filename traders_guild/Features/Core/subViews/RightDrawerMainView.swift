@@ -28,7 +28,7 @@ struct RightDrawerMainView: View {
     let friends: [UserDM]
     
     @EnvironmentObject var messagingManager: MessagingManager
-    @EnvironmentObject var currentUser: UserStore
+    @EnvironmentObject var appState: AppState
     
     @State private var dragTranslation: CGFloat = 0
     @State private var searchText: String = ""

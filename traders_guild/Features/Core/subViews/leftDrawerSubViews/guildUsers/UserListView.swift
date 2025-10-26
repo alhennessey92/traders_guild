@@ -37,7 +37,7 @@ struct UserListView: View {
                     GuildUserListRowView(
                         user: membership,
                         onTap: {
-                            bottomSheetContent = .profile(membership)
+                            bottomSheetContent = .guildMember(membership)
                         }
                     )
                 }
