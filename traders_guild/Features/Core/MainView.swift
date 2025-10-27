@@ -38,6 +38,7 @@ struct MainView: View {
     /// Environment object for session management across the app
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var messagingManager: MessagingManager // Get from app-level environment
+    @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
     
     
     // MARK: - Sample data
@@ -104,142 +105,136 @@ struct MainView: View {
         screenSize.width * LayoutConstants.drawerWidthRatio
     }
     
-    
-    
-    // MARK: - Computed Properties for User Filtering
-
-    /// Set of all friend IDs for quick lookup using the new GuildFriends model
-    /// Assumes GuildFriends stores pairs of userId <-> friendId for the current user
-//    private var friendIDs: Set<UUID> {
-//        guard let currentUserId = currentUser.user?.id else { return [] }
-//        // Include both directions in case the relationship is stored asymmetrically
-//        let outgoing = guildFriends.filter { $0.userID == currentUserId }.map { $0.friendID }
-//        let incoming = guildFriends.filter { $0.friendID == currentUserId }.map { $0.userID }
-//        return Set(outgoing + incoming)
-//    }
-//
-//    /// All users who are friends (based on GuildFriends relationship)
-//    private var friends: [GuildMembership] {
-//        let currentUserId = currentUser.user?.id
-//        return allGuildMembers.filter { membership in
-//            if let currentUserId = currentUserId, membership.userId == currentUserId { return false }
-//            return friendIDs.contains(membership.userId)
-//        }
-//    }
-//
-//    /// Online users who are NOT friends
-//    private var onlineUsers: [GuildMembership] {
-//        let currentUserId = currentUser.user?.id
-//        return allGuildMembers.filter { membership in
-//            if let currentUserId = currentUserId, membership.userId == currentUserId { return false }
-//            return membership.isUserOnline && !friendIDs.contains(membership.userId)
-//        }
-//    }
-//
-//    /// Offline users who are NOT friends
-//    private var offlineUsers: [GuildMembership] {
-//        let currentUserId = currentUser.user?.id
-//        return allGuildMembers.filter { membership in
-//            if let currentUserId = currentUserId, membership.userId == currentUserId { return false }
-//            return !membership.isUserOnline && !friendIDs.contains(membership.userId)
-//        }
-//    }
-    
 
     // MARK: - Body
     var body: some View {
+        if let user = appState.currentUser,
+           let guild = appState.currentGuild {
         // ZStack layers all UI elements with proper z-ordering
-        ZStack {
-            // MARK: - Main Content Layer
-            /// Chart content with fade-in animation
-            /// Disabled when drawers are open to prevent interaction conflicts
-            mainContentStack
-                .disabled(showLeftDrawer || showRightDrawer)
-            
-            // MARK: - Overlay Layer
-            /// Semi-transparent overlay that appears behind open drawers
-            if showOverlay {
-                overlayView
-                    .opacity(showLeftDrawer || showRightDrawer ? 1 : 0)
-                    .animation(.easeOut(duration: 0.4), value: showLeftDrawer)
-                    .animation(.easeOut(duration: 0.4), value: showRightDrawer)
-                    .gesture(
-                        // Allow dragging from anywhere on the overlay to dismiss drawers
-                        DragGesture()
-                            .onChanged { value in
-                                // Dismiss any right-drawer sheets when interacting with the overlay
-                                dismissRightSheetsSignal = true
-                                // Update drag translation based on which drawer is open
-                                if showLeftDrawer && value.translation.width < 0 {
-                                    leftDragTranslation = value.translation.width
-                                } else if showRightDrawer && value.translation.width > 0 {
-                                    rightDragTranslation = value.translation.width
+            ZStack {
+                // MARK: - Main Content Layer
+                /// Chart content with fade-in animation
+                /// Disabled when drawers are open to prevent interaction conflicts
+                mainContentStack
+                    .disabled(showLeftDrawer || showRightDrawer)
+                
+                // MARK: - Overlay Layer
+                /// Semi-transparent overlay that appears behind open drawers
+                if showOverlay {
+                    overlayView
+                        .opacity(showLeftDrawer || showRightDrawer ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4), value: showLeftDrawer)
+                        .animation(.easeOut(duration: 0.4), value: showRightDrawer)
+                        .gesture(
+                            // Allow dragging from anywhere on the overlay to dismiss drawers
+                            DragGesture()
+                                .onChanged { value in
+                                    // Dismiss any right-drawer sheets when interacting with the overlay
+                                    dismissRightSheetsSignal = true
+                                    // Update drag translation based on which drawer is open
+                                    if showLeftDrawer && value.translation.width < 0 {
+                                        leftDragTranslation = value.translation.width
+                                    } else if showRightDrawer && value.translation.width > 0 {
+                                        rightDragTranslation = value.translation.width
+                                    }
                                 }
-                            }
-                            .onEnded { value in
-                                // Handle drag end with current position
-                                handleDrawerDragEnd(currentPosition: showLeftDrawer ? leftDragTranslation : rightDragTranslation)
-                            }
-                    )
+                                .onEnded { value in
+                                    // Handle drag end with current position
+                                    handleDrawerDragEnd(currentPosition: showLeftDrawer ? leftDragTranslation : rightDragTranslation)
+                                }
+                        )
+                }
+                
+                // MARK: - Drawer Layers
+                /// Left drawer view with fade-in animation
+                leftDrawerView(user: user, guild: guild)
+                    .opacity(fadeIn ? 1 : 0)
+                    .animation(.easeIn(duration: 1.5), value: fadeIn)
+                
+                /// Right drawer view with fade-in animation
+                rightDrawerView
+                    .opacity(fadeIn ? 1 : 0)
+                    .animation(.easeIn(duration: 1.5), value: fadeIn)
+                
+                // MARK: - Sheet Overlay Layer
+                /// Overlay that appears when chat sheets are presented over everything
+                if showSheetOverlay {
+                    sheetOverlayView
+                        .opacity(showSheetOverlay ? 1 : 0)
+                        .animation(.linear(duration: 0.05), value: showSheetOverlay)
+                }
             }
+            .ignoresSafeArea()
+            .globalMessaging() // Apply global messaging to MainView only
             
-            // MARK: - Drawer Layers
-            /// Left drawer view with fade-in animation
-            leftDrawerView
-                .opacity(fadeIn ? 1 : 0)
-                .animation(.easeIn(duration: 1.5), value: fadeIn)
-            
-            /// Right drawer view with fade-in animation
-            rightDrawerView
-                .opacity(fadeIn ? 1 : 0)
-                .animation(.easeIn(duration: 1.5), value: fadeIn)
-            
-            // MARK: - Sheet Overlay Layer
-            /// Overlay that appears when chat sheets are presented over everything
-            if showSheetOverlay {
-                sheetOverlayView
-                    .opacity(showSheetOverlay ? 1 : 0)
-                    .animation(.linear(duration: 0.05), value: showSheetOverlay)
+            // MARK: - Bottom Sheet
+            /// Native bottom sheet using Apple's .sheet modifier
+            /// Conditionally hidden when drawers are open to prevent layering conflicts
+            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer)) {
+                ChartBottomSheet(selectedDetent: $selectedDetent)
+                    .presentationDetents([.fraction(0.11), .fraction(0.5), .fraction(0.9)],
+                                          selection: $selectedDetent)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackgroundInteraction(.enabled)
+                    .interactiveDismissDisabled(true)
+                    .presentationContentInteraction(.resizes)
+                    .presentationBackground {
+                        ZStack {
+                            Color.clear
+                                .background(.ultraThinMaterial)
+                            AppColors.drawerBackground.opacity(0.4)
+                        }
+                    }
             }
-        }
-        .ignoresSafeArea()
-        .globalMessaging() // Apply global messaging to MainView only
-        
-        // MARK: - Bottom Sheet
-        /// Native bottom sheet using Apple's .sheet modifier
-        /// Conditionally hidden when drawers are open to prevent layering conflicts
-        .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer)) {
-            ChartBottomSheet(selectedDetent: $selectedDetent)
-                .presentationDetents([.fraction(0.11), .fraction(0.5), .fraction(0.9)],
-                                      selection: $selectedDetent)
-                .presentationDragIndicator(.visible)
-                .presentationBackgroundInteraction(.enabled)
-                .interactiveDismissDisabled(true)
-                .presentationContentInteraction(.resizes)
-                .presentationBackground {
-                    ZStack {
-                        Color.clear
-                            .background(.ultraThinMaterial)
-                        AppColors.drawerBackground.opacity(0.4)
+            .onAppear {
+                // Start fade-in animation
+                withAnimation(.easeIn(duration: 1.5)) {
+                    fadeIn = true
+                }
+                
+                // Show bottom sheet with slight delay for smooth presentation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                        showBottomSheet = true
                     }
                 }
-        }
-        .onAppear {
-            // Start fade-in animation
-            withAnimation(.easeIn(duration: 1.5)) {
-                fadeIn = true
             }
+            // Haptic feedback for drawer interactions
+            .sensoryFeedback(.impact(weight: .light), trigger: showLeftDrawer)
+            .sensoryFeedback(.impact(weight: .light), trigger: showRightDrawer)
             
-            // Show bottom sheet with slight delay for smooth presentation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
-                    showBottomSheet = true
+            .environmentObject(leftDrawerViewModel)  // ✅ Pass to child views
+            .task {
+                // ✅ Preload drawer data when MainView appears
+                await leftDrawerViewModel.preloadData(for: guild.id, appState: appState)
+            }
+            .onChange(of: appState.currentGuild?.id) { _, newGuildId in
+                // ✅ Reload data when guild changes
+                if let guildId = newGuildId {
+                    Task {
+                        leftDrawerViewModel.clearCache()  // Clear old guild data
+                        await leftDrawerViewModel.preloadData(for: guildId, appState: appState)
+                    }
+                }
+            }
+        } else {
+            VStack(spacing: 20) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                Text("Reconnecting...")
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear {
+                Task {
+                    if appState.currentUser != nil && appState.currentGuild == nil {
+                        await appState.openGuildSelector()
+                    } else if appState.currentUser == nil {
+                        appState.logout()
+                    }
                 }
             }
         }
-        // Haptic feedback for drawer interactions
-        .sensoryFeedback(.impact(weight: .light), trigger: showLeftDrawer)
-        .sensoryFeedback(.impact(weight: .light), trigger: showRightDrawer)
     }
     
     // MARK: - View Components
@@ -355,9 +350,9 @@ struct MainView: View {
     }
     
     /// Left drawer view with swipe-to-dismiss functionality
-    private var leftDrawerView: some View {
+    private func leftDrawerView(user: CurrentUserDTO, guild: GuildDTO) -> some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView(currentGuild: currentGuild, announcements: announcements, events: events, memberships: allGuildMembers, guildWatchlist: guildWatchlist, notificationsList: notificationsList, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
+            LeftDrawerMainView(user: user, guild: guild, currentGuild: currentGuild, announcements: announcements, events: events, memberships: allGuildMembers, guildWatchlist: guildWatchlist, notificationsList: notificationsList, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false

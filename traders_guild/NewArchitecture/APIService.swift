@@ -74,6 +74,27 @@ class MockAPIService {
         try await simulateNetworkDelay()
         // Mock: successful leave
     }
+    
+    
+    func fetchGuildAnnouncements(guildId: UUID) async throws -> [GuildAnnouncementDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.announcements
+    }
+
+    func fetchGuildEvents(guildId: UUID) async throws -> [GuildEventDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.events
+    }
+
+    func fetchGuildMembers(guildId: UUID) async throws -> [GuildMembershipDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.guildMemberships
+    }
+
+    func fetchGuildWatchlists(guildId: UUID) async throws -> [GuildWatchlistDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.watchlists
+    }
 }
 
 // ================================================================================================

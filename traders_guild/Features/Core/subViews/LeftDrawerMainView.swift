@@ -60,6 +60,9 @@ struct LeftDrawerMainView: View {
     // dragTranslation: Current drag offset for swipe-to-dismiss
     // navigationState: Which section is currently shown inside the drawer
     // bottomSheetContent: Which detail sheet is currently presented (if any)
+    let user: CurrentUserDTO
+    let guild: GuildDTO
+    
     let currentGuild: Guild
     let announcements: [GuildAnnouncement]
     let events: [GuildEvent]
@@ -77,6 +80,9 @@ struct LeftDrawerMainView: View {
     @State private var bottomSheetContent: BottomSheetContent? = nil
     @State private var selectedDetent: PresentationDetent = .fraction(0.6)
     
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    
     /// Dismisses any currently presented sheet from the left drawer.
     /// Used when the global overlay is tapped/dragged or the drawer closes.
     private func dismissAllSheets() {
@@ -88,6 +94,8 @@ struct LeftDrawerMainView: View {
             // Main content that changes based on navigation state
             if navigationState == .main {
                 MainDrawerView(
+                    user: user,
+                    guild: guild,
                     currentGuild: currentGuild,
                     navigationState: $navigationState,
                     onClose: onClose,
@@ -194,11 +202,16 @@ struct LeftDrawerMainView: View {
 /// Drawer home screen showing guild header and navigation menu for sections.
 /// Selecting a menu item updates `navigationState` to replace the content area.
 struct MainDrawerView: View {
+    let user: CurrentUserDTO
+    let guild: GuildDTO
     let currentGuild: Guild
     @Binding var navigationState: DrawerNavigationState
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     let presentProfile: () -> Void
+    
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
@@ -213,196 +226,189 @@ struct MainDrawerView: View {
         ("chart.bar.fill", "Statistics", .statistics)
     ]
     
-    @EnvironmentObject var appState: AppState
     
     var body: some View {
-        if let user = appState.currentUser,
-           let guild = appState.currentGuild {
-            VStack(alignment: .leading, spacing: 0) {
-                // Header section
-                VStack {
-                    HStack {
-                        Text("Guild")
-                            .font(.title)
+        
+        VStack(alignment: .leading, spacing: 0) {
+            // Header section
+            VStack {
+                HStack {
+                    Text("Guild")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Button(action: {
+                        withAnimation(AnimationConstants.standard) { onClose() }
+                    }) {
+                        Image(systemName: "chevron.left.chevron.left.dotted")
+                            .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
-                        Spacer()
-                        Button(action: {
-                            withAnimation(AnimationConstants.standard) { onClose() }
-                        }) {
-                            Image(systemName: "chevron.left.chevron.left.dotted")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.primary)
-                        }
                     }
+                }
+                
+                HStack {
+                    Image(systemName: "shield.pattern.checkered")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
                     
-                    HStack {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        
-                        Text(guild.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        + Text(" Guild")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.accentColor)
-                        
-                        
-                        Spacer()
-                    }
+                    Text(guild.name)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                    + Text(" Guild")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.accentColor)
                     
-                    HStack(spacing: 2) {
-                        Text("\(guild.memberCount)")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.whiteText)
-                        + Text(" Members")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 5, height: 5)
-                            .padding(.top, 1)
-                            .padding(.leading, 3)
-                            .padding(.trailing, 3)
-                        Text("52")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.whiteText)
-                        + Text(" Online")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-                        Circle()
-                            .fill(AppColors.bullCandleGreen)
-                            .frame(width: 7, height: 7)
-                            .padding(.top, 0)
-                            .padding(.leading, 3)
-                            .padding(.trailing, 3)
-                        Spacer()
-                    }
-                    .padding(.top, 6)
                     
-                    HStack(spacing: 2) {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.footnote)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text("\(currentGuild.reputation)")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        + Text(" Guild Reputation")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 5, height: 5)
-                            .padding(.top, 1)
-                            .padding(.leading, 3)
-                            .padding(.trailing, 3)
-                        Text("78%")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.whiteText)
-                        + Text(" Guild Accuracy")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-                        Spacer()
-                    }
-                    .padding(.top, 6)
-                    
-                    Text("Tagline describing the main content and premis of the guild, or a short description of the guild")
+                    Spacer()
+                }
+                
+                HStack(spacing: 2) {
+                    Text("\(guild.memberCount)")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.whiteText)
+                    + Text(" Members")
                         .font(.caption)
                         .foregroundColor(AppColors.whiteText.opacity(0.7))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 4)
-                        .multilineTextAlignment(.leading)
-                    
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.4))
-                        .frame(height: 0.5)
-                        .padding(.top, 6)
+                    Circle()
+                        .fill(AppColors.whiteText.opacity(0.7))
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 1)
+                        .padding(.leading, 3)
+                        .padding(.trailing, 3)
+                    Text("52")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.whiteText)
+                    + Text(" Online")
+                        .font(.caption)
+                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                    Circle()
+                        .fill(AppColors.bullCandleGreen)
+                        .frame(width: 7, height: 7)
+                        .padding(.top, 0)
+                        .padding(.leading, 3)
+                        .padding(.trailing, 3)
+                    Spacer()
                 }
-                .padding(.leading, 25)
-                .padding(.trailing, 25)
-                .padding(.bottom, 4)
-                .padding(.top, 60)
+                .padding(.top, 6)
                 
-                // Menu Items
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(menuItems, id: \.title) { item in
-                            DrawerMenuButton(
-                                icon: item.icon,
-                                title: item.title,
-                                action: {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        navigationState = item.state
-                                    }
+                HStack(spacing: 2) {
+                    Image(systemName: "shield.pattern.checkered")
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                    Text("\(currentGuild.reputation)")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                    + Text(" Guild Reputation")
+                        .font(.caption)
+                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                    Circle()
+                        .fill(AppColors.whiteText.opacity(0.7))
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 1)
+                        .padding(.leading, 3)
+                        .padding(.trailing, 3)
+                    Text("78%")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.whiteText)
+                    + Text(" Guild Accuracy")
+                        .font(.caption)
+                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                    Spacer()
+                }
+                .padding(.top, 6)
+                
+                Text("Tagline describing the main content and premis of the guild, or a short description of the guild")
+                    .font(.caption)
+                    .foregroundColor(AppColors.whiteText.opacity(0.7))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
+                    .multilineTextAlignment(.leading)
+                
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(height: 0.5)
+                    .padding(.top, 6)
+            }
+            .padding(.leading, 25)
+            .padding(.trailing, 25)
+            .padding(.bottom, 4)
+            .padding(.top, 60)
+            
+            // Menu Items
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(menuItems, id: \.title) { item in
+                        DrawerMenuButton(
+                            icon: item.icon,
+                            title: item.title,
+                            action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    navigationState = item.state
                                 }
-                            )
-                        }
+                            }
+                        )
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 20)
                 }
-                .scrollDismissesKeyboard(.interactively)
-                
-                // Footer
-                VStack(spacing: 16) {
-                    
-                    
-                    
-                    
-                    
-                    Divider()
-                        .padding(.top, 2)
-                        .padding(.bottom, 2)
-                    
-                    
-                    UserRowView(user: user, onTap: {  // ✅ No unwrapping!
-                        presentProfile()
-                    })
-                    
-                    
-                }
-                .padding(.top, 20)
-                .padding(.bottom, 40)
-                .padding(.leading, 25)
-                .padding(.trailing, 25)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 20)
             }
-        }
-        else{
-            // ✅ Safety fallback (should rarely/never show due to app-level guards)
-            VStack(spacing: 20) {
-                ProgressView()
-                    .scaleEffect(1.5)
-                
-                Text("Reconnecting...")
-                    .foregroundColor(.secondary)
+            .scrollDismissesKeyboard(.interactively)
+            .refreshable {
+                // ✅ Pull to refresh
+                await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onAppear {
-                // ✅ Auto-recovery: trigger guild selector
-                Task {
-                    if appState.currentUser != nil && appState.currentGuild == nil {
-                        // Have user but no guild - show selector
-                        await appState.openGuildSelector()
-                    } else if appState.currentUser == nil {
-                        // No user - logout completely
-                        appState.logout()
+            .overlay {
+                // ✅ Show loading only on first load
+                if leftDrawerViewModel.isLoading && leftDrawerViewModel.announcements.isEmpty {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(AppColors.whiteText)
+                        Text("Loading...")
+                            .foregroundColor(AppColors.whiteText)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppColors.gradientBackgroundDark.opacity(0.9))
                 }
             }
             
+            // Footer
+            VStack(spacing: 16) {
+                
+                
+                
+                
+                
+                Divider()
+                    .padding(.top, 2)
+                    .padding(.bottom, 2)
+                
+                
+                UserRowView(user: user, onTap: {  // ✅ No unwrapping!
+                    presentProfile()
+                })
+                
+                
+            }
+            .padding(.top, 20)
+            .padding(.bottom, 40)
+            .padding(.leading, 25)
+            .padding(.trailing, 25)
         }
     }
+        
+    
 }
 
 /// Full-screen replacement content inside the left drawer for a specific section.

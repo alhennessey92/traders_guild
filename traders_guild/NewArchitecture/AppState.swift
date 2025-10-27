@@ -368,6 +368,67 @@ class AppState: ObservableObject {
         }
     }
     
+    
+    /// Fetch announcements for a guild
+    func fetchGuildAnnouncements(guildId: UUID) async throws -> [GuildAnnouncementDTO] {
+        errorMessage = nil
+        
+        do {
+            let announcements = try await api.fetchGuildAnnouncements(guildId: guildId)
+            return announcements
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch announcements: \(error.localizedDescription)"
+            throw error
+        }
+    }
+
+    /// Fetch upcoming events for a guild
+    func fetchGuildEvents(guildId: UUID) async throws -> [GuildEventDTO] {
+        errorMessage = nil
+        
+        do {
+            let events = try await api.fetchGuildEvents(guildId: guildId)
+            return events
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch events: \(error.localizedDescription)"
+            throw error
+        }
+    }
+
+    /// Fetch members for a guild
+    func fetchGuildMembers(guildId: UUID) async throws -> [GuildMembershipDTO] {
+        errorMessage = nil
+        
+        do {
+            let members = try await api.fetchGuildMembers(guildId: guildId)
+            return members
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch members: \(error.localizedDescription)"
+            throw error
+        }
+    }
+
+    /// Fetch watchlists for a guild
+    func fetchGuildWatchlists(guildId: UUID) async throws -> [GuildWatchlistDTO] {
+        errorMessage = nil
+        
+        do {
+            let watchlists = try await api.fetchGuildWatchlists(guildId: guildId)
+            return watchlists
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch watchlists: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
     // ================================================================================================
     // MARK: - Persistence
     // ================================================================================================
