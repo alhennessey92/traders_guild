@@ -15,14 +15,25 @@
 import SwiftUI
 
 
-
-// MARK: - Announcements List View
-struct NotificationsView: View {
-    let notificationsList: [Notification]
+struct NotificationsListView: View {
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {
         VStack(spacing: 10) {
-            if notificationsList.isEmpty {
+            // ✅ Loading state
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.userNotifications.isEmpty {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading Notifications...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+            }
+            // ✅ Empty state
+            else if leftDrawerViewModel.userNotifications.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "megaphone")
                         .font(.largeTitle)
@@ -38,11 +49,11 @@ struct NotificationsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
             } else {
-                ForEach(notificationsList) { notification in
+                ForEach(leftDrawerViewModel.userNotifications) { notification in
                     NotificationRowView(
                         notification: notification,
                         onTap: {
-                            //bottomSheetContent = .guildUserProfile(user)
+                            //bottomSheetContent = .announcement(announcement)
                         }
                     )
                 }
@@ -56,7 +67,7 @@ struct NotificationsView: View {
 
 // MARK: - Announcement Row View
 struct NotificationRowView: View {
-    let notification: Notification
+    let notification: GuildNotificationDTO
     let onTap: () -> Void
     
     @State private var isPressed = false

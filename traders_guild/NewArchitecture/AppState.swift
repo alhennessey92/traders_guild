@@ -415,16 +415,40 @@ class AppState: ObservableObject {
     }
 
     /// Fetch watchlists for a guild
-    func fetchGuildWatchlists(guildId: UUID) async throws -> [GuildWatchlistDTO] {
+    func fetchGuildWatchlist(guildId: UUID) async throws -> GuildWatchlistDTO {
         errorMessage = nil
         
         do {
-            let watchlists = try await api.fetchGuildWatchlists(guildId: guildId)
-            return watchlists
+            let watchlist = try await api.fetchGuildWatchlist(guildId: guildId)
+            return watchlist
         } catch is CancellationError {
             throw CancellationError()
         } catch {
             errorMessage = "Failed to fetch watchlists: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    /// Fetch user notifications for a guild
+    func fetchGuildUserNotifications(guildId: UUID) async throws -> [GuildNotificationDTO] {
+        errorMessage = nil
+        
+        // ✅ Explicit guard with clear error message
+        guard let currentUser = currentUser else {
+            errorMessage = "User not authenticated"
+            throw AppError.unauthorized
+        }
+        
+        do {
+            let notifications = try await api.fetchUserNotifications(
+                guildId: guildId,
+                userId: currentUser.id
+            )
+            return notifications
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch notifications: \(error.localizedDescription)"
             throw error
         }
     }
@@ -450,6 +474,76 @@ class AppState: ObservableObject {
         do {
             let dmmessages = try await api.fetchDMMessagesByDmId(dmId: dmId)
             return dmmessages
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    /// Fetch all Guild Chatrooms
+    func fetchGuildChatrooms(guildId: UUID) async throws -> [GuildChatroomDTO]{
+        errorMessage = nil
+        do {
+            let guildChatroom = try await api.fetchGuildChatrooms(guildId: guildId)
+            return guildChatroom
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    ///  Fetch chatroom Messages by chatroomId
+    func fetchChatroomMessages(chatroomId: UUID) async throws -> [ChatroomMessageDTO]{
+        errorMessage = nil
+        do {
+            let chatroommessages = try await api.fetchChatroomMessagesByChatroomId(chatroomId: chatroomId)
+            return chatroommessages
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch Chatroom: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    /// Fetch all Guild Friends DM
+    func fetchGuildFriendDM(guildId: UUID) async throws -> [DMDTO]{
+        errorMessage = nil
+        do {
+            let friendDM = try await api.fetchGuildFriendDM(guildId: guildId)
+            return friendDM
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    /// Fetch all Guild Online users not friends
+    func fetchGuildOnlineNonFriendDM(guildId: UUID) async throws -> [DMDTO]{
+        errorMessage = nil
+        do {
+            let onlineDM = try await api.fetchGuildOnlineNonFriendDM(guildId: guildId)
+            return onlineDM
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    /// Fetch all Guild Offline users not friends
+    func fetchGuildOfflineNonFriendDM(guildId: UUID) async throws -> [DMDTO]{
+        errorMessage = nil
+        do {
+            let offlineDM = try await api.fetchGuildOfflineNonFriendDM(guildId: guildId)
+            return offlineDM
         } catch is CancellationError {
             throw CancellationError()
         } catch {

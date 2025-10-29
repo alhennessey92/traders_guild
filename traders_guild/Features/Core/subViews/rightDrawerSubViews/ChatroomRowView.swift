@@ -11,7 +11,7 @@ import SwiftUI
 
 // MARK: - Chatroom Row View
 struct ChatroomRowView: View {
-    let chatroom: Chatroom
+    let chatroom: GuildChatroomDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -38,7 +38,7 @@ struct ChatroomRowView: View {
                         .foregroundColor(AppColors.whiteText)
                     
                     if let lastMessage = chatroom.lastMessage {
-                        Text(lastMessage)
+                        Text(lastMessage.content)
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText.opacity(0.6))
                             .lineLimit(1)

@@ -103,7 +103,7 @@ class LeftDrawerViewModel: ObservableObject {
         }
         
         // Refresh if cache is empty
-        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil {
+        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil && userNotifications.isEmpty {
             return true
         }
         

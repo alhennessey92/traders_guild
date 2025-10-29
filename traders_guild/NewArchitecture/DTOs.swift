@@ -255,6 +255,28 @@ struct GuildMembershipDTO: Identifiable, Codable, Equatable {
     }
 }
 
+// MARK: - Notification Type
+enum NotificationType: String, Codable, CaseIterable {
+    case personal = "Personal"
+    case symbol = "Symbol"
+    
+}
+// MARK: - Guild Notification DTO
+/// Main User account for the guild
+/// Represents a user's membership in a specific guild
+/// Links a user to a guild with role, stats, and history
+/// Used in: member lists, member profiles, membership management
+struct GuildNotificationDTO: Identifiable, Codable, Equatable {
+    let id: UUID                    // Membership record ID (not user ID!)
+    let member: GuildMembershipDTO      // EMBEDDED member data (no lookup!)
+    let guild: GuildDTO      // EMBEDDED guild summary (just essentials)
+    let title: String
+    let createdDate: Date
+    let notificationType: NotificationType
+}
+
+
+
 // MARK: - Guild Announcement DTO
 /// Important guild updates that persist (unlike chat messages)
 /// Announcements are formal, authored communications

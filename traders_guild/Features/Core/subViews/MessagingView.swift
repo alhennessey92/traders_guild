@@ -9,7 +9,7 @@ import SwiftUI
 // MARK: - Message Content Types
 enum MessageContentType: Equatable {
     case userDM(DMDTO)
-    case chatroom(Chatroom)
+    case chatroom(GuildChatroomDTO)
 }
 
 // MARK: - Global Messaging Manager
@@ -24,6 +24,9 @@ class MessagingManager: ObservableObject {
     
     // Cache to avoid refetching the same DM
     private var dmCache: [UUID: DMDTO] = [:]
+    
+    // Cache to avoid refetching the same Chatroom
+    private var chatroomCache: [UUID: GuildChatroomDTO] = [:]
     
     private weak var appState: AppState?  // ✅ Store reference
         
@@ -76,7 +79,7 @@ class MessagingManager: ObservableObject {
     }
     
     /// Open a chatroom from anywhere in the app
-    func openChatroom(_ chatroom: Chatroom) {
+    func openChatroom(_ chatroom: GuildChatroomDTO) {
         activeMessage = .chatroom(chatroom)
     }
     
@@ -87,6 +90,7 @@ class MessagingManager: ObservableObject {
     
     func clearCache() {
         dmCache.removeAll()
+        chatroomCache.removeAll()
     }
 }
 
@@ -312,7 +316,7 @@ struct UserDMHeaderView: View {
 
 // MARK: - Chatroom Header Component
 struct ChatroomHeaderView: View {
-    let chatroom: Chatroom
+    let chatroom: GuildChatroomDTO
     
     var body: some View {
         HStack(spacing: 8) {
@@ -359,6 +363,7 @@ struct MessagingScrollView: View {
     
     @EnvironmentObject var appState: AppState  // ✅ Add this
     @State private var dmMessages: [DMMessageDTO] = []  // ✅ Store fetched messages
+    @State private var chatroomMessages: [ChatroomMessageDTO] = []  // ✅ Store fetched messages
     @State private var isLoadingMessages: Bool = false
     @State private var messageError: String?
     
@@ -367,10 +372,60 @@ struct MessagingScrollView: View {
             LazyVStack(spacing: 12) {
                 switch contentType {
                 case .chatroom(let chatroom):
-                    // Filter messages for this specific chatroom
-                    ForEach(chatroomMessages(for: chatroom)) { message in
-                        ChatroomMessageView(message: message)
+                    if isLoadingMessages {
+                        // ✅ Loading state
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                            Text("Loading messages...")
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                        
+                    } else if let error = messageError {
+                        // ✅ Error state
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.largeTitle)
+                                .foregroundColor(.red)
+                            Text("Failed to load messages")
+                                .foregroundColor(.secondary)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Button("Retry") {
+                                Task {
+                                    await loadChatroomMessages(for: chatroom)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                        
+                    } else if chatroomMessages.isEmpty {
+                        // ✅ Empty state
+                        VStack(spacing: 12) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.largeTitle)
+                                .foregroundColor(.secondary)
+                            Text("No messages yet")
+                                .foregroundColor(.secondary)
+                            Text("Start a conversation in \(chatroom.name)!")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                        
+                    } else {
+                        // ✅ Messages
+                        ForEach(chatroomMessages) { message in
+                            ChatroomMessageView(message: message)
+                        }
                     }
+                    
                     
                 case .userDM(let userDM):
                     if isLoadingMessages {
@@ -435,8 +490,8 @@ struct MessagingScrollView: View {
             switch contentType {
             case .userDM(let userDM):
                 await loadDMMessages(for: userDM, isRefresh: true)  // ✅ Add flag
-            case .chatroom:
-                break
+            case .chatroom(let chatroom):
+                await loadChatroomMessages(for: chatroom, isRefresh: true)  // ✅ Add flag
             }
         }
         .task(id: contentType) {
@@ -444,8 +499,8 @@ struct MessagingScrollView: View {
             switch contentType {
             case .userDM(let userDM):
                 await loadDMMessages(for: userDM, isRefresh: false)  // ✅ Add flag
-            case .chatroom:
-                break
+            case .chatroom(let chatroom):
+                await loadChatroomMessages(for: chatroom, isRefresh: false)  // ✅ Add flag
             }
         }
         .scrollDismissesKeyboard(.interactively)
@@ -454,9 +509,32 @@ struct MessagingScrollView: View {
         }
     }
     
-    // Helper to get messages for specific chatroom
-    private func chatroomMessages(for chatroom: Chatroom) -> [ChatroomMessage] {
-        ChatroomMessage.sampleChatroomMessages.filter { $0.roomId == chatroom.id }
+    // ✅ Updated function with better error handling
+    private func loadChatroomMessages(for chatroom: GuildChatroomDTO, isRefresh: Bool = false) async {
+        // Don't show loading spinner on refresh (pull-to-refresh has its own indicator)
+        if !isRefresh {
+            isLoadingMessages = true
+        }
+        messageError = nil
+        
+        do {
+            // Fetch messages from API
+            let fetchedMessages = try await appState.fetchChatroomMessages(chatroomId: chatroom.id)
+            
+            // Update state on main thread
+            chatroomMessages = fetchedMessages
+            
+        } catch is CancellationError {
+            // ✅ Ignore cancellation - this is normal behavior
+            print("📌 Message loading was cancelled (this is normal)")
+            return  // Don't set error state
+            
+        } catch {
+            print("⚠️ Failed to load Chatroom messages: \(error)")
+            messageError = error.localizedDescription
+        }
+        
+        isLoadingMessages = false
     }
     
     // ✅ Updated function with better error handling
@@ -495,7 +573,7 @@ struct MessagingScrollView: View {
 
 // MARK: - Chatroom Footer Component
 struct ChatroomFooterView: View {
-    let chatroom: Chatroom
+    let chatroom: GuildChatroomDTO
     @Binding var messageText: String
     
     var body: some View {
@@ -649,16 +727,14 @@ struct UserDMFooterView: View {
 
 // MARK: - Chatroom Message View
 struct ChatroomMessageView: View {
-    let message: ChatroomMessage
-    @EnvironmentObject var currentUser: UserStore // To check if message is from current user
+    let message: ChatroomMessageDTO
+    //@EnvironmentObject var currentUser: UserStore // To check if message is from current user
     
-    var isFromCurrentUser: Bool {
-        message.senderMembershipId == MembershipIDs.currentUserKaos
-    }
+
     
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            if isFromCurrentUser {
+            if message.isCurrentUserMessage {
                 Spacer()
             } else {
                 // Avatar for other users
@@ -666,67 +742,67 @@ struct ChatroomMessageView: View {
                     .fill(AppColors.accentColor.opacity(0.3))
                     .frame(width: 32, height: 32)
                     .overlay(
-                        Text(String(message.authorName?.prefix(2) ?? "?"))
+                        Text(String(message.author.globalMember.username.prefix(2)))
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
                     )
             }
             
-            VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                if !isFromCurrentUser {
+            VStack(alignment: message.alignment, spacing: 4) {
+                if !message.isCurrentUserMessage {
                     // User info header
                     HStack(spacing: 2) {
-                        Text(message.authorName ?? "Unknown")
+                        Text(message.author.globalMember.username)
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.whiteText.opacity(0.9))
                         
-                        if let role = message.authorRole {
-                            Circle()
-                                .fill(AppColors.whiteText.opacity(0.7))
-                                .frame(width: 3, height: 3)
-                                .padding(.horizontal, 3)
-                            
-                            Text(role.rawValue)
-                                .font(.caption)
-                                .foregroundColor(role.foregroundColor)
-                                .fontWeight(role.fontWeight)
-                            
-                            Circle()
-                                .fill(AppColors.whiteText.opacity(0.7))
-                                .frame(width: 3, height: 3)
-                                .padding(.horizontal, 3)
-                            
-                            Image(systemName: "shield.pattern.checkered")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                            
-                            Text("\(message.authorGuildReputation ?? 0)")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.accentColor)
-                        }
+                        let role = message.author.roleInGuild
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.7))
+                            .frame(width: 3, height: 3)
+                            .padding(.horizontal, 3)
+                        
+                        Text(role.rawValue)
+                            .font(.caption)
+                            .foregroundColor(role.roleForegroundColor)
+                            .fontWeight(role.roleFontWeight)
+                        
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.7))
+                            .frame(width: 3, height: 3)
+                            .padding(.horizontal, 3)
+                        
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        
+                        Text("\(message.author.reputation)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                        
                     }
                 }
                 
                 // Message bubble
                 Text(message.content)
                     .font(.subheadline)
-                    .foregroundColor(isFromCurrentUser ? .white : .primary)
+                    .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
-                        isFromCurrentUser ?
+                        message.isCurrentUserMessage ?
                         AppColors.accentDarkColor :
                         Color.gray.opacity(0.2)
                     )
-                    .clipShape(chatRoomMessageBubbleShape(isFromCurrentUser: isFromCurrentUser))
+                    .clipShape(chatRoomMessageBubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
                 
                 // Timestamp and edited indicator
                 HStack(spacing: 4) {
-                    Text(message.timeAgo)
+                    Text(message.timestampFormatted)
                         .font(.caption2)
                         .foregroundColor(.secondary)
                     
@@ -754,7 +830,7 @@ struct ChatroomMessageView: View {
 //                }
             }
             
-            if !isFromCurrentUser {
+            if !message.isCurrentUserMessage {
                 Spacer()
             }
         }

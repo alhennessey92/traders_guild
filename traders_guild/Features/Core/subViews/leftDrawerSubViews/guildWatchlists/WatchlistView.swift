@@ -11,11 +11,23 @@ import SwiftUI
 
 // MARK: - Announcements List View
 struct WatchlistView: View {
-    let guildWatchlist: GuildWatchlist
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {
         VStack(spacing: 10) {
-            if guildWatchlist.symbols.isEmpty {
+            // ✅ Loading state
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.watchlist == nil {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading Guild Watchlist...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+            }
+            else if leftDrawerViewModel.watchlist?.symbols.isEmpty ?? true {
                 VStack(spacing: 12) {
                     Image(systemName: "megaphone")
                         .font(.largeTitle)
@@ -31,13 +43,27 @@ struct WatchlistView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
             } else {
-                ForEach(guildWatchlist.symbolObjects) { symbol in
-                    WatchlistRowView(
-                        symbol: symbol,
-                        onTap: {
-                            print("Tapped on \(symbol.ticker)")
-                        }
-                    )
+                // ✅ Unwrap the single watchlist, then loop through its symbols
+                if let symbols = leftDrawerViewModel.watchlist?.symbols {
+                    ForEach(symbols) { symbol in
+                        WatchlistRowView(
+                            symbol: symbol,
+                            onTap: {
+                                print("Tapped on \(symbol.ticker)")
+                            }
+                        )
+                    }
+                } else {
+                    // ✅ Show empty state if no watchlist
+                    VStack(spacing: 12) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.largeTitle)
+                            .foregroundColor(.secondary)
+                        Text("No symbols yet")
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
                 }
             }
         }
@@ -49,7 +75,7 @@ struct WatchlistView: View {
 
 // MARK: - Watchlist Row View
 struct WatchlistRowView: View {
-    let symbol: Symbol
+    let symbol: SymbolDTO
     let onTap: () -> Void
 
     
@@ -85,7 +111,7 @@ struct WatchlistRowView: View {
     }
     
     private var isDirectionPositive: Bool{
-        symbol.changeDirection == .up
+        symbol.isUp == true
     }
     
     var body: some View {
@@ -105,7 +131,7 @@ struct WatchlistRowView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(symbol.symbol)
+                        Text(symbol.name)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.whiteText)
@@ -121,11 +147,11 @@ struct WatchlistRowView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("$\(Double(symbol.currentPrice))")
+                    Text(symbol.price, format: .currency(code: "USD"))
                         .font(.footnote)
                         .fontWeight(.semibold)
                         .foregroundColor(isDirectionPositive ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
-                    Text("\(isDirectionPositive ? "+" : "-") \(symbol.currentChange)")
+                    Text("\(symbol.changeFormatted)")
                         .font(.caption2)
                         .fontWeight(.medium)
                         .foregroundColor(isDirectionPositive ? AppColors.bullCandleGreen : AppColors.bearCandleRed)

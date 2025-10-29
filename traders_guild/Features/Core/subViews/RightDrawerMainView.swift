@@ -22,13 +22,14 @@ struct RightDrawerMainView: View {
     // isSearchFocused: Tracks keyboard focus for search
 
     let onClose: () -> Void
-    let chatrooms: [Chatroom]
-    let onlineUsers: [UserDM]
-    let offlineUsers: [UserDM]
-    let friends: [UserDM]
+//    let chatrooms: [Chatroom]
+//    let onlineUsers: [UserDM]
+//    let offlineUsers: [UserDM]
+//    let friends: [UserDM]
     
     @EnvironmentObject var messagingManager: MessagingManager
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rightDrawerViewModel: RightDrawerViewModel
     
     @State private var dragTranslation: CGFloat = 0
     @State private var searchText: String = ""
@@ -37,12 +38,12 @@ struct RightDrawerMainView: View {
 
     
     /// Filters the respective lists by `searchText` (case-insensitive).
-    var filteredChatrooms: [Chatroom] {
-        if searchText.isEmpty {
-            return chatrooms
-        }
-        return chatrooms.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
+//    var filteredChatrooms: [Chatroom] {
+//        if searchText.isEmpty {
+//            return chatrooms
+//        }
+//        return chatrooms.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+//    }
 //    var filteredFriends: [GuildMembership] {
 //        let friendsWithoutCurrentUser = friends.filter { $0.userId != currentUser.user?.id }
 //        guard !searchText.isEmpty else { return friendsWithoutCurrentUser }
@@ -69,262 +70,268 @@ struct RightDrawerMainView: View {
     
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header section
-            VStack {
-                HStack (spacing: 10){
-                    Button(action: {
-                        withAnimation(AnimationConstants.standard) { onClose() }
-                    }) {
-                        Image(systemName: "chevron.right.dotted.chevron.right")
-                            .font(.title2)
+        if let user = appState.currentUser,
+           let guild = appState.currentGuild {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header section
+                VStack {
+                    HStack (spacing: 10){
+                        Button(action: {
+                            withAnimation(AnimationConstants.standard) { onClose() }
+                        }) {
+                            Image(systemName: "chevron.right.dotted.chevron.right")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.primary)
+                        }
+                        
+                        Text("Messages")
+                            .font(.title)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
+                        Spacer()
                     }
                     
-                    Text("Messages")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                    Spacer()
-                }
-                
-                // Guild Name and icon
-                HStack (spacing: 4) {
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("KAOS")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    + Text(" Guild")
-                        .font(.headline)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.accentColor)
-                    Spacer()
-                }
-                .padding(.leading, 35)
-                
-                
-                
-                // Search bar with filter
-                HStack(spacing: 8) {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(AppColors.whiteText.opacity(0.5))
-                            .font(.subheadline)
-                        
-                        TextField("Search...", text: $searchText)
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.whiteText)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .submitLabel(.done)
-                            .focused($isSearchFocused)
-                            .onTapGesture {
-                                isSearchFocused = true
-                            }
-                        
-                        if !searchText.isEmpty {
-                            Button(action: { searchText = "" }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(AppColors.whiteText.opacity(0.5))
-                                    .font(.subheadline)
+                    // Guild Name and icon
+                    HStack (spacing: 4) {
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("KAOS")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        + Text(" Guild")
+                            .font(.headline)
+                            .fontWeight(.medium)
+                            .foregroundColor(AppColors.accentColor)
+                        Spacer()
+                    }
+                    .padding(.leading, 35)
+                    
+                    
+                    
+                    // Search bar with filter
+                    HStack(spacing: 8) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(AppColors.whiteText.opacity(0.5))
+                                .font(.subheadline)
+                            
+                            TextField("Search...", text: $searchText)
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.whiteText)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .submitLabel(.done)
+                                .focused($isSearchFocused)
+                                .onTapGesture {
+                                    isSearchFocused = true
+                                }
+                            
+                            if !searchText.isEmpty {
+                                Button(action: { searchText = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                                        .font(.subheadline)
+                                }
                             }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(AppColors.unhighlightedTextBoxBackground)
+                        .clipShape(Capsule())
+                        .onTapGesture {
+                            isSearchFocused = true
+                        }
+                        
+                        Button(action: { showFilterSheet = true }) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.title3)
+                                .foregroundColor(AppColors.whiteText)
+                                .frame(width: 40, height: 40)
+                                .background(AppColors.unhighlightedTextBoxBackground)
+                                .clipShape(Circle())
+                        }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(AppColors.unhighlightedTextBoxBackground)
-                    .clipShape(Capsule())
-                    .onTapGesture {
-                        isSearchFocused = true
-                    }
-                    
-                    Button(action: { showFilterSheet = true }) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.title3)
-                            .foregroundColor(AppColors.whiteText)
-                            .frame(width: 40, height: 40)
-                            .background(AppColors.unhighlightedTextBoxBackground)
-                            .clipShape(Circle())
-                    }
-                }
-//                .padding(.leading, 35)
-                .padding(.top, 12)
-                
-                Rectangle()
-                    .fill(Color.gray.opacity(0.4))
-                    .frame(height: 0.5)
+    //                .padding(.leading, 35)
                     .padding(.top, 12)
-            }
-            .padding(.leading, 25)
-            .padding(.trailing, 25)
-            .padding(.bottom, 4)
-            .padding(.top, 60)
-            
-            // User lists and chatrooms with disclosure groups
-            ScrollView {
-                VStack(spacing: 12) {
-                    // Chatrooms Section
-                    if !filteredChatrooms.isEmpty {
+                    
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.4))
+                        .frame(height: 0.5)
+                        .padding(.top, 12)
+                }
+                .padding(.leading, 25)
+                .padding(.trailing, 25)
+                .padding(.bottom, 4)
+                .padding(.top, 60)
+                
+                // User lists and chatrooms with disclosure groups
+                ScrollView {
+                    VStack(spacing: 12) {
+                        // Chatrooms Section
+                        
                         ChatroomDisclosureGroup(
-                            chatrooms: filteredChatrooms,
+                            chatrooms: rightDrawerViewModel.guildChatrooms,
                             onChatroomTap: { chatroom in
                                 messagingManager.openChatroom(chatroom)
                             }
                         )
+                        
+                        
+                        // Friends Section (now properly filtered)
+                        DMDisclosureGroup(
+                            title: "Friends",
+                            count: rightDrawerViewModel.guildFriends.count,
+                            icon: "star.fill",
+                            iconColor: AppColors.accentColor,
+                            userDMs: rightDrawerViewModel.guildFriends,
+                            onUserTap: { userDM in
+                                messagingManager.openUserDM(userDM)
+                            }
+                        )
+    //                    if !filteredFriends.isEmpty {
+    //                        UserDisclosureGroup(
+    //                            title: "Friends",
+    //                            count: filteredFriends.count,
+    //                            icon: "star.fill",
+    //                            iconColor: AppColors.accentColor,
+    //                            users: filteredFriends,
+    //                            onUserTap: { user in
+    //                                messagingManager.openUserChat(user)
+    //                            }
+    //                        )
+    //                    }
+                        
+                        // Online Users (excludes friends)
+                        DMDisclosureGroup(
+                            title: "Online",
+                            count: rightDrawerViewModel.guildOnlineNonFriends.count,
+                            icon: "circle.fill",
+                            iconColor: AppColors.bullCandleGreen,
+                            userDMs: rightDrawerViewModel.guildOnlineNonFriends,
+                            onUserTap: { userDM in
+                                messagingManager.openUserDM(userDM)
+                            }
+                        )
+    //                    if !filteredOnlineUsers.isEmpty {
+    //                        UserDisclosureGroup(
+    //                            title: "Online",
+    //                            count: filteredOnlineUsers.count,
+    //                            icon: "circle.fill",
+    //                            iconColor: AppColors.bullCandleGreen,
+    //                            users: filteredOnlineUsers,
+    //                            onUserTap: { user in
+    //                                messagingManager.openUserChat(user)
+    //                            }
+    //                        )
+    //                    }
+                        
+                        // Offline Users (excludes friends)
+                        DMDisclosureGroup(
+                            title: "Offline",
+                            count: rightDrawerViewModel.guildOfflineNonFriends.count,
+                            icon: "circle.fill",
+                            iconColor: Color.gray,
+                            userDMs: rightDrawerViewModel.guildOfflineNonFriends,
+                            onUserTap: { userDM in
+                                messagingManager.openUserDM(userDM)
+                            }
+                        )
+    //                    if !filteredOfflineUsers.isEmpty {
+    //                        UserDisclosureGroup(
+    //                            title: "Offline",
+    //                            count: filteredOfflineUsers.count,
+    //                            icon: "circle.fill",
+    //                            iconColor: Color.gray,
+    //                            users: filteredOfflineUsers,
+    //                            onUserTap: { user in
+    //                                messagingManager.openUserChat(user)
+    //                            }
+    //                        )
+    //                    }
+                        
+                        // No results state
+                        if rightDrawerViewModel.guildChatrooms.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.largeTitle)
+                                    .foregroundColor(AppColors.whiteText.opacity(0.3))
+                                Text("No results found")
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.whiteText.opacity(0.5))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
+                        }
                     }
-                    
-                    // Friends Section (now properly filtered)
-                    DMDisclosureGroup(
-                        title: "Friends",
-                        count: friends.count,
-                        icon: "star.fill",
-                        iconColor: AppColors.accentColor,
-                        userDMs: friends,
-                        onUserTap: { userDM in
-                            //messagingManager.openUserDM(userDM)
-                        }
-                    )
-//                    if !filteredFriends.isEmpty {
-//                        UserDisclosureGroup(
-//                            title: "Friends",
-//                            count: filteredFriends.count,
-//                            icon: "star.fill",
-//                            iconColor: AppColors.accentColor,
-//                            users: filteredFriends,
-//                            onUserTap: { user in
-//                                messagingManager.openUserChat(user)
-//                            }
-//                        )
-//                    }
-                    
-                    // Online Users (excludes friends)
-                    DMDisclosureGroup(
-                        title: "Online",
-                        count: onlineUsers.count,
-                        icon: "circle.fill",
-                        iconColor: AppColors.bullCandleGreen,
-                        userDMs: onlineUsers,
-                        onUserTap: { userDM in
-                            //messagingManager.openUserDM(userDM)
-                        }
-                    )
-//                    if !filteredOnlineUsers.isEmpty {
-//                        UserDisclosureGroup(
-//                            title: "Online",
-//                            count: filteredOnlineUsers.count,
-//                            icon: "circle.fill",
-//                            iconColor: AppColors.bullCandleGreen,
-//                            users: filteredOnlineUsers,
-//                            onUserTap: { user in
-//                                messagingManager.openUserChat(user)
-//                            }
-//                        )
-//                    }
-                    
-                    // Offline Users (excludes friends)
-                    DMDisclosureGroup(
-                        title: "Offline",
-                        count: offlineUsers.count,
-                        icon: "circle.fill",
-                        iconColor: Color.gray,
-                        userDMs: offlineUsers,
-                        onUserTap: { userDM in
-                            //messagingManager.openUserDM(userDM)
-                        }
-                    )
-//                    if !filteredOfflineUsers.isEmpty {
-//                        UserDisclosureGroup(
-//                            title: "Offline",
-//                            count: filteredOfflineUsers.count,
-//                            icon: "circle.fill",
-//                            iconColor: Color.gray,
-//                            users: filteredOfflineUsers,
-//                            onUserTap: { user in
-//                                messagingManager.openUserChat(user)
-//                            }
-//                        )
-//                    }
-                    
-                    // No results state
-                    if filteredChatrooms.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.largeTitle)
-                                .foregroundColor(AppColors.whiteText.opacity(0.3))
-                            Text("No results found")
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.whiteText.opacity(0.5))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
-                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 20)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .onTapGesture {
-                isSearchFocused = false
-                hideKeyboard()
-            }
-            .simultaneousGesture(
-                DragGesture()
-                    .onChanged { value in
-                        if (value.translation.width > 0) {
-                            dragTranslation = value.translation.width
+                .scrollDismissesKeyboard(.interactively)
+                .onTapGesture {
+                    isSearchFocused = false
+                    hideKeyboard()
+                }
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { value in
+                            if (value.translation.width > 0) {
+                                dragTranslation = value.translation.width
+                            }
                         }
-                    }
-                    .onEnded { value in
-                        let threshold = LayoutConstants.drawerDismissThreshold
-                        if (dragTranslation > threshold) {
-                            onClose()
+                        .onEnded { value in
+                            let threshold = LayoutConstants.drawerDismissThreshold
+                            if (dragTranslation > threshold) {
+                                onClose()
+                            }
+                            dragTranslation = 0
                         }
-                        dragTranslation = 0
-                    }
+                )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                ZStack {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea()
+                    AppColors.drawerBackground.opacity(0.6)
+                }
             )
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            ZStack {
+            .overlay(
                 Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                AppColors.drawerBackground.opacity(0.6)
-            }
-        )
-        .overlay(
-            Rectangle()
-                .fill(Color.white.opacity(0.1))
-                .frame(width: 1)
-                .frame(maxHeight: .infinity),
-            alignment: .leading
-        )
-        .clipShape(
-            UnevenRoundedRectangle(
-                cornerRadii: .init(
-                    topLeading: LayoutConstants.cornerRadius,
-                    bottomLeading: LayoutConstants.cornerRadius,
-                    bottomTrailing: 0,
-                    topTrailing: 0
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity),
+                alignment: .leading
+            )
+            .clipShape(
+                UnevenRoundedRectangle(
+                    cornerRadii: .init(
+                        topLeading: LayoutConstants.cornerRadius,
+                        bottomLeading: LayoutConstants.cornerRadius,
+                        bottomTrailing: 0,
+                        topTrailing: 0
+                    )
                 )
             )
-        )
-        .shadow(radius: LayoutConstants.shadowRadius)
-        .ignoresSafeArea()
-        
-        // Filter options sheet
-        .sheet(isPresented: $showFilterSheet) {
-            FilterOptionsView()
-                .presentationDetents([.fraction(0.8)])
-                .presentationBackground(Color.clear)
-                .presentationCornerRadius(25)
-                .presentationContentInteraction(.scrolls)
+            .shadow(radius: LayoutConstants.shadowRadius)
+            .ignoresSafeArea()
+            
+            // Filter options sheet
+            .sheet(isPresented: $showFilterSheet) {
+                FilterOptionsView()
+                    .presentationDetents([.fraction(0.8)])
+                    .presentationBackground(Color.clear)
+                    .presentationCornerRadius(25)
+                    .presentationContentInteraction(.scrolls)
+            }
+        } else {
+            // Optional: Show error state if user/guild missing
+            EmptyView()
         }
     }
     
@@ -335,8 +342,8 @@ struct RightDrawerMainView: View {
 
 /// Collapsible section listing chatrooms; tapping opens a chatroom sheet.
 struct ChatroomDisclosureGroup: View {
-    let chatrooms: [Chatroom]
-    let onChatroomTap: (Chatroom) -> Void
+    let chatrooms: [GuildChatroomDTO]
+    let onChatroomTap: (GuildChatroomDTO) -> Void
     
     @State private var isExpanded: Bool = true
     
@@ -398,8 +405,8 @@ struct DMDisclosureGroup: View {
     let count: Int
     let icon: String
     let iconColor: Color
-    let userDMs: [UserDM]
-    let onUserTap: (UserDM) -> Void
+    let userDMs: [DMDTO]
+    let onUserTap: (DMDTO) -> Void
     
     @State private var isExpanded: Bool = true
     

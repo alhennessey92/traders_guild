@@ -61,12 +61,7 @@ struct LeftDrawerMainView: View {
     // navigationState: Which section is currently shown inside the drawer
     // bottomSheetContent: Which detail sheet is currently presented (if any)
     
-    
-    let currentGuild: Guild
-  //let events: [GuildEvent]
-    //let memberships: [GuildMembership]
-    let guildWatchlist: GuildWatchlist
-    let notificationsList: [Notification]
+
     @Binding var sheetOverlayVisible: Bool
     @Binding var dismissSheetsSignal: Bool
     let onClose: () -> Void
@@ -109,10 +104,6 @@ struct LeftDrawerMainView: View {
                         navigationState: $navigationState,
                         currentSection: navigationState,
                         bottomSheetContent: $bottomSheetContent,
-                        currentGuild: currentGuild,
-                        //memberships: memberships,
-                        guildWatchlist: guildWatchlist,
-                        notificationsList: notificationsList,
                         onClose: onClose,
                         dragTranslation: $dragTranslation
                     )
@@ -422,10 +413,7 @@ struct SectionDrawerView: View {
     @Binding var navigationState: DrawerNavigationState
     let currentSection: DrawerNavigationState
     @Binding var bottomSheetContent: BottomSheetContent?
-    let currentGuild: Guild
-    //let memberships: [GuildMembership]
-    let guildWatchlist: GuildWatchlist
-    let notificationsList: [Notification]
+
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
@@ -524,13 +512,13 @@ struct SectionDrawerView: View {
         case .announcements:
             AnnouncementsListView(bottomSheetContent: $bottomSheetContent)
         case .notifications:
-            NotificationsView(notificationsList: notificationsList)
+            NotificationsListView()
         case .topMarkers:
             TopMarkersView()
         case .leaderboard:
             LeaderboardListView()
         case .guildWatchlist:
-            WatchlistView(guildWatchlist: guildWatchlist)
+            WatchlistView()
         case .events:
             EventsListView(bottomSheetContent: $bottomSheetContent)
         case .userList:

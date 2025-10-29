@@ -39,32 +39,10 @@ struct MainView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var messagingManager: MessagingManager // Get from app-level environment
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
-    
-    
-    // MARK: - Sample data
-    
-    // Current guild user is in /api/guilds/
-    @State private var currentGuild: Guild = Guild.allGuilds[0] //only 1 guild
-    @State private var allGuilds: [Guild] = Guild.allGuilds // all guilds
-    @State private var allGuildMembers: [GuildMembership] = GuildMembership.currentGuildMemberships // all guild members
-    @State private var guildFriends: [GuildFriends] = GuildFriends.guildFriends // guild members that are friends
-    @State private var chatrooms: [Chatroom] = Chatroom.sampleChatrooms // all guild chatrooms
-    @State private var userDMs: [UserDM] = UserDM.userDMs // user dm rooms
-    @State private var announcements: [GuildAnnouncement] = GuildAnnouncement.guildAnnouncements // guild announcements
-    @State private var events: [GuildEvent] = GuildEvent.guildEvents // guild events
-    @State private var guildWatchlist: GuildWatchlist = GuildWatchlist.guildWatchlist[0] // guild watchlists - atm only 1 but will expand to more
-    @State private var notificationsList: [Notification] = Notification.sampleNotifications // user notifications, this needs work
-    
-    // UserDMs
-    @State private var guildFriendsDMs: [UserDM] = UserDM.friendGuildDMs // /api/dm/friends/{id}
-    @State private var guildOnlineNonFriendsDMs: [UserDM] = UserDM.onlineNonFriendGuildDMs // /api/dm/online/{id}
-    @State private var guildOfflineNonFriendsDMs: [UserDM] = UserDM.offlineNonFriendGuildDMs // /api/dm/offline/{id}
-    
-    
-    
-    
+    @StateObject private var rightDrawerViewModel = RightDrawerViewModel()
     
 
+    
     
     /// Controls fade-in animation on view appearance
     @State private var fadeIn: Bool = false
@@ -204,16 +182,20 @@ struct MainView: View {
             .sensoryFeedback(.impact(weight: .light), trigger: showRightDrawer)
             
             .environmentObject(leftDrawerViewModel)  // ✅ Pass to child views
+            .environmentObject(rightDrawerViewModel)
             .task {
                 // ✅ Preload drawer data when MainView appears
                 await leftDrawerViewModel.preloadData(for: guild.id, appState: appState)
+                await rightDrawerViewModel.preloadData(for: guild.id, appState: appState)
             }
             .onChange(of: appState.currentGuild?.id) { _, newGuildId in
                 // ✅ Reload data when guild changes
                 if let guildId = newGuildId {
                     Task {
                         leftDrawerViewModel.clearCache()  // Clear old guild data
+                        rightDrawerViewModel.clearCache()
                         await leftDrawerViewModel.preloadData(for: guildId, appState: appState)
+                        await rightDrawerViewModel.preloadData(for: guildId, appState: appState)
                     }
                 }
             }
@@ -352,7 +334,7 @@ struct MainView: View {
     /// Left drawer view with swipe-to-dismiss functionality
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView(currentGuild: currentGuild, guildWatchlist: guildWatchlist, notificationsList: notificationsList, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
+            LeftDrawerMainView(sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false
@@ -401,11 +383,7 @@ struct MainView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         showOverlay = false
                     }
-                },
-                chatrooms: chatrooms,
-                onlineUsers: guildOnlineNonFriendsDMs,
-                offlineUsers: guildOfflineNonFriendsDMs,
-                friends: guildFriendsDMs,
+                }
                 
                 //sheetOverlayVisible: $showSheetOverlay,
                 //dismissSheetsSignal: $dismissRightSheetsSignal

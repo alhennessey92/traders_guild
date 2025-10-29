@@ -91,9 +91,14 @@ class MockAPIService {
         return SampleData.guildMemberships
     }
     
-    func fetchGuildWatchlists(guildId: UUID) async throws -> [GuildWatchlistDTO] {
+    func fetchGuildWatchlist(guildId: UUID) async throws -> GuildWatchlistDTO {
         try await simulateNetworkDelay()
-        return SampleData.watchlists
+        return SampleData.guildWatchlist
+    }
+    
+    func fetchUserNotifications(guildId: UUID, userId: UUID) async throws -> [GuildNotificationDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.userNotifications
     }
     
     /// Chat
@@ -105,6 +110,31 @@ class MockAPIService {
     func fetchDMMessagesByDmId(dmId: UUID) async throws -> [DMMessageDTO] {
         try await simulateNetworkDelay()
         return SampleData.dmMessages
+    }
+    
+    func fetchGuildChatrooms(guildId: UUID) async throws -> [GuildChatroomDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.allGuildChatrooms
+    }
+    
+    func fetchChatroomMessagesByChatroomId(chatroomId: UUID) async throws -> [ChatroomMessageDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.chatroomMessages
+    }
+    
+    func fetchGuildFriendDM(guildId: UUID) async throws -> [DMDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.allGuildFriendDM
+    }
+    
+    func fetchGuildOnlineNonFriendDM(guildId: UUID) async throws -> [DMDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.allGuildOnlineNonFriendDM
+    }
+    
+    func fetchGuildOfflineNonFriendDM(guildId: UUID) async throws -> [DMDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.allGuildOfflineNonFriendDM
     }
 
 }

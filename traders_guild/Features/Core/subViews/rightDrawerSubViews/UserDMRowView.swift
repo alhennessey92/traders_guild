@@ -10,7 +10,7 @@ import SwiftUI
 
 // MARK: - User Direct Message Row View
 struct UserDMRowView: View {
-    let userDM: UserDM
+    let userDM: DMDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -24,15 +24,24 @@ struct UserDMRowView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 40, height: 40)
                         .overlay(
-                            Text(String(userDM.participantName?.prefix(2) ?? "unKnown"))
+                            Text(String(userDM.participant.globalMember.username.prefix(2)))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
                         )
                     
-                    if ((userDM.participantMembership?.isUserOnline) != nil) {
+                    if userDM.participant.isOnline {
                         Circle()
                             .fill(AppColors.bullCandleGreen)
+                            .frame(width: 12, height: 12)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppColors.drawerBackground, lineWidth: 2)
+                            )
+                    } else{
+                        
+                        Circle()
+                            .fill(AppColors.bearCandleRed)
                             .frame(width: 12, height: 12)
                             .overlay(
                                 Circle()
@@ -50,7 +59,7 @@ struct UserDMRowView: View {
 //                                .foregroundColor(AppColors.accentColor)
 //                            
 //                        }
-                        Text(userDM.participantName ?? "Unknown")
+                        Text(userDM.participant.globalMember.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(AppColors.whiteText)
@@ -59,27 +68,27 @@ struct UserDMRowView: View {
             
                     
                     HStack (spacing:2){
-                        if let role = userDM.participantRole {
-                            Text(role.rawValue)
-                                .font(.caption)
-                                .foregroundColor(role.foregroundColor)
-                                .fontWeight(role.fontWeight)
-                                .lineLimit(1)
-                            Circle()
-                                .fill(AppColors.whiteText.opacity(0.7))
-                                .frame(width: 5, height: 5)
-                                .padding(.top, 1)
-                                .padding(.leading, 3)
-                                .padding(.trailing, 3)
-                            Image(systemName: "shield.pattern.checkered")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                            Text("\(userDM.participantGuildReputation ?? 0)")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.accentColor)
-                        }
+                        let role = userDM.participant.roleInGuild
+                        Text(role.rawValue)
+                            .font(.caption)
+                            .foregroundColor(role.roleForegroundColor)
+                            .fontWeight(role.roleFontWeight)
+                            .lineLimit(1)
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.7))
+                            .frame(width: 5, height: 5)
+                            .padding(.top, 1)
+                            .padding(.leading, 3)
+                            .padding(.trailing, 3)
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("\(userDM.participant.reputation)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                        
                         
                         
                     }
