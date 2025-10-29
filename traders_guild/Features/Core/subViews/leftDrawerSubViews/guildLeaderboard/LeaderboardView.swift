@@ -10,17 +10,30 @@ import SwiftUI
 
 
 // MARK: - Announcements List View
-struct LeaderboardView: View {
-    let guildUsers: [GuildMembership]
+struct LeaderboardListView: View {
+    // MARK: - Need to add a bottom sheet for user profile
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {
         VStack(spacing: 10) {
-            if guildUsers.isEmpty {
+            // ✅ Loading state
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.members.isEmpty {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading Guild Members...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+            }
+            else if leftDrawerViewModel.members.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "megaphone")
                         .font(.largeTitle)
                         .foregroundColor(AppColors.whiteText.opacity(0.3))
-                    Text("No announcements yet")
+                    Text("No members in the guild")
                         .font(.subheadline)
                         .foregroundColor(AppColors.whiteText.opacity(0.5))
                     Text("Check back later for guild updates")
@@ -31,7 +44,7 @@ struct LeaderboardView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
             } else {
-                ForEach(Array(guildUsers.sorted(by: { $0.reputation > $1.reputation }).enumerated()), id: \.element.id) { index, user in
+                ForEach(Array(leftDrawerViewModel.members.sorted(by: { $0.reputation > $1.reputation }).enumerated()), id: \.element.id) { index, user in
                     LeaderBoardRowView(
                         user: user,
                         rank: index + 1, // this is their place in the sorted list
@@ -50,7 +63,7 @@ struct LeaderboardView: View {
 
 // MARK: - Announcement Row View
 struct LeaderBoardRowView: View {
-    let user: GuildMembership
+    let user: GuildMembershipDTO
     let rank: Int
     let onTap: () -> Void
     
@@ -75,21 +88,21 @@ struct LeaderBoardRowView: View {
                     .fill(AppColors.accentColor.opacity(0.3))
                     .frame(width: 40, height: 40)
                     .overlay(
-                        Text(String(user.userName?.prefix(2) ?? "??"))
+                        Text(String(user.globalMember.username.prefix(2)))
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
                     )
                 VStack (alignment: .leading, spacing: 3){
-                    Text("\(user.userName ?? "Unknown")")
+                    Text("\(user.globalMember.username)")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
                     
                     Text(user.roleInGuild.rawValue)
                         .font(.caption)
-                        .foregroundColor(user.roleInGuild.foregroundColor)
-                        .fontWeight(user.roleInGuild.fontWeight)
+                        .foregroundColor(user.roleInGuild.roleForegroundColor)
+                        .fontWeight(user.roleInGuild.roleFontWeight)
                         .lineLimit(1)
                 }
                 

@@ -11,13 +11,26 @@ import SwiftUI
 // MARK: - Announcements List View
 struct UserListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
-    let memberships: [GuildMembership]
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var messagingManager: MessagingManager // Add messaging manager
     
     var body: some View {
         VStack(spacing: 10) {
-            if memberships.isEmpty {
+            // ✅ Loading state
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.members.isEmpty {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading Guild Members...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+            }
+            else if leftDrawerViewModel.members.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "person.3")
                         .font(.largeTitle)
@@ -33,7 +46,7 @@ struct UserListView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
             } else {
-                ForEach(memberships) { membership in
+                ForEach(leftDrawerViewModel.members) { membership in
                     GuildUserListRowView(
                         user: membership,
                         onTap: {
@@ -51,7 +64,7 @@ struct UserListView: View {
 
 // MARK: - Announcement Row View
 struct GuildUserListRowView: View {
-    let user: GuildMembership
+    let user: GuildMembershipDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -65,13 +78,13 @@ struct GuildUserListRowView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 40, height: 40)
                         .overlay(
-                            Text(String(user.userName?.prefix(2) ?? "unKnown"))
+                            Text(String(user.globalMember.username.prefix(2)))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
                         )
                     
-                    if user.isUserOnline {
+                    if user.isOnline {
                         Circle()
                             .fill(AppColors.bullCandleGreen)
                             .frame(width: 12, height: 12)
@@ -85,7 +98,7 @@ struct GuildUserListRowView: View {
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 2) {
-                        Text(user.userName ?? "unKnown")
+                        Text(user.globalMember.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(AppColors.whiteText)
@@ -94,8 +107,8 @@ struct GuildUserListRowView: View {
                     HStack(spacing: 2) {
                         Text(user.roleInGuild.rawValue)
                             .font(.caption)
-                            .foregroundColor(user.roleInGuild.foregroundColor)
-                            .fontWeight(user.roleInGuild.fontWeight)
+                            .foregroundColor(user.roleInGuild.roleForegroundColor)
+                            .fontWeight(user.roleInGuild.roleFontWeight)
                             .lineLimit(1)
                         Circle()
                             .fill(AppColors.whiteText.opacity(0.7))
@@ -141,9 +154,10 @@ struct GuildUserListRowView: View {
 
 // MARK: - Enhanced Announcement Detail View
 struct GuildUserDetailView: View {
-    let user: GuildMembership
+    let user: GuildMembershipDTO
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var messagingManager: MessagingManager // Add messaging manager
+    @EnvironmentObject var appState: AppState
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -159,13 +173,13 @@ struct GuildUserDetailView: View {
                                 .fill(AppColors.accentColor.opacity(0.3))
                                 .frame(width: 60, height: 60)
                                 .overlay(
-                                    Text(String(user.userName?.prefix(2) ?? "unKnown"))
+                                    Text(String(user.globalMember.username.prefix(2)))
                                         .font(.caption)
                                         .fontWeight(.bold)
                                         .foregroundColor(AppColors.accentColor)
                                 )
                             
-                            if user.isUserOnline {
+                            if user.isOnline {
                                 Circle()
                                     .fill(AppColors.bullCandleGreen)
                                     .frame(width: 12, height: 12)
@@ -178,15 +192,15 @@ struct GuildUserDetailView: View {
                         
                         // User info
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(user.userName ?? "Unknown")
+                            Text(user.globalMember.username)
                                 .font(.title3)
                                 .fontWeight(.medium)
                                 .foregroundColor(AppColors.whiteText)
                             
                             Text(user.roleInGuild.rawValue)
                                 .font(.caption)
-                                .foregroundColor(user.roleInGuild.foregroundColor)
-                                .fontWeight(user.roleInGuild.fontWeight)
+                                .foregroundColor(user.roleInGuild.roleForegroundColor)
+                                .fontWeight(user.roleInGuild.roleFontWeight)
                                 .lineLimit(1)
                         }
                         
@@ -202,7 +216,7 @@ struct GuildUserDetailView: View {
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.greyText)
-                            Text("Member Since")
+                            Text("\(user.memberSince)")
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundColor(AppColors.greyText)
@@ -295,7 +309,9 @@ struct GuildUserDetailView: View {
                         strokeWidth: 0.5,
                         action: {
                             dismiss() // If in a sheet
-                            messagingManager.openUserChat(with: user)
+                            Task {  // ✅ Add Task wrapper
+                                await messagingManager.openUserChat(with: user)
+                            }
                         }
                     )
                 }

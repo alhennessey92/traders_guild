@@ -33,11 +33,23 @@ private let timeFormatter: DateFormatter = {
 // MARK: - Announcements List View
 struct EventsListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
-    let events: [GuildEvent]
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {
         VStack(spacing: 10) {
-            if events.isEmpty {
+            // ✅ Loading state
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.upcomingEvents.isEmpty {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading events...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+            }
+            else if leftDrawerViewModel.upcomingEvents.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "megaphone")
                         .font(.largeTitle)
@@ -53,7 +65,7 @@ struct EventsListView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
             } else {
-                ForEach(events) { event in
+                ForEach(leftDrawerViewModel.upcomingEvents) { event in
                     EventRowView(
                         event: event,
                         onTap: {
@@ -69,10 +81,11 @@ struct EventsListView: View {
 
 /// Events list that triggers a bottom sheet when an item is tapped.
 struct EventRowView: View {
-//    @Binding var bottomSheetContent: BottomSheetContent?
-    let event: GuildEvent
-    @State private var isPressed = false
+    let event: GuildEventDTO
     let onTap: () -> Void
+    
+    @State private var isPressed = false
+    
     
     var body: some View {
         Button(action: onTap) {
@@ -107,14 +120,14 @@ struct EventRowView: View {
 
                     HStack(spacing: 6) {
                         Image(systemName: "clock")
-                        Text("\(timeFormatter.string(from: event.eventDate)) • \(event.noAttending) attending")
+                        Text("\(timeFormatter.string(from: event.eventDate)) • \(event.attendanceDisplay)")
                     }
                     .font(.caption2)
                     .foregroundColor(AppColors.accentColor)
                     .padding(.top, 2)
                     
-                    let role = event.authorRole ?? .member
-                    let authorName = event.authorName ?? "Unknown"
+                    let role = event.author.roleInGuild
+                    let authorName = event.author.globalMember.username
                     HStack(spacing: 4) {
                         Text("Hosted by")
                             .font(.caption2)
@@ -131,8 +144,8 @@ struct EventRowView: View {
                             .padding(.trailing, 3)
                         Text(role.rawValue)
                             .font(.caption2)
-                            .foregroundColor(role.foregroundColor)
-                            .fontWeight(role.fontWeight)
+                            .foregroundColor(role.roleForegroundColor)
+                            .fontWeight(role.roleFontWeight)
                         Spacer(minLength: 0)
                     }
                 }
@@ -161,8 +174,7 @@ struct EventRowView: View {
 
 /// Detail content for an event presented in a sheet.
 struct EventDetailView: View {
-//    let id: Int
-    let event: GuildEvent
+    let event: GuildEventDTO
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -194,8 +206,8 @@ struct EventDetailView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         
-                        let role = event.authorRole ?? .member
-                        let authorName = event.authorName ?? "Unknown"
+                        let role = event.author.roleInGuild
+                        let authorName = event.author.globalMember.username
                         HStack(spacing: 8) {
                             if role != .member {
                                 Text(role.rawValue.uppercased())
@@ -220,7 +232,7 @@ struct EventDetailView: View {
                 VStack{
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("\(event.noAttending) members attending", systemImage: "person.3.fill")
+                        Label("\(event.attendanceDisplay)", systemImage: "person.3.fill")
                             .foregroundColor(AppColors.accentColor)
                         Label("Guild Hall", systemImage: "location.fill")
                             .foregroundColor(.secondary)

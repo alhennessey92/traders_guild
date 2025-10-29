@@ -147,7 +147,7 @@ struct MainView: View {
                 
                 // MARK: - Drawer Layers
                 /// Left drawer view with fade-in animation
-                leftDrawerView(user: user, guild: guild)
+                leftDrawerView
                     .opacity(fadeIn ? 1 : 0)
                     .animation(.easeIn(duration: 1.5), value: fadeIn)
                 
@@ -350,9 +350,9 @@ struct MainView: View {
     }
     
     /// Left drawer view with swipe-to-dismiss functionality
-    private func leftDrawerView(user: CurrentUserDTO, guild: GuildDTO) -> some View {
+    private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView(user: user, guild: guild, currentGuild: currentGuild, announcements: announcements, events: events, memberships: allGuildMembers, guildWatchlist: guildWatchlist, notificationsList: notificationsList, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
+            LeftDrawerMainView(currentGuild: currentGuild, guildWatchlist: guildWatchlist, notificationsList: notificationsList, sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
                 // Closure called when drawer close button is tapped
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false

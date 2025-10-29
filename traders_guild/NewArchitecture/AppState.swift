@@ -429,6 +429,35 @@ class AppState: ObservableObject {
         }
     }
     
+    
+    /// Fetch or Create UserDM for Guild
+    func fetchOrCreateUserDM(userId: UUID) async throws -> DMDTO{
+        errorMessage = nil
+        do {
+            let dmdto = try await api.fetchOrCreateUserDM(userId: userId)
+            return dmdto
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    ///  Fetch DM Messages by DMId
+    func fetchDMMessages(dmId: UUID) async throws -> [DMMessageDTO]{
+        errorMessage = nil
+        do {
+            let dmmessages = try await api.fetchDMMessagesByDmId(dmId: dmId)
+            return dmmessages
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
     // ================================================================================================
     // MARK: - Persistence
     // ================================================================================================

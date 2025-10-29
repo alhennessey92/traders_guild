@@ -14,6 +14,17 @@ struct traders_guildApp: App {
     @StateObject private var messagingManager = MessagingManager()
     @StateObject private var appState = AppState()
     
+    init() {
+        let appState = AppState()
+        let messagingManager = MessagingManager()
+        
+        // ✅ Configure the connection
+        messagingManager.configure(with: appState)
+        
+        _appState = StateObject(wrappedValue: appState)
+        _messagingManager = StateObject(wrappedValue: messagingManager)
+    }
+    
     var body: some Scene {
         WindowGroup {
             ZStack {

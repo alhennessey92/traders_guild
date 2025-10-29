@@ -60,8 +60,8 @@ class MockAPIService {
         try await simulateNetworkDelay()
         
         // Return mock guild with matching ID
-//        return SampleData.openGuilds.first { $0.id == guildId }
-//            ?? SampleData.sampleGuild
+        //        return SampleData.openGuilds.first { $0.id == guildId }
+        //            ?? SampleData.sampleGuild
         return SampleData.sampleGuild
     }
     
@@ -80,21 +80,33 @@ class MockAPIService {
         try await simulateNetworkDelay()
         return SampleData.announcements
     }
-
+    
     func fetchGuildEvents(guildId: UUID) async throws -> [GuildEventDTO] {
         try await simulateNetworkDelay()
         return SampleData.events
     }
-
+    
     func fetchGuildMembers(guildId: UUID) async throws -> [GuildMembershipDTO] {
         try await simulateNetworkDelay()
         return SampleData.guildMemberships
     }
-
+    
     func fetchGuildWatchlists(guildId: UUID) async throws -> [GuildWatchlistDTO] {
         try await simulateNetworkDelay()
         return SampleData.watchlists
     }
+    
+    /// Chat
+    func fetchOrCreateUserDM(userId: UUID) async throws -> DMDTO {
+        try await simulateNetworkDelay()
+        return SampleData.userDMbyUserId
+    }
+    
+    func fetchDMMessagesByDmId(dmId: UUID) async throws -> [DMMessageDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.dmMessages
+    }
+
 }
 
 // ================================================================================================

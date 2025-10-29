@@ -33,10 +33,10 @@ enum DrawerNavigationState: Equatable {
 /// Conforms to `Identifiable` for `.sheet(item:)` and `Equatable` to support `.onChange`.
 /// Each case carries the minimal data needed to render its detail view.
 enum BottomSheetContent: Identifiable, Equatable {
-    case announcement(GuildAnnouncement)
-    case event(GuildEvent)
+    case announcement(GuildAnnouncementDTO)
+    case event(GuildEventDTO)
     case profile
-    case guildMember(GuildMembership)
+    case guildMember(GuildMembershipDTO)
     
     var id: String {
         switch self {
@@ -60,13 +60,11 @@ struct LeftDrawerMainView: View {
     // dragTranslation: Current drag offset for swipe-to-dismiss
     // navigationState: Which section is currently shown inside the drawer
     // bottomSheetContent: Which detail sheet is currently presented (if any)
-    let user: CurrentUserDTO
-    let guild: GuildDTO
+    
     
     let currentGuild: Guild
-    let announcements: [GuildAnnouncement]
-    let events: [GuildEvent]
-    let memberships: [GuildMembership]
+  //let events: [GuildEvent]
+    //let memberships: [GuildMembership]
     let guildWatchlist: GuildWatchlist
     let notificationsList: [Notification]
     @Binding var sheetOverlayVisible: Bool
@@ -90,98 +88,100 @@ struct LeftDrawerMainView: View {
     }
     
     var body: some View {
-        ZStack {
-            // Main content that changes based on navigation state
-            if navigationState == .main {
-                MainDrawerView(
-                    user: user,
-                    guild: guild,
-                    currentGuild: currentGuild,
-                    navigationState: $navigationState,
-                    onClose: onClose,
-                    dragTranslation: $dragTranslation,
-                    presentProfile: { bottomSheetContent = .profile }
-                )
-                .transition(.asymmetric(
-                    insertion: .move(edge: .leading),
-                    removal: .move(edge: .leading)
-                ))
-            } else {
-                SectionDrawerView(
-                    navigationState: $navigationState,
-                    currentSection: navigationState,
-                    bottomSheetContent: $bottomSheetContent,
-                    currentGuild: currentGuild,
-                    announcements: announcements,
-                    events: events,
-                    memberships: memberships,
-                    guildWatchlist: guildWatchlist,
-                    notificationsList: notificationsList,
-                    onClose: onClose,
-                    dragTranslation: $dragTranslation
-                )
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing),
-                    removal: .move(edge: .trailing)
-                ))
-            }
-        }
-        .offset(x: dragTranslation)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
+        if let user = appState.currentUser,
+           let guild = appState.currentGuild {
             ZStack {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                AppColors.drawerBackground.opacity(0.6)
+                // Main content that changes based on navigation state
+                if navigationState == .main {
+                    MainDrawerView(
+                        //currentGuild: currentGuild,
+                        navigationState: $navigationState,
+                        onClose: onClose,
+                        dragTranslation: $dragTranslation,
+                        presentProfile: { bottomSheetContent = .profile }
+                    )
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading),
+                        removal: .move(edge: .leading)
+                    ))
+                } else {
+                    SectionDrawerView(
+                        navigationState: $navigationState,
+                        currentSection: navigationState,
+                        bottomSheetContent: $bottomSheetContent,
+                        currentGuild: currentGuild,
+                        //memberships: memberships,
+                        guildWatchlist: guildWatchlist,
+                        notificationsList: notificationsList,
+                        onClose: onClose,
+                        dragTranslation: $dragTranslation
+                    )
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing),
+                        removal: .move(edge: .trailing)
+                    ))
+                }
             }
-        )
-        .overlay(
-            Rectangle()
-                .fill(Color.white.opacity(0.1))
-                .frame(width: 1)
-                .frame(maxHeight: .infinity),
-            alignment: .trailing
-        )
-        .clipShape(
-            UnevenRoundedRectangle(
-                cornerRadii: .init(
-                    topLeading: 0,
-                    bottomLeading: 0,
-                    bottomTrailing: LayoutConstants.cornerRadius,
-                    topTrailing: LayoutConstants.cornerRadius
+            .offset(x: dragTranslation)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                ZStack {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea()
+                    AppColors.drawerBackground.opacity(0.6)
+                }
+            )
+            .overlay(
+                Rectangle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity),
+                alignment: .trailing
+            )
+            .clipShape(
+                UnevenRoundedRectangle(
+                    cornerRadii: .init(
+                        topLeading: 0,
+                        bottomLeading: 0,
+                        bottomTrailing: LayoutConstants.cornerRadius,
+                        topTrailing: LayoutConstants.cornerRadius
+                    )
                 )
             )
-        )
-        .shadow(radius: LayoutConstants.shadowRadius)
-        .ignoresSafeArea()
-        // Present detail sheets with a clear background and consistent detents (matches right drawer)
-        .sheet(item: $bottomSheetContent) { content in
-            BottomSheetView(content: content, selectedDetent: $selectedDetent)  // PASS BINDING
-                .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
-//                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
-                .presentationBackground {
-                    ZStack {
-                        Color.clear
-                            .background(.ultraThinMaterial)
-                        AppColors.sheetBackground
+            .shadow(radius: LayoutConstants.shadowRadius)
+            .ignoresSafeArea()
+            // Present detail sheets with a clear background and consistent detents (matches right drawer)
+            .sheet(item: $bottomSheetContent) { content in
+                BottomSheetView(content: content, selectedDetent: $selectedDetent)  // PASS BINDING
+                    .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
+    //                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
+                    .presentationBackground {
+                        ZStack {
+                            Color.clear
+                                .background(.ultraThinMaterial)
+                            AppColors.sheetBackground
+                        }
                     }
+                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                    .presentationCornerRadius(33)
+            }
+            .onChange(of: bottomSheetContent) { oldValue, newValue in
+                sheetOverlayVisible = newValue != nil
+                // Reset detent when opening new sheet
+                if newValue != nil {
+                    selectedDetent = .fraction(0.6)
                 }
-                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                .presentationCornerRadius(33)
-        }
-        .onChange(of: bottomSheetContent) { oldValue, newValue in
-            sheetOverlayVisible = newValue != nil
-            // Reset detent when opening new sheet
-            if newValue != nil {
-                selectedDetent = .fraction(0.6)
             }
-        }
-        .onChange(of: dismissSheetsSignal) { oldValue, newValue in
-            if newValue {
-                dismissAllSheets()
-                dismissSheetsSignal = false
+            .onChange(of: dismissSheetsSignal) { oldValue, newValue in
+                if newValue {
+                    dismissAllSheets()
+                    dismissSheetsSignal = false
+                }
             }
+        } else {
+            // Optional: Show error state if user/guild missing
+            EmptyView()
         }
     }
 
@@ -202,9 +202,8 @@ struct LeftDrawerMainView: View {
 /// Drawer home screen showing guild header and navigation menu for sections.
 /// Selecting a menu item updates `navigationState` to replace the content area.
 struct MainDrawerView: View {
-    let user: CurrentUserDTO
-    let guild: GuildDTO
-    let currentGuild: Guild
+    
+    //let currentGuild: Guild
     @Binding var navigationState: DrawerNavigationState
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
@@ -228,8 +227,9 @@ struct MainDrawerView: View {
     
     
     var body: some View {
-        
-        VStack(alignment: .leading, spacing: 0) {
+        if let user = appState.currentUser,
+           let guild = appState.currentGuild {
+            VStack(alignment: .leading, spacing: 0) {
             // Header section
             VStack {
                 HStack {
@@ -281,7 +281,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("52")
+                    Text("\(guild.membersOnline)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -303,7 +303,7 @@ struct MainDrawerView: View {
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("\(currentGuild.reputation)")
+                    Text("\(guild.reputation)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -316,7 +316,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("78%")
+                    Text("\(guild.accuracy)%")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -327,7 +327,7 @@ struct MainDrawerView: View {
                 }
                 .padding(.top, 6)
                 
-                Text("Tagline describing the main content and premis of the guild, or a short description of the guild")
+                Text("\(guild.description)")
                     .font(.caption)
                     .foregroundColor(AppColors.whiteText.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -406,6 +406,11 @@ struct MainDrawerView: View {
             .padding(.leading, 25)
             .padding(.trailing, 25)
         }
+        } else {
+            // Optional: Show error state if user/guild missing
+            EmptyView()
+        }
+            
     }
         
     
@@ -418,100 +423,84 @@ struct SectionDrawerView: View {
     let currentSection: DrawerNavigationState
     @Binding var bottomSheetContent: BottomSheetContent?
     let currentGuild: Guild
-    let announcements: [GuildAnnouncement]
-    let events: [GuildEvent]
-    let memberships: [GuildMembership]
+    //let memberships: [GuildMembership]
     let guildWatchlist: GuildWatchlist
     let notificationsList: [Notification]
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with back button and title
-            HStack {
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        navigationState = .main
+        if let guild = appState.currentGuild {
+            VStack(spacing: 0) {
+                // Header with back button and title
+                HStack {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            navigationState = .main
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                            Text("KAOS")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                            + Text(" Guild")
+                                .font(.headline)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(AppColors.whiteText.opacity(0.95))
                     }
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        withAnimation(AnimationConstants.standard) { onClose() }
+                    }) {
+                        Image(systemName: "xmark")
                             .font(.title3)
                             .fontWeight(.semibold)
-                        Text("KAOS")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                        + Text(" Guild")
-                            .font(.headline)
-                            .fontWeight(.medium)
+                            .foregroundColor(AppColors.whiteText.opacity(0.8))
+                            
                     }
-                    .foregroundColor(AppColors.whiteText.opacity(0.95))
                 }
-                
-                Spacer()
-                
-                Button(action: {
-                    withAnimation(AnimationConstants.standard) { onClose() }
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText.opacity(0.8))
-                        
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 60)
-            .padding(.bottom, 16)
-            
-            // Section title
-//            HStack {
-////                Image(systemName: sectionIcon)
-////                    .font(.title2)
-////                    .fontWeight(.bold)
-////                    .foregroundColor(AppColors.accentColor)
-//                Text(sectionTitle)
-//                    .font(.title)
-//                    .fontWeight(.bold)
-//                    .foregroundColor(AppColors.whiteText)
-//                Spacer()
-//            }
-            Text(sectionTitle)
-                .font(.title)
-                .fontWeight(.bold)
-                .foregroundColor(AppColors.whiteText)
-//                .frame(width: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
-                .padding(.bottom, 18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            Rectangle()
-                .fill(Color.gray.opacity(0.4))
-                .frame(height: 0.5)
-            
-            // Content for the specific section
-            ScrollView {
-                sectionContent
-                    .padding(.top, 12)
-                    .padding(.bottom, 20)
+                .padding(.top, 60)
+                .padding(.bottom, 16)
+                
+                Text(sectionTitle)
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppColors.whiteText)
+    //                .frame(width: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(height: 0.5)
+                
+                // Content for the specific section
+                ScrollView {
+                    sectionContent
+                        .padding(.top, 12)
+                        .padding(.bottom, 20)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .refreshable {
+                    await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
+        } else {
+            EmptyView()
         }
     }
-    
-//    private var sectionIcon: String {
-//        switch currentSection {
-//        case .main: return ""
-//        case .announcements: return "megaphone.fill"
-//        case .topMarkers: return "chart.line.uptrend.xyaxis"
-//        case .leaderboard: return "trophy.fill"
-//        case .guildWatchlist: return "star.fill"
-//        case .events: return "calendar.badge.clock"
-//        case .userList: return "person.2.fill"
-//        case .statistics: return "chart.bar.fill"
-//        }
-//    }
+
     
     /// Human-readable title for the current section header.
     private var sectionTitle: String {
@@ -533,19 +522,19 @@ struct SectionDrawerView: View {
     private var sectionContent: some View {
         switch currentSection {
         case .announcements:
-            AnnouncementsListView(bottomSheetContent: $bottomSheetContent, announcements: announcements)
+            AnnouncementsListView(bottomSheetContent: $bottomSheetContent)
         case .notifications:
             NotificationsView(notificationsList: notificationsList)
         case .topMarkers:
             TopMarkersView()
         case .leaderboard:
-            LeaderboardView(guildUsers: memberships)
+            LeaderboardListView()
         case .guildWatchlist:
             WatchlistView(guildWatchlist: guildWatchlist)
         case .events:
-            EventsListView(bottomSheetContent: $bottomSheetContent, events: events)
+            EventsListView(bottomSheetContent: $bottomSheetContent)
         case .userList:
-            UserListView(bottomSheetContent: $bottomSheetContent, memberships: memberships)
+            UserListView(bottomSheetContent: $bottomSheetContent)
         case .statistics:
             StatisticsView()
         default:

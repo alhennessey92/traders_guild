@@ -13,11 +13,24 @@ import SwiftUI
 // MARK: - Announcements List View
 struct AnnouncementsListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
-    let announcements: [GuildAnnouncement]
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {
         VStack(spacing: 10) {
-            if announcements.isEmpty {
+            // ✅ Loading state
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.announcements.isEmpty {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading announcements...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+            }
+            // ✅ Empty state
+            else if leftDrawerViewModel.announcements.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "megaphone")
                         .font(.largeTitle)
@@ -33,7 +46,7 @@ struct AnnouncementsListView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
             } else {
-                ForEach(announcements) { announcement in
+                ForEach(leftDrawerViewModel.announcements) { announcement in
                     AnnouncementRowView(
                         announcement: announcement,
                         onTap: {
@@ -49,7 +62,7 @@ struct AnnouncementsListView: View {
 
 // MARK: - Announcement Row View
 struct AnnouncementRowView: View {
-    let announcement: GuildAnnouncement
+    let announcement: GuildAnnouncementDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -113,13 +126,13 @@ struct AnnouncementRowView: View {
 //                                .frame(maxWidth: .infinity, alignment: .init(horizontal: .leading, vertical: .center))
                             
                             Spacer()
-                            Text(announcement.timeAgo)
+                            Text(announcement.timeAgoFormatted)
                                 .font(.caption2)
                                 .foregroundColor(AppColors.whiteText.opacity(0.5))
                         }
                         HStack(spacing: 4) {
-                            let role = announcement.authorRole ?? .member
-                            Text(announcement.authorName ?? "Unknown")
+                            let role = announcement.author.roleInGuild
+                            Text(announcement.author.globalMember.username)
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundColor(AppColors.whiteText)
@@ -131,8 +144,8 @@ struct AnnouncementRowView: View {
                                 .padding(.trailing, 3)
                             Text(role.rawValue)
                                 .font(.caption)
-                                .foregroundColor(role.foregroundColor)
-                                .fontWeight(role.fontWeight)
+                                .foregroundColor(role.roleForegroundColor)
+                                .fontWeight(role.roleFontWeight)
                                 .lineLimit(1)
                             Circle()
                                 .fill(AppColors.whiteText.opacity(0.7))
@@ -146,7 +159,7 @@ struct AnnouncementRowView: View {
                                 .foregroundColor(AppColors.accentColor)
                             
                             // MARK: - need to fetch this based on author id
-                            Text("\(announcement.authorGuildReputation ?? 0)")
+                            Text("\(announcement.author.reputation)")
                                 .font(.caption2)
                                 .fontWeight(.semibold)
                                 .foregroundColor(AppColors.accentColor)
@@ -193,7 +206,7 @@ struct AnnouncementRowView: View {
 
 // MARK: - Enhanced Announcement Detail View
 struct AnnouncementDetailView: View {
-    let announcement: GuildAnnouncement
+    let announcement: GuildAnnouncementDTO
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -241,8 +254,8 @@ struct AnnouncementDetailView: View {
                     Spacer()
                 }
                 
-                let role = announcement.authorRole ?? .member
-                let authorName = announcement.authorName ?? "Unknown"
+                let role = announcement.author.roleInGuild
+                let authorName = announcement.author.globalMember.username
                 // Author and timestamp info
                 HStack(spacing: 8) {
                     if role != .member {
@@ -265,7 +278,7 @@ struct AnnouncementDetailView: View {
                     Text("•")
                         .foregroundColor(.secondary)
                     
-                    Text(announcement.timeAgo)
+                    Text(announcement.timeAgoFormatted)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

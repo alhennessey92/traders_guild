@@ -186,7 +186,7 @@ struct RightDrawerMainView: View {
                         iconColor: AppColors.accentColor,
                         userDMs: friends,
                         onUserTap: { userDM in
-                            messagingManager.openUserDM(userDM)
+                            //messagingManager.openUserDM(userDM)
                         }
                     )
 //                    if !filteredFriends.isEmpty {
@@ -210,7 +210,7 @@ struct RightDrawerMainView: View {
                         iconColor: AppColors.bullCandleGreen,
                         userDMs: onlineUsers,
                         onUserTap: { userDM in
-                            messagingManager.openUserDM(userDM)
+                            //messagingManager.openUserDM(userDM)
                         }
                     )
 //                    if !filteredOnlineUsers.isEmpty {
@@ -234,7 +234,7 @@ struct RightDrawerMainView: View {
                         iconColor: Color.gray,
                         userDMs: offlineUsers,
                         onUserTap: { userDM in
-                            messagingManager.openUserDM(userDM)
+                            //messagingManager.openUserDM(userDM)
                         }
                     )
 //                    if !filteredOfflineUsers.isEmpty {

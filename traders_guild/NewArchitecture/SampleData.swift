@@ -122,7 +122,7 @@ struct SampleData {
             id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426345174004")!,
             name: "KAOS Guild",
             description: "Cryptocurrency enthusiasts unite! Day trading, swing trading, and long-term investing strategies.",
-            reputation: 38000,
+            reputation: 8000,
             accuracy: 72,
             memberCount: 203,
             owner: GlobalMemberDTO(
@@ -1475,7 +1475,7 @@ struct SampleData {
     ]
     
     // MARK: - Direct Messages (with embedded GuildMembershipDTO participant + DMMessageDTO)
-    static let directMessages: [DMDTO] = [
+    static let userDMs: [DMDTO] = [
         DMDTO(
             id: UUID(uuidString: "b43e4567-e89b-12d3-a456-426614174080")!,
             guildId: 1,
@@ -1685,6 +1685,114 @@ struct SampleData {
             isBlocked: false
         )
     ]
+    
+    // MARK: - Direct Messages (with embedded GuildMembershipDTO participant + DMMessageDTO)
+    static let userDMbyUserId: DMDTO =
+        DMDTO(
+            id: UUID(uuidString: "b43e4567-e89b-12d3-a456-426614174080")!,
+            guildId: 1,
+            participant: GuildMembershipDTO(
+                id: UUID(uuidString: "423e4567-e89b-12d3-a456-426614174011")!,
+                globalMember: GlobalMemberDTO(
+                    id: UUID(uuidString: "523e4567-e89b-12d3-a456-426614174012")!,
+                    email: "alice.forex@email.com",
+                    name: "Alice Forex",
+                    username: "aliceforex",
+                    avatarURL: "https://cdn.tradersguild.com/avatars/alice.jpg",
+                    isOnline: true,
+                    globalReputation: 1500
+                ),
+                guild: GuildDTO(
+                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+                    name: "KAOS Trading Guild",
+                    description: "Premier guild for forex and cryptocurrency traders.",
+                    reputation: 45000,
+                    accuracy: 78,
+                    memberCount: 156,
+                    owner: GlobalMemberDTO(
+                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+                        email: "sarah.masters@email.com",
+                        name: "Sarah Masters",
+                        username: "tradingqueen",
+                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+                        isOnline: true,
+                        globalReputation: 5820
+                    ),
+                    ownerRole: .admin,
+                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+                    isJoined: true,
+                    currentMemberRole: .member,
+                    isOpen: true,
+                    membersOnline: 12
+                ),
+                roleInGuild: .member,
+                dateJoined: Date(timeIntervalSince1970: 1721131200),
+                reputation: 450,
+                daysInGuild: 101,
+                contributionScore: 65,
+                isOnline: true
+            ),
+            lastMessage: DMMessageDTO(
+                id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174092")!,
+                dmId: UUID(uuidString: "b43e4567-e89b-12d3-a456-426614174080")!,
+                author: GuildMembershipDTO(
+                    id: UUID(uuidString: "a23e4567-e89b-12d3-a456-426614174001")!,
+                    globalMember: GlobalMemberDTO(
+                        id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
+                        email: "john.developer@email.com",
+                        name: "John Developer",
+                        username: "johndev",
+                        avatarURL: "https://cdn.tradersguild.com/avatars/johndev.jpg",
+                        isOnline: true,
+                        globalReputation: 2450
+                    ),
+                    guild: GuildDTO(
+                        id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+                        name: "KAOS Trading Guild",
+                        description: "Premier guild for forex and cryptocurrency traders.",
+                        reputation: 45000,
+                        accuracy: 78,
+                        memberCount: 156,
+                        owner: GlobalMemberDTO(
+                            id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+                            email: "sarah.masters@email.com",
+                            name: "Sarah Masters",
+                            username: "tradingqueen",
+                            avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+                            isOnline: true,
+                            globalReputation: 5820
+                        ),
+                        ownerRole: .admin,
+                        dateCreated: Date(timeIntervalSince1970: 1705314600),
+                        imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+                        isJoined: true,
+                        currentMemberRole: .moderator,
+                        isOpen: true,
+                        membersOnline: 12
+                    ),
+                    roleInGuild: .moderator,
+                    dateJoined: Date(timeIntervalSince1970: 1718712300),
+                    reputation: 850,
+                    daysInGuild: 127,
+                    contributionScore: 78,
+                    isOnline: true
+                ),
+                content: "Sure! I saw a good entry point this morning.",
+                timestamp: Date(timeIntervalSinceNow: -2700),
+                timestampFormatted: "45 min ago",
+                isEdited: false,
+                isCurrentUserMessage: true,
+                canEdit: true,
+                canDelete: true,
+                isRead: true
+            ),
+            lastActivity: Date(timeIntervalSinceNow: -2700),
+            lastActivityFormatted: "45 min ago",
+            unreadCount: 3,
+            isBlocked: false
+        )
+    
     
     // MARK: - Friends (with embedded GuildMembershipDTO + GuildSummaryDTO array)
     static let friends: [GuildFriendDTO] = [
