@@ -53,7 +53,7 @@ class MockAPIService {
     func fetchUserGuilds() async throws -> [GuildDTO] {
         try await simulateNetworkDelay()
         // ✅ Return guilds the user is a member of
-        return [SampleData.sampleGuild]  // User is member of this guild
+        return SampleData.userGuilds  // User is member of this guild
     }
     
     func fetchGuildById(guildId: UUID) async throws -> GuildDTO? {

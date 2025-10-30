@@ -222,9 +222,9 @@ struct GuildSelectionRowFull: View {
         .buttonStyle(.plain)
     }
     
-    private func mockOnlineCount(for guild: GuildDTO) -> Int {
-        Int(Double(guild.memberCount) * 0.3)
-    }
+//    private func mockOnlineCount(for guild: GuildDTO) -> Int {
+//        Int(Double(guild.memberCount) * 0.3)
+//    }
 }
 
 #Preview {

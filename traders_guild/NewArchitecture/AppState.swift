@@ -310,9 +310,11 @@ class AppState: ObservableObject {
     
     
     /// Fetch all guilds the user is a member of
+    // MARK: - need to add user id
     func fetchUserGuilds() async throws -> [GuildDTO] {
+        isLoading = true
         errorMessage = nil
-        
+        defer { isLoading = false }
         do {
             let guilds = try await api.fetchUserGuilds()
             return guilds

@@ -98,7 +98,7 @@ struct RightDrawerMainView: View {
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
-                        Text("KAOS")
+                        Text("\(guild.name)")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)

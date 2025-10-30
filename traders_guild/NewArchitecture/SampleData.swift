@@ -89,6 +89,59 @@ struct SampleData {
         membersOnline: 12
     )
     
+    // MARK: - Open Guilds (with embedded GlobalMemberDTO owner)
+    static let userGuilds: [GuildDTO] = [
+        
+        GuildDTO(
+            id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+            name: "KAOS",
+            description: "Premier guild for forex and cryptocurrency traders. We focus on technical analysis, risk management, and collaborative learning. All skill levels welcome!",
+            reputation: 45000,
+            accuracy: 78,
+            memberCount: 156,
+            owner: GlobalMemberDTO(
+                id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+                email: "sarah.masters@email.com",
+                name: "Sarah Masters",
+                username: "tradingqueen",
+                avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+                isOnline: true,
+                globalReputation: 5820
+            ),
+            ownerRole: .admin,
+            dateCreated: Date(timeIntervalSince1970: 1705314600),
+            imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+            isJoined: true,
+            currentMemberRole: .moderator,
+            isOpen: true,
+            membersOnline: 12
+        ),
+        GuildDTO(
+            id: UUID(uuidString: "b23e4567-e89b-12d3-a456-234234220001")!,
+            name: "MEGA",
+            description: "Premier guild for forex and cryptocurrency traders. We focus on technical analysis, risk management, and collaborative learning. All skill levels welcome!",
+            reputation: 423,
+            accuracy: 54,
+            memberCount: 12,
+            owner: GlobalMemberDTO(
+                id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
+                email: "crypto.king@email.com",
+                name: "Crypto King",
+                username: "cryptoking",
+                avatarURL: nil,
+                isOnline: false,
+                globalReputation: 4200
+            ),
+            ownerRole: .admin,
+            dateCreated: Date(timeIntervalSince1970: 1705314600),
+            imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+            isJoined: true,
+            currentMemberRole: .member,
+            isOpen: true,
+            membersOnline: 1
+        )
+        
+    ]
     
     
     // MARK: - Open Guilds (with embedded GlobalMemberDTO owner)
