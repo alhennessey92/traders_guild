@@ -33,7 +33,7 @@ struct UserDMRowView: View {
                     if userDM.participant.isOnline {
                         Circle()
                             .fill(AppColors.bullCandleGreen)
-                            .frame(width: 12, height: 12)
+                            .frame(width: 10, height: 10)
                             .overlay(
                                 Circle()
                                     .stroke(AppColors.drawerBackground, lineWidth: 2)
@@ -41,8 +41,8 @@ struct UserDMRowView: View {
                     } else{
                         
                         Circle()
-                            .fill(AppColors.bearCandleRed)
-                            .frame(width: 12, height: 12)
+                            .fill(AppColors.greyText)
+                            .frame(width: 10, height: 10)
                             .overlay(
                                 Circle()
                                     .stroke(AppColors.drawerBackground, lineWidth: 2)
@@ -53,16 +53,30 @@ struct UserDMRowView: View {
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
                     HStack (spacing: 2){
-//                        if user.isFriend {
-//                            Image(systemName: "star.fill")
-//                                .font(.caption2)
-//                                .foregroundColor(AppColors.accentColor)
-//                            
-//                        }
+                        if userDM.participant.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.bearCandleRed)
+                                
+                        }
+                    
                         Text(userDM.participant.globalMember.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundColor(AppColors.whiteText)
+                            .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.whiteText)
+                        
+                        
+                        if userDM.participant.isFriend {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.8))
+                                .padding(.top, 2)
+                                .padding(.leading, 2)
+                        }
+
+                        
                         
                     }
             
@@ -97,17 +111,17 @@ struct UserDMRowView: View {
                 Spacer()
                 
                 // Friend indicator & chevron
-//                HStack(spacing: 2) {
-//                    if user.newMessage {
-//                        Circle()
-//                            .fill(AppColors.accentDarkColor)
-//                            .stroke(AppColors.accentColor, lineWidth: 2)
-//                            .frame(width: 10, height: 10)
-//                    }
-//                    
-//                    
-//                        
-//                }
+                HStack(spacing: 2) {
+                    if userDM.hasUnread {
+                        Circle()
+                            .fill(AppColors.accentDarkColor)
+                            .stroke(AppColors.accentColor, lineWidth: 2)
+                            .frame(width: 8, height: 8)
+                    }
+                    
+                    
+                        
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)

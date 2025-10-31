@@ -155,8 +155,8 @@ struct RightDrawerMainView: View {
                         DMDisclosureGroup(
                             title: "Friends",
                             count: rightDrawerViewModel.guildFriends.count,
-                            icon: "star.fill",
-                            iconColor: AppColors.accentColor,
+                            icon: "person.crop.circle.badge.checkmark",
+                            iconColor: AppColors.whiteText,
                             userDMs: rightDrawerViewModel.guildFriends,
                             onUserTap: { userDM in
                                 messagingManager.openUserDM(userDM)

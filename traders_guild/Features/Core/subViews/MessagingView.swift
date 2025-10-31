@@ -248,7 +248,7 @@ struct UserDMHeaderView: View {
                 }
                 else{
                     Circle()
-                        .fill(AppColors.bearCandleRed)
+                        .fill(AppColors.greyText)
                         .frame(width: 10, height: 10)
                         .overlay(
                             Circle()
@@ -261,10 +261,28 @@ struct UserDMHeaderView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack (spacing: 2){
 
+                    if userDM.participant.isBlocked {
+                        Image(systemName: "nosign")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.bearCandleRed)
+                            
+                    }
                     Text(userDM.participant.globalMember.username)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .foregroundColor(AppColors.whiteText)
+                        .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.whiteText)
+                    
+                    
+                    
+                    if userDM.participant.isFriend {
+                        Image(systemName: "person.crop.circle.badge.checkmark")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.8))
+                            .padding(.top, 2)
+                            .padding(.leading, 2)
+                    }
                     
                 }
                 
@@ -323,16 +341,22 @@ struct ChatroomHeaderView: View {
             
             // Chatroom info
             VStack(alignment: .leading, spacing: 4) {
-                Text(chatroom.name)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.whiteText)
-                
-                HStack(spacing: 6) {
+                HStack(spacing: 3){
                     Circle()
                         .fill(chatroom.isActive ? AppColors.bullCandleGreen : Color.gray.opacity(0.5))
-                        .frame(width: 6, height: 6)
-                    Text("\(chatroom.memberCount) members")
+                        .frame(width: 8, height: 8)
+                    
+                    Text(chatroom.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                }
+                
+                
+                HStack(spacing: 6) {
+                    
+                    Text(chatroom.description ?? chatroom.lastActivityFormatted)
                         .font(.caption2)
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
                 }
@@ -719,24 +743,65 @@ struct ChatroomMessageView: View {
             if message.isCurrentUserMessage {
                 Spacer()
             } else {
-                Circle()
-                    .fill(AppColors.accentColor.opacity(0.3))
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Text(String(message.author.globalMember.username.prefix(2)))
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                    )
+                ZStack(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(AppColors.accentColor.opacity(0.3))
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Text(String(message.author.globalMember.username.prefix(2)))
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.accentColor)
+                        )
+                    
+                    if (message.author.isOnline) {
+                        Circle()
+                            .fill(AppColors.bullCandleGreen)
+                            .frame(width: 10, height: 10)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppColors.sheetBackground, lineWidth: 2)
+                            )
+                    }
+                    else{
+                        Circle()
+                            .fill(AppColors.greyText)
+                            .frame(width: 10, height: 10)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppColors.sheetBackground, lineWidth: 2)
+                            )
+                    }
+                }
+                
             }
             
             VStack(alignment: message.alignment, spacing: 4) {
                 if !message.isCurrentUserMessage {
                     HStack(spacing: 2) {
+                        
+                        if message.author.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.bearCandleRed)
+                                
+                        }
+                        
                         Text(message.author.globalMember.username)
                             .font(.caption)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText.opacity(0.9))
+                            .foregroundColor(message.author.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.9))
+                        
+                        if message.author.isFriend {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(message.author.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.8))
+                                .padding(.top, 2)
+                                .padding(.leading, 2)
+                        }
+                        
                         
                         let role = message.author.roleInGuild
                         Circle()

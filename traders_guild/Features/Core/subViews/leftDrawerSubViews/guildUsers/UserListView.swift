@@ -97,11 +97,29 @@ struct GuildUserListRowView: View {
                 
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 2) {
+                    HStack(spacing: 4) {
+                        if user.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.bearCandleRed)
+                                
+                        }
                         Text(user.globalMember.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundColor(AppColors.whiteText)
+                            .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.whiteText)
+                        
+                        
+                        
+                        if user.isFriend {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.8))
+                                .padding(.top, 2)
+                                .padding(.leading, 2)
+                        }
                     }
             
                     HStack(spacing: 2) {
@@ -112,7 +130,7 @@ struct GuildUserListRowView: View {
                             .lineLimit(1)
                         Circle()
                             .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 5, height: 5)
+                            .frame(width: 4, height: 4)
                             .padding(.top, 1)
                             .padding(.leading, 3)
                             .padding(.trailing, 3)

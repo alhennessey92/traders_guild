@@ -60,7 +60,9 @@ struct SampleData {
             reputation: 850,
             daysInGuild: 127,
             contributionScore: 78,
-            isOnline: true
+            isOnline: true,
+            isFriend: false,
+            isBlocked: false
         )
     )
     
@@ -322,7 +324,9 @@ struct SampleData {
                 reputation: 5820,
                 daysInGuild: 282,
                 contributionScore: 95,
-                isOnline: true
+                isOnline: true,
+                isFriend: true,
+                isBlocked: false
             ),
             isOpen: true
         ),
@@ -372,7 +376,9 @@ struct SampleData {
                 reputation: 4200,
                 daysInGuild: 217,
                 contributionScore: 92,
-                isOnline: false
+                isOnline: false,
+                isFriend: false,
+                isBlocked: false
             ),
             isOpen: true
         )
@@ -420,7 +426,9 @@ struct SampleData {
             reputation: 5820,
             daysInGuild: 282,
             contributionScore: 95,
-            isOnline: true
+            isOnline: true,
+            isFriend: true,
+            isBlocked: false
         ),
         GuildMembershipDTO(
             id: UUID(uuidString: "323e4567-e89b-12d3-a456-426614174010")!,
@@ -462,7 +470,9 @@ struct SampleData {
             reputation: 3200,
             daysInGuild: 228,
             contributionScore: 88,
-            isOnline: false
+            isOnline: false,
+            isFriend: false,
+            isBlocked: false
         ),
         GuildMembershipDTO(
             id: UUID(uuidString: "a23e4567-e89b-12d3-a456-426614174001")!,
@@ -504,7 +514,9 @@ struct SampleData {
             reputation: 850,
             daysInGuild: 127,
             contributionScore: 78,
-            isOnline: true
+            isOnline: true,
+            isFriend: false,
+            isBlocked: false
         ),
         GuildMembershipDTO(
             id: UUID(uuidString: "423e4567-e89b-12d3-a456-426614174011")!,
@@ -546,7 +558,9 @@ struct SampleData {
             reputation: 450,
             daysInGuild: 101,
             contributionScore: 65,
-            isOnline: true
+            isOnline: true,
+            isFriend: true,
+            isBlocked: false
         ),
         GuildMembershipDTO(
             id: UUID(uuidString: "623e4567-e89b-12d3-a456-426614174013")!,
@@ -588,7 +602,9 @@ struct SampleData {
             reputation: 320,
             daysInGuild: 65,
             contributionScore: 52,
-            isOnline: false
+            isOnline: false,
+            isFriend: false,
+            isBlocked: true
         )
     ]
     
@@ -637,7 +653,9 @@ struct SampleData {
                 reputation: 5820,
                 daysInGuild: 282,
                 contributionScore: 95,
-                isOnline: true
+                isOnline: true,
+                isFriend: true,
+                isBlocked: false
             ),
             title: "New Trading Hours and Market Analysis Session",
             content: """
@@ -699,7 +717,9 @@ struct SampleData {
                 reputation: 3200,
                 daysInGuild: 228,
                 contributionScore: 88,
-                isOnline: false
+                isOnline: false,
+                isFriend: true,
+                isBlocked: false
             ),
             title: "Weekend Trading Workshop",
             content: """
@@ -766,7 +786,9 @@ struct SampleData {
                 reputation: 3200,
                 daysInGuild: 228,
                 contributionScore: 88,
-                isOnline: false
+                isOnline: false,
+                isFriend: true,
+                isBlocked: false
             ),
             title: "Live EUR/USD Trading Session",
             content: """
@@ -834,7 +856,9 @@ struct SampleData {
                     reputation: 450,
                     daysInGuild: 101,
                     contributionScore: 65,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 GuildMembershipDTO(
                     id: UUID(uuidString: "623e4567-e89b-12d3-a456-426614174013")!,
@@ -876,7 +900,9 @@ struct SampleData {
                     reputation: 320,
                     daysInGuild: 65,
                     contributionScore: 52,
-                    isOnline: false
+                    isOnline: false,
+                    isFriend: false,
+                    isBlocked: false
                 )
             ],
             isImportant: true,
@@ -925,7 +951,9 @@ struct SampleData {
                 reputation: 5820,
                 daysInGuild: 282,
                 contributionScore: 95,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             title: "Monthly Trading Competition",
             content: """
@@ -1107,7 +1135,9 @@ struct SampleData {
                 reputation: 5820,
                 daysInGuild: 282,
                 contributionScore: 95,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             dateCreated: Date(timeIntervalSinceNow: -1987200),
             symbols: [
@@ -1208,7 +1238,9 @@ struct SampleData {
                 reputation: 450,
                 daysInGuild: 90,
                 contributionScore: 72,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             guild: GuildDTO(
                 id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
@@ -1282,7 +1314,9 @@ struct SampleData {
                 reputation: 850,
                 daysInGuild: 127,
                 contributionScore: 78,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             guild: GuildDTO(
                 id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
@@ -1356,7 +1390,9 @@ struct SampleData {
                 reputation: 50,
                 daysInGuild: 1,
                 contributionScore: 5,
-                isOnline: false
+                isOnline: false,
+                isFriend: false,
+                isBlocked: false
             ),
             guild: GuildDTO(
                 id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
@@ -1430,7 +1466,9 @@ struct SampleData {
                 reputation: 2500,
                 daysInGuild: 365,
                 contributionScore: 100,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             guild: GuildDTO(
                 id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
@@ -1504,7 +1542,9 @@ struct SampleData {
                 reputation: 850,
                 daysInGuild: 127,
                 contributionScore: 78,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             guild: GuildDTO(
                 id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
@@ -1578,7 +1618,9 @@ struct SampleData {
                 reputation: 850,
                 daysInGuild: 127,
                 contributionScore: 78,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             guild: GuildDTO(
                 id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
@@ -1652,7 +1694,9 @@ struct SampleData {
                 reputation: 2500,
                 daysInGuild: 365,
                 contributionScore: 100,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             guild: GuildDTO(
                 id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
@@ -1726,7 +1770,9 @@ struct SampleData {
                 reputation: 850,
                 daysInGuild: 127,
                 contributionScore: 78,
-                isOnline: true
+                isOnline: true,
+                isFriend: true,
+                isBlocked: false
             ),
             guild: GuildDTO(
                 id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
@@ -1805,7 +1851,9 @@ struct SampleData {
                 reputation: 450,
                 daysInGuild: 101,
                 contributionScore: 65,
-                isOnline: true
+                isOnline: true,
+                isFriend: true,
+                isBlocked: false
             ),
             content: "Good morning everyone! How are the markets looking today?",
             timestamp: Date(timeIntervalSinceNow: -28800),
@@ -1858,7 +1906,9 @@ struct SampleData {
                 reputation: 850,
                 daysInGuild: 127,
                 contributionScore: 78,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             content: "Looking bullish on gold! Expecting a breakout soon.",
             timestamp: Date(timeIntervalSinceNow: -28500),
@@ -1911,7 +1961,9 @@ struct SampleData {
                 reputation: 3200,
                 daysInGuild: 228,
                 contributionScore: 88,
-                isOnline: false
+                isOnline: false,
+                isFriend: false,
+                isBlocked: true
             ),
             content: "Just saw a great setup on EUR/USD! 📈",
             timestamp: Date(timeIntervalSinceNow: -120),
@@ -1973,7 +2025,9 @@ struct SampleData {
                     reputation: 3200,
                     daysInGuild: 228,
                     contributionScore: 88,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Just saw a great setup on EUR/USD! 📈",
                 timestamp: Date(timeIntervalSinceNow: -120),
@@ -2054,7 +2108,9 @@ struct SampleData {
                 reputation: 450,
                 daysInGuild: 101,
                 contributionScore: 65,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             content: "Hey! Want to discuss that EUR/USD setup?",
             timestamp: Date(timeIntervalSinceNow: -3600),
@@ -2108,7 +2164,9 @@ struct SampleData {
                 reputation: 850,
                 daysInGuild: 127,
                 contributionScore: 78,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             content: "Sure! I saw a good entry point this morning.",
             timestamp: Date(timeIntervalSinceNow: -3300),
@@ -2166,7 +2224,9 @@ struct SampleData {
                 reputation: 450,
                 daysInGuild: 101,
                 contributionScore: 65,
-                isOnline: true
+                isOnline: true,
+                isFriend: true,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174092")!,
@@ -2211,7 +2271,9 @@ struct SampleData {
                     reputation: 850,
                     daysInGuild: 127,
                     contributionScore: 78,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Sure! I saw a good entry point this morning.",
                 timestamp: Date(timeIntervalSinceNow: -2700),
@@ -2270,7 +2332,9 @@ struct SampleData {
                 reputation: 3200,
                 daysInGuild: 228,
                 contributionScore: 88,
-                isOnline: false
+                isOnline: false,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174093")!,
@@ -2315,7 +2379,9 @@ struct SampleData {
                     reputation: 3200,
                     daysInGuild: 228,
                     contributionScore: 88,
-                    isOnline: false
+                    isOnline: false,
+                    isFriend: true,
+                    isBlocked: true
                 ),
                 content: "See you at the trading session tomorrow!",
                 timestamp: Date(timeIntervalSinceNow: -86400),
@@ -2378,7 +2444,9 @@ struct SampleData {
                 reputation: 450,
                 daysInGuild: 101,
                 contributionScore: 65,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174092")!,
@@ -2423,7 +2491,9 @@ struct SampleData {
                     reputation: 850,
                     daysInGuild: 127,
                     contributionScore: 78,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Sure! I saw a good entry point this morning.",
                 timestamp: Date(timeIntervalSinceNow: -2700),
@@ -2486,7 +2556,9 @@ struct SampleData {
                 reputation: 980,
                 daysInGuild: 168,
                 contributionScore: 82,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174094")!,
@@ -2531,7 +2603,9 @@ struct SampleData {
                     reputation: 980,
                     daysInGuild: 168,
                     contributionScore: 82,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Bitcoin looks bullish! Check the 4H chart 📈",
                 timestamp: Date(timeIntervalSinceNow: -1800),
@@ -2590,7 +2664,9 @@ struct SampleData {
                 reputation: 2100,
                 daysInGuild: 270,
                 contributionScore: 95,
-                isOnline: false
+                isOnline: false,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174095")!,
@@ -2635,7 +2711,9 @@ struct SampleData {
                     reputation: 850,
                     daysInGuild: 127,
                     contributionScore: 78,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Thanks for the scalping tips yesterday!",
                 timestamp: Date(timeIntervalSinceNow: -7200),
@@ -2694,7 +2772,9 @@ struct SampleData {
                 reputation: 1250,
                 daysInGuild: 199,
                 contributionScore: 87,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174096")!,
@@ -2739,7 +2819,9 @@ struct SampleData {
                     reputation: 1250,
                     daysInGuild: 199,
                     contributionScore: 87,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Want to join the options webinar this weekend?",
                 timestamp: Date(timeIntervalSinceNow: -10800),
@@ -2802,7 +2884,9 @@ struct SampleData {
                 reputation: 320,
                 daysInGuild: 84,
                 contributionScore: 52,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174097")!,
@@ -2847,7 +2931,9 @@ struct SampleData {
                     reputation: 320,
                     daysInGuild: 84,
                     contributionScore: 52,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Do you have any thoughts on GBP/JPY right now?",
                 timestamp: Date(timeIntervalSinceNow: -900),
@@ -2906,7 +2992,9 @@ struct SampleData {
                 reputation: 180,
                 daysInGuild: 61,
                 contributionScore: 38,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174098")!,
@@ -2951,7 +3039,9 @@ struct SampleData {
                     reputation: 850,
                     daysInGuild: 127,
                     contributionScore: 78,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Happy to help! Check the pinned messages in #analysis",
                 timestamp: Date(timeIntervalSinceNow: -5400),
@@ -3010,7 +3100,9 @@ struct SampleData {
                 reputation: 740,
                 daysInGuild: 136,
                 contributionScore: 71,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174099")!,
@@ -3055,7 +3147,9 @@ struct SampleData {
                     reputation: 740,
                     daysInGuild: 136,
                     contributionScore: 71,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Crude oil futures looking interesting. Are you tracking WTI?",
                 timestamp: Date(timeIntervalSinceNow: -14400),
@@ -3118,7 +3212,9 @@ struct SampleData {
                 reputation: 395,
                 daysInGuild: 102,
                 contributionScore: 58,
-                isOnline: false
+                isOnline: false,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174100")!,
@@ -3163,7 +3259,9 @@ struct SampleData {
                     reputation: 850,
                     daysInGuild: 127,
                     contributionScore: 78,
-                    isOnline: true
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "I'll review your chart analysis when you're back online",
                 timestamp: Date(timeIntervalSinceNow: -21600),
@@ -3222,7 +3320,9 @@ struct SampleData {
                 reputation: 125,
                 daysInGuild: 43,
                 contributionScore: 31,
-                isOnline: false
+                isOnline: false,
+                isFriend: false,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174101")!,
@@ -3267,7 +3367,9 @@ struct SampleData {
                     reputation: 125,
                     daysInGuild: 43,
                     contributionScore: 31,
-                    isOnline: false
+                    isOnline: false,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Could you recommend some penny stock resources?",
                 timestamp: Date(timeIntervalSinceNow: -43200),
@@ -3326,7 +3428,9 @@ struct SampleData {
                 reputation: 610,
                 daysInGuild: 167,
                 contributionScore: 69,
-                isOnline: false
+                isOnline: false,
+                isFriend: true,
+                isBlocked: false
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174102")!,
@@ -3371,7 +3475,9 @@ struct SampleData {
                     reputation: 610,
                     daysInGuild: 167,
                     contributionScore: 69,
-                    isOnline: false
+                    isOnline: false,
+                    isFriend: false,
+                    isBlocked: false
                 ),
                 content: "Thanks for the momentum indicator tips!",
                 timestamp: Date(timeIntervalSinceNow: -172800),
@@ -3434,7 +3540,9 @@ struct SampleData {
                 reputation: 450,
                 daysInGuild: 101,
                 contributionScore: 65,
-                isOnline: true
+                isOnline: true,
+                isFriend: false,
+                isBlocked: false
             ),
             friendshipDate: Date(timeIntervalSince1970: 1717246800),
             friendshipDuration: "Friends for 5 months",
@@ -3485,7 +3593,9 @@ struct SampleData {
                         reputation: 5820,
                         daysInGuild: 282,
                         contributionScore: 95,
-                        isOnline: true
+                        isOnline: true,
+                        isFriend: false,
+                        isBlocked: false
                     ),
                     isOpen: true
                 )
