@@ -104,165 +104,6 @@ class AppState: ObservableObject {
         }
     }
     
-    // ================================================================================================
-    // MARK: - Authentication
-    // ================================================================================================
-    
-    /// Signup with email and password
-    /// /// Signup with email and password
-    func signUp(data: SignupData) async throws {
-        isLoading = true
-        errorMessage = nil
-        isCompletingSignup = true  // ✅ Set flag
-        
-        defer {
-            isLoading = false
-            isCompletingSignup = false  // ✅ Clear flag
-        }
-        
-        do {
-            let response = try await api.signUp(data: data)
-            self.currentUser = response.user
-            self.authToken = response.token
-            
-            if let selectedGuildId = data.selectedGuildId {
-                try await joinGuild(guildId: selectedGuildId)
-                
-                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
-                    self.currentGuild = selectedGuild
-                } else {
-                    if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
-                        self.currentGuild = joinedGuild
-                    }
-                }
-            }
-            
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            errorMessage = "Signup failed: \(error.localizedDescription)"
-            throw error
-        }
-    }
-//    func signUp(data: SignupData) async throws {
-//        isLoading = true
-//        errorMessage = nil
-//        
-//        defer {
-//            isLoading = false
-//        }
-//        
-//        do {
-//            let response = try await api.signUp(data: data)
-//            self.currentUser = response.user
-//            self.authToken = response.token
-//            
-//            // ✅ If user selected a guild during signup, set it as current guild
-//            if let selectedGuildId = data.selectedGuildId {
-//                // Join the guild
-//                try await joinGuild(guildId: selectedGuildId)
-//                
-//                // ✅ Use the guild from availableGuilds (already fetched in SignupGuildView!)
-//                // No need to fetch again
-//                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
-//                    self.currentGuild = selectedGuild
-//                } else {
-//                    // Fallback: fetch if somehow not in list
-//                    if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
-//                        self.currentGuild = joinedGuild
-//                    }
-//                }
-//            }
-//            
-//        } catch is CancellationError {
-//            throw CancellationError()
-//        } catch {
-//            errorMessage = "Signup failed: \(error.localizedDescription)"
-//            throw error
-//        }
-//    }
-    /// Login with email and password
-    func login(email: String, password: String) async throws {
-        isLoading = true
-        errorMessage = nil
-        
-        defer {
-            isLoading = false
-        }
-        
-        do {
-            let response = try await api.login(email: email, password: password)
-            self.currentUser = response.user
-            self.authToken = response.token
-            
-            // ✅ Fetch user's guilds
-            let userGuilds = try await fetchUserGuilds()
-            self.availableGuildsForSelection = userGuilds
-            
-            // ✅ Show guild selection sheet (currentGuild is still nil)
-            showGuildSelectionSheet = true
-            
-        } catch {
-            errorMessage = "Login failed: \(error.localizedDescription)"
-            throw error
-        }
-    }
-//    /// Login with email and password
-//    func login(email: String, password: String) async throws {
-//        isLoading = true
-//        errorMessage = nil
-//        
-//        defer {
-//            isLoading = false
-//        }
-//        
-//        do {
-//            let response = try await api.login(email: email, password: password)
-//            self.currentUser = response.user
-//            self.authToken = response.token
-//            
-//            // ✅ Fetch and set user's current guild after login
-//            // In production, this would come from the user's last active guild
-//            // For now, we'll use sample data
-//            let userGuild = try await fetchUserGuilds()
-//            self.currentGuild = userGuild.first
-//            
-//            showLoginSheet = false
-//            
-//        } catch {
-//            errorMessage = "Login failed: \(error.localizedDescription)"
-//            throw error
-//        }
-//    }
-    
-    /// Logout and clear session
-    func logout() {
-        currentUser = nil
-        authToken = nil
-        currentGuild = nil
-        clearKeychain()
-        //showLoginSheet = true
-    }
-    
-    /// Restore saved session from storage
-    private func restoreSession() async {
-        if let savedToken = getTokenFromKeychain(),
-           let savedUser = getUserFromKeychain() {
-            
-            self.authToken = savedToken
-            self.currentUser = savedUser
-            
-            // Restore current guild if exists
-            if let savedGuild = getCurrentGuildFromKeychain() {
-                self.currentGuild = savedGuild
-            }
-            
-            // TODO: Validate token with backend
-            
-        }
-        // Mark initial load as complete
-        hasCompletedInitialLoad = true
-    }
     
     // ================================================================================================
     // MARK: - Transition Management
@@ -273,11 +114,10 @@ class AppState: ObservableObject {
         showingTransition = false
     }
     
+    
     // ================================================================================================
     // MARK: - Error Management Methods
     // ================================================================================================
-    
-
     
     // In AppState.swift
 
@@ -361,8 +201,109 @@ class AppState: ObservableObject {
         currentAlert = nil
     }
     
+    
     // ================================================================================================
-    // MARK: - Guild Management
+    // MARK: - Authentication - API
+    // ================================================================================================
+    
+    /// Signup with email and password
+    /// /// Signup with email and password
+    func signUp(data: SignupData) async throws {
+        isLoading = true
+        errorMessage = nil
+        isCompletingSignup = true  // ✅ Set flag
+        
+        defer {
+            isLoading = false
+            isCompletingSignup = false  // ✅ Clear flag
+        }
+        
+        do {
+            let response = try await api.signUp(data: data)
+            self.currentUser = response.user
+            self.authToken = response.token
+            
+            if let selectedGuildId = data.selectedGuildId {
+                try await joinGuild(guildId: selectedGuildId)
+                
+                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
+                    self.currentGuild = selectedGuild
+                } else {
+                    if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
+                        self.currentGuild = joinedGuild
+                    }
+                }
+            }
+            
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            errorMessage = "Signup failed: \(error.localizedDescription)"
+            throw error
+        }
+    }
+
+    /// Login with email and password
+    func login(email: String, password: String) async throws {
+        isLoading = true
+        errorMessage = nil
+        
+        defer {
+            isLoading = false
+        }
+        
+        do {
+            let response = try await api.login(email: email, password: password)
+            self.currentUser = response.user
+            self.authToken = response.token
+            
+            // ✅ Fetch user's guilds
+            let userGuilds = try await fetchUserGuilds()
+            self.availableGuildsForSelection = userGuilds
+            
+            // ✅ Show guild selection sheet (currentGuild is still nil)
+            showGuildSelectionSheet = true
+            
+        } catch {
+            errorMessage = "Login failed: \(error.localizedDescription)"
+            throw error
+        }
+    }
+
+    
+    /// Logout and clear session
+    func logout() {
+        currentUser = nil
+        authToken = nil
+        currentGuild = nil
+        clearKeychain()
+        //showLoginSheet = true
+    }
+    
+    /// Restore saved session from storage
+    private func restoreSession() async {
+        if let savedToken = getTokenFromKeychain(),
+           let savedUser = getUserFromKeychain() {
+            
+            self.authToken = savedToken
+            self.currentUser = savedUser
+            
+            // Restore current guild if exists
+            if let savedGuild = getCurrentGuildFromKeychain() {
+                self.currentGuild = savedGuild
+            }
+            
+            // TODO: Validate token with backend
+            
+        }
+        // Mark initial load as complete
+        hasCompletedInitialLoad = true
+    }
+    
+
+    
+    // ================================================================================================
+    // MARK: - Guild Management - API
     // ================================================================================================
     
     /// Switch to a different guild
@@ -399,7 +340,6 @@ class AppState: ObservableObject {
         }
     }
     
-    
     /// Fetch all guilds the user is a member of
     // MARK: - need to add user id
     func fetchUserGuilds() async throws -> [GuildDTO] {
@@ -414,7 +354,6 @@ class AppState: ObservableObject {
             throw error
         }
     }
-    
     
     /// Fetch a specific guild by ID
     func fetchGuildById(guildId: UUID) async throws -> GuildDTO? {
@@ -460,7 +399,6 @@ class AppState: ObservableObject {
             throw error
         }
     }
-    
     
     /// Fetch announcements for a guild
     func fetchGuildAnnouncements(guildId: UUID) async throws -> [GuildAnnouncementDTO] {
@@ -545,6 +483,12 @@ class AppState: ObservableObject {
             throw error
         }
     }
+    
+    
+    
+    // ================================================================================================
+    // MARK: - Messaging - API
+    // ================================================================================================
     
     
     /// Fetch or Create UserDM for Guild
@@ -645,8 +589,115 @@ class AppState: ObservableObject {
         }
     }
     
+    /// Send Chatroom Message
+    func sendChatroomMessage(chatroomId: UUID, content: String) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.sendChatroomMessage(chatroomId: chatroomId, userId: currentUser.id, content: content)
+        } catch {
+            showError(error, title: "Failed to send message to Chatroom", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Send DM Message
+    func sendDMMessage(dmId: UUID, content: String) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.sendDMMessage(dmId: dmId, userId: currentUser.id, content: content)
+        } catch {
+            showError(error, title: "Failed to send message to DM", style: .toast)
+            throw error
+        }
+    }
+    
+    
+    /// Delete Chatroom Message
+    func deleteChatroomMessage(messageId: UUID, chatroomId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.deleteChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId)
+        } catch {
+            showError(error, title: "Failed to delete chatroom message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// report Chatroom Message
+    func reportChatroomMessage(messageId: UUID, chatroomId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.reportChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId)
+        } catch {
+            showError(error, title: "Failed to report chatroom message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// edit Chatroom Message
+    func editChatroomMessage(messageId: UUID, newContent: String, chatroomId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.editChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId, newContent: newContent)
+        } catch {
+            showError(error, title: "Failed to edit chatroom message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Delete DM Message
+    func deleteDMMessage(messageId: UUID, dmId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.deleteDMMessage(messageId: messageId, userId: currentUser.id, dmId: dmId)
+        } catch {
+            showError(error, title: "Failed to delete DM message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// edit Chatroom Message
+    func editDMMessage(messageId: UUID, newContent: String, dmId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.editDMMessage(messageId: messageId, userId: currentUser.id, dmId: dmId, newContent: newContent)
+        } catch {
+            showError(error, title: "Failed to edit DM message", style: .toast)
+            throw error
+        }
+    }
+    
+    
     // ================================================================================================
-    // MARK: - User Management
+    // MARK: - User Management - API
     // ================================================================================================
     
     

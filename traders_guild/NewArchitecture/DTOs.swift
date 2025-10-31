@@ -61,6 +61,26 @@ enum MemberRole: String, Codable, CaseIterable {
     var canAdmin: Bool {
         self == .admin
     }
+    
+    /// Returns the hierarchical level of the role (higher = more power)
+    var hierarchyLevel: Int {
+        switch self {
+        case .admin: return 3
+        case .moderator: return 2
+        case .member: return 1
+        }
+    }
+    
+    /// Check if this role can delete a message from another role
+    func canDelete(messageFrom authorRole: MemberRole, isOwnMessage: Bool) -> Bool {
+        // Always can delete own messages
+        if isOwnMessage {
+            return true
+        }
+        
+        // Can only delete if your role is higher than the author's role
+        return self.hierarchyLevel > authorRole.hierarchyLevel
+    }
 }
 
 // MARK: - Current User DTO
@@ -220,6 +240,8 @@ struct GuildMembershipDTO: Identifiable, Codable, Equatable {
     let daysInGuild: Int            // Pre-calculated by backend for efficiency
     let contributionScore: Int      // Activity metric (0-100, higher = more active)
     let isOnline: Bool              // Real-time online status for presence indicator
+    let isFriend: Bool              // Friend status for current user
+    let isBlocked: Bool             // Blocked status for current user 
     
     /// Formatted membership duration
     var memberSince: String {

@@ -16,7 +16,7 @@ class MockAPIService {
     }
     
     // ================================================================================================
-    // MARK: - Authentication
+    // MARK: - Authentication - API
     // ================================================================================================
     
     func signUp(data: SignupData) async throws -> authResponse {
@@ -40,7 +40,7 @@ class MockAPIService {
     }
     
     // ================================================================================================
-    // MARK: - Guild Operations
+    // MARK: - Guild Management - API
     // ================================================================================================
     
     /// fetch all open guilds for signup that require no authentication
@@ -101,6 +101,10 @@ class MockAPIService {
         return SampleData.userNotifications
     }
     
+    // ================================================================================================
+    // MARK: - Messaging - API
+    // ================================================================================================
+    
     /// Chat
     func fetchOrCreateUserDM(userId: UUID) async throws -> DMDTO {
         try await simulateNetworkDelay()
@@ -137,8 +141,43 @@ class MockAPIService {
         return SampleData.allGuildOfflineNonFriendDM
     }
     
+    func sendChatroomMessage(chatroomId: UUID, userId: UUID, content: String) async throws {
+        try await simulateNetworkDelay()
+        // Mock: send message
+    }
+    
+    func sendDMMessage(dmId: UUID, userId: UUID, content: String) async throws {
+        try await simulateNetworkDelay()
+        // Mock: send message
+    }
+    
+    func deleteChatroomMessage(messageId: UUID, userId: UUID, chatroomId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: send message
+    }
+    
+    func reportChatroomMessage(messageId: UUID, userId: UUID, chatroomId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: send message
+    }
+    
+    func editChatroomMessage(messageId: UUID, userId: UUID, chatroomId: UUID, newContent: String) async throws {
+        try await simulateNetworkDelay()
+        // Mock: send message
+    }
+    
+    func deleteDMMessage(messageId: UUID, userId: UUID, dmId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: send message
+    }
+    
+    func editDMMessage(messageId: UUID, userId: UUID, dmId: UUID, newContent: String) async throws {
+        try await simulateNetworkDelay()
+        // Mock: send message
+    }
+    
     // ================================================================================================
-    // MARK: - User Management
+    // MARK: - User Management - API
     // ================================================================================================
     
     func blockUser(guildId: UUID, userId: UUID) async throws {
@@ -162,60 +201,3 @@ struct authResponse {
     let token: String
 }
 
-
-
-//import Foundation
-//import SwiftUI
-//
-//// ================================================================================================
-//// MARK: - TEMP: Mock API Service
-//// ================================================================================================
-//// DELETE this when connecting to real backend
-//// Simulates network calls with sample data
-//// ================================================================================================
-//
-//class MockAPIService {
-//    
-//    // Simulate network delay
-//    private func simulateNetworkDelay() async throws {
-//        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-//    }
-//    
-//    
-//    func fetchGuilds() async -> [GuildDTO] {
-//        try? await Task.sleep(nanoseconds: 500_000_000)
-//        return SampleData.guilds
-//    }
-//    
-//    func fetchOpenGuilds() async throws -> [GuildDTO] {
-//        return SampleData.openGuilds
-//    }
-//    
-//    
-//    
-//    
-//    
-//    
-//    
-//    
-//    
-//    
-//
-////    func fetchAnnouncements() async -> [GuildAnnouncementDTO] {
-////        try? await Task.sleep(nanoseconds: 300_000_000)
-////        return SampleData.announcements()
-////    }
-//    
-//    func fetchEvents(guildId: UUID) async -> [GuildEventDTO] {
-//        return [] // Add sample events as needed
-//    }
-//    
-//    func fetchChatrooms(guildId: UUID) async -> [GuildChatroomDTO] {
-//        return [] // Add sample chatrooms as needed
-//    }
-//    
-//    func fetchWatchlists(guildId: UUID) async -> [GuildWatchlistDTO] {
-//        return [] // Add sample watchlists as needed
-//    }
-//    
-//}
