@@ -136,6 +136,20 @@ class MockAPIService {
         try await simulateNetworkDelay()
         return SampleData.allGuildOfflineNonFriendDM
     }
+    
+    // ================================================================================================
+    // MARK: - User Management
+    // ================================================================================================
+    
+    func blockUser(guildId: UUID, userId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful join
+    }
+    
+    func sendFriendRequest(guildId: UUID, userId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful join
+    }
 
 }
 

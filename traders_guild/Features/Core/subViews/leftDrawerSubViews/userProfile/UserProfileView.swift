@@ -15,30 +15,36 @@ enum UserSheetContent {
     case help
 }
 
-
 struct UserProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appState: AppState
     @State private var currentContent: UserSheetContent = .profile
-    @Binding var selectedDetent: PresentationDetent  // ADD THIS
+    @State private var selectedTab: ProfileTab = .overview  // ADD THIS
+    @Binding var selectedDetent: PresentationDetent
+
+    // Define your tabs
+    enum ProfileTab: String, CaseIterable {
+        case overview = "Overview"
+        case activity = "Activity"
+        case achievements = "Achievements"
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            // Switch content based on state with slide transitions
             Group {
                 switch currentContent {
                 case .profile:
                     profileView
                         .transition(.asymmetric(
                             insertion: .opacity,
-                            removal: .identity  // Instant removal
+                            removal: .identity
                         ))
                 case .switchGuild:
                     SwitchGuildView(
                         onBack: {
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 currentContent = .profile
-                                selectedDetent = .fraction(0.6)  // Shrink back
+                                selectedDetent = .fraction(0.6)
                             }
                         },
                         selectedDetent: $selectedDetent
@@ -48,7 +54,7 @@ struct UserProfileDetailView: View {
                     UserSettingsSheetView(onBack: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentContent = .profile
-                            selectedDetent = .fraction(0.6)  // Shrink back
+                            selectedDetent = .fraction(0.6)
                         }
                     })
                     .transition(.opacity)
@@ -56,15 +62,13 @@ struct UserProfileDetailView: View {
                     UserHelpSheetView(onBack: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentContent = .profile
-                            selectedDetent = .fraction(0.6)  // Shrink back
+                            selectedDetent = .fraction(0.6)
                         }
                     })
                     .transition(.opacity)
                 }
-               
             }
             
-            // Floating dismiss button overlaid on top
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
@@ -73,9 +77,6 @@ struct UserProfileDetailView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        
-        
-//        .background(AppColors.drawerBackground.opacity(0.8))
     }
     
     private var profileView: some View {
@@ -83,31 +84,23 @@ struct UserProfileDetailView: View {
             
             UserProfileHeaderView()
             
-            ScrollView(.vertical, showsIndicators: false) {
-                HStack(alignment: .center, spacing: 2) {
-                    Image(systemName: "globe")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("\(appState.currentUser?.globalReputation ?? 0)")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Global Reputation")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.greyText)
-                        .padding(.leading, 4)
-                }
-            }
-            .padding(.horizontal, 25)
-            .padding(.vertical, 20)
             
-//            Spacer(minLength: 0)
+            
+            // Tab Headers - Fixed
+            tabHeader
             
             Divider()
-                
-
+            
+            // Scrollable Tab Content
+            ScrollView(.vertical, showsIndicators: false) {
+                tabContent
+                    .padding(.horizontal, 25)
+                    .padding(.vertical, 20)
+            }
+            
+            Divider()
+            
+            // Action Buttons
             HStack(spacing: 8) {
                 DrawerActionButton(
                     title: "Switch Guild",
@@ -119,8 +112,6 @@ struct UserProfileDetailView: View {
                     action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentContent = .switchGuild
-                            //selectedDetent = .large
-                            // Keep current detent for switch guild
                         }
                     }
                 )
@@ -136,7 +127,7 @@ struct UserProfileDetailView: View {
                     action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentContent = .help
-                            selectedDetent = .large  // EXPAND TO LARGE FOR SETTINGS
+                            selectedDetent = .large
                         }
                     }
                 )
@@ -150,16 +141,14 @@ struct UserProfileDetailView: View {
                     action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentContent = .settings
-                            selectedDetent = .large  // EXPAND TO LARGE FOR SETTINGS
+                            selectedDetent = .large
                         }
                     }
                 )
-                
             }
             .padding(.horizontal, 25)
             .padding(.top, 20)
             .background(AppColors.sheetBackground)
-            
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
@@ -168,13 +157,136 @@ struct UserProfileDetailView: View {
                     .background(.ultraThinMaterial)
                 AppColors.sheetBackground
                 StaticPatternView()
-                
             }
         )
     }
     
+    // MARK: - Tab Header
+    private var tabHeader: some View {
+        HStack(spacing: 0) {
+            ForEach(ProfileTab.allCases, id: \.self) { tab in
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = tab
+                    }
+                }) {
+                    VStack(spacing: 8) {
+                        Text(tab.rawValue)
+                            .font(.subheadline)
+                            .fontWeight(selectedTab == tab ? .semibold : .regular)
+                            .foregroundColor(selectedTab == tab ? AppColors.accentColor : AppColors.greyText)
+                        
+                        // Active indicator
+                        Rectangle()
+                            .fill(selectedTab == tab ? AppColors.accentColor : Color.clear)
+                            .frame(height: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 25)
+        .padding(.top, 12)
+        .background(AppColors.sheetBackground)
+    }
+    
+    // MARK: - Tab Content
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .overview:
+            overviewContent
+        case .activity:
+            activityContent
+        case .achievements:
+            achievementsContent
+        }
+    }
+    
+    private var overviewContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Overview")
+                .font(.title3)
+                .fontWeight(.bold)
+            
+            // Add your overview content here
+            Text("User stats, bio, and other overview information...")
+                .foregroundColor(AppColors.greyText)
+            
+            // Example content to demonstrate scrolling
+            ForEach(0..<5) { i in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Section \(i + 1)")
+                        .font(.headline)
+                    Text("Some content here that makes the view scrollable...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .padding()
+                .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                .cornerRadius(12)
+            }
+        }
+    }
+    
+    private var activityContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Recent Activity")
+                .font(.title3)
+                .fontWeight(.bold)
+            
+            // Add your activity content here
+            ForEach(0..<8) { i in
+                HStack(spacing: 12) {
+                    Image(systemName: "circle.fill")
+                        .font(.caption)
+                        .foregroundColor(AppColors.accentColor)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Activity \(i + 1)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Description of the activity")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    
+                    Spacer()
+                }
+                .padding()
+                .background(AppColors.gradientBackgroundDark.opacity(0.1))
+                .cornerRadius(10)
+            }
+        }
+    }
+    
+    private var achievementsContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Achievements")
+                .font(.title3)
+                .fontWeight(.bold)
+            
+            // Add your achievements content here
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                ForEach(0..<10) { i in
+                    VStack(spacing: 8) {
+                        Image(systemName: "star.fill")
+                            .font(.title)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("Achievement \(i + 1)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                    .cornerRadius(12)
+                }
+            }
+        }
+    }
 }
-
 
 
 // MARK: - User Profile Header Component

@@ -153,12 +153,12 @@ struct SwitchGuildView: View {
         }
         .fullScreenCover(isPresented: $showJoinGuild) {
             JoinGuildFlowView()
-                .withGlobalAlerts()
+                
                 .environmentObject(appState)
         }
         .fullScreenCover(isPresented: $showCreateGuild) {
             CreateGuildFlowView()
-                .withGlobalAlerts()
+                
                 .environmentObject(appState)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -678,7 +678,7 @@ struct GuildDetailView: View {
                 }
             })
             .environmentObject(appState)
-            .withGlobalAlerts()
+            
         }
     }
     
@@ -793,7 +793,7 @@ struct CreateGuildFlowView: View {
                 dismiss()
             })
             .environmentObject(appState)
-            .withGlobalAlerts()
+            
             .background(
                 LinearGradient(
                     gradient: Gradient(colors: [

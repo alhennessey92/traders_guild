@@ -5,8 +5,8 @@
 ////  Created by Al Hennessey on 16/07/2025.
 ////
 ///
-///
-///
+
+
 import SwiftUI
 
 @main
@@ -33,24 +33,13 @@ struct traders_guildApp: App {
                         .environmentObject(appState)
                         .environmentObject(messagingManager)
                 } else {
-                    // ✅ Remove Group, put logic directly in ZStack
                     mainContent
                         .environmentObject(appState)
                         .environmentObject(messagingManager)
                 }
-                // ✅ Global Toast Display (non-blocking)
-                if let alert = appState.currentAlert, alert.style == .toast {
-                    VStack {
-                        Spacer()
-                        ErrorToastView(alert: alert, onDismiss: {
-                            appState.clearAlert()
-                        })
-                        .padding(.bottom, 20)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    .animation(.spring(), value: appState.currentAlert?.id)
-                }
+                // ❌ REMOVED - ToastWindowManager handles toasts now!
             }
+            // ✅ Keep blocking alerts - these still use currentAlert
             .alert(
                 appState.currentAlert?.title ?? "Alert",
                 isPresented: Binding(
@@ -66,41 +55,23 @@ struct traders_guildApp: App {
                     Text(alert.message)
                 }
             }
-//            .alert(
-//                "Error",
-//                isPresented: Binding(
-//                    get: { appState.errorMessage != nil },
-//                    set: { if !$0 { appState.errorMessage = nil } }
-//                )
-//            ) {
-//                Button("OK", role: .cancel) {
-//                    appState.errorMessage = nil
-//                }
-//            } message: {
-//                if let errorMessage = appState.errorMessage {
-//                    Text(errorMessage)
-//                }
-//            }
             .fullScreenCover(isPresented: $appState.showGuildSelectionSheet) {
                 GuildSelectionFullView()
                     .environmentObject(appState)
                     .environmentObject(messagingManager)
-                    .withGlobalAlerts()
+                    // ❌ REMOVED .withGlobalAlerts()
             }
         }
     }
     
-    // ✅ Extract to computed property
     @ViewBuilder
     private var mainContent: some View {
         if appState.isAuthenticated && appState.currentGuild != nil {
-            // State 1: User + Guild = Show main app
             MainView()
                 .preferredColorScheme(.dark)
-                .withGlobalAlerts()
+                // ❌ REMOVED .withGlobalAlerts()
                 
         } else if appState.isAuthenticated {
-            // State 2: User but no guild = Show loading + trigger selector
             VStack(spacing: 20) {
                 ProgressView()
                     .scaleEffect(1.5)
@@ -112,9 +83,8 @@ struct traders_guildApp: App {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppColors.gradientBackgroundDark.opacity(0.9))
-            .withGlobalAlerts()
+            // ❌ REMOVED .withGlobalAlerts()
             .onAppear {
-                // ✅ Don't trigger during signup completion
                 if !appState.isCompletingSignup && !appState.showGuildSelectionSheet {
                     Task {
                         await appState.openGuildSelector()
@@ -122,9 +92,8 @@ struct traders_guildApp: App {
                 }
             }
         } else {
-            // State 3: No user = Show auth flow
             ContentView()
-            .withGlobalAlerts()
+            // ❌ REMOVED .withGlobalAlerts()
         }
     }
 }

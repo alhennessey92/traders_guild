@@ -277,54 +277,83 @@ class AppState: ObservableObject {
     // MARK: - Error Management Methods
     // ================================================================================================
     
+
+    
+    // In AppState.swift
+
     /// Display an error to the user
     func showError(_ error: Error, title: String = "Error", style: AlertDisplayStyle = .alert) {
-        currentAlert = AppAlert(
+        let alert = AppAlert(
             title: title,
             message: error.localizedDescription,
             severity: .error,
             style: style
         )
+        
+        if style == .toast {
+            ToastWindowManager.shared.showToast(alert) {
+                self.clearAlert()
+            }
+        } else {
+            currentAlert = alert
+        }
     }
-    
+
     /// Display a custom error message
     func showError(title: String = "Error", message: String, severity: AlertSeverity = .error, style: AlertDisplayStyle = .alert) {
-        currentAlert = AppAlert(
+        let alert = AppAlert(
             title: title,
             message: message,
             severity: severity,
             style: style
         )
+        
+        if style == .toast {
+            ToastWindowManager.shared.showToast(alert) {
+                self.clearAlert()
+            }
+        } else {
+            currentAlert = alert
+        }
     }
-    
+
     /// Display a success message
     func showSuccess(_ message: String, title: String = "Success") {
-        currentAlert = AppAlert(
+        let alert = AppAlert(
             title: title,
             message: message,
             severity: .success,
             style: .toast
         )
+        ToastWindowManager.shared.showToast(alert) {
+            self.clearAlert()
+        }
     }
-    
+
     /// Display a warning message
     func showWarning(_ message: String, title: String = "Warning") {
-        currentAlert = AppAlert(
+        let alert = AppAlert(
             title: title,
             message: message,
             severity: .warning,
             style: .toast
         )
+        ToastWindowManager.shared.showToast(alert) {
+            self.clearAlert()
+        }
     }
-    
+
     /// Display an info message
     func showInfo(_ message: String, title: String = "Info") {
-        currentAlert = AppAlert(
+        let alert = AppAlert(
             title: title,
             message: message,
             severity: .info,
             style: .toast
         )
+        ToastWindowManager.shared.showToast(alert) {
+            self.clearAlert()
+        }
     }
     
     /// Clear the current alert
@@ -612,6 +641,35 @@ class AppState: ObservableObject {
             throw CancellationError()
         } catch {
             showError(error, title: "Failed to Fetch User DM", style: .toast)
+            throw error
+        }
+    }
+    
+    // ================================================================================================
+    // MARK: - User Management
+    // ================================================================================================
+    
+    
+    /// Block a User
+    func blockUser(guildId: UUID, userId: UUID) async throws {
+        errorMessage = nil
+        
+        do {
+            try await api.blockUser(guildId: guildId, userId: userId)
+        } catch {
+            showError(error, title: "Failed to Block User", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Add User as a Friend
+    func sendFriendRequest(guildId: UUID, userId: UUID) async throws {
+        errorMessage = nil
+        
+        do {
+            try await api.sendFriendRequest(guildId: guildId, userId: userId)
+        } catch {
+            showError(error, title: "Failed to send Friend Request", style: .toast)
             throw error
         }
     }

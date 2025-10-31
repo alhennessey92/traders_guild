@@ -27,17 +27,33 @@ struct WelcomeView: View {
             
             VStack(spacing: 20) {
                 
+                VStack(spacing: 0){
+                    Text("Traders")
+                        .font(AppFonts.title(size: 66))
+                        .foregroundColor(AppColors.whiteText)
+                        .multilineTextAlignment(.leading)
+                        //.lineSpacing(0)
+                        .frame(maxWidth: .infinity, alignment: .bottomLeading) // full width
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 50)
+//                        .padding(.bottom, 40)
+                        .padding(.leading, 20)
+                    
+                    Text("Guild")
+                        .font(AppFonts.title(size: 66))
+                        .foregroundColor(AppColors.whiteText)
+                        .multilineTextAlignment(.leading)
+                        //.lineSpacing(0)
+                        .frame(maxWidth: .infinity, alignment: .bottomLeading) // full width
+                        .fixedSize(horizontal: false, vertical: true)
+//                        .padding(.top, 50)
+                        .padding(.bottom, 40)
+                        .padding(.leading, 20)
+                    
+                }
+                
                 // Title
-                Text("Traders Guild")
-                    .font(AppFonts.title(size: 66))
-                    .foregroundColor(AppColors.whiteText)
-                    .multilineTextAlignment(.leading)
-                    .lineSpacing(0)
-                    .frame(maxWidth: .infinity, alignment: .bottomLeading) // full width
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 40)
-                    .padding(.bottom, 40)
-                    .padding(.leading, 20)
+                
                 
                 
 

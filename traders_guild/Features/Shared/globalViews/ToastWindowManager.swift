@@ -30,7 +30,7 @@ class ToastWindowManager: ObservableObject {
         
         guard let window = toastWindow else { return }
         
-        // Wrap toast in VStack to position at bottom
+        // ✅ Uses your ErrorToastView!
         let toastView = VStack {
             Spacer()
             ErrorToastView(alert: alert, onDismiss: {

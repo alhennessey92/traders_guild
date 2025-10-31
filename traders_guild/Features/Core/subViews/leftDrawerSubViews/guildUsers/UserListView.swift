@@ -158,119 +158,33 @@ struct GuildUserDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var messagingManager: MessagingManager // Add messaging manager
     @EnvironmentObject var appState: AppState
+    
+    @State private var selectedTab: ProfileTab = .overview
+    @State private var showBlockUserConfirmation = false
+    @State private var showAddFriendConfirmation = false
+    
+    // Define your tabs
+    enum ProfileTab: String, CaseIterable {
+        case overview = "Overview"
+        case activity = "Activity"
+        case achievements = "Achievements"
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // Main content
             VStack(alignment: .leading, spacing: 0) {
                 // Top header section with gradient background
-                VStack(alignment: .leading, spacing: 20) {
-                    // User header
-                    HStack(spacing: 15) {
-                        // Avatar with online indicator
-                        ZStack(alignment: .bottomTrailing) {
-                            Circle()
-                                .fill(AppColors.accentColor.opacity(0.3))
-                                .frame(width: 60, height: 60)
-                                .overlay(
-                                    Text(String(user.globalMember.username.prefix(2)))
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(AppColors.accentColor)
-                                )
-                            
-                            if user.isOnline {
-                                Circle()
-                                    .fill(AppColors.bullCandleGreen)
-                                    .frame(width: 12, height: 12)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(AppColors.drawerBackground, lineWidth: 2)
-                                    )
-                            }
-                        }
-                        
-                        // User info
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(user.globalMember.username)
-                                .font(.title3)
-                                .fontWeight(.medium)
-                                .foregroundColor(AppColors.whiteText)
-                            
-                            Text(user.roleInGuild.rawValue)
-                                .font(.caption)
-                                .foregroundColor(user.roleInGuild.roleForegroundColor)
-                                .fontWeight(user.roleInGuild.roleFontWeight)
-                                .lineLimit(1)
-                        }
-                        
-                        Spacer(minLength: 60) // Leave space for dismiss button
-                    }
-                    .padding(.horizontal, 25)
-                    .padding(.top, 25)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        // member since
-                        HStack(spacing: 6) {
-                            Image(systemName: "calendar")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.greyText)
-                            Text("\(user.memberSince)")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        
-                        // User guild reputation
-                        HStack(alignment: .center, spacing: 1) {
-                            Image(systemName: "shield.pattern.checkered")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                            Text("\(user.reputation)")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.accentColor)
-                            Text("Guild Reputation")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.greyText)
-                                .padding(.leading, 6)
-                        }
-                    }
-                    .padding(.horizontal, 25)
-                    
-                    Divider()
-                        
-                }
-                .background(
-                    LinearGradient(
-                        colors: [
-                            AppColors.gradientBackgroundDark.opacity(0.3),
-                            AppColors.sheetBackground
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                GuildMemberProfileHeaderView(user: user)
+                // Tab Headers - Fixed
+                tabHeader
+                
+                Divider()
                 
                 ScrollView(.vertical, showsIndicators: false) {
-                    HStack(alignment: .center, spacing: 1) {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text("\(user.reputation)")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text("Guild Reputation")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.greyText)
-                            .padding(.leading, 6)
-                    }
+                    tabContent
+                        .padding(.horizontal, 25)
+                        .padding(.vertical, 20)
                 }
                 .padding(.horizontal, 25)
                 .padding(.vertical, 20)
@@ -286,7 +200,7 @@ struct GuildUserDetailView: View {
                         foregroundColor: AppColors.whiteText,
                         strokeColor: AppColors.bearCandleRed.opacity(0.6),
                         strokeWidth: 0.5,
-                        action: { }
+                        action: { showBlockUserConfirmation = true}
                     )
                     
                     Spacer()
@@ -297,7 +211,7 @@ struct GuildUserDetailView: View {
                         foregroundColor: AppColors.whiteText.opacity(0.8),
                         strokeColor: AppColors.whiteText.opacity(0.3),
                         strokeWidth: 0.5,
-                        action: { }
+                        action: {showAddFriendConfirmation = true }
                     )
 
                     DrawerActionButton(
@@ -339,8 +253,284 @@ struct GuildUserDetailView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-       // .background(AppColors.drawerBackground.opacity(0.2))
+        // ✅ Block User Alert
+        .alert("Block User", isPresented: $showBlockUserConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Block", role: .destructive) {
+                blockUser()
+            }
+        } message: {
+            Text("Are you sure you want to block \(user.globalMember.username)? You won't see their messages or activity.")
+        }
+        // ✅ Add Friend Alert
+        .alert("Add Friend", isPresented: $showAddFriendConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Add Friend") {
+                addFriend()
+            }
+        } message: {
+            Text("Send a friend request to \(user.globalMember.username)?")
+        }
+    }
+    
+    // ✅ Block user action
+    private func blockUser() {
+        Task {
+            guard let guildId = appState.currentGuild?.id else { return }
+            
+            do {
+                // TODO: Call API to block user
+                try await appState.blockUser(guildId: guildId, userId: user.globalMember.id)
+                appState.showSuccess("User blocked successfully")
+                dismiss()
+            } catch {
+                appState.showError(error, title: "Failed to Block User")
+            }
+        }
+    }
+    
+    // ✅ Add friend action
+    private func addFriend() {
+        Task {
+            guard let guildId = appState.currentGuild?.id else { return }
+            do {
+                // TODO: Call API to add friend
+                try await appState.sendFriendRequest(guildId: guildId, userId: user.globalMember.id)
+                appState.showSuccess("Friend request sent!")
+            } catch {
+                appState.showError(error, title: "Failed to Send Friend Request")
+            }
+        }
+    }
+    
+    // MARK: - Tab Header
+    private var tabHeader: some View {
+        HStack(spacing: 0) {
+            ForEach(ProfileTab.allCases, id: \.self) { tab in
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = tab
+                    }
+                }) {
+                    VStack(spacing: 8) {
+                        Text(tab.rawValue)
+                            .font(.subheadline)
+                            .fontWeight(selectedTab == tab ? .semibold : .regular)
+                            .foregroundColor(selectedTab == tab ? AppColors.accentColor : AppColors.greyText)
+                        
+                        // Active indicator
+                        Rectangle()
+                            .fill(selectedTab == tab ? AppColors.accentColor : Color.clear)
+                            .frame(height: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 25)
+        .padding(.top, 12)
+        .background(AppColors.sheetBackground)
+    }
+    
+    // MARK: - Tab Content
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .overview:
+            overviewContent
+        case .activity:
+            activityContent
+        case .achievements:
+            achievementsContent
+        }
+    }
+    
+    private var overviewContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Overview")
+                .font(.title3)
+                .fontWeight(.bold)
+            
+            // Add your overview content here
+            Text("User stats, bio, and other overview information...")
+                .foregroundColor(AppColors.greyText)
+            
+            // Example content to demonstrate scrolling
+            ForEach(0..<5) { i in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Section \(i + 1)")
+                        .font(.headline)
+                    Text("Some content here that makes the view scrollable...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .padding()
+                .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                .cornerRadius(12)
+            }
+        }
+    }
+    
+    private var activityContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Recent Activity")
+                .font(.title3)
+                .fontWeight(.bold)
+            
+            // Add your activity content here
+            ForEach(0..<8) { i in
+                HStack(spacing: 12) {
+                    Image(systemName: "circle.fill")
+                        .font(.caption)
+                        .foregroundColor(AppColors.accentColor)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Activity \(i + 1)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Description of the activity")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    
+                    Spacer()
+                }
+                .padding()
+                .background(AppColors.gradientBackgroundDark.opacity(0.1))
+                .cornerRadius(10)
+            }
+        }
+    }
+    
+    private var achievementsContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Achievements")
+                .font(.title3)
+                .fontWeight(.bold)
+            
+            // Add your achievements content here
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                ForEach(0..<10) { i in
+                    VStack(spacing: 8) {
+                        Image(systemName: "star.fill")
+                            .font(.title)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("Achievement \(i + 1)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                    .cornerRadius(12)
+                }
+            }
+        }
     }
     
 
+}
+
+
+// MARK: - Guild Member header view for profile sheet
+struct GuildMemberProfileHeaderView: View {
+    let user: GuildMembershipDTO
+    
+    
+    
+    var body: some View {
+ 
+        // Top header section with gradient background
+        VStack(alignment: .leading, spacing: 20) {
+            // User header
+            HStack(spacing: 15) {
+                // Avatar with online indicator
+                ZStack(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(AppColors.accentColor.opacity(0.3))
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            Text(String(user.globalMember.username.prefix(2)))
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.accentColor)
+                        )
+
+                    if user.isOnline {
+                        Circle()
+                            .fill(AppColors.bullCandleGreen)
+                            .frame(width: 12, height: 12)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppColors.drawerBackground, lineWidth: 2)
+                            )
+                    }
+                }
+
+                // User info
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(user.globalMember.username)
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.whiteText)
+
+                    Text(user.roleInGuild.rawValue)
+                        .font(.caption)
+                        .foregroundColor(user.roleInGuild.roleForegroundColor)
+                        .fontWeight(user.roleInGuild.roleFontWeight)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 60) // Leave space for dismiss button
+            }
+            .padding(.horizontal, 25)
+            .padding(.top, 25)
+
+            VStack(alignment: .leading, spacing: 6) {
+                // member since
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.greyText)
+                    Text("\(user.memberSince)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                }
+
+                // User guild reputation
+                HStack(alignment: .center, spacing: 1) {
+                    Image(systemName: "shield.pattern.checkered")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                    Text("\(user.reputation)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.accentColor)
+                    Text("Guild Reputation")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                        .padding(.leading, 6)
+                }
+            }
+            .padding(.horizontal, 25)
+
+            Divider()
+
+        }
+        .background(
+            LinearGradient(
+                colors: [
+                    AppColors.gradientBackgroundDark.opacity(0.3),
+                    AppColors.sheetBackground
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
 }

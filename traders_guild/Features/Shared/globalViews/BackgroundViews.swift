@@ -51,7 +51,7 @@ struct StaticAuthBackgroundView: View {
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1)) {
-                patternOpacity = 0.03
+                patternOpacity = 0.04
             }
         }
     }

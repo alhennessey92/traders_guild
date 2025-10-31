@@ -294,7 +294,7 @@ struct RightDrawerMainView: View {
             // Filter options sheet
             .sheet(isPresented: $showFilterSheet) {
                 FilterOptionsView()
-                    .withGlobalAlerts()
+                    
                     .presentationDetents([.fraction(0.8)])
                     .presentationBackground(Color.clear)
                     .presentationCornerRadius(25)
