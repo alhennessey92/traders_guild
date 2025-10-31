@@ -36,37 +36,7 @@ struct RightDrawerMainView: View {
     @State private var showFilterSheet: Bool = false
     @FocusState private var isSearchFocused: Bool
 
-    
-    /// Filters the respective lists by `searchText` (case-insensitive).
-//    var filteredChatrooms: [Chatroom] {
-//        if searchText.isEmpty {
-//            return chatrooms
-//        }
-//        return chatrooms.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-//    }
-//    var filteredFriends: [GuildMembership] {
-//        let friendsWithoutCurrentUser = friends.filter { $0.userId != currentUser.user?.id }
-//        guard !searchText.isEmpty else { return friendsWithoutCurrentUser }
-//        return friendsWithoutCurrentUser.filter {
-//            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
-//        }
-//    }
-//
-//    var filteredOnlineUsers: [GuildMembership] {
-//        let onlineWithoutCurrentUser = onlineUsers.filter { $0.userId != currentUser.user?.id }
-//        guard !searchText.isEmpty else { return onlineWithoutCurrentUser }
-//        return onlineWithoutCurrentUser.filter {
-//            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
-//        }
-//    }
-//
-//    var filteredOfflineUsers: [GuildMembership] {
-//        let offlineWithoutCurrentUser = offlineUsers.filter { $0.userId != currentUser.user?.id }
-//        guard !searchText.isEmpty else { return offlineWithoutCurrentUser }
-//        return offlineWithoutCurrentUser.filter {
-//            $0.userName?.localizedCaseInsensitiveContains(searchText) ?? false
-//        }
-//    }
+
     
     
     var body: some View {
@@ -324,6 +294,7 @@ struct RightDrawerMainView: View {
             // Filter options sheet
             .sheet(isPresented: $showFilterSheet) {
                 FilterOptionsView()
+                    .withGlobalAlerts()
                     .presentationDetents([.fraction(0.8)])
                     .presentationBackground(Color.clear)
                     .presentationCornerRadius(25)

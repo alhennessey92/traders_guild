@@ -145,6 +145,7 @@ struct LeftDrawerMainView: View {
             // Present detail sheets with a clear background and consistent detents (matches right drawer)
             .sheet(item: $bottomSheetContent) { content in
                 BottomSheetView(content: content, selectedDetent: $selectedDetent)  // PASS BINDING
+                    .withGlobalAlerts()
                     .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
     //                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
                     .presentationBackground {

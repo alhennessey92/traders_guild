@@ -76,6 +76,7 @@ class RightDrawerViewModel: ObservableObject {
             return
         } catch {
             print("⚠️ Failed to preload drawer data: \(error)")
+            appState.showError(error, title: "Failed to load data", style: .toast)
         }
     }
     

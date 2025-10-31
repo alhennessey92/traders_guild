@@ -150,6 +150,7 @@ struct MainView: View {
             /// Conditionally hidden when drawers are open to prevent layering conflicts
             .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer)) {
                 ChartBottomSheet(selectedDetent: $selectedDetent)
+                    .withGlobalAlerts()
                     .presentationDetents([.fraction(0.11), .fraction(0.5), .fraction(0.9)],
                                           selection: $selectedDetent)
                     .presentationDragIndicator(.visible)

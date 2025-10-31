@@ -700,3 +700,46 @@ struct SymbolDTO: Identifiable, Codable, Equatable {
         isUp ? "↑" : "↓"
     }
 }
+
+
+
+/// Represents an alert/message to display to the user
+struct AppAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let severity: AlertSeverity
+    let style: AlertDisplayStyle
+}
+
+/// Severity level of the alert
+enum AlertSeverity {
+    case error
+    case warning
+    case info
+    case success
+    
+    var color: Color {
+        switch self {
+        case .error: return .red
+        case .warning: return .orange
+        case .info: return .blue
+        case .success: return AppColors.bullCandleGreen
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .error: return "exclamationmark.triangle.fill"
+        case .warning: return "exclamationmark.circle.fill"
+        case .info: return "info.circle.fill"
+        case .success: return "checkmark.circle.fill"
+        }
+    }
+}
+
+/// How the alert should be displayed
+enum AlertDisplayStyle {
+    case alert      // Modal alert (blocking)
+    case toast      // Toast notification (non-blocking)
+}

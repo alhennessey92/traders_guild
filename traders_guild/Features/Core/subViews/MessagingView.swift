@@ -114,6 +114,7 @@ struct GlobalMessagingOverlay: ViewModifier {
                 }
             )) { item in
                 MessagingSheet(contentType: item.contentType)
+                    .withGlobalAlerts()
                     .environmentObject(messagingManager) // Pass the messaging manager to the sheet
                     //.environmentObject(appState)
                     .presentationDetents([.fraction(0.9)])

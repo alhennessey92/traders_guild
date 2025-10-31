@@ -69,6 +69,9 @@ class AppState: ObservableObject {
     /// Error message for alerts
     @Published var errorMessage: String?
     
+    /// Current error/message to display
+    @Published var currentAlert: AppAlert?
+    
 //    /// Show/hide login sheet
 //    @Published var showLoginSheet: Bool = false
     
@@ -271,6 +274,65 @@ class AppState: ObservableObject {
     }
     
     // ================================================================================================
+    // MARK: - Error Management Methods
+    // ================================================================================================
+    
+    /// Display an error to the user
+    func showError(_ error: Error, title: String = "Error", style: AlertDisplayStyle = .alert) {
+        currentAlert = AppAlert(
+            title: title,
+            message: error.localizedDescription,
+            severity: .error,
+            style: style
+        )
+    }
+    
+    /// Display a custom error message
+    func showError(title: String = "Error", message: String, severity: AlertSeverity = .error, style: AlertDisplayStyle = .alert) {
+        currentAlert = AppAlert(
+            title: title,
+            message: message,
+            severity: severity,
+            style: style
+        )
+    }
+    
+    /// Display a success message
+    func showSuccess(_ message: String, title: String = "Success") {
+        currentAlert = AppAlert(
+            title: title,
+            message: message,
+            severity: .success,
+            style: .toast
+        )
+    }
+    
+    /// Display a warning message
+    func showWarning(_ message: String, title: String = "Warning") {
+        currentAlert = AppAlert(
+            title: title,
+            message: message,
+            severity: .warning,
+            style: .toast
+        )
+    }
+    
+    /// Display an info message
+    func showInfo(_ message: String, title: String = "Info") {
+        currentAlert = AppAlert(
+            title: title,
+            message: message,
+            severity: .info,
+            style: .toast
+        )
+    }
+    
+    /// Clear the current alert
+    func clearAlert() {
+        currentAlert = nil
+    }
+    
+    // ================================================================================================
     // MARK: - Guild Management
     // ================================================================================================
     
@@ -303,7 +365,7 @@ class AppState: ObservableObject {
             let guilds = try await api.fetchOpenGuilds()
             return guilds
         } catch {
-            errorMessage = "Failed to fetch guilds: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch Guilds", style: .toast)
             throw error
         }
     }
@@ -319,7 +381,7 @@ class AppState: ObservableObject {
             let guilds = try await api.fetchUserGuilds()
             return guilds
         } catch {
-            errorMessage = "Failed to fetch user guilds: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch User Guilds", style: .toast)
             throw error
         }
     }
@@ -333,7 +395,7 @@ class AppState: ObservableObject {
             let guild = try await api.fetchGuildById(guildId: guildId)
             return guild
         } catch {
-            errorMessage = "Failed to fetch guild: \(error.localizedDescription)"
+            showError(error, title: "Failed to Load Guild", style: .toast)
             throw error
         }
     }
@@ -345,7 +407,7 @@ class AppState: ObservableObject {
         do {
             try await api.joinGuild(guildId: guildId)
         } catch {
-            errorMessage = "Failed to join guild: \(error.localizedDescription)"
+            showError(error, title: "Failed to Join Guild", style: .toast)
             throw error
         }
     }
@@ -365,7 +427,7 @@ class AppState: ObservableObject {
             try await api.leaveGuild(guildId: guild.id)
             currentGuild = nil
         } catch {
-            errorMessage = "Failed to leave guild: \(error.localizedDescription)"
+            showError(error, title: "Failed to Leave Guild", style: .toast)
             throw error
         }
     }
@@ -381,7 +443,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch announcements: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch Announcements", style: .toast)
             throw error
         }
     }
@@ -396,7 +458,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch events: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch Events", style: .toast)
             throw error
         }
     }
@@ -411,7 +473,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch members: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch Guild Members", style: .toast)
             throw error
         }
     }
@@ -426,7 +488,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch watchlists: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch Guild Watchlist", style: .toast)
             throw error
         }
     }
@@ -450,7 +512,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch notifications: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch Notifications", style: .toast)
             throw error
         }
     }
@@ -465,7 +527,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch User DM", style: .toast)
             throw error
         }
     }
@@ -493,7 +555,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch Chatroom", style: .toast)
             throw error
         }
     }
@@ -507,7 +569,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch Chatroom: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch Chatroom Messages", style: .toast)
             throw error
         }
     }
@@ -521,7 +583,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch User DM Messages", style: .toast)
             throw error
         }
     }
@@ -535,7 +597,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch User DM", style: .toast)
             throw error
         }
     }
@@ -549,7 +611,7 @@ class AppState: ObservableObject {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            errorMessage = "Failed to fetch User DM: \(error.localizedDescription)"
+            showError(error, title: "Failed to Fetch User DM", style: .toast)
             throw error
         }
     }
