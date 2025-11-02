@@ -98,21 +98,21 @@ struct ChatroomSettingsView: View {
                         }
                     }
                     
-                    Divider()
+                    //Divider()
                     
-                    // Chatroom Actions Section
-                    VStack(spacing: 0) {
-                        SettingsSectionHeader(title: "Chatroom")
-                        
-                        SettingsButtonRow(
-                            icon: "arrow.right.square.fill",
-                            title: "Leave Chatroom",
-                            subtitle: "You can rejoin anytime",
-                            iconColor: .red
-                        ) {
-                            showLeaveConfirmation = true
-                        }
-                    }
+//                    // Chatroom Actions Section
+//                    VStack(spacing: 0) {
+//                        SettingsSectionHeader(title: "Chatroom")
+//                        
+//                        SettingsButtonRow(
+//                            icon: "arrow.right.square.fill",
+//                            title: "Leave Chatroom",
+//                            subtitle: "You can rejoin anytime",
+//                            iconColor: .red
+//                        ) {
+//                            showLeaveConfirmation = true
+//                        }
+//                    }
                     
                     Spacer(minLength: 50)  // ✅ Add some bottom padding
                 }
@@ -127,15 +127,15 @@ struct ChatroomSettingsView: View {
         } message: {
             Text("How long would you like to mute this chatroom?")
         }
-        .alert("Leave Chatroom", isPresented: $showLeaveConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Leave", role: .destructive) {
-                leaveChatroom()
-            }
-        } message: {
-            Text("Are you sure you want to leave #\(chatroom.name)? You can rejoin at any time.")
-        }
-        .confirmationDialog("Report Chatroom", isPresented: $showReportOptions, titleVisibility: .visible) {
+//        .alert("Leave Chatroom", isPresented: $showLeaveConfirmation) {
+//            Button("Cancel", role: .cancel) { }
+//            Button("Leave", role: .destructive) {
+//                leaveChatroom()
+//            }
+//        } message: {
+//            Text("Are you sure you want to leave #\(chatroom.name)? You can rejoin at any time.")
+//        }
+        .alert("Report Chatroom", isPresented: $showReportOptions) {
             Button("Spam or Scam") { reportChatroom(reason: "spam") }
             Button("Harassment") { reportChatroom(reason: "harassment") }
             Button("Inappropriate Content") { reportChatroom(reason: "inappropriate") }
@@ -157,21 +157,22 @@ struct ChatroomSettingsView: View {
         }
     }
     
-    private func leaveChatroom() {
-        Task {
-            do {
-                // TODO: Implement leave chatroom API call
-                appState.showSuccess("Left chatroom")
-            } catch {
-                appState.showError(error, title: "Failed to Leave Chatroom")
-            }
-        }
-    }
+//    private func leaveChatroom() {
+//        Task {
+//            do {
+//                // TODO: Implement leave chatroom API call
+//                appState.showSuccess("Left chatroom")
+//            } catch {
+//                appState.showError(error, title: "Failed to Leave Chatroom")
+//            }
+//        }
+//    }
     
     private func reportChatroom(reason: String) {
         Task {
             do {
                 // TODO: Implement report API call
+                try await appState.reportChatroom(chatroomId: chatroom.id, reason: reason)
                 appState.showInfo("Report submitted for review")
             } catch {
                 appState.showError(error, title: "Failed to Report Chatroom")
@@ -362,7 +363,7 @@ struct DMSettingsView: View {
         } message: {
             Text("Are you sure you want to delete this conversation? This cannot be undone.")
         }
-        .confirmationDialog("Report User", isPresented: $showReportOptions, titleVisibility: .visible) {
+        .alert("Report User", isPresented: $showReportOptions) {
             Button("Spam") { reportUser(reason: "spam") }
             Button("Harassment") { reportUser(reason: "harassment") }
             Button("Inappropriate Content") { reportUser(reason: "inappropriate") }
@@ -386,9 +387,9 @@ struct DMSettingsView: View {
     
     private func blockUser() {
         Task {
-            guard let guildId = appState.currentGuild?.id else { return }
+            
             do {
-                try await appState.blockUser(guildId: guildId, userId: userDM.participant.globalMember.id)
+                try await appState.blockUser(userId: userDM.participant.globalMember.id)
                 appState.showSuccess("User blocked successfully")
                 messagingManager.closeMessage()
                 dismiss()
@@ -400,10 +401,11 @@ struct DMSettingsView: View {
     
     private func unblockUser() {
         Task {
-            guard let guildId = appState.currentGuild?.id else { return }
+            
             do {
-                try await appState.unBlockUser(guildId: guildId, userId: userDM.participant.globalMember.id)
+                try await appState.unBlockUser(userId: userDM.participant.globalMember.id)
                 appState.showSuccess("User unblocked")
+                dismiss()
             } catch {
                 appState.showError(error, title: "Failed to Unblock User")
             }
@@ -413,6 +415,7 @@ struct DMSettingsView: View {
     private func deleteConversation() {
         Task {
             do {
+                try await appState.deleteDMMessagesEntire(dmId: userDM.id)
                 appState.showSuccess("Conversation deleted")
                 messagingManager.closeMessage()
                 dismiss()
@@ -425,6 +428,7 @@ struct DMSettingsView: View {
     private func reportUser(reason: String) {
         Task {
             do {
+                try await appState.reportDMUser(userId: userDM.participant.id, reason: reason)
                 appState.showInfo("Report submitted for review")
             } catch {
                 appState.showError(error, title: "Failed to Report User")

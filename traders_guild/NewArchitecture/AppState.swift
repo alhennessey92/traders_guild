@@ -694,6 +694,7 @@ class AppState: ObservableObject {
         }
     }
     
+    
     /// edit Chatroom Message
     func editDMMessage(messageId: UUID, newContent: String, dmId: UUID) async throws {
         errorMessage = nil
@@ -709,6 +710,42 @@ class AppState: ObservableObject {
         }
     }
     
+    /// Delete DM Message Entirely - delete the entire conversation
+    func deleteDMMessagesEntire(dmId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.deleteDMMessagesEntire(guildId: currentGuild.id, userId: currentUser.id, dmId: dmId)
+        } catch {
+            showError(error, title: "Failed to delete entire DM message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Report Chatroom
+    func reportChatroom(chatroomId: UUID, reason: String) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.reportChatroom(guildId: currentGuild.id, chatroomId: chatroomId, userId: currentUser.id, reason: reason)
+        } catch {
+            showError(error, title: "Failed to report chatroom", style: .toast)
+            throw error
+        }
+    }
+    
     
     // ================================================================================================
     // MARK: - User Management - API
@@ -716,11 +753,17 @@ class AppState: ObservableObject {
     
     
     /// Block a User
-    func blockUser(guildId: UUID, userId: UUID) async throws {
+    func blockUser(userId: UUID) async throws {
         errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
         
         do {
-            try await api.blockUser(guildId: guildId, userId: userId)
+            try await api.blockUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
         } catch {
             showError(error, title: "Failed to Block User", style: .toast)
             throw error
@@ -728,11 +771,16 @@ class AppState: ObservableObject {
     }
     
     /// Block a User
-    func unBlockUser(guildId: UUID, userId: UUID) async throws {
+    func unBlockUser(userId: UUID) async throws {
         errorMessage = nil
-        
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
         do {
-            try await api.unBlockUser(guildId: guildId, userId: userId)
+            try await api.unBlockUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
         } catch {
             showError(error, title: "Failed to Un Block User", style: .toast)
             throw error
@@ -740,11 +788,16 @@ class AppState: ObservableObject {
     }
     
     /// Add User as a Friend
-    func sendFriendRequest(guildId: UUID, userId: UUID) async throws {
+    func sendFriendRequest(userId: UUID) async throws {
         errorMessage = nil
-        
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
         do {
-            try await api.sendFriendRequest(guildId: guildId, userId: userId)
+            try await api.sendFriendRequest(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
         } catch {
             showError(error, title: "Failed to send Friend Request", style: .toast)
             throw error
@@ -752,13 +805,36 @@ class AppState: ObservableObject {
     }
     
     /// Add User as a Friend
-    func sendCancelFriendship(guildId: UUID, userId: UUID) async throws {
+    func sendCancelFriendship(userId: UUID) async throws {
         errorMessage = nil
-        
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
         do {
-            try await api.sendCancelFriendship(guildId: guildId, userId: userId)
+            try await api.sendCancelFriendship(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
         } catch {
             showError(error, title: "Failed to end friendship", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Report a User
+    func reportDMUser(userId: UUID, reason: String) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.reportUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id, reason: reason)
+        } catch {
+            showError(error, title: "Failed to Block User", style: .toast)
             throw error
         }
     }

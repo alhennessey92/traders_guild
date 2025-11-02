@@ -181,28 +181,43 @@ class MockAPIService {
         // Mock: send message
     }
     
+    func deleteDMMessagesEntire(guildId: UUID, userId: UUID, dmId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: delete entire messages for dm
+    }
+    
+    func reportChatroom(guildId: UUID, chatroomId: UUID, userId: UUID, reason: String) async throws {
+        try await simulateNetworkDelay()
+        // Mock: delete entire messages for dm
+    }
+    
     // ================================================================================================
     // MARK: - User Management - API
     // ================================================================================================
     
-    func blockUser(guildId: UUID, userId: UUID) async throws {
+    func blockUser(userId: UUID, guildId: UUID, currentUserId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful block user
+    }
+    
+    func unBlockUser(userId: UUID, guildId: UUID, currentUserId: UUID) async throws {
         try await simulateNetworkDelay()
         // Mock: successful join
     }
     
-    func unBlockUser(guildId: UUID, userId: UUID) async throws {
+    func sendFriendRequest(userId: UUID, guildId: UUID, currentUserId: UUID) async throws {
         try await simulateNetworkDelay()
-        // Mock: successful join
+        // Mock: successful send friend request
     }
     
-    func sendFriendRequest(guildId: UUID, userId: UUID) async throws {
+    func sendCancelFriendship(userId: UUID, guildId: UUID, currentUserId: UUID) async throws {
         try await simulateNetworkDelay()
-        // Mock: successful join
+        // Mock: successful end friendship
     }
     
-    func sendCancelFriendship(guildId: UUID, userId: UUID) async throws {
+    func reportUser(userId: UUID, guildId: UUID, currentUserId: UUID, reason: String) async throws {
         try await simulateNetworkDelay()
-        // Mock: successful join
+        // Mock: successful report
     }
 
 }
