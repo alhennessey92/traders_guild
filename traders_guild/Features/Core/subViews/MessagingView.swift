@@ -130,14 +130,15 @@ struct MessagingSheet: View {
     @EnvironmentObject var messagingManager: MessagingManager
     @State private var messageText = ""
     
-    // ✅ Add navigation state for both DM and chatroom profiles
+    // ✅ Navigation state
     @State private var showUserProfile = false
     @State private var selectedChatroomUser: GuildMembershipDTO? = nil
+    @State private var showSettings = false  // ✅ Add settings state
     
     var body: some View {
         ZStack {
             // ✅ Main messaging view
-            if !showUserProfile {
+            if !showUserProfile && !showSettings {
                 messagingView
                     .transition(.move(edge: .leading))
             }
@@ -153,8 +154,15 @@ struct MessagingSheet: View {
                 userProfileView(for: selectedUser, backTitle: "Back to Chatroom")
                     .transition(.move(edge: .trailing))
             }
+            
+            // ✅ Settings view
+            if showSettings {
+                settingsView
+                    .transition(.move(edge: .trailing))
+            }
         }
         .animation(.easeInOut(duration: 0.3), value: showUserProfile)
+        .animation(.easeInOut(duration: 0.3), value: showSettings)
     }
     
     // MARK: - Messaging View
@@ -163,13 +171,18 @@ struct MessagingSheet: View {
             // Header section
             VStack(spacing: 0) {
                 HStack {
+                    // ✅ Settings button
                     Button(action: {
-                        // Handle settings action
+                        withAnimation {
+                            showSettings = true
+                        }
+                        HapticFeedback.light.trigger()
                     }) {
                         Image(systemName: "gear")
                             .font(.title2)
                             .foregroundColor(.secondary)
                     }
+                    
                     Spacer()
                     
                     // Header content
@@ -214,7 +227,6 @@ struct MessagingSheet: View {
             }
             
             // Main content area with messages
-            // ✅ Pass callback for avatar taps
             MessagingScrollView(
                 contentType: contentType,
                 onUserAvatarTap: { user in
@@ -248,7 +260,6 @@ struct MessagingSheet: View {
     // MARK: - User Profile View
     private func userProfileView(for user: GuildMembershipDTO, backTitle: String) -> some View {
         VStack(spacing: 0) {
-            // ✅ Back button header
             HStack {
                 Button(action: {
                     withAnimation {
@@ -285,15 +296,11 @@ struct MessagingSheet: View {
             
             Divider()
             
-            // ✅ Header
             GuildMemberProfileHeaderView(user: user)
-            
-            // ✅ Reusable profile content
             GuildUserProfileContent(user: user)
             
             Divider()
             
-            // ✅ Reusable action buttons
             GuildUserActionButtons(user: user)
                 .padding(.horizontal, 25)
                 .padding(.top, 20)
@@ -308,7 +315,255 @@ struct MessagingSheet: View {
             }
         )
     }
+    
+    // MARK: - Settings View
+    private var settingsView: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button(action: {
+                    withAnimation {
+                        showSettings = false
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Text("Back")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(AppColors.accentColor)
+                }
+                
+                Spacer()
+                
+                Text("Settings")
+                    .font(.headline)
+                    .foregroundColor(AppColors.whiteText)
+                
+                Spacer()
+                
+                Button(action: {
+                    messagingManager.closeMessage()
+                    dismiss()
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+            .background(AppColors.sheetBackground)
+            
+            Divider()
+            
+            // Settings content based on type
+            switch contentType {
+            case .chatroom(let chatroom):
+                ChatroomSettingsView(chatroom: chatroom)
+            case .userDM(let userDM):
+                DMSettingsView(userDM: userDM)
+            }
+        }
+        .background(
+            ZStack {
+                Color.clear
+                    .background(.ultraThinMaterial)
+                AppColors.sheetBackground
+                StaticPatternView()
+            }
+        )
+    }
 }
+//struct MessagingSheet: View {
+//    let contentType: MessageContentType
+//    @Environment(\.dismiss) private var dismiss
+//    @EnvironmentObject var messagingManager: MessagingManager
+//    @State private var messageText = ""
+//    
+//    // ✅ Add navigation state for both DM and chatroom profiles
+//    @State private var showUserProfile = false
+//    @State private var selectedChatroomUser: GuildMembershipDTO? = nil
+//    
+//    var body: some View {
+//        ZStack {
+//            // ✅ Main messaging view
+//            if !showUserProfile {
+//                messagingView
+//                    .transition(.move(edge: .leading))
+//            }
+//            
+//            // ✅ User profile view for DMs
+//            if showUserProfile, case .userDM(let userDM) = contentType {
+//                userProfileView(for: userDM.participant, backTitle: "Back to Chat")
+//                    .transition(.move(edge: .trailing))
+//            }
+//            
+//            // ✅ User profile view for chatroom users
+//            if showUserProfile, case .chatroom = contentType, let selectedUser = selectedChatroomUser {
+//                userProfileView(for: selectedUser, backTitle: "Back to Chatroom")
+//                    .transition(.move(edge: .trailing))
+//            }
+//        }
+//        .animation(.easeInOut(duration: 0.3), value: showUserProfile)
+//    }
+//    
+//    // MARK: - Messaging View
+//    private var messagingView: some View {
+//        VStack(spacing: 0) {
+//            // Header section
+//            VStack(spacing: 0) {
+//                HStack {
+//                    Button(action: {
+//                        // Handle settings action
+//                    }) {
+//                        Image(systemName: "gear")
+//                            .font(.title2)
+//                            .foregroundColor(.secondary)
+//                    }
+//                    Spacer()
+//                    
+//                    // Header content
+//                    switch contentType {
+//                        case .chatroom(let chatroom):
+//                            ChatroomHeaderView(chatroom: chatroom)
+//                        case .userDM(let userDM):
+//                            Button(action: {
+//                                withAnimation {
+//                                    showUserProfile = true
+//                                }
+//                            }) {
+//                                UserDMHeaderView(userDM: userDM)
+//                            }
+//                            .buttonStyle(PlainButtonStyle())
+//                            .simultaneousGesture(
+//                                DragGesture(minimumDistance: 0)
+//                                    .onChanged { _ in
+//                                        HapticFeedback.light.trigger()
+//                                    }
+//                            )
+//                    }
+//                    
+//                    Spacer()
+//                    
+//                    // Dismiss button
+//                    Button(action: {
+//                        messagingManager.closeMessage()
+//                        dismiss()
+//                    }) {
+//                        Image(systemName: "xmark.circle.fill")
+//                            .font(.title2)
+//                            .foregroundColor(.secondary)
+//                    }
+//                }
+//                .padding(.horizontal, 20)
+//                .padding(.top, 20)
+//                .padding(.bottom, 16)
+//                .background(AppColors.sheetBackground)
+//                
+//                Divider()
+//            }
+//            
+//            // Main content area with messages
+//            // ✅ Pass callback for avatar taps
+//            MessagingScrollView(
+//                contentType: contentType,
+//                onUserAvatarTap: { user in
+//                    selectedChatroomUser = user
+//                    withAnimation {
+//                        showUserProfile = true
+//                    }
+//                    HapticFeedback.light.trigger()
+//                }
+//            )
+//            
+//            Divider()
+//            
+//            switch contentType {
+//                case .chatroom(let chatroom):
+//                    ChatroomFooterView(chatroom: chatroom, messageText: $messageText)
+//                case .userDM(let userDM):
+//                    UserDMFooterView(userDM: userDM, messageText: $messageText)
+//            }
+//        }
+//        .background(
+//            ZStack {
+//                Color.clear
+//                    .background(.ultraThinMaterial)
+//                AppColors.sheetBackground
+//                StaticPatternView()
+//            }
+//        )
+//    }
+//    
+//    // MARK: - User Profile View
+//    private func userProfileView(for user: GuildMembershipDTO, backTitle: String) -> some View {
+//        VStack(spacing: 0) {
+//            // ✅ Back button header
+//            HStack {
+//                Button(action: {
+//                    withAnimation {
+//                        showUserProfile = false
+//                        selectedChatroomUser = nil
+//                    }
+//                }) {
+//                    HStack(spacing: 6) {
+//                        Image(systemName: "chevron.left")
+//                            .font(.title3)
+//                            .fontWeight(.semibold)
+//                        Text(backTitle)
+//                            .font(.subheadline)
+//                            .fontWeight(.medium)
+//                    }
+//                    .foregroundColor(AppColors.accentColor)
+//                }
+//                
+//                Spacer()
+//                
+//                Button(action: {
+//                    messagingManager.closeMessage()
+//                    dismiss()
+//                }) {
+//                    Image(systemName: "xmark.circle.fill")
+//                        .font(.title2)
+//                        .foregroundColor(.secondary)
+//                }
+//            }
+//            .padding(.horizontal, 20)
+//            .padding(.top, 20)
+//            .padding(.bottom, 16)
+//            .background(AppColors.sheetBackground)
+//            
+//            Divider()
+//            
+//            // ✅ Header
+//            GuildMemberProfileHeaderView(user: user)
+//            
+//            // ✅ Reusable profile content
+//            GuildUserProfileContent(user: user)
+//            
+//            Divider()
+//            
+//            // ✅ Reusable action buttons
+//            GuildUserActionButtons(user: user)
+//                .padding(.horizontal, 25)
+//                .padding(.top, 20)
+//                .background(AppColors.sheetBackground)
+//        }
+//        .background(
+//            ZStack {
+//                Color.clear
+//                    .background(.ultraThinMaterial)
+//                AppColors.sheetBackground
+//                StaticPatternView()
+//            }
+//        )
+//    }
+//}
 
 // MARK: - User DM Header Component
 struct UserDMHeaderView: View {
