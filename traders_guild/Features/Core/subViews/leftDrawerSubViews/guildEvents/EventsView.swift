@@ -200,7 +200,7 @@ struct EventRowView: View {
                     .fill(Color.white.opacity(isPressed ? 0.1 : 0.02))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(event.userViewed ? Color.clear : AppColors.accentColor.opacity(0.3), lineWidth: 1)
+                            .strokeBorder(event.isRead ? Color.clear : AppColors.accentColor.opacity(0.3), lineWidth: 1)
                     )
             )
         }
@@ -221,6 +221,7 @@ struct EventDetailView: View {
     let event: GuildEventDTO
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     @State private var showUnAttendConfirmation = false
     @State private var showAttendConfirmation = false
@@ -421,7 +422,7 @@ struct EventDetailView: View {
         .background(AppColors.drawerBackground.opacity(0.2))
         .alert("Attend Event", isPresented: $showAttendConfirmation) {
             Button("Cancel", role: .cancel) { }
-            Button("Attend Event", role: .destructive) {
+            Button("Attend Event") {
                 attendEvent()
             }
             
@@ -457,6 +458,12 @@ struct EventDetailView: View {
            
             do {
                 try await appState.attendEvent(eventId: event.id)
+                // ✅ Update cache - increment attendance
+                leftDrawerViewModel.updateEventAttendance(
+                    eventId: event.id,
+                    isAttending: true,
+                    attendanceCount: event.attendeeCount + 1
+                )
                 appState.showSuccess("Attending Event")
                 dismiss()
             } catch {
@@ -470,6 +477,12 @@ struct EventDetailView: View {
            
             do {
                 try await appState.unAttendEvent(eventId: event.id)
+                // ✅ Update cache - decrement attendance
+                leftDrawerViewModel.updateEventAttendance(
+                    eventId: event.id,
+                    isAttending: false,
+                    attendanceCount: max(0, event.attendeeCount - 1)
+                )
                 appState.showSuccess("Attendance cancelled")
                 dismiss()
             } catch {
@@ -500,6 +513,9 @@ struct EventDetailView: View {
         Task {
             do {
                 try await appState.recordEventView(eventId: event.id)
+                
+                // 2. Update cache to mark as read
+                leftDrawerViewModel.markEventAsRead(eventId: event.id)
                 // Optionally: silently succeed, no need to show success message
             } catch {
                 // Silently fail - viewing tracking is not critical

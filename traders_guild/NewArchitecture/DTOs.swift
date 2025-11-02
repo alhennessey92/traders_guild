@@ -373,7 +373,7 @@ struct GuildAnnouncementDTO: Identifiable, Codable, Equatable {
     let postedAt: Date              // Timestamp when posted
     let timeAgoFormatted: String    // Pre-formatted by backend (e.g., "2 hours ago")
     let isImportant: Bool           // Should be highlighted/pinned at top
-    let isRead: Bool                // Has current user read this? (personalized)
+    var isRead: Bool                // Has current user read this? (personalized)
     let readCount: Int              // Total members who've read (for analytics)
     
     /// Color for importance indicator
@@ -411,12 +411,12 @@ struct GuildEventDTO: Identifiable, Codable, Equatable {
     let timeUntilEvent: String      // Pre-formatted countdown (e.g., "in 2 days")
     let postedAt: Date              // When event was created
     let postedTimeAgo: String       // Pre-formatted creation time
-    let attendeeCount: Int          // Number of members who RSVP'd yes
-    let isAttending: Bool           // Current user's RSVP status (personalized)
+    var attendeeCount: Int          // Number of members who RSVP'd yes
+    var isAttending: Bool           // Current user's RSVP status (personalized)
     let attendees: [GuildMembershipDTO] // First 5-10 attendees for preview display
     let isImportant: Bool           // High-priority/mandatory event
     let canEdit: Bool               // Can current user edit? (based on backend permissions)
-    let userViewed: Bool             // Has user viewed the event 
+    var isRead: Bool             // Has user viewed the event
     
     /// Check if event has already happened
     var isPastEvent: Bool {
@@ -543,7 +543,7 @@ struct GuildChatroomDTO: Identifiable, Codable, Equatable {
     let isActive: Bool              // True / false
     let lastActivity: Date          // Timestamp of last message
     let lastActivityFormatted: String // Pre-formatted (e.g., "Active 2 min ago")
-    let unreadCount: Int            // Unread messages for current user (personalized)
+    var unreadCount: Int            // Unread messages for current user (personalized)
     let memberCount: Int            // Members with access to this channel
     let isPinned: Bool              // Pinned to top for current user (personalized)
     let isMuted: Bool               // Muted notifications for current user (personalized)
@@ -579,7 +579,7 @@ struct DMDTO: Identifiable, Codable, Equatable {
     let lastMessage: DMMessageDTO?    // Most recent message in conversation
     let lastActivity: Date          // Timestamp of last message
     let lastActivityFormatted: String // Pre-formatted time
-    let unreadCount: Int            // Number of unread messages (personalized)
+    var unreadCount: Int            // Number of unread messages (personalized)
     let isBlocked: Bool             // Has user blocked this person?
 
     

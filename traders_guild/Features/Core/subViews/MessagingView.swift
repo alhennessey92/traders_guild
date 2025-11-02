@@ -129,6 +129,7 @@ struct MessagingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var messagingManager: MessagingManager
     @EnvironmentObject var appState: AppState  // ✅ Add if not already present
+    @EnvironmentObject var rightDrawerViewModel: RightDrawerViewModel
     
     @State private var messageText = ""
     @State private var showUserProfile = false
@@ -182,11 +183,15 @@ struct MessagingSheet: View {
                     // ✅ Mark DM as read
                     try await appState.markDMAsRead(dmId: userDM.id)
                     // Silently succeed - no need for success message
+                    // 2. Update cache directly
+                    rightDrawerViewModel.markDMAsRead(dmId: userDM.id)
                     
                 case .chatroom(let chatroom):
                     // ✅ Mark chatroom as read
                     try await appState.markChatroomAsRead(chatroomId: chatroom.id)
                     // Silently succeed - no need for success message
+                    // 2. Update cache directly
+                    rightDrawerViewModel.markChatroomAsRead(chatroomId: chatroom.id)
                 }
             } catch {
                 // Silently fail - marking as read is not critical

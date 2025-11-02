@@ -206,6 +206,7 @@ struct AnnouncementDetailView: View {
     let announcement: GuildAnnouncementDTO
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appState: AppState  // ✅ Add this if not already present
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     @State private var hasRecordedView = false  // ✅ Prevent duplicate calls
 
@@ -342,6 +343,9 @@ struct AnnouncementDetailView: View {
         Task {
             do {
                 try await appState.recordAnnouncementView(announcementId: announcement.id)
+                
+                // 2. Update cache to mark as read
+                leftDrawerViewModel.markAnnouncementAsRead(announcementId: announcement.id)
                 // Optionally: silently succeed, no need to show success message
             } catch {
                 // Silently fail - viewing tracking is not critical

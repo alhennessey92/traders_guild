@@ -852,6 +852,8 @@ class AppState: ObservableObject {
         
         do {
             try await api.markDMAsRead(guildId: currentGuild.id, userId: currentUser.id, dmId: dmId)
+            
+            
         } catch {
             showError(error, title: "Failed to mark dm as read", style: .toast)
             throw error
@@ -870,6 +872,7 @@ class AppState: ObservableObject {
         
         do {
             try await api.markChatroomAsRead(guildId: currentGuild.id, chatroomId: chatroomId, userId: currentUser.id)
+            
         } catch {
             showError(error, title: "Failed to mark chatroom as read", style: .toast)
             throw error
