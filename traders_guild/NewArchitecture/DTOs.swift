@@ -416,6 +416,7 @@ struct GuildEventDTO: Identifiable, Codable, Equatable {
     let attendees: [GuildMembershipDTO] // First 5-10 attendees for preview display
     let isImportant: Bool           // High-priority/mandatory event
     let canEdit: Bool               // Can current user edit? (based on backend permissions)
+    let userViewed: Bool             // Has user viewed the event 
     
     /// Check if event has already happened
     var isPastEvent: Bool {

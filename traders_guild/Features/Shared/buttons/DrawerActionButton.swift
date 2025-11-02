@@ -8,6 +8,8 @@
 import SwiftUI
 
 /// Generic full-width button for login/signup
+///
+
 struct DrawerActionButton: View {
     let title: String?
     let imageName: String?
@@ -15,6 +17,7 @@ struct DrawerActionButton: View {
     let foregroundColor: Color
     let strokeColor: Color?
     let strokeWidth: CGFloat
+    let imageOffset: CGFloat  // ✅ Add image offset parameter
     let action: () -> Void
     
     init(
@@ -24,6 +27,7 @@ struct DrawerActionButton: View {
         foregroundColor: Color,
         strokeColor: Color? = nil,
         strokeWidth: CGFloat = 0,
+        imageOffset: CGFloat = 0,  // ✅ Default to 0 (no offset)
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -32,6 +36,7 @@ struct DrawerActionButton: View {
         self.foregroundColor = foregroundColor
         self.strokeColor = strokeColor
         self.strokeWidth = strokeWidth
+        self.imageOffset = imageOffset  // ✅ Store the offset
         self.action = action
     }
     
@@ -41,13 +46,14 @@ struct DrawerActionButton: View {
                 if let imageName = imageName {
                     Image(systemName: imageName)
                         .font(.headline)
+                        .offset(y: imageOffset)  // ✅ Apply vertical offset
                 }
                 
                 if let title = title {
                     Text(title)
                         .font(.subheadline)
                         .fontWeight(.bold)
-                        .lineLimit(1)  // ADD THIS
+                        .lineLimit(1)
                 }
             }
             .foregroundColor(foregroundColor)
@@ -59,7 +65,62 @@ struct DrawerActionButton: View {
                 Capsule()
                     .strokeBorder(strokeColor ?? Color.clear, lineWidth: strokeWidth)
             )
-            .fixedSize(horizontal: true, vertical: false) // ADD THIS - prevents wrapping
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 }
+//struct DrawerActionButton: View {
+//    let title: String?
+//    let imageName: String?
+//    let backgroundColor: Color
+//    let foregroundColor: Color
+//    let strokeColor: Color?
+//    let strokeWidth: CGFloat
+//    let action: () -> Void
+//    
+//    init(
+//        title: String? = nil,
+//        imageName: String? = nil,
+//        backgroundColor: Color,
+//        foregroundColor: Color,
+//        strokeColor: Color? = nil,
+//        strokeWidth: CGFloat = 0,
+//        action: @escaping () -> Void
+//    ) {
+//        self.title = title
+//        self.imageName = imageName
+//        self.backgroundColor = backgroundColor
+//        self.foregroundColor = foregroundColor
+//        self.strokeColor = strokeColor
+//        self.strokeWidth = strokeWidth
+//        self.action = action
+//    }
+//    
+//    var body: some View {
+//        Button(action: action) {
+//            HStack(spacing: 6) {
+//                if let imageName = imageName {
+//                    Image(systemName: imageName)
+//                        .font(.headline)
+//                }
+//                
+//                if let title = title {
+//                    Text(title)
+//                        .font(.subheadline)
+//                        .fontWeight(.bold)
+//                        .lineLimit(1)  // ADD THIS
+//                }
+//            }
+//            .foregroundColor(foregroundColor)
+//            .padding(.vertical, 12)
+//            .padding(.horizontal, 20)
+//            .background(backgroundColor)
+//            .clipShape(Capsule())
+//            .overlay(
+//                Capsule()
+//                    .strokeBorder(strokeColor ?? Color.clear, lineWidth: strokeWidth)
+//            )
+//            .fixedSize(horizontal: true, vertical: false) // ADD THIS - prevents wrapping
+//        }
+//    }
+//}

@@ -128,12 +128,13 @@ struct MessagingSheet: View {
     let contentType: MessageContentType
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var messagingManager: MessagingManager
-    @State private var messageText = ""
+    @EnvironmentObject var appState: AppState  // ✅ Add if not already present
     
-    // ✅ Navigation state
+    @State private var messageText = ""
     @State private var showUserProfile = false
     @State private var selectedChatroomUser: GuildMembershipDTO? = nil
-    @State private var showSettings = false  // ✅ Add settings state
+    @State private var showSettings = false
+    @State private var hasMarkedAsRead = false  // ✅ Prevent duplicate API calls
     
     var body: some View {
         ZStack {
@@ -141,6 +142,9 @@ struct MessagingSheet: View {
             if !showUserProfile && !showSettings {
                 messagingView
                     .transition(.move(edge: .leading))
+                    .onAppear {  // ✅ Mark as read when messaging view appears
+                        markAsRead()
+                    }
             }
             
             // ✅ User profile view for DMs
@@ -163,6 +167,33 @@ struct MessagingSheet: View {
         }
         .animation(.easeInOut(duration: 0.3), value: showUserProfile)
         .animation(.easeInOut(duration: 0.3), value: showSettings)
+    }
+    
+    // MARK: - Mark as Read Function
+    private func markAsRead() {
+        // Prevent duplicate calls
+        guard !hasMarkedAsRead else { return }
+        hasMarkedAsRead = true
+        
+        Task {
+            do {
+                switch contentType {
+                case .userDM(let userDM):
+                    // ✅ Mark DM as read
+                    try await appState.markDMAsRead(dmId: userDM.id)
+                    // Silently succeed - no need for success message
+                    
+                case .chatroom(let chatroom):
+                    // ✅ Mark chatroom as read
+                    try await appState.markChatroomAsRead(chatroomId: chatroom.id)
+                    // Silently succeed - no need for success message
+                }
+            } catch {
+                // Silently fail - marking as read is not critical
+                // Optionally log for debugging
+                print("Failed to mark as read: \(error)")
+            }
+        }
     }
     
     // MARK: - Messaging View

@@ -499,6 +499,100 @@ class AppState: ObservableObject {
         }
     }
     
+    // ================================================================================================
+    // MARK: - Announcments - API
+    // ================================================================================================
+    
+    /// Attend Event
+    func recordAnnouncementView(announcementId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        guard let currentGuild = currentGuild else {
+            throw AppError.unauthorized
+        }
+        do {
+            try await api.recordAnnouncementView(announcementId: announcementId, userId: currentUser.id, guildId: currentGuild.id)
+        } catch {
+            showError(error, title: "Failed to record announcement view", style: .toast)
+            throw error
+        }
+    }
+    
+    
+    
+    // ================================================================================================
+    // MARK: - Events - API
+    // ================================================================================================
+    
+    /// Attend Event
+    func attendEvent(eventId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        guard let currentGuild = currentGuild else {
+            throw AppError.unauthorized
+        }
+        do {
+            try await api.attendEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
+        } catch {
+            showError(error, title: "Failed to attend event", style: .toast)
+            throw error
+        }
+    }
+    
+    /// UnAttend Event
+    func unAttendEvent(eventId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        guard let currentGuild = currentGuild else {
+            throw AppError.unauthorized
+        }
+        do {
+            try await api.unAttendEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
+        } catch {
+            showError(error, title: "Failed to attend event", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Share Event
+    func shareEvent(eventId: UUID, friendId: String) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        guard let currentGuild = currentGuild else {
+            throw AppError.unauthorized
+        }
+        do {
+            try await api.shareEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id, friendId: friendId)
+        } catch {
+            showError(error, title: "Failed to attend event", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Record view  Event
+    func recordEventView(eventId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        guard let currentGuild = currentGuild else {
+            throw AppError.unauthorized
+        }
+        do {
+            try await api.recordEventView(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
+        } catch {
+            showError(error, title: "Failed to record event view", style: .toast)
+            throw error
+        }
+    }
     
     // ================================================================================================
     // MARK: - Messaging - API
@@ -746,11 +840,46 @@ class AppState: ObservableObject {
         }
     }
     
+    /// Mark dm as read
+    func markDMAsRead(dmId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.markDMAsRead(guildId: currentGuild.id, userId: currentUser.id, dmId: dmId)
+        } catch {
+            showError(error, title: "Failed to mark dm as read", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Mark chatroom as read
+    func markChatroomAsRead(chatroomId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+                throw AppError.unauthorized
+            }
+        guard let currentGuild = currentGuild else {
+                throw AppError.unauthorized
+            }
+        
+        do {
+            try await api.markChatroomAsRead(guildId: currentGuild.id, chatroomId: chatroomId, userId: currentUser.id)
+        } catch {
+            showError(error, title: "Failed to mark chatroom as read", style: .toast)
+            throw error
+        }
+    }
+    
     
     // ================================================================================================
     // MARK: - User Management - API
     // ================================================================================================
-    
     
     /// Block a User
     func blockUser(userId: UUID) async throws {
@@ -838,6 +967,7 @@ class AppState: ObservableObject {
             throw error
         }
     }
+    
     
     // ================================================================================================
     // MARK: - Persistence

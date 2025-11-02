@@ -79,96 +79,140 @@ struct EventsListView: View {
     }
 }
 
-/// Events list that triggers a bottom sheet when an item is tapped.
 struct EventRowView: View {
     let event: GuildEventDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
     
-    
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .top, spacing: 12) {
-                // Date pill
-                VStack(spacing: 4) {
-                    Text(monthFormatter.string(from: event.eventDate))
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text(dayFormatter.string(from: event.eventDate))
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.whiteText)
-                }
-                .frame(width: 50)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(8)
-
-                // Event content
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(event.title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText)
-
-                    Text(event.content)
-                        .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.6))
-                        .lineLimit(2)
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock")
-                        Text("\(timeFormatter.string(from: event.eventDate)) • \(event.attendanceDisplay)")
-                    }
-                    .font(.caption2)
-                    .foregroundColor(AppColors.accentColor)
-                    .padding(.top, 2)
-                    
-                    let role = event.author.roleInGuild
-                    let authorName = event.author.globalMember.username
-                    HStack(spacing: 4) {
-                        Text("Hosted by")
+            VStack(spacing: 12) {
+                // ✅ Top section: Date, content, and chevron
+                HStack(alignment: .top, spacing: 12) {
+                    // Date pill
+                    VStack(spacing: 4) {
+                        Text(monthFormatter.string(from: event.eventDate))
                             .font(.caption2)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-                        Text(authorName)
-                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text(dayFormatter.string(from: event.eventDate))
+                            .font(.title2)
+                            .fontWeight(.bold)
                             .foregroundColor(AppColors.whiteText)
+                    }
+                    .frame(width: 50)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(8)
+
+                    // Event content
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(event.title)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.whiteText)
+
+                        Text(event.content)
+                            .font(.caption)
+                            .foregroundColor(AppColors.whiteText.opacity(0.6))
+                            .lineLimit(2)
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock")
+                            Text("\(timeFormatter.string(from: event.eventDate)) • \(event.attendanceDisplay)")
+                        }
+                        .font(.caption2)
+                        .foregroundColor(AppColors.accentColor)
+                        .padding(.top, 2)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(AppColors.whiteText.opacity(0.3))
+                }
+                
+                // ✅ Bottom section: Hosted by (full width)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Hosted by")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                    
+                    HStack(spacing: 4) {
+                        let author = event.author
+                        
+                        if author.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.bearCandleRed)
+                        }
+                        
+                        Text(author.globalMember.username)
+                            .font(.caption)
                             .fontWeight(.medium)
+                            .foregroundColor(AppColors.whiteText)
+                        
+                        if author.isFriend {
+                            Image(systemName: "person.crop.circle")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(author.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                                
+                        }
+                        
                         Circle()
                             .fill(AppColors.whiteText.opacity(0.7))
                             .frame(width: 3, height: 3)
-                            .padding(.top, 1)
-                            .padding(.leading, 3)
-                            .padding(.trailing, 3)
-                        Text(role.rawValue)
+                            .padding(.horizontal, 3)
+                        
+                        Text(author.roleInGuild.rawValue)
+                            .font(.caption)
+                            .foregroundColor(author.roleInGuild.roleForegroundColor)
+                            .fontWeight(author.roleInGuild.roleFontWeight)
+                            .lineLimit(1)
+                        
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.7))
+                            .frame(width: 3, height: 3)
+                            .padding(.horizontal, 3)
+                        
+                        Image(systemName: "shield.pattern.checkered")
                             .font(.caption2)
-                            .foregroundColor(role.roleForegroundColor)
-                            .fontWeight(role.roleFontWeight)
-                        Spacer(minLength: 0)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        
+                        Text("\(author.reputation)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                        
+                        Spacer()
                     }
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(AppColors.whiteText.opacity(0.3))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white.opacity(isPressed ? 0.1 : 0.02))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14) // Change this to is viewed by the user to show the vorder, indicating a new unseen event
-                            .strokeBorder(AppColors.accentColor.opacity(0.3), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(event.userViewed ? Color.clear : AppColors.accentColor.opacity(0.3), lineWidth: 1)
                     )
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }, perform: {})
     }
 }
+
 
 
 
@@ -176,14 +220,23 @@ struct EventRowView: View {
 struct EventDetailView: View {
     let event: GuildEventDTO
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appState: AppState
+    
+    @State private var showUnAttendConfirmation = false
+    @State private var showAttendConfirmation = false
+    @State private var showShareConfirmation = false
+    
+    @State private var hasRecordedView = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 16) {
                 
+                // START OF CONTENT
                 
-                // start of content
-                HStack {
+                // Header with date pill and title
+                HStack(alignment: .top, spacing: 12) {
+                    // Date pill
                     VStack(spacing: 4) {
                         Text(monthFormatter.string(from: event.eventDate))
                             .font(.caption)
@@ -192,105 +245,165 @@ struct EventDetailView: View {
                         Text(dayFormatter.string(from: event.eventDate))
                             .font(.largeTitle)
                             .fontWeight(.bold)
+                            .foregroundColor(.primary)
                     }
-                    .frame(width: 80)
+                    .frame(width: 60)
                     .padding(.vertical, 12)
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(10)
                     
+                    // Title and time
                     VStack(alignment: .leading, spacing: 4) {
                         Text(event.title)
                             .font(.title2)
                             .fontWeight(.bold)
-                        Text(timeFormatter.string(from: event.eventDate))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.primary)
+                            .fixedSize(horizontal: false, vertical: true)  // ✅ Allow vertical wrapping
+                            .frame(maxWidth: .infinity, alignment: .leading)  // ✅ Take full width
                         
-                        let role = event.author.roleInGuild
-                        let authorName = event.author.globalMember.username
-                        HStack(spacing: 8) {
-                            if role != .member {
-                                Text(role.rawValue.uppercased())
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        role == .admin ? Color.red.opacity(0.8) : AppColors.accentColor.opacity(0.8)
-                                    )
-                                    .cornerRadius(4)
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock")
+                            Text(timeFormatter.string(from: event.eventDate))
+                        }
+                        .font(.caption)
+                        .foregroundColor(AppColors.accentColor)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Spacer()
+                }
+                
+                // Author and details info (similar to announcement)
+                let author = event.author
+                HStack(spacing: 3) {
+                    if author.isBlocked {
+                        Image(systemName: "nosign")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.bearCandleRed)
+                    }
+                    
+                    Text("Hosted by \(author.globalMember.username)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    if author.isFriend {
+                        Image(systemName: "person.crop.circle")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(author.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                    }
+                    
+                    Circle()
+                        .fill(AppColors.whiteText.opacity(0.7))
+                        .frame(width: 4, height: 4)
+                        .padding(.top, 1)
+                        .padding(.leading, 3)
+                        .padding(.trailing, 3)
+                    
+                    Text(author.roleInGuild.rawValue)
+                        .font(.caption)
+                        .foregroundColor(author.roleInGuild.roleForegroundColor)
+                        .fontWeight(author.roleInGuild.roleFontWeight)
+                        .lineLimit(1)
+                    
+                    Circle()
+                        .fill(AppColors.whiteText.opacity(0.7))
+                        .frame(width: 4, height: 4)
+                        .padding(.top, 1)
+                        .padding(.leading, 3)
+                        .padding(.trailing, 3)
+                    
+                    Image(systemName: "shield.pattern.checkered")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                    
+                    Text("\(author.reputation)")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.accentColor)
+                }
+                
+                Divider()
+                
+                // Event details and content
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Event info
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "person.3.fill")
+                                    .foregroundColor(AppColors.accentColor)
+                                Text(event.attendanceDisplay)
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.accentColor)
                             }
-                            Text("Hosted by \(authorName)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 6) {
+                                Image(systemName: "location.fill")
+                                    .foregroundColor(.secondary)
+                                Text("Guild Hall")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        // Event description
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Event Description")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Text(event.content)
+                                .font(.body)
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
                 
-                Divider()
-                VStack{
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label("\(event.attendanceDisplay)", systemImage: "person.3.fill")
-                            .foregroundColor(AppColors.accentColor)
-                        Label("Guild Hall", systemImage: "location.fill")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Text("Event Description")
-                        .font(.headline)
-                        .padding(.top, 8)
-                    
-                    Text(event.content)
-                        .font(.body)
-                }
-                .padding(.horizontal)
-                
-                
-                Spacer(minLength: 0)
+                Spacer()
                 
                 Divider()
-                    
                 
+                // Action buttons
                 HStack(spacing: 8) {
-                    DrawerActionButton(
-                        imageName: "nosign",
-                        backgroundColor: AppColors.bearCandleRed.opacity(0.3),
-                        foregroundColor: AppColors.whiteText,
-                        strokeColor: AppColors.bearCandleRed.opacity(0.6),
-                        strokeWidth: 0.5,
-                        action: { }
-                    )
+                    
                     
                     Spacer()
                     
                     DrawerActionButton(
-                        imageName: "person.fill.badge.plus",
+                        imageName: "square.and.arrow.up",
                         backgroundColor: AppColors.gradientBackgroundDark.opacity(0.2),
                         foregroundColor: AppColors.whiteText.opacity(0.8),
                         strokeColor: AppColors.whiteText.opacity(0.3),
                         strokeWidth: 0.5,
-                        action: { }
+                        imageOffset: -2,
+                        action: {
+                            showShareConfirmation = true
+                        }
                     )
 
                     DrawerActionButton(
-                        title: "Chat",
-                        imageName: "message.fill",
-                        backgroundColor: AppColors.gradientBackgroundDark.opacity(0.2),
-                        foregroundColor: AppColors.whiteText.opacity(0.8),
-                        strokeColor: AppColors.whiteText.opacity(0.3),
+                        title: event.isAttending ? "Attending" : "Attend",
+                        imageName: event.isAttending ? "calendar.badge.checkmark" : "calendar.badge.plus",
+                        backgroundColor: event.isAttending ? AppColors.whiteText.opacity(0.8) : AppColors.gradientBackgroundDark.opacity(0.2),
+                        foregroundColor: event.isAttending ? Color.black : AppColors.whiteText.opacity(0.8),
+                        strokeColor: event.isAttending ? Color.black : AppColors.whiteText.opacity(0.3),
                         strokeWidth: 0.5,
-                        action: { }
+                        action: {
+                            
+                            if event.isAttending {
+                                showUnAttendConfirmation = true
+                            } else {
+                                showAttendConfirmation = true
+                            }
+                        }
                     )
                 }
-                .padding(.horizontal)
                 
-                
-
-                
-                
-                // END OF CONTENT 
+                // END OF CONTENT
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.top, 30)
@@ -306,6 +419,93 @@ struct EventDetailView: View {
             .padding(.trailing, 20)
         }
         .background(AppColors.drawerBackground.opacity(0.2))
+        .alert("Attend Event", isPresented: $showAttendConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Attend Event", role: .destructive) {
+                attendEvent()
+            }
+            
+        } message: {
+            Text("Are you sure you want to attend the Event")
+        }
+        .alert("Un Attend Event", isPresented: $showUnAttendConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Un Attend Event", role: .destructive) {
+                unAttendEvent()
+            }
+            
+        } message: {
+            Text("Are you sure you want to un attend the Event")
+        }
+        .alert("Share Event", isPresented: $showShareConfirmation) {
+            // TODO: - List of friends to share to
+            Button("Cancel", role: .cancel) { }
+            Button("Share Event") {
+                shareEvent()
+            }
+            
+        } message: {
+            Text("Share the event with Friends")
+        }
+        .onAppear {  // ✅ Record view when the view appears
+            recordEventView()
+        }
+    }
+    // MARK: - Action Methods
+    private func attendEvent() {
+        Task {
+           
+            do {
+                try await appState.attendEvent(eventId: event.id)
+                appState.showSuccess("Attending Event")
+                dismiss()
+            } catch {
+                appState.showError(error, title: "Failed to attend Event")
+            }
+        }
+    }
+    
+    private func unAttendEvent() {
+        Task {
+           
+            do {
+                try await appState.unAttendEvent(eventId: event.id)
+                appState.showSuccess("Attendance cancelled")
+                dismiss()
+            } catch {
+                appState.showError(error, title: "Failed to cancel attendance")
+            }
+        }
+    }
+    
+    private func shareEvent() {
+        Task {
+           
+            do {
+                try await appState.shareEvent(eventId: event.id, friendId: UUID().uuidString)
+                appState.showSuccess("Event Shared")
+                dismiss()
+            } catch {
+                appState.showError(error, title: "Failed to share event")
+            }
+        }
+    }
+    
+    // ✅ Function to record the view
+    private func recordEventView() {
+        // Prevent duplicate calls if view appears multiple times
+        guard !hasRecordedView else { return }
+        hasRecordedView = true
+        
+        Task {
+            do {
+                try await appState.recordEventView(eventId: event.id)
+                // Optionally: silently succeed, no need to show success message
+            } catch {
+                // Silently fail - viewing tracking is not critical
+                // Or optionally log the error for debugging
+                print("Failed to record event view: \(error)")
+            }
+        }
     }
 }
-

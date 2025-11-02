@@ -71,33 +71,62 @@ struct LeaderBoardRowView: View {
     
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Text("\(rank)")
-                    .font(.headline)
+                    .font(.subheadline)
                     .fontWeight(.bold)
                     .foregroundColor(rank <= 3 ? AppColors.accentColor : AppColors.whiteText.opacity(0.6))
-                    .frame(width: 30)
+                    //.frame(width: 30)
+        
                 
-//                if rank <= 3 {
-//                    Image(systemName: rank == 1 ? "crown.fill" : "medal.fill")
-//                        .foregroundColor(rank == 1 ? .yellow : (rank == 2 ? .gray : Color.orange))
-//                        .font(.title3)
-//                }
+                // Avatar with online indicator
+                ZStack(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(AppColors.accentColor.opacity(0.3))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(String(user.globalMember.username.prefix(2)))
+                                .font(.body)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.accentColor)
+                        )
+                        .overlay(alignment: .bottomTrailing) {
+                            Circle()
+                                .fill(user.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                                .frame(width: 10, height: 10)
+                                .overlay(
+                                    Circle()
+                                        .stroke(AppColors.drawerBackground, lineWidth: 2)
+                                )
+                                .padding(.trailing, 2)
+                                .padding(.bottom, 2)
+                        }
+                }
                 
-                Circle()
-                    .fill(AppColors.accentColor.opacity(0.3))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(String(user.globalMember.username.prefix(2)))
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                    )
                 VStack (alignment: .leading, spacing: 3){
-                    Text("\(user.globalMember.username)")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.whiteText)
+                    
+                    HStack(spacing: 2) {
+                        if user.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.bearCandleRed)
+                        }
+                    
+                        Text(user.globalMember.username)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.whiteText)
+                        
+                        if user.isFriend {
+                            Image(systemName: "person.crop.circle")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                                .padding(.leading, 3)
+                        }
+                    }
+                   
                     
                     Text(user.roleInGuild.rawValue)
                         .font(.caption)
@@ -111,11 +140,11 @@ struct LeaderBoardRowView: View {
                 HStack(spacing:2) {
                     
                     Image(systemName: "shield.pattern.checkered")
-                        .font(.subheadline)
+                        .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
                     Text("\(user.reputation)")
-                        .font(.subheadline)
+                        .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
                 }

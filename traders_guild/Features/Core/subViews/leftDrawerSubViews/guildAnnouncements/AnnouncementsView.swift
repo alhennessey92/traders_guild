@@ -77,12 +77,12 @@ struct AnnouncementRowView: View {
                         .foregroundColor(announcement.isImportant ? AppColors.whiteText : AppColors.whiteText.opacity(0.8))
                         .frame(width: 24)
                     
-                    if announcement.isImportant {
-                        Circle()
-                            .fill(Color.red.opacity(0.9))
-                            .frame(width: 8, height: 8)
-                            .offset(x: 8, y: -8)
-                    }
+//                    if announcement.isImportant {
+//                        Circle()
+//                            .fill(Color.red.opacity(0.9))
+//                            .frame(width: 8, height: 8)
+//                            .offset(x: 8, y: -8)
+//                    }
                 }
                 
                 VStack(alignment: .leading, spacing: 6) {
@@ -94,19 +94,18 @@ struct AnnouncementRowView: View {
                             .foregroundColor(AppColors.whiteText)
                             .multilineTextAlignment(.leading)
                             .lineLimit(2)
-                        
-//                        if announcement.isImportant {
-//                            Text("IMPORTANT")
-//                                .font(.caption2)
-//                                .fontWeight(.bold)
-//                                .foregroundColor(.white)
-//                                .padding(.horizontal, 6)
-//                                .padding(.vertical, 2)
-//                                .background(Color.red)
-//                                .cornerRadius(4)
-//                        }
+
                         
                         Spacer()
+                    }
+                    if announcement.isImportant {
+                        Text("IMPORTANT ANNOUNCEMENT")
+                            .font(.system(size: 8, weight: .bold))  // ✅ Combine size and weight
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(AppColors.bearCandleRed.opacity(0.8))
+                            .cornerRadius(6)
                     }
                     
                     // Preview text
@@ -188,10 +187,8 @@ struct AnnouncementRowView: View {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white.opacity(isPressed ? 0.1 : 0.02))
                     .overlay(
-                        announcement.isImportant ?
                         RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(AppColors.accentColor.opacity(0.3), lineWidth: 1) :
-                        nil
+                            .strokeBorder(announcement.isRead ? Color.clear : AppColors.accentColor.opacity(0.3), lineWidth: 1)
                     )
             )
         }
@@ -208,15 +205,15 @@ struct AnnouncementRowView: View {
 struct AnnouncementDetailView: View {
     let announcement: GuildAnnouncementDTO
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appState: AppState  // ✅ Add this if not already present
+    
+    @State private var hasRecordedView = false  // ✅ Prevent duplicate calls
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 16) {
                 
-                
-                
                 // START OF CONTENT
-                
                 
                 // Header with icon and title
                 HStack(alignment: .top, spacing: 12) {
@@ -224,13 +221,6 @@ struct AnnouncementDetailView: View {
                         Image(systemName: announcement.isImportant ? "megaphone.fill" : "megaphone.fill")
                             .font(.title)
                             .foregroundColor(AppColors.accentColor)
-                        
-                        if announcement.isImportant {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 12, height: 12)
-                                .offset(x: 12, y: -12)
-                        }
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -241,46 +231,73 @@ struct AnnouncementDetailView: View {
                         
                         if announcement.isImportant {
                             Text("IMPORTANT ANNOUNCEMENT")
-                                .font(.caption)
+                                .font(.caption2)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(Color.red)
+                                .background(AppColors.bearCandleRed.opacity(0.8))
                                 .cornerRadius(6)
                         }
+                        
+                        Text(announcement.timeAgoFormatted)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                     
                     Spacer()
                 }
                 
-                let role = announcement.author.roleInGuild
-                let authorName = announcement.author.globalMember.username
+                let author = announcement.author
                 // Author and timestamp info
-                HStack(spacing: 8) {
-                    if role != .member {
-                        Text(role.rawValue.uppercased())
+                HStack(spacing: 3) {
+                    if author.isBlocked {
+                        Image(systemName: "nosign")
                             .font(.caption2)
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                role == .admin ? Color.red.opacity(0.8) : AppColors.accentColor.opacity(0.8)
-                            )
-                            .cornerRadius(4)
+                            .foregroundColor(AppColors.bearCandleRed)
                     }
                     
-                    Text("Posted by \(authorName)")
+                    Text("Posted by \(author.globalMember.username)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    Text("•")
-                        .foregroundColor(.secondary)
+                    if author.isFriend {
+                        Image(systemName: "person.crop.circle")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(author.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                    }
                     
-                    Text(announcement.timeAgoFormatted)
+                    Circle()
+                        .fill(AppColors.whiteText.opacity(0.7))
+                        .frame(width: 4, height: 4)
+                        .padding(.top, 1)
+                        .padding(.leading, 3)
+                        .padding(.trailing, 3)
+                    
+                    Text(author.roleInGuild.rawValue)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(author.roleInGuild.roleForegroundColor)
+                        .fontWeight(author.roleInGuild.roleFontWeight)
+                        .lineLimit(1)
+                    
+                    Circle()
+                        .fill(AppColors.whiteText.opacity(0.7))
+                        .frame(width: 4, height: 4)
+                        .padding(.top, 1)
+                        .padding(.leading, 3)
+                        .padding(.trailing, 3)
+                    
+                    Image(systemName: "shield.pattern.checkered")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                    
+                    Text("\(author.reputation)")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.accentColor)
                 }
                 
                 Divider()
@@ -294,7 +311,6 @@ struct AnnouncementDetailView: View {
                 }
                 
                 Spacer()
-                
                 
                 // END OF CONTENT
             }
@@ -312,6 +328,27 @@ struct AnnouncementDetailView: View {
             .padding(.trailing, 20)
         }
         .background(AppColors.drawerBackground.opacity(0.2))
+        .onAppear {  // ✅ Record view when the view appears
+            recordAnnouncementView()
+        }
+    }
+    
+    // ✅ Function to record the view
+    private func recordAnnouncementView() {
+        // Prevent duplicate calls if view appears multiple times
+        guard !hasRecordedView else { return }
+        hasRecordedView = true
+        
+        Task {
+            do {
+                try await appState.recordAnnouncementView(announcementId: announcement.id)
+                // Optionally: silently succeed, no need to show success message
+            } catch {
+                // Silently fail - viewing tracking is not critical
+                // Or optionally log the error for debugging
+                print("Failed to record announcement view: \(error)")
+            }
+        }
     }
 }
 

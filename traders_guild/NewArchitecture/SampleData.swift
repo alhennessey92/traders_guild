@@ -921,7 +921,8 @@ struct SampleData {
                 )
             ],
             isImportant: true,
-            canEdit: false
+            canEdit: false,
+            userViewed: true
         ),
         GuildEventDTO(
             id: UUID(uuidString: "643e4567-e89b-12d3-a456-426614174033")!,
@@ -990,7 +991,8 @@ struct SampleData {
             isAttending: false,
             attendees: [],
             isImportant: true,
-            canEdit: false
+            canEdit: false,
+            userViewed: false
         )
     ]
     

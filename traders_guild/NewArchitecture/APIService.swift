@@ -107,6 +107,40 @@ class MockAPIService {
     }
     
     // ================================================================================================
+    // MARK: - Announcement - API
+    // ================================================================================================
+    
+    func recordAnnouncementView(announcementId: UUID, userId: UUID, guildId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: record announcement view
+    }
+    
+    
+    // ================================================================================================
+    // MARK: - Event - API
+    // ================================================================================================
+    
+    func attendEvent(eventId: UUID, userId: UUID, guildId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: attend event
+    }
+    
+    func unAttendEvent(eventId: UUID, userId: UUID, guildId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: un attend event
+    }
+    
+    func shareEvent(eventId: UUID, userId: UUID, guildId: UUID, friendId: String) async throws {
+        try await simulateNetworkDelay()
+        // Mock: Share event
+    }
+    
+    func recordEventView(eventId: UUID, userId: UUID, guildId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: record event view
+    }
+    
+    // ================================================================================================
     // MARK: - Messaging - API
     // ================================================================================================
     
@@ -189,6 +223,16 @@ class MockAPIService {
     func reportChatroom(guildId: UUID, chatroomId: UUID, userId: UUID, reason: String) async throws {
         try await simulateNetworkDelay()
         // Mock: delete entire messages for dm
+    }
+    
+    func markDMAsRead(guildId: UUID, userId: UUID, dmId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: mark dm as read
+    }
+    
+    func markChatroomAsRead(guildId: UUID, chatroomId: UUID, userId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: mark chatroom as read
     }
     
     // ================================================================================================
