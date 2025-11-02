@@ -19,39 +19,31 @@ struct UserDMRowView: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Avatar with online indicator
-                ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(AppColors.accentColor.opacity(0.3))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text(String(userDM.participant.globalMember.username.prefix(2)))
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                        )
-                    
-                    if userDM.participant.isOnline {
+                Circle()
+                    .fill(AppColors.accentColor.opacity(0.3))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Text(String(userDM.participant.globalMember.username.prefix(2)))
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                    )
+
+                    .overlay(alignment: .bottomTrailing) {
                         Circle()
-                            .fill(AppColors.bullCandleGreen)
+                            .fill(userDM.participant.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
                             .frame(width: 10, height: 10)
                             .overlay(
                                 Circle()
-                                    .stroke(AppColors.drawerBackground, lineWidth: 2)
+                                    .stroke(AppColors.drawerBackground, lineWidth: 1)
                             )
-                    } else{
-                        
-                        Circle()
-                            .fill(AppColors.greyText)
-                            .frame(width: 10, height: 10)
-                            .overlay(
-                                Circle()
-                                    .stroke(AppColors.drawerBackground, lineWidth: 2)
-                            )
+                            .padding(.trailing, 2)
+                            .padding(.bottom, 2)
                     }
-                }
+
                 
                 // User info
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack (spacing: 2){
                         if userDM.participant.isBlocked {
                             Image(systemName: "nosign")
@@ -68,12 +60,12 @@ struct UserDMRowView: View {
                         
                         
                         if userDM.participant.isFriend {
-                            Image(systemName: "person.crop.circle.badge.checkmark")
+                            Image(systemName: "person.crop.circle")
                                 .font(.caption2)
                                 .fontWeight(.bold)
-                                .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.8))
-                                .padding(.top, 2)
-                                .padding(.leading, 2)
+                                .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                                
+                                .padding(.leading, 3)
                         }
 
                         
@@ -83,14 +75,15 @@ struct UserDMRowView: View {
                     
                     HStack (spacing:2){
                         let role = userDM.participant.roleInGuild
+                        
                         Text(role.rawValue)
                             .font(.caption)
                             .foregroundColor(role.roleForegroundColor)
                             .fontWeight(role.roleFontWeight)
                             .lineLimit(1)
                         Circle()
-                            .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 5, height: 5)
+                            .fill(AppColors.whiteText.opacity(0.5))
+                            .frame(width: 4, height: 4)
                             .padding(.top, 1)
                             .padding(.leading, 3)
                             .padding(.trailing, 3)
@@ -102,6 +95,8 @@ struct UserDMRowView: View {
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.accentColor)
+                        
+                        
                         
                         
                         

@@ -37,7 +37,7 @@ enum MemberRole: String, Codable, CaseIterable {
     /// Color for roles in UI
     var roleForegroundColor: Color {
         switch self {
-        case .member: return .blue
+        case .member: return .gray
         case .moderator: return .orange
         case .admin: return .red
         }
@@ -223,6 +223,66 @@ struct GuildDTO: Identifiable, Codable, Equatable {
     var statusText: String {
         isOpen ? "Open" : "Closed"
     }
+}
+
+// MARK: - Guild Statistics DTO
+/// Lightweight guild representation for lists and references
+/// Use this when you need basic guild info without full details
+/// Example: showing mutual guilds, guild selector dropdown
+struct GuildStatisticsDTO: Codable, Equatable {
+    let id: UUID                    // Guild's unique identifier
+    let name: String                // Guild name (e.g., "KAOS)
+    let totalPredictions: Int            // Current number of members
+    let correctPredictions: Int            // Current number of members
+    let averageAccuracy: Int            // Current number of members
+    let guildRank: Int            // Current number of members
+    let newMembers: Int            // Current number of members
+    let activeUsers: Int            // Current number of members
+    let predictionsMade: Int            // Current number of members
+    let reputationEarned: Int
+    
+    var totalPredictionsDisplay: String {
+        
+        return "\(totalPredictions)"
+    }
+    var correctPredictionsDisplay: String {
+        
+        return "\(correctPredictions)"
+    }
+    /// Human-readable reputation (1000 -> 1k)
+    var averageAccuracyDisplay: String {
+        
+        return "\(averageAccuracy)%"
+    }
+    
+    var guildRankDisplay: String {
+        
+        return "#\(guildRank)"
+    }
+    
+    /// Human-readable reputation (1000 -> 1k)
+    var newMembersDisplay: String {
+        
+        return "+\(newMembers)"
+    }
+    
+    var activeUsersDisplay: String {
+        
+        return "\(activeUsers)"
+    }
+    
+    var predictionsMadeDisplay: String {
+        
+        return "\(predictionsMade)"
+    }
+    
+    /// Human-readable reputation (1000 -> 1k)
+    var reputationEarnedDisplay: String {
+        
+        return "+\(reputationEarned)"
+    }
+
+    
 }
 
 // MARK: - Guild Membership DTO

@@ -101,6 +101,11 @@ class MockAPIService {
         return SampleData.userNotifications
     }
     
+    func fetchGuildStatistics(guildId: UUID) async throws -> GuildStatisticsDTO {
+        try await simulateNetworkDelay()
+        return SampleData.guildStatistics
+    }
+    
     // ================================================================================================
     // MARK: - Messaging - API
     // ================================================================================================
@@ -185,7 +190,17 @@ class MockAPIService {
         // Mock: successful join
     }
     
+    func unBlockUser(guildId: UUID, userId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful join
+    }
+    
     func sendFriendRequest(guildId: UUID, userId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful join
+    }
+    
+    func sendCancelFriendship(guildId: UUID, userId: UUID) async throws {
         try await simulateNetworkDelay()
         // Mock: successful join
     }

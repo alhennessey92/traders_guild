@@ -276,6 +276,21 @@ struct SampleData {
         )
     ]
     
+    static let guildStatistics: GuildStatisticsDTO =
+        // MARK: - Watchlist 1: Tech Stocks
+        GuildStatisticsDTO(
+            id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+            name: "KAOS Trading",
+            totalPredictions: 123,            // Current number of members
+            correctPredictions: 43,            // Current number of members
+            averageAccuracy: 34,            // Current number of members
+            guildRank: 2,            // Current number of members
+            newMembers: 1231,            // Current number of members
+            activeUsers: 12,            // Current number of members
+            predictionsMade: 4124,            // Current number of members
+            reputationEarned: 34123
+        )
+    
     // MARK: - Guild Summaries (with embedded GuildMembershipDTO owner)
     static let guildSummaries: [GuildSummaryDTO] = [
         GuildSummaryDTO(
@@ -2557,7 +2572,7 @@ struct SampleData {
                 daysInGuild: 168,
                 contributionScore: 82,
                 isOnline: true,
-                isFriend: false,
+                isFriend: true,
                 isBlocked: false
             ),
             lastMessage: DMMessageDTO(
@@ -2604,7 +2619,7 @@ struct SampleData {
                     daysInGuild: 168,
                     contributionScore: 82,
                     isOnline: true,
-                    isFriend: false,
+                    isFriend: true,
                     isBlocked: false
                 ),
                 content: "Bitcoin looks bullish! Check the 4H chart 📈",
@@ -2665,8 +2680,8 @@ struct SampleData {
                 daysInGuild: 270,
                 contributionScore: 95,
                 isOnline: false,
-                isFriend: false,
-                isBlocked: false
+                isFriend: true,
+                isBlocked: true
             ),
             lastMessage: DMMessageDTO(
                 id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174095")!,
@@ -2773,7 +2788,7 @@ struct SampleData {
                 daysInGuild: 199,
                 contributionScore: 87,
                 isOnline: true,
-                isFriend: false,
+                isFriend: true,
                 isBlocked: false
             ),
             lastMessage: DMMessageDTO(

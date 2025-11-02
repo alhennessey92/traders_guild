@@ -26,4 +26,6 @@ enum AppColors {
     static let sheetBackground = Color("TGSheetBackground")
     static let sheetBackgroundDark = Color("TGSheetBackgroundDark")
     
+    static let friendAccent = Color("TGFriend")
+    
 }

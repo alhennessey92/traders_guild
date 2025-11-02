@@ -27,6 +27,7 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var members: [GuildMembershipDTO] = []
     @Published var watchlist: GuildWatchlistDTO?  // ✅ Single object, not array
     @Published var userNotifications: [GuildNotificationDTO] = []
+    @Published var statistics: GuildStatisticsDTO?  // ✅ Single object, not array
     
     @Published var isLoading: Bool = false
     @Published var lastRefresh: Date?
@@ -49,14 +50,16 @@ class LeftDrawerViewModel: ObservableObject {
         async let membersTask = appState.fetchGuildMembers(guildId: guildId)
         async let watchlistTask = appState.fetchGuildWatchlist(guildId: guildId)  // Returns single object
         async let userNotificationsTask = appState.fetchGuildUserNotifications(guildId: guildId)
+        async let statisticsTask = appState.fetchGuildStatistics(guildId: guildId)  // Returns single object
         
         do {
-            let (fetchedAnnouncements, fetchedEvents, fetchedMembers, fetchedWatchlist, fetchedUserNotifications) = try await (
+            let (fetchedAnnouncements, fetchedEvents, fetchedMembers, fetchedWatchlist, fetchedUserNotifications, fetchedStatistics) = try await (
                 announcementsTask,
                 eventsTask,
                 membersTask,
                 watchlistTask,
-                userNotificationsTask
+                userNotificationsTask,
+                statisticsTask
             )
             
             self.announcements = fetchedAnnouncements
@@ -64,6 +67,7 @@ class LeftDrawerViewModel: ObservableObject {
             self.members = fetchedMembers
             self.watchlist = fetchedWatchlist  // ✅ Single assignment
             self.userNotifications = fetchedUserNotifications
+            self.statistics = fetchedStatistics
             self.lastRefresh = Date()
             self.currentGuildId = guildId
             
@@ -88,6 +92,7 @@ class LeftDrawerViewModel: ObservableObject {
         members = []
         watchlist = nil  // ✅ Set to nil instead of empty array
         userNotifications = []
+        statistics = nil  // ✅ Set to nil instead of empty array
         lastRefresh = nil
         currentGuildId = nil
     }
@@ -104,7 +109,7 @@ class LeftDrawerViewModel: ObservableObject {
         }
         
         // Refresh if cache is empty
-        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil && userNotifications.isEmpty {
+        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil && userNotifications.isEmpty && statistics == nil  {
             return true
         }
         
@@ -131,5 +136,10 @@ class LeftDrawerViewModel: ObservableObject {
     /// Has watchlist been loaded
     var hasWatchlist: Bool {
         watchlist != nil
+    }
+    
+    /// Has statistics been loaded
+    var hasStatistics: Bool {
+        statistics != nil
     }
 }

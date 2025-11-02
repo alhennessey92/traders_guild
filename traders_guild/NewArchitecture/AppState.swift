@@ -484,6 +484,20 @@ class AppState: ObservableObject {
         }
     }
     
+    /// Fetch statistics for a guild
+    func fetchGuildStatistics(guildId: UUID) async throws -> GuildStatisticsDTO {
+        errorMessage = nil
+        
+        do {
+            let statistics = try await api.fetchGuildStatistics(guildId: guildId)
+            return statistics
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Fetch Guild Statistics", style: .toast)
+            throw error
+        }
+    }
     
     
     // ================================================================================================
@@ -713,6 +727,18 @@ class AppState: ObservableObject {
         }
     }
     
+    /// Block a User
+    func unBlockUser(guildId: UUID, userId: UUID) async throws {
+        errorMessage = nil
+        
+        do {
+            try await api.unBlockUser(guildId: guildId, userId: userId)
+        } catch {
+            showError(error, title: "Failed to Un Block User", style: .toast)
+            throw error
+        }
+    }
+    
     /// Add User as a Friend
     func sendFriendRequest(guildId: UUID, userId: UUID) async throws {
         errorMessage = nil
@@ -721,6 +747,18 @@ class AppState: ObservableObject {
             try await api.sendFriendRequest(guildId: guildId, userId: userId)
         } catch {
             showError(error, title: "Failed to send Friend Request", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Add User as a Friend
+    func sendCancelFriendship(guildId: UUID, userId: UUID) async throws {
+        errorMessage = nil
+        
+        do {
+            try await api.sendCancelFriendship(guildId: guildId, userId: userId)
+        } catch {
+            showError(error, title: "Failed to end friendship", style: .toast)
             throw error
         }
     }

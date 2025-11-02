@@ -13,10 +13,6 @@ enum MessageContentType: Equatable {
 }
 
 // MARK: - Global Messaging Manager
-/// A global messaging state manager that can be used anywhere in the app
-/// Add this to your app's environment to enable messaging from any view
-///
-// MARK: - Global Messaging Manager
 @MainActor
 class MessagingManager: ObservableObject {
     @Published var activeMessage: MessageContentType? = nil
@@ -61,7 +57,6 @@ class MessagingManager: ObservableObject {
         } catch is CancellationError {
             return
         } catch {
-            // ✅ Use new error system
             appState.showError(error, title: "Failed to Open Chat", style: .toast)
         }
         
@@ -82,12 +77,9 @@ class MessagingManager: ObservableObject {
     }
 }
 
-
 // MARK: - Global Messaging Overlay
-/// Add this to your main app view to enable global messaging
 struct GlobalMessagingOverlay: ViewModifier {
     @EnvironmentObject var messagingManager: MessagingManager
-    //@EnvironmentObject var appState: AppState
     
     func body(content: Content) -> some View {
         content
@@ -103,9 +95,7 @@ struct GlobalMessagingOverlay: ViewModifier {
                 }
             )) { item in
                 MessagingSheet(contentType: item.contentType)
-                  
-                    .environmentObject(messagingManager) // Pass the messaging manager to the sheet
-                    //.environmentObject(appState)
+                    .environmentObject(messagingManager)
                     .presentationDetents([.fraction(0.9)])
                     .presentationBackground {
                         ZStack {
@@ -120,8 +110,6 @@ struct GlobalMessagingOverlay: ViewModifier {
     }
 }
 
-
-
 // MARK: - Helper for Sheet Presentation
 struct MessageContentItem: Identifiable {
     let id = UUID()
@@ -130,22 +118,47 @@ struct MessageContentItem: Identifiable {
 
 // MARK: - View Extension for Easy Access
 extension View {
-    /// Add global messaging capability to any view
     func globalMessaging() -> some View {
         self.modifier(GlobalMessagingOverlay())
     }
 }
 
 // MARK: - Unified Messaging Sheet
-/// A unified messaging sheet that handles both user chats and chatroom conversations
-/// Similar structure to left drawer sheets with header, content, and footer sections
 struct MessagingSheet: View {
     let contentType: MessageContentType
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var messagingManager: MessagingManager
     @State private var messageText = ""
     
+    // ✅ Add navigation state for both DM and chatroom profiles
+    @State private var showUserProfile = false
+    @State private var selectedChatroomUser: GuildMembershipDTO? = nil
+    
     var body: some View {
+        ZStack {
+            // ✅ Main messaging view
+            if !showUserProfile {
+                messagingView
+                    .transition(.move(edge: .leading))
+            }
+            
+            // ✅ User profile view for DMs
+            if showUserProfile, case .userDM(let userDM) = contentType {
+                userProfileView(for: userDM.participant, backTitle: "Back to Chat")
+                    .transition(.move(edge: .trailing))
+            }
+            
+            // ✅ User profile view for chatroom users
+            if showUserProfile, case .chatroom = contentType, let selectedUser = selectedChatroomUser {
+                userProfileView(for: selectedUser, backTitle: "Back to Chatroom")
+                    .transition(.move(edge: .trailing))
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: showUserProfile)
+    }
+    
+    // MARK: - Messaging View
+    private var messagingView: some View {
         VStack(spacing: 0) {
             // Header section
             VStack(spacing: 0) {
@@ -158,14 +171,27 @@ struct MessagingSheet: View {
                             .foregroundColor(.secondary)
                     }
                     Spacer()
+                    
                     // Header content
                     switch contentType {
                         case .chatroom(let chatroom):
                             ChatroomHeaderView(chatroom: chatroom)
                         case .userDM(let userDM):
-                            UserDMHeaderView(userDM: userDM)
-                        }
-                        
+                            Button(action: {
+                                withAnimation {
+                                    showUserProfile = true
+                                }
+                            }) {
+                                UserDMHeaderView(userDM: userDM)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in
+                                        HapticFeedback.light.trigger()
+                                    }
+                            )
+                    }
                     
                     Spacer()
                     
@@ -184,12 +210,21 @@ struct MessagingSheet: View {
                 .padding(.bottom, 16)
                 .background(AppColors.sheetBackground)
                 
-                
                 Divider()
             }
             
             // Main content area with messages
-            MessagingScrollView(contentType: contentType)
+            // ✅ Pass callback for avatar taps
+            MessagingScrollView(
+                contentType: contentType,
+                onUserAvatarTap: { user in
+                    selectedChatroomUser = user
+                    withAnimation {
+                        showUserProfile = true
+                    }
+                    HapticFeedback.light.trigger()
+                }
+            )
             
             Divider()
             
@@ -198,13 +233,7 @@ struct MessagingSheet: View {
                     ChatroomFooterView(chatroom: chatroom, messageText: $messageText)
                 case .userDM(let userDM):
                     UserDMFooterView(userDM: userDM, messageText: $messageText)
-                }
-            
-            // Message input footer
-//            MessagingFooterView(
-//                contentType: contentType,
-//                messageText: $messageText
-//            )
+            }
         }
         .background(
             ZStack {
@@ -212,83 +241,128 @@ struct MessagingSheet: View {
                     .background(.ultraThinMaterial)
                 AppColors.sheetBackground
                 StaticPatternView()
-                
             }
         )
-        //.ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+    
+    // MARK: - User Profile View
+    private func userProfileView(for user: GuildMembershipDTO, backTitle: String) -> some View {
+        VStack(spacing: 0) {
+            // ✅ Back button header
+            HStack {
+                Button(action: {
+                    withAnimation {
+                        showUserProfile = false
+                        selectedChatroomUser = nil
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Text(backTitle)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(AppColors.accentColor)
+                }
+                
+                Spacer()
+                
+                Button(action: {
+                    messagingManager.closeMessage()
+                    dismiss()
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+            .background(AppColors.sheetBackground)
+            
+            Divider()
+            
+            // ✅ Header
+            GuildMemberProfileHeaderView(user: user)
+            
+            // ✅ Reusable profile content
+            GuildUserProfileContent(user: user)
+            
+            Divider()
+            
+            // ✅ Reusable action buttons
+            GuildUserActionButtons(user: user)
+                .padding(.horizontal, 25)
+                .padding(.top, 20)
+                .background(AppColors.sheetBackground)
+        }
+        .background(
+            ZStack {
+                Color.clear
+                    .background(.ultraThinMaterial)
+                AppColors.sheetBackground
+                StaticPatternView()
+            }
+        )
     }
 }
 
 // MARK: - User DM Header Component
 struct UserDMHeaderView: View {
     let userDM: DMDTO
+    @State private var isPressed = false
     
     var body: some View {
         HStack(spacing: 8) {
             // Avatar with online indicator
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(AppColors.accentColor.opacity(0.3))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(String(userDM.participant.globalMember.username.prefix(2)))
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                    )
-                
-                if (userDM.participant.isOnline) {
+            Circle()
+                .fill(AppColors.accentColor.opacity(0.3))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Text(String(userDM.participant.globalMember.username.prefix(2)))
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.accentColor)
+                )
+                .overlay(alignment: .bottomTrailing) {
                     Circle()
-                        .fill(AppColors.bullCandleGreen)
+                        .fill(userDM.participant.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
                         .frame(width: 10, height: 10)
                         .overlay(
                             Circle()
-                                .stroke(AppColors.sheetBackground, lineWidth: 2)
+                                .stroke(AppColors.drawerBackground, lineWidth: 1)
                         )
+                        .padding(.trailing, 2)
+                        .padding(.bottom, 2)
                 }
-                else{
-                    Circle()
-                        .fill(AppColors.greyText)
-                        .frame(width: 10, height: 10)
-                        .overlay(
-                            Circle()
-                                .stroke(AppColors.sheetBackground, lineWidth: 2)
-                        )
-                }
-            }
             
             // User info
-            VStack(alignment: .leading, spacing: 3) {
-                HStack (spacing: 2){
-
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 2) {
                     if userDM.participant.isBlocked {
                         Image(systemName: "nosign")
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.bearCandleRed)
-                            
                     }
                     Text(userDM.participant.globalMember.username)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.whiteText)
                     
-                    
-                    
                     if userDM.participant.isFriend {
-                        Image(systemName: "person.crop.circle.badge.checkmark")
+                        Image(systemName: "person.crop.circle")
                             .font(.caption2)
                             .fontWeight(.bold)
-                            .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.8))
-                            .padding(.top, 2)
-                            .padding(.leading, 2)
+                            .foregroundColor(userDM.participant.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                            .padding(.leading, 3)
                     }
-                    
                 }
                 
-                
-                HStack (spacing:2){
-                    
+                HStack(spacing: 2) {
                     Text(userDM.participant.roleInGuild.rawValue)
                         .font(.caption2)
                         .foregroundColor(userDM.participant.roleInGuild.roleForegroundColor)
@@ -308,19 +382,13 @@ struct UserDMHeaderView: View {
                         .font(.caption2)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.accentColor)
-                    
-                    
-                    
                 }
             }
-            
         }
-   
-        
+        .opacity(isPressed ? 0.7 : 1.0)
+        .scaleEffect(isPressed ? 0.98 : 1.0)
     }
-    
 }
-
 
 // MARK: - Chatroom Header Component
 struct ChatroomHeaderView: View {
@@ -341,7 +409,7 @@ struct ChatroomHeaderView: View {
             
             // Chatroom info
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 3){
+                HStack(spacing: 3) {
                     Circle()
                         .fill(chatroom.isActive ? AppColors.bullCandleGreen : Color.gray.opacity(0.5))
                         .frame(width: 8, height: 8)
@@ -350,29 +418,22 @@ struct ChatroomHeaderView: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.whiteText)
-                    
                 }
                 
-                
                 HStack(spacing: 6) {
-                    
                     Text(chatroom.description ?? chatroom.lastActivityFormatted)
                         .font(.caption2)
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
                 }
             }
-            
         }
-        
-        
     }
-    
 }
-
 
 // MARK: - Scrollable Messages Content
 struct MessagingScrollView: View {
     let contentType: MessageContentType
+    let onUserAvatarTap: (GuildMembershipDTO) -> Void  // ✅ Add callback
     
     @EnvironmentObject var appState: AppState
     @State private var dmMessages: [DMMessageDTO] = []
@@ -393,7 +454,12 @@ struct MessagingScrollView: View {
                         )
                     } else {
                         ForEach(chatroomMessages) { message in
-                            ChatroomMessageView(message: message)
+                            ChatroomMessageView(
+                                message: message,
+                                onAvatarTap: {
+                                    onUserAvatarTap(message.author)
+                                }
+                            )
                         }
                     }
                     
@@ -436,7 +502,6 @@ struct MessagingScrollView: View {
         }
     }
     
-    // ✅ Updated with new error system
     private func loadChatroomMessages(for chatroom: GuildChatroomDTO, isRefresh: Bool = false) async {
         if !isRefresh {
             isLoadingMessages = true
@@ -449,14 +514,12 @@ struct MessagingScrollView: View {
         } catch is CancellationError {
             return
         } catch {
-            // ✅ Show error toast
             appState.showError(error, title: "Failed to Load Messages", style: .toast)
         }
         
         isLoadingMessages = false
     }
     
-    // ✅ Updated with new error system
     private func loadDMMessages(for userDM: DMDTO, isRefresh: Bool = false) async {
         if !isRefresh {
             isLoadingMessages = true
@@ -469,7 +532,6 @@ struct MessagingScrollView: View {
         } catch is CancellationError {
             return
         } catch {
-            // ✅ Show error toast
             appState.showError(error, title: "Failed to Load Messages", style: .toast)
         }
         
@@ -518,7 +580,6 @@ struct EmptyMessagesView: View {
         .padding(.top, 60)
     }
 }
-
 
 // MARK: - Chatroom Footer Component
 struct ChatroomFooterView: View {
@@ -591,26 +652,18 @@ struct ChatroomFooterView: View {
         }
     }
     
-    // ✅ Added error handling
     private func sendMessage() async {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         let textToSend = messageText
-        messageText = "" // Clear immediately for better UX
+        messageText = ""
         isSending = true
         
         do {
-            // TODO: Implement actual send API call
-             try await appState.sendChatroomMessage(chatroomId: chatroom.id, content: textToSend)
-            
-            
-            // ✅ Success feedback (optional - could be too noisy)
-            // appState.showSuccess("Message sent")
-            
+            try await appState.sendChatroomMessage(chatroomId: chatroom.id, content: textToSend)
         } catch is CancellationError {
             return
         } catch {
-            // ✅ Show error and restore message
             messageText = textToSend
             appState.showError(error, title: "Failed to Send Message", style: .toast)
         }
@@ -687,23 +740,18 @@ struct UserDMFooterView: View {
         .background(AppColors.sheetBackground)
     }
     
-    // ✅ Added error handling
     private func sendMessage() async {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         let textToSend = messageText
-        messageText = "" // Clear immediately
+        messageText = ""
         isSending = true
         
         do {
-            // TODO: Implement actual send API call
             try await appState.sendDMMessage(dmId: userDM.id, content: textToSend)
-            
-            
         } catch is CancellationError {
             return
         } catch {
-            // ✅ Show error and restore message
             messageText = textToSend
             appState.showError(error, title: "Failed to Send Message", style: .toast)
         }
@@ -712,16 +760,15 @@ struct UserDMFooterView: View {
     }
 }
 
-
 // MARK: - Chatroom Message View
 struct ChatroomMessageView: View {
     let message: ChatroomMessageDTO
+    let onAvatarTap: () -> Void  // ✅ Add callback
     
     @EnvironmentObject var appState: AppState
     @State private var showDeleteConfirmation = false
     @State private var showEditSheet = false
     
-    // ✅ Simple computed properties using currentGuild.currentMemberRole
     private var canDeleteMessage: Bool {
         guard let currentUserRole = appState.currentGuild?.currentMemberRole else {
             return false
@@ -734,7 +781,6 @@ struct ChatroomMessageView: View {
     }
     
     private var canEditMessage: Bool {
-        // Only edit own messages
         return message.isCurrentUserMessage
     }
     
@@ -743,49 +789,42 @@ struct ChatroomMessageView: View {
             if message.isCurrentUserMessage {
                 Spacer()
             } else {
-                ZStack(alignment: .bottomTrailing) {
+                // ✅ Make avatar tappable
+                Button(action: {
+                    onAvatarTap()
+                }) {
                     Circle()
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 32, height: 32)
                         .overlay(
                             Text(String(message.author.globalMember.username.prefix(2)))
-                                .font(.caption2)
+                                .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
                         )
-                    
-                    if (message.author.isOnline) {
-                        Circle()
-                            .fill(AppColors.bullCandleGreen)
-                            .frame(width: 10, height: 10)
-                            .overlay(
-                                Circle()
-                                    .stroke(AppColors.sheetBackground, lineWidth: 2)
-                            )
-                    }
-                    else{
-                        Circle()
-                            .fill(AppColors.greyText)
-                            .frame(width: 10, height: 10)
-                            .overlay(
-                                Circle()
-                                    .stroke(AppColors.sheetBackground, lineWidth: 2)
-                            )
-                    }
+                        .overlay(alignment: .bottomTrailing) {
+                            Circle()
+                                .fill(message.author.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                                .frame(width: 10, height: 10)
+                                .overlay(
+                                    Circle()
+                                        .stroke(AppColors.drawerBackground, lineWidth: 1)
+                                )
+                                .padding(.trailing, 2)
+                                .padding(.bottom, 2)
+                        }
                 }
-                
+                .buttonStyle(PlainButtonStyle())
             }
             
             VStack(alignment: message.alignment, spacing: 4) {
                 if !message.isCurrentUserMessage {
                     HStack(spacing: 2) {
-                        
                         if message.author.isBlocked {
                             Image(systemName: "nosign")
                                 .font(.caption2)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.bearCandleRed)
-                                
                         }
                         
                         Text(message.author.globalMember.username)
@@ -794,14 +833,12 @@ struct ChatroomMessageView: View {
                             .foregroundColor(message.author.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.9))
                         
                         if message.author.isFriend {
-                            Image(systemName: "person.crop.circle.badge.checkmark")
+                            Image(systemName: "person.crop.circle")
                                 .font(.caption2)
                                 .fontWeight(.bold)
-                                .foregroundColor(message.author.isBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.8))
-                                .padding(.top, 2)
-                                .padding(.leading, 2)
+                                .foregroundColor(message.author.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                                .padding(.leading, 3)
                         }
-                        
                         
                         let role = message.author.roleInGuild
                         Circle()
@@ -843,7 +880,6 @@ struct ChatroomMessageView: View {
                     )
                     .clipShape(chatRoomMessageBubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
                     .contextMenu {
-                        // ✅ Edit - only own messages
                         if canEditMessage {
                             Button {
                                 showEditSheet = true
@@ -852,7 +888,6 @@ struct ChatroomMessageView: View {
                             }
                         }
                         
-                        // ✅ Delete - respects role hierarchy
                         if canDeleteMessage {
                             Button(role: .destructive) {
                                 showDeleteConfirmation = true
@@ -861,7 +896,6 @@ struct ChatroomMessageView: View {
                             }
                         }
                         
-                        // ✅ Copy - always available
                         Button {
                             UIPasteboard.general.string = message.content
                             appState.showSuccess("Copied to clipboard")
@@ -869,7 +903,6 @@ struct ChatroomMessageView: View {
                             Label("Copy", systemImage: "doc.on.doc")
                         }
                         
-                        // ✅ Report - only for other users' messages
                         if !message.isCurrentUserMessage {
                             Divider()
                             Button(role: .destructive) {
@@ -913,11 +946,8 @@ struct ChatroomMessageView: View {
     
     private func deleteMessage() async {
         do {
-        
             try await appState.deleteChatroomMessage(messageId: message.id, chatroomId: message.chatroom)
-            // TODO: update message to show delete state
             appState.showSuccess("Message deleted")
-            
         } catch {
             appState.showError(error, title: "Failed to Delete Message")
         }
@@ -925,15 +955,11 @@ struct ChatroomMessageView: View {
     
     private func reportMessage() async {
         do {
-            
             try await appState.reportChatroomMessage(messageId: message.id, chatroomId: message.chatroom)
-            // TODO: - update message to show a report icon
             appState.showInfo("Report submitted for review")
-            
         } catch {
-            appState.showError(error, title: "Failed to Delete Message")
+            appState.showError(error, title: "Failed to Report Message")
         }
-        
     }
     
     private func chatRoomMessageBubbleShape(isFromCurrentUser: Bool) -> UnevenRoundedRectangle {
@@ -955,7 +981,7 @@ struct ChatroomMessageView: View {
     }
 }
 
-// ✅ Edit chatroom message sheet
+// MARK: - Edit Chatroom Message Sheet
 struct EditChatroomMessageSheet: View {
     let message: ChatroomMessageDTO
     @Environment(\.dismiss) private var dismiss
@@ -1008,11 +1034,9 @@ struct EditChatroomMessageSheet: View {
         isSaving = true
 
         do {
-            // TODO: add edited icon to message
             try await appState.editChatroomMessage(messageId: message.id, newContent: editedText, chatroomId: message.chatroom)
             appState.showSuccess("Message updated")
             dismiss()
-
         } catch {
             appState.showError(error, title: "Failed to Update Message")
         }
@@ -1021,7 +1045,7 @@ struct EditChatroomMessageSheet: View {
     }
 }
 
-
+// MARK: - User DM Message View
 struct UserDMMessageView: View {
     let message: DMMessageDTO
     
@@ -1107,7 +1131,6 @@ struct UserDMMessageView: View {
                 Spacer()
             }
         }
-        // ✅ Delete confirmation alert
         .alert("Delete Message", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -1116,20 +1139,16 @@ struct UserDMMessageView: View {
         } message: {
             Text("Are you sure you want to delete this message? This cannot be undone.")
         }
-        // ✅ Edit sheet (TODO: implement edit UI)
         .sheet(isPresented: $showEditSheet) {
             EditMessageSheet(message: message)
                 .environmentObject(appState)
         }
     }
     
-    // ✅ Delete message with error handling
     private func deleteMessage() async {
         do {
-            // TODO: add delete state to the message
             try await appState.deleteDMMessage(messageId: message.id, dmId: message.dmId)
             appState.showSuccess("Message deleted")
-            
         } catch {
             appState.showError(error, title: "Failed to Delete Message")
         }
@@ -1154,7 +1173,7 @@ struct UserDMMessageView: View {
     }
 }
 
-// ✅ Placeholder edit sheet
+// MARK: - Edit DM Message Sheet
 struct EditMessageSheet: View {
     let message: DMMessageDTO
     @Environment(\.dismiss) private var dismiss
@@ -1207,11 +1226,9 @@ struct EditMessageSheet: View {
         isSaving = true
         
         do {
-            // TODO: update message to show edited icon
             try await appState.editDMMessage(messageId: message.id, newContent: editedText, dmId: message.dmId)
             appState.showSuccess("Message updated")
             dismiss()
-            
         } catch {
             appState.showError(error, title: "Failed to Update Message")
         }
@@ -1219,3 +1236,4 @@ struct EditMessageSheet: View {
         isSaving = false
     }
 }
+
