@@ -80,6 +80,19 @@ class LeftDrawerViewModel: ObservableObject {
         print("✅ Updated event attendance cache: \(eventId) -> isAttending: \(isAttending)")
     }
     
+    
+    /// Mark notification as read in cache
+    func markNotificationAsRead(notificationId: UUID) {
+        guard let index = userNotifications.firstIndex(where: { $0.id == notificationId }) else {
+            print("⚠️ Notification not found in cache: \(notificationId)")
+            return
+        }
+        
+        var updatedNotification = userNotifications[index]
+        updatedNotification.isRead = true
+        userNotifications[index] = updatedNotification
+        print("✅ Updated notification cache: \(notificationId) -> isRead: true")
+    }
     // ================================================================================================
     // MARK: - Preload Data
     // ================================================================================================

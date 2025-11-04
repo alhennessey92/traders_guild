@@ -40,6 +40,7 @@ struct MainView: View {
     @EnvironmentObject var messagingManager: MessagingManager // Get from app-level environment
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
     @StateObject private var rightDrawerViewModel = RightDrawerViewModel()
+    @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     
 
     
@@ -184,10 +185,17 @@ struct MainView: View {
             
             .environmentObject(leftDrawerViewModel)  // ✅ Pass to child views
             .environmentObject(rightDrawerViewModel)
+            .environmentObject(notificationNavigationManager)
             .task {
                 // ✅ Preload drawer data when MainView appears
                 await leftDrawerViewModel.preloadData(for: guild.id, appState: appState)
                 await rightDrawerViewModel.preloadData(for: guild.id, appState: appState)
+                
+                notificationNavigationManager.configure(
+                    appState: appState,
+                    messagingManager: messagingManager,
+                    rightDrawerViewModel: rightDrawerViewModel
+                )
             }
             .onChange(of: appState.currentGuild?.id) { _, newGuildId in
                 // ✅ Reload data when guild changes

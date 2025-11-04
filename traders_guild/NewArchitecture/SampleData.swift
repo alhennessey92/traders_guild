@@ -1211,8 +1211,9 @@ struct SampleData {
     
     
     // MARK: - Get sample notifications for user in guild
+
     static let userNotifications: [GuildNotificationDTO] = [
-        // 1. Personal - New Message
+        // 1. Personal - New Message (DM)
         GuildNotificationDTO(
             id: UUID(uuidString: "a1111111-1111-1111-1111-111111111111")!,
             member: GuildMembershipDTO(
@@ -1284,15 +1285,27 @@ struct SampleData {
                 membersOnline: 12
             ),
             title: "Sarah Chen sent you a message",
-            createdDate: Date(timeIntervalSinceNow: -1800), // 30 min ago
-            notificationType: .personal
+            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+            createdDate: Date(timeIntervalSinceNow: -1800),
+            notificationType: .personal,
+            isRead: false,
+            // ✅ NAVIGATION FIELDS - DM Notification
+            targetUserId: UUID(uuidString: "b1111111-1111-1111-1111-111111111111")!,
+            targetChatroomId: nil,
+            targetSymbolId: nil,
+            targetSymbolTicker: nil,
+            targetAnnouncementId: nil,
+            targetMetadata: [
+                "message_preview": "Hi Al, sorry i missed...",
+                "message_type": "dm"
+            ]
         ),
         
         // 2. Symbol - Price Alert
         GuildNotificationDTO(
             id: UUID(uuidString: "a2222222-2222-2222-2222-222222222222")!,
             member: GuildMembershipDTO(
-                id: UUID(uuidString: "a23e4567-e89b-12d3-a456-426614174001")!, // Current user
+                id: UUID(uuidString: "a23e4567-e89b-12d3-a456-426614174001")!,
                 globalMember: GlobalMemberDTO(
                     id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
                     email: "john.developer@email.com",
@@ -1360,8 +1373,21 @@ struct SampleData {
                 membersOnline: 12
             ),
             title: "BTC/USD reached target price $95,000",
-            createdDate: Date(timeIntervalSinceNow: -3600), // 1 hour ago
-            notificationType: .symbol
+            content: "Your price alert for BTC/USD has been triggered at $95,000",
+            createdDate: Date(timeIntervalSinceNow: -3600),
+            notificationType: .symbol,
+            isRead: false,
+            // ✅ NAVIGATION FIELDS - Symbol Notification (FIXED UUID)
+            targetUserId: nil,
+            targetChatroomId: nil,
+            targetSymbolId: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,  // ✅ Valid UUID for BTC/USD
+            targetSymbolTicker: "BTC/USD",
+            targetAnnouncementId: nil,
+            targetMetadata: [
+                "alert_type": "price_target",
+                "price_level": "95000",
+                "trigger_direction": "above"
+            ]
         ),
         
         // 3. Personal - Member Joined
@@ -1403,7 +1429,7 @@ struct SampleData {
                     membersOnline: 12
                 ),
                 roleInGuild: .member,
-                dateJoined: Date(timeIntervalSinceNow: -7200), // 2 hours ago
+                dateJoined: Date(timeIntervalSinceNow: -7200),
                 reputation: 50,
                 daysInGuild: 1,
                 contributionScore: 5,
@@ -1436,8 +1462,20 @@ struct SampleData {
                 membersOnline: 12
             ),
             title: "Mike Johnson joined KAOS Trading Guild",
-            createdDate: Date(timeIntervalSinceNow: -7200), // 2 hours ago
-            notificationType: .personal
+            content: "Welcome the new member to the guild!",
+            createdDate: Date(timeIntervalSinceNow: -7200),
+            notificationType: .personal,
+            isRead: true,
+            // ✅ NAVIGATION FIELDS - User Profile Notification
+            targetUserId: UUID(uuidString: "b3333333-3333-3333-3333-333333333333")!,
+            targetChatroomId: nil,
+            targetSymbolId: nil,
+            targetSymbolTicker: nil,
+            targetAnnouncementId: nil,
+            targetMetadata: [
+                "event_type": "member_joined",
+                "notification_category": "guild_activity"
+            ]
         ),
         
         // 4. Symbol - New Trading Signal
@@ -1512,8 +1550,22 @@ struct SampleData {
                 membersOnline: 12
             ),
             title: "New BUY signal posted for EUR/USD",
-            createdDate: Date(timeIntervalSinceNow: -10800), // 3 hours ago
-            notificationType: .symbol
+            content: "Sarah Masters posted a new trading signal for EUR/USD",
+            createdDate: Date(timeIntervalSinceNow: -10800),
+            notificationType: .symbol,
+            isRead: true,
+            // ✅ NAVIGATION FIELDS - Symbol Notification (FIXED UUID)
+            targetUserId: UUID(uuidString: "b4444444-4444-4444-4444-444444444444")!,
+            targetChatroomId: nil,
+            targetSymbolId: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!,  // ✅ Valid UUID for EUR/USD
+            targetSymbolTicker: "EUR/USD",
+            targetAnnouncementId: nil,
+            targetMetadata: [
+                "signal_type": "buy",
+                "signal_id": "signal-456",
+                "entry_price": "1.0850",
+                "confidence": "high"
+            ]
         ),
         
         // 5. Personal - Promoted to Moderator
@@ -1588,8 +1640,22 @@ struct SampleData {
                 membersOnline: 12
             ),
             title: "You've been promoted to Moderator!",
-            createdDate: Date(timeIntervalSinceNow: -86400), // 1 day ago
-            notificationType: .personal
+            content: "Congratulations! You now have moderator privileges in KAOS Trading Guild",
+            createdDate: Date(timeIntervalSinceNow: -86400),
+            notificationType: .personal,
+            isRead: true,
+            // ✅ NAVIGATION FIELDS - Announcement Notification (FIXED UUID)
+            targetUserId: nil,
+            targetChatroomId: nil,
+            targetSymbolId: nil,
+            targetSymbolTicker: nil,
+            targetAnnouncementId: UUID(uuidString: "20000000-0000-0000-0000-000000000001")!,  // ✅ Valid UUID
+            targetMetadata: [
+                "event_type": "role_promotion",
+                "old_role": "member",
+                "new_role": "moderator",
+                "promoted_by": "c23e4567-e89b-12d3-a456-426614174003"
+            ]
         ),
         
         // 6. Symbol - High Volatility Alert
@@ -1664,11 +1730,25 @@ struct SampleData {
                 membersOnline: 12
             ),
             title: "High volatility detected in GBP/JPY",
-            createdDate: Date(timeIntervalSinceNow: -900), // 15 min ago
-            notificationType: .symbol
+            content: "GBP/JPY showing unusual volatility - 2.5% movement in last hour",
+            createdDate: Date(timeIntervalSinceNow: -900),
+            notificationType: .symbol,
+            isRead: true,
+            // ✅ NAVIGATION FIELDS - Symbol Notification (FIXED UUID)
+            targetUserId: nil,
+            targetChatroomId: nil,
+            targetSymbolId: UUID(uuidString: "10000000-0000-0000-0000-000000000003")!,  // ✅ Valid UUID for GBP/JPY
+            targetSymbolTicker: "GBP/JPY",
+            targetAnnouncementId: nil,
+            targetMetadata: [
+                "alert_type": "volatility",
+                "volatility_percentage": "2.5",
+                "time_period": "1h",
+                "current_price": "189.45"
+            ]
         ),
         
-        // 7. Personal - Announcement
+        // 7. Personal - Guild Announcement
         GuildNotificationDTO(
             id: UUID(uuidString: "a7777777-7777-7777-7777-777777777777")!,
             member: GuildMembershipDTO(
@@ -1740,8 +1820,22 @@ struct SampleData {
                 membersOnline: 12
             ),
             title: "Guild Announcement: Weekly Trading Competition",
-            createdDate: Date(timeIntervalSinceNow: -172800), // 2 days ago
-            notificationType: .personal
+            content: "Join our weekly trading competition! Top 3 traders win exclusive rewards",
+            createdDate: Date(timeIntervalSinceNow: -172800),
+            notificationType: .personal,
+            isRead: true,
+            // ✅ NAVIGATION FIELDS - Announcement Notification (FIXED UUID)
+            targetUserId: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+            targetChatroomId: nil,
+            targetSymbolId: nil,
+            targetSymbolTicker: nil,
+            targetAnnouncementId: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,  // ✅ Valid UUID
+            targetMetadata: [
+                "announcement_type": "competition",
+                "competition_id": "comp-789",
+                "start_date": "2025-11-01",
+                "end_date": "2025-11-07"
+            ]
         ),
         
         // 8. Symbol - Breakout Alert
@@ -1816,10 +1910,698 @@ struct SampleData {
                 membersOnline: 12
             ),
             title: "ETH/USD broke resistance at $3,500",
-            createdDate: Date(timeIntervalSinceNow: -5400), // 90 min ago
-            notificationType: .symbol
+            content: "ETH/USD has broken through the $3,500 resistance level with strong volume",
+            createdDate: Date(timeIntervalSinceNow: -5400),
+            notificationType: .symbol,
+            isRead: true,
+            // ✅ NAVIGATION FIELDS - Symbol Notification (FIXED UUID)
+            targetUserId: nil,
+            targetChatroomId: nil,
+            targetSymbolId: UUID(uuidString: "10000000-0000-0000-0000-000000000004")!,  // ✅ Valid UUID for ETH/USD
+            targetSymbolTicker: "ETH/USD",
+            targetAnnouncementId: nil,
+            targetMetadata: [
+                "alert_type": "breakout",
+                "resistance_level": "3500",
+                "breakout_direction": "bullish",
+                "volume_indicator": "strong"
+            ]
         )
     ]
+    
+
+    // ============================================================================
+    // UUID FORMAT REFERENCE
+    // ============================================================================
+
+    /*
+    VALID UUID FORMAT:
+    "12345678-1234-1234-1234-123456789012"
+     └──8──┘ └4┘ └4┘ └4┘ └────12────┘
+     
+    PATTERN: 8-4-4-4-12 hexadecimal digits separated by hyphens
+
+    ✅ VALID EXAMPLES:
+    - "10000000-0000-0000-0000-000000000001"
+    - "a1111111-1111-1111-1111-111111111111"
+    - "123e4567-e89b-12d3-a456-426614174000"
+
+    ❌ INVALID EXAMPLES:
+    - "symbol-btcusd-001" (not in UUID format)
+    - "btc-usd" (too short)
+    - "12345" (not enough segments)
+
+    HOW TO GENERATE VALID UUIDS:
+    1. Use UUID() to generate random: let id = UUID()
+    2. Use UUID(uuidString:) with valid format only
+    3. For sample data, use patterns like:
+       - Symbols: 10000000-0000-0000-0000-00000000000X
+       - Announcements: 20000000-0000-0000-0000-00000000000X
+       - Users: Use existing member IDs
+    */
+
+    // ============================================================================
+    // SYMBOL UUID MAPPING (For Your Backend)
+    // ============================================================================
+
+    /*
+    When your backend sends notifications, it should use actual symbol UUIDs.
+    For sample data, I've used this pattern:
+
+    BTC/USD:  10000000-0000-0000-0000-000000000001
+    EUR/USD:  10000000-0000-0000-0000-000000000002
+    GBP/JPY:  10000000-0000-0000-0000-000000000003
+    ETH/USD:  10000000-0000-0000-0000-000000000004
+
+    Your backend should replace these with real symbol IDs from your database.
+    */
+    
+    
+//    static let userNotifications: [GuildNotificationDTO] = [
+//        // 1. Personal - New Message
+//        GuildNotificationDTO(
+//            id: UUID(uuidString: "a1111111-1111-1111-1111-111111111111")!,
+//            member: GuildMembershipDTO(
+//                id: UUID(uuidString: "b1111111-1111-1111-1111-111111111111")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c1111111-c111-1111-1111-111111111111")!,
+//                    email: "sarah.trader@email.com",
+//                    name: "Sarah Chen",
+//                    username: "sarahchen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 3200
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading Guild",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .member,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .member,
+//                dateJoined: Date(timeIntervalSince1970: 1720000000),
+//                reputation: 450,
+//                daysInGuild: 90,
+//                contributionScore: 72,
+//                isOnline: true,
+//                isFriend: false,
+//                isBlocked: false
+//            ),
+//            guild: GuildDTO(
+//                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                name: "KAOS Trading Guild",
+//                description: "Premier guild for forex and cryptocurrency traders.",
+//                reputation: 45000,
+//                accuracy: 78,
+//                memberCount: 156,
+//                owner: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                ownerRole: .admin,
+//                dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                isJoined: true,
+//                currentMemberRole: .member,
+//                isOpen: true,
+//                membersOnline: 12
+//            ),
+//            title: "Sarah Chen sent you a message",
+//            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+//            createdDate: Date(timeIntervalSinceNow: -1800), // 30 min ago
+//            notificationType: .personal,
+//            isRead: false
+//        ),
+//        
+//        // 2. Symbol - Price Alert
+//        GuildNotificationDTO(
+//            id: UUID(uuidString: "a2222222-2222-2222-2222-222222222222")!,
+//            member: GuildMembershipDTO(
+//                id: UUID(uuidString: "a23e4567-e89b-12d3-a456-426614174001")!, // Current user
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
+//                    email: "john.developer@email.com",
+//                    name: "John Developer",
+//                    username: "johndev",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/johndev.jpg",
+//                    isOnline: true,
+//                    globalReputation: 2450
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading Guild",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .moderator,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .moderator,
+//                dateJoined: Date(timeIntervalSince1970: 1718712300),
+//                reputation: 850,
+//                daysInGuild: 127,
+//                contributionScore: 78,
+//                isOnline: true,
+//                isFriend: false,
+//                isBlocked: false
+//            ),
+//            guild: GuildDTO(
+//                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                name: "KAOS Trading Guild",
+//                description: "Premier guild for forex and cryptocurrency traders.",
+//                reputation: 45000,
+//                accuracy: 78,
+//                memberCount: 156,
+//                owner: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                ownerRole: .admin,
+//                dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                isJoined: true,
+//                currentMemberRole: .moderator,
+//                isOpen: true,
+//                membersOnline: 12
+//            ),
+//            title: "BTC/USD reached target price $95,000",
+//            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+//            createdDate: Date(timeIntervalSinceNow: -3600), // 1 hour ago
+//            notificationType: .symbol,
+//            isRead: false
+//        ),
+//        
+//        // 3. Personal - Member Joined
+//        GuildNotificationDTO(
+//            id: UUID(uuidString: "a3333333-3333-3333-3333-333333333333")!,
+//            member: GuildMembershipDTO(
+//                id: UUID(uuidString: "b3333333-3333-3333-3333-333333333333")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c3333333-3333-3333-3333-333333333333")!,
+//                    email: "mike.scalper@email.com",
+//                    name: "Mike Johnson",
+//                    username: "mikescalper",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/mike.jpg",
+//                    isOnline: false,
+//                    globalReputation: 1850
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading Guild",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .member,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .member,
+//                dateJoined: Date(timeIntervalSinceNow: -7200), // 2 hours ago
+//                reputation: 50,
+//                daysInGuild: 1,
+//                contributionScore: 5,
+//                isOnline: false,
+//                isFriend: false,
+//                isBlocked: false
+//            ),
+//            guild: GuildDTO(
+//                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                name: "KAOS Trading Guild",
+//                description: "Premier guild for forex and cryptocurrency traders.",
+//                reputation: 45000,
+//                accuracy: 78,
+//                memberCount: 156,
+//                owner: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                ownerRole: .admin,
+//                dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                isJoined: true,
+//                currentMemberRole: .member,
+//                isOpen: true,
+//                membersOnline: 12
+//            ),
+//            title: "Mike Johnson joined KAOS Trading Guild",
+//            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+//            createdDate: Date(timeIntervalSinceNow: -7200), // 2 hours ago
+//            notificationType: .personal,
+//            isRead: true
+//        ),
+//        
+//        // 4. Symbol - New Trading Signal
+//        GuildNotificationDTO(
+//            id: UUID(uuidString: "a4444444-4444-4444-4444-444444444444")!,
+//            member: GuildMembershipDTO(
+//                id: UUID(uuidString: "b4444444-4444-4444-4444-444444444444")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading Guild",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .admin,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .admin,
+//                dateJoined: Date(timeIntervalSince1970: 1705314600),
+//                reputation: 2500,
+//                daysInGuild: 365,
+//                contributionScore: 100,
+//                isOnline: true,
+//                isFriend: false,
+//                isBlocked: false
+//            ),
+//            guild: GuildDTO(
+//                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                name: "KAOS Trading Guild",
+//                description: "Premier guild for forex and cryptocurrency traders.",
+//                reputation: 45000,
+//                accuracy: 78,
+//                memberCount: 156,
+//                owner: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                ownerRole: .admin,
+//                dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                isJoined: true,
+//                currentMemberRole: .admin,
+//                isOpen: true,
+//                membersOnline: 12
+//            ),
+//            title: "New BUY signal posted for EUR/USD",
+//            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+//            createdDate: Date(timeIntervalSinceNow: -10800), // 3 hours ago
+//            notificationType: .symbol,
+//            isRead: true
+//        ),
+//        
+//        // 5. Personal - Promoted to Moderator
+//        GuildNotificationDTO(
+//            id: UUID(uuidString: "a5555555-5555-5555-5555-555555555555")!,
+//            member: GuildMembershipDTO(
+//                id: UUID(uuidString: "a23e4567-e89b-12d3-a456-426614174001")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
+//                    email: "john.developer@email.com",
+//                    name: "John Developer",
+//                    username: "johndev",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/johndev.jpg",
+//                    isOnline: true,
+//                    globalReputation: 2450
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading Guild",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .moderator,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .moderator,
+//                dateJoined: Date(timeIntervalSince1970: 1718712300),
+//                reputation: 850,
+//                daysInGuild: 127,
+//                contributionScore: 78,
+//                isOnline: true,
+//                isFriend: false,
+//                isBlocked: false
+//            ),
+//            guild: GuildDTO(
+//                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                name: "KAOS Trading Guild",
+//                description: "Premier guild for forex and cryptocurrency traders.",
+//                reputation: 45000,
+//                accuracy: 78,
+//                memberCount: 156,
+//                owner: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                ownerRole: .admin,
+//                dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                isJoined: true,
+//                currentMemberRole: .moderator,
+//                isOpen: true,
+//                membersOnline: 12
+//            ),
+//            title: "You've been promoted to Moderator!",
+//            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+//            createdDate: Date(timeIntervalSinceNow: -86400), // 1 day ago
+//            notificationType: .personal,
+//            isRead: true
+//        ),
+//        
+//        // 6. Symbol - High Volatility Alert
+//        GuildNotificationDTO(
+//            id: UUID(uuidString: "a6666666-6666-6666-6666-666666666666")!,
+//            member: GuildMembershipDTO(
+//                id: UUID(uuidString: "a23e4567-e89b-12d3-a456-426614174001")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
+//                    email: "john.developer@email.com",
+//                    name: "John Developer",
+//                    username: "johndev",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/johndev.jpg",
+//                    isOnline: true,
+//                    globalReputation: 2450
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading Guild",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .moderator,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .moderator,
+//                dateJoined: Date(timeIntervalSince1970: 1718712300),
+//                reputation: 850,
+//                daysInGuild: 127,
+//                contributionScore: 78,
+//                isOnline: true,
+//                isFriend: false,
+//                isBlocked: false
+//            ),
+//            guild: GuildDTO(
+//                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                name: "KAOS Trading Guild",
+//                description: "Premier guild for forex and cryptocurrency traders.",
+//                reputation: 45000,
+//                accuracy: 78,
+//                memberCount: 156,
+//                owner: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                ownerRole: .admin,
+//                dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                isJoined: true,
+//                currentMemberRole: .moderator,
+//                isOpen: true,
+//                membersOnline: 12
+//            ),
+//            title: "High volatility detected in GBP/JPY",
+//            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+//            createdDate: Date(timeIntervalSinceNow: -900), // 15 min ago
+//            notificationType: .symbol,
+//            isRead: true
+//        ),
+//        
+//        // 7. Personal - Announcement
+//        GuildNotificationDTO(
+//            id: UUID(uuidString: "a7777777-7777-7777-7777-777777777777")!,
+//            member: GuildMembershipDTO(
+//                id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading Guild",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .admin,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .admin,
+//                dateJoined: Date(timeIntervalSince1970: 1705314600),
+//                reputation: 2500,
+//                daysInGuild: 365,
+//                contributionScore: 100,
+//                isOnline: true,
+//                isFriend: false,
+//                isBlocked: false
+//            ),
+//            guild: GuildDTO(
+//                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                name: "KAOS Trading Guild",
+//                description: "Premier guild for forex and cryptocurrency traders.",
+//                reputation: 45000,
+//                accuracy: 78,
+//                memberCount: 156,
+//                owner: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                ownerRole: .admin,
+//                dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                isJoined: true,
+//                currentMemberRole: .admin,
+//                isOpen: true,
+//                membersOnline: 12
+//            ),
+//            title: "Guild Announcement: Weekly Trading Competition",
+//            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+//            createdDate: Date(timeIntervalSinceNow: -172800), // 2 days ago
+//            notificationType: .personal,
+//            isRead: true
+//        ),
+//        
+//        // 8. Symbol - Breakout Alert
+//        GuildNotificationDTO(
+//            id: UUID(uuidString: "a8888888-8888-8888-8888-888888888888")!,
+//            member: GuildMembershipDTO(
+//                id: UUID(uuidString: "a23e4567-e89b-12d3-a456-426614174001")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
+//                    email: "john.developer@email.com",
+//                    name: "John Developer",
+//                    username: "johndev",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/johndev.jpg",
+//                    isOnline: true,
+//                    globalReputation: 2450
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading Guild",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .moderator,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .moderator,
+//                dateJoined: Date(timeIntervalSince1970: 1718712300),
+//                reputation: 850,
+//                daysInGuild: 127,
+//                contributionScore: 78,
+//                isOnline: true,
+//                isFriend: true,
+//                isBlocked: false
+//            ),
+//            guild: GuildDTO(
+//                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                name: "KAOS Trading Guild",
+//                description: "Premier guild for forex and cryptocurrency traders.",
+//                reputation: 45000,
+//                accuracy: 78,
+//                memberCount: 156,
+//                owner: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                ownerRole: .admin,
+//                dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                isJoined: true,
+//                currentMemberRole: .moderator,
+//                isOpen: true,
+//                membersOnline: 12
+//            ),
+//            title: "ETH/USD broke resistance at $3,500",
+//            content: "Hi Al, sorry i missed your text, iv looked at the figures in EUR/USD and all looks good",
+//            createdDate: Date(timeIntervalSinceNow: -5400), // 90 min ago
+//            notificationType: .symbol,
+//            isRead: true
+//        )
+//    ]
     
     
     
@@ -2079,6 +2861,78 @@ struct SampleData {
             canSendMessages: true
         )
     ]
+    
+    // MARK: - Guild Chatroom By ID
+    static let chatroomByChatroomId: GuildChatroomDTO =
+        GuildChatroomDTO(
+            id: UUID(uuidString: "943e4567-e89b-12d3-a456-426614174060")!,
+            guildId: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+            name: "general",
+            description: "Main chat for guild discussions",
+            lastMessage: ChatroomMessageDTO(
+                id: UUID(uuidString: "a43e4567-e89b-12d3-a456-426614174073")!,
+                chatroom: UUID(uuidString: "943e4567-e89b-12d3-a456-426614174060")!,
+                author: GuildMembershipDTO(
+                    id: UUID(uuidString: "323e4567-e89b-12d3-a456-426614174010")!,
+                    globalMember: GlobalMemberDTO(
+                        id: UUID(uuidString: "023e4567-e89b-12d3-a456-426614174007")!,
+                        email: "mike.trader@email.com",
+                        name: "Mike Trader",
+                        username: "miketrader",
+                        avatarURL: "https://cdn.tradersguild.com/avatars/mike.jpg",
+                        isOnline: true,
+                        globalReputation: 3200
+                    ),
+                    guild: GuildDTO(
+                        id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+                        name: "KAOS Trading Guild",
+                        description: "Premier guild for forex and cryptocurrency traders.",
+                        reputation: 45000,
+                        accuracy: 78,
+                        memberCount: 156,
+                        owner: GlobalMemberDTO(
+                            id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+                            email: "sarah.masters@email.com",
+                            name: "Sarah Masters",
+                            username: "tradingqueen",
+                            avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+                            isOnline: true,
+                            globalReputation: 5820
+                        ),
+                        ownerRole: .admin,
+                        dateCreated: Date(timeIntervalSince1970: 1705314600),
+                        imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+                        isJoined: true,
+                        currentMemberRole: .moderator,
+                        isOpen: true,
+                        membersOnline: 12
+                    ),
+                    roleInGuild: .moderator,
+                    dateJoined: Date(timeIntervalSince1970: 1710063600),
+                    reputation: 3200,
+                    daysInGuild: 228,
+                    contributionScore: 88,
+                    isOnline: true,
+                    isFriend: false,
+                    isBlocked: false
+                ),
+                content: "Just saw a great setup on EUR/USD! 📈",
+                timestamp: Date(timeIntervalSinceNow: -120),
+                timestampFormatted: "2 min ago",
+                isEdited: false,
+                isCurrentUserMessage: false,
+                canEdit: false,
+                canDelete: false
+            ),
+            isActive: true,
+            lastActivity: Date(timeIntervalSinceNow: -120),
+            lastActivityFormatted: "Active 2 min ago",
+            unreadCount: 5,
+            memberCount: 156,
+            isPinned: false,
+            isMuted: false,
+            canSendMessages: true
+        )
     
     // MARK: - DM Messages (with embedded GuildMembershipDTO author)
     static let dmMessages: [DMMessageDTO] = [

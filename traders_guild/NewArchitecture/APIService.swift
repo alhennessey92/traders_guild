@@ -140,14 +140,31 @@ class MockAPIService {
         // Mock: record event view
     }
     
+    
+    // ================================================================================================
+    // MARK: - Notification - API
+    // ================================================================================================
+    
+    func recordNotificationView(notificationId: UUID, userId: UUID, guildId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: record notification view
+    }
+    
+    
     // ================================================================================================
     // MARK: - Messaging - API
     // ================================================================================================
     
-    /// Chat
+    /// UserDM
     func fetchOrCreateUserDM(userId: UUID) async throws -> DMDTO {
         try await simulateNetworkDelay()
         return SampleData.userDMbyUserId
+    }
+    
+    /// Chatroom
+    func fetchChatroomById(chatroomId: UUID) async throws -> GuildChatroomDTO {
+        try await simulateNetworkDelay()
+        return SampleData.chatroomByChatroomId
     }
     
     func fetchDMMessagesByDmId(dmId: UUID) async throws -> [DMMessageDTO] {

@@ -13,16 +13,21 @@ import SwiftUI
 struct traders_guildApp: App {
     @StateObject private var messagingManager = MessagingManager()
     @StateObject private var appState = AppState()
+    @StateObject private var notificationNavigationManager = NotificationNavigationManager() // NEW
     
     init() {
         let appState = AppState()
         let messagingManager = MessagingManager()
         
+        
         // ✅ Configure the connection
         messagingManager.configure(with: appState)
         
+        
+        
         _appState = StateObject(wrappedValue: appState)
         _messagingManager = StateObject(wrappedValue: messagingManager)
+        
     }
     
     var body: some Scene {
@@ -32,12 +37,14 @@ struct traders_guildApp: App {
                     TransitionView()
                         .environmentObject(appState)
                         .environmentObject(messagingManager)
+                       
                 } else {
                     mainContent
                         .environmentObject(appState)
                         .environmentObject(messagingManager)
+                        
                 }
-                // ❌ REMOVED - ToastWindowManager handles toasts now!
+                
             }
             // ✅ Keep blocking alerts - these still use currentAlert
             .alert(
@@ -59,7 +66,8 @@ struct traders_guildApp: App {
                 GuildSelectionFullView()
                     .environmentObject(appState)
                     .environmentObject(messagingManager)
-                    // ❌ REMOVED .withGlobalAlerts()
+                   
+                    
             }
         }
     }
@@ -69,7 +77,7 @@ struct traders_guildApp: App {
         if appState.isAuthenticated && appState.currentGuild != nil {
             MainView()
                 .preferredColorScheme(.dark)
-                // ❌ REMOVED .withGlobalAlerts()
+                
                 
         } else if appState.isAuthenticated {
             VStack(spacing: 20) {
@@ -83,7 +91,7 @@ struct traders_guildApp: App {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppColors.gradientBackgroundDark.opacity(0.9))
-            // ❌ REMOVED .withGlobalAlerts()
+           
             .onAppear {
                 if !appState.isCompletingSignup && !appState.showGuildSelectionSheet {
                     Task {
@@ -93,7 +101,6 @@ struct traders_guildApp: App {
             }
         } else {
             ContentView()
-            // ❌ REMOVED .withGlobalAlerts()
         }
     }
 }

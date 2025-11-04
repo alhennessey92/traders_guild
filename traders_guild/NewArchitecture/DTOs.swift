@@ -343,18 +343,132 @@ enum NotificationType: String, Codable, CaseIterable {
     case symbol = "Symbol"
     
 }
+
+enum NotificationDestination: Equatable {
+    /// Navigate to a user's DM chat
+    case userDM(userId: UUID)
+    
+    /// Navigate to a guild chatroom
+    case chatroom(chatroomId: UUID)
+    
+    /// Navigate to a symbol's chart
+    case symbolChart(symbolId: UUID, ticker: String)
+    
+    /// Navigate to a user's profile
+    case userProfile(userId: UUID)
+    
+    /// Navigate to a guild announcement detail
+    case announcement(announcementId: UUID)
+    
+    // Future destinations - uncomment as needed:
+    // case trade(tradeId: UUID)
+    // case challenge(challengeId: UUID)
+    // case achievement(achievementId: UUID)
+}
 // MARK: - Guild Notification DTO
 /// Main User account for the guild
 /// Represents a user's membership in a specific guild
 /// Links a user to a guild with role, stats, and history
 /// Used in: member lists, member profiles, membership management
+//struct GuildNotificationDTO: Identifiable, Codable, Equatable {
+//    let id: UUID
+//    let member: GuildMembershipDTO
+//    let guild: GuildDTO
+//    let title: String
+//    let content: String
+//    let createdDate: Date
+//    let notificationType: NotificationType
+//    var isRead: Bool
+//    
+//    // ✅ Short, consistent format
+//    var timeAgoFormatted: String {
+//        let formatter = RelativeDateTimeFormatter()
+//        formatter.unitsStyle = .short  // "2 min ago", "1 hr ago", etc.
+//        return formatter.localizedString(for: createdDate, relativeTo: Date())
+//    }
+//}
+
 struct GuildNotificationDTO: Identifiable, Codable, Equatable {
-    let id: UUID                    // Membership record ID (not user ID!)
-    let member: GuildMembershipDTO      // EMBEDDED member data (no lookup!)
-    let guild: GuildDTO      // EMBEDDED guild summary (just essentials)
+    let id: UUID
+    let member: GuildMembershipDTO
+    let guild: GuildDTO
     let title: String
+    let content: String
     let createdDate: Date
     let notificationType: NotificationType
+    var isRead: Bool
+    
+    // ============================================================================
+    // ✅ ADD THESE NAVIGATION FIELDS
+    // ============================================================================
+    /// User ID for DM-related notifications (e.g., "Sarah sent you a message")
+    let targetUserId: UUID?
+    
+    /// Chatroom ID for chatroom-related notifications (e.g., "New message in #trading")
+    let targetChatroomId: UUID?
+    
+    /// Symbol ID for symbol-related notifications (e.g., "EURUSD marker placed")
+    let targetSymbolId: UUID?
+    
+    /// Symbol ticker for display purposes (e.g., "EURUSD", "BTC/USD")
+    let targetSymbolTicker: String?
+    
+    /// Announcement ID for guild announcement notifications
+    let targetAnnouncementId: UUID?
+    
+    /// Additional metadata as key-value pairs for future extensibility
+    let targetMetadata: [String: String]?
+    
+    // ============================================================================
+    // ✅ ADD THESE COMPUTED PROPERTIES
+    // ============================================================================
+    
+    /// Computed navigation destination based on notification type and metadata
+    var destination: NotificationDestination? {
+        switch notificationType {
+        case .personal:
+            // Priority order for personal notifications:
+            // 1. Chatroom message -> open chatroom
+            if let chatroomId = targetChatroomId {
+                return .chatroom(chatroomId: chatroomId)
+            }
+            
+            // 2. DM message -> open DM with user
+            if let userId = targetUserId {
+                return .userDM(userId: userId)
+            }
+            
+            // 3. Guild announcement -> open announcement detail
+            if let announcementId = targetAnnouncementId {
+                return .announcement(announcementId: announcementId)
+            }
+            
+            // 4. Fallback to user profile
+            return .userProfile(userId: member.id)
+            
+        case .symbol:
+            // Symbol notifications always go to charts
+            if let symbolId = targetSymbolId,
+               let ticker = targetSymbolTicker {
+                return .symbolChart(symbolId: symbolId, ticker: ticker)
+            }
+            
+            // No valid symbol data
+            return nil
+        }
+    }
+    
+    /// Check if notification has a valid destination (is tappable)
+    var isActionable: Bool {
+        destination != nil
+    }
+    
+    // Existing computed property
+    var timeAgoFormatted: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: createdDate, relativeTo: Date())
+    }
 }
 
 

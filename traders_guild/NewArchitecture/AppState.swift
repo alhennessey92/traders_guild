@@ -522,6 +522,7 @@ class AppState: ObservableObject {
     
     
     
+    
     // ================================================================================================
     // MARK: - Events - API
     // ================================================================================================
@@ -594,6 +595,31 @@ class AppState: ObservableObject {
         }
     }
     
+    
+    // ================================================================================================
+    // MARK: - Notifications - API
+    // ================================================================================================
+    
+    /// Attend Event
+    func recordNotificationView(notificationId: UUID) async throws {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        guard let currentGuild = currentGuild else {
+            throw AppError.unauthorized
+        }
+        do {
+            try await api.recordNotificationView(notificationId: notificationId, userId: currentUser.id, guildId: currentGuild.id)
+        } catch {
+            showError(error, title: "Failed to record notification view", style: .toast)
+            throw error
+        }
+    }
+    
+    
+    
+    
     // ================================================================================================
     // MARK: - Messaging - API
     // ================================================================================================
@@ -609,6 +635,20 @@ class AppState: ObservableObject {
             throw CancellationError()
         } catch {
             showError(error, title: "Failed to Fetch User DM", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch or Create UserDM for Guild
+    func fetchChatroomById(chatroomId: UUID) async throws -> GuildChatroomDTO{
+        errorMessage = nil
+        do {
+            let chatroomdto = try await api.fetchChatroomById(chatroomId: chatroomId)
+            return chatroomdto
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Fetch Chatroom", style: .toast)
             throw error
         }
     }
