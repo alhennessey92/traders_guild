@@ -25,7 +25,7 @@ struct SwitchGuildView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
-    @State private var userGuilds: [GuildDTO] = []
+    @State private var userGuilds: [GuildMembershipDTO] = []
     @State private var isLoading: Bool = false
     @State private var showJoinGuild = false
     @State private var showCreateGuild = false
@@ -190,7 +190,7 @@ struct SwitchGuildView: View {
     }
     
     // ✅ Select and switch to guild
-    private func selectGuild(_ guild: GuildDTO) {
+    private func selectGuild(_ guild: GuildMembershipDTO) {
         // Update current guild in AppState
         appState.selectGuild(guild)
         
@@ -201,7 +201,7 @@ struct SwitchGuildView: View {
         //onBack()
         
         // Show success message
-        appState.showSuccess("Switched to \(guild.name)")
+        appState.showSuccess("Switched to \(guild.guild.name)")
     }
 }
 
@@ -209,7 +209,7 @@ struct SwitchGuildView: View {
 
 // MARK: - Guild Switch Row (Enhanced)
 struct GuildSwitchRow: View {
-    let guild: GuildDTO
+    let guild: GuildMembershipDTO
     let isCurrentGuild: Bool
     let onSelect: () -> Void
     
@@ -227,7 +227,7 @@ struct GuildSwitchRow: View {
                             .font(.title2)
                             .foregroundColor(AppColors.accentColor.opacity(0.6))
                         
-                        Text(guild.name)
+                        Text(guild.guild.name)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
@@ -237,13 +237,13 @@ struct GuildSwitchRow: View {
                             .foregroundColor(AppColors.accentColor)
                     }
                     
-                    Text("\(guild.memberCount) Members • \(guild.membersOnline) Online")
+                    Text("\(guild.guild.memberCount) Members • \(guild.guild.membersOnline) Online")
                         .font(.caption)
                         .foregroundColor(AppColors.whiteText)
                         .padding(.leading, 15)
                     
                     HStack(spacing: 3) {
-                        Text(guild.owner.username)
+                        Text(guild.guild.owner.username)
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
                             .lineLimit(1)
@@ -252,10 +252,10 @@ struct GuildSwitchRow: View {
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
                         
-                        Text(guild.ownerRole.rawValue)
+                        Text(guild.guild.ownerRole.rawValue)
                             .font(.caption)
-                            .foregroundColor(guild.ownerRole.roleForegroundColor)
-                            .fontWeight(guild.ownerRole.roleFontWeight)
+                            .foregroundColor(guild.guild.ownerRole.roleForegroundColor)
+                            .fontWeight(guild.guild.ownerRole.roleFontWeight)
                             .lineLimit(1)
                     }
                     .padding(.leading, 15)
@@ -275,6 +275,39 @@ struct GuildSwitchRow: View {
                             .lineLimit(1)
                     }
                     .padding(.leading, 15)
+                    
+                    Divider()
+                    
+                    HStack(spacing: 2){
+                        Text("You are a ")
+                            .font(.caption)
+                            .foregroundColor(AppColors.whiteText)
+                       
+                        Text(guild.roleInGuild.rawValue)
+                            .font(.caption)
+                            .foregroundColor(guild.roleInGuild.roleForegroundColor)
+                            .fontWeight(guild.roleInGuild.roleFontWeight)
+                            .lineLimit(1)
+            
+                        
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.7))
+                            .frame(width: 3, height: 3)
+                            .padding(.top, 1)
+                            .padding(.leading, 3)
+                            .padding(.trailing, 3)
+                        
+                        
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("\(guild.reputation)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                        
+                    }.padding(.leading, 15)
                 }
                 
                 Spacer()

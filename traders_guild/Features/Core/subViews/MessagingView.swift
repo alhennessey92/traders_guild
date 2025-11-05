@@ -877,7 +877,7 @@ struct ChatroomMessageView: View {
     @State private var showEditSheet = false
     
     private var canDeleteMessage: Bool {
-        guard let currentUserRole = appState.currentGuild?.currentMemberRole else {
+        guard let currentUserRole = appState.currentGuild?.roleInGuild else {
             return false
         }
         

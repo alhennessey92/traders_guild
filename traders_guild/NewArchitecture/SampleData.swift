@@ -66,29 +66,49 @@ struct SampleData {
         )
     )
     
-    static let sampleGuild = GuildDTO(
-        id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
-        name: "KAOS",
-        description: "Premier guild for forex and cryptocurrency traders. We focus on technical analysis, risk management, and collaborative learning. All skill levels welcome!",
-        reputation: 45000,
-        accuracy: 78,
-        memberCount: 156,
-        owner: GlobalMemberDTO(
-            id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
-            email: "sarah.masters@email.com",
-            name: "Sarah Masters",
-            username: "tradingqueen",
-            avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+    static let sampleGuild = GuildMembershipDTO(
+        id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174008")!,
+        globalMember: GlobalMemberDTO(
+            id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
+            email: "john.developer@email.com",
+            name: "John Developer",
+            username: "johndev",
+            avatarURL: "https://cdn.tradersguild.com/avatars/johndev.jpg",
             isOnline: true,
-            globalReputation: 5820
+            globalReputation: 2450
         ),
-        ownerRole: .admin,
-        dateCreated: Date(timeIntervalSince1970: 1705314600),
-        imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
-        isJoined: true,
-        currentMemberRole: .moderator,
-        isOpen: true,
-        membersOnline: 12
+        guild: GuildDTO(
+            id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+            name: "KAOS Trading",
+            description: "Premier guild for forex and cryptocurrency traders.",
+            reputation: 45000,
+            accuracy: 78,
+            memberCount: 156,
+            owner: GlobalMemberDTO(
+                id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+                email: "sarah.masters@email.com",
+                name: "Sarah Masters",
+                username: "tradingqueen",
+                avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+                isOnline: true,
+                globalReputation: 5820
+            ),
+            ownerRole: .admin,
+            dateCreated: Date(timeIntervalSince1970: 1705314600),
+            imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+            isJoined: true,
+            currentMemberRole: .admin,
+            isOpen: true,
+            membersOnline: 12
+        ),
+        roleInGuild: .admin,
+        dateJoined: Date(timeIntervalSince1970: 1705314600),
+        reputation: 5820,
+        daysInGuild: 282,
+        contributionScore: 95,
+        isOnline: true,
+        isFriend: true,
+        isBlocked: false
     )
     
     // MARK: - Open Guilds (with embedded GlobalMemberDTO owner)
@@ -143,6 +163,97 @@ struct SampleData {
             membersOnline: 1
         )
         
+    ]
+    
+    static let userMembershipGuilds: [GuildMembershipDTO] = [
+        GuildMembershipDTO(
+            id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174008")!,
+            globalMember: GlobalMemberDTO(
+                id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
+                email: "john.developer@email.com",
+                name: "John Developer",
+                username: "johndev",
+                avatarURL: "https://cdn.tradersguild.com/avatars/johndev.jpg",
+                isOnline: true,
+                globalReputation: 2450
+            ),
+            guild: GuildDTO(
+                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+                name: "KAOS Trading",
+                description: "Premier guild for forex and cryptocurrency traders.",
+                reputation: 45000,
+                accuracy: 78,
+                memberCount: 156,
+                owner: GlobalMemberDTO(
+                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+                    email: "sarah.masters@email.com",
+                    name: "Sarah Masters",
+                    username: "tradingqueen",
+                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+                    isOnline: true,
+                    globalReputation: 5820
+                ),
+                ownerRole: .admin,
+                dateCreated: Date(timeIntervalSince1970: 1705314600),
+                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+                isJoined: true,
+                currentMemberRole: .admin,
+                isOpen: true,
+                membersOnline: 12
+            ),
+            roleInGuild: .admin,
+            dateJoined: Date(timeIntervalSince1970: 1705314600),
+            reputation: 5820,
+            daysInGuild: 282,
+            contributionScore: 95,
+            isOnline: true,
+            isFriend: true,
+            isBlocked: false
+        ),
+        GuildMembershipDTO(
+            id: UUID(uuidString: "323e4567-e89b-12d3-a456-426614174010")!,
+            globalMember: GlobalMemberDTO(
+                id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
+                email: "john.developer@email.com",
+                name: "John Developer",
+                username: "johndev",
+                avatarURL: "https://cdn.tradersguild.com/avatars/johndev.jpg",
+                isOnline: true,
+                globalReputation: 2450
+            ),
+            guild: GuildDTO(
+                id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+                name: "Crypto",
+                description: "Premier guild for forex and cryptocurrency traders.",
+                reputation: 45000,
+                accuracy: 78,
+                memberCount: 156,
+                owner: GlobalMemberDTO(
+                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+                    email: "sarah.masters@email.com",
+                    name: "Sarah Masters",
+                    username: "tradingqueen",
+                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+                    isOnline: true,
+                    globalReputation: 5820
+                ),
+                ownerRole: .admin,
+                dateCreated: Date(timeIntervalSince1970: 1705314600),
+                imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+                isJoined: true,
+                currentMemberRole: .moderator,
+                isOpen: true,
+                membersOnline: 12
+            ),
+            roleInGuild: .moderator,
+            dateJoined: Date(timeIntervalSince1970: 1710063600),
+            reputation: 3200,
+            daysInGuild: 228,
+            contributionScore: 88,
+            isOnline: false,
+            isFriend: false,
+            isBlocked: false
+        )
     ]
     
     

@@ -12,6 +12,8 @@ import SwiftUI
 // MARK: - Announcements List View
 struct LeaderboardListView: View {
     // MARK: - Need to add a bottom sheet for user profile
+    
+    @Binding var bottomSheetContent: BottomSheetContent?
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {
@@ -50,6 +52,7 @@ struct LeaderboardListView: View {
                         rank: index + 1, // this is their place in the sorted list
                         onTap: {
                             // handle tap
+                            bottomSheetContent = .guildMember(user)
                         }
                     )
                 }
@@ -151,12 +154,13 @@ struct LeaderBoardRowView: View {
                 
                 
             }
-            .padding()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(
                         Color.white
-                            .opacity(isPressed ? 0.1 : (rank <= 3 ? 0.04 : 0.02))
+                            .opacity(isPressed ? 0.1 : (rank <= 3 ? 0.05 : 0.03))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)

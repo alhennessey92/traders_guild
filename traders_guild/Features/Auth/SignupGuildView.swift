@@ -162,7 +162,7 @@ struct SignupGuildView: View {
         do {
             availableGuilds = try await appState.fetchOpenGuilds()
             // ✅ Store in appState so signup can reuse them
-            appState.availableGuildsForSelection = availableGuilds
+            appState.availableOpenGuildsForSelection = availableGuilds
         } catch is CancellationError {
             // Silently ignore cancellation
             return

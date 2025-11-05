@@ -46,7 +46,7 @@ class AppState: ObservableObject {
     
     /// Currently selected/active guild the user is viewing
     /// This represents which guild's content is currently being displayed
-    @Published var currentGuild: GuildDTO? {
+    @Published var currentGuild: GuildMembershipDTO? {
         didSet {
             if let guild = currentGuild {
                 saveCurrentGuildToKeychain(guild)
@@ -85,7 +85,9 @@ class AppState: ObservableObject {
     @Published var showGuildSelectionSheet: Bool = false
 
     /// Available guilds for selection
-    @Published var availableGuildsForSelection: [GuildDTO] = []
+    @Published var availableGuildsForSelection: [GuildMembershipDTO] = []
+    
+    @Published var availableOpenGuildsForSelection: [GuildDTO] = []
     
     
     // ================================================================================================
@@ -226,6 +228,7 @@ class AppState: ObservableObject {
             if let selectedGuildId = data.selectedGuildId {
                 try await joinGuild(guildId: selectedGuildId)
                 
+                // TODO: change this to full guild async
                 if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
                     self.currentGuild = selectedGuild
                 } else {
@@ -307,7 +310,7 @@ class AppState: ObservableObject {
     // ================================================================================================
     
     /// Switch to a different guild
-    func selectGuild(_ guild: GuildDTO) {
+    func selectGuild(_ guild: GuildMembershipDTO) {
         currentGuild = guild
     }
     
@@ -342,12 +345,12 @@ class AppState: ObservableObject {
     
     /// Fetch all guilds the user is a member of
     // MARK: - need to add user id
-    func fetchUserGuilds() async throws -> [GuildDTO] {
+    func fetchUserGuilds() async throws -> [GuildMembershipDTO] {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
-            let guilds = try await api.fetchUserGuilds()
+            let guilds = try await api.fetchUserGuildMemberships()
             return guilds
         } catch {
             showError(error, title: "Failed to Fetch User Guilds", style: .toast)
@@ -355,8 +358,10 @@ class AppState: ObservableObject {
         }
     }
     
+    
+    // TODO: workout wtf is going on here
     /// Fetch a specific guild by ID
-    func fetchGuildById(guildId: UUID) async throws -> GuildDTO? {
+    func fetchGuildById(guildId: UUID) async throws -> GuildMembershipDTO? {
         errorMessage = nil
         
         do {
@@ -1035,15 +1040,15 @@ class AppState: ObservableObject {
         return try? JSONDecoder().decode(CurrentUserDTO.self, from: data)
     }
     
-    private func saveCurrentGuildToKeychain(_ guild: GuildDTO) {
+    private func saveCurrentGuildToKeychain(_ guild: GuildMembershipDTO) {
         if let data = try? JSONEncoder().encode(guild) {
             UserDefaults.standard.set(data, forKey: "currentGuild")
         }
     }
     
-    private func getCurrentGuildFromKeychain() -> GuildDTO? {
+    private func getCurrentGuildFromKeychain() -> GuildMembershipDTO? {
         guard let data = UserDefaults.standard.data(forKey: "currentGuild") else { return nil }
-        return try? JSONDecoder().decode(GuildDTO.self, from: data)
+        return try? JSONDecoder().decode(GuildMembershipDTO.self, from: data)
     }
     
     private func clearCurrentGuild() {

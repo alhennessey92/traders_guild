@@ -246,7 +246,7 @@ struct MainDrawerView: View {
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
                     
-                    Text(guild.name)
+                    Text(guild.guild.name)
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -260,7 +260,7 @@ struct MainDrawerView: View {
                 }
                 
                 HStack(spacing: 2) {
-                    Text("\(guild.memberCount)")
+                    Text("\(guild.guild.memberCount)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -273,7 +273,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("\(guild.membersOnline)")
+                    Text("\(guild.guild.membersOnline)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -295,7 +295,7 @@ struct MainDrawerView: View {
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("\(guild.reputation)")
+                    Text("\(guild.guild.reputation)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -308,7 +308,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("\(guild.accuracy)%")
+                    Text("\(guild.guild.accuracy)%")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -319,7 +319,7 @@ struct MainDrawerView: View {
                 }
                 .padding(.top, 6)
                 
-                Text("\(guild.description)")
+                Text("\(guild.guild.description)")
                     .font(.caption)
                     .foregroundColor(AppColors.whiteText.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -503,6 +503,7 @@ struct SectionDrawerView: View {
         case .events: return "Events"
         case .userList: return "Members"
         case .statistics: return "Statistics"
+        
         }
     }
     
@@ -517,7 +518,7 @@ struct SectionDrawerView: View {
         case .topMarkers:
             TopMarkersView()
         case .leaderboard:
-            LeaderboardListView()
+            LeaderboardListView(bottomSheetContent: $bottomSheetContent)
         case .guildWatchlist:
             WatchlistView()
         case .events:

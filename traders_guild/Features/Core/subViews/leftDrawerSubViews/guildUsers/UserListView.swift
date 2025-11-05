@@ -362,7 +362,7 @@ struct GuildUserActionButtons: View {
         HStack(spacing: 8) {
             DrawerActionButton(
                 imageName: "nosign",
-                backgroundColor: user.isBlocked ? AppColors.bearCandleRed.opacity(0.8) : AppColors.bearCandleRed.opacity(0.05),
+                backgroundColor: user.isBlocked ? AppColors.bearCandleRed.opacity(0.8) : AppColors.bearCandleRed.opacity(0.1),
                 foregroundColor: user.isBlocked ? AppColors.whiteText : AppColors.bearCandleRed,
                 strokeColor: AppColors.bearCandleRed.opacity(0.6),
                 strokeWidth: 0.5,

@@ -21,9 +21,9 @@ import SwiftUI
 /// Defines the permission hierarchy within guilds
 /// This determines what actions a user can perform
 enum MemberRole: String, Codable, CaseIterable {
-    case member = "member"          // Basic: can chat, view content, join events
-    case moderator = "moderator"    // Mid: can moderate chat, pin messages, create events
-    case admin = "admin"            // Full: can manage guild settings, kick members, delete guild
+    case member = "Member"          // Basic: can chat, view content, join events
+    case moderator = "Moderator"    // Mid: can moderate chat, pin messages, create events
+    case admin = "Admin"            // Full: can manage guild settings, kick members, delete guild
     
     /// Display-friendly name for UI
     var displayName: String {

@@ -19,7 +19,7 @@ struct NotificationsListView: View {
     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager  // ✅ ADD THIS
     
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             // Loading state
             if leftDrawerViewModel.isLoading && leftDrawerViewModel.userNotifications.isEmpty {
                 VStack(spacing: 16) {
@@ -60,6 +60,7 @@ struct NotificationsListView: View {
                 }
             }
         }
+        .padding(.horizontal, 16)
         // ✅ ADD THIS: Loading overlay
         .overlay {
             if notificationNavigationManager.isNavigating {
@@ -90,6 +91,8 @@ struct NotificationsListView: View {
 
 // MARK: - Notification Row View
 
+// MARK: - Notification Row View
+
 struct NotificationRowView: View {
     let notification: GuildNotificationDTO
     let onTap: () -> Void
@@ -100,7 +103,7 @@ struct NotificationRowView: View {
     
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager  // ✅ ADD THIS
+    @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
     
     init(notification: GuildNotificationDTO, onTap: @escaping () -> Void) {
         self.notification = notification
@@ -110,90 +113,80 @@ struct NotificationRowView: View {
     
     var body: some View {
         Button(action: {
-            // ✅ REPLACE YOUR EXISTING onTap WITH THIS:
             Task {
                 await notificationNavigationManager.navigate(to: notification)
             }
             HapticFeedback.light.trigger()
-            onTap()  // Keep original onTap if needed
+            onTap()
         }) {
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 12) {
-                    // Icon
+            HStack(alignment: .top, spacing: 12) {
+                // Icon
+                ZStack {
                     switch notification.notificationType {
                     case .personal:
+                        // Profile picture or default icon
                         Image(systemName: "person.2.shield")
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.title3)
                             .foregroundColor(AppColors.friendAccent)
-                            .frame(width: 30)
+                            .frame(width: 24)
                     case .symbol:
                         Image(systemName: "chart.line.uptrend.xyaxis.circle")
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.title3)
                             .foregroundColor(AppColors.bullCandleGreen)
-                            .frame(width: 30)
+                            .frame(width: 24)
                     }
-                    
-                    // Content
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(alignment: .top, spacing: 8) {
-                            if showAsUnread {
-                                Circle()
-                                    .fill(AppColors.accentDarkColor)
-                                    .stroke(AppColors.accentColor, lineWidth: 2)
-                                    .frame(width: 6, height: 6)
-                                    .padding(.top, 6)
-                            }
-                            Text(notification.title)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(AppColors.whiteText.opacity(0.95))
-                            
-                            
-                        }
+                }
+                
+                // Content
+                VStack(alignment: .leading, spacing: 4) {  // ✅ CHANGED: Reduced spacing from 6 to 4
+                    // Title with unread indicator and time
+                    HStack(alignment: .top, spacing: 6) {
+//                        if showAsUnread {
+//                            Circle()
+//                                .fill(AppColors.accentDarkColor)
+//                                .stroke(AppColors.accentColor, lineWidth: 2)
+//                                .frame(width: 6, height: 6)
+//                                .padding(.top, 6)
+//                        }
                         
-                        Text(notification.content)
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-                            .fontWeight(.medium)
+                        Text(notification.title)
+                            .font(.footnote)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.whiteText)
+                            .multilineTextAlignment(.leading)
                             .lineLimit(2)
                         
+                        Spacer()
                         
-                    }
-                    
-                    Spacer()
-                    
-                    // Time and chevron
-                    VStack(alignment: .trailing, spacing: 4) {
                         Text(notification.timeAgoFormatted)
                             .font(.caption2)
-                            .fontWeight(.bold)
                             .foregroundColor(AppColors.whiteText.opacity(0.5))
-                        
-                        
                     }
+                    
+                    // Content text
+                    Text(notification.content)
+                        .font(.caption)
+                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        .lineLimit(1)
+                        .multilineTextAlignment(.leading)
                 }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .background(
-                    Rectangle()
-                        .fill(AppColors.whiteText.opacity(showAsUnread ? 0.05 : 0))
-                )
                 
-                if !showAsUnread {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 0.5)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 3)
-                }
+                
             }
-            .padding(.bottom, 6)
+            .padding(.horizontal, 14)  // ✅ CHANGED: More specific horizontal padding
+            .padding(.vertical, 10)     // ✅ CHANGED: Reduced from 16 to 10 for thinner height
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(isPressed ? 0.1 : showAsUnread ? 0.05 : 0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(showAsUnread ? AppColors.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+            )
         }
         .buttonStyle(PlainButtonStyle())
-        .disabled(notificationNavigationManager.isNavigating)  // ✅ ADD THIS
-        .opacity(notificationNavigationManager.isNavigating ? 0.6 : 1.0)  // ✅ ADD THIS
+        .disabled(notificationNavigationManager.isNavigating)
+        .opacity(notificationNavigationManager.isNavigating ? 0.6 : 1.0)
         .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
                 isPressed = pressing

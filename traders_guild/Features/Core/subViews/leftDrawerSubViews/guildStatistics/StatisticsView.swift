@@ -54,7 +54,7 @@ struct StatisticsView: View {
                         StatRow(label: "Reputation Earned", value: statistics.reputationEarnedDisplay)
                     }
                     .padding()
-                    .background(Color.white.opacity(0.08))
+                    .background(Color.white.opacity(0.05))
                     .cornerRadius(10)
                 }
                 
@@ -107,7 +107,7 @@ struct StatRow: View {
             Text(value)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(AppColors.accentColor)
+                .foregroundColor(AppColors.whiteText)
         }
     }
 }

@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-struct UserHelpSheetView: View {
+struct UserGlobalSheetView: View {
     let onBack: () -> Void
     
     var body: some View {
@@ -24,7 +24,7 @@ struct UserHelpSheetView: View {
                 }
                 .padding(.top, 20)
                 
-                Text("Help and Support")
+                Text("Your Global Account")
                     .font(.title)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.whiteText)

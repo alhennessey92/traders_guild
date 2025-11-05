@@ -10,7 +10,7 @@ import SwiftUI
 
 struct GuildSelectionFullView: View {
     @EnvironmentObject var appState: AppState
-    @State private var selectedGuild: GuildDTO?
+    @State private var selectedGuild: GuildMembershipDTO?
     @Environment(\.dismiss) var dismiss
     
     // Check if this is first login (required) or switching (optional)
@@ -103,7 +103,7 @@ struct GuildSelectionFullView: View {
                 HStack {
                     Spacer()
                     StandardActionButton(
-                        title: selectedGuild != nil ? "Enter \(selectedGuild!.name)" : "Select a Guild",
+                        title: selectedGuild != nil ? "Enter \(selectedGuild!.guild.name)" : "Select a Guild",
                         backgroundColor: AppColors.whiteText,
                         foregroundColor: AppColors.gradientBackgroundDark
                     ) {
@@ -138,7 +138,7 @@ struct GuildSelectionFullView: View {
 // MARK: - Guild Selection Row (Full View Version)
 
 struct GuildSelectionRowFull: View {
-    let guild: GuildDTO
+    let guild: GuildMembershipDTO
     let isSelected: Bool
     let isCurrent: Bool
     let onTap: () -> Void
@@ -152,7 +152,7 @@ struct GuildSelectionRowFull: View {
                             .font(.title2)
                             .foregroundColor(AppColors.accentColor.opacity(0.6))
                         
-                        Text("\(guild.name)")
+                        Text("\(guild.guild.name)")
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
@@ -162,13 +162,13 @@ struct GuildSelectionRowFull: View {
                             .foregroundColor(AppColors.accentColor)
                     }
                     
-                    Text("\(guild.memberCount) Members - \(guild.statusText)")
+                    Text("\(guild.guild.memberCount) Members - \(guild.guild.statusText)")
                         .font(.caption)
                         .foregroundColor(AppColors.whiteText)
                         .padding(.leading, 15)
                     
                     HStack(spacing: 3) {
-                        Text("\(guild.owner.name)")
+                        Text("\(guild.guild.owner.name)")
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
                             .lineLimit(1)
@@ -177,10 +177,10 @@ struct GuildSelectionRowFull: View {
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
                         
-                        Text("Admin")
+                        Text("\(guild.guild.ownerRole.rawValue)")
                             .font(.caption)
-                            .foregroundColor(guild.ownerRole.roleForegroundColor)
-                            .fontWeight(guild.ownerRole.roleFontWeight)
+                            .foregroundColor(guild.guild.ownerRole.roleForegroundColor)
+                            .fontWeight(guild.guild.ownerRole.roleFontWeight)
                             .lineLimit(1)
                     }
                     .padding(.leading, 15)
@@ -190,7 +190,7 @@ struct GuildSelectionRowFull: View {
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
-                        Text("\(guild.reputationDisplay)")
+                        Text("\(guild.guild.reputationDisplay)")
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.accentColor)
@@ -200,6 +200,40 @@ struct GuildSelectionRowFull: View {
                             .lineLimit(1)
                     }
                     .padding(.leading, 15)
+                    
+                    
+                    Divider()
+                    
+                    HStack(spacing: 2){
+                        Text("You are a ")
+                            .font(.caption)
+                            .foregroundColor(AppColors.whiteText)
+                       
+                        Text(guild.roleInGuild.rawValue)
+                            .font(.caption)
+                            .foregroundColor(guild.roleInGuild.roleForegroundColor)
+                            .fontWeight(guild.roleInGuild.roleFontWeight)
+                            .lineLimit(1)
+            
+                        
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.7))
+                            .frame(width: 3, height: 3)
+                            .padding(.top, 1)
+                            .padding(.leading, 3)
+                            .padding(.trailing, 3)
+                        
+                        
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("\(guild.reputation)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                        
+                    }.padding(.leading, 15)
                 }
                 
                 Spacer()

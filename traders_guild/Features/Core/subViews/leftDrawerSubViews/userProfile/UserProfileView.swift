@@ -12,7 +12,7 @@ enum UserSheetContent {
     case profile
     case switchGuild
     case settings
-    case help
+    case global
 }
 
 struct UserProfileDetailView: View {
@@ -58,8 +58,8 @@ struct UserProfileDetailView: View {
                         }
                     })
                     .transition(.opacity)
-                case .help:
-                    UserHelpSheetView(onBack: {
+                case .global:
+                    UserGlobalSheetView(onBack: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentContent = .profile
                             selectedDetent = .fraction(0.6)
@@ -119,14 +119,14 @@ struct UserProfileDetailView: View {
                 Spacer()
                 
                 DrawerActionButton(
-                    imageName: "questionmark.circle",
+                    imageName: "globe",
                     backgroundColor: AppColors.gradientBackgroundDark.opacity(0.2),
                     foregroundColor: AppColors.whiteText.opacity(0.9),
                     strokeColor: AppColors.whiteText.opacity(0.3),
                     strokeWidth: 0.5,
                     action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
-                            currentContent = .help
+                            currentContent = .global
                             selectedDetent = .large
                         }
                     }
@@ -429,7 +429,7 @@ struct UserProfileFooterView: View {
                 strokeWidth: 0.5,
                 action: {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        currentContent = .help
+                        currentContent = .global
                         selectedDetent = .large  // EXPAND TO LARGE FOR SETTINGS
                     }
                 }

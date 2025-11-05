@@ -14,18 +14,7 @@ import SwiftUI
 /// Hosts search/filter UI, lists for chatrooms and users, and opens chats via MessagingManager.
 struct RightDrawerMainView: View {
     // MARK: - Bindings & State
-    // onClose: Callback to close the drawer
-    // chatrooms / onlineUsers / offlineUsers / friends: Data sources for lists
-    // dragTranslation: Current drag offset for swipe-to-dismiss
-    // searchText: Current text in the search field
-    // showFilterSheet: Controls filter options sheet presentation
-    // isSearchFocused: Tracks keyboard focus for search
-
     let onClose: () -> Void
-//    let chatrooms: [Chatroom]
-//    let onlineUsers: [UserDM]
-//    let offlineUsers: [UserDM]
-//    let friends: [UserDM]
     
     @EnvironmentObject var messagingManager: MessagingManager
     @EnvironmentObject var appState: AppState
@@ -33,11 +22,44 @@ struct RightDrawerMainView: View {
     
     @State private var dragTranslation: CGFloat = 0
     @State private var searchText: String = ""
-    @State private var showFilterSheet: Bool = false
     @FocusState private var isSearchFocused: Bool
-
-
     
+    // MARK: - Computed Filtered Lists
+    private var filteredChatrooms: [GuildChatroomDTO] {
+        guard !searchText.isEmpty else { return rightDrawerViewModel.guildChatrooms }
+        return rightDrawerViewModel.guildChatrooms.filter { chatroom in
+            chatroom.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    private var filteredFriends: [DMDTO] {
+        guard !searchText.isEmpty else { return rightDrawerViewModel.guildFriends }
+        return rightDrawerViewModel.guildFriends.filter { dm in
+            dm.participant.globalMember.username.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    private var filteredOnlineNonFriends: [DMDTO] {
+        guard !searchText.isEmpty else { return rightDrawerViewModel.guildOnlineNonFriends }
+        return rightDrawerViewModel.guildOnlineNonFriends.filter { dm in
+            dm.participant.globalMember.username.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    private var filteredOfflineNonFriends: [DMDTO] {
+        guard !searchText.isEmpty else { return rightDrawerViewModel.guildOfflineNonFriends }
+        return rightDrawerViewModel.guildOfflineNonFriends.filter { dm in
+            dm.participant.globalMember.username.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    private var hasNoResults: Bool {
+        !searchText.isEmpty &&
+        filteredChatrooms.isEmpty &&
+        filteredFriends.isEmpty &&
+        filteredOnlineNonFriends.isEmpty &&
+        filteredOfflineNonFriends.isEmpty
+    }
     
     var body: some View {
         if let user = appState.currentUser,
@@ -68,7 +90,7 @@ struct RightDrawerMainView: View {
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
-                        Text("\(guild.name)")
+                        Text("\(guild.guild.name)")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
@@ -80,8 +102,6 @@ struct RightDrawerMainView: View {
                     }
                     .padding(.leading, 35)
                     
-                    
-                    
                     // Search bar with filter
                     HStack(spacing: 8) {
                         HStack {
@@ -89,7 +109,7 @@ struct RightDrawerMainView: View {
                                 .foregroundColor(AppColors.whiteText.opacity(0.5))
                                 .font(.subheadline)
                             
-                            TextField("Search...", text: $searchText)
+                            TextField("Search chatrooms & users...", text: $searchText)
                                 .font(.subheadline)
                                 .foregroundColor(AppColors.whiteText)
                                 .autocorrectionDisabled()
@@ -115,17 +135,7 @@ struct RightDrawerMainView: View {
                         .onTapGesture {
                             isSearchFocused = true
                         }
-                        
-                        Button(action: { showFilterSheet = true }) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                .font(.title3)
-                                .foregroundColor(AppColors.whiteText)
-                                .frame(width: 40, height: 40)
-                                .background(AppColors.unhighlightedTextBoxBackground)
-                                .clipShape(Circle())
-                        }
                     }
-    //                .padding(.leading, 35)
                     .padding(.top, 12)
                     
                     Rectangle()
@@ -141,90 +151,8 @@ struct RightDrawerMainView: View {
                 // User lists and chatrooms with disclosure groups
                 ScrollView {
                     VStack(spacing: 12) {
-                        // Chatrooms Section
-                        
-                        ChatroomDisclosureGroup(
-                            chatrooms: rightDrawerViewModel.guildChatrooms,
-                            onChatroomTap: { chatroom in
-                                messagingManager.openChatroom(chatroom)
-                            }
-                        )
-                        
-                        
-                        // Friends Section (now properly filtered)
-                        DMDisclosureGroup(
-                            title: "Friends",
-                            count: rightDrawerViewModel.guildFriends.count,
-                            icon: "person.crop.circle",
-                            iconColor: AppColors.friendAccent,
-                            userDMs: rightDrawerViewModel.guildFriends,
-                            onUserTap: { userDM in
-                                messagingManager.openUserDM(userDM)
-                            }
-                        )
-    //                    if !filteredFriends.isEmpty {
-    //                        UserDisclosureGroup(
-    //                            title: "Friends",
-    //                            count: filteredFriends.count,
-    //                            icon: "star.fill",
-    //                            iconColor: AppColors.accentColor,
-    //                            users: filteredFriends,
-    //                            onUserTap: { user in
-    //                                messagingManager.openUserChat(user)
-    //                            }
-    //                        )
-    //                    }
-                        
-                        // Online Users (excludes friends)
-                        DMDisclosureGroup(
-                            title: "Online",
-                            count: rightDrawerViewModel.guildOnlineNonFriends.count,
-                            icon: "circle.fill",
-                            iconColor: AppColors.bullCandleGreen,
-                            userDMs: rightDrawerViewModel.guildOnlineNonFriends,
-                            onUserTap: { userDM in
-                                messagingManager.openUserDM(userDM)
-                            }
-                        )
-    //                    if !filteredOnlineUsers.isEmpty {
-    //                        UserDisclosureGroup(
-    //                            title: "Online",
-    //                            count: filteredOnlineUsers.count,
-    //                            icon: "circle.fill",
-    //                            iconColor: AppColors.bullCandleGreen,
-    //                            users: filteredOnlineUsers,
-    //                            onUserTap: { user in
-    //                                messagingManager.openUserChat(user)
-    //                            }
-    //                        )
-    //                    }
-                        
-                        // Offline Users (excludes friends)
-                        DMDisclosureGroup(
-                            title: "Offline",
-                            count: rightDrawerViewModel.guildOfflineNonFriends.count,
-                            icon: "circle.fill",
-                            iconColor: Color.gray,
-                            userDMs: rightDrawerViewModel.guildOfflineNonFriends,
-                            onUserTap: { userDM in
-                                messagingManager.openUserDM(userDM)
-                            }
-                        )
-    //                    if !filteredOfflineUsers.isEmpty {
-    //                        UserDisclosureGroup(
-    //                            title: "Offline",
-    //                            count: filteredOfflineUsers.count,
-    //                            icon: "circle.fill",
-    //                            iconColor: Color.gray,
-    //                            users: filteredOfflineUsers,
-    //                            onUserTap: { user in
-    //                                messagingManager.openUserChat(user)
-    //                            }
-    //                        )
-    //                    }
-                        
                         // No results state
-                        if rightDrawerViewModel.guildChatrooms.isEmpty {
+                        if hasNoResults {
                             VStack(spacing: 12) {
                                 Image(systemName: "magnifyingglass")
                                     .font(.largeTitle)
@@ -232,9 +160,65 @@ struct RightDrawerMainView: View {
                                 Text("No results found")
                                     .font(.subheadline)
                                     .foregroundColor(AppColors.whiteText.opacity(0.5))
+                                Text("Try searching for a different chatroom or user")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.whiteText.opacity(0.4))
+                                    .multilineTextAlignment(.center)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.top, 40)
+                        } else {
+                            // Chatrooms Section
+                            if !filteredChatrooms.isEmpty {
+                                ChatroomDisclosureGroup(
+                                    chatrooms: filteredChatrooms,
+                                    onChatroomTap: { chatroom in
+                                        messagingManager.openChatroom(chatroom)
+                                    }
+                                )
+                            }
+                            
+                            // Friends Section
+                            if !filteredFriends.isEmpty {
+                                DMDisclosureGroup(
+                                    title: "Friends",
+                                    count: filteredFriends.count,
+                                    icon: "person.crop.circle",
+                                    iconColor: AppColors.friendAccent,
+                                    userDMs: filteredFriends,
+                                    onUserTap: { userDM in
+                                        messagingManager.openUserDM(userDM)
+                                    }
+                                )
+                            }
+                            
+                            // Online Users (excludes friends)
+                            if !filteredOnlineNonFriends.isEmpty {
+                                DMDisclosureGroup(
+                                    title: "Online",
+                                    count: filteredOnlineNonFriends.count,
+                                    icon: "circle.fill",
+                                    iconColor: AppColors.bullCandleGreen,
+                                    userDMs: filteredOnlineNonFriends,
+                                    onUserTap: { userDM in
+                                        messagingManager.openUserDM(userDM)
+                                    }
+                                )
+                            }
+                            
+                            // Offline Users (excludes friends)
+                            if !filteredOfflineNonFriends.isEmpty {
+                                DMDisclosureGroup(
+                                    title: "Offline",
+                                    count: filteredOfflineNonFriends.count,
+                                    icon: "circle.fill",
+                                    iconColor: Color.gray,
+                                    userDMs: filteredOfflineNonFriends,
+                                    onUserTap: { userDM in
+                                        messagingManager.openUserDM(userDM)
+                                    }
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -290,18 +274,7 @@ struct RightDrawerMainView: View {
             )
             .shadow(radius: LayoutConstants.shadowRadius)
             .ignoresSafeArea()
-            
-            // Filter options sheet
-            .sheet(isPresented: $showFilterSheet) {
-                FilterOptionsView()
-                    
-                    .presentationDetents([.fraction(0.8)])
-                    .presentationBackground(Color.clear)
-                    .presentationCornerRadius(25)
-                    .presentationContentInteraction(.scrolls)
-            }
         } else {
-            // Optional: Show error state if user/guild missing
             EmptyView()
         }
     }
@@ -432,49 +405,49 @@ struct DMDisclosureGroup: View {
 }
 
 
-/// Filter options presented as a sheet from the right drawer.
-struct FilterOptionsView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var showOnlineOnly = false
-    @State private var showFriendsOnly = false
-    @State private var sortBy = "Name"
-    
-    var body: some View {
-        NavigationView {
-            List {
-                Section("Display") {
-                    Toggle("Online Users Only", isOn: $showOnlineOnly)
-                    Toggle("Friends Only", isOn: $showFriendsOnly)
-                }
-                
-                Section("Sort By") {
-                    ForEach(["Name", "Level", "Status"], id: \.self) { option in
-                        HStack {
-                            Text(option)
-                            Spacer()
-                            if sortBy == option {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(AppColors.accentColor)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            sortBy = option
-                        }
-                    }
-                }
-            }
-            .background(Color.black.opacity(0.3))
-            .navigationTitle("Filter Options")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
+///// Filter options presented as a sheet from the right drawer.
+//struct FilterOptionsView: View {
+//    @Environment(\.dismiss) private var dismiss
+//    @State private var showOnlineOnly = false
+//    @State private var showFriendsOnly = false
+//    @State private var sortBy = "Name"
+//    
+//    var body: some View {
+//        NavigationView {
+//            List {
+//                Section("Display") {
+//                    Toggle("Online Users Only", isOn: $showOnlineOnly)
+//                    Toggle("Friends Only", isOn: $showFriendsOnly)
+//                }
+//                
+//                Section("Sort By") {
+//                    ForEach(["Name", "Level", "Status"], id: \.self) { option in
+//                        HStack {
+//                            Text(option)
+//                            Spacer()
+//                            if sortBy == option {
+//                                Image(systemName: "checkmark")
+//                                    .foregroundColor(AppColors.accentColor)
+//                            }
+//                        }
+//                        .contentShape(Rectangle())
+//                        .onTapGesture {
+//                            sortBy = option
+//                        }
+//                    }
+//                }
+//            }
+//            .background(Color.black.opacity(0.3))
+//            .navigationTitle("Filter Options")
+//            .navigationBarTitleDisplayMode(.inline)
+//            .toolbar {
+//                ToolbarItem(placement: .navigationBarTrailing) {
+//                    Button("Done") {
+//                        dismiss()
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
 

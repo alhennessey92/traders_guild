@@ -73,7 +73,7 @@ struct ChatroomRowView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.white.opacity(isPressed ? 0.1 : 0.02))
+                    .fill(Color.white.opacity(isPressed ? 0.1 : 0.03))
             )
         }
         .buttonStyle(PlainButtonStyle())

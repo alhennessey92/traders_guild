@@ -282,7 +282,7 @@ struct WatchlistRowView: View {
             .frame(minHeight: 56, alignment: .center)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(isPressed ? 0.1 : 0.02))
+                    .fill(Color.white.opacity(isPressed ? 0.1 : 0.03))
 //                    .overlay(
 //                        RoundedRectangle(cornerRadius: 14)
 //                            .strokeBorder(AppColors.accentColor.opacity(0.3), lineWidth: 1)
