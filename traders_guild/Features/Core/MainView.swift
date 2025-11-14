@@ -13,6 +13,7 @@
 
 // MARK: - Main View UI
 import SwiftUI
+import SwiftTradingView
 
 // MARK: - Constants
 /// Layout constants for consistent spacing, sizing, and ratios throughout the app
@@ -41,6 +42,8 @@ struct MainView: View {
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
     @StateObject private var rightDrawerViewModel = RightDrawerViewModel()
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
+    
+
     
 
     
@@ -239,7 +242,7 @@ struct MainView: View {
                 
                 VStack(spacing: 0) {
                     chartView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    
                 }
                 .opacity(fadeIn ? 1 : 0)
                 .animation(.easeIn(duration: 1.5), value: fadeIn)
@@ -304,6 +307,20 @@ struct MainView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
     }
+    
+//    private var chartViewContent: some View {
+//        CleanCandlestickChartView(
+//            candles: chartController.allCandles,
+//            config: chartController.configuration
+//        )
+//        .frame(maxWidth: .infinity, maxHeight: .infinity)
+//        .onAppear {
+//            chartController.start()
+//        }
+//        .onDisappear {
+//            chartController.stop()
+//        }
+//    }
     
     /// Semi-transparent overlay that dims content when drawers are open
     private var overlayView: some View {
@@ -461,15 +478,13 @@ struct MainView: View {
 
 
 
-// MARK: - Chart View
-/// Placeholder for the main chart component
+
 struct chartView: View {
+
     var body: some View {
-        VStack {
-            Text("Chart UI")
-                .foregroundColor(.white)
-                .bold()
-        }
+        TradingChartView()
+            .ignoresSafeArea() // Full screen chart
+        
     }
 }
 
@@ -486,6 +501,7 @@ enum DrawerSide { case left, right }
 struct ChartBottomSheet: View {
     @State private var selectedView: ChartView = .symbol
     @Binding var selectedDetent: PresentationDetent
+    
     
     enum ChartView: String, CaseIterable {
         case symbol = "Symbol"
@@ -617,8 +633,7 @@ struct ChartBottomSheet: View {
         }
     }
     
-    // MARK: - Content Views
-    
+
     private var chartInfoContent: some View {
         VStack(spacing: 16) {
             VStack(spacing: 12) {

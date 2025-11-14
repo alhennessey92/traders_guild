@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D6DC228B2EC11B2E00EB2BB8 /* SwiftTA in Frameworks */ = {isa = PBXBuildFile; productRef = D6DC228A2EC11B2E00EB2BB8 /* SwiftTA */; };
+		D6DC228D2EC11B2E00EB2BB8 /* SwiftTradingView in Frameworks */ = {isa = PBXBuildFile; productRef = D6DC228C2EC11B2E00EB2BB8 /* SwiftTradingView */; };
+		D6DC228F2EC11B2E00EB2BB8 /* TALib in Frameworks */ = {isa = PBXBuildFile; productRef = D6DC228E2EC11B2E00EB2BB8 /* TALib */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		D60EC7812E280DB3005E2FF1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +58,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D6DC228F2EC11B2E00EB2BB8 /* TALib in Frameworks */,
+				D6DC228B2EC11B2E00EB2BB8 /* SwiftTA in Frameworks */,
+				D6DC228D2EC11B2E00EB2BB8 /* SwiftTradingView in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +121,9 @@
 			);
 			name = traders_guild;
 			packageProductDependencies = (
+				D6DC228A2EC11B2E00EB2BB8 /* SwiftTA */,
+				D6DC228C2EC11B2E00EB2BB8 /* SwiftTradingView */,
+				D6DC228E2EC11B2E00EB2BB8 /* TALib */,
 			);
 			productName = traders_guild;
 			productReference = D60EC7702E280DB2005E2FF1 /* traders_guild.app */;
@@ -195,6 +207,9 @@
 			);
 			mainGroup = D60EC7672E280DB2005E2FF1;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D6DC22892EC11B2E00EB2BB8 /* XCRemoteSwiftPackageReference "swift-trading-view" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D60EC7712E280DB2005E2FF1 /* Products */;
 			projectDirPath = "";
@@ -556,6 +571,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D6DC22892EC11B2E00EB2BB8 /* XCRemoteSwiftPackageReference "swift-trading-view" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sergiikhliustin/swift-trading-view.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D6DC228A2EC11B2E00EB2BB8 /* SwiftTA */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D6DC22892EC11B2E00EB2BB8 /* XCRemoteSwiftPackageReference "swift-trading-view" */;
+			productName = SwiftTA;
+		};
+		D6DC228C2EC11B2E00EB2BB8 /* SwiftTradingView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D6DC22892EC11B2E00EB2BB8 /* XCRemoteSwiftPackageReference "swift-trading-view" */;
+			productName = SwiftTradingView;
+		};
+		D6DC228E2EC11B2E00EB2BB8 /* TALib */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D6DC22892EC11B2E00EB2BB8 /* XCRemoteSwiftPackageReference "swift-trading-view" */;
+			productName = TALib;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D60EC7682E280DB2005E2FF1 /* Project object */;
 }
