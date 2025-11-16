@@ -25,6 +25,10 @@ struct TradingChartView: View {
     /// Prevents interference between Y-axis drag and normal chart pan
     @State private var isDraggingOnYAxis = false
     
+    /// Track if user is currently pinching on the Y-axis area
+    /// Prevents interference between Y-axis pinch and normal chart horizontal zoom
+    @State private var isPinchingOnYAxis = false
+    
     /// Starting Y position when beginning Y-axis drag
     /// Used to calculate relative drag distance for scaling
     @State private var yAxisDragStart: CGFloat = 0
@@ -217,6 +221,9 @@ struct TradingChartView: View {
                                                 let candle = chartData.candles[previewCandleIndex]
                                                 //print("✅ Placing marker at candle \(previewCandleIndex)")
                                                 
+                                                // Clear any existing selected marker to prevent conflicts
+                                                markerManager.selectedMarker = nil
+                                                
                                                 // Store marker info for sheet
                                                 pendingMarkerInfo = (previewCandleIndex, timestamp, candle.close)
                                                 
@@ -300,8 +307,8 @@ struct TradingChartView: View {
                         Color.clear
                             .frame(width: yAxisWidth)
                             .contentShape(Rectangle())
-                            .gesture(yAxisDragGesture)
-                            .simultaneousGesture(yAxisPinchGesture)
+                            .highPriorityGesture(yAxisDragGesture)
+                            .highPriorityGesture(yAxisPinchGesture)
                     }
                     
                     // PRICE INDICATOR
@@ -451,6 +458,7 @@ struct TradingChartView: View {
                     // Exit placement mode after marker is created or cancelled
                     isMarkerPlacementMode = false
                     isShowingSheet = false
+                    markerManager.selectedMarker = nil
                 }
             }
         }
@@ -567,8 +575,8 @@ struct TradingChartView: View {
     private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onEnded { value in
-                // Don't handle taps during special modes
-                guard !crosshairManager.isActive && !isMarkerPlacementMode else { return }
+                // Don't handle taps during special modes or when creation sheet is showing
+                guard !crosshairManager.isActive && !isMarkerPlacementMode && !showMarkerSheet && !isShowingSheet else { return }
                 
                 let location = value.location
                 
@@ -651,8 +659,8 @@ struct TradingChartView: View {
     private func pinchGesture(in size: CGSize) -> some Gesture {
         MagnificationGesture()
             .updating($pinchScale) { value, state, _ in
-                // Don't zoom during special modes
-                guard !crosshairManager.isActive && !isMarkerPlacementMode else { return }
+                // Don't zoom during special modes OR when pinching on Y-axis
+                guard !crosshairManager.isActive && !isMarkerPlacementMode && !isPinchingOnYAxis else { return }
                 
                 // Apply dampening to make zoom feel smoother
                 // Raw pinch values can be jumpy; dampening smooths them out
@@ -660,7 +668,7 @@ struct TradingChartView: View {
                 state = dampened
             }
             .onChanged { value in
-                guard !crosshairManager.isActive && !isMarkerPlacementMode else { return }
+                guard !crosshairManager.isActive && !isMarkerPlacementMode && !isPinchingOnYAxis else { return }
                 
                 // Apply dampening
                 let dampenedValue = 1.0 + (value - 1.0) * pinchSensitivity
@@ -697,6 +705,7 @@ struct TradingChartView: View {
     // MARK: - Y-Axis Gestures
     
     /// Drag gesture on Y-axis area for vertical price scaling
+    /// Ignores horizontal drag and zooming state.
     /// Drag up = compress price range (zoom in), Drag down = expand range (zoom out)
     /// Scaling is centered on the middle price of visible candles
     private var yAxisDragGesture: some Gesture {
@@ -709,16 +718,21 @@ struct TradingChartView: View {
                     initialPriceScale = gestureState.priceScale
                 }
                 
-                // Find visible candle range to calculate center price
-                // We want to keep the center of visible prices stable during scaling
-                let totalOffset = gestureState.panOffset.width + dragState.width
+                // Use the chart height and width from screen bounds for calculations
+                let chartHeight = UIScreen.main.bounds.height
+                let chartWidth = UIScreen.main.bounds.width
+                
+                // Calculate total horizontal pan offset WITHOUT active horizontal drag to avoid jitter
+                let totalOffset = gestureState.panOffset.width
+                
+                // Calculate visible candle range based on horizontal pan only
                 let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
                 let visibleEndIndex = Swift.min(
                     chartData.candles.count,
-                    visibleStartIndex + Int(UIScreen.main.bounds.width / totalCandleWidth) + 2
+                    visibleStartIndex + Int(chartWidth / totalCandleWidth) + 2
                 )
                 
-                // Get highest and lowest prices in visible range
+                // Extract visible candles to find price range extremes
                 let visibleCandles = Array(chartData.candles[visibleStartIndex..<visibleEndIndex])
                 let visibleHighs = visibleCandles.map { $0.high }
                 let visibleLows = visibleCandles.map { $0.low }
@@ -727,10 +741,10 @@ struct TradingChartView: View {
                 let centerPrice = (visibleMaxPrice + visibleMinPrice) / 2
                 
                 // Calculate center price position BEFORE scaling
-                let oldScaledHeight = UIScreen.main.bounds.height * gestureState.priceScale
+                let oldScaledHeight = chartHeight * gestureState.priceScale
                 let priceRange = chartData.priceRange
                 let normalizedCenterPrice = (centerPrice - priceRange.min) / (priceRange.max - priceRange.min)
-                let centerYBeforeScale = UIScreen.main.bounds.height -
+                let centerYBeforeScale = chartHeight -
                     (CGFloat(normalizedCenterPrice) * oldScaledHeight) -
                     gestureState.verticalPanOffset
                 
@@ -744,8 +758,8 @@ struct TradingChartView: View {
                 let clampedScale = Swift.min(3.0, Swift.max(0.5, newScale))
                 
                 // Calculate center price position AFTER scaling
-                let newScaledHeight = UIScreen.main.bounds.height * clampedScale
-                let centerYAfterScale = UIScreen.main.bounds.height -
+                let newScaledHeight = chartHeight * clampedScale
+                let centerYAfterScale = chartHeight -
                     (CGFloat(normalizedCenterPrice) * newScaledHeight) -
                     gestureState.verticalPanOffset
                 
@@ -760,6 +774,7 @@ struct TradingChartView: View {
     }
     
     /// Pinch gesture on Y-axis area for vertical price scaling
+    /// Ignores horizontal drag and zooming state.
     /// Alternative to drag gesture - uses two-finger pinch
     /// Same centering logic as drag but with pinch input
     private var yAxisPinchGesture: some Gesture {
@@ -770,14 +785,26 @@ struct TradingChartView: View {
                 state = dampened
             }
             .onChanged { value in
-                // Same centering logic as drag gesture
-                let totalOffset = gestureState.panOffset.width + dragState.width
+                // Mark that we're pinching on Y-axis to block main chart horizontal zoom
+                if !isPinchingOnYAxis {
+                    isPinchingOnYAxis = true
+                }
+                
+                // Use the chart height and width from screen bounds for calculations
+                let chartHeight = UIScreen.main.bounds.height
+                let chartWidth = UIScreen.main.bounds.width
+                
+                // Calculate total horizontal pan offset WITHOUT active horizontal drag to avoid jitter
+                let totalOffset = gestureState.panOffset.width
+                
+                // Calculate visible candle range based on horizontal pan only
                 let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
                 let visibleEndIndex = Swift.min(
                     chartData.candles.count,
-                    visibleStartIndex + Int(UIScreen.main.bounds.width / totalCandleWidth) + 2
+                    visibleStartIndex + Int(chartWidth / totalCandleWidth) + 2
                 )
                 
+                // Extract visible candles to find price range extremes
                 let visibleCandles = Array(chartData.candles[visibleStartIndex..<visibleEndIndex])
                 let visibleHighs = visibleCandles.map { $0.high }
                 let visibleLows = visibleCandles.map { $0.low }
@@ -785,27 +812,33 @@ struct TradingChartView: View {
                 let visibleMinPrice = visibleLows.min() ?? chartData.priceRange.min
                 let centerPrice = (visibleMaxPrice + visibleMinPrice) / 2
                 
-                let oldScaledHeight = UIScreen.main.bounds.height * gestureState.priceScale
+                // Calculate center price position BEFORE scaling
+                let oldScaledHeight = chartHeight * gestureState.priceScale
                 let priceRange = chartData.priceRange
                 let normalizedCenterPrice = (centerPrice - priceRange.min) / (priceRange.max - priceRange.min)
-                let centerYBeforeScale = UIScreen.main.bounds.height -
+                let centerYBeforeScale = chartHeight -
                     (CGFloat(normalizedCenterPrice) * oldScaledHeight) -
                     gestureState.verticalPanOffset
                 
+                // Apply dampened scaling factor
                 let dampenedValue = 1.0 + (value - 1.0) * (yAxisSensitivity * 0.7)
                 let newScale = gestureState.priceScale * dampenedValue
                 let clampedScale = Swift.min(3.0, Swift.max(0.5, newScale))
                 
-                let newScaledHeight = UIScreen.main.bounds.height * clampedScale
-                let centerYAfterScale = UIScreen.main.bounds.height -
+                // Calculate center price position AFTER scaling
+                let newScaledHeight = chartHeight * clampedScale
+                let centerYAfterScale = chartHeight -
                     (CGFloat(normalizedCenterPrice) * newScaledHeight) -
                     gestureState.verticalPanOffset
                 
+                // Adjust vertical offset to keep center price at same screen position
                 let offsetAdjustment = centerYAfterScale - centerYBeforeScale
                 gestureState.verticalPanOffset += offsetAdjustment
                 gestureState.priceScale = clampedScale
             }
-            .onEnded { _ in }
+            .onEnded { _ in
+                isPinchingOnYAxis = false
+            }
     }
     
     // MARK: - Axis Overlays
@@ -1059,4 +1092,3 @@ struct TradingChartView: View {
         }
     }
 }
-
