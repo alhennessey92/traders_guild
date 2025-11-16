@@ -335,6 +335,7 @@ struct ChartNavigationControls: View {
                 .foregroundColor(.white)
                 .cornerRadius(20)
             }
+            .padding(.top, 100)
             
             // Zoom controls
             ZoomControls(gestureState: gestureState)
