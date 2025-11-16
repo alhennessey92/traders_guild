@@ -9,7 +9,7 @@ import Foundation
 
 /// Represents a single candlestick in the trading chart
 /// Contains OHLC (Open, High, Low, Close) data plus timestamp and optional volume
-struct Candle: Identifiable {
+struct Candle: Identifiable, Equatable {
     let id = UUID()
     
     /// The opening price at the start of this time period
@@ -108,7 +108,7 @@ extension Candle {
     }
     
     /// Generate an array of sample candles for initial chart display
-    static func generateSampleData(count: Int = 100, startDate: Date = Date()) -> [Candle] {
+    static func generateSampleData(count: Int = 200, startDate: Date = Date()) -> [Candle] {
         var candles: [Candle] = []
         var currentPrice = 100.0 // Starting price at $100
         var currentDate = startDate

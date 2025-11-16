@@ -55,7 +55,7 @@ class ChartDataManager: ObservableObject {
     /// In production, this would load historical data from an API
     private func loadInitialData() {
         // Generate 100 candles of historical data
-        candles = Candle.generateSampleData(count: 100)
+        candles = Candle.generateSampleData(count: 200)
         
         // Update the price range based on loaded data
         updatePriceRange()
@@ -134,7 +134,7 @@ class ChartDataManager: ObservableObject {
         
         // Add 10% padding to the range for better visualization
         // This prevents candles from touching the top/bottom of the chart
-        let padding = (maxPrice - minPrice) * 0.1
+        let padding = (maxPrice - minPrice) * 0.6 // TODO: make this universal to adjust the padding in settings
         priceRange = (minPrice - padding, maxPrice + padding)
     }
     

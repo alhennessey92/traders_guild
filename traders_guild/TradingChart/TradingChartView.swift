@@ -1,167 +1,634 @@
-
-//
-//  TradingChartView.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 14/11/2025.
-//
-
 import SwiftUI
 
 /// Main trading chart view that handles all chart rendering and interactions
 /// Features centered scaling that keeps visible candles in view during zoom
+/// Includes marker placement system for collaborative chart annotations
 struct TradingChartView: View {
     // MARK: - State Properties
     
-    /// Gesture state manager that handles all transformations
+    /// Gesture state manager that handles all pan/zoom transformations
+    /// This is the single source of truth for chart positioning
     @StateObject private var gestureState = ChartGestureState()
     
-    /// Current drag translation for smooth panning feedback
+    /// Current drag translation for smooth real-time panning feedback
+    /// This is a @GestureState so it automatically resets when gesture ends
     @GestureState private var dragState: CGSize = .zero
     
-    /// Current pinch scale for smooth scaling feedback
+    /// Current pinch scale for smooth real-time horizontal zoom feedback
+    /// Dampened and combined with stored scale for natural feel
     @GestureState private var pinchScale: CGFloat = 1.0
     
-    /// Track if user is currently dragging on the Y-axis area for vertical scaling
+    /// Y-axis pinch scale for vertical price range scaling
+    @GestureState private var yAxisPinchScale: CGFloat = 1.0
+    
+    /// Track if user is currently dragging on the Y-axis area
+    /// Prevents interference between Y-axis drag and normal chart pan
     @State private var isDraggingOnYAxis = false
     
     /// Starting Y position when beginning Y-axis drag
+    /// Used to calculate relative drag distance for scaling
     @State private var yAxisDragStart: CGFloat = 0
     
-    /// The price scale value when starting Y-axis drag (for relative scaling)
+    /// The price scale value when starting Y-axis drag
+    /// Used as baseline for relative scaling calculations
     @State private var initialPriceScale: CGFloat = 1.0
     
-    /// Track the center of visible candles for centered scaling
+    /// Track the center of visible candles for centered scaling operations
     @State private var visibleCandlesCenter: CGFloat = 0
+    
+    // MARK: - Overlay Managers
+    
+    /// Manages all markers on the chart (creation, deletion, filtering)
+    @StateObject private var markerManager: MarkerManager
+    
+    /// Manages crosshair functionality for price inspection
+    /// Activated by long press, allows precise price/time reading
+    @StateObject private var crosshairManager = CrosshairManager()
+    
+    /// Manages chart navigation controls (auto-scroll, jump to latest, etc)
+    @StateObject private var navigationManager = ChartNavigationManager()
+    
+    // MARK: - UI State
+    
+    /// Whether the marker creation sheet is currently showing
+    @State private var showMarkerSheet = false
+    
+    /// Whether we're in marker placement mode (user is positioning new marker)
+    /// When true, drag gestures move the preview marker instead of panning chart
+    @State private var isMarkerPlacementMode = false
+    
+    /// Temporary storage for marker info before final creation
+    /// Contains candle index, timestamp, and price of pending marker
+    @State private var pendingMarkerInfo: (candleIndex: Int, timestamp: Date, price: Double)?
+    
+    /// Current candle index where the preview marker is positioned
+    /// Updates in real-time as user drags during placement mode
+    @State private var previewCandleIndex: Int = 0
+    
+    /// Prevents multiple sheet presentations when user taps rapidly
+    @State private var isShowingSheet = false
     
     // MARK: - Chart Configuration
     
-    /// Base width of each candle (before scaling)
+    /// Base width of each candle before any scaling is applied
+    /// This is the "normal" candle width at 1x zoom
     private let baseCandleWidth: CGFloat = 12
     
-    /// Spacing between candles
+    /// Spacing between adjacent candles
+    /// Creates visual separation for readability
     private let candleSpacing: CGFloat = 4
     
     /// Edge padding to prevent endless scrolling
-    /// User can scroll slightly beyond data bounds but not infinitely
+    /// Provides buffer space at chart boundaries
     private let edgePadding: CGFloat = 100
     
-    /// Width of the Y-axis interaction area
+    /// Width of the Y-axis interaction area on the right side
+    /// This area captures vertical drag/pinch gestures for price scaling
     private let yAxisWidth: CGFloat = 60
     
-    /// Chart view model that manages candlestick data
+    /// Chart data manager that generates and maintains candlestick data
+    /// Handles real-time data generation and price range calculations
     @StateObject private var chartData = ChartDataManager()
     
     // MARK: - Sensitivity Configuration
     
-    /// Dampening factor for pinch gesture (lower = less sensitive)
-    private let pinchSensitivity: CGFloat = 0.25
+    /// Dampening factor for horizontal pinch gesture (0.0 to 1.0)
+    /// Lower = less sensitive and smoother, Higher = more responsive but jittery
+    /// 0.15 provides a good balance for production use
+    private let pinchSensitivity: CGFloat = 0.15
     
-    /// Dampening factor for Y-axis drag (lower = less sensitive)
-    private let yAxisSensitivity: CGFloat = 0.3
+    /// Dampening factor for Y-axis drag scaling (0.0 to 1.0)
+    /// Controls how quickly vertical drag changes price scale
+    /// 0.15 makes scaling feel controlled and predictable
+    private let yAxisSensitivity: CGFloat = 0.15
     
     // MARK: - Computed Properties
     
-    /// Actual width of each candle including current scale
-    /// This combines base width with both stored scale and active pinch gesture
+    /// Actual width of each candle including current zoom scale
+    /// Combines base width, stored scale, and active pinch gesture
+    /// This is what's actually rendered on screen
     private var actualCandleWidth: CGFloat {
         baseCandleWidth * gestureState.candleWidthScale * pinchScale
     }
     
     /// Total width per candle including spacing
+    /// Used for all positioning calculations throughout the chart
     private var totalCandleWidth: CGFloat {
         actualCandleWidth + candleSpacing
     }
     
-    /// Calculate the center index of currently visible candles
-    /// This is used for centered scaling to keep visible candles in view
-    private func calculateVisibleCenter(in width: CGFloat) -> CGFloat {
-        let totalOffset = gestureState.panOffset.width + dragState.width
-        let visibleStartIndex = -totalOffset / totalCandleWidth
-        let visibleCount = width / totalCandleWidth
-        return visibleStartIndex + (visibleCount / 2)
+    /// Calculate clamped vertical offset that respects pan limits
+    /// Prevents user from panning too far up or down
+    /// Provides natural boundaries to vertical movement
+    private func clampedVerticalOffset(chartHeight: CGFloat) -> CGFloat {
+        // Combine stored offset with active drag gesture
+        let totalOffset = gestureState.verticalPanOffset + dragState.height
+        
+        // Calculate scaled height to determine valid pan range
+        let scaledHeight = chartHeight * gestureState.priceScale
+        
+        // Allow panning up to 50% of scaled height in either direction
+        let verticalPadding = scaledHeight * 0.5
+        
+        // Clamp the offset to valid range
+        return Swift.min(verticalPadding, Swift.max(-verticalPadding, totalOffset))
     }
     
-    /// Calculate clamped vertical offset that respects pan limits
-    /// This prevents panning beyond reasonable bounds in real-time
-    private func clampedVerticalOffset(chartHeight: CGFloat) -> CGFloat {
-        let totalOffset = gestureState.verticalPanOffset + dragState.height
-        let scaledHeight = chartHeight * gestureState.priceScale
-        let verticalPadding = scaledHeight * 0.5
-        return Swift.min(verticalPadding, Swift.max(-verticalPadding, totalOffset))
+    // MARK: - Initialization
+    
+    /// Initialize the trading chart view with user and guild context
+    /// - Parameters:
+    ///   - userId: Current user's ID for marker ownership
+    ///   - username: Current user's display name
+    ///   - guildId: Guild context for marker filtering
+    init(userId: String = "user123", username: String = "TestUser", guildId: String = "guild1") {
+        // Initialize marker manager with user context
+        _markerManager = StateObject(wrappedValue: MarkerManager(userId: userId, guildId: guildId))
     }
     
     // MARK: - Body
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Black background for professional trading chart appearance
-                Color.black
-                    .ignoresSafeArea()
+        ZStack {
+            // GeometryReader provides the available chart space
+            // This is the canvas we draw everything on
+            GeometryReader { geometry in
+                // Create coordinate system for converting between screen and chart coordinates
+                // This handles all the math for positioning elements correctly
+                let coordinateSystem = ChartCoordinateSystem(
+                    chartData: chartData,
+                    gestureState: gestureState,
+                    chartSize: geometry.size,
+                    baseCandleWidth: baseCandleWidth,
+                    candleSpacing: candleSpacing
+                )
                 
-                // Main chart canvas where all drawing happens
-                Canvas { context, size in
-                    drawChart(
-                        context: context,
-                        size: size,
-                        geometry: geometry
+                // Update coordinate system with live gesture state
+                // This ensures real-time accuracy during active gestures
+                let _ = coordinateSystem.updateLiveState(dragState: dragState, pinchScale: pinchScale)
+                
+                ZStack {
+                    // Black background for professional trading chart appearance
+                    Color.black.ignoresSafeArea()
+                    
+                    // MAIN CHART CANVAS
+                    // Draws: grid, candlesticks, and placed markers
+                    // Does NOT draw preview marker (that's a SwiftUI overlay for smooth updates)
+                    Canvas { context, size in
+                        drawChart(context: context, size: size, geometry: geometry)
+                    }
+                    .contentShape(Rectangle()) // Make entire canvas tappable/draggable
+                    // Only redraw Canvas when markers are added/removed or data changes
+                    // NOT when preview is dragging (that's SwiftUI overlay)
+                    .id("\(markerManager.markers.count)-\(chartData.candles.count)")
+                    
+                    // MARKER PLACEMENT OVERLAY
+                    // This entire section is SwiftUI (not Canvas) for instant updates
+                    // Shows preview marker and handles drag-to-position interaction
+                    if isMarkerPlacementMode {
+                        ZStack {
+                            // Full-screen transparent overlay that captures ALL drag gestures
+                            // This prevents chart pan gestures from interfering with marker placement
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    // Drag gesture with NO minimum distance = instant response
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            // Convert screen X position to candle index
+                                            if let index = coordinateSystem.candleIndex(atXPosition: value.location.x) {
+                                                // Ensure index is within valid bounds
+                                                let clampedIndex = max(0, min(chartData.candles.count - 1, index))
+                                                // Update preview position (SwiftUI will animate)
+                                                previewCandleIndex = clampedIndex
+                                                //print("👆 Dragging to candle \(clampedIndex)")
+                                            }
+                                        }
+                                        .onEnded { value in
+                                            // User released - confirm marker placement
+                                            // Check if sheet is already showing to prevent duplicates
+                                            guard !isShowingSheet else { return }
+                                            
+                                            // Validate candle index and get timestamp
+                                            if let timestamp = coordinateSystem.timestamp(forCandleIndex: previewCandleIndex),
+                                               previewCandleIndex >= 0,
+                                               previewCandleIndex < chartData.candles.count {
+                                                
+                                                let candle = chartData.candles[previewCandleIndex]
+                                                //print("✅ Placing marker at candle \(previewCandleIndex)")
+                                                
+                                                // Store marker info for sheet
+                                                pendingMarkerInfo = (previewCandleIndex, timestamp, candle.close)
+                                                
+                                                // Show creation sheet
+                                                isShowingSheet = true
+                                                showMarkerSheet = true
+                                            }
+                                        }
+                                )
+                                .allowsHitTesting(true) // CRITICAL: Must receive touches
+                            
+                            // PREVIEW MARKER - SwiftUI overlay for instant updates
+                            // This is NOT in Canvas so it updates immediately as you drag
+                            if previewCandleIndex >= 0 && previewCandleIndex < chartData.candles.count {
+                                let candle = chartData.candles[previewCandleIndex]
+                                
+                                // Calculate X position using SAME formula as Canvas candlesticks
+                                // REPLACED by coordinate system call as requested
+                                let x = coordinateSystem.xCenterPosition(forCandleIndex: previewCandleIndex)
+                                
+                                // Calculate Y position above the candle's high point
+                                // REPLACED manual coordinate math with coordinate system call
+                                let markerY = coordinateSystem.yPosition(forPrice: candle.high) - 30
+                                
+                                // DEBUG: Log preview coordinates
+                                //print("🧭 Preview index \(previewCandleIndex), x=\(x), y=\(markerY), width=\(geometry.size.width), height=\(geometry.size.height)")
+                                
+                                if x >= -50 && x <= geometry.size.width + 50 {
+                                    ZStack {
+                                        // Large blue circle background
+                                        Circle()
+                                            .fill(Color.blue)
+                                            .frame(width: 40, height: 40)
+                                            .overlay(
+                                                // White border for visibility
+                                                Circle()
+                                                    .stroke(Color.white, lineWidth: 3)
+                                            )
+                                        
+                                        // White center dot
+                                        Circle()
+                                            .fill(Color.white)
+                                            .frame(width: 12, height: 12)
+                                        
+                                        // Info box showing time and price
+                                        VStack(spacing: 2) {
+                                            Text(candle.timestamp.chartTimeLabel)
+                                                .font(.caption2)
+                                                .foregroundColor(.white)
+                                            Text(candle.close.formattedPrice)
+                                                .font(.caption)
+                                                .fontWeight(.bold)
+                                                .foregroundColor(.white)
+                                        }
+                                        .padding(4)
+                                        .background(Color.blue)
+                                        .cornerRadius(4)
+                                        .offset(y: 40) // Position below marker circle
+                                    }
+                                    .position(x: x, y: markerY) // Absolute positioning
+                                }
+                            }
+                        }
+                    }
+                    
+                    // FIXED Y-AXIS OVERLAY
+                    // Shows price labels on the right side
+                    // Stays fixed during horizontal panning
+                    yAxisOverlay(geometry: geometry)
+                    
+                    // FIXED X-AXIS OVERLAY
+                    // Shows time labels at the bottom
+                    // Moves with horizontal pan to stay aligned with candles
+                    xAxisOverlay(geometry: geometry)
+                    
+                    // Y-AXIS INTERACTION OVERLAY
+                    // Invisible overlay on right side that captures vertical scaling gestures
+                    // Allows users to drag/pinch on Y-axis to scale price range
+                    HStack {
+                        Spacer()
+                        Color.clear
+                            .frame(width: yAxisWidth)
+                            .contentShape(Rectangle())
+                            .gesture(yAxisDragGesture)
+                            .simultaneousGesture(yAxisPinchGesture)
+                    }
+                    
+                    // PRICE INDICATOR
+                    // Shows current/latest price with animated movement
+                    // Follows price changes in real-time
+                    PriceIndicatorView(
+                        currentPrice: chartData.currentPrice,
+                        priceScale: gestureState.priceScale,
+                        verticalOffset: clampedVerticalOffset(chartHeight: geometry.size.height),
+                        chartHeight: geometry.size.height,
+                        priceRange: chartData.priceRange
                     )
+                    
+                    // CROSSHAIR OVERLAY
+                    // Activated by long press for precise price inspection
+                    // Shows exact price and time at touch location
+                    CrosshairView(
+                        crosshairManager: crosshairManager,
+                        chartSize: geometry.size
+                    )
+                    
+                    // INSTRUCTION BANNER
+                    // Shown during marker placement mode
+                    // Tells user how to place marker and provides cancel button
+                    if isMarkerPlacementMode {
+                        VStack {
+                            HStack {
+                                Spacer()
+                                
+                                // Instruction text
+                                Text("Drag to position, release to place")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding()
+                                    .background(Color.blue)
+                                    .cornerRadius(12)
+                                
+                                Spacer()
+                                
+                                // Cancel button to exit placement mode
+                                Button(action: {
+                                    withAnimation {
+                                        isMarkerPlacementMode = false
+                                    }
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 30))
+                                        .foregroundColor(.red)
+                                }
+                                .padding(.trailing)
+                            }
+                            .padding(.top, 60)
+                            Spacer()
+                        }
+                        .allowsHitTesting(false) // Let touches pass through to marker drag overlay
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    
+                    // NAVIGATION CONTROLS
+                    // Top-right corner controls for auto-scroll, jump to latest, etc.
+                    VStack {
+                        HStack {
+                            Spacer()
+                            ChartNavigationControls(
+                                navigationManager: navigationManager,
+                                gestureState: gestureState,
+                                chartData: chartData,
+                                chartWidth: geometry.size.width,
+                                baseCandleWidth: baseCandleWidth
+                            )
+                        }
+                        Spacer()
+                    }
                 }
-                // Apply gestures to the canvas
-                .gesture(dragGesture(in: geometry.size))
+                // GESTURE LAYER
+                // These gestures only apply when NOT in marker placement mode
+                // Order matters: crosshair has priority, then tap, then pan/zoom
+                .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
+                .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
+                .simultaneousGesture(dragGesture(in: geometry.size))
                 .simultaneousGesture(pinchGesture(in: geometry.size))
                 
-                // Fixed Y-axis overlay (stays on right side)
-                yAxisOverlay(geometry: geometry)
-                
-                // Fixed X-axis overlay (stays at bottom)
-                xAxisOverlay(geometry: geometry)
-                
-                // Y-axis interaction overlay for vertical scaling
-                // This is an invisible area on the right side of the chart
-                HStack {
+                // BOTTOM TOOLBAR
+                // Contains marker placement button and reset zoom button
+                VStack {
                     Spacer()
-                    Color.clear
-                        .frame(width: yAxisWidth)
-                        .contentShape(Rectangle()) // Ensure full height is tappable
-                        .gesture(yAxisDragGesture)
+                    HStack(spacing: 20) {
+                        // Marker placement toggle button
+                        Button(action: {
+                            withAnimation {
+                                // Toggle placement mode
+                                isMarkerPlacementMode.toggle()
+                                
+                                if isMarkerPlacementMode {
+                                    // Start preview at CENTER of currently visible area
+                                    // This ensures marker appears where user is looking
+                                    previewCandleIndex = centerCandleIndex(using: coordinateSystem, chartWidth: geometry.size.width)
+                                    print("📍 Marker placement mode ON - preview at candle \(previewCandleIndex)")
+                                } else {
+                                    print("📍 Marker placement mode OFF")
+                                }
+                            }
+                        }) {
+                            VStack(spacing: 2) {
+                                // Icon changes when placement mode is active
+                                Image(systemName: isMarkerPlacementMode ? "mappin.circle.fill" : "mappin.circle")
+                                    .font(.system(size: 24))
+                                Text("Marker")
+                                    .font(.caption2)
+                            }
+                        }
+                        .foregroundColor(isMarkerPlacementMode ? .blue : .white)
+                        
+                        // Reset zoom and pan button
+                        Button(action: {
+                            gestureState.reset()
+                        }) {
+                            VStack(spacing: 2) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 24))
+                                Text("Reset")
+                                    .font(.caption2)
+                            }
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    .padding(.bottom, 80)
                 }
-                
-                // Price indicator overlay showing current/latest price
-                PriceIndicatorView(
-                    currentPrice: chartData.currentPrice,
-                    priceScale: gestureState.priceScale,
-                    verticalOffset: clampedVerticalOffset(chartHeight: geometry.size.height),
-                    chartHeight: geometry.size.height,
-                    priceRange: chartData.priceRange
-                )
             }
         }
+        // MARKER CREATION SHEET
+        // Shows when user releases marker preview
+        // Allows user to select marker type and add notes
+        .sheet(isPresented: $showMarkerSheet) {
+            if let info = pendingMarkerInfo {
+                MarkerCreationSheet(
+                    markerManager: markerManager,
+                    candleIndex: info.candleIndex,
+                    timestamp: info.timestamp,
+                    price: info.price,
+                    username: "TestUser"
+                )
+                .onDisappear {
+                    // Exit placement mode after marker is created or cancelled
+                    isMarkerPlacementMode = false
+                    isShowingSheet = false
+                }
+            }
+        }
+        // MARKER DETAIL SHEET
+        // Shows when user taps an existing marker
+        // Displays marker info and allows editing/deletion for own markers
+        .sheet(item: $markerManager.selectedMarker) { marker in
+            MarkerDetailSheet(
+                markerManager: markerManager,
+                marker: marker,
+                currentUserId: "user123"
+            )
+        }
         .onAppear {
-            // Start generating real-time data when view appears
+            // Start generating real-time candle data when view appears
             chartData.startDataGeneration()
         }
     }
     
-    // MARK: - Gestures
+    // MARK: - Helper Functions
     
-    /// Drag gesture for panning the chart in all directions
-    /// This allows users to explore historical data and adjust vertical position
-    private func dragGesture(in size: CGSize) -> some Gesture {
+    /// Calculate which candle is at the center of the current visible area
+    /// This ensures marker preview starts where the user is actually looking
+    /// Uses visible range calculation instead of screen center math
+    /// - Parameter geometry: The geometry of the chart view
+    /// - Returns: Clamped candle index at the center of visible range
+    private func getCenterVisibleCandleIndex(geometry: GeometryProxy) -> Int {
+        // Get current pan offset (includes both stored and active drag)
+        let totalOffset = gestureState.panOffset.width + dragState.width
+        
+        // Calculate which candles are currently visible on screen
+        // Start index: first candle visible on left edge
+        let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
+        
+        // End index: last candle visible on right edge (plus buffer)
+        let visibleEndIndex = Swift.min(
+            chartData.candles.count,
+            visibleStartIndex + Int(geometry.size.width / totalCandleWidth) + 2
+        )
+        
+        // Return the middle candle of the visible range
+        // This is where the user is most likely looking
+        let middleIndex = (visibleStartIndex + visibleEndIndex) / 2
+        
+        // Clamp to valid array bounds
+        let clampedIndex = max(0, min(chartData.candles.count - 1, middleIndex))
+        
+        print("📍 Visible range: \(visibleStartIndex) to \(visibleEndIndex)")
+        print("📍 Center candle: \(clampedIndex) of \(chartData.candles.count)")
+        
+        return clampedIndex
+    }
+    
+    /// Compute the candle index at the actual screen center using the coordinate system
+    /// - Parameters:
+    ///   - coordinateSystem: The chart coordinate system configured with live gesture state
+    ///   - chartWidth: The current width of the chart view
+    /// - Returns: A clamped candle index at the screen center
+    private func centerCandleIndex(using coordinateSystem: ChartCoordinateSystem, chartWidth: CGFloat) -> Int {
+        let centerX = chartWidth / 2
+        if let idx = coordinateSystem.candleIndex(atXPosition: centerX) {
+            return max(0, min(chartData.candles.count - 1, idx))
+        }
+        return max(0, min(chartData.candles.count - 1, chartData.candles.count / 2))
+    }
+    
+    // MARK: - Crosshair Gesture
+    
+    /// Long press gesture for activating crosshair (price inspection tool)
+    /// User must hold for 0.5 seconds, then can drag to inspect different prices
+    /// - Parameter coordinateSystem: Coordinate converter for screen<->chart mapping
+    /// - Returns: Combined long press + drag gesture
+    private func crosshairGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.5)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { value in
+                switch value {
+                case .second(true, let drag):
+                    // Long press succeeded, now user is dragging
+                    if let location = drag?.location {
+                        if !crosshairManager.isActive {
+                            // First activation - show crosshair at touch location
+                            crosshairManager.activate(
+                                at: location,
+                                coordinateSystem: coordinateSystem,
+                                chartData: chartData
+                            )
+                        } else {
+                            // Already active - update position as user drags
+                            crosshairManager.updatePosition(
+                                location,
+                                coordinateSystem: coordinateSystem,
+                                chartData: chartData
+                            )
+                        }
+                    }
+                default:
+                    break
+                }
+            }
+            .onEnded { _ in
+                // User released - hide crosshair
+                crosshairManager.deactivate()
+            }
+    }
+    
+    // MARK: - Tap Gesture for Markers
+    
+    /// Detect taps on existing markers to show their details
+    /// Checks if tap location is within 30 points of any marker
+    /// Only works when not in crosshair or placement mode
+    /// - Parameter geometry: Chart view geometry for position calculations
+    /// - Returns: Tap gesture that selects markers
+    private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
         DragGesture(minimumDistance: 0)
+            .onEnded { value in
+                // Don't handle taps during special modes
+                guard !crosshairManager.isActive && !isMarkerPlacementMode else { return }
+                
+                let location = value.location
+                
+                // Calculate current chart offsets for marker positioning
+                let totalOffset = gestureState.panOffset.width + dragState.width
+                let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
+                let scaledHeight = geometry.size.height * gestureState.priceScale
+                
+                // Check each visible marker to see if it was tapped
+                for marker in markerManager.filteredMarkers {
+                    // Skip markers with invalid candle indices
+                    guard marker.candleIndex < chartData.candles.count else { continue }
+                    
+                    // Calculate marker's current screen position
+                    // Uses same formula as Canvas drawing for perfect alignment
+                    let markerX = CGFloat(marker.candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+                    let candle = chartData.candles[marker.candleIndex]
+                    let markerY = geometry.size.height -
+                        (CGFloat(candle.high - chartData.priceRange.min) /
+                         CGFloat(chartData.priceRange.max - chartData.priceRange.min)) *
+                        scaledHeight - totalVerticalOffset - 30
+                    
+                    // Calculate distance from tap to marker center
+                    let distance = hypot(location.x - markerX, location.y - markerY)
+                    
+                    // If tap is within 30 points, select this marker
+                    if distance <= 30 {
+                        markerManager.selectedMarker = marker
+                        return // Found a marker, stop checking
+                    }
+                }
+            }
+    }
+    
+    // MARK: - Pan Gesture
+    
+    /// Drag gesture for panning the chart horizontally and vertically
+    /// Only active when NOT in Y-axis drag, crosshair, or marker placement modes
+    /// Requires 10pt movement to distinguish from tap gestures
+    /// - Parameter size: Chart view size for boundary calculations
+    /// - Returns: Pan drag gesture
+    private func dragGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 10)
             .updating($dragState) { value, state, _ in
-                // Only update if not dragging on Y-axis (for scaling)
-                if !isDraggingOnYAxis {
-                    // Reverse vertical direction for natural feel (drag up = chart moves up)
+                // Only update drag state if not in special modes
+                if !isDraggingOnYAxis && !crosshairManager.isActive && !isMarkerPlacementMode {
+                    // Reverse vertical direction for natural feel
+                    // (drag up = chart moves up, revealing lower prices)
                     state = CGSize(width: value.translation.width, height: -value.translation.height)
                 }
             }
             .onEnded { value in
-                // Apply the final translation with limits
-                if !isDraggingOnYAxis {
-                    // Reverse vertical direction for natural feel
-                    let adjustedTranslation = CGSize(width: value.translation.width, height: -value.translation.height)
+                // Apply final pan position when gesture ends
+                if !isDraggingOnYAxis && !crosshairManager.isActive && !isMarkerPlacementMode {
+                    let adjustedTranslation = CGSize(
+                        width: value.translation.width,
+                        height: -value.translation.height
+                    )
+                    
+                    // Update stored pan offset with boundary clamping
                     gestureState.applyPan(
                         translation: adjustedTranslation,
                         chartWidth: size.width,
@@ -174,122 +641,204 @@ struct TradingChartView: View {
             }
     }
     
-    /// Pinch gesture that ONLY affects horizontal scale (candle width)
-    /// This scales around the center of visible candles to keep them in view
-    /// Now with reduced sensitivity for better control
+    // MARK: - Pinch Gesture
+    
+    /// Pinch gesture for horizontal zoom (changes candle width)
+    /// Zoom is centered on screen center to keep visible candles in view
+    /// Dampened for smooth, controlled zooming
+    /// - Parameter size: Chart view size for center calculations
+    /// - Returns: Magnification pinch gesture
     private func pinchGesture(in size: CGSize) -> some Gesture {
         MagnificationGesture()
             .updating($pinchScale) { value, state, _ in
-                // Apply dampening to make it less sensitive
+                // Don't zoom during special modes
+                guard !crosshairManager.isActive && !isMarkerPlacementMode else { return }
+                
+                // Apply dampening to make zoom feel smoother
+                // Raw pinch values can be jumpy; dampening smooths them out
                 let dampened = 1.0 + (value - 1.0) * pinchSensitivity
                 state = dampened
             }
             .onChanged { value in
+                guard !crosshairManager.isActive && !isMarkerPlacementMode else { return }
+                
                 // Apply dampening
                 let dampenedValue = 1.0 + (value - 1.0) * pinchSensitivity
                 
-                // Calculate the center of visible candles before scaling
-                let centerIndex = calculateVisibleCenter(in: size.width)
+                // Calculate which candle is at screen center BEFORE zoom
+                let screenCenterX = size.width / 2
+                let totalOffset = gestureState.panOffset.width + dragState.width
                 
-                // Store the position of this center candle before scaling
                 let oldCandleWidth = baseCandleWidth * gestureState.candleWidthScale
-                let oldPosition = centerIndex * (oldCandleWidth + candleSpacing)
+                let oldTotalWidth = oldCandleWidth + candleSpacing
+                let centerCandleIndex = (screenCenterX - totalOffset) / oldTotalWidth
+                let oldCandlePosition = centerCandleIndex * oldTotalWidth + totalOffset
                 
-                // Apply the scale (clamped to reasonable limits)
+                // Apply new zoom level with limits (0.3x to 3x)
                 let newScale = gestureState.candleWidthScale * dampenedValue
                 let clampedScale = Swift.min(3.0, Swift.max(0.3, newScale))
                 
-                // Calculate new position after scaling
+                // Calculate where center candle WOULD BE after zoom
                 let newCandleWidth = baseCandleWidth * clampedScale
-                let newPosition = centerIndex * (newCandleWidth + candleSpacing)
+                let newTotalWidth = newCandleWidth + candleSpacing
+                let newCandlePosition = centerCandleIndex * newTotalWidth + totalOffset
                 
-                // Adjust pan offset to keep the center candle in the same screen position
-                // This creates the effect of scaling around the visible center
-                let offsetAdjustment = oldPosition - newPosition
+                // Adjust pan offset to keep center candle at screen center
+                // This is what makes the zoom feel "centered" instead of anchored to left
+                let offsetAdjustment = oldCandlePosition - newCandlePosition
                 gestureState.panOffset.width += offsetAdjustment
                 
                 // Apply the new scale
                 gestureState.candleWidthScale = clampedScale
             }
-            .onEnded { value in
-                // Finalize the scale when gesture ends
-                let dampenedValue = 1.0 + (value - 1.0) * pinchSensitivity
-                let centerIndex = calculateVisibleCenter(in: size.width)
-                let oldCandleWidth = baseCandleWidth * gestureState.candleWidthScale
-                let oldPosition = centerIndex * (oldCandleWidth + candleSpacing)
-                
-                let newScale = gestureState.candleWidthScale * dampenedValue
-                let clampedScale = Swift.min(3.0, Swift.max(0.3, newScale))
-                
-                let newCandleWidth = baseCandleWidth * clampedScale
-                let newPosition = centerIndex * (newCandleWidth + candleSpacing)
-                
-                let offsetAdjustment = oldPosition - newPosition
-                gestureState.panOffset.width += offsetAdjustment
-                gestureState.candleWidthScale = clampedScale
-            }
+            .onEnded { _ in }
     }
     
-    /// Drag gesture on the Y-axis area for vertical scaling
-    /// This allows users to compress/expand the price range
-    /// Now with reduced sensitivity
+    // MARK: - Y-Axis Gestures
+    
+    /// Drag gesture on Y-axis area for vertical price scaling
+    /// Drag up = compress price range (zoom in), Drag down = expand range (zoom out)
+    /// Scaling is centered on the middle price of visible candles
     private var yAxisDragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
+                // Initialize drag tracking on first movement
                 if !isDraggingOnYAxis {
-                    // First touch - record starting position and current scale
                     isDraggingOnYAxis = true
                     yAxisDragStart = value.startLocation.y
                     initialPriceScale = gestureState.priceScale
                 }
                 
-                // Calculate how far user has dragged
-                let dragDistance = value.location.y - yAxisDragStart
+                // Find visible candle range to calculate center price
+                // We want to keep the center of visible prices stable during scaling
+                let totalOffset = gestureState.panOffset.width + dragState.width
+                let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
+                let visibleEndIndex = Swift.min(
+                    chartData.candles.count,
+                    visibleStartIndex + Int(UIScreen.main.bounds.width / totalCandleWidth) + 2
+                )
                 
-                // Apply dampened scale factor (less sensitive)
-                // Positive drag (down) = zoom out, negative drag (up) = zoom in
+                // Get highest and lowest prices in visible range
+                let visibleCandles = Array(chartData.candles[visibleStartIndex..<visibleEndIndex])
+                let visibleHighs = visibleCandles.map { $0.high }
+                let visibleLows = visibleCandles.map { $0.low }
+                let visibleMaxPrice = visibleHighs.max() ?? chartData.priceRange.max
+                let visibleMinPrice = visibleLows.min() ?? chartData.priceRange.min
+                let centerPrice = (visibleMaxPrice + visibleMinPrice) / 2
+                
+                // Calculate center price position BEFORE scaling
+                let oldScaledHeight = UIScreen.main.bounds.height * gestureState.priceScale
+                let priceRange = chartData.priceRange
+                let normalizedCenterPrice = (centerPrice - priceRange.min) / (priceRange.max - priceRange.min)
+                let centerYBeforeScale = UIScreen.main.bounds.height -
+                    (CGFloat(normalizedCenterPrice) * oldScaledHeight) -
+                    gestureState.verticalPanOffset
+                
+                // Calculate scale factor from drag distance
+                // Drag up (negative) = increase scale = compress price range
+                let dragDistance = value.location.y - yAxisDragStart
                 let scaleFactor = 1.0 - (dragDistance / 500.0) * yAxisSensitivity
                 
-                // Apply the scale with limits
+                // Apply scale with limits (0.5x to 3x)
                 let newScale = initialPriceScale * scaleFactor
-                gestureState.priceScale = Swift.min(3.0, Swift.max(0.5, newScale))
+                let clampedScale = Swift.min(3.0, Swift.max(0.5, newScale))
+                
+                // Calculate center price position AFTER scaling
+                let newScaledHeight = UIScreen.main.bounds.height * clampedScale
+                let centerYAfterScale = UIScreen.main.bounds.height -
+                    (CGFloat(normalizedCenterPrice) * newScaledHeight) -
+                    gestureState.verticalPanOffset
+                
+                // Adjust vertical offset to keep center price at same screen position
+                let offsetAdjustment = centerYAfterScale - centerYBeforeScale
+                gestureState.verticalPanOffset += offsetAdjustment
+                gestureState.priceScale = clampedScale
             }
             .onEnded { _ in
                 isDraggingOnYAxis = false
             }
     }
     
-    // MARK: - Fixed Axis Overlays
+    /// Pinch gesture on Y-axis area for vertical price scaling
+    /// Alternative to drag gesture - uses two-finger pinch
+    /// Same centering logic as drag but with pinch input
+    private var yAxisPinchGesture: some Gesture {
+        MagnificationGesture()
+            .updating($yAxisPinchScale) { value, state, _ in
+                // Apply dampening for smooth pinch
+                let dampened = 1.0 + (value - 1.0) * (yAxisSensitivity * 0.7)
+                state = dampened
+            }
+            .onChanged { value in
+                // Same centering logic as drag gesture
+                let totalOffset = gestureState.panOffset.width + dragState.width
+                let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
+                let visibleEndIndex = Swift.min(
+                    chartData.candles.count,
+                    visibleStartIndex + Int(UIScreen.main.bounds.width / totalCandleWidth) + 2
+                )
+                
+                let visibleCandles = Array(chartData.candles[visibleStartIndex..<visibleEndIndex])
+                let visibleHighs = visibleCandles.map { $0.high }
+                let visibleLows = visibleCandles.map { $0.low }
+                let visibleMaxPrice = visibleHighs.max() ?? chartData.priceRange.max
+                let visibleMinPrice = visibleLows.min() ?? chartData.priceRange.min
+                let centerPrice = (visibleMaxPrice + visibleMinPrice) / 2
+                
+                let oldScaledHeight = UIScreen.main.bounds.height * gestureState.priceScale
+                let priceRange = chartData.priceRange
+                let normalizedCenterPrice = (centerPrice - priceRange.min) / (priceRange.max - priceRange.min)
+                let centerYBeforeScale = UIScreen.main.bounds.height -
+                    (CGFloat(normalizedCenterPrice) * oldScaledHeight) -
+                    gestureState.verticalPanOffset
+                
+                let dampenedValue = 1.0 + (value - 1.0) * (yAxisSensitivity * 0.7)
+                let newScale = gestureState.priceScale * dampenedValue
+                let clampedScale = Swift.min(3.0, Swift.max(0.5, newScale))
+                
+                let newScaledHeight = UIScreen.main.bounds.height * clampedScale
+                let centerYAfterScale = UIScreen.main.bounds.height -
+                    (CGFloat(normalizedCenterPrice) * newScaledHeight) -
+                    gestureState.verticalPanOffset
+                
+                let offsetAdjustment = centerYAfterScale - centerYBeforeScale
+                gestureState.verticalPanOffset += offsetAdjustment
+                gestureState.priceScale = clampedScale
+            }
+            .onEnded { _ in }
+    }
     
-    /// Y-axis overlay that stays fixed on the right side
-    /// Only moves vertically with vertical pan
+    // MARK: - Axis Overlays
+    
+    /// Y-axis overlay showing price labels
+    /// Stays fixed on right side while chart pans horizontally
+    /// Moves vertically with price scaling
+    /// - Parameter geometry: Chart view geometry
+    /// - Returns: Y-axis label overlay view
     @ViewBuilder
     private func yAxisOverlay(geometry: GeometryProxy) -> some View {
         HStack {
             Spacer()
-            
             Canvas { context, size in
                 let priceRange = chartData.priceRange
                 let scaledHeight = geometry.size.height * gestureState.priceScale
                 let priceStep = (priceRange.max - priceRange.min) / 10
-                
-                // Only apply vertical offset, no horizontal movement
                 let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
                 
+                // Draw 10 evenly-spaced price labels
                 for i in 0...10 {
                     let price = priceRange.min + (priceStep * Double(i))
-                    
-                    // Calculate Y position with scale and offset
-                    let y = size.height - (CGFloat(price - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
+                    let y = size.height -
+                        (CGFloat(price - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) *
+                        scaledHeight - totalVerticalOffset
                     
                     // Only draw labels that are visible on screen
                     if y >= -20 && y <= size.height + 20 {
-                        // Draw price label
                         context.draw(
                             Text(String(format: "%.2f", price))
                                 .font(.system(size: 10))
                                 .foregroundColor(.gray),
-                            at: CGPoint(x: 30, y: y) // Fixed X position
+                            at: CGPoint(x: 30, y: y)
                         )
                     }
                 }
@@ -297,49 +846,45 @@ struct TradingChartView: View {
             .frame(width: yAxisWidth)
             .background(Color.black.opacity(0.8))
         }
-        .allowsHitTesting(false) // Let touches pass through to the gesture area below
+        .allowsHitTesting(false) // Let touches pass through to Y-axis gesture area
     }
     
-    /// X-axis overlay that stays fixed at the bottom
-    /// Only moves horizontally with horizontal pan
-    /// Time labels smoothly slide with the candles
+    /// X-axis overlay showing time labels
+    /// Stays fixed at bottom but moves horizontally with pan
+    /// Shows time label every 5 candles
+    /// - Parameter geometry: Chart view geometry
+    /// - Returns: X-axis label overlay view
     @ViewBuilder
     private func xAxisOverlay(geometry: GeometryProxy) -> some View {
         VStack {
             Spacer()
-            
             Canvas { context, size in
-                // Only apply horizontal offset, no vertical movement
                 let totalOffset = gestureState.panOffset.width + dragState.width
+                let labelStride = 5 // Show label every 5 candles
                 
-                // Draw time labels for every 5th candle
-                // These will smoothly slide with the horizontal pan
-                let labelStride = 5
+                // Draw time labels that move with horizontal pan
                 for i in stride(from: 0, to: chartData.candles.count, by: labelStride) {
                     let x = CGFloat(i) * totalCandleWidth + totalOffset
                     
-                    // Only draw if visible on screen (but calculation stays smooth)
+                    // Only draw labels that are visible on screen
                     if x >= -50 && x <= size.width + 50 {
                         let candle = chartData.candles[i]
-                        
-                        // Format time label
                         let formatter = DateFormatter()
                         formatter.dateFormat = "HH:mm"
                         let timeText = formatter.string(from: candle.timestamp)
                         
-                        // Draw time label at fixed Y position
                         context.draw(
                             Text(timeText)
                                 .font(.system(size: 10))
                                 .foregroundColor(.gray),
-                            at: CGPoint(x: x + actualCandleWidth / 2, y: 10) // Fixed Y position
+                            at: CGPoint(x: x + actualCandleWidth / 2, y: 10)
                         )
                     }
                 }
             }
             .frame(height: 20)
             .background(Color.black.opacity(0.8))
-            .padding(.bottom, geometry.size.height * 0.11 + 10) // Raise above bottom sheet (11% + padding)
+            .padding(.bottom, geometry.size.height * 0.11 + 10)
         }
         .allowsHitTesting(false)
     }
@@ -347,48 +892,74 @@ struct TradingChartView: View {
     // MARK: - Chart Drawing
     
     /// Main chart drawing coordinator
-    /// Calls individual drawing methods for each chart component
+    /// Calls individual drawing methods in correct order (back to front)
+    /// Draws: grid, candlesticks, placed markers (NOT preview)
+    /// - Parameters:
+    ///   - context: Graphics context for drawing
+    ///   - size: Canvas size
+    ///   - geometry: View geometry
     private func drawChart(context: GraphicsContext, size: CGSize, geometry: GeometryProxy) {
-        // Create a drawing context with proper clipping
         var drawingContext = context
         
-        // Clip to chart bounds to prevent drawing outside
+        // Clip drawing to chart bounds
         drawingContext.clip(to: Path(CGRect(origin: .zero, size: size)))
+        
+        // Calculate current offsets for all positioning
+        let totalOffset = gestureState.panOffset.width + dragState.width
+        let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
         
         // Draw components in order (back to front)
         drawGrid(context: drawingContext, size: size)
         drawCandlesticks(context: drawingContext, size: size)
+        
+        // Draw placed markers (NOT preview - that's SwiftUI overlay)
+        // Uses EXACT same positioning math as candlesticks for perfect alignment
+        ChartMarkerSystem.drawMarkers(
+            context: drawingContext,
+            markers: markerManager.filteredMarkers,
+            candles: chartData.candles,
+            chartSize: size,
+            priceRange: chartData.priceRange,
+            priceScale: gestureState.priceScale,
+            verticalOffset: totalVerticalOffset,
+            totalCandleWidth: totalCandleWidth,
+            actualCandleWidth: actualCandleWidth,
+            totalOffset: totalOffset
+        )
     }
     
-    /// Draw the background grid for visual reference
-    /// Grid lines help users gauge price levels and time intervals
+    /// Draw background grid for visual reference
+    /// Vertical lines every 5 candles, horizontal lines every 10% of price range
+    /// - Parameters:
+    ///   - context: Graphics context
+    ///   - size: Canvas size
     private func drawGrid(context: GraphicsContext, size: CGSize) {
         let gridPath = Path { path in
-            // Vertical grid lines (time-based)
-            // Space them based on current candle width for consistent appearance
-            let verticalSpacing = totalCandleWidth * 5 // Grid line every 5 candles
-            
-            // Calculate starting position to align with candles
+            // Vertical grid lines (aligned with time)
+            let verticalSpacing = totalCandleWidth * 5
             let totalOffset = gestureState.panOffset.width + dragState.width
-            var x = totalOffset.truncatingRemainder(dividingBy: verticalSpacing)
-            if x > 0 { x -= verticalSpacing } // Ensure we start from the left
             
-            // Draw vertical lines across the visible area
+            // Calculate starting position for seamless grid during pan
+            var x = totalOffset.truncatingRemainder(dividingBy: verticalSpacing)
+            if x > 0 { x -= verticalSpacing }
+            
+            // Draw vertical lines across entire height
             while x < size.width {
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: size.height))
                 x += verticalSpacing
             }
             
-            // Horizontal grid lines (price-based)
+            // Horizontal grid lines (aligned with price)
             let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
             let scaledHeight = size.height * gestureState.priceScale
             let horizontalSpacing = scaledHeight / 10
             
-            // Calculate starting Y with offset
+            // Calculate starting position for seamless grid during vertical pan
             var y = -totalVerticalOffset.truncatingRemainder(dividingBy: horizontalSpacing)
             if y > 0 { y -= horizontalSpacing }
             
+            // Draw horizontal lines across entire width
             while y < size.height {
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: size.width, y: y))
@@ -396,49 +967,58 @@ struct TradingChartView: View {
             }
         }
         
-        // Draw with subtle gray color for non-intrusive reference
-        context.stroke(gridPath, with: .color(.gray.opacity(0.1)), lineWidth: 0.5)
+        // Draw grid with subtle gray color
+        context.stroke(gridPath, with: .color(.gray.opacity(0.2)), lineWidth: 0.5)
     }
     
     /// Draw candlesticks - the main chart content
-    /// Each candle shows open, high, low, close prices
+    /// Only draws visible candles for performance
+    /// Green = bullish (close >= open), Red = bearish (close < open)
+    /// - Parameters:
+    ///   - context: Graphics context
+    ///   - size: Canvas size
     private func drawCandlesticks(context: GraphicsContext, size: CGSize) {
         let priceRange = chartData.priceRange
         let scaledHeight = size.height * gestureState.priceScale
-        
-        // Calculate total offset including current drag
         let totalOffset = gestureState.panOffset.width + dragState.width
         
-        // Determine visible candle range with buffer for smooth scrolling
+        // Calculate visible candle range for performance
+        // Only draw candles that are actually on screen
         let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth) - 1)
-        let visibleEndIndex = Swift.min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 3)
+        let visibleEndIndex = Swift.min(
+            chartData.candles.count,
+            visibleStartIndex + Int(size.width / totalCandleWidth) + 3
+        )
         
         // Draw each visible candle
         for i in visibleStartIndex..<visibleEndIndex {
             guard i < chartData.candles.count else { continue }
             
             let candle = chartData.candles[i]
+            
+            // Calculate X position
+            // This is the EXACT formula used for marker positioning
             let x = CGFloat(i) * totalCandleWidth + totalOffset
             
-            // Skip if candle is outside visible area (performance optimization)
+            // Skip if definitely outside visible area (optimization)
             if x < -totalCandleWidth || x > size.width + totalCandleWidth {
                 continue
             }
             
             // Calculate Y positions for OHLC values
             let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
-            
-            // High price Y position (top of wick)
-            let highY = size.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
-            
-            // Low price Y position (bottom of wick)
-            let lowY = size.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
-            
-            // Open price Y position
-            let openY = size.height - (CGFloat(candle.open - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
-            
-            // Close price Y position
-            let closeY = size.height - (CGFloat(candle.close - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
+            let highY = size.height -
+                (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) *
+                scaledHeight - totalVerticalOffset
+            let lowY = size.height -
+                (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) *
+                scaledHeight - totalVerticalOffset
+            let openY = size.height -
+                (CGFloat(candle.open - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) *
+                scaledHeight - totalVerticalOffset
+            let closeY = size.height -
+                (CGFloat(candle.close - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) *
+                scaledHeight - totalVerticalOffset
             
             // Determine candle color based on price movement
             let candleColor = candle.close >= candle.open ? Color.green : Color.red
@@ -453,9 +1033,9 @@ struct TradingChartView: View {
             // Draw body (rectangle from open to close)
             let bodyRect = CGRect(
                 x: x,
-                y: Swift.min(openY, closeY), // Top of body
+                y: Swift.min(openY, closeY),
                 width: actualCandleWidth,
-                height: Swift.max(1, abs(closeY - openY)) // Height of body (minimum 1 for doji)
+                height: Swift.max(1, abs(closeY - openY)) // Min height of 1 for doji candles
             )
             
             if candle.close >= candle.open {
@@ -465,7 +1045,6 @@ struct TradingChartView: View {
                     with: .color(candleColor),
                     lineWidth: 1
                 )
-                // Semi-transparent fill for better visibility
                 context.fill(
                     Path(roundedRect: bodyRect, cornerRadius: 0),
                     with: .color(candleColor.opacity(0.3))
@@ -480,482 +1059,4 @@ struct TradingChartView: View {
         }
     }
 }
-
-////
-////  TradingChartView.swift
-////  traders_guild
-////
-////  Created by Al Hennessey on 14/11/2025.
-////
-//
-////
-////  TradingChartView.swift
-////  traders_guild
-////
-////  Created by Al Hennessey on 14/11/2025.
-////
-//
-//import SwiftUI
-//
-///// Main trading chart view that handles all chart rendering and interactions
-///// Features centered scaling that keeps visible candles in view during zoom
-//struct TradingChartView: View {
-//    // MARK: - State Properties
-//    
-//    /// Gesture state manager that handles all transformations
-//    @StateObject private var gestureState = ChartGestureState()
-//    
-//    /// Current drag translation for smooth panning feedback
-//    @GestureState private var dragState: CGSize = .zero
-//    
-//    /// Current pinch scale for smooth scaling feedback
-//    @GestureState private var pinchScale: CGFloat = 1.0
-//    
-//    /// Track if user is currently dragging on the Y-axis area for vertical scaling
-//    @State private var isDraggingOnYAxis = false
-//    
-//    /// Starting Y position when beginning Y-axis drag
-//    @State private var yAxisDragStart: CGFloat = 0
-//    
-//    /// The price scale value when starting Y-axis drag (for relative scaling)
-//    @State private var initialPriceScale: CGFloat = 1.0
-//    
-//    /// Track the center of visible candles for centered scaling
-//    @State private var visibleCandlesCenter: CGFloat = 0
-//    
-//    // MARK: - Chart Configuration
-//    
-//    /// Base width of each candle (before scaling)
-//    private let baseCandleWidth: CGFloat = 12
-//    
-//    /// Spacing between candles
-//    private let candleSpacing: CGFloat = 4
-//    
-//    /// Edge padding to prevent endless scrolling
-//    /// User can scroll slightly beyond data bounds but not infinitely
-//    private let edgePadding: CGFloat = 100
-//    
-//    /// Width of the Y-axis interaction area
-//    private let yAxisWidth: CGFloat = 60
-//    
-//    /// Chart view model that manages candlestick data
-//    @StateObject private var chartData = ChartDataManager()
-//    
-//    // MARK: - Sensitivity Configuration
-//    
-//    /// Dampening factor for pinch gesture (lower = less sensitive)
-//    private let pinchSensitivity: CGFloat = 0.5
-//    
-//    /// Dampening factor for Y-axis drag (lower = less sensitive)
-//    private let yAxisSensitivity: CGFloat = 0.3
-//    
-//    // MARK: - Computed Properties
-//    
-//    /// Actual width of each candle including current scale
-//    /// This combines base width with both stored scale and active pinch gesture
-//    private var actualCandleWidth: CGFloat {
-//        baseCandleWidth * gestureState.candleWidthScale * pinchScale
-//    }
-//    
-//    /// Total width per candle including spacing
-//    private var totalCandleWidth: CGFloat {
-//        actualCandleWidth + candleSpacing
-//    }
-//    
-//    /// Calculate the center index of currently visible candles
-//    /// This is used for centered scaling to keep visible candles in view
-//    private func calculateVisibleCenter(in width: CGFloat) -> CGFloat {
-//        let totalOffset = gestureState.panOffset.width + dragState.width
-//        let visibleStartIndex = -totalOffset / totalCandleWidth
-//        let visibleCount = width / totalCandleWidth
-//        return visibleStartIndex + (visibleCount / 2)
-//    }
-//    
-//    // MARK: - Body
-//    
-//    var body: some View {
-//        GeometryReader { geometry in
-//            ZStack {
-//                // Black background for professional trading chart appearance
-//                Color.black
-//                    .ignoresSafeArea()
-//                
-//                // Main chart canvas where all drawing happens
-//                Canvas { context, size in
-//                    drawChart(
-//                        context: context,
-//                        size: size,
-//                        geometry: geometry
-//                    )
-//                }
-//                // Apply gestures to the canvas
-//                .gesture(dragGesture(in: geometry.size))
-//                .simultaneousGesture(pinchGesture(in: geometry.size))
-//                
-//                // Fixed Y-axis overlay (stays on right side)
-//                yAxisOverlay(geometry: geometry)
-//                
-//                // Fixed X-axis overlay (stays at bottom)
-//                xAxisOverlay(geometry: geometry)
-//                
-//                // Y-axis interaction overlay for vertical scaling
-//                // This is an invisible area on the right side of the chart
-//                HStack {
-//                    Spacer()
-//                    Color.clear
-//                        .frame(width: yAxisWidth)
-//                        .contentShape(Rectangle()) // Ensure full height is tappable
-//                        .gesture(yAxisDragGesture)
-//                }
-//                
-//                // Price indicator overlay showing current/latest price
-//                PriceIndicatorView(
-//                    currentPrice: chartData.currentPrice,
-//                    priceScale: gestureState.priceScale,
-//                    verticalOffset: gestureState.verticalPanOffset + dragState.height,
-//                    chartHeight: geometry.size.height,
-//                    priceRange: chartData.priceRange
-//                )
-//            }
-//        }
-//        .onAppear {
-//            // Start generating real-time data when view appears
-//            chartData.startDataGeneration()
-//        }
-//    }
-//    
-//    // MARK: - Gestures
-//    
-//    /// Drag gesture for panning the chart in all directions
-//    /// This allows users to explore historical data and adjust vertical position
-//    private func dragGesture(in size: CGSize) -> some Gesture {
-//        DragGesture(minimumDistance: 0)
-//            .updating($dragState) { value, state, _ in
-//                // Only update if not dragging on Y-axis (for scaling)
-//                if !isDraggingOnYAxis {
-//                    // Reverse vertical direction for natural feel (drag up = chart moves up)
-//                    state = CGSize(width: value.translation.width, height: -value.translation.height)
-//                }
-//            }
-//            .onEnded { value in
-//                // Apply the final translation with limits
-//                if !isDraggingOnYAxis {
-//                    // Reverse vertical direction for natural feel
-//                    let adjustedTranslation = CGSize(width: value.translation.width, height: -value.translation.height)
-//                    gestureState.applyPan(
-//                        translation: adjustedTranslation,
-//                        chartWidth: size.width,
-//                        candleCount: chartData.candles.count,
-//                        candleWidth: totalCandleWidth
-//                    )
-//                }
-//            }
-//    }
-//    
-//    /// Pinch gesture that ONLY affects horizontal scale (candle width)
-//    /// This scales around the center of visible candles to keep them in view
-//    /// Now with reduced sensitivity for better control
-//    private func pinchGesture(in size: CGSize) -> some Gesture {
-//        MagnificationGesture()
-//            .updating($pinchScale) { value, state, _ in
-//                // Apply dampening to make it less sensitive
-//                let dampened = 1.0 + (value - 1.0) * pinchSensitivity
-//                state = dampened
-//            }
-//            .onChanged { value in
-//                // Apply dampening
-//                let dampenedValue = 1.0 + (value - 1.0) * pinchSensitivity
-//                
-//                // Calculate the center of visible candles before scaling
-//                let centerIndex = calculateVisibleCenter(in: size.width)
-//                
-//                // Store the position of this center candle before scaling
-//                let oldCandleWidth = baseCandleWidth * gestureState.candleWidthScale
-//                let oldPosition = centerIndex * (oldCandleWidth + candleSpacing)
-//                
-//                // Apply the scale (clamped to reasonable limits)
-//                let newScale = gestureState.candleWidthScale * dampenedValue
-//                let clampedScale = Swift.min(3.0, Swift.max(0.3, newScale))
-//                
-//                // Calculate new position after scaling
-//                let newCandleWidth = baseCandleWidth * clampedScale
-//                let newPosition = centerIndex * (newCandleWidth + candleSpacing)
-//                
-//                // Adjust pan offset to keep the center candle in the same screen position
-//                // This creates the effect of scaling around the visible center
-//                let offsetAdjustment = oldPosition - newPosition
-//                gestureState.panOffset.width += offsetAdjustment
-//                
-//                // Apply the new scale
-//                gestureState.candleWidthScale = clampedScale
-//            }
-//            .onEnded { value in
-//                // Finalize the scale when gesture ends
-//                let dampenedValue = 1.0 + (value - 1.0) * pinchSensitivity
-//                let centerIndex = calculateVisibleCenter(in: size.width)
-//                let oldCandleWidth = baseCandleWidth * gestureState.candleWidthScale
-//                let oldPosition = centerIndex * (oldCandleWidth + candleSpacing)
-//                
-//                let newScale = gestureState.candleWidthScale * dampenedValue
-//                let clampedScale = Swift.min(3.0, Swift.max(0.3, newScale))
-//                
-//                let newCandleWidth = baseCandleWidth * clampedScale
-//                let newPosition = centerIndex * (newCandleWidth + candleSpacing)
-//                
-//                let offsetAdjustment = oldPosition - newPosition
-//                gestureState.panOffset.width += offsetAdjustment
-//                gestureState.candleWidthScale = clampedScale
-//            }
-//    }
-//    
-//    /// Drag gesture on the Y-axis area for vertical scaling
-//    /// This allows users to compress/expand the price range
-//    /// Now with reduced sensitivity
-//    private var yAxisDragGesture: some Gesture {
-//        DragGesture()
-//            .onChanged { value in
-//                if !isDraggingOnYAxis {
-//                    // First touch - record starting position and current scale
-//                    isDraggingOnYAxis = true
-//                    yAxisDragStart = value.startLocation.y
-//                    initialPriceScale = gestureState.priceScale
-//                }
-//                
-//                // Calculate how far user has dragged
-//                let dragDistance = value.location.y - yAxisDragStart
-//                
-//                // Apply dampened scale factor (less sensitive)
-//                // Positive drag (down) = zoom out, negative drag (up) = zoom in
-//                let scaleFactor = 1.0 - (dragDistance / 500.0) * yAxisSensitivity
-//                
-//                // Apply the scale with limits
-//                let newScale = initialPriceScale * scaleFactor
-//                gestureState.priceScale = Swift.min(3.0, Swift.max(0.5, newScale))
-//            }
-//            .onEnded { _ in
-//                isDraggingOnYAxis = false
-//            }
-//    }
-//    
-//    // MARK: - Fixed Axis Overlays
-//    
-//    /// Y-axis overlay that stays fixed on the right side
-//    /// Only moves vertically with vertical pan
-//    @ViewBuilder
-//    private func yAxisOverlay(geometry: GeometryProxy) -> some View {
-//        HStack {
-//            Spacer()
-//            
-//            Canvas { context, size in
-//                let priceRange = chartData.priceRange
-//                let scaledHeight = geometry.size.height * gestureState.priceScale
-//                let priceStep = (priceRange.max - priceRange.min) / 10
-//                
-//                // Only apply vertical offset, no horizontal movement
-//                let totalVerticalOffset = gestureState.verticalPanOffset + dragState.height
-//                
-//                for i in 0...10 {
-//                    let price = priceRange.min + (priceStep * Double(i))
-//                    
-//                    // Calculate Y position with scale and offset
-//                    let y = size.height - (CGFloat(price - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
-//                    
-//                    // Only draw labels that are visible on screen
-//                    if y >= -20 && y <= size.height + 20 {
-//                        // Draw price label
-//                        context.draw(
-//                            Text(String(format: "%.2f", price))
-//                                .font(.system(size: 10))
-//                                .foregroundColor(.gray),
-//                            at: CGPoint(x: 30, y: y) // Fixed X position
-//                        )
-//                    }
-//                }
-//            }
-//            .frame(width: yAxisWidth)
-//            .background(Color.black.opacity(0.8))
-//        }
-//        .allowsHitTesting(false) // Let touches pass through to the gesture area below
-//    }
-//    
-//    /// X-axis overlay that stays fixed at the bottom
-//    /// Only moves horizontally with horizontal pan
-//    /// Time labels smoothly slide with the candles
-//    @ViewBuilder
-//    private func xAxisOverlay(geometry: GeometryProxy) -> some View {
-//        VStack {
-//            Spacer()
-//            
-//            Canvas { context, size in
-//                // Only apply horizontal offset, no vertical movement
-//                let totalOffset = gestureState.panOffset.width + dragState.width
-//                
-//                // Draw time labels for every 5th candle
-//                // These will smoothly slide with the horizontal pan
-//                let labelStride = 5
-//                for i in stride(from: 0, to: chartData.candles.count, by: labelStride) {
-//                    let x = CGFloat(i) * totalCandleWidth + totalOffset
-//                    
-//                    // Only draw if visible on screen (but calculation stays smooth)
-//                    if x >= -50 && x <= size.width + 50 {
-//                        let candle = chartData.candles[i]
-//                        
-//                        // Format time label
-//                        let formatter = DateFormatter()
-//                        formatter.dateFormat = "HH:mm"
-//                        let timeText = formatter.string(from: candle.timestamp)
-//                        
-//                        // Draw time label at fixed Y position
-//                        context.draw(
-//                            Text(timeText)
-//                                .font(.system(size: 10))
-//                                .foregroundColor(.gray),
-//                            at: CGPoint(x: x + actualCandleWidth / 2, y: 10) // Fixed Y position
-//                        )
-//                    }
-//                }
-//            }
-//            .frame(height: 20)
-//            .background(Color.black.opacity(0.8))
-//            .padding(.bottom, geometry.size.height * 0.11 + 10) // Raise above bottom sheet (11% + padding)
-//        }
-//        .allowsHitTesting(false)
-//    }
-//    
-//    // MARK: - Chart Drawing
-//    
-//    /// Main chart drawing coordinator
-//    /// Calls individual drawing methods for each chart component
-//    private func drawChart(context: GraphicsContext, size: CGSize, geometry: GeometryProxy) {
-//        // Create a drawing context with proper clipping
-//        var drawingContext = context
-//        
-//        // Clip to chart bounds to prevent drawing outside
-//        drawingContext.clip(to: Path(CGRect(origin: .zero, size: size)))
-//        
-//        // Draw components in order (back to front)
-//        drawGrid(context: drawingContext, size: size)
-//        drawCandlesticks(context: drawingContext, size: size)
-//    }
-//    
-//    /// Draw the background grid for visual reference
-//    /// Grid lines help users gauge price levels and time intervals
-//    private func drawGrid(context: GraphicsContext, size: CGSize) {
-//        let gridPath = Path { path in
-//            // Vertical grid lines (time-based)
-//            // Space them based on current candle width for consistent appearance
-//            let verticalSpacing = totalCandleWidth * 5 // Grid line every 5 candles
-//            
-//            // Calculate starting position to align with candles
-//            let totalOffset = gestureState.panOffset.width + dragState.width
-//            var x = totalOffset.truncatingRemainder(dividingBy: verticalSpacing)
-//            if x > 0 { x -= verticalSpacing } // Ensure we start from the left
-//            
-//            // Draw vertical lines across the visible area
-//            while x < size.width {
-//                path.move(to: CGPoint(x: x, y: 0))
-//                path.addLine(to: CGPoint(x: x, y: size.height))
-//                x += verticalSpacing
-//            }
-//            
-//            // Horizontal grid lines (price-based)
-//            let totalVerticalOffset = gestureState.verticalPanOffset + dragState.height
-//            let scaledHeight = size.height * gestureState.priceScale
-//            let horizontalSpacing = scaledHeight / 10
-//            
-//            // Calculate starting Y with offset
-//            var y = -totalVerticalOffset.truncatingRemainder(dividingBy: horizontalSpacing)
-//            if y > 0 { y -= horizontalSpacing }
-//            
-//            while y < size.height {
-//                path.move(to: CGPoint(x: 0, y: y))
-//                path.addLine(to: CGPoint(x: size.width, y: y))
-//                y += horizontalSpacing
-//            }
-//        }
-//        
-//        // Draw with subtle gray color for non-intrusive reference
-//        context.stroke(gridPath, with: .color(.gray.opacity(0.1)), lineWidth: 0.5)
-//    }
-//    
-//    /// Draw candlesticks - the main chart content
-//    /// Each candle shows open, high, low, close prices
-//    private func drawCandlesticks(context: GraphicsContext, size: CGSize) {
-//        let priceRange = chartData.priceRange
-//        let scaledHeight = size.height * gestureState.priceScale
-//        
-//        // Calculate total offset including current drag
-//        let totalOffset = gestureState.panOffset.width + dragState.width
-//        
-//        // Determine visible candle range with buffer for smooth scrolling
-//        let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth) - 1)
-//        let visibleEndIndex = Swift.min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 3)
-//        
-//        // Draw each visible candle
-//        for i in visibleStartIndex..<visibleEndIndex {
-//            guard i < chartData.candles.count else { continue }
-//            
-//            let candle = chartData.candles[i]
-//            let x = CGFloat(i) * totalCandleWidth + totalOffset
-//            
-//            // Skip if candle is outside visible area (performance optimization)
-//            if x < -totalCandleWidth || x > size.width + totalCandleWidth {
-//                continue
-//            }
-//            
-//            // Calculate Y positions for OHLC values
-//            let totalVerticalOffset = gestureState.verticalPanOffset + dragState.height
-//            
-//            // High price Y position (top of wick)
-//            let highY = size.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
-//            
-//            // Low price Y position (bottom of wick)
-//            let lowY = size.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
-//            
-//            // Open price Y position
-//            let openY = size.height - (CGFloat(candle.open - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
-//            
-//            // Close price Y position
-//            let closeY = size.height - (CGFloat(candle.close - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - totalVerticalOffset
-//            
-//            // Determine candle color based on price movement
-//            let candleColor = candle.close >= candle.open ? Color.green : Color.red
-//            
-//            // Draw wick (thin line from high to low)
-//            let wickPath = Path { path in
-//                path.move(to: CGPoint(x: x + actualCandleWidth / 2, y: highY))
-//                path.addLine(to: CGPoint(x: x + actualCandleWidth / 2, y: lowY))
-//            }
-//            context.stroke(wickPath, with: .color(candleColor), lineWidth: 1)
-//            
-//            // Draw body (rectangle from open to close)
-//            let bodyRect = CGRect(
-//                x: x,
-//                y: Swift.min(openY, closeY), // Top of body
-//                width: actualCandleWidth,
-//                height: Swift.max(1, abs(closeY - openY)) // Height of body (minimum 1 for doji)
-//            )
-//            
-//            if candle.close >= candle.open {
-//                // Bullish candle - hollow with green outline
-//                context.stroke(
-//                    Path(roundedRect: bodyRect, cornerRadius: 0),
-//                    with: .color(candleColor),
-//                    lineWidth: 1
-//                )
-//                // Semi-transparent fill for better visibility
-//                context.fill(
-//                    Path(roundedRect: bodyRect, cornerRadius: 0),
-//                    with: .color(candleColor.opacity(0.3))
-//                )
-//            } else {
-//                // Bearish candle - solid red fill
-//                context.fill(
-//                    Path(roundedRect: bodyRect, cornerRadius: 0),
-//                    with: .color(candleColor)
-//                )
-//            }
-//        }
-//    }
-//}
 
