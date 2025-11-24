@@ -1,3 +1,5 @@
+
+
 //
 //  ChartDataManager.swift
 //  traders_guild
@@ -223,5 +225,92 @@ extension ChartDataManager {
         }
         
         updatePriceRange()
+    }
+}
+
+
+//
+//  ChartDataManager+Regeneration.swift
+//  traders_guild
+//
+//  Extension to add regeneration method for symbol/timeframe switching
+//  Add this to the end of your ChartDataManager.swift file
+//
+
+import Foundation
+
+// MARK: - Chart Data Regeneration
+
+extension ChartDataManager {
+    
+    /// Regenerate mock data when symbol or timeframe changes
+    /// This stops the current generation, creates fresh data, and restarts the timer
+    func regenerateMockData() {
+        // Stop current data generation
+        stopDataGeneration()
+        
+        // Generate fresh candle data
+        candles = Candle.generateSampleData(count: 200)
+        
+        // Update price range with new data
+        updatePriceRange()
+        
+        // Set current price from the latest candle
+        if let lastCandle = candles.last {
+            currentPrice = lastCandle.close
+            basePrice = lastCandle.close
+        }
+        
+        // Restart data generation for real-time updates
+        startDataGeneration()
+    }
+    
+    /// Regenerate mock data with a specific number of candles
+    /// Useful for different timeframes that may need more or less historical data
+    func regenerateMockData(candleCount: Int) {
+        stopDataGeneration()
+        
+        // Generate specified number of candles
+        candles = Candle.generateSampleData(count: candleCount)
+        
+        updatePriceRange()
+        
+        if let lastCandle = candles.last {
+            currentPrice = lastCandle.close
+            basePrice = lastCandle.close
+        }
+        
+        startDataGeneration()
+    }
+    
+    /// Regenerate mock data with a specific base price
+    /// Useful for different symbols with different price ranges
+    func regenerateMockData(basePrice: Double) {
+        stopDataGeneration()
+        
+        // Set the base price for this symbol
+        self.basePrice = basePrice
+        
+        // Generate data starting from this price
+        var tempCandles: [Candle] = []
+        var currentPrice = basePrice
+        var currentDate = Date()
+        
+        for _ in 0..<200 {
+            let candle = Candle.random(basePrice: currentPrice, timestamp: currentDate)
+            tempCandles.append(candle)
+            currentPrice = candle.close
+            currentDate = currentDate.addingTimeInterval(-300) // 5 minutes earlier
+        }
+        
+        candles = tempCandles.reversed()
+        
+        updatePriceRange()
+        
+        if let lastCandle = candles.last {
+            self.currentPrice = lastCandle.close
+        }
+        
+        startDataGeneration()
     }
 }

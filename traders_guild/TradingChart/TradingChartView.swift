@@ -1,5 +1,4 @@
 
-
 import SwiftUI
 
 /// Main trading chart view that handles all chart rendering and interactions
@@ -106,6 +105,8 @@ struct TradingChartView: View {
     /// Prevents multiple sheet presentations when user taps rapidly
     @State private var isShowingSheet = false
     
+    @State private var chartSize: CGSize = .zero
+    
     // MARK: - Chart Configuration
     
     /// Base width of each candle before any scaling is applied
@@ -124,9 +125,16 @@ struct TradingChartView: View {
     /// This area captures vertical drag/pinch gestures for price scaling
     private let yAxisWidth: CGFloat = 60
     
-    /// Chart data manager that generates and maintains candlestick data
-    /// Handles real-time data generation and price range calculations
-    @StateObject private var chartData = ChartDataManager()
+    // MARK: - Chart View Model
+    
+    /// Chart view model that coordinates chart state and data
+    @ObservedObject var chartViewModel: ChartViewModel
+    
+    /// Shorthand accessor for data manager
+    /// This computed property lets us keep using "chartData" throughout the file
+    private var chartData: ChartDataManager {
+        chartViewModel.dataManager
+    }
     
     // MARK: - Sensitivity Configuration
     
@@ -207,14 +215,18 @@ struct TradingChartView: View {
     ///   - userId: Current user's ID for marker ownership
     ///   - username: Current user's display name
     ///   - guildId: Guild context for marker filtering
+    ///   - controlViewModel: View model for chart controls
+    ///   - chartViewModel: View model for chart data and state
     init(
         userId: String = "user123",
         username: String = "TestUser",
         guildId: String = "guild1",
-        controlViewModel: ChartControlViewModel
+        controlViewModel: ChartControlViewModel,
+        chartViewModel: ChartViewModel
     ) {
         _markerManager = StateObject(wrappedValue: MarkerManager(userId: userId, guildId: guildId))
         self.controlViewModel = controlViewModel
+        self.chartViewModel = chartViewModel
     }
     
     // MARK: - Body
@@ -237,6 +249,14 @@ struct TradingChartView: View {
                 // Update coordinate system with live gesture state
                 // Note: We update stored scale directly now, so no live pinch scale needed
                 let _ = coordinateSystem.updateLiveState(dragState: dragState, pinchScale: 1.0)
+                
+                let _ = {
+                    if chartSize != geometry.size {
+                        DispatchQueue.main.async {
+                            chartSize = geometry.size
+                        }
+                    }
+                }()
                 
                 ZStack {
                     // Black background for professional trading chart appearance
@@ -563,10 +583,17 @@ struct TradingChartView: View {
             )
         }
         .onAppear {
-            // Start generating real-time candle data when view appears
-            chartData.startDataGeneration()
             // Set up control actions
             setupControlActions()
+            // Note: Data generation is handled by ChartViewModel in MainView
+            // This ensures proper coordination with symbol/timeframe changes
+        }
+        
+        .onChange(of: controlViewModel.isMarkerPlacementMode) { oldValue, newValue in
+            if !oldValue && newValue {
+                let centerIndex = calculateCenterCandleIndex()
+                previewCandleIndex = centerIndex
+            }
         }
     }
     
@@ -602,6 +629,18 @@ struct TradingChartView: View {
         print("📍 Center candle: \(clampedIndex) of \(chartData.candles.count)")
         
         return clampedIndex
+    }
+    
+    private func calculateCenterCandleIndex() -> Int {
+        let totalOffset = gestureState.panOffset.width + dragState.width
+        let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
+        let candlesOnScreen = Int(chartSize.width / totalCandleWidth)
+        let visibleEndIndex = Swift.min(
+            chartData.candles.count,
+            visibleStartIndex + candlesOnScreen + 2
+        )
+        let middleIndex = (visibleStartIndex + visibleEndIndex) / 2
+        return max(0, min(chartData.candles.count - 1, middleIndex))
     }
     
     /// Compute the candle index at the actual screen center using the coordinate system
@@ -1189,8 +1228,6 @@ struct TradingChartView: View {
         }
     }
 }
-
-
 //
 //
 //import SwiftUI
@@ -1200,6 +1237,9 @@ struct TradingChartView: View {
 ///// Includes marker placement system for collaborative chart annotations
 //struct TradingChartView: View {
 //    // MARK: - State Properties
+//    
+//    // MARK: - Chart Control ViewModel
+//    @ObservedObject var controlViewModel: ChartControlViewModel
 //    
 //    /// Gesture state manager that handles all pan/zoom transformations
 //    /// This is the single source of truth for chart positioning
@@ -1270,7 +1310,10 @@ struct TradingChartView: View {
 //    
 //    /// Whether we're in marker placement mode (user is positioning new marker)
 //    /// When true, drag gestures move the preview marker instead of panning chart
-//    @State private var isMarkerPlacementMode = false
+//    // Marker placement mode is now controlled by ViewModel
+//    private var isMarkerPlacementMode: Bool {
+//        controlViewModel.isMarkerPlacementMode
+//    }
 //    
 //    /// Track if marker is actively being dragged (for scale animation)
 //    @State private var isMarkerBeingDragged = false
@@ -1394,9 +1437,14 @@ struct TradingChartView: View {
 //    ///   - userId: Current user's ID for marker ownership
 //    ///   - username: Current user's display name
 //    ///   - guildId: Guild context for marker filtering
-//    init(userId: String = "user123", username: String = "TestUser", guildId: String = "guild1") {
-//        // Initialize marker manager with user context
+//    init(
+//        userId: String = "user123",
+//        username: String = "TestUser",
+//        guildId: String = "guild1",
+//        controlViewModel: ChartControlViewModel
+//    ) {
 //        _markerManager = StateObject(wrappedValue: MarkerManager(userId: userId, guildId: guildId))
+//        self.controlViewModel = controlViewModel
 //    }
 //    
 //    // MARK: - Body
@@ -1598,7 +1646,7 @@ struct TradingChartView: View {
 //                                // Cancel button to exit placement mode
 //                                Button(action: {
 //                                    withAnimation {
-//                                        isMarkerPlacementMode = false
+//                                        controlViewModel.isMarkerPlacementMode = false
 //                                        isMarkerBeingDragged = false
 //                                        markerDragPosition = nil
 //                                    }
@@ -1679,19 +1727,7 @@ struct TradingChartView: View {
 //                    
 //                    // NAVIGATION CONTROLS
 //                    // Top-right corner controls for auto-scroll, jump to latest, etc.
-//                    VStack {
-//                        HStack {
-//                            Spacer()
-//                            ChartNavigationControls(
-//                                navigationManager: navigationManager,
-//                                gestureState: gestureState,
-//                                chartData: chartData,
-//                                chartWidth: geometry.size.width,
-//                                baseCandleWidth: baseCandleWidth
-//                            )
-//                        }
-//                        Spacer()
-//                    }
+//                    
 //                }
 //                // GESTURE LAYER
 //                // These gestures only apply when NOT in marker placement mode
@@ -1723,58 +1759,7 @@ struct TradingChartView: View {
 //                
 //                // BOTTOM TOOLBAR
 //                // Contains marker placement button and reset zoom button
-//                VStack {
-//                    Spacer()
-//                    HStack(spacing: 20) {
-//                        // Marker placement toggle button
-//                        Button(action: {
-//                            withAnimation {
-//                                // Toggle placement mode
-//                                isMarkerPlacementMode.toggle()
-//                                
-//                                if isMarkerPlacementMode {
-//                                    // Start preview at CENTER of currently visible area
-//                                    // This ensures marker appears where user is looking
-//                                    previewCandleIndex = centerCandleIndex(using: coordinateSystem, chartWidth: geometry.size.width)
-//                                    // Clear drag position so marker starts in snapped position
-//                                    markerDragPosition = nil
-//                                    print("📍 Marker placement mode ON - preview at candle \(previewCandleIndex)")
-//                                } else {
-//                                    // Clear all marker-related state when exiting
-//                                    markerDragPosition = nil
-//                                    isMarkerBeingDragged = false
-//                                    print("📍 Marker placement mode OFF")
-//                                }
-//                            }
-//                        }) {
-//                            VStack(spacing: 2) {
-//                                // Icon changes when placement mode is active
-//                                Image(systemName: isMarkerPlacementMode ? "mappin.circle.fill" : "mappin.circle")
-//                                    .font(.system(size: 24))
-//                                Text("Marker")
-//                                    .font(.caption2)
-//                            }
-//                        }
-//                        .foregroundColor(isMarkerPlacementMode ? .blue : .white)
-//                        
-//                        // Reset zoom and pan button
-//                        Button(action: {
-//                            gestureState.reset()
-//                        }) {
-//                            VStack(spacing: 2) {
-//                                Image(systemName: "arrow.counterclockwise")
-//                                    .font(.system(size: 24))
-//                                Text("Reset")
-//                                    .font(.caption2)
-//                            }
-//                        }
-//                    }
-//                    .foregroundColor(.white)
-//                    .padding()
-//                    .background(Color.black.opacity(0.8))
-//                    .cornerRadius(12)
-//                    .padding(.bottom, 80)
-//                }
+//
 //            }
 //        }
 //        // MARKER CREATION SHEET
@@ -1791,7 +1776,7 @@ struct TradingChartView: View {
 //                )
 //                .onDisappear {
 //                    // Exit placement mode after marker is created or cancelled
-//                    isMarkerPlacementMode = false
+//                    controlViewModel.isMarkerPlacementMode = false
 //                    isShowingSheet = false
 //                    markerManager.selectedMarker = nil
 //                }
@@ -1810,6 +1795,8 @@ struct TradingChartView: View {
 //        .onAppear {
 //            // Start generating real-time candle data when view appears
 //            chartData.startDataGeneration()
+//            // Set up control actions
+//            setupControlActions()
 //        }
 //    }
 //    
@@ -2382,4 +2369,54 @@ struct TradingChartView: View {
 //            }
 //        }
 //    }
+//    
+//    // MARK: - Control Actions Setup
+//
+//    /// Set up action closures for the control ViewModel
+//    private func setupControlActions() {
+//        // Reset chart to default state
+//        controlViewModel.resetChartAction = {
+//            self.gestureState.reset()
+//        }
+//        
+//        // Jump to the first candle
+//        controlViewModel.jumpToStartAction = {
+//            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+//                self.gestureState.panOffset.width = 0
+//            }
+//        }
+//        
+//        // Jump to the most recent candle
+//        controlViewModel.jumpToLatestAction = {
+//            guard !self.chartData.candles.isEmpty else { return }
+//            let targetOffset = -CGFloat(self.chartData.candles.count - 1) * self.totalCandleWidth + 100
+//            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+//                self.gestureState.panOffset.width = targetOffset
+//            }
+//        }
+//        
+//        // Toggle auto-scroll
+//        controlViewModel.toggleAutoScrollAction = {
+//            // If it's a @Published property:
+//            print("Auto-scroll toggled")
+//            
+//            // OR if it needs to be set directly:
+//            // self.navigationManager.isAutoScrolling = !self.navigationManager.isAutoScrolling
+//        }
+//        
+//        // Set horizontal zoom
+//        controlViewModel.setHorizontalZoomAction = { zoom in
+//            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+//                self.gestureState.candleWidthScale = CGFloat(zoom)
+//            }
+//        }
+//        
+//        // Set vertical zoom
+//        controlViewModel.setVerticalZoomAction = { zoom in
+//            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+//                self.gestureState.priceScale = CGFloat(zoom)
+//            }
+//        }
+//    }
 //}
+//
