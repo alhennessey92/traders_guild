@@ -1,13 +1,297 @@
+////
+////  ChartCrosshairAndNavigation_PERSISTENT.swift
+////  traders_guild
+////
+////  UPDATED: Crosshair now stays visible after activation
+////  - Long press activates crosshair (stays on screen)
+////  - Drag ANYWHERE on chart moves the crosshair
+////  - Single tap ANYWHERE dismisses crosshair
+////  - Chart panning disabled while crosshair is active
+////
 //
-//  ChartCrosshairAndNavigation.swift
-//  traders_guild
+//import SwiftUI
 //
-//  Created by Al Hennessey on 16/11/2025.
+//// MARK: - Crosshair Manager (Persistent Mode)
 //
+//class CrosshairManager: ObservableObject {
+//    @Published var isActive: Bool = false
+//    @Published var position: CGPoint = .zero
+//    @Published var targetCandle: Candle?
+//    @Published var targetPrice: Double = 0
+//    
+//    /// Activates crosshair at the given point - crosshair stays visible until explicitly dismissed
+//    func activate(at point: CGPoint, coordinateSystem: ChartCoordinateSystem, chartData: ChartDataManager) {
+//        isActive = true
+//        updatePosition(point, coordinateSystem: coordinateSystem, chartData: chartData)
+//    }
+//    
+//    /// Updates crosshair position - can be called from any drag on the chart
+//    func updatePosition(_ point: CGPoint, coordinateSystem: ChartCoordinateSystem, chartData: ChartDataManager) {
+//        position = point
+//        
+//        if let candleIndex = coordinateSystem.candleIndex(atXPosition: point.x),
+//           candleIndex < chartData.candles.count {
+//            targetCandle = chartData.candles[candleIndex]
+//        }
+//        
+//        targetPrice = coordinateSystem.price(atYPosition: point.y)
+//    }
+//    
+//    /// Deactivates crosshair - called on tap to dismiss
+//    func deactivate() {
+//        isActive = false
+//        targetCandle = nil
+//        targetPrice = 0
+//    }
+//}
+//
+//// MARK: - Crosshair View (Unchanged visually)
+//
+//struct CrosshairView: View {
+//    @ObservedObject var crosshairManager: CrosshairManager
+//    let chartSize: CGSize
+//    let chartData: ChartDataManager
+//    
+//    /// Backwards-compatible initializer
+//    init(crosshairManager: CrosshairManager, chartSize: CGSize) {
+//        self.crosshairManager = crosshairManager
+//        self.chartSize = chartSize
+//        self.chartData = ChartDataManager()
+//    }
+//    
+//    /// Full initializer with chartData for symbol-aware formatting
+//    init(crosshairManager: CrosshairManager, chartSize: CGSize, chartData: ChartDataManager) {
+//        self.crosshairManager = crosshairManager
+//        self.chartSize = chartSize
+//        self.chartData = chartData
+//    }
+//    
+//    var body: some View {
+//        if crosshairManager.isActive {
+//            ZStack {
+//                // Vertical line
+//                Path { path in
+//                    path.move(to: CGPoint(x: crosshairManager.position.x, y: 0))
+//                    path.addLine(to: CGPoint(x: crosshairManager.position.x, y: chartSize.height))
+//                }
+//                .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
+//                
+//                // Horizontal line
+//                Path { path in
+//                    path.move(to: CGPoint(x: 0, y: crosshairManager.position.y))
+//                    path.addLine(to: CGPoint(x: chartSize.width, y: crosshairManager.position.y))
+//                }
+//                .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
+//                
+//                // Center dot
+//                Circle()
+//                    .fill(Color.white)
+//                    .frame(width: 6, height: 6)
+//                    .position(crosshairManager.position)
+//                
+//                // Price label on Y-axis
+//                CrosshairPriceLabel(
+//                    price: crosshairManager.targetPrice,
+//                    chartData: chartData
+//                )
+//                .position(x: chartSize.width - 35, y: crosshairManager.position.y)
+//                
+//                // Time label on X-axis
+//                if let candle = crosshairManager.targetCandle {
+//                    CrosshairTimeLabel(timestamp: candle.timestamp)
+//                        .position(x: crosshairManager.position.x, y: chartSize.height - 12)
+//                }
+//                
+//                // Compact info popup
+//                CrosshairInfoPopupCompact(
+//                    candle: crosshairManager.targetCandle,
+//                    price: crosshairManager.targetPrice,
+//                    position: crosshairManager.position,
+//                    chartSize: chartSize,
+//                    chartData: chartData
+//                )
+//            }
+//            .allowsHitTesting(false)
+//        }
+//    }
+//}
+//
+//// MARK: - Crosshair Price Label
+//
+//struct CrosshairPriceLabel: View {
+//    let price: Double
+//    let chartData: ChartDataManager
+//    
+//    var body: some View {
+//        Text(chartData.formatPrice(price))
+//            .font(.system(size: 9, weight: .medium, design: .monospaced))
+//            .foregroundColor(.black)
+//            .padding(.horizontal, 4)
+//            .padding(.vertical, 2)
+//            .background(
+//                RoundedRectangle(cornerRadius: 3)
+//                    .fill(Color.white.opacity(0.9))
+//            )
+//    }
+//}
+//
+//// MARK: - Crosshair Time Label
+//
+//struct CrosshairTimeLabel: View {
+//    let timestamp: Date
+//    
+//    var body: some View {
+//        Text(timestamp.shortTimeLabel)
+//            .font(.system(size: 9, weight: .medium, design: .monospaced))
+//            .foregroundColor(.black)
+//            .padding(.horizontal, 4)
+//            .padding(.vertical, 2)
+//            .background(
+//                RoundedRectangle(cornerRadius: 3)
+//                    .fill(Color.white.opacity(0.9))
+//            )
+//    }
+//}
+//
+//// MARK: - Compact Crosshair Info Popup
+//
+//struct CrosshairInfoPopupCompact: View {
+//    let candle: Candle?
+//    let price: Double
+//    let position: CGPoint
+//    let chartSize: CGSize
+//    let chartData: ChartDataManager
+//    
+//    private var popupPosition: CGPoint {
+//        var x = position.x + 60
+//        var y = position.y - 50
+//        
+//        if x > chartSize.width - 100 {
+//            x = position.x - 60
+//        }
+//        if y < 40 {
+//            y = position.y + 50
+//        }
+//        if y > chartSize.height - 80 {
+//            y = chartSize.height - 80
+//        }
+//        
+//        return CGPoint(x: x, y: y)
+//    }
+//    
+//    var body: some View {
+//        Group {
+//            if let candle = candle {
+//                VStack(alignment: .leading, spacing: 2) {
+//                    Text(candle.timestamp.chartTimeLabel)
+//                        .font(.system(size: 9, weight: .semibold))
+//                        .foregroundColor(.white.opacity(0.7))
+//                    
+//                    HStack(spacing: 8) {
+//                        VStack(alignment: .leading, spacing: 1) {
+//                            PriceRow(label: "O", value: chartData.formatPrice(candle.open), color: .white)
+//                            PriceRow(label: "L", value: chartData.formatPrice(candle.low), color: .red)
+//                        }
+//                        VStack(alignment: .leading, spacing: 1) {
+//                            PriceRow(label: "H", value: chartData.formatPrice(candle.high), color: .green)
+//                            PriceRow(label: "C", value: chartData.formatPrice(candle.close), color: candle.isBullish ? .green : .red)
+//                        }
+//                    }
+//                    
+//                    if let volume = candle.volume {
+//                        Text("Vol: \(volume.formattedVolume)")
+//                            .font(.system(size: 8))
+//                            .foregroundColor(.white.opacity(0.6))
+//                    }
+//                }
+//                .padding(6)
+//                .background(
+//                    RoundedRectangle(cornerRadius: 6)
+//                        .fill(Color.black.opacity(0.75))
+//                )
+//                .position(popupPosition)
+//            }
+//        }
+//    }
+//}
+//
+//// MARK: - Price Row Helper
+//
+//struct PriceRow: View {
+//    let label: String
+//    let value: String
+//    let color: Color
+//    
+//    var body: some View {
+//        HStack(spacing: 2) {
+//            Text(label)
+//                .font(.system(size: 8, weight: .medium))
+//                .foregroundColor(.white.opacity(0.5))
+//            Text(value)
+//                .font(.system(size: 8, weight: .medium, design: .monospaced))
+//                .foregroundColor(color)
+//        }
+//    }
+//}
+//
+//// MARK: - Date Extensions
+//
+//extension Date {
+//    var shortTimeLabel: String {
+//        let formatter = DateFormatter()
+//        formatter.dateFormat = "HH:mm"
+//        return formatter.string(from: self)
+//    }
+//    
+//    var chartTimeLabel: String {
+//        let formatter = DateFormatter()
+//        formatter.dateFormat = "dd MMM HH:mm"
+//        return formatter.string(from: self)
+//    }
+//}
+//
+//// MARK: - Volume Formatting
+//
+//extension Double {
+//    var formattedVolume: String {
+//        if self >= 1_000_000_000 {
+//            return String(format: "%.1fB", self / 1_000_000_000)
+//        } else if self >= 1_000_000 {
+//            return String(format: "%.1fM", self / 1_000_000)
+//        } else if self >= 1_000 {
+//            return String(format: "%.1fK", self / 1_000)
+//        } else {
+//            return String(format: "%.0f", self)
+//        }
+//    }
+//}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //
 //  ChartCrosshairAndNavigation.swift
 //  traders_guild
+//
+//  UPDATED - Subtle crosshair design + symbol-aware price formatting
 //
 
 import SwiftUI
@@ -43,51 +327,70 @@ class CrosshairManager: ObservableObject {
     }
 }
 
-// MARK: - Crosshair View
+// MARK: - Crosshair View (Updated - More Subtle)
 
 struct CrosshairView: View {
     @ObservedObject var crosshairManager: CrosshairManager
     let chartSize: CGSize
+    let chartData: ChartDataManager
+    
+    /// Backwards-compatible initializer (creates fallback ChartDataManager)
+    init(crosshairManager: CrosshairManager, chartSize: CGSize) {
+        self.crosshairManager = crosshairManager
+        self.chartSize = chartSize
+        self.chartData = ChartDataManager()
+    }
+    
+    /// Full initializer with chartData for symbol-aware formatting
+    init(crosshairManager: CrosshairManager, chartSize: CGSize, chartData: ChartDataManager) {
+        self.crosshairManager = crosshairManager
+        self.chartSize = chartSize
+        self.chartData = chartData
+    }
     
     var body: some View {
         if crosshairManager.isActive {
             ZStack {
-                // Vertical line
+                // Vertical line - thinner and more subtle
                 Path { path in
                     path.move(to: CGPoint(x: crosshairManager.position.x, y: 0))
                     path.addLine(to: CGPoint(x: crosshairManager.position.x, y: chartSize.height))
                 }
-                .stroke(Color.yellow.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
+                .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
                 
-                // Horizontal line
+                // Horizontal line - thinner and more subtle
                 Path { path in
                     path.move(to: CGPoint(x: 0, y: crosshairManager.position.y))
                     path.addLine(to: CGPoint(x: chartSize.width, y: crosshairManager.position.y))
                 }
-                .stroke(Color.yellow.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
+                .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
                 
-                // Center circle
+                // Center dot - smaller
                 Circle()
-                    .fill(Color.yellow)
-                    .frame(width: 8, height: 8)
+                    .fill(Color.white)
+                    .frame(width: 6, height: 6)
                     .position(crosshairManager.position)
                 
-                // Price label
-                PriceLabelView(price: crosshairManager.targetPrice)
-                    .position(x: chartSize.width - 30, y: crosshairManager.position.y)
+                // Price label on Y-axis
+                CrosshairPriceLabel(
+                    price: crosshairManager.targetPrice,
+                    chartData: chartData
+                )
+                .position(x: chartSize.width - 35, y: crosshairManager.position.y)
                 
-                // Time label
+                // Time label on X-axis
                 if let candle = crosshairManager.targetCandle {
-                    TimeLabelView(timestamp: candle.timestamp)
-                        .position(x: crosshairManager.position.x, y: chartSize.height - 10)
+                    CrosshairTimeLabel(timestamp: candle.timestamp)
+                        .position(x: crosshairManager.position.x, y: chartSize.height - 12)
                 }
                 
-                // Info popup
-                CrosshairInfoPopup(
+                // Compact info popup
+                CrosshairInfoPopupCompact(
                     candle: crosshairManager.targetCandle,
                     price: crosshairManager.targetPrice,
                     position: crosshairManager.position,
-                    chartSize: chartSize
+                    chartSize: chartSize,
+                    chartData: chartData
                 )
             }
             .allowsHitTesting(false)
@@ -95,100 +398,141 @@ struct CrosshairView: View {
     }
 }
 
-// MARK: - Crosshair Info Popup
+// MARK: - Crosshair Price Label (Symbol-Aware)
 
-struct CrosshairInfoPopup: View {
+struct CrosshairPriceLabel: View {
+    let price: Double
+    let chartData: ChartDataManager
+    
+    var body: some View {
+        Text(chartData.formatPrice(price))
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .foregroundColor(.black)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.9))
+            )
+    }
+}
+
+// MARK: - Crosshair Time Label
+
+struct CrosshairTimeLabel: View {
+    let timestamp: Date
+    
+    var body: some View {
+        Text(timestamp.shortTimeLabel)
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .foregroundColor(.black)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.9))
+            )
+    }
+}
+
+// MARK: - Compact Crosshair Info Popup (Subtle Design)
+
+struct CrosshairInfoPopupCompact: View {
     let candle: Candle?
     let price: Double
     let position: CGPoint
     let chartSize: CGSize
+    let chartData: ChartDataManager
     
     private var popupPosition: CGPoint {
-        var x = position.x + 80
-        var y = position.y - 60
+        var x = position.x + 60
+        var y = position.y - 50
         
-        if x > chartSize.width - 160 {
-            x = position.x - 80
+        // Keep popup on screen
+        if x > chartSize.width - 100 {
+            x = position.x - 60
         }
-        if y < 60 {
-            y = 60
+        if y < 40 {
+            y = position.y + 50
         }
-        if y > chartSize.height - 100 {
-            y = chartSize.height - 100
+        if y > chartSize.height - 80 {
+            y = chartSize.height - 80
         }
         
         return CGPoint(x: x, y: y)
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        Group {
             if let candle = candle {
-                Text(candle.timestamp.chartTimeLabel)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                
-                Divider()
-                
-                HStack {
-                    Text("O:")
-                    Spacer()
-                    Text(candle.open.formattedPrice)
-                }
-                HStack {
-                    Text("H:")
-                    Spacer()
-                    Text(candle.high.formattedPrice)
-                        .foregroundColor(.green)
-                }
-                HStack {
-                    Text("L:")
-                    Spacer()
-                    Text(candle.low.formattedPrice)
-                        .foregroundColor(.red)
-                }
-                HStack {
-                    Text("C:")
-                    Spacer()
-                    Text(candle.close.formattedPrice)
-                        .fontWeight(.semibold)
-                        .foregroundColor(candle.isBullish ? .green : .red)
-                }
-                
-                if let volume = candle.volume {
-                    Divider()
-                    HStack {
-                        Text("Vol:")
-                        Spacer()
-                        Text(volume.formattedVolume)
+                VStack(alignment: .leading, spacing: 2) {
+                    // Time header
+                    Text(candle.timestamp.chartTimeLabel)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    // OHLC in compact format
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            PriceRow(label: "O", value: chartData.formatPrice(candle.open), color: .white)
+                            PriceRow(label: "L", value: chartData.formatPrice(candle.low), color: .red)
+                        }
+                        VStack(alignment: .leading, spacing: 1) {
+                            PriceRow(label: "H", value: chartData.formatPrice(candle.high), color: .green)
+                            PriceRow(label: "C", value: chartData.formatPrice(candle.close), color: candle.isBullish ? .green : .red)
+                        }
+                    }
+                    
+                    // Volume if available
+                    if let volume = candle.volume {
+                        Text("Vol: \(volume.formattedVolume)")
+                            .font(.system(size: 8))
+                            .foregroundColor(.white.opacity(0.5))
                     }
                 }
-            } else {
-                Text("Price: \(price.formattedPrice)")
-                    .font(.caption)
+                .padding(6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.black.opacity(0.75))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                        )
+                )
+                .position(popupPosition)
             }
         }
-        .font(.caption)
-        .foregroundColor(.white)
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.85))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.yellow.opacity(0.5), lineWidth: 1)
-                )
-        )
-        .position(popupPosition)
     }
 }
 
-// MARK: - Supporting Views
+// MARK: - Helper View for Price Rows
+
+private struct PriceRow: View {
+    let label: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 2) {
+            Text(label)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+                .frame(width: 10, alignment: .leading)
+            Text(value)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(color)
+        }
+    }
+}
+
+// MARK: - Legacy Supporting Views (for backwards compatibility)
 
 struct PriceLabelView: View {
     let price: Double
+    var chartData: ChartDataManager? = nil
     
     var body: some View {
-        Text(price.formattedPrice)
+        Text(chartData?.formatPrice(price) ?? String(format: "%.2f", price))
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
             .foregroundColor(.black)
             .padding(.horizontal, 4)
@@ -210,7 +554,7 @@ struct TimeLabelView: View {
     }
 }
 
-// MARK: - Crosshair Gesture
+// MARK: - Crosshair Gesture Modifier
 
 struct CrosshairGestureModifier: ViewModifier {
     @ObservedObject var crosshairManager: CrosshairManager
@@ -315,7 +659,6 @@ struct ChartNavigationControls: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            // Jump to latest
             Button(action: {
                 navigationManager.jumpToLatest(
                     gestureState: gestureState,
@@ -337,10 +680,7 @@ struct ChartNavigationControls: View {
             }
             .padding(.top, 100)
             
-            // Zoom controls
             ZoomControls(gestureState: gestureState)
-            
-            
         }
         .padding()
     }
@@ -353,7 +693,6 @@ struct ZoomControls: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            // Zoom in
             Button(action: {
                 withAnimation(.spring()) {
                     gestureState.candleWidthScale = min(
@@ -370,7 +709,6 @@ struct ZoomControls: View {
                     .cornerRadius(8)
             }
             
-            // Reset
             Button(action: {
                 gestureState.reset()
             }) {
@@ -382,7 +720,6 @@ struct ZoomControls: View {
                     .cornerRadius(8)
             }
             
-            // Zoom out
             Button(action: {
                 withAnimation(.spring()) {
                     gestureState.candleWidthScale = max(
