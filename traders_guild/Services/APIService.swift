@@ -287,40 +287,11 @@ class MockAPIService {
         try await simulateNetworkDelay()
         // Mock: successful report
     }
-
-}
-
-// ================================================================================================
-// MARK: - Response Models
-// ================================================================================================
-
-struct authResponse {
-    let user: CurrentUserDTO
-    let token: String
-}
-
-
-//
-//  MockAPIService+Chart.swift
-//
-//  EXACT CODE TO ADD TO YOUR APIService.swift
-//  Copy everything below and paste at the end of your APIService.swift file
-//  (after the authResponse struct)
-//
-
-// MARK: - Chart Data - API
-
-//
-//  MockAPIService+ChartExtension.swift
-//
-//  FIXED VERSION - Uses chartGuildWatchlist instead of guildWatchlist
-//  Add to the end of your APIService.swift
-//
-
-
-// MARK: - Chart Data API
-
-extension MockAPIService {
+    
+    
+    // ================================================================================================
+    // MARK: - Chart - API
+    // ================================================================================================
     
     /// Fetch user's personal trading watchlist
     func fetchPersonalWatchlist(userId: UUID) async throws -> [TradingSymbol] {
@@ -372,4 +343,25 @@ extension MockAPIService {
         // When backend is ready, this will make a real API call
         return Candle.generateSampleData(count: limit)
     }
+
 }
+
+// ================================================================================================
+// MARK: - Response Models
+// ================================================================================================
+
+struct authResponse {
+    let user: CurrentUserDTO
+    let token: String
+}
+
+
+//
+//  MockAPIService+Chart.swift
+//
+//  EXACT CODE TO ADD TO YOUR APIService.swift
+//  Copy everything below and paste at the end of your APIService.swift file
+//  (after the authResponse struct)
+//
+
+
