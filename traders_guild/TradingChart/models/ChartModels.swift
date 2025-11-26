@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 // MARK: - Trading Symbol DTO
 
@@ -172,5 +173,94 @@ extension ChartTimeframe {
             .hours: [.h1, .h4],
             .daily: [.d1, .w1, .mn]
         ]
+    }
+}
+
+
+
+// MARK: - Marker Types
+
+enum MarkerType: String, Codable, CaseIterable {
+    case entry = "Entry"
+    case exit = "Exit"
+    case stopLoss = "Stop Loss"
+    case takeProfit = "Take Profit"
+    case support = "Support"
+    case resistance = "Resistance"
+    case alert = "Alert"
+    case pattern = "Pattern"
+    case note = "Note"
+    
+    var color: Color {
+        switch self {
+        case .entry: return .green
+        case .exit: return .orange
+        case .stopLoss: return .red
+        case .takeProfit: return .blue
+        case .support: return .purple
+        case .resistance: return .pink
+        case .alert: return .yellow
+        case .pattern: return .cyan
+        case .note: return .gray
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .entry: return "arrow.up.circle.fill"
+        case .exit: return "arrow.down.circle.fill"
+        case .stopLoss: return "xmark.shield.fill"
+        case .takeProfit: return "checkmark.shield.fill"
+        case .support: return "arrow.up"
+        case .resistance: return "arrow.down"
+        case .alert: return "bell.fill"
+        case .pattern: return "sparkles"
+        case .note: return "note.text"
+        }
+    }
+}
+
+// MARK: - Chart Marker Model
+
+struct ChartMarker: Identifiable, Codable {
+    let id: UUID
+    let candleIndex: Int
+    let timestamp: Date
+    let price: Double
+    let type: MarkerType
+    let userId: String
+    let username: String
+    var note: String?
+    let createdAt: Date
+    let guildId: String
+    var isVisible: Bool
+    var likeCount: Int
+    var isLikedByCurrentUser: Bool
+    
+    init(
+        id: UUID = UUID(),
+        candleIndex: Int,
+        timestamp: Date,
+        price: Double,
+        type: MarkerType,
+        userId: String,
+        username: String,
+        note: String? = nil,
+        guildId: String,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.candleIndex = candleIndex
+        self.timestamp = timestamp
+        self.price = price
+        self.type = type
+        self.userId = userId
+        self.username = username
+        self.note = note
+        self.guildId = guildId
+        self.createdAt = createdAt
+        self.isVisible = true
+        self.likeCount = 0
+        self.isLikedByCurrentUser = false
     }
 }

@@ -24,8 +24,11 @@ struct TradingChartView: View {
     @StateObject private var gestureState = ChartGestureState()
     
     /// Current drag translation for smooth real-time panning feedback
-    /// This is a @GestureState so it automatically resets when gesture ends
-    @GestureState private var dragState: CGSize = .zero
+    /// Using @State instead of @GestureState to avoid spring-back animation
+    @State private var dragState: CGSize = .zero
+    
+    /// Track the previous drag translation for incremental updates
+    @State private var lastDragTranslation: CGSize = .zero
     
     /// Y-axis pinch scale for vertical price range scaling (not used but kept for reference)
     @GestureState private var yAxisPinchScale: CGFloat = 1.0
@@ -201,23 +204,34 @@ struct TradingChartView: View {
     
     /// Calculate clamped vertical offset that respects pan limits
     /// Prevents user from panning too far up or down
-    /// Provides natural boundaries to vertical movement
+    /// FIXED: No longer uses dragState (translation applied incrementally)
     private func clampedVerticalOffset(chartHeight: CGFloat) -> CGFloat {
-        // During Y-axis gestures, DON'T add dragState.height as it interferes with centering
-        // Only combine with dragState when doing normal chart panning
-        let totalOffset = (isDraggingOnYAxis || isPinchingOnYAxis)
-            ? gestureState.verticalPanOffset  // Y-axis gesture: use exact calculated offset
-            : gestureState.verticalPanOffset + dragState.height  // Normal pan: add drag
+        // Use stored offset directly - incremental updates already applied
+        let totalOffset = gestureState.verticalPanOffset
         
         // Calculate scaled height to determine valid pan range
         let scaledHeight = chartHeight * gestureState.priceScale
         
-        // Allow panning up to 50% of scaled height in either direction
-        // During Y-axis gestures, use larger limits to allow free scaling
-        let paddingMultiplier: CGFloat = (isDraggingOnYAxis || isPinchingOnYAxis) ? 2.0 : 0.5
-        let verticalPadding = scaledHeight * paddingMultiplier
+        // Very generous base limit
+        let baseMultiplier: CGFloat = 3.0
         
-        // Clamp the offset to valid range
+        // Extra room when zoomed out so prices NEVER run out
+        let zoomAdjustment: CGFloat
+        if gestureState.priceScale < 0.5 {
+            zoomAdjustment = 4.0
+        } else if gestureState.priceScale < 0.7 {
+            zoomAdjustment = 3.0
+        } else if gestureState.priceScale < 0.9 {
+            zoomAdjustment = 2.0
+        } else if gestureState.priceScale > 2.0 {
+            zoomAdjustment = 2.0
+        } else {
+            zoomAdjustment = 1.5
+        }
+        
+        let verticalPadding = scaledHeight * baseMultiplier * zoomAdjustment
+        
+        // Hard clamp - no animation, just stop at the wall
         return Swift.min(verticalPadding, Swift.max(-verticalPadding, totalOffset))
     }
     
@@ -606,7 +620,7 @@ struct TradingChartView: View {
     /// - Returns: Clamped candle index at the center of visible range
     private func getCenterVisibleCandleIndex(geometry: GeometryProxy) -> Int {
         // Get current pan offset (includes both stored and active drag)
-        let totalOffset = gestureState.panOffset.width + dragState.width
+        let totalOffset = gestureState.panOffset.width
         
         // Calculate which candles are currently visible on screen
         // Start index: first candle visible on left edge
@@ -632,7 +646,7 @@ struct TradingChartView: View {
     }
     
     private func calculateCenterCandleIndex() -> Int {
-        let totalOffset = gestureState.panOffset.width + dragState.width
+        let totalOffset = gestureState.panOffset.width
         let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
         let candlesOnScreen = Int(chartSize.width / totalCandleWidth)
         let visibleEndIndex = Swift.min(
@@ -726,7 +740,7 @@ struct TradingChartView: View {
                 let location = value.location
                 
                 // Calculate current chart offsets for marker positioning
-                let totalOffset = gestureState.panOffset.width + dragState.width
+                let totalOffset = gestureState.panOffset.width
                 let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
                 let scaledHeight = geometry.size.height * gestureState.priceScale
                 
@@ -759,45 +773,27 @@ struct TradingChartView: View {
     // MARK: - Pan Gesture
     
     /// Drag gesture for panning the chart horizontally and vertically
-    /// When crosshair is active, moves the crosshair by drag delta (relative movement)
-    /// Requires 10pt movement to distinguish from tap gestures
+    /// FIXED: Uses incremental updates to eliminate spring-back animation
+    /// When crosshair is active, moves the crosshair by drag delta
     /// - Parameters:
     ///   - size: Chart view size for boundary calculations
     ///   - coordinateSystem: Coordinate converter for crosshair positioning
     /// - Returns: Pan drag gesture
     private func dragGesture(in size: CGSize, coordinateSystem: ChartCoordinateSystem) -> some Gesture {
         DragGesture(minimumDistance: 10)
-            .updating($dragState) { value, state, _ in
-                // If crosshair is active, DON'T update drag state (we'll move crosshair instead)
-                if crosshairManager.isActive {
-                    return
-                }
-                
-                // Only update drag state if not in special modes or actively dragging marker
-                // CRITICAL: Block during BOTH Y-axis drag AND pinch to prevent interference
-                if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged {
-                    // Reverse vertical direction for natural feel
-                    // (drag up = chart moves up, revealing lower prices)
-                    state = CGSize(width: value.translation.width, height: -value.translation.height)
-                }
-            }
             .onChanged { value in
-                // If crosshair is active, move it by drag delta (relative movement)
+                // If crosshair is active, move it by drag delta
                 if crosshairManager.isActive {
-                    // Store starting position on first drag event
                     if crosshairDragStartPosition == nil {
                         crosshairDragStartPosition = crosshairManager.position
                     }
                     
-                    // Calculate new position based on original position + translation
-                    // This keeps crosshair movement relative to where it was, not jumping to finger
                     if let startPos = crosshairDragStartPosition {
                         let newPosition = CGPoint(
                             x: startPos.x + value.translation.width,
                             y: startPos.y + value.translation.height
                         )
                         
-                        // Clamp to chart bounds
                         let clampedPosition = CGPoint(
                             x: max(0, min(size.width, newPosition.x)),
                             y: max(0, min(size.height, newPosition.y))
@@ -809,32 +805,38 @@ struct TradingChartView: View {
                             chartData: chartData
                         )
                     }
-                }
-            }
-            .onEnded { value in
-                // Clear the drag start position when drag ends
-                if crosshairManager.isActive {
-                    crosshairDragStartPosition = nil
                     return
                 }
                 
-                // Normal pan behavior when crosshair not active
+                // Normal panning - apply INCREMENTALLY for no spring-back
                 if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged {
-                    let adjustedTranslation = CGSize(
-                        width: value.translation.width,
-                        height: -value.translation.height
-                    )
+                    // Calculate incremental change since last update
+                    let incrementalX = value.translation.width - lastDragTranslation.width
+                    let incrementalY = -(value.translation.height - lastDragTranslation.height)
                     
-                    // Update stored pan offset with boundary clamping
+                    // Apply incremental pan immediately to gestureState
                     gestureState.applyPan(
-                        translation: adjustedTranslation,
+                        translation: CGSize(width: incrementalX, height: incrementalY),
                         chartWidth: size.width,
                         candleCount: chartData.candles.count,
                         candleWidth: totalCandleWidth,
                         chartHeight: size.height,
                         priceScale: gestureState.priceScale
                     )
+                    
+                    // Update last translation for next increment
+                    lastDragTranslation = value.translation
                 }
+            }
+            .onEnded { value in
+                // Clear crosshair drag state
+                if crosshairManager.isActive {
+                    crosshairDragStartPosition = nil
+                }
+                
+                // Reset drag tracking - NO ANIMATION, instant reset
+                lastDragTranslation = .zero
+                dragState = .zero
             }
     }
     
@@ -993,42 +995,83 @@ struct TradingChartView: View {
         VStack {
             Spacer()
             Canvas { context, size in
-                let totalOffset = gestureState.panOffset.width + dragState.width
+                let totalOffset = gestureState.panOffset.width
+                let timeframe = chartViewModel.currentTimeframe
                 
-                // Use stride-based positioning (same as grid) for smooth scrolling
-                let labelStride = calculateCandleStride()
+                // Calculate visible range with buffer
+                let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 30)
+                let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 60)
                 
-                // Calculate starting index based on current scroll position
-                let startIndex = max(0, Int(-totalOffset / totalCandleWidth) - labelStride)
-                let endIndex = min(chartData.candles.count, startIndex + Int(size.width / totalCandleWidth) + labelStride * 2)
+                guard visibleStartIndex < visibleEndIndex else { return }
                 
-                // CRITICAL FIX: Align to absolute candle positions for smooth scrolling
-                let firstAlignedIndex = (startIndex / labelStride) * labelStride
+                // Get the nice time interval for this timeframe and zoom level
+                let niceInterval = getNiceTimeInterval(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
                 
-                // Draw labels at stride intervals
-                var drawnCount = 0
-                for i in stride(from: firstAlignedIndex, to: endIndex, by: labelStride) {
+                // Track drawn positions to avoid overlap
+                var drawnPositions: [CGFloat] = []
+                let minLabelSpacing: CGFloat = 55  // Minimum pixels between labels
+                
+                // First pass: Draw DATE labels at midnight (these take priority)
+                for i in visibleStartIndex..<visibleEndIndex {
                     guard i >= 0 && i < chartData.candles.count else { continue }
                     
                     let candle = chartData.candles[i]
                     let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
                     
-                    // Only draw if within visible area
-                    guard x >= -30 && x <= size.width + 30 else { continue }
+                    guard x >= -50 && x <= size.width + 50 else { continue }
                     
-                    // Format time based on timeframe
-                    let timeText = formatTimeLabel(candle.timestamp)
+                    // Check if this candle is at midnight (date boundary)
+                    if isAtMidnight(candle.timestamp, timeframe: timeframe) {
+                        // Check not too close to existing labels
+                        let tooClose = drawnPositions.contains { abs($0 - x) < minLabelSpacing }
+                        if tooClose { continue }
+                        
+                        let dateText = formatDateLabel(candle.timestamp, timeframe: timeframe)
+                        
+                        // Draw date label in BOLD WHITE
+                        context.draw(
+                            Text(dateText)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white),
+                            at: CGPoint(x: x, y: 10)
+                        )
+                        
+                        drawnPositions.append(x)
+                    }
+                }
+                
+                // Second pass: Draw TIME labels at nice boundaries
+                for i in visibleStartIndex..<visibleEndIndex {
+                    guard i >= 0 && i < chartData.candles.count else { continue }
                     
-                    context.draw(
-                        Text(timeText)
-                            .font(.system(size: 10))
-                            .foregroundColor(.gray),
-                        at: CGPoint(x: x, y: 10)
-                    )
+                    let candle = chartData.candles[i]
+                    let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
                     
-                    drawnCount += 1
-                    // Limit max labels for performance
-                    if drawnCount > 15 { break }
+                    guard x >= -50 && x <= size.width + 50 else { continue }
+                    
+                    // Skip midnight candles (already drawn as date labels)
+                    if isAtMidnight(candle.timestamp, timeframe: timeframe) {
+                        continue
+                    }
+                    
+                    // Check if this candle falls on a nice time boundary
+                    if isNiceTimeBoundary(candle.timestamp, interval: niceInterval, timeframe: timeframe) {
+                        // Check not too close to existing labels
+                        let tooClose = drawnPositions.contains { abs($0 - x) < minLabelSpacing }
+                        if tooClose { continue }
+                        
+                        let timeText = formatTimeLabel(candle.timestamp, timeframe: timeframe)
+                        
+                        // Draw time label in gray
+                        context.draw(
+                            Text(timeText)
+                                .font(.system(size: 10))
+                                .foregroundColor(.gray),
+                            at: CGPoint(x: x, y: 10)
+                        )
+                        
+                        drawnPositions.append(x)
+                    }
                 }
             }
             .frame(height: 20)
@@ -1038,38 +1081,228 @@ struct TradingChartView: View {
         .allowsHitTesting(false)
     }
     
-    /// Format time label based on current timeframe
-    private func formatTimeLabel(_ timestamp: Date) -> String {
-        let formatter = DateFormatter()
-        let timeframe = chartViewModel.currentTimeframe
-        
+    // MARK: - X-Axis Time Helpers
+    
+    /// Get the "nice" time interval in minutes based on timeframe and zoom
+    private func getNiceTimeInterval(timeframe: ChartTimeframe, zoomScale: CGFloat) -> Int {
         switch timeframe {
-        case .m1, .m5, .m15, .m30:
-            formatter.dateFormat = "HH:mm"
+        case .m1:
+            // M1: Show every 5, 10, 15, or 30 minutes depending on zoom
+            if zoomScale > 2.0 {
+                return 5    // Zoomed in: every 5 minutes
+            } else if zoomScale > 1.0 {
+                return 15   // Normal: every 15 minutes
+            } else if zoomScale > 0.5 {
+                return 30   // Zoomed out: every 30 minutes
+            } else {
+                return 60   // Very zoomed out: every hour
+            }
+            
+        case .m5:
+            // M5: Show every 15, 30, or 60 minutes
+            if zoomScale > 2.0 {
+                return 15   // Zoomed in: every 15 minutes
+            } else if zoomScale > 1.0 {
+                return 30   // Normal: every 30 minutes
+            } else if zoomScale > 0.5 {
+                return 60   // Zoomed out: every hour
+            } else {
+                return 120  // Very zoomed out: every 2 hours
+            }
+            
+        case .m15:
+            // M15: Show every 30 min, 1 hour, or 2 hours
+            if zoomScale > 1.5 {
+                return 30   // Zoomed in: every 30 minutes
+            } else if zoomScale > 0.7 {
+                return 60   // Normal: every hour
+            } else {
+                return 120  // Zoomed out: every 2 hours
+            }
+            
+        case .m30:
+            // M30: Show every 1, 2, or 4 hours
+            if zoomScale > 1.5 {
+                return 60   // Zoomed in: every hour
+            } else if zoomScale > 0.7 {
+                return 120  // Normal: every 2 hours
+            } else {
+                return 240  // Zoomed out: every 4 hours
+            }
             
         case .h1:
-            let hour = Calendar.current.component(.hour, from: timestamp)
-            if hour == 0 {
-                formatter.dateFormat = "dd MMM"
+            // H1: Show every 2, 4, or 8 hours
+            if zoomScale > 1.5 {
+                return 120  // Zoomed in: every 2 hours
+            } else if zoomScale > 0.7 {
+                return 240  // Normal: every 4 hours
             } else {
-                formatter.dateFormat = "HH:mm"
+                return 480  // Zoomed out: every 8 hours
             }
             
         case .h4:
-            let hour = Calendar.current.component(.hour, from: timestamp)
-            if hour == 0 {
-                formatter.dateFormat = "dd MMM"
+            // H4: Show every 8, 12, or 24 hours
+            if zoomScale > 1.5 {
+                return 480  // Zoomed in: every 8 hours
+            } else if zoomScale > 0.7 {
+                return 720  // Normal: every 12 hours
             } else {
-                formatter.dateFormat = "HH:mm"
+                return 1440 // Zoomed out: every 24 hours (daily)
             }
             
         case .d1:
-            formatter.dateFormat = "dd MMM"
+            // D1: Return days as minutes (1440 min/day)
+            if zoomScale > 1.5 {
+                return 1440     // Every day
+            } else if zoomScale > 0.7 {
+                return 1440 * 2 // Every 2 days
+            } else {
+                return 1440 * 7 // Every week
+            }
             
         case .w1:
-            formatter.dateFormat = "dd MMM"
+            // W1: Return weeks as minutes
+            if zoomScale > 1.0 {
+                return 1440 * 7     // Every week
+            } else {
+                return 1440 * 14    // Every 2 weeks
+            }
             
         case .mn:
+            // MN: Return ~months as minutes
+            return 1440 * 30  // Roughly monthly
+        }
+    }
+    
+    /// Check if a timestamp falls on a "nice" time boundary
+    private func isNiceTimeBoundary(_ timestamp: Date, interval: Int, timeframe: ChartTimeframe) -> Bool {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: timestamp)
+        let minute = calendar.component(.minute, from: timestamp)
+        
+        switch timeframe {
+        case .m1, .m5, .m15, .m30:
+            // For intraday: check if minutes align with interval
+            if interval < 60 {
+                // Sub-hourly: check minute alignment (e.g., :00, :15, :30, :45)
+                return minute % interval == 0
+            } else {
+                // Hourly or multi-hour intervals
+                let intervalHours = interval / 60
+                return minute == 0 && hour % intervalHours == 0
+            }
+            
+        case .h1, .h4:
+            // For hourly: check if hour aligns with interval (in hours)
+            let intervalHours = max(1, interval / 60)
+            return minute == 0 && hour % intervalHours == 0
+            
+        case .d1:
+            // For daily: check day of week or specific days
+            let intervalDays = interval / 1440
+            if intervalDays <= 1 {
+                return true  // Every day
+            } else if intervalDays <= 7 {
+                // Every few days - show Mon, Wed, Fri
+                let weekday = calendar.component(.weekday, from: timestamp)
+                return weekday == 2 || weekday == 4 || weekday == 6
+            } else {
+                // Weekly - show Mondays
+                let weekday = calendar.component(.weekday, from: timestamp)
+                return weekday == 2
+            }
+            
+        case .w1:
+            // Weekly: show at start of weeks/months
+            let day = calendar.component(.day, from: timestamp)
+            return day <= 7
+            
+        case .mn:
+            // Monthly: show at quarter starts
+            let month = calendar.component(.month, from: timestamp)
+            return [1, 4, 7, 10].contains(month)
+        }
+    }
+    
+    /// Check if timestamp is at midnight (for date labels)
+    private func isAtMidnight(_ timestamp: Date, timeframe: ChartTimeframe) -> Bool {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: timestamp)
+        let minute = calendar.component(.minute, from: timestamp)
+        
+        switch timeframe {
+        case .m1:
+            // M1: The 00:00 candle exactly
+            return hour == 0 && minute == 0
+        case .m5:
+            // M5: The 00:00 candle (might be 00:00 or 00:05 depending on alignment)
+            return hour == 0 && minute <= 5
+        case .m15:
+            // M15: The 00:00 candle
+            return hour == 0 && minute == 0
+        case .m30:
+            // M30: The 00:00 candle
+            return hour == 0 && minute == 0
+        case .h1, .h4:
+            // Hourly: The 00:00 candle
+            return hour == 0
+        case .d1:
+            // Daily: First of month
+            let day = calendar.component(.day, from: timestamp)
+            return day == 1
+        case .w1:
+            // Weekly: First week of month
+            let day = calendar.component(.day, from: timestamp)
+            return day <= 7
+        case .mn:
+            // Monthly: Quarter start
+            let month = calendar.component(.month, from: timestamp)
+            return [1, 4, 7, 10].contains(month)
+        }
+    }
+    
+    /// Format a date label for display (shown at midnight/boundaries in BOLD)
+    private func formatDateLabel(_ timestamp: Date, timeframe: ChartTimeframe) -> String {
+        let formatter = DateFormatter()
+        
+        switch timeframe {
+        case .m1, .m5, .m15, .m30, .h1, .h4:
+            // Intraday: Show day/month
+            formatter.dateFormat = "dd/MM"
+        case .d1:
+            // Daily: Show month name
+            formatter.dateFormat = "MMM"
+        case .w1:
+            // Weekly: Show month and year
+            formatter.dateFormat = "MMM yy"
+        case .mn:
+            // Monthly: Show quarter
+            let calendar = Calendar.current
+            let month = calendar.component(.month, from: timestamp)
+            let year = calendar.component(.year, from: timestamp)
+            let quarter = (month - 1) / 3 + 1
+            return "Q\(quarter) '\(year % 100)"
+        }
+        
+        return formatter.string(from: timestamp)
+    }
+    
+    /// Format a time label for display (shown at nice time boundaries in gray)
+    private func formatTimeLabel(_ timestamp: Date, timeframe: ChartTimeframe) -> String {
+        let formatter = DateFormatter()
+        
+        switch timeframe {
+        case .m1, .m5, .m15, .m30, .h1, .h4:
+            // Intraday: Show HH:mm
+            formatter.dateFormat = "HH:mm"
+        case .d1:
+            // Daily: Show day number
+            formatter.dateFormat = "dd"
+        case .w1:
+            // Weekly: Show day and month
+            formatter.dateFormat = "dd MMM"
+        case .mn:
+            // Monthly: Show month and year
             formatter.dateFormat = "MMM yy"
         }
         
@@ -1079,6 +1312,7 @@ struct TradingChartView: View {
     // MARK: - Y-Axis Overlay (Symbol-Aware Formatting)
     
     /// Y-axis overlay with symbol-aware price formatting
+    /// FIXED: Uses zoom-aware PriceAxisHelper for proper grid density
     @ViewBuilder
     func yAxisOverlay(geometry: GeometryProxy) -> some View {
         HStack {
@@ -1088,32 +1322,42 @@ struct TradingChartView: View {
                 let scaledHeight = geometry.size.height * gestureState.priceScale
                 let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
                 
-                // Calculate nice price step
-                let priceStep = calculateNicePriceStep(range: priceRange.max - priceRange.min)
-                let startPrice = floor(priceRange.min / priceStep) * priceStep
+                // Use PriceAxisHelper with chart height for zoom-aware calculation
+                let priceHelper = PriceAxisHelper(
+                    symbol: currentSymbol,
+                    priceRange: priceRange,
+                    priceScale: gestureState.priceScale,
+                    chartHeight: geometry.size.height
+                )
                 
-                // Draw labels at nice price intervals
-                var currentPrice = startPrice
-                while currentPrice <= priceRange.max + priceStep {
+                let step = priceHelper.nicePriceStep
+                
+                // VERY extended range - prices should NEVER run out
+                let extendedStartPrice = floor((priceRange.min - step * 30) / step) * step
+                let extendedEndPrice = ceil((priceRange.max + step * 30) / step) * step
+                
+                var currentPrice = extendedStartPrice
+                var labelCount = 0
+                let maxLabels = 100  // Generous limit for zoomed-in views
+                
+                while currentPrice <= extendedEndPrice && labelCount < maxLabels {
                     let normalizedPrice = (currentPrice - priceRange.min) / (priceRange.max - priceRange.min)
                     let y = size.height - (CGFloat(normalizedPrice) * scaledHeight) - totalVerticalOffset
                     
-                    guard y >= -20 && y <= size.height + 20 else {
-                        currentPrice += priceStep
-                        continue
+                    // Very extended bounds
+                    if y >= -300 && y <= size.height + 300 {
+                        let priceText = chartData.formatPrice(currentPrice)
+                        
+                        context.draw(
+                            Text(priceText)
+                                .font(.system(size: 10))
+                                .foregroundColor(.gray),
+                            at: CGPoint(x: 30, y: y)
+                        )
+                        labelCount += 1
                     }
                     
-                    // Use symbol-aware formatting
-                    let priceText = chartData.formatPrice(currentPrice)
-                    
-                    context.draw(
-                        Text(priceText)
-                            .font(.system(size: 10))
-                            .foregroundColor(.gray),
-                        at: CGPoint(x: 30, y: y)
-                    )
-                    
-                    currentPrice += priceStep
+                    currentPrice += step
                 }
             }
             .frame(width: yAxisWidth)
@@ -1138,7 +1382,7 @@ struct TradingChartView: View {
         drawingContext.clip(to: Path(CGRect(origin: .zero, size: size)))
         
         // Calculate current offsets for all positioning
-        let totalOffset = gestureState.panOffset.width + dragState.width
+        let totalOffset = gestureState.panOffset.width
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
         
         // Draw components in order (back to front)
@@ -1162,48 +1406,80 @@ struct TradingChartView: View {
     }
     
     /// Draw background grid for visual reference
-    /// Vertical lines every 5 candles, horizontal lines at nice price intervals
-    /// Grid now moves WITH candles during vertical scaling
-    /// - Parameters:
-    ///   - context: Graphics context
-    ///   - size: Canvas size
+    /// FIXED: Grid lines EXACTLY match axis labels, zoom-aware density
     private func drawGrid(context: GraphicsContext, size: CGSize) {
         let priceRange = chartData.priceRange
         let scaledHeight = size.height * gestureState.priceScale
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
-        let totalOffset = gestureState.panOffset.width + dragState.width
+        let totalOffset = gestureState.panOffset.width
+        let timeframe = chartViewModel.currentTimeframe
         
         let gridPath = Path { path in
-            // Vertical grid lines at nice time boundaries
-            let timeHelper = TimeAxisHelper(timeframe: currentTimeframe)
-            let labelInterval = timeHelper.adaptiveLabelInterval(zoomScale: gestureState.candleWidthScale)
             
-            for i in 0..<chartData.candles.count {
+            // ========================================
+            // VERTICAL GRID LINES
+            // TIME-BASED: Draws lines at nice time boundaries
+            // (matches X-axis labels for consistency)
+            // ========================================
+            
+            let niceInterval = getNiceTimeInterval(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
+            
+            let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 30)
+            let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 60)
+            
+            for i in visibleStartIndex..<visibleEndIndex {
+                guard i >= 0 && i < chartData.candles.count else { continue }
+                
                 let candle = chartData.candles[i]
-                let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
                 
-                guard x >= -totalCandleWidth && x <= size.width + totalCandleWidth else { continue }
-                guard timeHelper.isNiceBoundary(candle.timestamp, interval: labelInterval) else { continue }
+                // Draw grid line at nice time boundaries OR midnight
+                let isMidnight = isAtMidnight(candle.timestamp, timeframe: timeframe)
+                let isNiceBoundary = isNiceTimeBoundary(candle.timestamp, interval: niceInterval, timeframe: timeframe)
                 
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x, y: size.height))
+                if isMidnight || isNiceBoundary {
+                    let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+                    
+                    if x >= -100 && x <= size.width + 100 {
+                        path.move(to: CGPoint(x: x, y: 0))
+                        path.addLine(to: CGPoint(x: x, y: size.height))
+                    }
+                }
             }
             
-            // Horizontal grid lines at nice price levels
+            // ========================================
+            // HORIZONTAL GRID LINES
+            // Zoom-aware step calculation (same as Y-axis)
+            // ========================================
+            
             let priceHelper = PriceAxisHelper(
                 symbol: currentSymbol,
                 priceRange: priceRange,
-                priceScale: gestureState.priceScale
+                priceScale: gestureState.priceScale,
+                chartHeight: size.height
             )
             
-            for price in priceHelper.gridPriceLevels {
-                let normalizedPrice = (price - priceRange.min) / (priceRange.max - priceRange.min)
+            let step = priceHelper.nicePriceStep
+            
+            // VERY extended range - grid should NEVER run out
+            let extendedStartPrice = floor((priceRange.min - step * 30) / step) * step
+            let extendedEndPrice = ceil((priceRange.max + step * 30) / step) * step
+            
+            var currentPrice = extendedStartPrice
+            var lineCount = 0
+            let maxLines = 100  // Safety limit
+            
+            while currentPrice <= extendedEndPrice && lineCount < maxLines {
+                let normalizedPrice = (currentPrice - priceRange.min) / (priceRange.max - priceRange.min)
                 let y = size.height - (CGFloat(normalizedPrice) * scaledHeight) - totalVerticalOffset
                 
-                if y >= -1 && y <= size.height + 1 {
+                // Very extended bounds
+                if y >= -500 && y <= size.height + 500 {
                     path.move(to: CGPoint(x: 0, y: y))
                     path.addLine(to: CGPoint(x: size.width, y: y))
+                    lineCount += 1
                 }
+                
+                currentPrice += step
             }
         }
         
@@ -1289,7 +1565,7 @@ struct TradingChartView: View {
     private func drawCandlesticks(context: GraphicsContext, size: CGSize) {
         let priceRange = chartData.priceRange
         let scaledHeight = size.height * gestureState.priceScale
-        let totalOffset = gestureState.panOffset.width + dragState.width
+        let totalOffset = gestureState.panOffset.width
         
         // Calculate visible candle range for performance
         // Only draw candles that are actually on screen
@@ -1422,22 +1698,6 @@ struct TradingChartView: View {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//
 //import SwiftUI
 //
 ///// Main trading chart view that handles all chart rendering and interactions
@@ -1464,8 +1724,11 @@ struct TradingChartView: View {
 //    @StateObject private var gestureState = ChartGestureState()
 //    
 //    /// Current drag translation for smooth real-time panning feedback
-//    /// This is a @GestureState so it automatically resets when gesture ends
-//    @GestureState private var dragState: CGSize = .zero
+//    /// Using @State instead of @GestureState to avoid spring-back animation
+//    @State private var dragState: CGSize = .zero
+//    
+//    /// Track the previous drag translation for incremental updates
+//    @State private var lastDragTranslation: CGSize = .zero
 //    
 //    /// Y-axis pinch scale for vertical price range scaling (not used but kept for reference)
 //    @GestureState private var yAxisPinchScale: CGFloat = 1.0
@@ -1556,6 +1819,10 @@ struct TradingChartView: View {
 //    
 //    @State private var chartSize: CGSize = .zero
 //    
+//    /// Stores crosshair position at start of drag for relative movement
+//    /// This allows crosshair to move by delta instead of jumping to finger position
+//    @State private var crosshairDragStartPosition: CGPoint? = nil
+//    
 //    // MARK: - Chart Configuration
 //    
 //    /// Base width of each candle before any scaling is applied
@@ -1637,23 +1904,34 @@ struct TradingChartView: View {
 //    
 //    /// Calculate clamped vertical offset that respects pan limits
 //    /// Prevents user from panning too far up or down
-//    /// Provides natural boundaries to vertical movement
+//    /// FIXED: No longer uses dragState (translation applied incrementally)
 //    private func clampedVerticalOffset(chartHeight: CGFloat) -> CGFloat {
-//        // During Y-axis gestures, DON'T add dragState.height as it interferes with centering
-//        // Only combine with dragState when doing normal chart panning
-//        let totalOffset = (isDraggingOnYAxis || isPinchingOnYAxis)
-//            ? gestureState.verticalPanOffset  // Y-axis gesture: use exact calculated offset
-//            : gestureState.verticalPanOffset + dragState.height  // Normal pan: add drag
+//        // Use stored offset directly - incremental updates already applied
+//        let totalOffset = gestureState.verticalPanOffset
 //        
 //        // Calculate scaled height to determine valid pan range
 //        let scaledHeight = chartHeight * gestureState.priceScale
 //        
-//        // Allow panning up to 50% of scaled height in either direction
-//        // During Y-axis gestures, use larger limits to allow free scaling
-//        let paddingMultiplier: CGFloat = (isDraggingOnYAxis || isPinchingOnYAxis) ? 2.0 : 0.5
-//        let verticalPadding = scaledHeight * paddingMultiplier
+//        // Very generous base limit
+//        let baseMultiplier: CGFloat = 3.0
 //        
-//        // Clamp the offset to valid range
+//        // Extra room when zoomed out so prices NEVER run out
+//        let zoomAdjustment: CGFloat
+//        if gestureState.priceScale < 0.5 {
+//            zoomAdjustment = 4.0
+//        } else if gestureState.priceScale < 0.7 {
+//            zoomAdjustment = 3.0
+//        } else if gestureState.priceScale < 0.9 {
+//            zoomAdjustment = 2.0
+//        } else if gestureState.priceScale > 2.0 {
+//            zoomAdjustment = 2.0
+//        } else {
+//            zoomAdjustment = 1.5
+//        }
+//        
+//        let verticalPadding = scaledHeight * baseMultiplier * zoomAdjustment
+//        
+//        // Hard clamp - no animation, just stop at the wall
 //        return Swift.min(verticalPadding, Swift.max(-verticalPadding, totalOffset))
 //    }
 //    
@@ -1894,8 +2172,6 @@ struct TradingChartView: View {
 //                                    HStack(spacing: 6) {
 //                                        Image(systemName: "xmark.circle.fill")
 //                                            .font(.system(size: 22))
-////                                        Text("Cancel")
-////                                            .font(.headline)
 //                                    }
 //                                    .foregroundColor(.white)
 //                                    .padding(.horizontal, 16)
@@ -1903,19 +2179,6 @@ struct TradingChartView: View {
 //                                    .background(Color.red)
 //                                    .cornerRadius(12)
 //                                }
-//                                
-//                                
-//                                
-////                                // Instruction text
-////                                Text("Drag marker to position")
-////                                    .font(.headline)
-////                                    .foregroundColor(.white)
-////                                    .padding(.horizontal, 16)
-////                                    .padding(.vertical, 12)
-////                                    .background(Color.blue.opacity(0.9))
-////                                    .cornerRadius(12)
-////
-////                                Spacer()
 //                                
 //                                // Place button to commit marker placement
 //                                Button(action: {
@@ -1946,8 +2209,6 @@ struct TradingChartView: View {
 //                                    HStack(spacing: 6) {
 //                                        Image(systemName: "checkmark.circle.fill")
 //                                            .font(.system(size: 22))
-////                                        Text("Place")
-////                                            .font(.headline)
 //                                    }
 //                                    .foregroundColor(.white)
 //                                    .padding(.horizontal, 16)
@@ -1971,10 +2232,11 @@ struct TradingChartView: View {
 //                }
 //                // GESTURE LAYER
 //                // These gestures only apply when NOT in marker placement mode
-//                // Order matters: crosshair has priority, then tap, then pan/zoom
+//                // Order matters: tap to dismiss crosshair first, then long press to activate, then others
+//                .gesture(crosshairDismissTapGesture())  // NEW: Tap to dismiss crosshair
 //                .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
 //                .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
-//                .simultaneousGesture(dragGesture(in: geometry.size))
+//                .simultaneousGesture(dragGesture(in: geometry.size, coordinateSystem: coordinateSystem))  // MODIFIED: Pass coordinateSystem
 //                .simultaneousGesture(pinchGesture(in: geometry.size))
 //                // Y-AXIS GESTURE OVERLAY
 //                // CRITICAL: This must be OUTSIDE the main ZStack and AFTER the gesture layer
@@ -2058,7 +2320,7 @@ struct TradingChartView: View {
 //    /// - Returns: Clamped candle index at the center of visible range
 //    private func getCenterVisibleCandleIndex(geometry: GeometryProxy) -> Int {
 //        // Get current pan offset (includes both stored and active drag)
-//        let totalOffset = gestureState.panOffset.width + dragState.width
+//        let totalOffset = gestureState.panOffset.width
 //        
 //        // Calculate which candles are currently visible on screen
 //        // Start index: first candle visible on left edge
@@ -2084,7 +2346,7 @@ struct TradingChartView: View {
 //    }
 //    
 //    private func calculateCenterCandleIndex() -> Int {
-//        let totalOffset = gestureState.panOffset.width + dragState.width
+//        let totalOffset = gestureState.panOffset.width
 //        let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
 //        let candlesOnScreen = Int(chartSize.width / totalCandleWidth)
 //        let visibleEndIndex = Swift.min(
@@ -2108,14 +2370,14 @@ struct TradingChartView: View {
 //        return max(0, min(chartData.candles.count - 1, chartData.candles.count / 2))
 //    }
 //    
-//    // MARK: - Crosshair Gesture
+//    // MARK: - Crosshair Gestures
 //    
 //    /// Long press gesture for activating crosshair (price inspection tool)
-//    /// User must hold for 0.5 seconds, then can drag to inspect different prices
+//    /// Crosshair stays visible until user taps to dismiss
 //    /// - Parameter coordinateSystem: Coordinate converter for screen<->chart mapping
 //    /// - Returns: Combined long press + drag gesture
 //    private func crosshairGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
-//        LongPressGesture(minimumDuration: 0.5)
+//        LongPressGesture(minimumDuration: 0.2)  // Fast activation (0.2s)
 //            .sequenced(before: DragGesture(minimumDistance: 0))
 //            .onChanged { value in
 //                switch value {
@@ -2123,7 +2385,10 @@ struct TradingChartView: View {
 //                    // Long press succeeded, now user is dragging
 //                    if let location = drag?.location {
 //                        if !crosshairManager.isActive {
-//                            // First activation - show crosshair at touch location
+//                            // First activation - haptic feedback
+//                            let generator = UIImpactFeedbackGenerator(style: .medium)
+//                            generator.impactOccurred()
+//                            
 //                            crosshairManager.activate(
 //                                at: location,
 //                                coordinateSystem: coordinateSystem,
@@ -2142,9 +2407,20 @@ struct TradingChartView: View {
 //                    break
 //                }
 //            }
-//            .onEnded { _ in
-//                // User released - hide crosshair
-//                crosshairManager.deactivate()
+//        // NO .onEnded - crosshair stays visible until tapped to dismiss!
+//    }
+//    
+//    /// Tap anywhere to dismiss active crosshair
+//    /// Only triggers when crosshair is active
+//    private func crosshairDismissTapGesture() -> some Gesture {
+//        TapGesture()
+//            .onEnded {
+//                if crosshairManager.isActive {
+//                    // Light haptic on dismiss
+//                    let generator = UIImpactFeedbackGenerator(style: .light)
+//                    generator.impactOccurred()
+//                    crosshairManager.deactivate()
+//                }
 //            }
 //    }
 //    
@@ -2164,7 +2440,7 @@ struct TradingChartView: View {
 //                let location = value.location
 //                
 //                // Calculate current chart offsets for marker positioning
-//                let totalOffset = gestureState.panOffset.width + dragState.width
+//                let totalOffset = gestureState.panOffset.width
 //                let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
 //                let scaledHeight = geometry.size.height * gestureState.priceScale
 //                
@@ -2197,39 +2473,70 @@ struct TradingChartView: View {
 //    // MARK: - Pan Gesture
 //    
 //    /// Drag gesture for panning the chart horizontally and vertically
-//    /// Only active when NOT in Y-axis gestures, crosshair, or actively dragging marker
-//    /// Requires 10pt movement to distinguish from tap gestures
-//    /// - Parameter size: Chart view size for boundary calculations
+//    /// FIXED: Uses incremental updates to eliminate spring-back animation
+//    /// When crosshair is active, moves the crosshair by drag delta
+//    /// - Parameters:
+//    ///   - size: Chart view size for boundary calculations
+//    ///   - coordinateSystem: Coordinate converter for crosshair positioning
 //    /// - Returns: Pan drag gesture
-//    private func dragGesture(in size: CGSize) -> some Gesture {
+//    private func dragGesture(in size: CGSize, coordinateSystem: ChartCoordinateSystem) -> some Gesture {
 //        DragGesture(minimumDistance: 10)
-//            .updating($dragState) { value, state, _ in
-//                // Only update drag state if not in special modes or actively dragging marker
-//                // CRITICAL: Block during BOTH Y-axis drag AND pinch to prevent interference
-//                if !isDraggingOnYAxis && !isPinchingOnYAxis && !crosshairManager.isActive && !isMarkerBeingDragged {
-//                    // Reverse vertical direction for natural feel
-//                    // (drag up = chart moves up, revealing lower prices)
-//                    state = CGSize(width: value.translation.width, height: -value.translation.height)
-//                }
-//            }
-//            .onEnded { value in
-//                // Apply final pan position when gesture ends
-//                if !isDraggingOnYAxis && !isPinchingOnYAxis && !crosshairManager.isActive && !isMarkerBeingDragged {
-//                    let adjustedTranslation = CGSize(
-//                        width: value.translation.width,
-//                        height: -value.translation.height
-//                    )
+//            .onChanged { value in
+//                // If crosshair is active, move it by drag delta
+//                if crosshairManager.isActive {
+//                    if crosshairDragStartPosition == nil {
+//                        crosshairDragStartPosition = crosshairManager.position
+//                    }
 //                    
-//                    // Update stored pan offset with boundary clamping
+//                    if let startPos = crosshairDragStartPosition {
+//                        let newPosition = CGPoint(
+//                            x: startPos.x + value.translation.width,
+//                            y: startPos.y + value.translation.height
+//                        )
+//                        
+//                        let clampedPosition = CGPoint(
+//                            x: max(0, min(size.width, newPosition.x)),
+//                            y: max(0, min(size.height, newPosition.y))
+//                        )
+//                        
+//                        crosshairManager.updatePosition(
+//                            clampedPosition,
+//                            coordinateSystem: coordinateSystem,
+//                            chartData: chartData
+//                        )
+//                    }
+//                    return
+//                }
+//                
+//                // Normal panning - apply INCREMENTALLY for no spring-back
+//                if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged {
+//                    // Calculate incremental change since last update
+//                    let incrementalX = value.translation.width - lastDragTranslation.width
+//                    let incrementalY = -(value.translation.height - lastDragTranslation.height)
+//                    
+//                    // Apply incremental pan immediately to gestureState
 //                    gestureState.applyPan(
-//                        translation: adjustedTranslation,
+//                        translation: CGSize(width: incrementalX, height: incrementalY),
 //                        chartWidth: size.width,
 //                        candleCount: chartData.candles.count,
 //                        candleWidth: totalCandleWidth,
 //                        chartHeight: size.height,
 //                        priceScale: gestureState.priceScale
 //                    )
+//                    
+//                    // Update last translation for next increment
+//                    lastDragTranslation = value.translation
 //                }
+//            }
+//            .onEnded { value in
+//                // Clear crosshair drag state
+//                if crosshairManager.isActive {
+//                    crosshairDragStartPosition = nil
+//                }
+//                
+//                // Reset drag tracking - NO ANIMATION, instant reset
+//                lastDragTranslation = .zero
+//                dragState = .zero
 //            }
 //    }
 //    
@@ -2243,6 +2550,7 @@ struct TradingChartView: View {
 //    private func pinchGesture(in size: CGSize) -> some Gesture {
 //        MagnificationGesture()
 //            .onChanged { value in
+//                // Disable zoom while crosshair is active
 //                guard !crosshairManager.isActive && !isMarkerBeingDragged && !isPinchingOnYAxis else { return }
 //                
 //                // Initialize on first pinch
@@ -2387,30 +2695,73 @@ struct TradingChartView: View {
 //        VStack {
 //            Spacer()
 //            Canvas { context, size in
-//                let totalOffset = gestureState.panOffset.width + dragState.width
+//                let totalOffset = gestureState.panOffset.width
 //                
-//                // Use stride-based positioning (same as grid) for smooth scrolling
+//                // Stride-based positioning for regular time labels
 //                let labelStride = calculateCandleStride()
 //                
-//                // Calculate starting index based on current scroll position
-//                let startIndex = max(0, Int(-totalOffset / totalCandleWidth) - labelStride)
-//                let endIndex = min(chartData.candles.count, startIndex + Int(size.width / totalCandleWidth) + labelStride * 2)
+//                // Extended range for smooth scrolling
+//                let startIndex = max(0, Int(-totalOffset / totalCandleWidth) - labelStride * 3)
+//                let endIndex = min(chartData.candles.count, startIndex + Int(size.width / totalCandleWidth) + labelStride * 4)
 //                
-//                // Draw labels at stride intervals
-//                var drawnCount = 0
-//                let firstAlignedIndex = (startIndex / labelStride) * labelStride  // ADD THIS LINE
-//                for i in stride(from: firstAlignedIndex, to: endIndex, by: labelStride) {
+//                // Track positions where we've drawn labels to avoid overlap
+//                var drawnPositions: [CGFloat] = []
+//                let minLabelSpacing: CGFloat = 45  // Minimum pixels between labels
+//                
+//                // First pass: Find and draw ALL date labels (midnight boundaries)
+//                // These take priority and are always shown
+//                for i in startIndex..<endIndex {
 //                    guard i >= 0 && i < chartData.candles.count else { continue }
 //                    
 //                    let candle = chartData.candles[i]
 //                    let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
 //                    
-//                    // Only draw if within visible area
-//                    guard x >= -30 && x <= size.width + 30 else { continue }
+//                    guard x >= -100 && x <= size.width + 100 else { continue }
 //                    
-//                    // Format time based on timeframe
-//                    let timeText = formatTimeLabel(candle.timestamp)
+//                    // Check if this is a date boundary (midnight)
+//                    if isDateBoundary(candle.timestamp) {
+//                        let dateText = formatDateLabel(candle.timestamp)
+//                        
+//                        // Draw date label in BOLD WHITE
+//                        context.draw(
+//                            Text(dateText)
+//                                .font(.system(size: 11, weight: .bold))
+//                                .foregroundColor(.white),
+//                            at: CGPoint(x: x, y: 10)
+//                        )
+//                        
+//                        drawnPositions.append(x)
+//                    }
+//                }
+//                
+//                // Second pass: Draw stride-based time labels (avoiding overlap with date labels)
+//                let firstAlignedIndex = (startIndex / labelStride) * labelStride
+//                var drawnCount = 0
+//                let maxLabels = 25
+//                
+//                for i in stride(from: firstAlignedIndex, to: endIndex, by: labelStride) {
+//                    guard i >= 0 && i < chartData.candles.count else { continue }
+//                    guard drawnCount < maxLabels else { break }
 //                    
+//                    let candle = chartData.candles[i]
+//                    let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+//                    
+//                    guard x >= -100 && x <= size.width + 100 else { continue }
+//                    
+//                    // Skip if this is a date boundary (already drawn in first pass)
+//                    if isDateBoundary(candle.timestamp) {
+//                        continue
+//                    }
+//                    
+//                    // Skip if too close to a date label
+//                    let tooClose = drawnPositions.contains { abs($0 - x) < minLabelSpacing }
+//                    if tooClose {
+//                        continue
+//                    }
+//                    
+//                    let timeText = formatTimeOnlyLabel(candle.timestamp)
+//                    
+//                    // Draw time label in gray
 //                    context.draw(
 //                        Text(timeText)
 //                            .font(.system(size: 10))
@@ -2418,9 +2769,8 @@ struct TradingChartView: View {
 //                        at: CGPoint(x: x, y: 10)
 //                    )
 //                    
+//                    drawnPositions.append(x)
 //                    drawnCount += 1
-//                    // Limit max labels for performance
-//                    if drawnCount > 15 { break }
 //                }
 //            }
 //            .frame(height: 20)
@@ -2430,33 +2780,84 @@ struct TradingChartView: View {
 //        .allowsHitTesting(false)
 //    }
 //    
-//    /// Format time label based on current timeframe
-//    private func formatTimeLabel(_ timestamp: Date) -> String {
+//    /// Check if timestamp is at a date boundary (midnight for intraday, month start for daily+)
+//    private func isDateBoundary(_ timestamp: Date) -> Bool {
+//        let timeframe = chartViewModel.currentTimeframe
+//        let calendar = Calendar.current
+//        let hour = calendar.component(.hour, from: timestamp)
+//        let minute = calendar.component(.minute, from: timestamp)
+//        
+//        switch timeframe {
+//        case .m1, .m5:
+//            // Midnight (allowing small tolerance for M1/M5)
+//            return hour == 0 && minute <= 5
+//            
+//        case .m15, .m30:
+//            // Exactly midnight
+//            return hour == 0 && minute == 0
+//            
+//        case .h1, .h4:
+//            // Midnight
+//            return hour == 0
+//            
+//        case .d1:
+//            // First of month
+//            let day = calendar.component(.day, from: timestamp)
+//            return day == 1
+//            
+//        case .w1:
+//            // First week of month
+//            let day = calendar.component(.day, from: timestamp)
+//            return day <= 7
+//            
+//        case .mn:
+//            // Quarter start
+//            let month = calendar.component(.month, from: timestamp)
+//            return [1, 4, 7, 10].contains(month)
+//        }
+//    }
+//    
+//    /// Format a date label (shown at midnight/boundaries)
+//    private func formatDateLabel(_ timestamp: Date) -> String {
+//        let formatter = DateFormatter()
+//        let timeframe = chartViewModel.currentTimeframe
+//        let calendar = Calendar.current
+//        
+//        switch timeframe {
+//        case .m1, .m5, .m15, .m30, .h1, .h4:
+//            // Intraday: show dd/MM
+//            formatter.dateFormat = "dd/MM"
+//            
+//        case .d1:
+//            // Daily: show month name
+//            formatter.dateFormat = "MMM"
+//            
+//        case .w1:
+//            // Weekly: show month and year
+//            formatter.dateFormat = "MMM yy"
+//            
+//        case .mn:
+//            // Monthly: show quarter label
+//            let month = calendar.component(.month, from: timestamp)
+//            let year = calendar.component(.year, from: timestamp)
+//            let quarter = (month - 1) / 3 + 1
+//            return "Q\(quarter) \(year % 100)"
+//        }
+//        
+//        return formatter.string(from: timestamp)
+//    }
+//    
+//    /// Format a time-only label (for non-boundary candles)
+//    private func formatTimeOnlyLabel(_ timestamp: Date) -> String {
 //        let formatter = DateFormatter()
 //        let timeframe = chartViewModel.currentTimeframe
 //        
 //        switch timeframe {
-//        case .m1, .m5, .m15, .m30:
+//        case .m1, .m5, .m15, .m30, .h1, .h4:
 //            formatter.dateFormat = "HH:mm"
 //            
-//        case .h1:
-//            let hour = Calendar.current.component(.hour, from: timestamp)
-//            if hour == 0 {
-//                formatter.dateFormat = "dd MMM"
-//            } else {
-//                formatter.dateFormat = "HH:mm"
-//            }
-//            
-//        case .h4:
-//            let hour = Calendar.current.component(.hour, from: timestamp)
-//            if hour == 0 {
-//                formatter.dateFormat = "dd MMM"
-//            } else {
-//                formatter.dateFormat = "HH:mm"
-//            }
-//            
 //        case .d1:
-//            formatter.dateFormat = "dd MMM"
+//            formatter.dateFormat = "dd"
 //            
 //        case .w1:
 //            formatter.dateFormat = "dd MMM"
@@ -2468,9 +2869,97 @@ struct TradingChartView: View {
 //        return formatter.string(from: timestamp)
 //    }
 //    
+//    /// Format time label and indicate if it's a date label (for bold styling)
+//    /// Returns (labelText, isDateLabel)
+//    private func formatTimeLabelWithType(_ timestamp: Date) -> (String, Bool) {
+//        let formatter = DateFormatter()
+//        let timeframe = chartViewModel.currentTimeframe
+//        let calendar = Calendar.current
+//        let hour = calendar.component(.hour, from: timestamp)
+//        let minute = calendar.component(.minute, from: timestamp)
+//        
+//        switch timeframe {
+//        case .m1, .m5:
+//            // Show date at midnight, otherwise time
+//            if hour == 0 && minute <= 5 {
+//                formatter.dateFormat = "dd/MM"
+//                return (formatter.string(from: timestamp), true)
+//            } else {
+//                formatter.dateFormat = "HH:mm"
+//                return (formatter.string(from: timestamp), false)
+//            }
+//            
+//        case .m15, .m30:
+//            // Show date at midnight, otherwise time
+//            if hour == 0 && minute == 0 {
+//                formatter.dateFormat = "dd/MM"
+//                return (formatter.string(from: timestamp), true)
+//            } else {
+//                formatter.dateFormat = "HH:mm"
+//                return (formatter.string(from: timestamp), false)
+//            }
+//            
+//        case .h1:
+//            // Show date at midnight (00:00)
+//            if hour == 0 {
+//                formatter.dateFormat = "dd/MM"
+//                return (formatter.string(from: timestamp), true)
+//            } else {
+//                formatter.dateFormat = "HH:mm"
+//                return (formatter.string(from: timestamp), false)
+//            }
+//            
+//        case .h4:
+//            // Show date at midnight
+//            if hour == 0 {
+//                formatter.dateFormat = "dd/MM"
+//                return (formatter.string(from: timestamp), true)
+//            } else {
+//                formatter.dateFormat = "HH:mm"
+//                return (formatter.string(from: timestamp), false)
+//            }
+//            
+//        case .d1:
+//            // Daily: show date, highlight month start
+//            let day = calendar.component(.day, from: timestamp)
+//            if day == 1 {
+//                formatter.dateFormat = "MMM"  // Just month name at month start - BOLD
+//                return (formatter.string(from: timestamp), true)
+//            } else {
+//                formatter.dateFormat = "dd"   // Just day number otherwise
+//                return (formatter.string(from: timestamp), false)
+//            }
+//            
+//        case .w1:
+//            // Weekly: show date, highlight month start
+//            let day = calendar.component(.day, from: timestamp)
+//            if day <= 7 {
+//                formatter.dateFormat = "MMM yy"  // Month/year - BOLD
+//                return (formatter.string(from: timestamp), true)
+//            } else {
+//                formatter.dateFormat = "dd MMM"
+//                return (formatter.string(from: timestamp), false)
+//            }
+//            
+//        case .mn:
+//            formatter.dateFormat = "MMM yy"
+//            // First month of quarter is bold
+//            let month = calendar.component(.month, from: timestamp)
+//            let isQuarterStart = [1, 4, 7, 10].contains(month)
+//            return (formatter.string(from: timestamp), isQuarterStart)
+//        }
+//    }
+//    
+//    /// Format time label based on current timeframe (legacy - for compatibility)
+//    /// Shows date (dd/MM) at midnight for intraday timeframes
+//    private func formatTimeLabel(_ timestamp: Date) -> String {
+//        return formatTimeLabelWithType(timestamp).0
+//    }
+//    
 //    // MARK: - Y-Axis Overlay (Symbol-Aware Formatting)
 //    
 //    /// Y-axis overlay with symbol-aware price formatting
+//    /// FIXED: Uses zoom-aware PriceAxisHelper for proper grid density
 //    @ViewBuilder
 //    func yAxisOverlay(geometry: GeometryProxy) -> some View {
 //        HStack {
@@ -2480,32 +2969,42 @@ struct TradingChartView: View {
 //                let scaledHeight = geometry.size.height * gestureState.priceScale
 //                let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
 //                
-//                // Calculate nice price step
-//                let priceStep = calculateNicePriceStep(range: priceRange.max - priceRange.min)
-//                let startPrice = floor(priceRange.min / priceStep) * priceStep
+//                // Use PriceAxisHelper with chart height for zoom-aware calculation
+//                let priceHelper = PriceAxisHelper(
+//                    symbol: currentSymbol,
+//                    priceRange: priceRange,
+//                    priceScale: gestureState.priceScale,
+//                    chartHeight: geometry.size.height
+//                )
 //                
-//                // Draw labels at nice price intervals
-//                var currentPrice = startPrice
-//                while currentPrice <= priceRange.max + priceStep {
+//                let step = priceHelper.nicePriceStep
+//                
+//                // VERY extended range - prices should NEVER run out
+//                let extendedStartPrice = floor((priceRange.min - step * 30) / step) * step
+//                let extendedEndPrice = ceil((priceRange.max + step * 30) / step) * step
+//                
+//                var currentPrice = extendedStartPrice
+//                var labelCount = 0
+//                let maxLabels = 100  // Generous limit for zoomed-in views
+//                
+//                while currentPrice <= extendedEndPrice && labelCount < maxLabels {
 //                    let normalizedPrice = (currentPrice - priceRange.min) / (priceRange.max - priceRange.min)
 //                    let y = size.height - (CGFloat(normalizedPrice) * scaledHeight) - totalVerticalOffset
 //                    
-//                    guard y >= -20 && y <= size.height + 20 else {
-//                        currentPrice += priceStep
-//                        continue
+//                    // Very extended bounds
+//                    if y >= -300 && y <= size.height + 300 {
+//                        let priceText = chartData.formatPrice(currentPrice)
+//                        
+//                        context.draw(
+//                            Text(priceText)
+//                                .font(.system(size: 10))
+//                                .foregroundColor(.gray),
+//                            at: CGPoint(x: 30, y: y)
+//                        )
+//                        labelCount += 1
 //                    }
 //                    
-//                    // Use symbol-aware formatting
-//                    let priceText = chartData.formatPrice(currentPrice)
-//                    
-//                    context.draw(
-//                        Text(priceText)
-//                            .font(.system(size: 10))
-//                            .foregroundColor(.gray),
-//                        at: CGPoint(x: 30, y: y)
-//                    )
-//                    
-//                    currentPrice += priceStep
+//                    currentPrice += step
 //                }
 //            }
 //            .frame(width: yAxisWidth)
@@ -2513,141 +3012,6 @@ struct TradingChartView: View {
 //        }
 //        .allowsHitTesting(false)
 //    }
-//    // MARK: - X-Axis Overlay (Smooth Scrolling)
-//    
-//    /// X-axis overlay with smooth scrolling labels
-//    /// Uses stride-based positioning like grid lines for consistent movement
-////    @ViewBuilder
-////    func xAxisOverlay(geometry: GeometryProxy) -> some View {
-////        VStack {
-////            Spacer()
-////            Canvas { context, size in
-////                let totalOffset = gestureState.panOffset.width + dragState.width
-////                
-////                // Use stride-based positioning (same as grid) for smooth scrolling
-////                let labelStride = calculateCandleStride()
-////                
-////                // Calculate starting index based on current scroll position
-////                let startIndex = max(0, Int(-totalOffset / totalCandleWidth) - labelStride)
-////                let endIndex = min(chartData.candles.count, startIndex + Int(size.width / totalCandleWidth) + labelStride * 2)
-////                
-////                // Draw labels at stride intervals
-////                var drawnCount = 0
-////                for i in stride(from: startIndex, to: endIndex, by: labelStride) {
-////                    guard i >= 0 && i < chartData.candles.count else { continue }
-////                    
-////                    let candle = chartData.candles[i]
-////                    let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
-////                    
-////                    // Only draw if within visible area
-////                    guard x >= -30 && x <= size.width + 30 else { continue }
-////                    
-////                    // Format time based on timeframe
-////                    let timeText = formatTimeLabel(candle.timestamp)
-////                    
-////                    context.draw(
-////                        Text(timeText)
-////                            .font(.system(size: 10))
-////                            .foregroundColor(.gray),
-////                        at: CGPoint(x: x, y: 10)
-////                    )
-////                    
-////                    drawnCount += 1
-////                    // Limit max labels for performance
-////                    if drawnCount > 15 { break }
-////                }
-////            }
-////            .frame(height: 20)
-////            .background(Color.black.opacity(0.8))
-////            .padding(.bottom, geometry.size.height * 0.11 + 10)
-////        }
-////        .allowsHitTesting(false)
-////    }
-////    
-////    /// Format time label based on current timeframe
-////    private func formatTimeLabel(_ timestamp: Date) -> String {
-////        let formatter = DateFormatter()
-////        let timeframe = chartViewModel.currentTimeframe
-////        
-////        switch timeframe {
-////        case .m1, .m5, .m15, .m30:
-////            formatter.dateFormat = "HH:mm"
-////            
-////        case .h1:
-////            let hour = Calendar.current.component(.hour, from: timestamp)
-////            if hour == 0 {
-////                formatter.dateFormat = "dd MMM"
-////            } else {
-////                formatter.dateFormat = "HH:mm"
-////            }
-////            
-////        case .h4:
-////            let hour = Calendar.current.component(.hour, from: timestamp)
-////            if hour == 0 {
-////                formatter.dateFormat = "dd MMM"
-////            } else {
-////                formatter.dateFormat = "HH:mm"
-////            }
-////            
-////        case .d1:
-////            formatter.dateFormat = "dd MMM"
-////            
-////        case .w1:
-////            formatter.dateFormat = "dd MMM"
-////            
-////        case .mn:
-////            formatter.dateFormat = "MMM yy"
-////        }
-////        
-////        return formatter.string(from: timestamp)
-////    }
-////    
-////    // MARK: - Y-Axis Overlay (Symbol-Aware Formatting)
-////    
-////    /// Y-axis overlay with symbol-aware price formatting
-////    @ViewBuilder
-////    func yAxisOverlay(geometry: GeometryProxy) -> some View {
-////        HStack {
-////            Spacer()
-////            Canvas { context, size in
-////                let priceRange = chartData.priceRange
-////                let scaledHeight = geometry.size.height * gestureState.priceScale
-////                let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
-////                
-////                // Calculate nice price step
-////                let priceStep = calculateNicePriceStep(range: priceRange.max - priceRange.min)
-////                let startPrice = floor(priceRange.min / priceStep) * priceStep
-////                
-////                // Draw labels at nice price intervals
-////                var currentPrice = startPrice
-////                while currentPrice <= priceRange.max + priceStep {
-////                    let normalizedPrice = (currentPrice - priceRange.min) / (priceRange.max - priceRange.min)
-////                    let y = size.height - (CGFloat(normalizedPrice) * scaledHeight) - totalVerticalOffset
-////                    
-////                    guard y >= -20 && y <= size.height + 20 else {
-////                        currentPrice += priceStep
-////                        continue
-////                    }
-////                    
-////                    // Use symbol-aware formatting
-////                    let priceText = chartData.formatPrice(currentPrice)
-////                    
-////                    context.draw(
-////                        Text(priceText)
-////                            .font(.system(size: 10))
-////                            .foregroundColor(.gray),
-////                        at: CGPoint(x: 30, y: y)
-////                    )
-////                    
-////                    currentPrice += priceStep
-////                }
-////            }
-////            .frame(width: yAxisWidth)
-////            .background(Color.black.opacity(0.8))
-////        }
-////        .allowsHitTesting(false)
-////    }
-// 
 //    
 //    // MARK: - Chart Drawing
 //    
@@ -2665,7 +3029,7 @@ struct TradingChartView: View {
 //        drawingContext.clip(to: Path(CGRect(origin: .zero, size: size)))
 //        
 //        // Calculate current offsets for all positioning
-//        let totalOffset = gestureState.panOffset.width + dragState.width
+//        let totalOffset = gestureState.panOffset.width
 //        let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
 //        
 //        // Draw components in order (back to front)
@@ -2689,48 +3053,69 @@ struct TradingChartView: View {
 //    }
 //    
 //    /// Draw background grid for visual reference
-//    /// Vertical lines every 5 candles, horizontal lines at nice price intervals
-//    /// Grid now moves WITH candles during vertical scaling
-//    /// - Parameters:
-//    ///   - context: Graphics context
-//    ///   - size: Canvas size
+//    /// FIXED: Grid lines EXACTLY match axis labels, zoom-aware density
 //    private func drawGrid(context: GraphicsContext, size: CGSize) {
 //        let priceRange = chartData.priceRange
 //        let scaledHeight = size.height * gestureState.priceScale
 //        let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
-//        let totalOffset = gestureState.panOffset.width + dragState.width
+//        let totalOffset = gestureState.panOffset.width
 //        
 //        let gridPath = Path { path in
-//            // Vertical grid lines at nice time boundaries
-//            let timeHelper = TimeAxisHelper(timeframe: currentTimeframe)
-//            let labelInterval = timeHelper.adaptiveLabelInterval(zoomScale: gestureState.candleWidthScale)
 //            
-//            for i in 0..<chartData.candles.count {
-//                let candle = chartData.candles[i]
-//                let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+//            // ========================================
+//            // VERTICAL GRID LINES
+//            // Uses stride-based positioning (same as X-axis)
+//            // ========================================
+//            
+//            let labelStride = calculateCandleStride()
+//            let startIndex = max(0, Int(-totalOffset / totalCandleWidth) - labelStride * 3)
+//            let endIndex = min(chartData.candles.count, startIndex + Int(size.width / totalCandleWidth) + labelStride * 4)
+//            let firstAlignedIndex = (startIndex / labelStride) * labelStride
+//            
+//            for i in stride(from: firstAlignedIndex, to: endIndex, by: labelStride) {
+//                guard i >= 0 && i < chartData.candles.count else { continue }
 //                
-//                guard x >= -totalCandleWidth && x <= size.width + totalCandleWidth else { continue }
-//                guard timeHelper.isNiceBoundary(candle.timestamp, interval: labelInterval) else { continue }
+//                let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+//                guard x >= -100 && x <= size.width + 100 else { continue }
 //                
 //                path.move(to: CGPoint(x: x, y: 0))
 //                path.addLine(to: CGPoint(x: x, y: size.height))
 //            }
 //            
-//            // Horizontal grid lines at nice price levels
+//            // ========================================
+//            // HORIZONTAL GRID LINES
+//            // Zoom-aware step calculation (same as Y-axis)
+//            // ========================================
+//            
 //            let priceHelper = PriceAxisHelper(
 //                symbol: currentSymbol,
 //                priceRange: priceRange,
-//                priceScale: gestureState.priceScale
+//                priceScale: gestureState.priceScale,
+//                chartHeight: size.height
 //            )
 //            
-//            for price in priceHelper.gridPriceLevels {
-//                let normalizedPrice = (price - priceRange.min) / (priceRange.max - priceRange.min)
+//            let step = priceHelper.nicePriceStep
+//            
+//            // VERY extended range - grid should NEVER run out
+//            let extendedStartPrice = floor((priceRange.min - step * 30) / step) * step
+//            let extendedEndPrice = ceil((priceRange.max + step * 30) / step) * step
+//            
+//            var currentPrice = extendedStartPrice
+//            var lineCount = 0
+//            let maxLines = 100  // Safety limit
+//            
+//            while currentPrice <= extendedEndPrice && lineCount < maxLines {
+//                let normalizedPrice = (currentPrice - priceRange.min) / (priceRange.max - priceRange.min)
 //                let y = size.height - (CGFloat(normalizedPrice) * scaledHeight) - totalVerticalOffset
 //                
-//                if y >= -1 && y <= size.height + 1 {
+//                // Very extended bounds
+//                if y >= -500 && y <= size.height + 500 {
 //                    path.move(to: CGPoint(x: 0, y: y))
 //                    path.addLine(to: CGPoint(x: size.width, y: y))
+//                    lineCount += 1
 //                }
+//                
+//                currentPrice += step
 //            }
 //        }
 //        
@@ -2816,7 +3201,7 @@ struct TradingChartView: View {
 //    private func drawCandlesticks(context: GraphicsContext, size: CGSize) {
 //        let priceRange = chartData.priceRange
 //        let scaledHeight = size.height * gestureState.priceScale
-//        let totalOffset = gestureState.panOffset.width + dragState.width
+//        let totalOffset = gestureState.panOffset.width
 //        
 //        // Calculate visible candle range for performance
 //        // Only draw candles that are actually on screen
@@ -2826,7 +3211,7 @@ struct TradingChartView: View {
 //            Swift.max(visibleStartIndex, visibleStartIndex + Int(size.width / totalCandleWidth) + 3)
 //        )
 //
-//        // ADD THIS LINE - prevents crash
+//        // Safe guard - prevents crash when panning past chart bounds
 //        guard visibleStartIndex < visibleEndIndex else { return }
 //
 //        for i in visibleStartIndex..<visibleEndIndex {
@@ -2946,6 +3331,14 @@ struct TradingChartView: View {
 //        }
 //    }
 //}
+//
+//
+//
+//
+//
+//
+//
+//
 //
 //
 //
