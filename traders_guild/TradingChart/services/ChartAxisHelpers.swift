@@ -287,9 +287,8 @@ struct PriceAxisHelper {
         // So the effective range for grid calculation should be smaller
         let visibleRange = dataRange / Double(priceScale)
         
-        // Target a consistent NUMBER OF LINES ON SCREEN regardless of zoom
-        // This ensures consistent visual density
-        let targetLinesOnScreen: Double = 10.0
+        // UPDATED: Target 14 lines instead of 10 for denser Y-axis grid
+        let targetLinesOnScreen: Double = 14.0
         
         // Calculate rough step based on VISIBLE range
         let roughStep = visibleRange / targetLinesOnScreen
@@ -488,13 +487,5 @@ struct AxisConfiguration {
     var timeAxis = TimeAxis()
     var priceAxis = PriceAxis()
 }
-
-
-
-
-
-
-
-
 
 

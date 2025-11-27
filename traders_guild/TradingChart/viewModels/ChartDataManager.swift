@@ -2,8 +2,39 @@
 //  ChartDataManager.swift
 //  traders_guild
 //
-//  UPDATED VERSION v2 - Faster initial load + symbol-aware formatting
+//  UPDATED VERSION v3 - Live tick data + Real data integration ready
 //
+//  ============================================================================
+//  REAL DATA INTEGRATION GUIDE
+//  ============================================================================
+//
+//  When ready to switch from mock data to real data (MetaTrader, broker API, etc.):
+//
+//  1. INITIAL LOAD (Historical Data):
+//     - Fetch historical candles from your data source
+//     - Call: dataManager.updateWithMarketData(candles)
+//
+//  2. REAL-TIME TICKS (WebSocket/Streaming):
+//     - When you receive a price tick, call:
+//       dataManager.processRealTick(price: 1.0850, volume: 100, timestamp: Date())
+//     - This updates the current candle in real-time
+//
+//  3. COMPLETED CANDLES (New candle notifications):
+//     - When a new candle completes, call:
+//       dataManager.processRealCandle(candle)
+//
+//  4. SWITCHING MODES:
+//     - To stop mock data: dataManager.setDataMode(useMockData: false)
+//     - To resume mock data: dataManager.setDataMode(useMockData: true)
+//
+//  5. SYMBOL/TIMEFRAME CHANGES:
+//     - When user changes symbol/timeframe:
+//       a. Stop current data: dataManager.stopDataGeneration()
+//       b. Fetch new historical data
+//       c. Call: dataManager.updateWithMarketData(newCandles)
+//       d. Resume real-time feed for new symbol
+//
+//  ============================================================================
 
 import SwiftUI
 import Combine
@@ -209,32 +240,211 @@ class ChartDataManager: ObservableObject {
     
     // MARK: - Timer Management
     
+    /// Timer for new candle generation (based on timeframe)
+    private var candleTimer: Timer?
+    
+    /// Timer for tick updates (fast price changes within current candle)
+    private var tickTimer: Timer?
+    
+    /// The timestamp when the current candle started
+    private var currentCandleStartTime: Date?
+    
     func startDataGeneration() {
         stopDataGeneration()
         
-        let interval: TimeInterval
-        switch currentTimeframe {
-        case .m1:
-            interval = 5.0
-        case .m5:
-            interval = 8.0
-        case .m15, .m30:
-            interval = 10.0
-        default:
-            interval = 15.0
+        // Start tick timer for live price updates (every 0.8 seconds)
+        tickTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
+            self?.generateTickUpdate()
         }
         
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            self?.generateNewCandle()
+        // Start candle timer based on timeframe
+        let candleInterval: TimeInterval
+        switch currentTimeframe {
+        case .m1:
+            candleInterval = 60.0   // New candle every minute
+        case .m5:
+            candleInterval = 300.0  // Every 5 minutes
+        case .m15:
+            candleInterval = 900.0  // Every 15 minutes
+        case .m30:
+            candleInterval = 1800.0 // Every 30 minutes
+        case .h1:
+            candleInterval = 3600.0 // Every hour
+        case .h4:
+            candleInterval = 14400.0 // Every 4 hours
+        default:
+            candleInterval = 60.0   // Fallback to 1 minute for demo
         }
+        
+        // For demo purposes, use accelerated time (1 candle per X seconds)
+        let demoInterval: TimeInterval
+        switch currentTimeframe {
+        case .m1:
+            demoInterval = 10.0   // New M1 candle every 10 seconds
+        case .m5:
+            demoInterval = 15.0   // New M5 candle every 15 seconds
+        case .m15, .m30:
+            demoInterval = 20.0
+        default:
+            demoInterval = 25.0
+        }
+        
+        candleTimer = Timer.scheduledTimer(withTimeInterval: demoInterval, repeats: true) { [weak self] _ in
+            self?.closeCurrentCandleAndStartNew()
+        }
+        
+        // Initialize current candle start time
+        currentCandleStartTime = Date()
     }
     
     func stopDataGeneration() {
         timer?.invalidate()
         timer = nil
+        candleTimer?.invalidate()
+        candleTimer = nil
+        tickTimer?.invalidate()
+        tickTimer = nil
     }
     
-    // MARK: - Live Candle Generation
+    // MARK: - Tick Data Updates
+    
+    /// Generate a tick update - modifies the current (last) candle
+    /// This simulates real-time price movement within a candle
+    private func generateTickUpdate() {
+        guard !candles.isEmpty else { return }
+        
+        let volatility = currentSymbol.map { defaultVolatility(for: $0) } ?? 0.02
+        
+        // Smaller tick movements (fraction of candle volatility)
+        let tickVolatility = volatility * 0.3
+        
+        // Generate new tick price
+        let priceChange = basePrice * Double.random(in: -tickVolatility...tickVolatility)
+        let newPrice = basePrice + priceChange
+        
+        // Update the last candle with new tick
+        updateCurrentCandle(withTick: newPrice)
+        
+        // Update current price display
+        currentPrice = newPrice
+        basePrice = newPrice
+    }
+    
+    /// Update the current (last) candle with a new tick price
+    /// - Parameters:
+    ///   - tickPrice: The new tick price
+    ///   - tickVolume: Optional volume for this tick (uses random if nil - for mock data)
+    private func updateCurrentCandle(withTick tickPrice: Double, tickVolume: Double? = nil) {
+        guard !candles.isEmpty else { return }
+        
+        let lastCandle = candles[candles.count - 1]
+        
+        // Calculate new volume (use provided tick volume or generate random for mock)
+        let volumeIncrement = tickVolume ?? Double.random(in: 100...1000)
+        let newVolume = (lastCandle.volume ?? 0) + volumeIncrement
+        
+        // Update candle with new tick data
+        let updatedCandle = Candle(
+            open: lastCandle.open,
+            high: max(lastCandle.high, tickPrice),
+            low: min(lastCandle.low, tickPrice),
+            close: tickPrice,
+            timestamp: lastCandle.timestamp,
+            volume: newVolume
+        )
+        
+        candles[candles.count - 1] = updatedCandle
+        
+        // Update price range if needed
+        if tickPrice > priceRange.max || tickPrice < priceRange.min {
+            updatePriceRange()
+        }
+    }
+    
+    // MARK: - Real Data Integration Points
+    
+    /// Process a real tick from a data feed (WebSocket, API, etc.)
+    /// Call this method when you receive real-time price updates
+    /// - Parameters:
+    ///   - price: The tick price
+    ///   - volume: Optional tick volume
+    ///   - timestamp: Optional tick timestamp (uses current time if nil)
+    func processRealTick(price: Double, volume: Double? = nil, timestamp: Date? = nil) {
+        // Update current price display immediately
+        currentPrice = price
+        basePrice = price
+        
+        // Update the current candle
+        updateCurrentCandle(withTick: price, tickVolume: volume)
+    }
+    
+    /// Process a complete candle from a data feed
+    /// Use this when receiving historical or completed candles
+    /// - Parameter candle: The complete candle data
+    func processRealCandle(_ candle: Candle) {
+        // Check if this candle should update the last one or be appended
+        if let lastCandle = candles.last {
+            if candle.timestamp == lastCandle.timestamp {
+                // Same timestamp - update existing candle
+                candles[candles.count - 1] = candle
+            } else if candle.timestamp > lastCandle.timestamp {
+                // New candle - append
+                candles.append(candle)
+                
+                if candles.count > maxCandles {
+                    candles.removeFirst(candles.count - maxCandles)
+                }
+            }
+            // Older candles are ignored (historical data should use updateWithMarketData)
+        } else {
+            candles.append(candle)
+        }
+        
+        currentPrice = candle.close
+        basePrice = candle.close
+        updatePriceRange()
+    }
+    
+    /// Switch between mock and real data modes
+    /// - Parameter useMockData: If true, generates mock tick data. If false, stops mock generation.
+    func setDataMode(useMockData: Bool) {
+        if useMockData {
+            startDataGeneration()
+        } else {
+            // Stop mock data generation - real data will come via processRealTick/processRealCandle
+            stopDataGeneration()
+        }
+    }
+    
+    /// Close the current candle and start a new one
+    private func closeCurrentCandleAndStartNew() {
+        guard !candles.isEmpty else { return }
+        
+        let lastTimestamp = candles.last?.timestamp ?? Date()
+        let newTimestamp = lastTimestamp.addingTimeInterval(currentTimeframe.seconds)
+        let alignedTimestamp = alignToTimeframe(date: newTimestamp, timeframe: currentTimeframe)
+        
+        // Create new candle starting at current price
+        let newCandle = Candle(
+            open: currentPrice,
+            high: currentPrice,
+            low: currentPrice,
+            close: currentPrice,
+            timestamp: alignedTimestamp,
+            volume: Double.random(in: 10000...50000)
+        )
+        
+        candles.append(newCandle)
+        currentCandleStartTime = Date()
+        
+        if candles.count > maxCandles {
+            candles.removeFirst(candles.count - maxCandles)
+        }
+        
+        updatePriceRange()
+    }
+    
+    // MARK: - Legacy Candle Generation (kept for compatibility)
     
     private func generateNewCandle() {
         guard !candles.isEmpty else { return }
@@ -454,134 +664,291 @@ class ChartDataManager: ObservableObject {
     }
 }
 
-//
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
 ////
 ////  ChartDataManager.swift
 ////  traders_guild
 ////
-////  Created by Al Hennessey on 14/11/2025.
+////  UPDATED VERSION v2 - Faster initial load + symbol-aware formatting
 ////
 //
 //import SwiftUI
 //import Combine
 //import Foundation
 //
-///// Manages chart data and provides real-time updates
-///// This is the data source for the trading chart, handling both historical and live data
 //class ChartDataManager: ObservableObject {
 //    // MARK: - Published Properties
 //    
-//    /// Array of candles to display on the chart
-//    /// Published so the view updates when new candles are added
 //    @Published var candles: [Candle] = []
-//    
-//    /// Current/latest price for the price indicator
-//    /// This is typically the close price of the most recent candle
 //    @Published var currentPrice: Double = 0
-//    
-//    /// The price range for scaling the chart
-//    /// Calculated from all visible candles plus padding
 //    @Published var priceRange: (min: Double, max: Double) = (0, 0)
+//    
+//    // MARK: - Symbol & Timeframe Context
+//    
+//    /// Current trading symbol - needed for proper price generation and formatting
+//    var currentSymbol: TradingSymbol?
+//    
+//    /// Current timeframe - needed for proper timestamp alignment
+//    var currentTimeframe: ChartTimeframe = .h1
 //    
 //    // MARK: - Private Properties
 //    
-//    /// Timer for generating new candles in real-time
 //    private var timer: Timer?
-//    
-//    /// Current base price for generating new sample data
-//    /// This creates continuous price movement from the last candle
-//    var basePrice: Double = 100.0
-//    
-//    /// Maximum number of candles to keep in memory
-//    /// Prevents memory issues with long-running charts
+//    private var basePrice: Double = 100.0
 //    private let maxCandles = 500
 //    
 //    // MARK: - Initialization
 //    
 //    init() {
-//        loadInitialData()
+//        // Generate default data immediately so chart isn't empty on launch
+//        // This will be replaced when symbol loads
+//        loadDefaultData()
 //    }
 //    
 //    deinit {
-//        // Clean up timer when manager is deallocated
 //        stopDataGeneration()
 //    }
 //    
-//    // MARK: - Data Management
+//    // MARK: - Immediate Default Data (prevents empty chart on launch)
 //    
-//    /// Load initial sample data for the chart
-//    /// In production, this would load historical data from an API
-//    private func loadInitialData() {
-//        // Generate 100 candles of historical data
-//        candles = Candle.generateSampleData(count: 200)
+//    /// Load default data immediately - prevents blank chart on app launch
+//    private func loadDefaultData() {
+//        // Generate quick default data at a typical forex price
+//        candles = Candle.generateAlignedSampleData(
+//            count: 100,  // Fewer candles for faster initial load
+//            timeframe: .h1,
+//            endDate: Date(),
+//            basePrice: 1.08  // Typical EUR/USD price
+//        )
 //        
-//        // Update the price range based on loaded data
 //        updatePriceRange()
 //        
-//        // Set current price from the latest candle
 //        if let lastCandle = candles.last {
 //            currentPrice = lastCandle.close
 //            basePrice = lastCandle.close
 //        }
 //    }
 //    
-//    /// Start generating real-time data updates
-//    /// Simulates live market data feed
-//    func startDataGeneration() {
-//        // Stop any existing timer to prevent duplicates
+//    // MARK: - Primary Data Generation Methods
+//    
+//    /// Regenerate mock data for a specific symbol and timeframe
+//    func regenerateMockData(symbol: TradingSymbol, timeframe: ChartTimeframe) {
 //        stopDataGeneration()
 //        
-//        // Create timer for real-time updates (every 5 seconds for demo)
-//        // In production, this would be replaced with WebSocket or API polling
-//        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+//        self.currentSymbol = symbol
+//        self.currentTimeframe = timeframe
+//        
+//        candles = Candle.generateSampleData(
+//            count: timeframe.initialCandlesCount,
+//            timeframe: timeframe,
+//            symbol: symbol
+//        )
+//        
+//        updatePriceRange()
+//        
+//        if let lastCandle = candles.last {
+//            currentPrice = lastCandle.close
+//            basePrice = lastCandle.close
+//        }
+//        
+//        startDataGeneration()
+//    }
+//    
+//    /// Regenerate for current symbol with new timeframe
+//    func regenerateMockData(timeframe: ChartTimeframe) {
+//        self.currentTimeframe = timeframe
+//        
+//        if let symbol = currentSymbol {
+//            regenerateMockData(symbol: symbol, timeframe: timeframe)
+//        } else {
+//            regenerateMockDataDefault(timeframe: timeframe)
+//        }
+//    }
+//    
+//    /// Regenerate for current timeframe with new symbol
+//    func regenerateMockData(symbol: TradingSymbol) {
+//        regenerateMockData(symbol: symbol, timeframe: currentTimeframe)
+//    }
+//    
+//    /// Fallback when no symbol is set
+//    private func regenerateMockDataDefault(timeframe: ChartTimeframe) {
+//        stopDataGeneration()
+//        
+//        self.currentTimeframe = timeframe
+//        
+//        candles = Candle.generateAlignedSampleData(
+//            count: timeframe.initialCandlesCount,
+//            timeframe: timeframe,
+//            endDate: Date(),
+//            basePrice: basePrice > 0 ? basePrice : 100.0
+//        )
+//        
+//        updatePriceRange()
+//        
+//        if let lastCandle = candles.last {
+//            currentPrice = lastCandle.close
+//            basePrice = lastCandle.close
+//        }
+//        
+//        startDataGeneration()
+//    }
+//    
+//    // MARK: - Legacy Methods
+//    
+//    func regenerateMockData() {
+//        if let symbol = currentSymbol {
+//            regenerateMockData(symbol: symbol, timeframe: currentTimeframe)
+//        } else {
+//            regenerateMockDataDefault(timeframe: currentTimeframe)
+//        }
+//    }
+//    
+//    func regenerateMockData(candleCount: Int) {
+//        stopDataGeneration()
+//        
+//        if let symbol = currentSymbol {
+//            candles = Candle.generateSampleData(
+//                count: candleCount,
+//                timeframe: currentTimeframe,
+//                symbol: symbol
+//            )
+//        } else {
+//            candles = Candle.generateAlignedSampleData(
+//                count: candleCount,
+//                timeframe: currentTimeframe,
+//                endDate: Date(),
+//                basePrice: basePrice > 0 ? basePrice : 100.0
+//            )
+//        }
+//        
+//        updatePriceRange()
+//        
+//        if let lastCandle = candles.last {
+//            currentPrice = lastCandle.close
+//            basePrice = lastCandle.close
+//        }
+//        
+//        startDataGeneration()
+//    }
+//    
+//    func regenerateMockData(basePrice: Double) {
+//        stopDataGeneration()
+//        
+//        self.basePrice = basePrice
+//        
+//        if let symbol = currentSymbol {
+//            var tempCandles: [Candle] = []
+//            var currentPriceVal = basePrice
+//            let volatility = defaultVolatility(for: symbol)
+//            
+//            let alignedEndDate = alignToTimeframe(date: Date(), timeframe: currentTimeframe)
+//            var currentDate = alignedEndDate
+//            
+//            for _ in 0..<currentTimeframe.initialCandlesCount {
+//                let candle = Candle.randomWithVolatility(
+//                    basePrice: currentPriceVal,
+//                    timestamp: currentDate,
+//                    volatility: volatility
+//                )
+//                tempCandles.append(candle)
+//                currentPriceVal = candle.close
+//                currentDate = currentDate.addingTimeInterval(-currentTimeframe.seconds)
+//            }
+//            
+//            candles = tempCandles.reversed()
+//        } else {
+//            candles = Candle.generateAlignedSampleData(
+//                count: currentTimeframe.initialCandlesCount,
+//                timeframe: currentTimeframe,
+//                endDate: Date(),
+//                basePrice: basePrice
+//            )
+//        }
+//        
+//        updatePriceRange()
+//        
+//        if let lastCandle = candles.last {
+//            currentPrice = lastCandle.close
+//        }
+//        
+//        startDataGeneration()
+//    }
+//    
+//    // MARK: - Timer Management
+//    
+//    func startDataGeneration() {
+//        stopDataGeneration()
+//        
+//        let interval: TimeInterval
+//        switch currentTimeframe {
+//        case .m1:
+//            interval = 5.0
+//        case .m5:
+//            interval = 8.0
+//        case .m15, .m30:
+//            interval = 10.0
+//        default:
+//            interval = 15.0
+//        }
+//        
+//        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
 //            self?.generateNewCandle()
 //        }
 //    }
 //    
-//    /// Stop generating real-time data
 //    func stopDataGeneration() {
 //        timer?.invalidate()
 //        timer = nil
 //    }
 //    
-//    /// Generate a new candle and add it to the chart
-//    /// Simulates receiving new market data
+//    // MARK: - Live Candle Generation
+//    
 //    private func generateNewCandle() {
-//        // Create new candle based on current price
-//        let newCandle = Candle.random(
+//        guard !candles.isEmpty else { return }
+//        
+//        let lastTimestamp = candles.last?.timestamp ?? Date()
+//        let newTimestamp = lastTimestamp.addingTimeInterval(currentTimeframe.seconds)
+//        let alignedTimestamp = alignToTimeframe(date: newTimestamp, timeframe: currentTimeframe)
+//        
+//        let volatility = currentSymbol.map { defaultVolatility(for: $0) } ?? 0.02
+//        
+//        let newCandle = Candle.randomWithVolatility(
 //            basePrice: basePrice,
-//            timestamp: Date()
+//            timestamp: alignedTimestamp,
+//            volatility: volatility
 //        )
 //        
-//        // Add new candle to the array
 //        candles.append(newCandle)
-//        
-//        // Update current price indicator
 //        currentPrice = newCandle.close
-//        
-//        // Update base price for next candle generation
 //        basePrice = newCandle.close
 //        
-//        // Remove old candles if we exceed the memory limit
 //        if candles.count > maxCandles {
 //            candles.removeFirst(candles.count - maxCandles)
 //        }
 //        
-//        // Recalculate price range with new data
 //        updatePriceRange()
 //    }
 //    
-//    /// Update the price range based on all candles
-//    /// This determines the Y-axis scale for the chart
+//    // MARK: - Price Range
+//    
 //    func updatePriceRange() {
 //        guard !candles.isEmpty else {
-//            // Default range if no data
 //            priceRange = (0, 100)
 //            return
 //        }
 //        
-//        // Find the absolute minimum and maximum prices
 //        let allLows = candles.map { $0.low }
 //        let allHighs = candles.map { $0.high }
 //        
@@ -591,38 +958,76 @@ class ChartDataManager: ObservableObject {
 //            return
 //        }
 //        
-//        // Add 10% padding to the range for better visualization
-//        // This prevents candles from touching the top/bottom of the chart
-//        let padding = (maxPrice - minPrice) * 0.6 // TODO: make this universal to adjust the padding in settings
+//        let padding = (maxPrice - minPrice) * 0.1
 //        priceRange = (minPrice - padding, maxPrice + padding)
+//    }
+//    
+//    // MARK: - Price Formatting (Symbol-Aware)
+//    
+//    /// Format a price using the current symbol's conventions
+//    func formatPrice(_ price: Double) -> String {
+//        if let symbol = currentSymbol {
+//            return symbol.formatPrice(price)
+//        } else {
+//            // Fallback based on price magnitude
+//            return formatPriceByMagnitude(price)
+//        }
+//    }
+//    
+//    /// Get the number of decimal places for current symbol
+//    var priceDecimalPlaces: Int {
+//        guard let symbol = currentSymbol else {
+//            return decimalPlacesForMagnitude(currentPrice)
+//        }
+//        
+//        switch symbol.assetClass {
+//        case .forex:
+//            return symbol.symbol.contains("JPY") ? 3 : 5
+//        case .crypto:
+//            if currentPrice > 1000 { return 2 }
+//            else if currentPrice > 1 { return 4 }
+//            else { return 6 }
+//        case .stocks, .commodities, .futures:
+//            return 2
+//        case .indices:
+//            return currentPrice > 10000 ? 0 : 2
+//        }
+//    }
+//    
+//    /// Fallback formatting based on price magnitude
+//    private func formatPriceByMagnitude(_ price: Double) -> String {
+//        let decimals = decimalPlacesForMagnitude(price)
+//        return String(format: "%.\(decimals)f", price)
+//    }
+//    
+//    private func decimalPlacesForMagnitude(_ price: Double) -> Int {
+//        let absPrice = abs(price)
+//        if absPrice >= 1000 { return 2 }
+//        else if absPrice >= 100 { return 2 }
+//        else if absPrice >= 10 { return 3 }
+//        else if absPrice >= 1 { return 4 }
+//        else { return 5 }
 //    }
 //    
 //    // MARK: - Data Access Methods
 //    
-//    /// Get candles within a specific time range
-//    /// Useful for filtering data by date
 //    func candles(from startDate: Date, to endDate: Date) -> [Candle] {
 //        return candles.filter { candle in
 //            candle.timestamp >= startDate && candle.timestamp <= endDate
 //        }
 //    }
 //    
-//    /// Get the most recent candles
-//    /// Useful for calculating recent indicators
 //    func recentCandles(count: Int) -> [Candle] {
 //        guard count > 0 else { return [] }
 //        let startIndex = max(0, candles.count - count)
 //        return Array(candles.suffix(from: startIndex))
 //    }
 //    
-//    /// Calculate simple moving average for a given period
-//    /// This is a common technical indicator
 //    func movingAverage(period: Int) -> [Double] {
 //        guard period > 0 && candles.count >= period else { return [] }
 //        
 //        var movingAverages: [Double] = []
 //        
-//        // Calculate MA for each possible position
 //        for i in (period-1)..<candles.count {
 //            let relevantCandles = candles[(i-period+1)...i]
 //            let sum = relevantCandles.reduce(0) { $0 + $1.close }
@@ -634,28 +1039,18 @@ class ChartDataManager: ObservableObject {
 //    
 //    // MARK: - Price Calculations
 //    
-//    /// Convert a Y coordinate to a price value
-//    /// Used for displaying price at cursor position
 //    func price(at yPosition: CGFloat, in height: CGFloat, scale: CGFloat, offset: CGFloat) -> Double {
 //        let normalizedY = (height - yPosition - offset) / (height * scale)
 //        return priceRange.min + (normalizedY * (priceRange.max - priceRange.min))
 //    }
 //    
-//    /// Convert a price to a Y coordinate
-//    /// Used for positioning price indicators and levels
 //    func yPosition(for price: Double, in height: CGFloat, scale: CGFloat, offset: CGFloat) -> CGFloat {
 //        let normalizedPrice = (price - priceRange.min) / (priceRange.max - priceRange.min)
 //        return height - (CGFloat(normalizedPrice) * height * scale) - offset
 //    }
 //    
-//    /// Simulate receiving real-time market data
-//    /// In production, this would connect to a real data feed
-//    func simulateMarketData() {
-//        startDataGeneration()
-//    }
+//    // MARK: - External Data Methods
 //    
-//    /// Update chart with real market data
-//    /// This would be called when receiving data from an API or WebSocket
 //    func updateWithMarketData(_ data: [Candle]) {
 //        candles = data
 //        updatePriceRange()
@@ -666,13 +1061,11 @@ class ChartDataManager: ObservableObject {
 //        }
 //    }
 //    
-//    /// Add a single new candle from real-time feed
-//    /// Used when receiving tick-by-tick updates
 //    func addRealtimeCandle(_ candle: Candle) {
 //        candles.append(candle)
 //        currentPrice = candle.close
+//        basePrice = candle.close
 //        
-//        // Maintain memory limit
 //        if candles.count > maxCandles {
 //            candles.removeFirst()
 //        }
@@ -680,77 +1073,62 @@ class ChartDataManager: ObservableObject {
 //        updatePriceRange()
 //    }
 //    
-//    /// Regenerate mock data when symbol or timeframe changes
-//    /// This stops the current generation, creates fresh data, and restarts the timer
-//    func regenerateMockData() {
-//        // Stop current data generation
-//        stopDataGeneration()
-//        
-//        // Generate fresh candle data
-//        candles = Candle.generateSampleData(count: 200)
-//        
-//        // Update price range with new data
-//        updatePriceRange()
-//        
-//        // Set current price from the latest candle
-//        if let lastCandle = candles.last {
-//            currentPrice = lastCandle.close
-//            basePrice = lastCandle.close
+//    // MARK: - Helper Methods
+//    
+//    private func defaultVolatility(for symbol: TradingSymbol) -> Double {
+//        switch symbol.assetClass {
+//        case .forex: return 0.003
+//        case .crypto: return 0.03
+//        case .stocks: return 0.015
+//        case .commodities: return 0.02
+//        case .indices: return 0.01
+//        case .futures: return 0.02
 //        }
-//        
-//        // Restart data generation for real-time updates
-//        startDataGeneration()
 //    }
 //    
-//    /// Regenerate mock data with a specific number of candles
-//    /// Useful for different timeframes that may need more or less historical data
-//    func regenerateMockData(candleCount: Int) {
-//        stopDataGeneration()
+//    private func alignToTimeframe(date: Date, timeframe: ChartTimeframe) -> Date {
+//        let calendar = Calendar.current
+//        var components = calendar.dateComponents(
+//            [.year, .month, .day, .hour, .minute, .second],
+//            from: date
+//        )
 //        
-//        // Generate specified number of candles
-//        candles = Candle.generateSampleData(count: candleCount)
+//        components.second = 0
 //        
-//        updatePriceRange()
-//        
-//        if let lastCandle = candles.last {
-//            currentPrice = lastCandle.close
-//            basePrice = lastCandle.close
+//        switch timeframe {
+//        case .m1:
+//            break
+//        case .m5:
+//            if let minute = components.minute {
+//                components.minute = (minute / 5) * 5
+//            }
+//        case .m15:
+//            if let minute = components.minute {
+//                components.minute = (minute / 15) * 15
+//            }
+//        case .m30:
+//            if let minute = components.minute {
+//                components.minute = (minute / 30) * 30
+//            }
+//        case .h1:
+//            components.minute = 0
+//        case .h4:
+//            components.minute = 0
+//            if let hour = components.hour {
+//                components.hour = (hour / 4) * 4
+//            }
+//        case .d1:
+//            components.hour = 0
+//            components.minute = 0
+//        case .w1:
+//            components.hour = 0
+//            components.minute = 0
+//        case .mn:
+//            components.day = 1
+//            components.hour = 0
+//            components.minute = 0
 //        }
 //        
-//        startDataGeneration()
-//    }
-//    
-//    /// Regenerate mock data with a specific base price
-//    /// Useful for different symbols with different price ranges
-//    func regenerateMockData(basePrice: Double) {
-//        stopDataGeneration()
-//        
-//        // Set the base price for this symbol
-//        self.basePrice = basePrice
-//        
-//        // Generate data starting from this price
-//        var tempCandles: [Candle] = []
-//        var currentPrice = basePrice
-//        var currentDate = Date()
-//        
-//        for _ in 0..<200 {
-//            let candle = Candle.random(basePrice: currentPrice, timestamp: currentDate)
-//            tempCandles.append(candle)
-//            currentPrice = candle.close
-//            currentDate = currentDate.addingTimeInterval(-300) // 5 minutes earlier
-//        }
-//        
-//        candles = tempCandles.reversed()
-//        
-//        updatePriceRange()
-//        
-//        if let lastCandle = candles.last {
-//            self.currentPrice = lastCandle.close
-//        }
-//        
-//        startDataGeneration()
+//        return calendar.date(from: components) ?? date
 //    }
 //}
-//
-//
-//
