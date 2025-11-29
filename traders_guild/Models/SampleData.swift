@@ -4104,6 +4104,169 @@ struct SampleData {
     static var chartGuildWatchlist: [TradingSymbol] {
         Array(allTradingSymbols.suffix(5))
     }
+    
+    
+    
+    
+    //
+    //  ADD THIS CODE INSIDE YOUR EXISTING SampleData STRUCT
+    //  (Paste before the final closing brace of the struct)
+    //
+
+    // ================================================================================================
+    // MARK: - Chart Marker Sample Data
+    // ================================================================================================
+    
+    /// Sample guild members who have placed markers
+    static let chartMarkerMembers: [(userId: String, username: String, avatarURL: String?)] = [
+        ("member_alex_001", "Alex_Trader", "https://cdn.tradersguild.com/avatars/alex.jpg"),
+        ("member_sarah_002", "SarahFX", "https://cdn.tradersguild.com/avatars/sarah.jpg"),
+        ("member_mike_003", "MikeTheChart", nil),
+        ("member_emma_004", "EmmaSwings", "https://cdn.tradersguild.com/avatars/emma.jpg"),
+        ("member_james_005", "JamesPips", "https://cdn.tradersguild.com/avatars/james.jpg"),
+        ("member_lisa_006", "LisaTrades", nil),
+        ("member_tom_007", "TomTechnical", "https://cdn.tradersguild.com/avatars/tom.jpg"),
+        ("member_nina_008", "NinaFibo", "https://cdn.tradersguild.com/avatars/nina.jpg")
+    ]
+    
+    /// Sample notes that guild members might write on their markers
+    static let chartMarkerNotes: [String?] = [
+        "Strong support level - watching for bounce",
+        "Watching for breakout above resistance",
+        "Nice entry on the retest",
+        nil,
+        "Previous resistance now acting as support",
+        "High volatility zone - be careful here",
+        nil,
+        "Good risk/reward setup - 1:3 R:R",
+        "Divergence on RSI at this level",
+        nil,
+        "Weekly level confluence",
+        "Stop loss below this swing low",
+        "Taking partial profits here",
+        nil,
+        "Fibonacci 61.8% retracement level",
+        "Order block area - expect reaction"
+    ]
+    
+    /// Weighted distribution of marker types (more realistic)
+    static let markerTypeDistribution: [MarkerType] = [
+        .entry, .entry, .entry,
+        .exit, .exit,
+        .stopLoss, .stopLoss, .stopLoss,
+        .takeProfit, .takeProfit,
+        .support, .support, .support, .support,
+        .resistance, .resistance, .resistance,
+        .alert,
+        .pattern,
+        .note, .note
+    ]
+    
+    /// Generate sample chart markers for testing
+    static func generateChartMarkers(
+        forSymbol symbol: String,
+        guildId: String,
+        candleCount: Int,
+        count: Int = 8
+    ) -> [ChartMarker] {
+        guard candleCount >= 30 else { return [] }
+        
+        var markers: [ChartMarker] = []
+        let startIndex = 15
+        let endIndex = candleCount - 10
+        let range = endIndex - startIndex
+        
+        guard range > count else { return [] }
+        
+        var usedIndices: [Int] = []
+        
+        for i in 0..<count {
+            // 20% chance to cluster with previous marker
+            let baseIndex: Int
+            if i > 0 && Int.random(in: 0...4) == 0 {
+                baseIndex = usedIndices.last! + Int.random(in: 0...2)
+            } else {
+                let step = range / count
+                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
+            }
+            
+            let candleIndex = min(endIndex, max(startIndex, baseIndex))
+            usedIndices.append(candleIndex)
+            
+            let member = chartMarkerMembers[i % chartMarkerMembers.count]
+            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
+            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
+            let placeholderPrice = 1.0850
+            
+            let hoursAgo = Double.random(in: 1...72)
+            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
+            
+            var marker = ChartMarker(
+                id: UUID(),
+                candleIndex: candleIndex,
+                timestamp: timestamp,
+                price: placeholderPrice,
+                type: markerType,
+                userId: member.userId,
+                username: member.username,
+                note: note,
+                guildId: guildId,
+                createdAt: timestamp
+            )
+            
+            marker.likeCount = Int.random(in: 0...15)
+            marker.isLikedByCurrentUser = marker.likeCount > 0 && Bool.random()
+            
+            markers.append(marker)
+        }
+        
+        return markers
+    }
+    
+    /// Update marker prices based on actual candle data
+    static func updateMarkerPrices(
+        markers: [ChartMarker],
+        candles: [Candle]
+    ) -> [ChartMarker] {
+        return markers.map { marker in
+            guard marker.candleIndex >= 0 && marker.candleIndex < candles.count else {
+                return marker
+            }
+            
+            let candle = candles[marker.candleIndex]
+            let price: Double
+            
+            switch marker.type {
+            case .support:
+                price = candle.low
+            case .resistance:
+                price = candle.high
+            case .entry, .takeProfit:
+                price = candle.close
+            case .exit, .stopLoss:
+                price = candle.open
+            default:
+                price = (candle.high + candle.low) / 2
+            }
+            
+            var updatedMarker = ChartMarker(
+                id: marker.id,
+                candleIndex: marker.candleIndex,
+                timestamp: candle.timestamp,
+                price: price,
+                type: marker.type,
+                userId: marker.userId,
+                username: marker.username,
+                note: marker.note,
+                guildId: marker.guildId,
+                createdAt: marker.createdAt
+            )
+            updatedMarker.likeCount = marker.likeCount
+            updatedMarker.isLikedByCurrentUser = marker.isLikedByCurrentUser
+            
+            return updatedMarker
+        }
+    }
 }
 
 

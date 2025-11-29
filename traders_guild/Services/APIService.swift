@@ -343,6 +343,73 @@ class MockAPIService {
         // When backend is ready, this will make a real API call
         return Candle.generateSampleData(count: limit)
     }
+    
+    
+    
+    
+    
+    //
+    //  ADD THESE METHODS INSIDE YOUR EXISTING MockAPIService CLASS
+    //  (Paste inside the class, after the existing chart methods)
+    //
+
+    // ================================================================================================
+    // MARK: - Chart Markers - API
+    // ================================================================================================
+    
+    /// Fetch chart markers for a specific symbol and guild
+    func fetchGuildChartMarkers(
+        symbol: String,
+        guildId: UUID,
+        timeframe: ChartTimeframe,
+        candleCount: Int
+    ) async throws -> [ChartMarker] {
+        try await simulateNetworkDelay()
+        return SampleData.generateChartMarkers(
+            forSymbol: symbol,
+            guildId: guildId.uuidString,
+            candleCount: candleCount
+        )
+    }
+    
+    /// Fetch markers for a specific user
+    func fetchUserChartMarkers(
+        userId: UUID,
+        symbol: String,
+        guildId: UUID
+    ) async throws -> [ChartMarker] {
+        try await simulateNetworkDelay()
+        let allMarkers = SampleData.generateChartMarkers(
+            forSymbol: symbol,
+            guildId: guildId.uuidString,
+            candleCount: 200
+        )
+        return allMarkers.filter { $0.userId == userId.uuidString }
+    }
+    
+    /// Post a new marker to the backend
+    func postChartMarker(_ marker: ChartMarker) async throws -> ChartMarker {
+        try await simulateNetworkDelay()
+        return marker
+    }
+    
+    /// Delete a marker
+    func deleteChartMarker(markerId: UUID, guildId: UUID) async throws {
+        try await simulateNetworkDelay()
+    }
+    
+    /// Update a marker (edit note, etc.)
+    func updateChartMarker(_ marker: ChartMarker) async throws -> ChartMarker {
+        try await simulateNetworkDelay()
+        return marker
+    }
+    
+    /// Toggle like on a marker
+    func toggleMarkerLike(markerId: UUID, userId: UUID) async throws -> (likeCount: Int, isLiked: Bool) {
+        try await simulateNetworkDelay()
+        let newLikeCount = Int.random(in: 1...15)
+        return (newLikeCount, true)
+    }
 
 }
 

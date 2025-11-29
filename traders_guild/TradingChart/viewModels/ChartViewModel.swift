@@ -18,6 +18,8 @@ class ChartViewModel: ObservableObject {
     let dataManager: ChartDataManager
     private let api: MockAPIService
     
+    weak var markerManager: MarkerManager?
+    
     // MARK: - Published State
     
     @Published var currentSymbol: TradingSymbol?
@@ -161,5 +163,22 @@ class ChartViewModel: ObservableObject {
     private func loadGuildWatchlist() async throws {
         guard let guildId = appState.currentGuild?.id else { return }
         guildWatchlist = try await api.fetchChartGuildWatchlist(guildId: guildId)
+    }
+    
+    
+    func loadMarkers() async {
+        guard let symbol = currentSymbol,
+              let guildId = appState.currentGuild?.id,
+              let markerManager = markerManager else {
+            return
+        }
+        
+        await markerManager.loadMarkersFromAPI(
+            api: api,
+            symbol: symbol.symbol,
+            guildId: guildId,
+            timeframe: currentTimeframe,
+            candles: dataManager.candles
+        )
     }
 }
