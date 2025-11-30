@@ -18,18 +18,18 @@ struct MarkerXAxisTimeIndicator: View {
     let chartHeight: CGFloat
     
     /// Position from bottom - INCREASED to stay visible above sheets
-    private let bottomOffset: CGFloat = 55
+    private let bottomOffset: CGFloat = 115
     
     var body: some View {
         ZStack {
             // Time label box - styled like price indicator
             RoundedRectangle(cornerRadius: 4)
                 .fill(Color.blue)
-                .frame(width: 85, height: 24)
+                .frame(width: 65, height: 24)
                 .overlay(
                     HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 10, weight: .semibold))
+//                        Image(systemName: "clock")
+//                            .font(.system(size: 10, weight: .semibold))
                         Text(timestamp.chartTimeLabel)
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     }

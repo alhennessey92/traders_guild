@@ -432,7 +432,7 @@ struct ChartBottomSheet: View {
         case chat = "Chat"
         case indicator = "Indicator"
         case markers = "Markers"
-        case controls = "Controls"
+//        case controls = "Controls"
         
         var icon: String {
             switch self {
@@ -440,7 +440,7 @@ struct ChartBottomSheet: View {
             case .chat: return "message.fill"
             case .indicator: return "chart.line.uptrend.xyaxis.circle"
             case .markers: return "mappin.circle.fill"
-            case .controls: return "slider.horizontal.3"
+//            case .controls: return "slider.horizontal.3"
             }
         }
     }
@@ -464,8 +464,8 @@ struct ChartBottomSheet: View {
                             indicatorContent
                         case .markers:
                             markersContent
-                        case .controls:
-                            chartControlsContent
+//                        case .controls:
+//                            chartControlsContent
                         }
                     }
                     .padding(.horizontal, 16)
@@ -552,21 +552,21 @@ struct ChartBottomSheet: View {
                             }
                         }
                         
-                        // Controls button
-                        RootBottomBarIconButton(
-                            systemName: "slider.horizontal.3",
-                            fontSize: 25,
-                            backgroundColor: selectedView == .controls ?
-                                AppColors.whiteText :
-                                AppColors.whiteText.opacity(0.5),
-                            foregroundColor: selectedView == .controls ?
-                                AppColors.gradientBackgroundDark :
-                                AppColors.gradientBackgroundDark.opacity(0.8)
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                selectedView = .controls
-                            }
-                        }
+//                        // Controls button
+//                        RootBottomBarIconButton(
+//                            systemName: "slider.horizontal.3",
+//                            fontSize: 25,
+//                            backgroundColor: selectedView == .controls ?
+//                                AppColors.whiteText :
+//                                AppColors.whiteText.opacity(0.5),
+//                            foregroundColor: selectedView == .controls ?
+//                                AppColors.gradientBackgroundDark :
+//                                AppColors.gradientBackgroundDark.opacity(0.8)
+//                        ) {
+//                            withAnimation(.easeInOut(duration: 0.25)) {
+//                                selectedView = .controls
+//                            }
+//                        }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -580,6 +580,23 @@ struct ChartBottomSheet: View {
     // MARK: - Symbol Tab Content (NEW - Enhanced with timeframe and watchlist)
     private var symbolAndSettingsContent: some View {
         VStack(spacing: 20) {
+            HStack(spacing: 10){
+                ChartControlButton(
+                    title: "Latest",
+                    icon: "arrow.right.to.line",
+                    color: .blue
+                ) {
+                    controlViewModel.jumpToLatest()
+                }
+                
+                ChartControlButton(
+                    title: "Reset View",
+                    icon: "arrow.counterclockwise",
+                    color: .purple
+                ) {
+                    controlViewModel.resetChart()
+                }
+            }
             // SECTION: Current Symbol Info
             if let symbol = chartViewModel.currentSymbol {
                 VStack(spacing: 12) {
@@ -805,134 +822,341 @@ struct ChartBottomSheet: View {
     private var markersContent: some View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Chart Markers")
-                    .font(.headline)
+                Text("Add a Marker")
+                    .font(.title2)
+                    .fontWeight(.bold)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 15)
                 
                 Text("Place markers on the chart to share insights with your guild")
                     .font(.caption)
                     .foregroundColor(.gray)
                     .padding(.bottom, 8)
                 
+                // chart markers
+                // core - note, question, entry, exit
+                // analysis - support, resistance, pattern, trendline, volume spike, indicator
+                // prediction - prediction (direction), prediction (target price)
+                // social - reaction(emoji), poll
+                
                 VStack(spacing: 8) {
-                    MarkerTypeItem(title: "Support Level", icon: "arrow.up.circle", color: .green)
-                    MarkerTypeItem(title: "Resistance Level", icon: "arrow.down.circle", color: .red)
-                    MarkerTypeItem(title: "Entry Point", icon: "arrow.right.circle", color: .blue)
-                    MarkerTypeItem(title: "Exit Point", icon: "xmark.circle", color: .orange)
+                    
+                    Text("Core Markers")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                        .padding(.bottom, 4)
+                        
+                    
+                    // TODO: - All markers allow a note section for the user to write a basic note/message about their marker placement, also allow likes, and display marker set time and price, all markers should allow basic commenting for other users, not real messaging like the other parts of the app just a basic commenting section,  there should be a couple of buttons allowing to share, save and report marker, everything else is custom to the marker
+                    
+                    HStack(spacing: 10){
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Note",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "note.text",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .gray,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Question",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "questionmark.circle",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .blue,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Alert",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "bell.circle",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .yellow,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - custom detail view allow to pick from a few types of alert, mild, severe etc...
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                    }
+                    
+                    
+                    
+                    
+                    HStack(spacing: 10){
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Entry",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "arrow.up.circle.fill",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .green,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - a set horizontal line is placed at the open of the selected candle indicating entry line, when selecting the marker later the line is displayed and price highlighted on y axis like the price indicator
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Exit",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "arrow.down.circle.fill",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .orange,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - a set horizontal line is placed at the close of the selected candle indicating exit line, when selecting the marker later the line is displayed and price highlighted on y axis like the price indicator
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                    }
+                    
+                    
+                    
+                    
+                    
+                    Text("Analysis Markers")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 12)
+                        .padding(.bottom, 4)
+                    
+                    HStack(spacing: 10){
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Support",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "arrow.up.circle",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .purple,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - a set horizontal line is placed at the high of the selected candle indicating support line, when selecting the marker later the line is displayed and price highlighted on y axis like the price indicator
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Resistance",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "arrow.down.circle",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .pink,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - a set horizontal line is placed at the low of the selected candle indicating resistance line, when selecting the marker later the line is displayed and price highlighted on y axis like the price indicator
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Indicator",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "baseball.diamond.bases.outs.indicator",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .teal,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            
+                            // TODO: - custom detail view section allows user to select indicator to reference
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                    }
+                    
+                    HStack(spacing: 10){
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Trendline",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "chart.line.uptrend.xyaxis.circle",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .indigo,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - custom detail view section allows user to select direction of trendline
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Pattern",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "sparkles",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .cyan,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            
+                            // TODO: - custom detail view section allows user to select pattern from a selection of known chart patterns
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Volume Spike",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "chart.line.downtrend.xyaxis.circle",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .mint,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                    }
+                    
+                    
+                    
+                    Text("Prediction Markers")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 12)
+                        .padding(.bottom, 4)
+                    
+                    HStack(spacing: 10){
+                        
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Prediction (Target Price)",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "checkmark.circle.badge.questionmark",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .tgAccentDark,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - custom detail view section allows user to select a target price (stop Loss) via a draggable target price horizontal line, there is also a fixed entry line showing price of entry, when selecting the marker the lines are displayed and price highlighted on y axis like the price indicator
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                    }
+                    
+                    Text("Social Markers")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 12)
+                        .padding(.bottom, 4)
+                    
+                    HStack(spacing: 10){
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Emoji",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "face.smiling.inverse",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .white,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - custom detail view section allows user to select emoji symbol
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                        ChartControlButton(
+                            title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Poll",
+                            icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "person.3",
+                            color: controlViewModel.isMarkerPlacementMode ? .red : .blue,
+                            isActive: controlViewModel.isMarkerPlacementMode
+                        ) {
+                            // TODO: - custom detail view section allows user to set a poll question and answers, users can select their answer, show results
+                            controlViewModel.toggleMarkerPlacement()
+                        }
+                        
+                    }
+
                 }
             }
         }
     }
     
-    private var chartControlsContent: some View {
-        VStack(spacing: 20) {
-            // SECTION: Marker Tools
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Marker Tools")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                HStack(spacing: 16) {
-                    ChartControlButton(
-                        title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Place Marker",
-                        icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "mappin.circle",
-                        color: controlViewModel.isMarkerPlacementMode ? .red : .green,
-                        isActive: controlViewModel.isMarkerPlacementMode
-                    ) {
-                        controlViewModel.toggleMarkerPlacement()
-                    }
-                    
-                    ChartControlButton(
-                        title: "Filter",
-                        icon: "line.3.horizontal.decrease.circle",
-                        color: .orange
-                    ) {
-                        print("Filter tapped")
-                    }
-                }
-            }
-            
-            // SECTION: Navigation
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Navigation")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                HStack(spacing: 16) {
-                    ChartControlButton(
-                        title: "Start",
-                        icon: "arrow.left.to.line",
-                        color: .blue
-                    ) {
-                        controlViewModel.jumpToStart()
-                    }
-                    
-                    ChartControlButton(
-                        title: "Latest",
-                        icon: "arrow.right.to.line",
-                        color: .blue
-                    ) {
-                        controlViewModel.jumpToLatest()
-                    }
-                }
-                
-                HStack(spacing: 16) {
-                    ChartControlButton(
-                        title: "Reset View",
-                        icon: "arrow.counterclockwise",
-                        color: .purple
-                    ) {
-                        controlViewModel.resetChart()
-                    }
-                    
-                    ChartControlButton(
-                        title: "Auto-Scroll",
-                        icon: "arrow.right.circle",
-                        color: .indigo,
-                        isActive: controlViewModel.isAutoScrolling
-                    ) {
-                        controlViewModel.toggleAutoScroll()
-                    }
-                }
-            }
-            
-            // SECTION: Zoom Info
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Zoom & Scale")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("Horizontal Zoom")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                        Spacer()
-                        Text("Use pinch gesture")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                    
-                    HStack {
-                        Text("Vertical Scale")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                        Spacer()
-                        Text("Drag Y-axis area")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-                .padding()
-                .background(Color.white.opacity(0.05))
-                .cornerRadius(8)
-            }
-        }
-    }
+//    private var chartControlsContent: some View {
+//        VStack(spacing: 20) {
+//            // SECTION: Marker Tools
+//            VStack(alignment: .leading, spacing: 12) {
+//                Text("Marker Tools")
+//                    .font(.headline)
+//                    .foregroundColor(.white)
+//                    .frame(maxWidth: .infinity, alignment: .leading)
+//                
+//                HStack(spacing: 16) {
+//                    ChartControlButton(
+//                        title: controlViewModel.isMarkerPlacementMode ? "Cancel" : "Place Marker",
+//                        icon: controlViewModel.isMarkerPlacementMode ? "xmark.circle" : "mappin.circle",
+//                        color: controlViewModel.isMarkerPlacementMode ? .red : .green,
+//                        isActive: controlViewModel.isMarkerPlacementMode
+//                    ) {
+//                        controlViewModel.toggleMarkerPlacement()
+//                    }
+//                    
+//                    ChartControlButton(
+//                        title: "Filter",
+//                        icon: "line.3.horizontal.decrease.circle",
+//                        color: .orange
+//                    ) {
+//                        print("Filter tapped")
+//                    }
+//                }
+//            }
+//            
+//            // SECTION: Navigation
+//            VStack(alignment: .leading, spacing: 12) {
+//                Text("Navigation")
+//                    .font(.headline)
+//                    .foregroundColor(.white)
+//                    .frame(maxWidth: .infinity, alignment: .leading)
+//                
+//                HStack(spacing: 16) {
+//                    ChartControlButton(
+//                        title: "Start",
+//                        icon: "arrow.left.to.line",
+//                        color: .blue
+//                    ) {
+//                        controlViewModel.jumpToStart()
+//                    }
+//                    
+//                    ChartControlButton(
+//                        title: "Latest",
+//                        icon: "arrow.right.to.line",
+//                        color: .blue
+//                    ) {
+//                        controlViewModel.jumpToLatest()
+//                    }
+//                }
+//                
+//                HStack(spacing: 16) {
+//                    ChartControlButton(
+//                        title: "Reset View",
+//                        icon: "arrow.counterclockwise",
+//                        color: .purple
+//                    ) {
+//                        controlViewModel.resetChart()
+//                    }
+//                    
+//                    ChartControlButton(
+//                        title: "Auto-Scroll",
+//                        icon: "arrow.right.circle",
+//                        color: .indigo,
+//                        isActive: controlViewModel.isAutoScrolling
+//                    ) {
+//                        controlViewModel.toggleAutoScroll()
+//                    }
+//                }
+//            }
+//            
+//            // SECTION: Zoom Info
+//            VStack(alignment: .leading, spacing: 12) {
+//                Text("Zoom & Scale")
+//                    .font(.headline)
+//                    .foregroundColor(.white)
+//                    .frame(maxWidth: .infinity, alignment: .leading)
+//                
+//                VStack(spacing: 12) {
+//                    HStack {
+//                        Text("Horizontal Zoom")
+//                            .font(.caption)
+//                            .foregroundColor(.white.opacity(0.8))
+//                        Spacer()
+//                        Text("Use pinch gesture")
+//                            .font(.caption)
+//                            .foregroundColor(.gray)
+//                    }
+//                    
+//                    HStack {
+//                        Text("Vertical Scale")
+//                            .font(.caption)
+//                            .foregroundColor(.white.opacity(0.8))
+//                        Spacer()
+//                        Text("Drag Y-axis area")
+//                            .font(.caption)
+//                            .foregroundColor(.gray)
+//                    }
+//                }
+//                .padding()
+//                .background(Color.white.opacity(0.05))
+//                .cornerRadius(8)
+//            }
+//        }
+//    }
 }
 
 // MARK: - Helper Components

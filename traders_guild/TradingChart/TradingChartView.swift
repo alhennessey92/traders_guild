@@ -1256,7 +1256,7 @@ struct TradingChartView: View {
     @ViewBuilder
     func xAxisOverlay(geometry: GeometryProxy) -> some View {
         // Calculate the bottom area height (includes bottom sheet space)
-        let bottomAreaHeight = geometry.size.height * 0.11 + 10
+        let bottomAreaHeight = geometry.size.height * 0.11
         
         VStack(spacing: 0) {
             Spacer()
@@ -1356,6 +1356,7 @@ struct TradingChartView: View {
                 }
             }
             .frame(height: 22)
+            .padding(.top, 10)
             .background(Color.black)
             
             // SOLID BLACK AREA below X-axis to hide any chart content
@@ -1363,6 +1364,7 @@ struct TradingChartView: View {
             Rectangle()
                 .fill(Color.black)
                 .frame(height: bottomAreaHeight)
+                
         }
         .allowsHitTesting(false)
     }
