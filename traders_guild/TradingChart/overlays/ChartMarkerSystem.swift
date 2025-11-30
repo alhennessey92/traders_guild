@@ -1,12 +1,15 @@
-
 //
 //  ChartMarkerSystem.swift
 //  traders_guild
 //
-//  UPDATED v2 - Smart positioning + Marker clustering
-//  - Markers positioned above candles with smart offset to avoid interference
-//  - Multiple markers on same candle stack vertically or cluster if >3
-//  - Load markers via API instead of hardcoding
+//  COMPREHENSIVE FIX v5 - Addresses ALL issues:
+//  1. MarkerCreationSheet now passes candles for proper positioning
+//  2. Hit detection uses stored positions (shared calculation)
+//  3. Increased stack offsets to prevent name overlap
+//  4. Connection lines stop at marker edges
+//  5. Better peak/valley detection
+//
+//  NOTE: ChartMarker and MarkerType are defined in ChartModels.swift
 //
 
 import SwiftUI
@@ -18,17 +21,13 @@ class MarkerManager: ObservableObject {
     @Published var selectedMarker: ChartMarker?
     @Published var visibleTypes: Set<MarkerType> = Set(MarkerType.allCases)
     @Published var showOnlyMyMarkers: Bool = false
-    
-    /// Expanded cluster (shows all markers when tapped)
     @Published var expandedClusterCandleIndex: Int? = nil
     
     private let currentUserId: String
     private let currentGuildId: String
     
-    /// Public accessor for guild ID
-    var guildId: String {
-        currentGuildId
-    }
+    var guildId: String { currentGuildId }
+    var userId: String { currentUserId }
     
     init(userId: String = "user123", guildId: String = "guild1") {
         self.currentUserId = userId
@@ -37,8 +36,6 @@ class MarkerManager: ObservableObject {
     
     // MARK: - API Loading
     
-    /// Load markers from the API
-    /// Call this after chart data is loaded
     func loadMarkersFromAPI(
         api: MockAPIService,
         symbol: String,
@@ -54,9 +51,13 @@ class MarkerManager: ObservableObject {
                 candleCount: candles.count
             )
             
-            // Update marker prices based on actual candle data
-            let positionedMarkers = SampleData.updateMarkerPrices(
+            var positionedMarkers = SampleData.updateMarkerPrices(
                 markers: fetchedMarkers,
+                candles: candles
+            )
+            
+            positionedMarkers = MarkerPositionCalculator.assignStablePositions(
+                markers: positionedMarkers,
                 candles: candles
             )
             
@@ -68,7 +69,6 @@ class MarkerManager: ObservableObject {
         }
     }
     
-    /// Clear all markers (when switching symbols)
     func clearMarkers() {
         markers.removeAll()
         expandedClusterCandleIndex = nil
@@ -76,15 +76,18 @@ class MarkerManager: ObservableObject {
     
     // MARK: - Marker CRUD
     
+    /// Add a new marker WITH proper positioning calculation
+    /// This is the PRIMARY method - always use this when candles are available
     func addMarker(
         candleIndex: Int,
         timestamp: Date,
         price: Double,
         type: MarkerType,
         username: String,
-        note: String? = nil
+        note: String? = nil,
+        candles: [Candle]
     ) {
-        let marker = ChartMarker(
+        var marker = ChartMarker(
             candleIndex: candleIndex,
             timestamp: timestamp,
             price: price,
@@ -93,6 +96,66 @@ class MarkerManager: ObservableObject {
             username: username,
             note: note,
             guildId: currentGuildId
+        )
+        
+        // CRITICAL: Calculate proper position based on existing markers and candle data
+        let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
+            marker: marker,
+            existingMarkers: markers,
+            candles: candles
+        )
+        
+        marker.positionedBelow = positioning.isBelow
+        marker.proximityTier = positioning.tier
+        marker.stackIndex = positioning.stackIndex
+        
+        print("📍 Adding marker at candle \(candleIndex): below=\(positioning.isBelow), tier=\(positioning.tier), stack=\(positioning.stackIndex)")
+        
+        markers.append(marker)
+    }
+    
+    /// DEPRECATED: Backwards-compatible addMarker without candles
+    /// Only use when candles are truly unavailable - positioning will be suboptimal
+    func addMarker(
+        candleIndex: Int,
+        timestamp: Date,
+        price: Double,
+        type: MarkerType,
+        username: String,
+        note: String? = nil
+    ) {
+        // Try to get some positioning info from existing markers
+        let markersAtCandle = markers.filter { $0.candleIndex == candleIndex }
+        let markersAbove = markersAtCandle.filter { !$0.positionedBelow }
+        let markersBelow = markersAtCandle.filter { $0.positionedBelow }
+        
+        // Alternate: if more markers above, put below
+        let shouldBeBelow = markersAbove.count > markersBelow.count
+        let stackIndex = shouldBeBelow ? markersBelow.count : markersAbove.count
+        
+        // Check nearby markers for tier
+        let nearbyMarkers = markers.filter {
+            abs($0.candleIndex - candleIndex) <= MarkerPositionCalculator.proximityRange &&
+            $0.positionedBelow == shouldBeBelow
+        }
+        let usedTiers = Set(nearbyMarkers.map { $0.proximityTier })
+        var tier = 0
+        while usedTiers.contains(tier) {
+            tier += 1
+        }
+        
+        let marker = ChartMarker(
+            candleIndex: candleIndex,
+            timestamp: timestamp,
+            price: price,
+            type: type,
+            userId: currentUserId,
+            username: username,
+            note: note,
+            guildId: currentGuildId,
+            positionedBelow: shouldBeBelow,
+            proximityTier: tier,
+            stackIndex: stackIndex
         )
         markers.append(marker)
     }
@@ -112,8 +175,6 @@ class MarkerManager: ObservableObject {
         markers[index].likeCount += markers[index].isLikedByCurrentUser ? 1 : -1
     }
     
-    // MARK: - Filtering
-    
     var filteredMarkers: [ChartMarker] {
         markers.filter { marker in
             guard marker.isVisible else { return false }
@@ -125,32 +186,26 @@ class MarkerManager: ObservableObject {
         }
     }
     
-    // MARK: - Clustering Logic
-    
-    /// Group markers by candle index
     func markersGroupedByCandle() -> [Int: [ChartMarker]] {
         Dictionary(grouping: filteredMarkers) { $0.candleIndex }
     }
     
-    /// Check if a candle has a cluster (more than 3 markers)
     func isCluster(candleIndex: Int) -> Bool {
         let group = markersGroupedByCandle()[candleIndex] ?? []
-        return group.count > 3 && expandedClusterCandleIndex != candleIndex
+        return group.count > MarkerDisplaySettings.shared.maxBeforeCluster && expandedClusterCandleIndex != candleIndex
     }
     
-    /// Get markers to display for a candle (handles clustering)
     func displayMarkers(forCandleIndex candleIndex: Int) -> [ChartMarker] {
         let group = markersGroupedByCandle()[candleIndex] ?? []
+        let maxBeforeCluster = MarkerDisplaySettings.shared.maxBeforeCluster
         
-        if group.count <= 3 || expandedClusterCandleIndex == candleIndex {
+        if group.count <= maxBeforeCluster || expandedClusterCandleIndex == candleIndex {
             return group
         } else {
-            // Return empty - cluster indicator will be shown instead
             return []
         }
     }
     
-    /// Toggle cluster expansion
     func toggleClusterExpansion(candleIndex: Int) {
         if expandedClusterCandleIndex == candleIndex {
             expandedClusterCandleIndex = nil
@@ -159,114 +214,397 @@ class MarkerManager: ObservableObject {
         }
     }
     
-    /// Get cluster info for a candle
     func clusterInfo(forCandleIndex candleIndex: Int) -> (count: Int, types: Set<MarkerType>)? {
         let group = markersGroupedByCandle()[candleIndex] ?? []
-        guard group.count > 3 && expandedClusterCandleIndex != candleIndex else { return nil }
+        let maxBeforeCluster = MarkerDisplaySettings.shared.maxBeforeCluster
+        guard group.count > maxBeforeCluster && expandedClusterCandleIndex != candleIndex else { return nil }
         return (group.count, Set(group.map { $0.type }))
+    }
+}
+
+// MARK: - Marker Display Settings
+
+class MarkerDisplaySettings: ObservableObject {
+    static let shared = MarkerDisplaySettings()
+    
+    @Published var baseOffset: CGFloat {
+        didSet { UserDefaults.standard.set(baseOffset, forKey: "markerBaseOffset") }
+    }
+    
+    @Published var stackOffset: CGFloat {
+        didSet { UserDefaults.standard.set(stackOffset, forKey: "markerStackOffset") }
+    }
+    
+    @Published var maxBeforeCluster: Int {
+        didSet { UserDefaults.standard.set(maxBeforeCluster, forKey: "markerMaxBeforeCluster") }
+    }
+    
+    @Published var proximityTierOffset: CGFloat {
+        didSet { UserDefaults.standard.set(proximityTierOffset, forKey: "markerProximityTierOffset") }
+    }
+    
+    @Published var placementExtraOffset: CGFloat {
+        didSet { UserDefaults.standard.set(placementExtraOffset, forKey: "markerPlacementExtraOffset") }
+    }
+    
+    private init() {
+        // SIGNIFICANTLY INCREASED offsets to prevent overlap
+        self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 95
+        // INCREASED from 40 to 55 to prevent name overlap
+        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 55
+        self.maxBeforeCluster = UserDefaults.standard.object(forKey: "markerMaxBeforeCluster") as? Int ?? 3
+        self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 40
+        self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 45
+    }
+    
+    func resetToDefaults() {
+        baseOffset = 95
+        stackOffset = 55
+        maxBeforeCluster = 3
+        proximityTierOffset = 40
+        placementExtraOffset = 45
     }
 }
 
 // MARK: - Marker Position Calculator
 
-/// Calculates smart positions for markers to avoid candle interference
-/// Now considers adjacent candle markers and trend direction for smarter placement
 struct MarkerPositionCalculator {
     
-    /// Base offset above candle high (in pixels) - increased for better clearance
-    static let baseOffset: CGFloat = 75
+    static var settings: MarkerDisplaySettings { MarkerDisplaySettings.shared }
+    static var baseOffset: CGFloat { settings.baseOffset }
+    static var stackOffset: CGFloat { settings.stackOffset }
+    static var maxBeforeCluster: Int { settings.maxBeforeCluster }
+    static let proximityRange = 4  // Increased from 3
+    static let hitRadius: CGFloat = 30  // Increased for better tap detection
     
-    /// Additional offset per stacked marker
-    static let stackOffset: CGFloat = 38
+    static var placementOffset: CGFloat {
+        settings.baseOffset + settings.placementExtraOffset
+    }
     
-    /// Maximum markers before clustering kicks in
-    static let maxBeforeCluster = 3
+    // MARK: - SHARED Position Calculation
     
-    /// Horizontal range (in candle indices) to check for nearby markers
-    static let proximityRange = 2
-    
-    /// Calculate Y positions for markers on the same candle
-    /// Returns dictionary of marker ID to Y offset from candle high
-    static func calculatePositions(
-        markers: [ChartMarker],
-        candleIndex: Int
-    ) -> [UUID: CGFloat] {
-        let markersAtCandle = markers.filter { $0.candleIndex == candleIndex }
-        var positions: [UUID: CGFloat] = [:]
+    /// Calculate the screen position for a marker using its STORED properties
+    /// SINGLE SOURCE OF TRUTH - used by both drawing and hit detection
+    static func computeMarkerScreenPosition(
+        marker: ChartMarker,
+        candleHighY: CGFloat,
+        candleLowY: CGFloat,
+        centerX: CGFloat
+    ) -> CGPoint {
+        let baseY: CGFloat
+        let stackDirection: CGFloat
         
-        // Sort by creation time (oldest first, so they stack consistently)
-        let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-        
-        for (index, marker) in sorted.enumerated() {
-            // Each marker stacks above the previous one
-            let offset = baseOffset + (CGFloat(index) * stackOffset)
-            positions[marker.id] = offset
+        if marker.positionedBelow {
+            baseY = candleLowY + baseOffset
+            stackDirection = 1.0
+        } else {
+            baseY = candleHighY - baseOffset
+            stackDirection = -1.0
         }
         
-        return positions
-    }
-    
-    /// Check if markers should alternate above/below candle
-    /// Returns true if marker should be below candle
-    static func shouldPositionBelow(
-        markerIndex: Int,
-        totalMarkers: Int
-    ) -> Bool {
-        // If we have 2-3 markers, alternate positions
-        guard totalMarkers >= 2 && totalMarkers <= maxBeforeCluster else { return false }
-        return markerIndex % 2 == 1 // Odd indices go below
-    }
-    
-    /// Determine if marker should be below based on trend direction
-    /// Uptrend = markers above, Downtrend = markers below
-    static func shouldPositionBelowBasedOnTrend(
-        candle: Candle,
-        previousCandle: Candle?
-    ) -> Bool {
-        guard let prev = previousCandle else { return false }
+        let stackOffsetValue = CGFloat(marker.stackIndex) * stackOffset * stackDirection
+        let tierOffset = offsetForTier(marker.proximityTier) * stackDirection
+        let markerY = baseY + stackOffsetValue + tierOffset
         
-        // If current candle high is lower than previous, we're in a downtrend
-        // In downtrend, position markers below candles for better visibility
-        return candle.high < prev.high
+        return CGPoint(x: centerX, y: markerY)
     }
     
-    /// Calculate extra vertical offset based on nearby markers to prevent overlap
-    /// Returns additional offset if there are markers on adjacent candles
-    static func calculateProximityOffset(
+    /// Calculate PREVIEW position for new marker placement
+    /// This determines where the preview marker should snap to
+    static func calculatePreviewPosition(
+        candleIndex: Int,
+        existingMarkers: [ChartMarker],
+        candles: [Candle],
+        candleHighY: CGFloat,
+        candleLowY: CGFloat,
+        centerX: CGFloat
+    ) -> (position: CGPoint, isBelow: Bool) {
+        // Determine if new marker should be above or below
+        let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
+        
+        let shouldBeBelow: Bool
+        if markersAtCandle.isEmpty {
+            // No existing markers - use peak/valley detection
+            shouldBeBelow = shouldPositionBelowUsingPeakValleyDetection(
+                candleIndex: candleIndex,
+                candles: candles
+            )
+            
+            // Also check nearby marker density
+            let nearbyMarkers = existingMarkers.filter {
+                abs($0.candleIndex - candleIndex) <= proximityRange
+            }
+            let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
+            let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
+            
+            // Override if one side is much more crowded
+            if neighborsAbove > neighborsBelow + 2 {
+                // Above is crowded, go below
+                let baseY = candleLowY + placementOffset
+                return (CGPoint(x: centerX, y: baseY), true)
+            } else if neighborsBelow > neighborsAbove + 2 {
+                // Below is crowded, go above
+                let baseY = candleHighY - placementOffset
+                return (CGPoint(x: centerX, y: baseY), false)
+            }
+        } else {
+            // Has existing markers - alternate
+            let aboveCount = markersAtCandle.filter { !$0.positionedBelow }.count
+            let belowCount = markersAtCandle.filter { $0.positionedBelow }.count
+            shouldBeBelow = aboveCount > belowCount
+        }
+        
+        // Calculate position
+        let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
+        let baseY: CGFloat
+        let stackDirection: CGFloat
+        
+        if shouldBeBelow {
+            baseY = candleLowY + placementOffset
+            stackDirection = 1.0
+        } else {
+            baseY = candleHighY - placementOffset
+            stackDirection = -1.0
+        }
+        
+        let stackOffsetValue = CGFloat(stackIndex) * stackOffset * stackDirection
+        let markerY = baseY + stackOffsetValue
+        
+        return (CGPoint(x: centerX, y: markerY), shouldBeBelow)
+    }
+    
+    // MARK: - Stable Position Assignment
+    
+    static func assignStablePositions(
+        markers: [ChartMarker],
+        candles: [Candle]
+    ) -> [ChartMarker] {
+        var result = markers
+        
+        let grouped = Dictionary(grouping: result) { $0.candleIndex }
+        let sortedIndices = grouped.keys.sorted()
+        
+        var usedAboveTiers: [Int: Set<Int>] = [:]
+        var usedBelowTiers: [Int: Set<Int>] = [:]
+        var positionDecisions: [Int: Bool] = [:]
+        
+        for candleIndex in sortedIndices {
+            guard let markersAtCandle = grouped[candleIndex] else { continue }
+            
+            let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+            let useSingleMarkerLogic = sorted.count == 1
+            
+            for (stackIndex, marker) in sorted.enumerated() {
+                guard let resultIndex = result.firstIndex(where: { $0.id == marker.id }) else { continue }
+                
+                let shouldBeBelow: Bool
+                
+                if useSingleMarkerLogic {
+                    let preferBelow = shouldPositionBelowUsingPeakValleyDetection(
+                        candleIndex: candleIndex,
+                        candles: candles
+                    )
+                    
+                    let leftIsAbove = positionDecisions[candleIndex - 1] == true
+                    let rightIsAbove = positionDecisions[candleIndex + 1] == true
+                    let leftIsBelow = positionDecisions[candleIndex - 1] == false
+                    let rightIsBelow = positionDecisions[candleIndex + 1] == false
+                    
+                    if leftIsAbove || rightIsAbove {
+                        shouldBeBelow = true
+                    } else if leftIsBelow || rightIsBelow {
+                        shouldBeBelow = false
+                    } else {
+                        shouldBeBelow = preferBelow
+                    }
+                    
+                    positionDecisions[candleIndex] = !shouldBeBelow
+                } else {
+                    shouldBeBelow = stackIndex % 2 == 1
+                }
+                
+                let tier: Int
+                if shouldBeBelow {
+                    tier = calculateProximityTierInternal(
+                        candleIndex: candleIndex,
+                        usedTiers: &usedBelowTiers
+                    )
+                } else {
+                    tier = calculateProximityTierInternal(
+                        candleIndex: candleIndex,
+                        usedTiers: &usedAboveTiers
+                    )
+                }
+                
+                result[resultIndex].positionedBelow = shouldBeBelow
+                result[resultIndex].proximityTier = tier
+                result[resultIndex].stackIndex = stackIndex / 2
+            }
+        }
+        
+        return result
+    }
+    
+    static func calculatePositionForNewMarker(
+        marker: ChartMarker,
+        existingMarkers: [ChartMarker],
+        candles: [Candle]
+    ) -> (isBelow: Bool, tier: Int, stackIndex: Int) {
+        let candleIndex = marker.candleIndex
+        let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
+        
+        let shouldBeBelow: Bool
+        
+        if markersAtCandle.isEmpty {
+            // Use peak/valley detection
+            shouldBeBelow = shouldPositionBelowUsingPeakValleyDetection(
+                candleIndex: candleIndex,
+                candles: candles
+            )
+            
+            // Check nearby marker density
+            let nearbyMarkers = existingMarkers.filter {
+                abs($0.candleIndex - candleIndex) <= proximityRange
+            }
+            let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
+            let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
+            
+            if neighborsAbove > neighborsBelow + 2 {
+                // Override: above is crowded, go below
+                let sameSideNearby = existingMarkers.filter {
+                    abs($0.candleIndex - candleIndex) <= proximityRange && $0.positionedBelow
+                }
+                let usedTiers = Set(sameSideNearby.map { $0.proximityTier })
+                var tier = 0
+                while usedTiers.contains(tier) { tier += 1 }
+                return (isBelow: true, tier: tier, stackIndex: 0)
+            } else if neighborsBelow > neighborsAbove + 2 {
+                // Override: below is crowded, go above
+                let sameSideNearby = existingMarkers.filter {
+                    abs($0.candleIndex - candleIndex) <= proximityRange && !$0.positionedBelow
+                }
+                let usedTiers = Set(sameSideNearby.map { $0.proximityTier })
+                var tier = 0
+                while usedTiers.contains(tier) { tier += 1 }
+                return (isBelow: false, tier: tier, stackIndex: 0)
+            }
+        } else {
+            // Alternate with existing markers
+            let aboveCount = markersAtCandle.filter { !$0.positionedBelow }.count
+            let belowCount = markersAtCandle.filter { $0.positionedBelow }.count
+            shouldBeBelow = aboveCount > belowCount
+        }
+        
+        // Calculate stack index (how many markers on same side of this candle)
+        let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
+        
+        // Find unused tier
+        let sameSideNearby = existingMarkers.filter {
+            abs($0.candleIndex - candleIndex) <= proximityRange &&
+            $0.positionedBelow == shouldBeBelow
+        }
+        let usedTiers = Set(sameSideNearby.map { $0.proximityTier })
+        
+        var tier = 0
+        while usedTiers.contains(tier) {
+            tier += 1
+        }
+        
+        return (isBelow: shouldBeBelow, tier: tier, stackIndex: stackIndex)
+    }
+    
+    // MARK: - Peak/Valley Detection
+    
+    private static func shouldPositionBelowUsingPeakValleyDetection(
+        candleIndex: Int,
+        candles: [Candle]
+    ) -> Bool {
+        guard candleIndex >= 0 && candleIndex < candles.count else { return false }
+        
+        let windowSize = 5
+        let candle = candles[candleIndex]
+        
+        var lowerHighsCount = 0
+        var higherLowsCount = 0
+        
+        for delta in 1...windowSize {
+            if candleIndex - delta >= 0 {
+                let leftCandle = candles[candleIndex - delta]
+                if leftCandle.high < candle.high { lowerHighsCount += 1 }
+                if leftCandle.low > candle.low { higherLowsCount += 1 }
+            }
+            
+            if candleIndex + delta < candles.count {
+                let rightCandle = candles[candleIndex + delta]
+                if rightCandle.high < candle.high { lowerHighsCount += 1 }
+                if rightCandle.low > candle.low { higherLowsCount += 1 }
+            }
+        }
+        
+        // At a peak (most neighbors have lower highs) -> position ABOVE (return false)
+        // At a valley (most neighbors have higher lows) -> position BELOW (return true)
+        let isPeak = lowerHighsCount >= windowSize
+        let isValley = higherLowsCount >= windowSize
+        
+        if isPeak && !isValley {
+            return false // Position above at peaks
+        } else if isValley && !isPeak {
+            return true // Position below at valleys
+        } else {
+            // Neutral - use simple trend
+            if candleIndex > 0 {
+                return candle.close < candles[candleIndex - 1].close
+            }
+            return false
+        }
+    }
+    
+    static func calculateProximityTier(
         candleIndex: Int,
         allMarkers: [ChartMarker],
-        isBelow: Bool
-    ) -> CGFloat {
-        // Count markers on adjacent candles (within proximityRange)
-        var nearbyCount = 0
+        isBelow: Bool,
+        usedTiers: inout [Int: Set<Int>]
+    ) -> Int {
+        return calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedTiers)
+    }
+    
+    static func offsetForTier(_ tier: Int) -> CGFloat {
+        return CGFloat(tier) * settings.proximityTierOffset
+    }
+    
+    private static func calculateProximityTierInternal(
+        candleIndex: Int,
+        usedTiers: inout [Int: Set<Int>]
+    ) -> Int {
+        var conflictingTiers: Set<Int> = []
+        
         for delta in 1...proximityRange {
-            let leftIndex = candleIndex - delta
-            let rightIndex = candleIndex + delta
-            
-            nearbyCount += allMarkers.filter { $0.candleIndex == leftIndex }.count
-            nearbyCount += allMarkers.filter { $0.candleIndex == rightIndex }.count
+            if let leftTiers = usedTiers[candleIndex - delta] {
+                conflictingTiers.formUnion(leftTiers)
+            }
+            if let rightTiers = usedTiers[candleIndex + delta] {
+                conflictingTiers.formUnion(rightTiers)
+            }
         }
         
-        // If there are nearby markers, add staggered offset
-        if nearbyCount > 0 {
-            // Alternate vertical position based on candle index (even/odd)
-            let staggerOffset: CGFloat = candleIndex % 2 == 0 ? 20 : 0
-            return staggerOffset
+        var tier = 0
+        while conflictingTiers.contains(tier) {
+            tier += 1
         }
         
-        return 0
+        if usedTiers[candleIndex] == nil {
+            usedTiers[candleIndex] = []
+        }
+        usedTiers[candleIndex]?.insert(tier)
+        
+        return tier
     }
 }
 
-// MARK: - Canvas Drawing Functions
+// MARK: - Chart Marker System (Canvas Drawing)
 
 struct ChartMarkerSystem {
     
-    /// Draw markers directly in the chart canvas with smart positioning
-    /// - Markers stack above candles to avoid interference
-    /// - Single markers on adjacent candles use trend-based positioning
-    /// - Clusters shown when >3 markers on same candle
-    /// - Supports animation for tapped markers
     static func drawMarkers(
         context: GraphicsContext,
         markers: [ChartMarker],
@@ -280,29 +618,17 @@ struct ChartMarkerSystem {
         totalOffset: CGFloat,
         expandedClusterIndex: Int? = nil,
         markerManager: MarkerManager? = nil,
-        tappedMarkerId: UUID? = nil  // For tap animation
+        tappedMarkerId: UUID? = nil
     ) {
         let scaledHeight = chartSize.height * priceScale
-        
-        // Get all visible markers for proximity calculations
         let allVisibleMarkers = markers.filter { $0.isVisible }
-        
-        // Group markers by candle
         let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
         
-        // Sort candle indices for consistent processing (needed for trend calculation)
-        let sortedCandleIndices = groupedMarkers.keys.sorted()
-        
-        // Track which candles already have above/below markers for alternation
-        var usedPositions: [Int: Bool] = [:]  // candleIndex -> isAbove (true = above, false = below)
-        
-        for candleIndex in sortedCandleIndices {
-            guard let markersAtCandle = groupedMarkers[candleIndex],
-                  candleIndex >= 0 && candleIndex < candles.count else { continue }
+        for (candleIndex, markersAtCandle) in groupedMarkers {
+            guard candleIndex >= 0 && candleIndex < candles.count else { continue }
             
             let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
             
-            // Skip if not visible on screen
             if x < -totalCandleWidth * 2 || x > chartSize.width + totalCandleWidth * 2 {
                 continue
             }
@@ -310,107 +636,56 @@ struct ChartMarkerSystem {
             let candle = candles[candleIndex]
             let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
             let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
-            
             let centerX = x + actualCandleWidth / 2
             
-            // Check if this should be a cluster
             let isCluster = markersAtCandle.count > MarkerPositionCalculator.maxBeforeCluster && expandedClusterIndex != candleIndex
             
             if isCluster {
-                // Draw cluster indicator
+                let typeCounts = Dictionary(grouping: markersAtCandle, by: { $0.type }).mapValues { $0.count }
+                let dominantType = typeCounts.max { a, b in
+                    if a.value == b.value {
+                        return a.key.rawValue > b.key.rawValue
+                    }
+                    return a.value < b.value
+                }?.key
+                let primaryColor = dominantType?.color ?? .blue
+                
                 drawClusterIndicator(
                     context: context,
                     position: CGPoint(x: centerX, y: candleHighY - MarkerPositionCalculator.baseOffset),
                     candleHighPoint: CGPoint(x: centerX, y: candleHighY),
                     count: markersAtCandle.count,
-                    types: Set(markersAtCandle.map { $0.type })
+                    primaryColor: primaryColor
                 )
             } else {
-                // Draw individual markers with smart stacking
-                let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+                let sortedMarkers = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
                 
-                // For single markers, use trend-based and proximity-aware positioning
-                let useTrendPositioning = sorted.count == 1
+                var markerPositions: [(marker: ChartMarker, position: CGPoint)] = []
+                for marker in sortedMarkers {
+                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+                        marker: marker,
+                        candleHighY: candleHighY,
+                        candleLowY: candleLowY,
+                        centerX: centerX
+                    )
+                    markerPositions.append((marker, position))
+                }
                 
-                for (index, marker) in sorted.enumerated() {
-                    var shouldBeBelow: Bool
-                    
-                    if useTrendPositioning {
-                        // Single marker: check trend and nearby markers
-                        let previousCandle = candleIndex > 0 ? candles[candleIndex - 1] : nil
-                        let trendBelow = MarkerPositionCalculator.shouldPositionBelowBasedOnTrend(
-                            candle: candle,
-                            previousCandle: previousCandle
-                        )
-                        
-                        // Check if adjacent candles have markers above/below
-                        let leftHasAbove = usedPositions[candleIndex - 1] == true
-                        let rightHasAbove = usedPositions[candleIndex + 1] == true
-                        let leftHasBelow = usedPositions[candleIndex - 1] == false
-                        let rightHasBelow = usedPositions[candleIndex + 1] == false
-                        
-                        // Alternate with neighbors to prevent overlap
-                        if leftHasAbove || rightHasAbove {
-                            shouldBeBelow = true  // Go below if neighbors are above
-                        } else if leftHasBelow || rightHasBelow {
-                            shouldBeBelow = false  // Go above if neighbors are below
-                        } else {
-                            shouldBeBelow = trendBelow  // Use trend direction
-                        }
-                        
-                        // Record this position for future markers
-                        usedPositions[candleIndex] = !shouldBeBelow
-                    } else {
-                        // Multiple markers: use alternating positions
-                        shouldBeBelow = MarkerPositionCalculator.shouldPositionBelow(
-                            markerIndex: index,
-                            totalMarkers: sorted.count
-                        )
-                    }
-                    
-                    let baseY: CGFloat
-                    let anchorY: CGFloat
-                    let stackDirection: CGFloat
-                    
-                    if shouldBeBelow {
-                        // Position below candle low
-                        baseY = candleLowY + MarkerPositionCalculator.baseOffset
-                        anchorY = candleLowY
-                        stackDirection = 1.0 // Stack downward
-                    } else {
-                        // Position above candle high (default)
-                        baseY = candleHighY - MarkerPositionCalculator.baseOffset
-                        anchorY = candleHighY
-                        stackDirection = -1.0 // Stack upward
-                    }
-                    
-                    // Calculate stacking offset (only for markers on same side)
-                    let sameSideIndex = index / 2 // Every other marker is on same side
-                    var stackOffsetValue = CGFloat(sameSideIndex) * MarkerPositionCalculator.stackOffset * stackDirection
-                    
-                    // Add proximity offset for single markers on adjacent candles
-                    if useTrendPositioning {
-                        let proximityOffset = MarkerPositionCalculator.calculateProximityOffset(
-                            candleIndex: candleIndex,
-                            allMarkers: allVisibleMarkers,
-                            isBelow: shouldBeBelow
-                        )
-                        stackOffsetValue += proximityOffset * stackDirection
-                    }
-                    
-                    let markerY = baseY + stackOffsetValue
-                    
-                    // Check if this marker should be animated (tapped)
+                let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
+                let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
+                
+                drawStackedConnectionLines(context: context, markers: aboveMarkers, anchorY: candleHighY, centerX: centerX, isBelow: false)
+                drawStackedConnectionLines(context: context, markers: belowMarkers, anchorY: candleLowY, centerX: centerX, isBelow: true)
+                
+                for (marker, position) in markerPositions {
                     let isAnimated = tappedMarkerId == marker.id
                     let scale: CGFloat = isAnimated ? 1.3 : 1.0
                     
-                    // Draw the marker (with scale if animated)
                     drawSingleMarker(
                         context: context,
                         marker: marker,
-                        position: CGPoint(x: centerX, y: markerY),
-                        anchorPoint: CGPoint(x: centerX, y: anchorY),
-                        isBelow: shouldBeBelow,
+                        position: position,
+                        isBelow: marker.positionedBelow,
                         scale: scale
                     )
                 }
@@ -418,242 +693,267 @@ struct ChartMarkerSystem {
         }
     }
     
-    /// Draw a single marker with connection line
-    /// Supports scale animation for tap feedback
+    private static func drawStackedConnectionLines(
+        context: GraphicsContext,
+        markers: [(marker: ChartMarker, position: CGPoint)],
+        anchorY: CGFloat,
+        centerX: CGFloat,
+        isBelow: Bool
+    ) {
+        guard !markers.isEmpty else { return }
+        
+        let baseRadius: CGFloat = 16
+        var previousY = anchorY
+        
+        for (marker, position) in markers {
+            let markerEdgeY: CGFloat = isBelow ? position.y - baseRadius : position.y + baseRadius
+            
+            let linePath = Path { path in
+                path.move(to: CGPoint(x: centerX, y: previousY))
+                path.addLine(to: CGPoint(x: centerX, y: markerEdgeY))
+            }
+            
+            context.stroke(
+                linePath,
+                with: .color(marker.type.color.opacity(0.7)),
+                style: StrokeStyle(lineWidth: 2, dash: [4, 3])
+            )
+            
+            previousY = isBelow ? position.y + baseRadius : position.y - baseRadius
+        }
+    }
+    
     private static func drawSingleMarker(
         context: GraphicsContext,
         marker: ChartMarker,
         position: CGPoint,
-        anchorPoint: CGPoint,
         isBelow: Bool,
-        scale: CGFloat = 1.0  // Animation scale (1.0 = normal, >1.0 = enlarged)
+        scale: CGFloat = 1.0
     ) {
-        // Apply scale transform for animation
         let baseRadius: CGFloat = 16
         let scaledRadius = baseRadius * scale
         
-        // Draw connection line (not scaled - stays consistent)
-        let lineStartY = isBelow ? position.y - scaledRadius : position.y + scaledRadius
-        let connectionPath = Path { path in
-            path.move(to: CGPoint(x: position.x, y: lineStartY))
-            path.addLine(to: anchorPoint)
-        }
-        context.stroke(
-            connectionPath,
-            with: .color(marker.type.color.opacity(0.6)),
-            style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+        // Shadow
+        let shadowRect = CGRect(
+            x: position.x - scaledRadius + 2,
+            y: position.y - scaledRadius + 2,
+            width: scaledRadius * 2,
+            height: scaledRadius * 2
         )
+        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.4)))
         
-        // Draw marker circle background (scaled)
+        // Main circle
         let circleRect = CGRect(
             x: position.x - scaledRadius,
             y: position.y - scaledRadius,
             width: scaledRadius * 2,
             height: scaledRadius * 2
         )
-        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.85)))
-        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: 2.5 * scale)
+        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.9)))
+        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: 3 * scale)
         
-        // Draw icon (scaled)
-        if let resolved = context.resolveSymbol(id: marker.id) {
-            // Apply scale transform to the resolved symbol
-            var scaledContext = context
-            scaledContext.scaleBy(x: scale, y: scale)
-            let scaledPosition = CGPoint(x: position.x / scale, y: position.y / scale)
-            scaledContext.draw(resolved, at: scaledPosition)
-        } else {
-            // Fallback: draw colored circle with letter (scaled)
-            let iconRadius: CGFloat = 10 * scale
-            let iconCircle = CGRect(
-                x: position.x - iconRadius,
-                y: position.y - iconRadius,
-                width: iconRadius * 2,
-                height: iconRadius * 2
-            )
-            context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color))
-            
-            context.draw(
-                Text(String(marker.type.rawValue.prefix(1)))
-                    .font(.system(size: 12 * scale, weight: .bold))
-                    .foregroundColor(.white),
-                at: position
-            )
-        }
+        // Inner colored circle
+        let iconRadius: CGFloat = 10 * scale
+        let iconCircle = CGRect(
+            x: position.x - iconRadius,
+            y: position.y - iconRadius,
+            width: iconRadius * 2,
+            height: iconRadius * 2
+        )
+        context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color))
         
-        // Draw like badge (not scaled to keep it readable)
+        context.draw(
+            Text(String(marker.type.rawValue.prefix(1)))
+                .font(.system(size: 12 * scale, weight: .bold))
+                .foregroundColor(.white),
+            at: position
+        )
+        
+        // Like badge
         if marker.likeCount > 0 {
-            let badgeOffset: CGFloat = isBelow ? (scaledRadius + 4) : -(scaledRadius + 4)
+            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 4) : (scaledRadius - 12)
             let likeCircleRect = CGRect(
-                x: position.x + 10,
-                y: position.y + badgeOffset - 9,
-                width: 18,
-                height: 18
+                x: position.x + 9,
+                y: position.y + badgeOffset,
+                width: 14,
+                height: 14
             )
             context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
             
             context.draw(
                 Text("\(marker.likeCount)")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundColor(.white),
-                at: CGPoint(x: position.x + 19, y: position.y + badgeOffset)
+                at: CGPoint(x: position.x + 16, y: position.y + badgeOffset + 7)
             )
         }
         
-        // Draw username label for other users' markers
-        // (Small label below/above the marker)
-        let labelY = isBelow ? position.y + scaledRadius + 8 : position.y - scaledRadius - 8
+        // Username label - positioned further to avoid overlap
+        let labelY = isBelow ? position.y + scaledRadius + 12 : position.y - scaledRadius - 12
         context.draw(
             Text(marker.username)
-                .font(.system(size: 8, weight: .medium))
-                .foregroundColor(.white.opacity(0.8)),
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.white.opacity(0.9)),
             at: CGPoint(x: position.x, y: labelY)
         )
     }
     
-    /// Draw cluster indicator when >3 markers on same candle
     private static func drawClusterIndicator(
         context: GraphicsContext,
         position: CGPoint,
         candleHighPoint: CGPoint,
         count: Int,
-        types: Set<MarkerType>
+        primaryColor: Color
     ) {
-        // FIXED: Sort types to get consistent color (prevents flickering on re-render)
-        // Set iteration order is not guaranteed, so sorting ensures consistent color
-        let sortedTypes = types.sorted { $0.rawValue < $1.rawValue }
-        let primaryColor = sortedTypes.first?.color ?? .gray
-        
-        // Draw connection line
         let connectionPath = Path { path in
-            path.move(to: CGPoint(x: position.x, y: position.y + 20))
+            path.move(to: CGPoint(x: position.x, y: position.y + 22))
             path.addLine(to: candleHighPoint)
         }
-        
         context.stroke(
             connectionPath,
-            with: .color(primaryColor.opacity(0.6)),
+            with: .color(.white.opacity(0.5)),
             style: StrokeStyle(lineWidth: 2, dash: [4, 4])
         )
         
-        // Draw cluster circle (larger than single marker)
+        let clusterRadius: CGFloat = 22
         let circleRect = CGRect(
-            x: position.x - 20,
-            y: position.y - 20,
-            width: 40,
-            height: 40
+            x: position.x - clusterRadius,
+            y: position.y - clusterRadius,
+            width: clusterRadius * 2,
+            height: clusterRadius * 2
         )
         
-        // Solid background
-        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.9)))
+        context.fill(Path(ellipseIn: circleRect), with: .color(primaryColor.opacity(0.9)))
+        context.stroke(Path(ellipseIn: circleRect), with: .color(.white), lineWidth: 2)
         
-        // Draw colored ring (consistent color from sorted types)
-        context.stroke(Path(ellipseIn: circleRect), with: .color(primaryColor), lineWidth: 3)
-        
-        // Draw count number
         context.draw(
             Text("\(count)")
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white),
             at: position
         )
+    }
+    
+    // MARK: - Hit Detection
+    
+    static func findMarkerAtLocation(
+        _ location: CGPoint,
+        markers: [ChartMarker],
+        candles: [Candle],
+        chartSize: CGSize,
+        priceRange: (min: Double, max: Double),
+        priceScale: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat,
+        expandedClusterIndex: Int? = nil
+    ) -> (marker: ChartMarker?, isCluster: Bool, clusterCandleIndex: Int?) {
+        let scaledHeight = chartSize.height * priceScale
+        let allVisibleMarkers = markers.filter { $0.isVisible }
+        let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
+        let hitRadius = MarkerPositionCalculator.hitRadius
         
-        // Draw small "markers" label
-        context.draw(
-            Text("markers")
-                .font(.system(size: 8))
-                .foregroundColor(.white.opacity(0.7)),
-            at: CGPoint(x: position.x, y: position.y + 28)
-        )
+        let sortedCandleIndices = groupedMarkers.keys.sorted().reversed()
         
-        // Draw tap hint
-        context.draw(
-            Text("tap to expand")
-                .font(.system(size: 7))
-                .foregroundColor(.white.opacity(0.5)),
-            at: CGPoint(x: position.x, y: position.y + 38)
-        )
+        for candleIndex in sortedCandleIndices {
+            guard let markersAtCandle = groupedMarkers[candleIndex],
+                  candleIndex >= 0 && candleIndex < candles.count else { continue }
+            
+            let candle = candles[candleIndex]
+            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
+            let centerX = x + actualCandleWidth / 2
+            
+            let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+            let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+            
+            let isCluster = markersAtCandle.count > MarkerPositionCalculator.maxBeforeCluster && expandedClusterIndex != candleIndex
+            
+            if isCluster {
+                let clusterY = candleHighY - MarkerPositionCalculator.baseOffset
+                let distance = hypot(location.x - centerX, location.y - clusterY)
+                if distance <= 28 {
+                    return (nil, true, candleIndex)
+                }
+            } else {
+                let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+                
+                for marker in sorted.reversed() {
+                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+                        marker: marker,
+                        candleHighY: candleHighY,
+                        candleLowY: candleLowY,
+                        centerX: centerX
+                    )
+                    
+                    let distance = hypot(location.x - position.x, location.y - position.y)
+                    if distance <= hitRadius {
+                        return (marker, false, nil)
+                    }
+                }
+            }
+        }
+        
+        return (nil, false, nil)
     }
 }
 
-// MARK: - Marker Creation Sheet
+// MARK: - Marker Creation Sheet (FIXED - now passes candles)
 
 struct MarkerCreationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var markerManager: MarkerManager
-    
     let candleIndex: Int
     let timestamp: Date
     let price: Double
     let username: String
     let chartData: ChartDataManager
+    /// CRITICAL: Must pass candles for proper positioning
+    let candles: [Candle]
     
-    @State private var selectedType: MarkerType = .note
+    @State private var selectedType: MarkerType = .entry
     @State private var note: String = ""
-    
-    /// Backwards-compatible initializer (uses fallback formatting)
-    init(
-        markerManager: MarkerManager,
-        candleIndex: Int,
-        timestamp: Date,
-        price: Double,
-        username: String
-    ) {
-        self.markerManager = markerManager
-        self.candleIndex = candleIndex
-        self.timestamp = timestamp
-        self.price = price
-        self.username = username
-        self.chartData = ChartDataManager()
-    }
-    
-    /// Full initializer with chartData for symbol-aware formatting
-    init(
-        markerManager: MarkerManager,
-        candleIndex: Int,
-        timestamp: Date,
-        price: Double,
-        username: String,
-        chartData: ChartDataManager
-    ) {
-        self.markerManager = markerManager
-        self.candleIndex = candleIndex
-        self.timestamp = timestamp
-        self.price = price
-        self.username = username
-        self.chartData = chartData
-    }
     
     var body: some View {
         NavigationView {
             Form {
                 Section("Marker Type") {
-                    Picker("Type", selection: $selectedType) {
-                        ForEach(MarkerType.allCases, id: \.self) { type in
-                            Label(type.rawValue, systemImage: type.icon)
-                                .tag(type)
+                    ForEach(MarkerType.allCases, id: \.rawValue) { type in
+                        Button(action: { selectedType = type }) {
+                            HStack {
+                                Image(systemName: type.icon)
+                                    .foregroundColor(type.color)
+                                    .frame(width: 30)
+                                Text(type.rawValue)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if selectedType == type {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.blue)
+                                }
+                            }
                         }
                     }
-                    .pickerStyle(.wheel)
                 }
                 
-                Section("Location") {
-                    HStack {
-                        Text("Price")
-                        Spacer()
-                        Text(chartData.formatPrice(price))
-                            .foregroundColor(.secondary)
-                    }
+                Section("Details") {
                     HStack {
                         Text("Time")
                         Spacer()
                         Text(timestamp.chartTimeLabel)
                             .foregroundColor(.secondary)
                     }
+                    HStack {
+                        Text("Price")
+                        Spacer()
+                        Text(chartData.formatPrice(price))
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
                 Section("Note (Optional)") {
                     TextEditor(text: $note)
-                        .frame(height: 100)
+                        .frame(minHeight: 80)
                 }
             }
             .navigationTitle("Add Marker")
@@ -664,19 +964,24 @@ struct MarkerCreationSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
+                        // FIXED: Now passes candles for proper positioning calculation
                         markerManager.addMarker(
                             candleIndex: candleIndex,
                             timestamp: timestamp,
                             price: price,
                             type: selectedType,
                             username: username,
-                            note: note.isEmpty ? nil : note
+                            note: note.isEmpty ? nil : note,
+                            candles: candles
                         )
                         dismiss()
                     }
                 }
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
     }
 }
 
@@ -692,25 +997,14 @@ struct MarkerDetailSheet: View {
     @State private var isEditing = false
     @State private var editedNote: String = ""
     
-    /// Backwards-compatible initializer
-    init(
-        markerManager: MarkerManager,
-        marker: ChartMarker,
-        currentUserId: String
-    ) {
+    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String) {
         self.markerManager = markerManager
         self.marker = marker
         self.currentUserId = currentUserId
         self.chartData = ChartDataManager()
     }
     
-    /// Full initializer with chartData
-    init(
-        markerManager: MarkerManager,
-        marker: ChartMarker,
-        currentUserId: String,
-        chartData: ChartDataManager
-    ) {
+    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String, chartData: ChartDataManager) {
         self.markerManager = markerManager
         self.marker = marker
         self.currentUserId = currentUserId
@@ -805,6 +1099,9 @@ struct MarkerDetailSheet: View {
                 }
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         .onAppear {
             editedNote = marker.note ?? ""
         }
@@ -835,7 +1132,6 @@ struct ClusterExpansionSheet: View {
                         }
                     }) {
                         HStack(spacing: 12) {
-                            // Marker type icon
                             Circle()
                                 .fill(marker.type.color)
                                 .frame(width: 32, height: 32)
@@ -853,18 +1149,10 @@ struct ClusterExpansionSheet: View {
                                 Text("by \(marker.username)")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                
-                                if let note = marker.note, !note.isEmpty {
-                                    Text(note)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                }
                             }
                             
                             Spacer()
                             
-                            // Like count
                             if marker.likeCount > 0 {
                                 HStack(spacing: 2) {
                                     Image(systemName: "heart.fill")
@@ -892,8 +1180,12 @@ struct ClusterExpansionSheet: View {
                 }
             }
         }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
     }
 }
+
 
 
 
@@ -907,10 +1199,14 @@ struct ClusterExpansionSheet: View {
 ////  ChartMarkerSystem.swift
 ////  traders_guild
 ////
-////  UPDATED v2 - Smart positioning + Marker clustering
-////  - Markers positioned above candles with smart offset to avoid interference
-////  - Multiple markers on same candle stack vertically or cluster if >3
-////  - Load markers via API instead of hardcoding
+////  COMPREHENSIVE FIX v4 - Addresses:
+////  1. Hit detection using stored positions (not recalculated)
+////  2. Improved connection lines for stacked markers
+////  3. Better peak/valley detection for positioning
+////  4. Increased minimum distance from candles
+////  5. Shared position calculation function (DRY)
+////
+////  NOTE: ChartMarker and MarkerType are defined in ChartModels.swift
 ////
 //
 //import SwiftUI
@@ -922,17 +1218,12 @@ struct ClusterExpansionSheet: View {
 //    @Published var selectedMarker: ChartMarker?
 //    @Published var visibleTypes: Set<MarkerType> = Set(MarkerType.allCases)
 //    @Published var showOnlyMyMarkers: Bool = false
-//    
-//    /// Expanded cluster (shows all markers when tapped)
 //    @Published var expandedClusterCandleIndex: Int? = nil
 //    
 //    private let currentUserId: String
 //    private let currentGuildId: String
 //    
-//    /// Public accessor for guild ID
-//    var guildId: String {
-//        currentGuildId
-//    }
+//    var guildId: String { currentGuildId }
 //    
 //    init(userId: String = "user123", guildId: String = "guild1") {
 //        self.currentUserId = userId
@@ -941,8 +1232,6 @@ struct ClusterExpansionSheet: View {
 //    
 //    // MARK: - API Loading
 //    
-//    /// Load markers from the API
-//    /// Call this after chart data is loaded
 //    func loadMarkersFromAPI(
 //        api: MockAPIService,
 //        symbol: String,
@@ -958,9 +1247,13 @@ struct ClusterExpansionSheet: View {
 //                candleCount: candles.count
 //            )
 //            
-//            // Update marker prices based on actual candle data
-//            let positionedMarkers = SampleData.updateMarkerPrices(
+//            var positionedMarkers = SampleData.updateMarkerPrices(
 //                markers: fetchedMarkers,
+//                candles: candles
+//            )
+//            
+//            positionedMarkers = MarkerPositionCalculator.assignStablePositions(
+//                markers: positionedMarkers,
 //                candles: candles
 //            )
 //            
@@ -972,13 +1265,45 @@ struct ClusterExpansionSheet: View {
 //        }
 //    }
 //    
-//    /// Clear all markers (when switching symbols)
 //    func clearMarkers() {
 //        markers.removeAll()
 //        expandedClusterCandleIndex = nil
 //    }
 //    
 //    // MARK: - Marker CRUD
+//    
+//    func addMarker(
+//        candleIndex: Int,
+//        timestamp: Date,
+//        price: Double,
+//        type: MarkerType,
+//        username: String,
+//        note: String? = nil,
+//        candles: [Candle]
+//    ) {
+//        var marker = ChartMarker(
+//            candleIndex: candleIndex,
+//            timestamp: timestamp,
+//            price: price,
+//            type: type,
+//            userId: currentUserId,
+//            username: username,
+//            note: note,
+//            guildId: currentGuildId
+//        )
+//        
+//        let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
+//            marker: marker,
+//            existingMarkers: markers,
+//            candles: candles
+//        )
+//        
+//        marker.positionedBelow = positioning.isBelow
+//        marker.proximityTier = positioning.tier
+//        marker.stackIndex = positioning.stackIndex
+//        
+//        markers.append(marker)
+//    }
 //    
 //    func addMarker(
 //        candleIndex: Int,
@@ -996,7 +1321,10 @@ struct ClusterExpansionSheet: View {
 //            userId: currentUserId,
 //            username: username,
 //            note: note,
-//            guildId: currentGuildId
+//            guildId: currentGuildId,
+//            positionedBelow: false,
+//            proximityTier: 0,
+//            stackIndex: markers.filter { $0.candleIndex == candleIndex }.count
 //        )
 //        markers.append(marker)
 //    }
@@ -1016,8 +1344,6 @@ struct ClusterExpansionSheet: View {
 //        markers[index].likeCount += markers[index].isLikedByCurrentUser ? 1 : -1
 //    }
 //    
-//    // MARK: - Filtering
-//    
 //    var filteredMarkers: [ChartMarker] {
 //        markers.filter { marker in
 //            guard marker.isVisible else { return false }
@@ -1029,32 +1355,26 @@ struct ClusterExpansionSheet: View {
 //        }
 //    }
 //    
-//    // MARK: - Clustering Logic
-//    
-//    /// Group markers by candle index
 //    func markersGroupedByCandle() -> [Int: [ChartMarker]] {
 //        Dictionary(grouping: filteredMarkers) { $0.candleIndex }
 //    }
 //    
-//    /// Check if a candle has a cluster (more than 3 markers)
 //    func isCluster(candleIndex: Int) -> Bool {
 //        let group = markersGroupedByCandle()[candleIndex] ?? []
-//        return group.count > 3 && expandedClusterCandleIndex != candleIndex
+//        return group.count > MarkerDisplaySettings.shared.maxBeforeCluster && expandedClusterCandleIndex != candleIndex
 //    }
 //    
-//    /// Get markers to display for a candle (handles clustering)
 //    func displayMarkers(forCandleIndex candleIndex: Int) -> [ChartMarker] {
 //        let group = markersGroupedByCandle()[candleIndex] ?? []
+//        let maxBeforeCluster = MarkerDisplaySettings.shared.maxBeforeCluster
 //        
-//        if group.count <= 3 || expandedClusterCandleIndex == candleIndex {
+//        if group.count <= maxBeforeCluster || expandedClusterCandleIndex == candleIndex {
 //            return group
 //        } else {
-//            // Return empty - cluster indicator will be shown instead
 //            return []
 //        }
 //    }
 //    
-//    /// Toggle cluster expansion
 //    func toggleClusterExpansion(candleIndex: Int) {
 //        if expandedClusterCandleIndex == candleIndex {
 //            expandedClusterCandleIndex = nil
@@ -1063,68 +1383,309 @@ struct ClusterExpansionSheet: View {
 //        }
 //    }
 //    
-//    /// Get cluster info for a candle
 //    func clusterInfo(forCandleIndex candleIndex: Int) -> (count: Int, types: Set<MarkerType>)? {
 //        let group = markersGroupedByCandle()[candleIndex] ?? []
-//        guard group.count > 3 && expandedClusterCandleIndex != candleIndex else { return nil }
+//        let maxBeforeCluster = MarkerDisplaySettings.shared.maxBeforeCluster
+//        guard group.count > maxBeforeCluster && expandedClusterCandleIndex != candleIndex else { return nil }
 //        return (group.count, Set(group.map { $0.type }))
+//    }
+//}
+//
+//// MARK: - Marker Display Settings
+//
+//class MarkerDisplaySettings: ObservableObject {
+//    static let shared = MarkerDisplaySettings()
+//    
+//    @Published var baseOffset: CGFloat {
+//        didSet { UserDefaults.standard.set(baseOffset, forKey: "markerBaseOffset") }
+//    }
+//    
+//    @Published var stackOffset: CGFloat {
+//        didSet { UserDefaults.standard.set(stackOffset, forKey: "markerStackOffset") }
+//    }
+//    
+//    @Published var maxBeforeCluster: Int {
+//        didSet { UserDefaults.standard.set(maxBeforeCluster, forKey: "markerMaxBeforeCluster") }
+//    }
+//    
+//    @Published var proximityTierOffset: CGFloat {
+//        didSet { UserDefaults.standard.set(proximityTierOffset, forKey: "markerProximityTierOffset") }
+//    }
+//    
+//    @Published var placementExtraOffset: CGFloat {
+//        didSet { UserDefaults.standard.set(placementExtraOffset, forKey: "markerPlacementExtraOffset") }
+//    }
+//    
+//    private init() {
+//        // INCREASED baseOffset from 75 to 90 for better candle clearance
+//        self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 90
+//        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 40
+//        self.maxBeforeCluster = UserDefaults.standard.object(forKey: "markerMaxBeforeCluster") as? Int ?? 3
+//        self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 35
+//        self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 40
+//    }
+//    
+//    func resetToDefaults() {
+//        baseOffset = 90
+//        stackOffset = 40
+//        maxBeforeCluster = 3
+//        proximityTierOffset = 35
+//        placementExtraOffset = 40
 //    }
 //}
 //
 //// MARK: - Marker Position Calculator
 //
-///// Calculates smart positions for markers to avoid candle interference
 //struct MarkerPositionCalculator {
 //    
-//    /// Base offset above candle high (in pixels) - increased for better clearance
-//    static let baseOffset: CGFloat = 75
+//    static var settings: MarkerDisplaySettings { MarkerDisplaySettings.shared }
+//    static var baseOffset: CGFloat { settings.baseOffset }
+//    static var stackOffset: CGFloat { settings.stackOffset }
+//    static var maxBeforeCluster: Int { settings.maxBeforeCluster }
+//    static let proximityRange = 3
+//    /// INCREASED hit radius for better tap detection
+//    static let hitRadius: CGFloat = 28
 //    
-//    /// Additional offset per stacked marker
-//    static let stackOffset: CGFloat = 38
-//    
-//    /// Maximum markers before clustering kicks in
-//    static let maxBeforeCluster = 3
-//    
-//    /// Calculate Y positions for markers on the same candle
-//    /// Returns dictionary of marker ID to Y offset from candle high
-//    static func calculatePositions(
-//        markers: [ChartMarker],
-//        candleIndex: Int
-//    ) -> [UUID: CGFloat] {
-//        let markersAtCandle = markers.filter { $0.candleIndex == candleIndex }
-//        var positions: [UUID: CGFloat] = [:]
-//        
-//        // Sort by creation time (oldest first, so they stack consistently)
-//        let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-//        
-//        for (index, marker) in sorted.enumerated() {
-//            // Each marker stacks above the previous one
-//            let offset = baseOffset + (CGFloat(index) * stackOffset)
-//            positions[marker.id] = offset
-//        }
-//        
-//        return positions
+//    static var placementOffset: CGFloat {
+//        settings.baseOffset + settings.placementExtraOffset
 //    }
 //    
-//    /// Check if markers should alternate above/below candle
-//    /// Returns true if marker should be below candle
-//    static func shouldPositionBelow(
-//        markerIndex: Int,
-//        totalMarkers: Int
+//    // MARK: - SHARED Position Calculation (Used by BOTH drawing AND hit detection)
+//    
+//    /// Calculate the screen position for a marker using its STORED properties
+//    /// This is the SINGLE SOURCE OF TRUTH - ensures drawing and hit detection match
+//    static func computeMarkerScreenPosition(
+//        marker: ChartMarker,
+//        candleHighY: CGFloat,
+//        candleLowY: CGFloat,
+//        centerX: CGFloat
+//    ) -> CGPoint {
+//        let baseY: CGFloat
+//        let stackDirection: CGFloat
+//        
+//        if marker.positionedBelow {
+//            baseY = candleLowY + baseOffset
+//            stackDirection = 1.0
+//        } else {
+//            baseY = candleHighY - baseOffset
+//            stackDirection = -1.0
+//        }
+//        
+//        let stackOffsetValue = CGFloat(marker.stackIndex) * stackOffset * stackDirection
+//        let tierOffset = offsetForTier(marker.proximityTier) * stackDirection
+//        let markerY = baseY + stackOffsetValue + tierOffset
+//        
+//        return CGPoint(x: centerX, y: markerY)
+//    }
+//    
+//    // MARK: - Stable Position Assignment
+//    
+//    static func assignStablePositions(
+//        markers: [ChartMarker],
+//        candles: [Candle]
+//    ) -> [ChartMarker] {
+//        var result = markers
+//        
+//        let grouped = Dictionary(grouping: result) { $0.candleIndex }
+//        let sortedIndices = grouped.keys.sorted()
+//        
+//        var usedAboveTiers: [Int: Set<Int>] = [:]
+//        var usedBelowTiers: [Int: Set<Int>] = [:]
+//        var positionDecisions: [Int: Bool] = [:]
+//        
+//        for candleIndex in sortedIndices {
+//            guard let markersAtCandle = grouped[candleIndex] else { continue }
+//            
+//            let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+//            let useSingleMarkerLogic = sorted.count == 1
+//            
+//            for (stackIndex, marker) in sorted.enumerated() {
+//                guard let resultIndex = result.firstIndex(where: { $0.id == marker.id }) else { continue }
+//                
+//                let shouldBeBelow: Bool
+//                
+//                if useSingleMarkerLogic {
+//                    // Use IMPROVED peak/valley detection
+//                    let preferBelow = shouldPositionBelowUsingPeakValleyDetection(
+//                        candleIndex: candleIndex,
+//                        candles: candles
+//                    )
+//                    
+//                    let leftIsAbove = positionDecisions[candleIndex - 1] == true
+//                    let rightIsAbove = positionDecisions[candleIndex + 1] == true
+//                    let leftIsBelow = positionDecisions[candleIndex - 1] == false
+//                    let rightIsBelow = positionDecisions[candleIndex + 1] == false
+//                    
+//                    if leftIsAbove || rightIsAbove {
+//                        shouldBeBelow = true
+//                    } else if leftIsBelow || rightIsBelow {
+//                        shouldBeBelow = false
+//                    } else {
+//                        shouldBeBelow = preferBelow
+//                    }
+//                    
+//                    positionDecisions[candleIndex] = !shouldBeBelow
+//                } else {
+//                    shouldBeBelow = stackIndex % 2 == 1
+//                }
+//                
+//                let tier: Int
+//                if shouldBeBelow {
+//                    tier = calculateProximityTierInternal(
+//                        candleIndex: candleIndex,
+//                        usedTiers: &usedBelowTiers
+//                    )
+//                } else {
+//                    tier = calculateProximityTierInternal(
+//                        candleIndex: candleIndex,
+//                        usedTiers: &usedAboveTiers
+//                    )
+//                }
+//                
+//                result[resultIndex].positionedBelow = shouldBeBelow
+//                result[resultIndex].proximityTier = tier
+//                result[resultIndex].stackIndex = stackIndex / 2
+//            }
+//        }
+//        
+//        return result
+//    }
+//    
+//    static func calculatePositionForNewMarker(
+//        marker: ChartMarker,
+//        existingMarkers: [ChartMarker],
+//        candles: [Candle]
+//    ) -> (isBelow: Bool, tier: Int, stackIndex: Int) {
+//        let candleIndex = marker.candleIndex
+//        let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
+//        let stackIndex = markersAtCandle.count
+//        
+//        let shouldBeBelow: Bool
+//        
+//        if markersAtCandle.isEmpty {
+//            shouldBeBelow = shouldPositionBelowUsingPeakValleyDetection(
+//                candleIndex: candleIndex,
+//                candles: candles
+//            )
+//            
+//            let nearbyMarkers = existingMarkers.filter {
+//                abs($0.candleIndex - candleIndex) <= proximityRange
+//            }
+//            let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
+//            let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
+//            
+//            if neighborsAbove > neighborsBelow + 2 {
+//                return (isBelow: true, tier: 0, stackIndex: 0)
+//            } else if neighborsBelow > neighborsAbove + 2 {
+//                return (isBelow: false, tier: 0, stackIndex: 0)
+//            }
+//        } else {
+//            shouldBeBelow = stackIndex % 2 == 1
+//        }
+//        
+//        let sameSideNearby = existingMarkers.filter {
+//            abs($0.candleIndex - candleIndex) <= proximityRange &&
+//            $0.positionedBelow == shouldBeBelow
+//        }
+//        let usedTiers = Set(sameSideNearby.map { $0.proximityTier })
+//        
+//        var tier = 0
+//        while usedTiers.contains(tier) {
+//            tier += 1
+//        }
+//        
+//        return (isBelow: shouldBeBelow, tier: tier, stackIndex: stackIndex / 2)
+//    }
+//    
+//    // MARK: - IMPROVED Peak/Valley Detection
+//    
+//    private static func shouldPositionBelowUsingPeakValleyDetection(
+//        candleIndex: Int,
+//        candles: [Candle]
 //    ) -> Bool {
-//        // If we have 2-3 markers, alternate positions
-//        guard totalMarkers >= 2 && totalMarkers <= maxBeforeCluster else { return false }
-//        return markerIndex % 2 == 1 // Odd indices go below
+//        guard candleIndex >= 0 && candleIndex < candles.count else { return false }
+//        
+//        let windowSize = 5
+//        let candle = candles[candleIndex]
+//        
+//        var lowerHighsCount = 0
+//        var higherLowsCount = 0
+//        
+//        for delta in 1...windowSize {
+//            if candleIndex - delta >= 0 {
+//                let leftCandle = candles[candleIndex - delta]
+//                if leftCandle.high < candle.high { lowerHighsCount += 1 }
+//                if leftCandle.low > candle.low { higherLowsCount += 1 }
+//            }
+//            
+//            if candleIndex + delta < candles.count {
+//                let rightCandle = candles[candleIndex + delta]
+//                if rightCandle.high < candle.high { lowerHighsCount += 1 }
+//                if rightCandle.low > candle.low { higherLowsCount += 1 }
+//            }
+//        }
+//        
+//        let isPeak = lowerHighsCount >= windowSize * 2 - 2
+//        let isValley = higherLowsCount >= windowSize * 2 - 2
+//        
+//        if isPeak {
+//            return false // Position above at peaks
+//        } else if isValley {
+//            return true // Position below at valleys
+//        } else {
+//            if candleIndex > 0 {
+//                return candle.high < candles[candleIndex - 1].high
+//            }
+//            return false
+//        }
+//    }
+//    
+//    static func calculateProximityTier(
+//        candleIndex: Int,
+//        allMarkers: [ChartMarker],
+//        isBelow: Bool,
+//        usedTiers: inout [Int: Set<Int>]
+//    ) -> Int {
+//        return calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedTiers)
+//    }
+//    
+//    static func offsetForTier(_ tier: Int) -> CGFloat {
+//        return CGFloat(tier) * settings.proximityTierOffset
+//    }
+//    
+//    private static func calculateProximityTierInternal(
+//        candleIndex: Int,
+//        usedTiers: inout [Int: Set<Int>]
+//    ) -> Int {
+//        var conflictingTiers: Set<Int> = []
+//        
+//        for delta in 1...proximityRange {
+//            if let leftTiers = usedTiers[candleIndex - delta] {
+//                conflictingTiers.formUnion(leftTiers)
+//            }
+//            if let rightTiers = usedTiers[candleIndex + delta] {
+//                conflictingTiers.formUnion(rightTiers)
+//            }
+//        }
+//        
+//        var tier = 0
+//        while conflictingTiers.contains(tier) {
+//            tier += 1
+//        }
+//        
+//        if usedTiers[candleIndex] == nil {
+//            usedTiers[candleIndex] = []
+//        }
+//        usedTiers[candleIndex]?.insert(tier)
+//        
+//        return tier
 //    }
 //}
 //
-//// MARK: - Canvas Drawing Functions
+//// MARK: - Chart Marker System (Canvas Drawing)
 //
 //struct ChartMarkerSystem {
 //    
-//    /// Draw markers directly in the chart canvas with smart positioning
-//    /// - Markers stack above candles to avoid interference
-//    /// - Clusters shown when >3 markers on same candle
 //    static func drawMarkers(
 //        context: GraphicsContext,
 //        markers: [ChartMarker],
@@ -1137,19 +1698,18 @@ struct ClusterExpansionSheet: View {
 //        actualCandleWidth: CGFloat,
 //        totalOffset: CGFloat,
 //        expandedClusterIndex: Int? = nil,
-//        markerManager: MarkerManager? = nil
+//        markerManager: MarkerManager? = nil,
+//        tappedMarkerId: UUID? = nil
 //    ) {
 //        let scaledHeight = chartSize.height * priceScale
-//        
-//        // Group markers by candle
-//        let groupedMarkers = Dictionary(grouping: markers.filter { $0.isVisible }) { $0.candleIndex }
+//        let allVisibleMarkers = markers.filter { $0.isVisible }
+//        let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
 //        
 //        for (candleIndex, markersAtCandle) in groupedMarkers {
 //            guard candleIndex >= 0 && candleIndex < candles.count else { continue }
 //            
 //            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
 //            
-//            // Skip if not visible on screen
 //            if x < -totalCandleWidth * 2 || x > chartSize.width + totalCandleWidth * 2 {
 //                continue
 //            }
@@ -1157,291 +1717,352 @@ struct ClusterExpansionSheet: View {
 //            let candle = candles[candleIndex]
 //            let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
 //            let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
-//            
 //            let centerX = x + actualCandleWidth / 2
 //            
-//            // Check if this should be a cluster
 //            let isCluster = markersAtCandle.count > MarkerPositionCalculator.maxBeforeCluster && expandedClusterIndex != candleIndex
 //            
 //            if isCluster {
-//                // Draw cluster indicator
+//                let typeCounts = Dictionary(grouping: markersAtCandle, by: { $0.type }).mapValues { $0.count }
+//                let dominantType = typeCounts.max { a, b in
+//                    if a.value == b.value {
+//                        return a.key.rawValue > b.key.rawValue
+//                    }
+//                    return a.value < b.value
+//                }?.key
+//                let primaryColor = dominantType?.color ?? .blue
+//                
 //                drawClusterIndicator(
 //                    context: context,
 //                    position: CGPoint(x: centerX, y: candleHighY - MarkerPositionCalculator.baseOffset),
 //                    candleHighPoint: CGPoint(x: centerX, y: candleHighY),
 //                    count: markersAtCandle.count,
-//                    types: Set(markersAtCandle.map { $0.type })
+//                    primaryColor: primaryColor
 //                )
 //            } else {
-//                // Draw individual markers with smart stacking
-//                let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+//                let sortedMarkers = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
 //                
-//                for (index, marker) in sorted.enumerated() {
-//                    // Calculate position with stacking
-//                    let shouldBeBelow = MarkerPositionCalculator.shouldPositionBelow(
-//                        markerIndex: index,
-//                        totalMarkers: sorted.count
+//                // Calculate positions using SHARED function
+//                var markerPositions: [(marker: ChartMarker, position: CGPoint)] = []
+//                for marker in sortedMarkers {
+//                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+//                        marker: marker,
+//                        candleHighY: candleHighY,
+//                        candleLowY: candleLowY,
+//                        centerX: centerX
 //                    )
+//                    markerPositions.append((marker, position))
+//                }
+//                
+//                // Separate by side for proper connection line drawing
+//                let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
+//                let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
+//                
+//                // Draw SEGMENTED connection lines
+//                drawStackedConnectionLines(
+//                    context: context,
+//                    markers: aboveMarkers,
+//                    anchorY: candleHighY,
+//                    centerX: centerX,
+//                    isBelow: false
+//                )
+//                
+//                drawStackedConnectionLines(
+//                    context: context,
+//                    markers: belowMarkers,
+//                    anchorY: candleLowY,
+//                    centerX: centerX,
+//                    isBelow: true
+//                )
+//                
+//                // Draw marker bodies (on top of lines)
+//                for (marker, position) in markerPositions {
+//                    let isAnimated = tappedMarkerId == marker.id
+//                    let scale: CGFloat = isAnimated ? 1.3 : 1.0
 //                    
-//                    let baseY: CGFloat
-//                    let anchorY: CGFloat
-//                    let stackDirection: CGFloat
-//                    
-//                    if shouldBeBelow {
-//                        // Position below candle low
-//                        baseY = candleLowY + MarkerPositionCalculator.baseOffset
-//                        anchorY = candleLowY
-//                        stackDirection = 1.0 // Stack downward
-//                    } else {
-//                        // Position above candle high (default)
-//                        baseY = candleHighY - MarkerPositionCalculator.baseOffset
-//                        anchorY = candleHighY
-//                        stackDirection = -1.0 // Stack upward
-//                    }
-//                    
-//                    // Calculate stacking offset (only for markers on same side)
-//                    let sameSideIndex = index / 2 // Every other marker is on same side
-//                    let stackOffset = CGFloat(sameSideIndex) * MarkerPositionCalculator.stackOffset * stackDirection
-//                    let markerY = baseY + stackOffset
-//                    
-//                    // Draw the marker
 //                    drawSingleMarker(
 //                        context: context,
 //                        marker: marker,
-//                        position: CGPoint(x: centerX, y: markerY),
-//                        anchorPoint: CGPoint(x: centerX, y: anchorY),
-//                        isBelow: shouldBeBelow
+//                        position: position,
+//                        anchorPoint: CGPoint(x: centerX, y: marker.positionedBelow ? candleLowY : candleHighY),
+//                        isBelow: marker.positionedBelow,
+//                        scale: scale
 //                    )
 //                }
 //            }
 //        }
 //    }
 //    
-//    /// Draw a single marker with connection line
+//    /// Draw connected lines for stacked markers - lines stop at each marker edge
+//    private static func drawStackedConnectionLines(
+//        context: GraphicsContext,
+//        markers: [(marker: ChartMarker, position: CGPoint)],
+//        anchorY: CGFloat,
+//        centerX: CGFloat,
+//        isBelow: Bool
+//    ) {
+//        guard !markers.isEmpty else { return }
+//        
+//        let baseRadius: CGFloat = 16
+//        var previousY = anchorY
+//        
+//        for (marker, position) in markers {
+//            let markerEdgeY: CGFloat
+//            if isBelow {
+//                markerEdgeY = position.y - baseRadius
+//            } else {
+//                markerEdgeY = position.y + baseRadius
+//            }
+//            
+//            let linePath = Path { path in
+//                path.move(to: CGPoint(x: centerX, y: previousY))
+//                path.addLine(to: CGPoint(x: centerX, y: markerEdgeY))
+//            }
+//            
+//            context.stroke(
+//                linePath,
+//                with: .color(marker.type.color.opacity(0.7)),
+//                style: StrokeStyle(lineWidth: 2, dash: [4, 3])
+//            )
+//            
+//            if isBelow {
+//                previousY = position.y + baseRadius
+//            } else {
+//                previousY = position.y - baseRadius
+//            }
+//        }
+//    }
+//    
 //    private static func drawSingleMarker(
 //        context: GraphicsContext,
 //        marker: ChartMarker,
 //        position: CGPoint,
 //        anchorPoint: CGPoint,
-//        isBelow: Bool
+//        isBelow: Bool,
+//        scale: CGFloat = 1.0
 //    ) {
-//        // Draw connection line
-//        let lineStartY = isBelow ? position.y - 16 : position.y + 16
-//        let connectionPath = Path { path in
-//            path.move(to: CGPoint(x: position.x, y: lineStartY))
-//            path.addLine(to: anchorPoint)
-//        }
-//        context.stroke(
-//            connectionPath,
-//            with: .color(marker.type.color.opacity(0.6)),
-//            style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
-//        )
+//        let baseRadius: CGFloat = 16
+//        let scaledRadius = baseRadius * scale
 //        
-//        // Draw marker circle background
+//        // Shadow
+//        let shadowRect = CGRect(
+//            x: position.x - scaledRadius + 2,
+//            y: position.y - scaledRadius + 2,
+//            width: scaledRadius * 2,
+//            height: scaledRadius * 2
+//        )
+//        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.3)))
+//        
+//        // Main circle
 //        let circleRect = CGRect(
-//            x: position.x - 16,
-//            y: position.y - 16,
-//            width: 32,
-//            height: 32
+//            x: position.x - scaledRadius,
+//            y: position.y - scaledRadius,
+//            width: scaledRadius * 2,
+//            height: scaledRadius * 2
 //        )
-//        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.85)))
-//        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: 2.5)
+//        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.9)))
+//        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: 3 * scale)
 //        
-//        // Draw icon
-//        if let resolved = context.resolveSymbol(id: marker.id) {
-//            context.draw(resolved, at: position)
-//        } else {
-//            // Fallback: draw colored circle with letter
-//            let iconCircle = CGRect(
-//                x: position.x - 10,
-//                y: position.y - 10,
-//                width: 20,
-//                height: 20
-//            )
-//            context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color))
-//            
-//            context.draw(
-//                Text(String(marker.type.rawValue.prefix(1)))
-//                    .font(.system(size: 12, weight: .bold))
-//                    .foregroundColor(.white),
-//                at: position
-//            )
-//        }
+//        // Icon
+//        let iconRadius: CGFloat = 10 * scale
+//        let iconCircle = CGRect(
+//            x: position.x - iconRadius,
+//            y: position.y - iconRadius,
+//            width: iconRadius * 2,
+//            height: iconRadius * 2
+//        )
+//        context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color))
 //        
-//        // Draw like badge
+//        context.draw(
+//            Text(String(marker.type.rawValue.prefix(1)))
+//                .font(.system(size: 12 * scale, weight: .bold))
+//                .foregroundColor(.white),
+//            at: position
+//        )
+//        
+//        // Like badge
 //        if marker.likeCount > 0 {
-//            let badgeOffset: CGFloat = isBelow ? 20 : -20
+//            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 3) : (scaledRadius - 13)
 //            let likeCircleRect = CGRect(
-//                x: position.x + 10,
-//                y: position.y + badgeOffset - 9,
-//                width: 18,
-//                height: 18
+//                x: position.x + 8,
+//                y: position.y + badgeOffset,
+//                width: 14,
+//                height: 14
 //            )
 //            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
 //            
 //            context.draw(
 //                Text("\(marker.likeCount)")
-//                    .font(.system(size: 10, weight: .bold))
+//                    .font(.system(size: 9, weight: .bold))
 //                    .foregroundColor(.white),
-//                at: CGPoint(x: position.x + 19, y: position.y + badgeOffset)
+//                at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 6)
 //            )
 //        }
 //        
-//        // Draw username label for other users' markers
-//        // (Small label below/above the marker)
-//        let labelY = isBelow ? position.y + 24 : position.y - 24
+//        // Username label
+//        let labelY = isBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
 //        context.draw(
 //            Text(marker.username)
-//                .font(.system(size: 8, weight: .medium))
-//                .foregroundColor(.white.opacity(0.8)),
+//                .font(.system(size: 9, weight: .medium))
+//                .foregroundColor(.white.opacity(0.85)),
 //            at: CGPoint(x: position.x, y: labelY)
 //        )
 //    }
 //    
-//    /// Draw cluster indicator when >3 markers on same candle
 //    private static func drawClusterIndicator(
 //        context: GraphicsContext,
 //        position: CGPoint,
 //        candleHighPoint: CGPoint,
 //        count: Int,
-//        types: Set<MarkerType>
+//        primaryColor: Color
 //    ) {
-//        // FIXED: Sort types to get consistent color (prevents flickering on re-render)
-//        // Set iteration order is not guaranteed, so sorting ensures consistent color
-//        let sortedTypes = types.sorted { $0.rawValue < $1.rawValue }
-//        let primaryColor = sortedTypes.first?.color ?? .gray
-//        
-//        // Draw connection line
 //        let connectionPath = Path { path in
-//            path.move(to: CGPoint(x: position.x, y: position.y + 20))
+//            path.move(to: CGPoint(x: position.x, y: position.y + 22))
 //            path.addLine(to: candleHighPoint)
 //        }
-//        
 //        context.stroke(
 //            connectionPath,
-//            with: .color(primaryColor.opacity(0.6)),
+//            with: .color(.white.opacity(0.5)),
 //            style: StrokeStyle(lineWidth: 2, dash: [4, 4])
 //        )
 //        
-//        // Draw cluster circle (larger than single marker)
+//        let clusterRadius: CGFloat = 22
 //        let circleRect = CGRect(
-//            x: position.x - 20,
-//            y: position.y - 20,
-//            width: 40,
-//            height: 40
+//            x: position.x - clusterRadius,
+//            y: position.y - clusterRadius,
+//            width: clusterRadius * 2,
+//            height: clusterRadius * 2
 //        )
 //        
-//        // Solid background
-//        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.9)))
+//        context.fill(Path(ellipseIn: circleRect), with: .color(primaryColor.opacity(0.9)))
+//        context.stroke(Path(ellipseIn: circleRect), with: .color(.white), lineWidth: 2)
 //        
-//        // Draw colored ring (consistent color from sorted types)
-//        context.stroke(Path(ellipseIn: circleRect), with: .color(primaryColor), lineWidth: 3)
-//        
-//        // Draw count number
 //        context.draw(
 //            Text("\(count)")
-//                .font(.system(size: 16, weight: .bold))
+//                .font(.system(size: 14, weight: .bold))
 //                .foregroundColor(.white),
 //            at: position
 //        )
+//    }
+//    
+//    // MARK: - Hit Detection (Uses SAME position calculation as drawing)
+//    
+//    static func findMarkerAtLocation(
+//        _ location: CGPoint,
+//        markers: [ChartMarker],
+//        candles: [Candle],
+//        chartSize: CGSize,
+//        priceRange: (min: Double, max: Double),
+//        priceScale: CGFloat,
+//        verticalOffset: CGFloat,
+//        totalCandleWidth: CGFloat,
+//        actualCandleWidth: CGFloat,
+//        totalOffset: CGFloat,
+//        expandedClusterIndex: Int? = nil
+//    ) -> (marker: ChartMarker?, isCluster: Bool, clusterCandleIndex: Int?) {
+//        let scaledHeight = chartSize.height * priceScale
+//        let allVisibleMarkers = markers.filter { $0.isVisible }
+//        let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
+//        let hitRadius = MarkerPositionCalculator.hitRadius
 //        
-//        // Draw small "markers" label
-//        context.draw(
-//            Text("markers")
-//                .font(.system(size: 8))
-//                .foregroundColor(.white.opacity(0.7)),
-//            at: CGPoint(x: position.x, y: position.y + 28)
-//        )
+//        let sortedCandleIndices = groupedMarkers.keys.sorted().reversed()
 //        
-//        // Draw tap hint
-//        context.draw(
-//            Text("tap to expand")
-//                .font(.system(size: 7))
-//                .foregroundColor(.white.opacity(0.5)),
-//            at: CGPoint(x: position.x, y: position.y + 38)
-//        )
+//        for candleIndex in sortedCandleIndices {
+//            guard let markersAtCandle = groupedMarkers[candleIndex],
+//                  candleIndex >= 0 && candleIndex < candles.count else { continue }
+//            
+//            let candle = candles[candleIndex]
+//            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
+//            let centerX = x + actualCandleWidth / 2
+//            
+//            let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+//            let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+//            
+//            let isCluster = markersAtCandle.count > MarkerPositionCalculator.maxBeforeCluster && expandedClusterIndex != candleIndex
+//            
+//            if isCluster {
+//                let clusterY = candleHighY - MarkerPositionCalculator.baseOffset
+//                let distance = hypot(location.x - centerX, location.y - clusterY)
+//                if distance <= 25 {
+//                    return (nil, true, candleIndex)
+//                }
+//            } else {
+//                let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+//                
+//                for marker in sorted.reversed() {
+//                    // Use SHARED position calculation - ensures hit matches draw
+//                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+//                        marker: marker,
+//                        candleHighY: candleHighY,
+//                        candleLowY: candleLowY,
+//                        centerX: centerX
+//                    )
+//                    
+//                    let distance = hypot(location.x - position.x, location.y - position.y)
+//                    if distance <= hitRadius {
+//                        return (marker, false, nil)
+//                    }
+//                }
+//            }
+//        }
+//        
+//        return (nil, false, nil)
 //    }
 //}
 //
-//// MARK: - Marker Creation Sheet
+//// MARK: - Sheet Views (Unchanged)
 //
 //struct MarkerCreationSheet: View {
 //    @Environment(\.dismiss) private var dismiss
 //    @ObservedObject var markerManager: MarkerManager
-//    
 //    let candleIndex: Int
 //    let timestamp: Date
 //    let price: Double
 //    let username: String
 //    let chartData: ChartDataManager
 //    
-//    @State private var selectedType: MarkerType = .note
+//    @State private var selectedType: MarkerType = .entry
 //    @State private var note: String = ""
-//    
-//    /// Backwards-compatible initializer (uses fallback formatting)
-//    init(
-//        markerManager: MarkerManager,
-//        candleIndex: Int,
-//        timestamp: Date,
-//        price: Double,
-//        username: String
-//    ) {
-//        self.markerManager = markerManager
-//        self.candleIndex = candleIndex
-//        self.timestamp = timestamp
-//        self.price = price
-//        self.username = username
-//        self.chartData = ChartDataManager()
-//    }
-//    
-//    /// Full initializer with chartData for symbol-aware formatting
-//    init(
-//        markerManager: MarkerManager,
-//        candleIndex: Int,
-//        timestamp: Date,
-//        price: Double,
-//        username: String,
-//        chartData: ChartDataManager
-//    ) {
-//        self.markerManager = markerManager
-//        self.candleIndex = candleIndex
-//        self.timestamp = timestamp
-//        self.price = price
-//        self.username = username
-//        self.chartData = chartData
-//    }
 //    
 //    var body: some View {
 //        NavigationView {
 //            Form {
 //                Section("Marker Type") {
-//                    Picker("Type", selection: $selectedType) {
-//                        ForEach(MarkerType.allCases, id: \.self) { type in
-//                            Label(type.rawValue, systemImage: type.icon)
-//                                .tag(type)
+//                    ForEach(MarkerType.allCases, id: \.rawValue) { type in
+//                        Button(action: { selectedType = type }) {
+//                            HStack {
+//                                Image(systemName: type.icon)
+//                                    .foregroundColor(type.color)
+//                                    .frame(width: 30)
+//                                Text(type.rawValue)
+//                                    .foregroundColor(.primary)
+//                                Spacer()
+//                                if selectedType == type {
+//                                    Image(systemName: "checkmark")
+//                                        .foregroundColor(.blue)
+//                                }
+//                            }
 //                        }
 //                    }
-//                    .pickerStyle(.wheel)
 //                }
 //                
-//                Section("Location") {
-//                    HStack {
-//                        Text("Price")
-//                        Spacer()
-//                        Text(chartData.formatPrice(price))
-//                            .foregroundColor(.secondary)
-//                    }
+//                Section("Details") {
 //                    HStack {
 //                        Text("Time")
 //                        Spacer()
 //                        Text(timestamp.chartTimeLabel)
 //                            .foregroundColor(.secondary)
 //                    }
+//                    HStack {
+//                        Text("Price")
+//                        Spacer()
+//                        Text(chartData.formatPrice(price))
+//                            .foregroundColor(.secondary)
+//                    }
 //                }
 //                
 //                Section("Note (Optional)") {
 //                    TextEditor(text: $note)
-//                        .frame(height: 100)
+//                        .frame(minHeight: 80)
 //                }
 //            }
 //            .navigationTitle("Add Marker")
@@ -1465,10 +2086,11 @@ struct ClusterExpansionSheet: View {
 //                }
 //            }
 //        }
+//        .presentationDetents([.medium, .large])
+//        .presentationDragIndicator(.visible)
+//        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
 //    }
 //}
-//
-//// MARK: - Marker Detail Sheet
 //
 //struct MarkerDetailSheet: View {
 //    @Environment(\.dismiss) private var dismiss
@@ -1480,25 +2102,14 @@ struct ClusterExpansionSheet: View {
 //    @State private var isEditing = false
 //    @State private var editedNote: String = ""
 //    
-//    /// Backwards-compatible initializer
-//    init(
-//        markerManager: MarkerManager,
-//        marker: ChartMarker,
-//        currentUserId: String
-//    ) {
+//    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String) {
 //        self.markerManager = markerManager
 //        self.marker = marker
 //        self.currentUserId = currentUserId
 //        self.chartData = ChartDataManager()
 //    }
 //    
-//    /// Full initializer with chartData
-//    init(
-//        markerManager: MarkerManager,
-//        marker: ChartMarker,
-//        currentUserId: String,
-//        chartData: ChartDataManager
-//    ) {
+//    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String, chartData: ChartDataManager) {
 //        self.markerManager = markerManager
 //        self.marker = marker
 //        self.currentUserId = currentUserId
@@ -1593,13 +2204,14 @@ struct ClusterExpansionSheet: View {
 //                }
 //            }
 //        }
+//        .presentationDetents([.medium, .large])
+//        .presentationDragIndicator(.visible)
+//        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
 //        .onAppear {
 //            editedNote = marker.note ?? ""
 //        }
 //    }
 //}
-//
-//// MARK: - Cluster Expansion Sheet
 //
 //struct ClusterExpansionSheet: View {
 //    @Environment(\.dismiss) private var dismiss
@@ -1623,7 +2235,6 @@ struct ClusterExpansionSheet: View {
 //                        }
 //                    }) {
 //                        HStack(spacing: 12) {
-//                            // Marker type icon
 //                            Circle()
 //                                .fill(marker.type.color)
 //                                .frame(width: 32, height: 32)
@@ -1641,18 +2252,10 @@ struct ClusterExpansionSheet: View {
 //                                Text("by \(marker.username)")
 //                                    .font(.caption)
 //                                    .foregroundColor(.secondary)
-//                                
-//                                if let note = marker.note, !note.isEmpty {
-//                                    Text(note)
-//                                        .font(.caption)
-//                                        .foregroundColor(.secondary)
-//                                        .lineLimit(1)
-//                                }
 //                            }
 //                            
 //                            Spacer()
 //                            
-//                            // Like count
 //                            if marker.likeCount > 0 {
 //                                HStack(spacing: 2) {
 //                                    Image(systemName: "heart.fill")
@@ -1680,7 +2283,16 @@ struct ClusterExpansionSheet: View {
 //                }
 //            }
 //        }
+//        .presentationDetents([.medium])
+//        .presentationDragIndicator(.visible)
+//        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
 //    }
 //}
-//
-//
+
+
+
+
+
+
+
+

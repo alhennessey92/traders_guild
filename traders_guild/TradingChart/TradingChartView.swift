@@ -1,3 +1,4 @@
+
 import SwiftUI
 
 /// Main trading chart view that handles all chart rendering and interactions
@@ -305,7 +306,7 @@ struct TradingChartView: View {
                 
                 ZStack {
                     // Black background for professional trading chart appearance
-                    Color.black.ignoresSafeArea().opacity(0.4)
+                    Color.black.ignoresSafeArea().opacity(0.2)
                     
                     // MAIN CHART CANVAS
                     // Draws: grid, candlesticks, and placed markers
@@ -316,9 +317,7 @@ struct TradingChartView: View {
                     .contentShape(Rectangle()) // Make entire canvas tappable/draggable
                     // Canvas will now redraw automatically when any @Published property changes
                     
-                    // MARKER PLACEMENT OVERLAY
-                    // This entire section is SwiftUI (not Canvas) for instant updates
-                    // Shows preview marker and handles drag-to-position interaction
+                    // MARKER PLACEMENT OVERLAY with improved time indicator
                     if isMarkerPlacementMode {
                         ZStack {
                             // VERTICAL GUIDE LINE - shows which candle is selected
@@ -336,62 +335,63 @@ struct TradingChartView: View {
                                     .foregroundColor(.blue.opacity(0.6))
                                     .allowsHitTesting(false)
                                     
-                                    // Timestamp label at bottom
-                                    Text(candle.timestamp.chartTimeLabel)
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.blue)
-                                        .cornerRadius(6)
-                                        .position(x: x, y: geometry.size.height - 15)
-                                        .allowsHitTesting(false)
+                                    // X-AXIS TIME INDICATOR - styled like the Y-axis price indicator
+                                    MarkerXAxisTimeIndicator(
+                                        timestamp: candle.timestamp,
+                                        xPosition: x,
+                                        chartHeight: geometry.size.height
+                                    )
                                 }
                             }
                             
                             // PREVIEW MARKER - SwiftUI overlay for instant updates
-                            // Follows finger position in 2D while dragging, snaps to candle position when released
-                            // Only the marker itself is draggable - chart remains fully interactive
                             if previewCandleIndex >= 0 && previewCandleIndex < chartData.candles.count {
                                 let candle = chartData.candles[previewCandleIndex]
                                 
-                                // Calculate snap position (above candle) - increased offset for better clearance
+                                // Calculate snap position - now properly calculates above/below
                                 let snapX = coordinateSystem.xCenterPosition(forCandleIndex: previewCandleIndex)
-                                let markerBaseOffset: CGFloat = 75 // Smart marker positioning offset (increased)
-                                let snapY = coordinateSystem.yPosition(forPrice: candle.high) - markerBaseOffset
-                                
+                                let candleHighY = coordinateSystem.yPosition(forPrice: candle.high)
+                                let candleLowY = coordinateSystem.yPosition(forPrice: candle.low)
+
+                                // Use position calculator to determine proper placement
+                                let (snapPosition, _) = MarkerPositionCalculator.calculatePreviewPosition(
+                                    candleIndex: previewCandleIndex,
+                                    existingMarkers: markerManager.filteredMarkers,
+                                    candles: chartData.candles,
+                                    candleHighY: candleHighY,
+                                    candleLowY: candleLowY,
+                                    centerX: snapX
+                                )
+
                                 // Use drag position if actively dragging, otherwise use snap position
-                                let markerX = markerDragPosition?.x ?? snapX
-                                let markerY = markerDragPosition?.y ?? snapY
+                                let markerX = markerDragPosition?.x ?? snapPosition.x
+                                let markerY = markerDragPosition?.y ?? snapPosition.y
                                 
                                 if markerX >= -50 && markerX <= geometry.size.width + 50 {
                                     ZStack {
-                                        // EXPANDED HIT AREA - invisible touch target
-                                        // Makes marker easier to grab without blocking chart gestures
+                                        // Invisible hit area
                                         Circle()
                                             .fill(Color.clear)
                                             .frame(width: 80, height: 80)
                                             .contentShape(Circle())
                                         
-                                        // Large blue circle background
+                                        // Blue marker circle
                                         Circle()
                                             .fill(Color.blue)
                                             .frame(width: 40, height: 40)
                                             .overlay(
-                                                // White border for visibility
                                                 Circle()
                                                     .stroke(Color.white, lineWidth: 3)
                                             )
                                             .scaleEffect(isMarkerBeingDragged ? 1.2 : 1.0)
                                         
-                                        // White center dot
+                                        // Center dot
                                         Circle()
                                             .fill(Color.white)
                                             .frame(width: 12, height: 12)
                                             .scaleEffect(isMarkerBeingDragged ? 1.2 : 1.0)
                                         
-                                        // Info box showing time and price
+                                        // Info box
                                         VStack(spacing: 2) {
                                             Text(candle.timestamp.chartTimeLabel)
                                                 .font(.caption2)
@@ -410,28 +410,21 @@ struct TradingChartView: View {
                                     .position(x: markerX, y: markerY)
                                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isMarkerBeingDragged)
                                     .gesture(
-                                        // Marker-specific drag gesture - only captures touches on the marker
                                         DragGesture(minimumDistance: 0)
                                             .onChanged { value in
-                                                // Trigger haptic on first movement
                                                 if !isMarkerBeingDragged {
                                                     isMarkerBeingDragged = true
                                                     impactFeedback.impactOccurred()
                                                 }
-                                                
-                                                // Update marker to follow finger position exactly (2D movement)
                                                 markerDragPosition = value.location
                                                 
-                                                // Update candle index based on X position (for vertical line and final placement)
                                                 if let index = coordinateSystem.candleIndex(atXPosition: value.location.x) {
                                                     let clampedIndex = max(0, min(chartData.candles.count - 1, index))
                                                     previewCandleIndex = clampedIndex
                                                 }
                                             }
                                             .onEnded { value in
-                                                // Stop dragging and snap to position
                                                 isMarkerBeingDragged = false
-                                                // Clear drag position to trigger snap animation
                                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                                     markerDragPosition = nil
                                                 }
@@ -629,16 +622,17 @@ struct TradingChartView: View {
                     timestamp: info.timestamp,
                     price: info.price,
                     username: "TestUser",
-                    chartData: chartData
+                    chartData: chartData,
+                    candles: chartData.candles
                 )
                 .onDisappear {
-                    // Exit placement mode after marker is created or cancelled
                     controlViewModel.isMarkerPlacementMode = false
                     isShowingSheet = false
                     markerManager.selectedMarker = nil
                 }
             }
         }
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         // MARKER DETAIL SHEET
         // Shows when user taps an existing marker
         // Displays marker info and allows editing/deletion for own markers
@@ -649,6 +643,7 @@ struct TradingChartView: View {
                 currentUserId: "user123",
                 chartData: chartData
             )
+            .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         }
         // CLUSTER EXPANSION SHEET
         // Shows when user taps a cluster indicator (>3 markers on same candle)
@@ -663,6 +658,7 @@ struct TradingChartView: View {
                         markerManager.selectedMarker = marker
                     }
                 )
+                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
             }
         }
         .onAppear {
@@ -796,6 +792,12 @@ struct TradingChartView: View {
     // MARK: - Marker API Loading
     
     /// Load markers from API and update their prices based on actual candle data
+    /// NOTE: For proper cross-timeframe persistence, markers should be stored by timestamp
+    /// and mapped to the appropriate candleIndex based on which candle contains that timestamp.
+    /// The current sample data implementation regenerates markers, but a real API would:
+    /// 1. Store markers with their exact timestamp
+    /// 2. On timeframe change, find the candle that contains each marker's timestamp
+    /// 3. Remap candleIndex accordingly
     private func loadMarkersFromAPI() async {
         guard !chartData.candles.isEmpty else { return }
         
@@ -816,10 +818,61 @@ struct TradingChartView: View {
             candles: chartData.candles
         )
         
+        // CRITICAL: Assign stable positions that won't change when new candles arrive
+        markers = MarkerPositionCalculator.assignStablePositions(
+            markers: markers,
+            candles: chartData.candles
+        )
+        
         // Update marker manager on main thread
         await MainActor.run {
             markerManager.markers = markers
         }
+    }
+    
+    /// Find the candle index that contains a given timestamp
+    /// Used for mapping timestamp-based markers to the current timeframe's candles
+    /// - Parameters:
+    ///   - timestamp: The marker's timestamp
+    ///   - candles: The current candle array
+    ///   - timeframe: The current timeframe (determines candle duration)
+    /// - Returns: The candle index containing the timestamp, or nil if not found
+    private func findCandleIndex(forTimestamp timestamp: Date, in candles: [Candle], timeframe: ChartTimeframe) -> Int? {
+        // Get the duration of each candle in seconds
+        let candleDuration: TimeInterval
+        switch timeframe {
+        case .m1: candleDuration = 60
+        case .m5: candleDuration = 5 * 60
+        case .m15: candleDuration = 15 * 60
+        case .m30: candleDuration = 30 * 60
+        case .h1: candleDuration = 60 * 60
+        case .h4: candleDuration = 4 * 60 * 60
+        case .d1: candleDuration = 24 * 60 * 60
+        case .w1: candleDuration = 7 * 24 * 60 * 60
+        case .mn: candleDuration = 30 * 24 * 60 * 60
+        }
+        
+        // Find the candle that contains this timestamp
+        for (index, candle) in candles.enumerated() {
+            let candleEnd = candle.timestamp.addingTimeInterval(candleDuration)
+            if timestamp >= candle.timestamp && timestamp < candleEnd {
+                return index
+            }
+        }
+        
+        // If not found in range, check if timestamp is close to any candle
+        // (handles edge cases at chart boundaries)
+        if let firstCandle = candles.first, timestamp < firstCandle.timestamp {
+            return 0  // Before first candle
+        }
+        if let lastCandle = candles.last {
+            let lastCandleEnd = lastCandle.timestamp.addingTimeInterval(candleDuration)
+            if timestamp >= lastCandleEnd {
+                return candles.count - 1  // After last candle
+            }
+        }
+        
+        return nil
     }
     
     // MARK: - Helper Functions
@@ -937,155 +990,45 @@ struct TradingChartView: View {
     
     // MARK: - Tap Gesture for Markers
     
-    /// Detect taps on existing markers to show their details
-    /// UPDATED: Handles stacked markers (2-3 on same candle) and clusters (>3) properly
-    /// Only works when not in crosshair or placement mode
-    /// - Parameter geometry: Chart view geometry for position calculations
-    /// - Returns: Tap gesture that selects markers
+    /// Detect taps on markers using UNIFIED hit detection
     private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onEnded { value in
-                // Don't handle taps during special modes or when sheets are showing
-                guard !crosshairManager.isActive && !isMarkerPlacementMode && !showMarkerSheet && !isShowingSheet && !showClusterSheet else { return }
+                guard !crosshairManager.isActive &&
+                      !isMarkerPlacementMode &&
+                      !showMarkerSheet &&
+                      !isShowingSheet &&
+                      !showClusterSheet else { return }
                 
                 let location = value.location
-                
-                // Calculate current chart offsets for marker positioning
                 let totalOffset = gestureState.panOffset.width
                 let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
-                let scaledHeight = geometry.size.height * gestureState.priceScale
                 
-                // Use same offset values as MarkerPositionCalculator for consistency
-                let baseOffset: CGFloat = 75  // Must match MarkerPositionCalculator.baseOffset
-                let stackOffset: CGFloat = 38  // Must match MarkerPositionCalculator.stackOffset
-                let maxBeforeCluster = 3       // Must match MarkerPositionCalculator.maxBeforeCluster
+                // Use UNIFIED hit detection
+                let result = ChartMarkerSystem.findMarkerAtLocation(
+                    location,
+                    markers: markerManager.filteredMarkers,
+                    candles: chartData.candles,
+                    chartSize: geometry.size,
+                    priceRange: chartData.priceRange,
+                    priceScale: gestureState.priceScale,
+                    verticalOffset: totalVerticalOffset,
+                    totalCandleWidth: totalCandleWidth,
+                    actualCandleWidth: actualCandleWidth,
+                    totalOffset: totalOffset,
+                    expandedClusterIndex: markerManager.expandedClusterCandleIndex
+                )
                 
-                // Group markers by candle (same logic as drawing code)
-                let visibleMarkers = markerManager.filteredMarkers.filter { $0.isVisible }
-                let groupedMarkers = Dictionary(grouping: visibleMarkers) { $0.candleIndex }
-                
-                // Sort candle indices and track positions (same as drawing code)
-                let sortedCandleIndices = groupedMarkers.keys.sorted()
-                var usedPositions: [Int: Bool] = [:]
-                
-                // First pass: calculate positions (same logic as drawMarkers)
-                var markerPositions: [UUID: (CGFloat, CGFloat)] = [:]  // markerId -> (centerX, markerY)
-                
-                for candleIndex in sortedCandleIndices {
-                    guard let markersAtCandle = groupedMarkers[candleIndex],
-                          candleIndex >= 0 && candleIndex < chartData.candles.count else { continue }
-                    
-                    let candle = chartData.candles[candleIndex]
-                    let centerX = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
-                    
-                    // Calculate candle high/low Y positions (same formula as drawing)
-                    let candleHighY = geometry.size.height -
-                        (CGFloat(candle.high - chartData.priceRange.min) /
-                         CGFloat(chartData.priceRange.max - chartData.priceRange.min)) *
-                        scaledHeight - totalVerticalOffset
-                    let candleLowY = geometry.size.height -
-                        (CGFloat(candle.low - chartData.priceRange.min) /
-                         CGFloat(chartData.priceRange.max - chartData.priceRange.min)) *
-                        scaledHeight - totalVerticalOffset
-                    
-                    let isCluster = markersAtCandle.count > maxBeforeCluster
-                    
-                    if isCluster {
-                        // Check tap on cluster indicator
-                        let clusterY = candleHighY - baseOffset
-                        let distance = hypot(location.x - centerX, location.y - clusterY)
-                        
-                        if distance <= 25 {
-                            clusterCandleIndex = candleIndex
-                            showClusterSheet = true
-                            return
-                        }
-                    } else {
-                        let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-                        let useTrendPositioning = sorted.count == 1
-                        
-                        for (index, marker) in sorted.enumerated() {
-                            var shouldBeBelow: Bool
-                            
-                            if useTrendPositioning {
-                                // Single marker: use trend-based positioning
-                                let previousCandle = candleIndex > 0 ? chartData.candles[candleIndex - 1] : nil
-                                let trendBelow = previousCandle.map { candle.high < $0.high } ?? false
-                                
-                                // Check neighbors
-                                let leftHasAbove = usedPositions[candleIndex - 1] == true
-                                let rightHasAbove = usedPositions[candleIndex + 1] == true
-                                let leftHasBelow = usedPositions[candleIndex - 1] == false
-                                let rightHasBelow = usedPositions[candleIndex + 1] == false
-                                
-                                if leftHasAbove || rightHasAbove {
-                                    shouldBeBelow = true
-                                } else if leftHasBelow || rightHasBelow {
-                                    shouldBeBelow = false
-                                } else {
-                                    shouldBeBelow = trendBelow
-                                }
-                                
-                                usedPositions[candleIndex] = !shouldBeBelow
-                            } else {
-                                shouldBeBelow = sorted.count >= 2 && sorted.count <= maxBeforeCluster && index % 2 == 1
-                            }
-                            
-                            let markerY: CGFloat
-                            let sameSideIndex = index / 2
-                            var stackOffsetValue = CGFloat(sameSideIndex) * stackOffset
-                            
-                            // Add proximity offset for single markers
-                            if useTrendPositioning {
-                                var nearbyCount = 0
-                                for delta in 1...2 {
-                                    nearbyCount += visibleMarkers.filter { $0.candleIndex == candleIndex - delta }.count
-                                    nearbyCount += visibleMarkers.filter { $0.candleIndex == candleIndex + delta }.count
-                                }
-                                if nearbyCount > 0 {
-                                    stackOffsetValue += candleIndex % 2 == 0 ? 20 : 0
-                                }
-                            }
-                            
-                            if shouldBeBelow {
-                                markerY = candleLowY + baseOffset + stackOffsetValue
-                            } else {
-                                markerY = candleHighY - baseOffset - stackOffsetValue
-                            }
-                            
-                            markerPositions[marker.id] = (centerX, markerY)
-                        }
+                if result.isCluster, let candleIndex = result.clusterCandleIndex {
+                    clusterCandleIndex = candleIndex
+                    showClusterSheet = true
+                } else if let marker = result.marker {
+                    markerHaptic.impactOccurred()
+                    tappedMarkerId = marker.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        tappedMarkerId = nil
                     }
-                }
-                
-                // Second pass: check for taps (check in reverse drawing order)
-                for candleIndex in sortedCandleIndices.reversed() {
-                    guard let markersAtCandle = groupedMarkers[candleIndex] else { continue }
-                    
-                    let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-                    
-                    for marker in sorted.reversed() {
-                        guard let (centerX, markerY) = markerPositions[marker.id] else { continue }
-                        
-                        let distance = hypot(location.x - centerX, location.y - markerY)
-                        
-                        if distance <= 20 {
-                            // Haptic feedback on marker tap
-                            markerHaptic.impactOccurred()
-                            
-                            // Set tapped marker for animation
-                            tappedMarkerId = marker.id
-                            
-                            // Clear animation state after short delay
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                tappedMarkerId = nil
-                            }
-                            
-                            // Select the marker to show detail sheet
-                            markerManager.selectedMarker = marker
-                            return
-                        }
-                    }
+                    markerManager.selectedMarker = marker
                 }
             }
     }
@@ -2243,6 +2186,9 @@ struct TradingChartView: View {
 
 
 
+
+
+//
 //import SwiftUI
 //
 ///// Main trading chart view that handles all chart rendering and interactions
@@ -2376,6 +2322,15 @@ struct TradingChartView: View {
 //    
 //    /// Track if chart has been initialized with proper position
 //    @State private var hasInitializedPosition = false
+//    
+//    /// Track if chart is loading (waiting for data)
+//    @State private var isChartLoading = true
+//    
+//    /// Track the marker ID that was just tapped (for animation)
+//    @State private var tappedMarkerId: UUID? = nil
+//    
+//    /// Haptic feedback generator for marker interactions
+//    private let markerHaptic = UIImpactFeedbackGenerator(style: .medium)
 //    
 //    // MARK: - Chart Configuration
 //    
@@ -2541,7 +2496,7 @@ struct TradingChartView: View {
 //                
 //                ZStack {
 //                    // Black background for professional trading chart appearance
-//                    Color.black.ignoresSafeArea().opacity(0.4)
+//                    Color.black.ignoresSafeArea().opacity(0.2)
 //                    
 //                    // MAIN CHART CANVAS
 //                    // Draws: grid, candlesticks, and placed markers
@@ -2552,9 +2507,7 @@ struct TradingChartView: View {
 //                    .contentShape(Rectangle()) // Make entire canvas tappable/draggable
 //                    // Canvas will now redraw automatically when any @Published property changes
 //                    
-//                    // MARKER PLACEMENT OVERLAY
-//                    // This entire section is SwiftUI (not Canvas) for instant updates
-//                    // Shows preview marker and handles drag-to-position interaction
+//                    // MARKER PLACEMENT OVERLAY with improved time indicator
 //                    if isMarkerPlacementMode {
 //                        ZStack {
 //                            // VERTICAL GUIDE LINE - shows which candle is selected
@@ -2572,62 +2525,51 @@ struct TradingChartView: View {
 //                                    .foregroundColor(.blue.opacity(0.6))
 //                                    .allowsHitTesting(false)
 //                                    
-//                                    // Timestamp label at bottom
-//                                    Text(candle.timestamp.chartTimeLabel)
-//                                        .font(.caption)
-//                                        .fontWeight(.semibold)
-//                                        .foregroundColor(.white)
-//                                        .padding(.horizontal, 8)
-//                                        .padding(.vertical, 4)
-//                                        .background(Color.blue)
-//                                        .cornerRadius(6)
-//                                        .position(x: x, y: geometry.size.height - 15)
-//                                        .allowsHitTesting(false)
+//                                    // X-AXIS TIME INDICATOR - styled like the Y-axis price indicator
+//                                    MarkerXAxisTimeIndicator(
+//                                        timestamp: candle.timestamp,
+//                                        xPosition: x,
+//                                        chartHeight: geometry.size.height
+//                                    )
 //                                }
 //                            }
 //                            
 //                            // PREVIEW MARKER - SwiftUI overlay for instant updates
-//                            // Follows finger position in 2D while dragging, snaps to candle position when released
-//                            // Only the marker itself is draggable - chart remains fully interactive
 //                            if previewCandleIndex >= 0 && previewCandleIndex < chartData.candles.count {
 //                                let candle = chartData.candles[previewCandleIndex]
 //                                
-//                                // Calculate snap position (above candle) - increased offset for better clearance
 //                                let snapX = coordinateSystem.xCenterPosition(forCandleIndex: previewCandleIndex)
-//                                let markerBaseOffset: CGFloat = 75 // Smart marker positioning offset (increased)
-//                                let snapY = coordinateSystem.yPosition(forPrice: candle.high) - markerBaseOffset
+//                                let markerPlacementOffset = MarkerPositionCalculator.placementOffset
+//                                let snapY = coordinateSystem.yPosition(forPrice: candle.high) - markerPlacementOffset
 //                                
-//                                // Use drag position if actively dragging, otherwise use snap position
 //                                let markerX = markerDragPosition?.x ?? snapX
 //                                let markerY = markerDragPosition?.y ?? snapY
 //                                
 //                                if markerX >= -50 && markerX <= geometry.size.width + 50 {
 //                                    ZStack {
-//                                        // EXPANDED HIT AREA - invisible touch target
-//                                        // Makes marker easier to grab without blocking chart gestures
+//                                        // Invisible hit area
 //                                        Circle()
 //                                            .fill(Color.clear)
 //                                            .frame(width: 80, height: 80)
 //                                            .contentShape(Circle())
 //                                        
-//                                        // Large blue circle background
+//                                        // Blue marker circle
 //                                        Circle()
 //                                            .fill(Color.blue)
 //                                            .frame(width: 40, height: 40)
 //                                            .overlay(
-//                                                // White border for visibility
 //                                                Circle()
 //                                                    .stroke(Color.white, lineWidth: 3)
 //                                            )
 //                                            .scaleEffect(isMarkerBeingDragged ? 1.2 : 1.0)
 //                                        
-//                                        // White center dot
+//                                        // Center dot
 //                                        Circle()
 //                                            .fill(Color.white)
 //                                            .frame(width: 12, height: 12)
 //                                            .scaleEffect(isMarkerBeingDragged ? 1.2 : 1.0)
 //                                        
-//                                        // Info box showing time and price
+//                                        // Info box
 //                                        VStack(spacing: 2) {
 //                                            Text(candle.timestamp.chartTimeLabel)
 //                                                .font(.caption2)
@@ -2646,28 +2588,21 @@ struct TradingChartView: View {
 //                                    .position(x: markerX, y: markerY)
 //                                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isMarkerBeingDragged)
 //                                    .gesture(
-//                                        // Marker-specific drag gesture - only captures touches on the marker
 //                                        DragGesture(minimumDistance: 0)
 //                                            .onChanged { value in
-//                                                // Trigger haptic on first movement
 //                                                if !isMarkerBeingDragged {
 //                                                    isMarkerBeingDragged = true
 //                                                    impactFeedback.impactOccurred()
 //                                                }
-//                                                
-//                                                // Update marker to follow finger position exactly (2D movement)
 //                                                markerDragPosition = value.location
 //                                                
-//                                                // Update candle index based on X position (for vertical line and final placement)
 //                                                if let index = coordinateSystem.candleIndex(atXPosition: value.location.x) {
 //                                                    let clampedIndex = max(0, min(chartData.candles.count - 1, index))
 //                                                    previewCandleIndex = clampedIndex
 //                                                }
 //                                            }
 //                                            .onEnded { value in
-//                                                // Stop dragging and snap to position
 //                                                isMarkerBeingDragged = false
-//                                                // Clear drag position to trigger snap animation
 //                                                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
 //                                                    markerDragPosition = nil
 //                                                }
@@ -2818,6 +2753,37 @@ struct TradingChartView: View {
 //                    }
 //                )
 //                
+//                // LOADING OVERLAY
+//                // Shows when chart is loading or symbol is not yet set
+//                if isChartLoading || chartViewModel.currentSymbol == nil || chartData.candles.isEmpty {
+//                    ZStack {
+//                        Color.black.opacity(0.85)
+//                            .ignoresSafeArea()
+//                        
+//                        VStack(spacing: 20) {
+//                            // Animated loading indicator
+//                            ProgressView()
+//                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+//                                .scaleEffect(1.5)
+//                            
+//                            Text("Loading Chart...")
+//                                .font(.headline)
+//                                .foregroundColor(.white)
+//                            
+//                            if chartViewModel.currentSymbol == nil {
+//                                Text("Fetching symbol data")
+//                                    .font(.caption)
+//                                    .foregroundColor(.gray)
+//                            } else if chartData.candles.isEmpty {
+//                                Text("Loading candles")
+//                                    .font(.caption)
+//                                    .foregroundColor(.gray)
+//                            }
+//                        }
+//                    }
+//                    .transition(.opacity.animation(.easeOut(duration: 0.3)))
+//                }
+//                
 //                // BOTTOM TOOLBAR
 //                // Contains marker placement button and reset zoom button
 //
@@ -2837,13 +2803,13 @@ struct TradingChartView: View {
 //                    chartData: chartData
 //                )
 //                .onDisappear {
-//                    // Exit placement mode after marker is created or cancelled
 //                    controlViewModel.isMarkerPlacementMode = false
 //                    isShowingSheet = false
 //                    markerManager.selectedMarker = nil
 //                }
 //            }
 //        }
+//        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
 //        // MARKER DETAIL SHEET
 //        // Shows when user taps an existing marker
 //        // Displays marker info and allows editing/deletion for own markers
@@ -2854,6 +2820,7 @@ struct TradingChartView: View {
 //                currentUserId: "user123",
 //                chartData: chartData
 //            )
+//            .presentationBackgroundInteraction(.enabled(upThrough: .medium))
 //        }
 //        // CLUSTER EXPANSION SHEET
 //        // Shows when user taps a cluster indicator (>3 markers on same candle)
@@ -2868,6 +2835,7 @@ struct TradingChartView: View {
 //                        markerManager.selectedMarker = marker
 //                    }
 //                )
+//                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
 //            }
 //        }
 //        .onAppear {
@@ -2878,9 +2846,12 @@ struct TradingChartView: View {
 //            // Connect marker manager to view model for coordinated loading
 //            chartViewModel.markerManager = markerManager
 //            
-//            // Position chart at most recent candles on initial load
-//            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-//                if !hasInitializedPosition && !chartData.candles.isEmpty {
+//            // Start with loading state until we have symbol and candles
+//            isChartLoading = chartViewModel.currentSymbol == nil || chartData.candles.isEmpty
+//            
+//            // Position chart at most recent candles on initial load (with delay for data to load)
+//            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+//                if !hasInitializedPosition && !chartData.candles.isEmpty && chartViewModel.currentSymbol != nil {
 //                    resetChartToMostRecentCandles()
 //                    hasInitializedPosition = true
 //                }
@@ -2905,25 +2876,44 @@ struct TradingChartView: View {
 //                previewCandleIndex = centerIndex
 //            }
 //        }
-//        // Reload markers and reset position when symbol changes
+//        // Watch for symbol becoming available (initial load)
+//        .onChange(of: chartViewModel.currentSymbol) { oldValue, newValue in
+//            if oldValue == nil && newValue != nil && !chartData.candles.isEmpty {
+//                // Symbol just became available - position chart properly
+//                if !hasInitializedPosition {
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+//                        resetChartToMostRecentCandles()
+//                        hasInitializedPosition = true
+//                    }
+//                }
+//            }
+//        }
+//        // Reload markers and reset position when symbol changes (not initial load)
 //        .onChange(of: chartViewModel.currentSymbol?.symbol) { oldValue, newValue in
-//            if oldValue != newValue {
+//            if oldValue != newValue && oldValue != nil {
+//                // Symbol changed (not initial nil -> value)
+//                isChartLoading = true
 //                markerManager.clearMarkers()
-//                // Reset chart position to most recent candles
-//                resetChartToMostRecentCandles()
-//                Task {
-//                    await loadMarkersFromAPI()
+//                // Short delay to let new candles load
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+//                    resetChartToMostRecentCandles()
+//                    Task {
+//                        await loadMarkersFromAPI()
+//                    }
 //                }
 //            }
 //        }
 //        // Reload markers and reset position when timeframe changes
 //        .onChange(of: chartViewModel.currentTimeframe) { oldValue, newValue in
 //            if oldValue != newValue {
+//                isChartLoading = true
 //                markerManager.clearMarkers()
-//                // Reset chart position to most recent candles (prevents crash from invalid pan offset)
-//                resetChartToMostRecentCandles()
-//                Task {
-//                    await loadMarkersFromAPI()
+//                // Short delay to let new candles load
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+//                    resetChartToMostRecentCandles()
+//                    Task {
+//                        await loadMarkersFromAPI()
+//                    }
 //                }
 //            }
 //        }
@@ -2940,6 +2930,7 @@ struct TradingChartView: View {
 //    
 //    /// Reset chart position to show most recent candles centered on screen
 //    /// Called on initial load, timeframe change, and symbol change
+//    /// Also resets vertical position and price scale for proper centering
 //    private func resetChartToMostRecentCandles() {
 //        guard !chartData.candles.isEmpty else { return }
 //        
@@ -2960,15 +2951,30 @@ struct TradingChartView: View {
 //        
 //        // Apply the position change (with animation for smoother UX)
 //        withAnimation(.easeOut(duration: 0.3)) {
+//            // Reset horizontal position to show recent candles
 //            gestureState.panOffset.width = clampedOffset
-//            // Reset vertical offset to center
+//            
+//            // Reset vertical offset to center (0 = centered on price range)
 //            gestureState.panOffset.height = 0
+//            gestureState.verticalPanOffset = 0
+//            
+//            // Reset price scale to default (1.0 = candles fit screen vertically)
+//            gestureState.priceScale = 1.0
 //        }
+//        
+//        // Mark loading as complete since we now have data and position
+//        isChartLoading = false
 //    }
 //    
 //    // MARK: - Marker API Loading
 //    
 //    /// Load markers from API and update their prices based on actual candle data
+//    /// NOTE: For proper cross-timeframe persistence, markers should be stored by timestamp
+//    /// and mapped to the appropriate candleIndex based on which candle contains that timestamp.
+//    /// The current sample data implementation regenerates markers, but a real API would:
+//    /// 1. Store markers with their exact timestamp
+//    /// 2. On timeframe change, find the candle that contains each marker's timestamp
+//    /// 3. Remap candleIndex accordingly
 //    private func loadMarkersFromAPI() async {
 //        guard !chartData.candles.isEmpty else { return }
 //        
@@ -2989,10 +2995,61 @@ struct TradingChartView: View {
 //            candles: chartData.candles
 //        )
 //        
+//        // CRITICAL: Assign stable positions that won't change when new candles arrive
+//        markers = MarkerPositionCalculator.assignStablePositions(
+//            markers: markers,
+//            candles: chartData.candles
+//        )
+//        
 //        // Update marker manager on main thread
 //        await MainActor.run {
 //            markerManager.markers = markers
 //        }
+//    }
+//    
+//    /// Find the candle index that contains a given timestamp
+//    /// Used for mapping timestamp-based markers to the current timeframe's candles
+//    /// - Parameters:
+//    ///   - timestamp: The marker's timestamp
+//    ///   - candles: The current candle array
+//    ///   - timeframe: The current timeframe (determines candle duration)
+//    /// - Returns: The candle index containing the timestamp, or nil if not found
+//    private func findCandleIndex(forTimestamp timestamp: Date, in candles: [Candle], timeframe: ChartTimeframe) -> Int? {
+//        // Get the duration of each candle in seconds
+//        let candleDuration: TimeInterval
+//        switch timeframe {
+//        case .m1: candleDuration = 60
+//        case .m5: candleDuration = 5 * 60
+//        case .m15: candleDuration = 15 * 60
+//        case .m30: candleDuration = 30 * 60
+//        case .h1: candleDuration = 60 * 60
+//        case .h4: candleDuration = 4 * 60 * 60
+//        case .d1: candleDuration = 24 * 60 * 60
+//        case .w1: candleDuration = 7 * 24 * 60 * 60
+//        case .mn: candleDuration = 30 * 24 * 60 * 60
+//        }
+//        
+//        // Find the candle that contains this timestamp
+//        for (index, candle) in candles.enumerated() {
+//            let candleEnd = candle.timestamp.addingTimeInterval(candleDuration)
+//            if timestamp >= candle.timestamp && timestamp < candleEnd {
+//                return index
+//            }
+//        }
+//        
+//        // If not found in range, check if timestamp is close to any candle
+//        // (handles edge cases at chart boundaries)
+//        if let firstCandle = candles.first, timestamp < firstCandle.timestamp {
+//            return 0  // Before first candle
+//        }
+//        if let lastCandle = candles.last {
+//            let lastCandleEnd = lastCandle.timestamp.addingTimeInterval(candleDuration)
+//            if timestamp >= lastCandleEnd {
+//                return candles.count - 1  // After last candle
+//            }
+//        }
+//        
+//        return nil
 //    }
 //    
 //    // MARK: - Helper Functions
@@ -3110,96 +3167,54 @@ struct TradingChartView: View {
 //    
 //    // MARK: - Tap Gesture for Markers
 //    
-//    /// Detect taps on existing markers to show their details
-//    /// UPDATED: Handles stacked markers (2-3 on same candle) and clusters (>3) properly
-//    /// Only works when not in crosshair or placement mode
-//    /// - Parameter geometry: Chart view geometry for position calculations
-//    /// - Returns: Tap gesture that selects markers
+//    /// Detect taps on existing markers using UNIFIED hit detection
+//    /// This ensures hit areas match exactly where markers are drawn
 //    private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
 //        DragGesture(minimumDistance: 0)
 //            .onEnded { value in
 //                // Don't handle taps during special modes or when sheets are showing
-//                guard !crosshairManager.isActive && !isMarkerPlacementMode && !showMarkerSheet && !isShowingSheet && !showClusterSheet else { return }
+//                guard !crosshairManager.isActive &&
+//                      !isMarkerPlacementMode &&
+//                      !showMarkerSheet &&
+//                      !isShowingSheet &&
+//                      !showClusterSheet else { return }
 //                
 //                let location = value.location
-//                
-//                // Calculate current chart offsets for marker positioning
 //                let totalOffset = gestureState.panOffset.width
 //                let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
-//                let scaledHeight = geometry.size.height * gestureState.priceScale
 //                
-//                // Use same offset values as MarkerPositionCalculator for consistency
-//                let baseOffset: CGFloat = 75  // Must match MarkerPositionCalculator.baseOffset
-//                let stackOffset: CGFloat = 38  // Must match MarkerPositionCalculator.stackOffset
-//                let maxBeforeCluster = 3       // Must match MarkerPositionCalculator.maxBeforeCluster
+//                // Use the UNIFIED hit detection from ChartMarkerSystem
+//                // This uses the exact same position calculation as drawing
+//                let result = ChartMarkerSystem.findMarkerAtLocation(
+//                    location,
+//                    markers: markerManager.filteredMarkers,
+//                    candles: chartData.candles,
+//                    chartSize: geometry.size,
+//                    priceRange: chartData.priceRange,
+//                    priceScale: gestureState.priceScale,
+//                    verticalOffset: totalVerticalOffset,
+//                    totalCandleWidth: totalCandleWidth,
+//                    actualCandleWidth: actualCandleWidth,
+//                    totalOffset: totalOffset,
+//                    expandedClusterIndex: markerManager.expandedClusterCandleIndex
+//                )
 //                
-//                // Group markers by candle (same logic as drawing code)
-//                let visibleMarkers = markerManager.filteredMarkers.filter { $0.isVisible }
-//                let groupedMarkers = Dictionary(grouping: visibleMarkers) { $0.candleIndex }
-//                
-//                // Check each candle's markers
-//                for (candleIndex, markersAtCandle) in groupedMarkers {
-//                    guard candleIndex >= 0 && candleIndex < chartData.candles.count else { continue }
+//                if result.isCluster, let candleIndex = result.clusterCandleIndex {
+//                    // Tapped on cluster indicator
+//                    clusterCandleIndex = candleIndex
+//                    showClusterSheet = true
+//                } else if let marker = result.marker {
+//                    // Tapped on individual marker
+//                    markerHaptic.impactOccurred()
 //                    
-//                    let candle = chartData.candles[candleIndex]
-//                    let centerX = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
-//                    
-//                    // Calculate candle high/low Y positions (same formula as drawing)
-//                    let candleHighY = geometry.size.height -
-//                        (CGFloat(candle.high - chartData.priceRange.min) /
-//                         CGFloat(chartData.priceRange.max - chartData.priceRange.min)) *
-//                        scaledHeight - totalVerticalOffset
-//                    let candleLowY = geometry.size.height -
-//                        (CGFloat(candle.low - chartData.priceRange.min) /
-//                         CGFloat(chartData.priceRange.max - chartData.priceRange.min)) *
-//                        scaledHeight - totalVerticalOffset
-//                    
-//                    // Check if this candle has a cluster (>3 markers)
-//                    let isCluster = markersAtCandle.count > maxBeforeCluster
-//                    
-//                    if isCluster {
-//                        // Check tap on cluster indicator (positioned above candle high)
-//                        let clusterY = candleHighY - baseOffset
-//                        let distance = hypot(location.x - centerX, location.y - clusterY)
-//                        
-//                        if distance <= 25 {
-//                            // Tapped on cluster - show cluster expansion sheet
-//                            clusterCandleIndex = candleIndex
-//                            showClusterSheet = true
-//                            return
-//                        }
-//                    } else {
-//                        // Check individual markers with proper stacking positions
-//                        // Sort by creation time to match drawing order
-//                        let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-//                        
-//                        // Check in reverse order so top-most (most recently drawn) markers are found first
-//                        for (index, marker) in sorted.enumerated().reversed() {
-//                            // Calculate stacking position (same logic as ChartMarkerSystem.drawMarkers)
-//                            // For 2-3 markers, odd indices go below the candle
-//                            let shouldBeBelow = sorted.count >= 2 && sorted.count <= maxBeforeCluster && index % 2 == 1
-//                            
-//                            let markerY: CGFloat
-//                            if shouldBeBelow {
-//                                // Position below candle low
-//                                let sameSideIndex = index / 2  // Every other marker on same side
-//                                markerY = candleLowY + baseOffset + CGFloat(sameSideIndex) * stackOffset
-//                            } else {
-//                                // Position above candle high
-//                                let sameSideIndex = index / 2  // Every other marker on same side
-//                                markerY = candleHighY - baseOffset - CGFloat(sameSideIndex) * stackOffset
-//                            }
-//                            
-//                            // Check tap distance
-//                            let distance = hypot(location.x - centerX, location.y - markerY)
-//                            
-//                            // Use slightly smaller hit radius (20) to prevent overlap issues with stacked markers
-//                            if distance <= 20 {
-//                                markerManager.selectedMarker = marker
-//                                return
-//                            }
-//                        }
+//                    // Trigger visual feedback animation
+//                    tappedMarkerId = marker.id
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+//                        tappedMarkerId = nil
 //                    }
+//                    
+//                    // Show marker detail sheet
+//                    markerManager.selectedMarker = marker
 //                }
 //            }
 //    }
@@ -4045,7 +4060,8 @@ struct TradingChartView: View {
 //            verticalOffset: totalVerticalOffset,
 //            totalCandleWidth: totalCandleWidth,
 //            actualCandleWidth: actualCandleWidth,
-//            totalOffset: totalOffset
+//            totalOffset: totalOffset,
+//            tappedMarkerId: tappedMarkerId  // For tap animation
 //        )
 //    }
 //    
@@ -4342,6 +4358,14 @@ struct TradingChartView: View {
 //        }
 //    }
 //}
+//
+//
+//
+//
+//
+//
+//
+//
 //
 //
 //

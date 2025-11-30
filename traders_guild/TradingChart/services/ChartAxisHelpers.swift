@@ -467,7 +467,7 @@ struct AxisConfiguration {
     /// X-axis settings
     struct TimeAxis {
         var showLabels: Bool = true
-        var labelHeight: CGFloat = 20
+        var labelHeight: CGFloat = 30
         var labelFont: Font = .system(size: 10)
         var labelColor: Color = .gray
         var gridColor: Color = .gray.opacity(0.2)
