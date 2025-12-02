@@ -2,14 +2,15 @@
 //  ChartMarkerSystem.swift
 //  traders_guild
 //
-//  COMPREHENSIVE FIX v5 - Addresses ALL issues:
-//  1. MarkerCreationSheet now passes candles for proper positioning
-//  2. Hit detection uses stored positions (shared calculation)
-//  3. Increased stack offsets to prevent name overlap
-//  4. Connection lines stop at marker edges
-//  5. Better peak/valley detection
-//
-//  NOTE: ChartMarker and MarkerType are defined in ChartModels.swift
+//  COMPREHENSIVE UPDATE v6 - Major refactor:
+//  1. Markers favor top placement (only below for severe troughs)
+//  2. Tighter stacking with reduced spacing
+//  3. Remove clustering - show all markers individually
+//  4. One type per candle restriction (offer like instead)
+//  5. Display SF Symbol icons instead of first letter
+//  6. Selected marker scales up and shows custom views (lines)
+//  7. Hide usernames when multiple markers on same candle
+//  8. Horizontal lines for Entry/Exit/Support/Resistance markers
 //
 
 import SwiftUI
@@ -21,7 +22,10 @@ class MarkerManager: ObservableObject {
     @Published var selectedMarker: ChartMarker?
     @Published var visibleTypes: Set<MarkerType> = Set(MarkerType.allCases)
     @Published var showOnlyMyMarkers: Bool = false
-    @Published var expandedClusterCandleIndex: Int? = nil
+    
+    /// Tracks if we should show a "like existing marker" prompt
+    @Published var duplicateMarkerToLike: ChartMarker?
+    @Published var showDuplicateAlert: Bool = false
     
     private let currentUserId: String
     private let currentGuildId: String
@@ -71,13 +75,29 @@ class MarkerManager: ObservableObject {
     
     func clearMarkers() {
         markers.removeAll()
-        expandedClusterCandleIndex = nil
+        selectedMarker = nil
+    }
+    
+    // MARK: - Duplicate Type Check
+    
+    /// Check if a marker of the same type already exists on this candle
+    /// Returns the existing marker if found
+    func existingMarkerOfType(_ type: MarkerType, atCandleIndex candleIndex: Int) -> ChartMarker? {
+        return markers.first { marker in
+            marker.candleIndex == candleIndex && marker.type == type
+        }
+    }
+    
+    /// Check if adding a marker is allowed (no duplicate types on same candle)
+    func canAddMarker(type: MarkerType, atCandleIndex candleIndex: Int) -> Bool {
+        return existingMarkerOfType(type, atCandleIndex: candleIndex) == nil
     }
     
     // MARK: - Marker CRUD
     
-    /// Add a new marker WITH proper positioning calculation
-    /// This is the PRIMARY method - always use this when candles are available
+    /// Add a new marker with proper positioning calculation
+    /// Returns true if added successfully, false if duplicate type exists
+    @discardableResult
     func addMarker(
         candleIndex: Int,
         timestamp: Date,
@@ -85,8 +105,44 @@ class MarkerManager: ObservableObject {
         type: MarkerType,
         username: String,
         note: String? = nil,
-        candles: [Candle]
-    ) {
+        candles: [Candle],
+        horizontalLinePrice: Double? = nil,
+        targetPrice: Double? = nil,
+        alertSeverity: MarkerAlertSeverity? = nil,
+        trendlineDirection: TrendlineDirection? = nil,
+        selectedIndicator: String? = nil,
+        chartPattern: ChartPattern? = nil,
+        selectedEmoji: String? = nil,
+        pollQuestion: String? = nil,
+        pollOptions: [PollOption]? = nil
+    ) -> Bool {
+        // Check for duplicate type on same candle
+        if let existingMarker = existingMarkerOfType(type, atCandleIndex: candleIndex) {
+            duplicateMarkerToLike = existingMarker
+            showDuplicateAlert = true
+            return false
+        }
+        
+        // Calculate line price based on marker type
+        var linePrice = horizontalLinePrice
+        if type.hasHorizontalLine && linePrice == nil && candleIndex >= 0 && candleIndex < candles.count {
+            let candle = candles[candleIndex]
+            switch type.lineSource {
+            case .candleOpen:
+                linePrice = candle.open
+            case .candleClose:
+                linePrice = candle.close
+            case .candleHigh:
+                linePrice = candle.high
+            case .candleLow:
+                linePrice = candle.low
+            case .custom:
+                linePrice = targetPrice
+            case .none:
+                break
+            }
+        }
+        
         var marker = ChartMarker(
             candleIndex: candleIndex,
             timestamp: timestamp,
@@ -95,10 +151,19 @@ class MarkerManager: ObservableObject {
             userId: currentUserId,
             username: username,
             note: note,
-            guildId: currentGuildId
+            guildId: currentGuildId,
+            horizontalLinePrice: linePrice,
+            targetPrice: targetPrice,
+            alertSeverity: alertSeverity,
+            trendlineDirection: trendlineDirection,
+            selectedIndicator: selectedIndicator,
+            chartPattern: chartPattern,
+            selectedEmoji: selectedEmoji,
+            pollQuestion: pollQuestion,
+            pollOptions: pollOptions
         )
         
-        // CRITICAL: Calculate proper position based on existing markers and candle data
+        // Calculate proper position
         let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
             marker: marker,
             existingMarkers: markers,
@@ -109,55 +174,8 @@ class MarkerManager: ObservableObject {
         marker.proximityTier = positioning.tier
         marker.stackIndex = positioning.stackIndex
         
-        print("📍 Adding marker at candle \(candleIndex): below=\(positioning.isBelow), tier=\(positioning.tier), stack=\(positioning.stackIndex)")
-        
         markers.append(marker)
-    }
-    
-    /// DEPRECATED: Backwards-compatible addMarker without candles
-    /// Only use when candles are truly unavailable - positioning will be suboptimal
-    func addMarker(
-        candleIndex: Int,
-        timestamp: Date,
-        price: Double,
-        type: MarkerType,
-        username: String,
-        note: String? = nil
-    ) {
-        // Try to get some positioning info from existing markers
-        let markersAtCandle = markers.filter { $0.candleIndex == candleIndex }
-        let markersAbove = markersAtCandle.filter { !$0.positionedBelow }
-        let markersBelow = markersAtCandle.filter { $0.positionedBelow }
-        
-        // Alternate: if more markers above, put below
-        let shouldBeBelow = markersAbove.count > markersBelow.count
-        let stackIndex = shouldBeBelow ? markersBelow.count : markersAbove.count
-        
-        // Check nearby markers for tier
-        let nearbyMarkers = markers.filter {
-            abs($0.candleIndex - candleIndex) <= MarkerPositionCalculator.proximityRange &&
-            $0.positionedBelow == shouldBeBelow
-        }
-        let usedTiers = Set(nearbyMarkers.map { $0.proximityTier })
-        var tier = 0
-        while usedTiers.contains(tier) {
-            tier += 1
-        }
-        
-        let marker = ChartMarker(
-            candleIndex: candleIndex,
-            timestamp: timestamp,
-            price: price,
-            type: type,
-            userId: currentUserId,
-            username: username,
-            note: note,
-            guildId: currentGuildId,
-            positionedBelow: shouldBeBelow,
-            proximityTier: tier,
-            stackIndex: stackIndex
-        )
-        markers.append(marker)
+        return true
     }
     
     func deleteMarker(id: UUID) {
@@ -175,6 +193,12 @@ class MarkerManager: ObservableObject {
         markers[index].likeCount += markers[index].isLikedByCurrentUser ? 1 : -1
     }
     
+    func addComment(markerId: UUID, text: String, username: String) {
+        guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
+        let comment = MarkerComment(userId: currentUserId, username: username, text: text)
+        markers[index].comments.append(comment)
+    }
+    
     var filteredMarkers: [ChartMarker] {
         markers.filter { marker in
             guard marker.isVisible else { return false }
@@ -190,35 +214,14 @@ class MarkerManager: ObservableObject {
         Dictionary(grouping: filteredMarkers) { $0.candleIndex }
     }
     
-    func isCluster(candleIndex: Int) -> Bool {
-        let group = markersGroupedByCandle()[candleIndex] ?? []
-        return group.count > MarkerDisplaySettings.shared.maxBeforeCluster && expandedClusterCandleIndex != candleIndex
+    /// Get count of markers at a specific candle
+    func markerCount(atCandleIndex candleIndex: Int) -> Int {
+        markersGroupedByCandle()[candleIndex]?.count ?? 0
     }
     
-    func displayMarkers(forCandleIndex candleIndex: Int) -> [ChartMarker] {
-        let group = markersGroupedByCandle()[candleIndex] ?? []
-        let maxBeforeCluster = MarkerDisplaySettings.shared.maxBeforeCluster
-        
-        if group.count <= maxBeforeCluster || expandedClusterCandleIndex == candleIndex {
-            return group
-        } else {
-            return []
-        }
-    }
-    
-    func toggleClusterExpansion(candleIndex: Int) {
-        if expandedClusterCandleIndex == candleIndex {
-            expandedClusterCandleIndex = nil
-        } else {
-            expandedClusterCandleIndex = candleIndex
-        }
-    }
-    
-    func clusterInfo(forCandleIndex candleIndex: Int) -> (count: Int, types: Set<MarkerType>)? {
-        let group = markersGroupedByCandle()[candleIndex] ?? []
-        let maxBeforeCluster = MarkerDisplaySettings.shared.maxBeforeCluster
-        guard group.count > maxBeforeCluster && expandedClusterCandleIndex != candleIndex else { return nil }
-        return (group.count, Set(group.map { $0.type }))
+    /// Check if we should hide usernames (more than 1 marker on candle)
+    func shouldHideUsername(forCandleIndex candleIndex: Int) -> Bool {
+        markerCount(atCandleIndex: candleIndex) > 1
     }
 }
 
@@ -231,12 +234,9 @@ class MarkerDisplaySettings: ObservableObject {
         didSet { UserDefaults.standard.set(baseOffset, forKey: "markerBaseOffset") }
     }
     
+    /// REDUCED stack offset for tighter stacking
     @Published var stackOffset: CGFloat {
         didSet { UserDefaults.standard.set(stackOffset, forKey: "markerStackOffset") }
-    }
-    
-    @Published var maxBeforeCluster: Int {
-        didSet { UserDefaults.standard.set(maxBeforeCluster, forKey: "markerMaxBeforeCluster") }
     }
     
     @Published var proximityTierOffset: CGFloat {
@@ -248,21 +248,19 @@ class MarkerDisplaySettings: ObservableObject {
     }
     
     private init() {
-        // SIGNIFICANTLY INCREASED offsets to prevent overlap
-        self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 95
-        // INCREASED from 40 to 55 to prevent name overlap
-        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 55
-        self.maxBeforeCluster = UserDefaults.standard.object(forKey: "markerMaxBeforeCluster") as? Int ?? 3
-        self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 40
-        self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 45
+        // Adjusted offsets for new stacking behavior
+        self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 70
+        // REDUCED from 55 to 28 for tighter stacking
+        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 28
+        self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 25
+        self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 40
     }
     
     func resetToDefaults() {
-        baseOffset = 95
-        stackOffset = 55
-        maxBeforeCluster = 3
-        proximityTierOffset = 40
-        placementExtraOffset = 45
+        baseOffset = 70
+        stackOffset = 28
+        proximityTierOffset = 25
+        placementExtraOffset = 40
     }
 }
 
@@ -273,9 +271,8 @@ struct MarkerPositionCalculator {
     static var settings: MarkerDisplaySettings { MarkerDisplaySettings.shared }
     static var baseOffset: CGFloat { settings.baseOffset }
     static var stackOffset: CGFloat { settings.stackOffset }
-    static var maxBeforeCluster: Int { settings.maxBeforeCluster }
-    static let proximityRange = 4  // Increased from 3
-    static let hitRadius: CGFloat = 30  // Increased for better tap detection
+    static let proximityRange = 3
+    static let hitRadius: CGFloat = 28
     
     static var placementOffset: CGFloat {
         settings.baseOffset + settings.placementExtraOffset
@@ -284,7 +281,6 @@ struct MarkerPositionCalculator {
     // MARK: - SHARED Position Calculation
     
     /// Calculate the screen position for a marker using its STORED properties
-    /// SINGLE SOURCE OF TRUTH - used by both drawing and hit detection
     static func computeMarkerScreenPosition(
         marker: ChartMarker,
         candleHighY: CGFloat,
@@ -310,7 +306,7 @@ struct MarkerPositionCalculator {
     }
     
     /// Calculate PREVIEW position for new marker placement
-    /// This determines where the preview marker should snap to
+    /// UPDATED: Now favors top placement by default
     static func calculatePreviewPosition(
         candleIndex: Int,
         existingMarkers: [ChartMarker],
@@ -319,42 +315,50 @@ struct MarkerPositionCalculator {
         candleLowY: CGFloat,
         centerX: CGFloat
     ) -> (position: CGPoint, isBelow: Bool) {
-        // Determine if new marker should be above or below
         let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
         
+        // NEW LOGIC: Default to ABOVE (false = not below)
+        // Only go below if:
+        // 1. There are already markers above and we need to alternate
+        // 2. It's a severe peak (lower candles on both sides)
+        
         let shouldBeBelow: Bool
+        
         if markersAtCandle.isEmpty {
-            // No existing markers - use peak/valley detection
-            shouldBeBelow = shouldPositionBelowUsingPeakValleyDetection(
-                candleIndex: candleIndex,
-                candles: candles
-            )
+            // No existing markers - check for severe peak first, otherwise default to above
+            let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+            let isSevereTrough = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: false)
             
-            // Also check nearby marker density
+            if isSeverePeak && !isSevereTrough {
+                // Severe peak - place below
+                shouldBeBelow = true
+            } else {
+                // Default to above (including severe troughs and neutral cases)
+                shouldBeBelow = false
+            }
+            
+            // Check nearby marker density and adjust if needed
             let nearbyMarkers = existingMarkers.filter {
                 abs($0.candleIndex - candleIndex) <= proximityRange
             }
             let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
             let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
             
-            // Override if one side is much more crowded
-            if neighborsAbove > neighborsBelow + 2 {
-                // Above is crowded, go below
+            // If above is very crowded, consider below
+            if neighborsAbove > neighborsBelow + 3 && !isSevereTrough {
                 let baseY = candleLowY + placementOffset
                 return (CGPoint(x: centerX, y: baseY), true)
-            } else if neighborsBelow > neighborsAbove + 2 {
-                // Below is crowded, go above
-                let baseY = candleHighY - placementOffset
-                return (CGPoint(x: centerX, y: baseY), false)
             }
         } else {
-            // Has existing markers - alternate
-            let aboveCount = markersAtCandle.filter { !$0.positionedBelow }.count
-            let belowCount = markersAtCandle.filter { $0.positionedBelow }.count
-            shouldBeBelow = aboveCount > belowCount
+            // FIXED: Has existing markers - place on SAME side as existing ones
+            // This ensures all markers stack together instead of alternating
+            if let firstMarker = markersAtCandle.first {
+                shouldBeBelow = firstMarker.positionedBelow
+            } else {
+                shouldBeBelow = false // Fallback - should never reach here
+            }
         }
         
-        // Calculate position
         let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
         let baseY: CGFloat
         let stackDirection: CGFloat
@@ -386,59 +390,64 @@ struct MarkerPositionCalculator {
         
         var usedAboveTiers: [Int: Set<Int>] = [:]
         var usedBelowTiers: [Int: Set<Int>] = [:]
-        var positionDecisions: [Int: Bool] = [:]
         
         for candleIndex in sortedIndices {
             guard let markersAtCandle = grouped[candleIndex] else { continue }
             
             let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-            let useSingleMarkerLogic = sorted.count == 1
             
-            for (stackIndex, marker) in sorted.enumerated() {
+            // Track markers placed above and below for this candle
+            var aboveStackIndex = 0
+            var belowStackIndex = 0
+            
+            for marker in sorted {
                 guard let resultIndex = result.firstIndex(where: { $0.id == marker.id }) else { continue }
                 
+                // NEW: Favor above placement
+                // First marker always goes above unless severe peak
+                // Subsequent markers alternate
                 let shouldBeBelow: Bool
                 
-                if useSingleMarkerLogic {
-                    let preferBelow = shouldPositionBelowUsingPeakValleyDetection(
-                        candleIndex: candleIndex,
-                        candles: candles
-                    )
-                    
-                    let leftIsAbove = positionDecisions[candleIndex - 1] == true
-                    let rightIsAbove = positionDecisions[candleIndex + 1] == true
-                    let leftIsBelow = positionDecisions[candleIndex - 1] == false
-                    let rightIsBelow = positionDecisions[candleIndex + 1] == false
-                    
-                    if leftIsAbove || rightIsAbove {
-                        shouldBeBelow = true
-                    } else if leftIsBelow || rightIsBelow {
+                // FIXED: All markers on same candle should be on the same side
+                // First marker determines side, all others follow
+                if sorted.count == 1 {
+                    // Single marker - check for severe peak
+                    let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+                    shouldBeBelow = isSeverePeak
+                } else {
+                    // Multiple markers - ALL go on same side
+                    // First marker (aboveStackIndex == 0 && belowStackIndex == 0) determines side
+                    if aboveStackIndex == 0 && belowStackIndex == 0 {
+                        let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+                        shouldBeBelow = isSeverePeak
+                    } else if aboveStackIndex > 0 {
+                        // We already have markers above, keep stacking above
                         shouldBeBelow = false
                     } else {
-                        shouldBeBelow = preferBelow
+                        // We already have markers below, keep stacking below
+                        shouldBeBelow = true
                     }
-                    
-                    positionDecisions[candleIndex] = !shouldBeBelow
+                }
+                
+                let stackIndex: Int
+                if shouldBeBelow {
+                    stackIndex = belowStackIndex
+                    belowStackIndex += 1
                 } else {
-                    shouldBeBelow = stackIndex % 2 == 1
+                    stackIndex = aboveStackIndex
+                    aboveStackIndex += 1
                 }
                 
                 let tier: Int
                 if shouldBeBelow {
-                    tier = calculateProximityTierInternal(
-                        candleIndex: candleIndex,
-                        usedTiers: &usedBelowTiers
-                    )
+                    tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedBelowTiers)
                 } else {
-                    tier = calculateProximityTierInternal(
-                        candleIndex: candleIndex,
-                        usedTiers: &usedAboveTiers
-                    )
+                    tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedAboveTiers)
                 }
                 
                 result[resultIndex].positionedBelow = shouldBeBelow
                 result[resultIndex].proximityTier = tier
-                result[resultIndex].stackIndex = stackIndex / 2
+                result[resultIndex].stackIndex = stackIndex
             }
         }
         
@@ -456,11 +465,9 @@ struct MarkerPositionCalculator {
         let shouldBeBelow: Bool
         
         if markersAtCandle.isEmpty {
-            // Use peak/valley detection
-            shouldBeBelow = shouldPositionBelowUsingPeakValleyDetection(
-                candleIndex: candleIndex,
-                candles: candles
-            )
+            // NEW: Default to above unless severe peak
+            let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+            shouldBeBelow = isSeverePeak
             
             // Check nearby marker density
             let nearbyMarkers = existingMarkers.filter {
@@ -469,8 +476,8 @@ struct MarkerPositionCalculator {
             let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
             let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
             
-            if neighborsAbove > neighborsBelow + 2 {
-                // Override: above is crowded, go below
+            if neighborsAbove > neighborsBelow + 3 {
+                // Above is crowded, go below
                 let sameSideNearby = existingMarkers.filter {
                     abs($0.candleIndex - candleIndex) <= proximityRange && $0.positionedBelow
                 }
@@ -478,27 +485,18 @@ struct MarkerPositionCalculator {
                 var tier = 0
                 while usedTiers.contains(tier) { tier += 1 }
                 return (isBelow: true, tier: tier, stackIndex: 0)
-            } else if neighborsBelow > neighborsAbove + 2 {
-                // Override: below is crowded, go above
-                let sameSideNearby = existingMarkers.filter {
-                    abs($0.candleIndex - candleIndex) <= proximityRange && !$0.positionedBelow
-                }
-                let usedTiers = Set(sameSideNearby.map { $0.proximityTier })
-                var tier = 0
-                while usedTiers.contains(tier) { tier += 1 }
-                return (isBelow: false, tier: tier, stackIndex: 0)
             }
         } else {
-            // Alternate with existing markers
-            let aboveCount = markersAtCandle.filter { !$0.positionedBelow }.count
-            let belowCount = markersAtCandle.filter { $0.positionedBelow }.count
-            shouldBeBelow = aboveCount > belowCount
+            // FIXED: Has existing markers - place on SAME side as existing ones
+            if let firstMarker = markersAtCandle.first {
+                shouldBeBelow = firstMarker.positionedBelow
+            } else {
+                shouldBeBelow = false
+            }
         }
         
-        // Calculate stack index (how many markers on same side of this candle)
         let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
         
-        // Find unused tier
         let sameSideNearby = existingMarkers.filter {
             abs($0.candleIndex - candleIndex) <= proximityRange &&
             $0.positionedBelow == shouldBeBelow
@@ -513,59 +511,28 @@ struct MarkerPositionCalculator {
         return (isBelow: shouldBeBelow, tier: tier, stackIndex: stackIndex)
     }
     
-    // MARK: - Peak/Valley Detection
+    // MARK: - Severe Peak/Trough Detection
     
-    private static func shouldPositionBelowUsingPeakValleyDetection(
+    /// Check if a candle is a severe peak (for placing below) or severe trough (for placing above)
+    /// A severe peak/trough requires BOTH neighbors to be lower/higher
+    private static func isSeverePeakOrTrough(
         candleIndex: Int,
-        candles: [Candle]
+        candles: [Candle],
+        checkPeak: Bool
     ) -> Bool {
-        guard candleIndex >= 0 && candleIndex < candles.count else { return false }
+        guard candleIndex > 0 && candleIndex < candles.count - 1 else { return false }
         
-        let windowSize = 5
         let candle = candles[candleIndex]
+        let leftCandle = candles[candleIndex - 1]
+        let rightCandle = candles[candleIndex + 1]
         
-        var lowerHighsCount = 0
-        var higherLowsCount = 0
-        
-        for delta in 1...windowSize {
-            if candleIndex - delta >= 0 {
-                let leftCandle = candles[candleIndex - delta]
-                if leftCandle.high < candle.high { lowerHighsCount += 1 }
-                if leftCandle.low > candle.low { higherLowsCount += 1 }
-            }
-            
-            if candleIndex + delta < candles.count {
-                let rightCandle = candles[candleIndex + delta]
-                if rightCandle.high < candle.high { lowerHighsCount += 1 }
-                if rightCandle.low > candle.low { higherLowsCount += 1 }
-            }
-        }
-        
-        // At a peak (most neighbors have lower highs) -> position ABOVE (return false)
-        // At a valley (most neighbors have higher lows) -> position BELOW (return true)
-        let isPeak = lowerHighsCount >= windowSize
-        let isValley = higherLowsCount >= windowSize
-        
-        if isPeak && !isValley {
-            return false // Position above at peaks
-        } else if isValley && !isPeak {
-            return true // Position below at valleys
+        if checkPeak {
+            // Severe peak: candle high is above BOTH neighbors' highs
+            return candle.high > leftCandle.high && candle.high > rightCandle.high
         } else {
-            // Neutral - use simple trend
-            if candleIndex > 0 {
-                return candle.close < candles[candleIndex - 1].close
-            }
-            return false
+            // Severe trough: candle low is below BOTH neighbors' lows
+            return candle.low < leftCandle.low && candle.low < rightCandle.low
         }
-    }
-    
-    static func calculateProximityTier(
-        candleIndex: Int,
-        allMarkers: [ChartMarker],
-        isBelow: Bool,
-        usedTiers: inout [Int: Set<Int>]
-    ) -> Int {
-        return calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedTiers)
     }
     
     static func offsetForTier(_ tier: Int) -> CGFloat {
@@ -616,13 +583,50 @@ struct ChartMarkerSystem {
         totalCandleWidth: CGFloat,
         actualCandleWidth: CGFloat,
         totalOffset: CGFloat,
-        expandedClusterIndex: Int? = nil,
         markerManager: MarkerManager? = nil,
-        tappedMarkerId: UUID? = nil
+        selectedMarkerId: UUID? = nil,
+        chartData: ChartDataManager? = nil
     ) {
         let scaledHeight = chartSize.height * priceScale
         let allVisibleMarkers = markers.filter { $0.isVisible }
         let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
+        
+        // Draw horizontal lines for selected marker first (behind markers)
+        if let selectedId = selectedMarkerId,
+           let selectedMarker = markers.first(where: { $0.id == selectedId }),
+           selectedMarker.type.hasHorizontalLine,
+           selectedMarker.candleIndex >= 0 && selectedMarker.candleIndex < candles.count {
+            let candle = candles[selectedMarker.candleIndex]
+            if let linePrice = selectedMarker.getLinePrice(candle: candle) {
+                drawHorizontalLine(
+                    context: context,
+                    price: linePrice,
+                    chartSize: chartSize,
+                    priceRange: priceRange,
+                    priceScale: priceScale,
+                    verticalOffset: verticalOffset,
+                    color: selectedMarker.type.color,
+                    markerX: CGFloat(selectedMarker.candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2,
+                    chartData: chartData
+                )
+            }
+            
+            // Draw target price line for prediction markers
+            if selectedMarker.type == .predictionTarget, let targetPrice = selectedMarker.targetPrice {
+                drawHorizontalLine(
+                    context: context,
+                    price: targetPrice,
+                    chartSize: chartSize,
+                    priceRange: priceRange,
+                    priceScale: priceScale,
+                    verticalOffset: verticalOffset,
+                    color: .red.opacity(0.8),
+                    markerX: CGFloat(selectedMarker.candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2,
+                    isDashed: true,
+                    chartData: chartData
+                )
+            }
+        }
         
         for (candleIndex, markersAtCandle) in groupedMarkers {
             guard candleIndex >= 0 && candleIndex < candles.count else { continue }
@@ -638,59 +642,95 @@ struct ChartMarkerSystem {
             let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
             let centerX = x + actualCandleWidth / 2
             
-            let isCluster = markersAtCandle.count > MarkerPositionCalculator.maxBeforeCluster && expandedClusterIndex != candleIndex
+            // No clustering - show all markers
+            let sortedMarkers = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+            let hideUsernames = markersAtCandle.count > 1
             
-            if isCluster {
-                let typeCounts = Dictionary(grouping: markersAtCandle, by: { $0.type }).mapValues { $0.count }
-                let dominantType = typeCounts.max { a, b in
-                    if a.value == b.value {
-                        return a.key.rawValue > b.key.rawValue
-                    }
-                    return a.value < b.value
-                }?.key
-                let primaryColor = dominantType?.color ?? .blue
-                
-                drawClusterIndicator(
-                    context: context,
-                    position: CGPoint(x: centerX, y: candleHighY - MarkerPositionCalculator.baseOffset),
-                    candleHighPoint: CGPoint(x: centerX, y: candleHighY),
-                    count: markersAtCandle.count,
-                    primaryColor: primaryColor
+            var markerPositions: [(marker: ChartMarker, position: CGPoint)] = []
+            for marker in sortedMarkers {
+                let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+                    marker: marker,
+                    candleHighY: candleHighY,
+                    candleLowY: candleLowY,
+                    centerX: centerX
                 )
-            } else {
-                let sortedMarkers = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+                markerPositions.append((marker, position))
+            }
+            
+            let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
+            let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
+            
+            drawStackedConnectionLines(context: context, markers: aboveMarkers, anchorY: candleHighY, centerX: centerX, isBelow: false)
+            drawStackedConnectionLines(context: context, markers: belowMarkers, anchorY: candleLowY, centerX: centerX, isBelow: true)
+            
+            for (marker, position) in markerPositions {
+                let isSelected = selectedMarkerId == marker.id
+                let scale: CGFloat = isSelected ? 1.3 : 1.0
                 
-                var markerPositions: [(marker: ChartMarker, position: CGPoint)] = []
-                for marker in sortedMarkers {
-                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
-                        marker: marker,
-                        candleHighY: candleHighY,
-                        candleLowY: candleLowY,
-                        centerX: centerX
-                    )
-                    markerPositions.append((marker, position))
-                }
-                
-                let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
-                let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
-                
-                drawStackedConnectionLines(context: context, markers: aboveMarkers, anchorY: candleHighY, centerX: centerX, isBelow: false)
-                drawStackedConnectionLines(context: context, markers: belowMarkers, anchorY: candleLowY, centerX: centerX, isBelow: true)
-                
-                for (marker, position) in markerPositions {
-                    let isAnimated = tappedMarkerId == marker.id
-                    let scale: CGFloat = isAnimated ? 1.3 : 1.0
-                    
-                    drawSingleMarker(
-                        context: context,
-                        marker: marker,
-                        position: position,
-                        isBelow: marker.positionedBelow,
-                        scale: scale
-                    )
-                }
+                drawSingleMarker(
+                    context: context,
+                    marker: marker,
+                    position: position,
+                    isBelow: marker.positionedBelow,
+                    scale: scale,
+                    hideUsername: hideUsernames,
+                    isSelected: isSelected
+                )
             }
         }
+    }
+    
+    private static func drawHorizontalLine(
+        context: GraphicsContext,
+        price: Double,
+        chartSize: CGSize,
+        priceRange: (min: Double, max: Double),
+        priceScale: CGFloat,
+        verticalOffset: CGFloat,
+        color: Color,
+        markerX: CGFloat,
+        isDashed: Bool = false,
+        chartData: ChartDataManager? = nil
+    ) {
+        let scaledHeight = chartSize.height * priceScale
+        let y = chartSize.height - (CGFloat(price - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+        
+        // Draw line from left edge, stopping before Y-axis (matching PriceIndicatorView)
+        let lineEndX = chartSize.width - 60
+        let linePath = Path { path in
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: lineEndX, y: y))
+        }
+        
+        let strokeStyle = isDashed ?
+            StrokeStyle(lineWidth: 1.5, dash: [6, 4]) :
+            StrokeStyle(lineWidth: 2)
+        
+        context.stroke(linePath, with: .color(color.opacity(0.6)), style: strokeStyle)
+        
+        // Y-axis price label (matching PriceIndicatorView style)
+        let labelX = chartSize.width - 35
+        let labelRect = CGRect(
+            x: labelX - 35,
+            y: y - 11,
+            width: 70,
+            height: 22
+        )
+        
+        // Draw label background with marker color
+        let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
+        context.fill(roundedPath, with: .color(color))
+        
+        // Format price using symbol-aware formatting if chartData available
+        let priceText = chartData?.formatPrice(price) ?? String(format: "%.5f", price)
+        
+        // Draw price text (white text on colored background)
+        context.draw(
+            Text(priceText)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white),
+            at: CGPoint(x: labelX, y: y)
+        )
     }
     
     private static func drawStackedConnectionLines(
@@ -702,7 +742,7 @@ struct ChartMarkerSystem {
     ) {
         guard !markers.isEmpty else { return }
         
-        let baseRadius: CGFloat = 16
+        let baseRadius: CGFloat = 14
         var previousY = anchorY
         
         for (marker, position) in markers {
@@ -715,8 +755,8 @@ struct ChartMarkerSystem {
             
             context.stroke(
                 linePath,
-                with: .color(marker.type.color.opacity(0.7)),
-                style: StrokeStyle(lineWidth: 2, dash: [4, 3])
+                with: .color(marker.type.color.opacity(0.6)),
+                style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
             )
             
             previousY = isBelow ? position.y + baseRadius : position.y - baseRadius
@@ -728,19 +768,32 @@ struct ChartMarkerSystem {
         marker: ChartMarker,
         position: CGPoint,
         isBelow: Bool,
-        scale: CGFloat = 1.0
+        scale: CGFloat = 1.0,
+        hideUsername: Bool = false,
+        isSelected: Bool = false
     ) {
-        let baseRadius: CGFloat = 16
+        let baseRadius: CGFloat = 14
         let scaledRadius = baseRadius * scale
+        
+        // Selection glow effect
+        if isSelected {
+            let glowRect = CGRect(
+                x: position.x - scaledRadius - 4,
+                y: position.y - scaledRadius - 4,
+                width: (scaledRadius + 4) * 2,
+                height: (scaledRadius + 4) * 2
+            )
+            context.fill(Path(ellipseIn: glowRect), with: .color(marker.type.color.opacity(0.3)))
+        }
         
         // Shadow
         let shadowRect = CGRect(
-            x: position.x - scaledRadius + 2,
-            y: position.y - scaledRadius + 2,
+            x: position.x - scaledRadius + 1.5,
+            y: position.y - scaledRadius + 1.5,
             width: scaledRadius * 2,
             height: scaledRadius * 2
         )
-        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.4)))
+        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.35)))
         
         // Main circle
         let circleRect = CGRect(
@@ -749,89 +802,109 @@ struct ChartMarkerSystem {
             width: scaledRadius * 2,
             height: scaledRadius * 2
         )
-        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.9)))
-        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: 3 * scale)
+        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.95)))
+        
+        let borderWidth: CGFloat = isSelected ? 3.5 : 2.5
+        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color.opacity(0.6)), lineWidth: borderWidth * scale)
         
         // Inner colored circle
-        let iconRadius: CGFloat = 10 * scale
+        let iconRadius: CGFloat = 9 * scale
         let iconCircle = CGRect(
             x: position.x - iconRadius,
             y: position.y - iconRadius,
             width: iconRadius * 2,
             height: iconRadius * 2
         )
-        context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color))
+        context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color.opacity(0.5)))
+        
+        // Draw SF Symbol icon instead of first letter
+        // For emoji markers, show the emoji
+        let displayText: String
+        if marker.type == .emoji, let emoji = marker.selectedEmoji {
+            displayText = emoji
+        } else {
+            // Use a unicode character that resembles the SF Symbol
+            // (Canvas can't render SF Symbols directly, so we use similar characters)
+            displayText = getIconCharacter(for: marker.type)
+        }
         
         context.draw(
-            Text(String(marker.type.rawValue.prefix(1)))
-                .font(.system(size: 12 * scale, weight: .bold))
+            Text(displayText)
+                .font(.system(size: 10 * scale, weight: .heavy))
                 .foregroundColor(.white),
             at: position
         )
         
         // Like badge
         if marker.likeCount > 0 {
-            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 4) : (scaledRadius - 12)
+            let badgeOffset: CGFloat = (scaledRadius - 11)
             let likeCircleRect = CGRect(
-                x: position.x + 9,
+                x: position.x + 7,
                 y: position.y + badgeOffset,
-                width: 14,
-                height: 14
+                width: 12,
+                height: 12
             )
             context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
-            
+            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.8)
             context.draw(
                 Text("\(marker.likeCount)")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white),
-                at: CGPoint(x: position.x + 16, y: position.y + badgeOffset + 7)
+                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
             )
         }
+//        if marker.likeCount > 0 {
+//            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 2) : (scaledRadius - 12)
+//            let likeCircleRect = CGRect(
+//                x: position.x + 6,
+//                y: position.y + badgeOffset,
+//                width: 14,
+//                height: 14
+//            )
+//            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
+//            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.5)
+//            context.draw(
+//                Text("\(marker.likeCount)")
+//                    .font(.system(size: 8, weight: .bold))
+//                    .foregroundColor(.white),
+//                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
+//            )
+//        }
         
-        // Username label - positioned further to avoid overlap
-        let labelY = isBelow ? position.y + scaledRadius + 12 : position.y - scaledRadius - 12
-        context.draw(
-            Text(marker.username)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.white.opacity(0.9)),
-            at: CGPoint(x: position.x, y: labelY)
-        )
+        // Username label - only show if not hidden
+        if !hideUsername {
+            let labelY = isBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
+            context.draw(
+                Text(marker.username)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(.white.opacity(0.85)),
+                at: CGPoint(x: position.x, y: labelY)
+            )
+        }
     }
     
-    private static func drawClusterIndicator(
-        context: GraphicsContext,
-        position: CGPoint,
-        candleHighPoint: CGPoint,
-        count: Int,
-        primaryColor: Color
-    ) {
-        let connectionPath = Path { path in
-            path.move(to: CGPoint(x: position.x, y: position.y + 22))
-            path.addLine(to: candleHighPoint)
+    /// Get a unicode character that represents the marker type
+    /// (Since Canvas can't render SF Symbols directly)
+    private static func getIconCharacter(for type: MarkerType) -> String {
+        switch type {
+            case .note: return "✎"
+            case .question: return "?"
+            case .alert: return "!"
+            case .entry: return "↑"
+            case .exit: return "↓"
+            case .stopLoss: return "✕"      // ADD THIS
+            case .takeProfit: return "✓"    // ADD THIS
+            case .support: return "S"
+            case .resistance: return "R"
+            case .indicator: return "★"
+            case .trendline: return "⤴"
+            case .pattern: return "◇"
+            case .volumeSpike: return "⚡"
+            case .predictionTarget: return "⊛"
+            case .emoji: return "☺"
+            case .poll: return "✓"
+            case .personal: return "●"
         }
-        context.stroke(
-            connectionPath,
-            with: .color(.white.opacity(0.5)),
-            style: StrokeStyle(lineWidth: 2, dash: [4, 4])
-        )
-        
-        let clusterRadius: CGFloat = 22
-        let circleRect = CGRect(
-            x: position.x - clusterRadius,
-            y: position.y - clusterRadius,
-            width: clusterRadius * 2,
-            height: clusterRadius * 2
-        )
-        
-        context.fill(Path(ellipseIn: circleRect), with: .color(primaryColor.opacity(0.9)))
-        context.stroke(Path(ellipseIn: circleRect), with: .color(.white), lineWidth: 2)
-        
-        context.draw(
-            Text("\(count)")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white),
-            at: position
-        )
     }
     
     // MARK: - Hit Detection
@@ -846,9 +919,8 @@ struct ChartMarkerSystem {
         verticalOffset: CGFloat,
         totalCandleWidth: CGFloat,
         actualCandleWidth: CGFloat,
-        totalOffset: CGFloat,
-        expandedClusterIndex: Int? = nil
-    ) -> (marker: ChartMarker?, isCluster: Bool, clusterCandleIndex: Int?) {
+        totalOffset: CGFloat
+    ) -> ChartMarker? {
         let scaledHeight = chartSize.height * priceScale
         let allVisibleMarkers = markers.filter { $0.isVisible }
         let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
@@ -867,38 +939,28 @@ struct ChartMarkerSystem {
             let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
             let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
             
-            let isCluster = markersAtCandle.count > MarkerPositionCalculator.maxBeforeCluster && expandedClusterIndex != candleIndex
+            let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
             
-            if isCluster {
-                let clusterY = candleHighY - MarkerPositionCalculator.baseOffset
-                let distance = hypot(location.x - centerX, location.y - clusterY)
-                if distance <= 28 {
-                    return (nil, true, candleIndex)
-                }
-            } else {
-                let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+            for marker in sorted.reversed() {
+                let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+                    marker: marker,
+                    candleHighY: candleHighY,
+                    candleLowY: candleLowY,
+                    centerX: centerX
+                )
                 
-                for marker in sorted.reversed() {
-                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
-                        marker: marker,
-                        candleHighY: candleHighY,
-                        candleLowY: candleLowY,
-                        centerX: centerX
-                    )
-                    
-                    let distance = hypot(location.x - position.x, location.y - position.y)
-                    if distance <= hitRadius {
-                        return (marker, false, nil)
-                    }
+                let distance = hypot(location.x - position.x, location.y - position.y)
+                if distance <= hitRadius {
+                    return marker
                 }
             }
         }
         
-        return (nil, false, nil)
+        return nil
     }
 }
 
-// MARK: - Marker Creation Sheet (FIXED - now passes candles)
+// MARK: - Marker Creation Sheet
 
 struct MarkerCreationSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -908,31 +970,32 @@ struct MarkerCreationSheet: View {
     let price: Double
     let username: String
     let chartData: ChartDataManager
-    /// CRITICAL: Must pass candles for proper positioning
     let candles: [Candle]
+    let markerType: MarkerType
     
-    @State private var selectedType: MarkerType = .entry
     @State private var note: String = ""
+    
+    // Type-specific state
+    @State private var alertSeverity: MarkerAlertSeverity = .moderate
+    @State private var trendlineDirection: TrendlineDirection = .up
+    @State private var selectedIndicator: String = "RSI"
+    @State private var chartPattern: ChartPattern = .doubleTop
+    @State private var selectedEmoji: String = "🎯"
+    @State private var pollQuestion: String = ""
+    @State private var pollOption1: String = ""
+    @State private var pollOption2: String = ""
+    @State private var targetPrice: String = ""
     
     var body: some View {
         NavigationView {
             Form {
-                Section("Marker Type") {
-                    ForEach(MarkerType.allCases, id: \.rawValue) { type in
-                        Button(action: { selectedType = type }) {
-                            HStack {
-                                Image(systemName: type.icon)
-                                    .foregroundColor(type.color)
-                                    .frame(width: 30)
-                                Text(type.rawValue)
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                if selectedType == type {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(.blue)
-                                }
-                            }
-                        }
+                Section("Marker Info") {
+                    HStack {
+                        Image(systemName: markerType.icon)
+                            .foregroundColor(markerType.color)
+                            .frame(width: 30)
+                        Text(markerType.rawValue)
+                            .foregroundColor(.primary)
                     }
                 }
                 
@@ -951,12 +1014,15 @@ struct MarkerCreationSheet: View {
                     }
                 }
                 
+                // Type-specific options
+                typeSpecificOptions
+                
                 Section("Note (Optional)") {
                     TextEditor(text: $note)
                         .frame(minHeight: 80)
                 }
             }
-            .navigationTitle("Add Marker")
+            .navigationTitle("Add \(markerType.rawValue)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -964,24 +1030,230 @@ struct MarkerCreationSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        // FIXED: Now passes candles for proper positioning calculation
-                        markerManager.addMarker(
-                            candleIndex: candleIndex,
-                            timestamp: timestamp,
-                            price: price,
-                            type: selectedType,
-                            username: username,
-                            note: note.isEmpty ? nil : note,
-                            candles: candles
-                        )
-                        dismiss()
+                        addMarker()
                     }
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.25), .medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
+        .interactiveDismissDisabled(true)
+    }
+    
+    @ViewBuilder
+    private var typeSpecificOptions: some View {
+        switch markerType {
+        case .alert:
+            Section("Alert Severity") {
+                Picker("Severity", selection: $alertSeverity) {
+                    ForEach(MarkerAlertSeverity.allCases, id: \.self) { severity in
+                        HStack {
+                            Circle()
+                                .fill(severity.color)
+                                .frame(width: 12, height: 12)
+                            Text(severity.rawValue)
+                        }
+                        .tag(severity)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+            
+        case .trendline:
+            Section("Trend Direction") {
+                Picker("Direction", selection: $trendlineDirection) {
+                    ForEach(TrendlineDirection.allCases, id: \.self) { direction in
+                        Text(direction.rawValue).tag(direction)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+            
+        case .indicator:
+            Section("Indicator") {
+                Picker("Select Indicator", selection: $selectedIndicator) {
+                    Text("RSI").tag("RSI")
+                    Text("MACD").tag("MACD")
+                    Text("Moving Average").tag("MA")
+                    Text("Bollinger Bands").tag("BB")
+                    Text("Stochastic").tag("STOCH")
+                    Text("ATR").tag("ATR")
+                }
+                .pickerStyle(.menu)
+            }
+            
+        case .pattern:
+            Section("Chart Pattern") {
+                Picker("Pattern", selection: $chartPattern) {
+                    ForEach(ChartPattern.allCases, id: \.self) { pattern in
+                        Text(pattern.rawValue).tag(pattern)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+            
+        case .emoji:
+            Section("Select Emoji") {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                    ForEach(["🎯", "🚀", "💰", "⚠️", "📈", "📉", "💎", "🔥", "⭐", "💡", "🤔", "👀"], id: \.self) { emoji in
+                        Button {
+                            selectedEmoji = emoji
+                        } label: {
+                            Text(emoji)
+                                .font(.title)
+                                .padding(8)
+                                .background(selectedEmoji == emoji ? Color.blue.opacity(0.3) : Color.clear)
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.borderless)  // FIXED: Allows button taps in Form
+                    }
+                }
+            }
+            
+        case .poll:
+            Section("Poll Question") {
+                TextField("Question", text: $pollQuestion)
+            }
+            Section("Options") {
+                TextField("Option 1", text: $pollOption1)
+                TextField("Option 2", text: $pollOption2)
+            }
+            
+        case .predictionTarget:
+            Section("Target Price") {
+                TextField("Enter target price", text: $targetPrice)
+                    .keyboardType(.decimalPad)
+                Text("A horizontal line will be drawn at the target price")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        
+        // FIXED: Explicit handling for markers that show horizontal lines
+        case .entry:
+            Section("Entry Details") {
+                HStack {
+                    Text("Entry Price")
+                    Spacer()
+                    Text(chartData.formatPrice(price))
+                        .foregroundColor(.green)
+                        .fontWeight(.semibold)
+                }
+                Text("A horizontal line will be drawn at the candle close price")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+        case .exit:
+            Section("Exit Details") {
+                HStack {
+                    Text("Exit Price")
+                    Spacer()
+                    Text(chartData.formatPrice(price))
+                        .foregroundColor(.orange)
+                        .fontWeight(.semibold)
+                }
+                Text("A horizontal line will be drawn at the candle close price")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+        case .stopLoss:
+            Section("Stop Loss Details") {
+                HStack {
+                    Text("Stop Loss Price")
+                    Spacer()
+                    Text(chartData.formatPrice(price))
+                        .foregroundColor(.red)
+                        .fontWeight(.semibold)
+                }
+                Text("A horizontal line will be drawn at this price level")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+        case .takeProfit:
+            Section("Take Profit Details") {
+                HStack {
+                    Text("Take Profit Price")
+                    Spacer()
+                    Text(chartData.formatPrice(price))
+                        .foregroundColor(.blue)
+                        .fontWeight(.semibold)
+                }
+                Text("A horizontal line will be drawn at this price level")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+        case .support:
+            Section("Support Level") {
+                HStack {
+                    Text("Support Price")
+                    Spacer()
+                    if candleIndex >= 0 && candleIndex < candles.count {
+                        Text(chartData.formatPrice(candles[candleIndex].low))
+                            .foregroundColor(.purple)
+                            .fontWeight(.semibold)
+                    }
+                }
+                Text("A horizontal line will be drawn at the candle low")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+        case .resistance:
+            Section("Resistance Level") {
+                HStack {
+                    Text("Resistance Price")
+                    Spacer()
+                    if candleIndex >= 0 && candleIndex < candles.count {
+                        Text(chartData.formatPrice(candles[candleIndex].high))
+                            .foregroundColor(.pink)
+                            .fontWeight(.semibold)
+                    }
+                }
+                Text("A horizontal line will be drawn at the candle high")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        
+        // Simple markers that just need notes
+        case .note, .question, .volumeSpike, .personal:
+            EmptyView()  // These just use the standard Note section
+        }
+    }
+    
+    private func addMarker() {
+        var pollOptions: [PollOption]? = nil
+        if markerType == .poll && !pollOption1.isEmpty {
+            pollOptions = [
+                PollOption(text: pollOption1),
+                PollOption(text: pollOption2.isEmpty ? "Option 2" : pollOption2)
+            ]
+        }
+        
+        let target = Double(targetPrice)
+        
+        markerManager.addMarker(
+            candleIndex: candleIndex,
+            timestamp: timestamp,
+            price: price,
+            type: markerType,
+            username: username,
+            note: note.isEmpty ? nil : note,
+            candles: candles,
+            targetPrice: target,
+            alertSeverity: markerType == .alert ? alertSeverity : nil,
+            trendlineDirection: markerType == .trendline ? trendlineDirection : nil,
+            selectedIndicator: markerType == .indicator ? selectedIndicator : nil,
+            chartPattern: markerType == .pattern ? chartPattern : nil,
+            selectedEmoji: markerType == .emoji ? selectedEmoji : nil,
+            pollQuestion: markerType == .poll ? pollQuestion : nil,
+            pollOptions: pollOptions
+        )
+        
+        dismiss()
     }
 }
 
@@ -996,6 +1268,7 @@ struct MarkerDetailSheet: View {
     
     @State private var isEditing = false
     @State private var editedNote: String = ""
+    @State private var newComment: String = ""
     
     init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String) {
         self.markerManager = markerManager
@@ -1047,6 +1320,9 @@ struct MarkerDetailSheet: View {
                     }
                 }
                 
+                // Type-specific info
+                typeSpecificInfo
+                
                 if let note = marker.note, !note.isEmpty {
                     Section("Note") {
                         if isEditing {
@@ -1067,6 +1343,59 @@ struct MarkerDetailSheet: View {
                                 .foregroundColor(marker.isLikedByCurrentUser ? .red : .gray)
                             Text("\(marker.likeCount) likes")
                         }
+                    }
+                }
+                
+                // Comments section
+                Section("Comments") {
+                    ForEach(marker.comments) { comment in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(comment.username)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                Text(comment.createdAt, style: .relative)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Text(comment.text)
+                                .font(.subheadline)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    
+                    HStack {
+                        TextField("Add comment...", text: $newComment)
+                        Button {
+                            guard !newComment.isEmpty else { return }
+                            markerManager.addComment(markerId: marker.id, text: newComment, username: "You")
+                            newComment = ""
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+                
+                // Share/Save/Report buttons
+                Section {
+                    Button {
+                        // Share action
+                    } label: {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    
+                    Button {
+                        // Save action
+                    } label: {
+                        Label("Save", systemImage: "bookmark")
+                    }
+                    
+                    Button(role: .destructive) {
+                        // Report action
+                    } label: {
+                        Label("Report", systemImage: "flag")
                     }
                 }
                 
@@ -1099,99 +1428,149 @@ struct MarkerDetailSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.25), .medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
         .onAppear {
             editedNote = marker.note ?? ""
         }
     }
-}
-
-// MARK: - Cluster Expansion Sheet
-
-struct ClusterExpansionSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var markerManager: MarkerManager
-    let candleIndex: Int
-    let chartData: ChartDataManager
-    let onSelectMarker: (ChartMarker) -> Void
     
-    private var markersAtCandle: [ChartMarker] {
-        markerManager.filteredMarkers.filter { $0.candleIndex == candleIndex }
-    }
-    
-    var body: some View {
-        NavigationView {
-            List {
-                ForEach(markersAtCandle) { marker in
-                    Button(action: {
-                        dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            onSelectMarker(marker)
-                        }
-                    }) {
-                        HStack(spacing: 12) {
-                            Circle()
-                                .fill(marker.type.color)
-                                .frame(width: 32, height: 32)
-                                .overlay {
-                                    Image(systemName: marker.type.icon)
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.white)
-                                }
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(marker.type.rawValue)
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                
-                                Text("by \(marker.username)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            if marker.likeCount > 0 {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "heart.fill")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                    Text("\(marker.likeCount)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 4)
+    @ViewBuilder
+    private var typeSpecificInfo: some View {
+        switch marker.type {
+        case .alert:
+            if let severity = marker.alertSeverity {
+                Section("Alert Details") {
+                    HStack {
+                        Circle()
+                            .fill(severity.color)
+                            .frame(width: 12, height: 12)
+                        Text(severity.rawValue)
                     }
                 }
             }
-            .navigationTitle("\(markersAtCandle.count) Markers")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+            
+        case .trendline:
+            if let direction = marker.trendlineDirection {
+                Section("Trendline Direction") {
+                    Text(direction.rawValue)
                 }
             }
+            
+        case .indicator:
+            if let indicator = marker.selectedIndicator {
+                Section("Indicator") {
+                    Text(indicator)
+                }
+            }
+            
+        case .pattern:
+            if let pattern = marker.chartPattern {
+                Section("Chart Pattern") {
+                    Text(pattern.rawValue)
+                }
+            }
+            
+        case .predictionTarget:
+            if let target = marker.targetPrice {
+                Section("Prediction") {
+                    HStack {
+                        Text("Target Price")
+                        Spacer()
+                        Text(chartData.formatPrice(target))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+        case .poll:
+            if let question = marker.pollQuestion, let options = marker.pollOptions {
+                Section("Poll: \(question)") {
+                    ForEach(options) { option in
+                        HStack {
+                            Text(option.text)
+                            Spacer()
+                            Text("\(option.voteCount)")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            
+        default:
+            EmptyView()
         }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
     }
 }
 
+// MARK: - Temporary Marker Placement Indicator
 
-
-
-
-
-
+/// Shows a temporary price line indicator while placing a marker
+/// Matches the style of PriceIndicatorView for consistency
+struct MarkerPlacementPriceIndicator: View {
+    let price: Double
+    let markerType: MarkerType
+    let priceScale: CGFloat
+    let verticalOffset: CGFloat
+    let chartHeight: CGFloat
+    let priceRange: (min: Double, max: Double)
+    let chartData: ChartDataManager
+    
+    private var indicatorYPosition: CGFloat {
+        let normalizedPrice = (price - priceRange.min) / (priceRange.max - priceRange.min)
+        return chartHeight - (CGFloat(normalizedPrice) * chartHeight * priceScale) - verticalOffset
+    }
+    
+    private var isVisible: Bool {
+        indicatorYPosition >= 0 && indicatorYPosition <= chartHeight
+    }
+    
+    private var formattedPrice: String {
+        chartData.formatPrice(price)
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            if isVisible && price > 0 {
+                Canvas { context, size in
+                    let y = indicatorYPosition
+                    let lineEndX = size.width - 60
+                    
+                    // Draw horizontal dashed line
+                    let linePath = Path { path in
+                        path.move(to: CGPoint(x: 0, y: y))
+                        path.addLine(to: CGPoint(x: lineEndX, y: y))
+                    }
+                    context.stroke(
+                        linePath,
+                        with: .color(markerType.color.opacity(0.7)),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [5, 3])
+                    )
+                    
+                    // Draw price label background (colored by marker type)
+                    let labelX = size.width - 35
+                    let labelRect = CGRect(
+                        x: labelX - 35,
+                        y: y - 11,
+                        width: 70,
+                        height: 22
+                    )
+                    let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
+                    context.fill(roundedPath, with: .color(markerType.color))
+                    
+                    // Draw price text
+                    let text = Text(formattedPrice)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white)
+                    
+                    context.draw(text, at: CGPoint(x: labelX, y: y))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
 
 
 
@@ -1199,14 +1578,15 @@ struct ClusterExpansionSheet: View {
 ////  ChartMarkerSystem.swift
 ////  traders_guild
 ////
-////  COMPREHENSIVE FIX v4 - Addresses:
-////  1. Hit detection using stored positions (not recalculated)
-////  2. Improved connection lines for stacked markers
-////  3. Better peak/valley detection for positioning
-////  4. Increased minimum distance from candles
-////  5. Shared position calculation function (DRY)
-////
-////  NOTE: ChartMarker and MarkerType are defined in ChartModels.swift
+////  COMPREHENSIVE UPDATE v6 - Major refactor:
+////  1. Markers favor top placement (only below for severe troughs)
+////  2. Tighter stacking with reduced spacing
+////  3. Remove clustering - show all markers individually
+////  4. One type per candle restriction (offer like instead)
+////  5. Display SF Symbol icons instead of first letter
+////  6. Selected marker scales up and shows custom views (lines)
+////  7. Hide usernames when multiple markers on same candle
+////  8. Horizontal lines for Entry/Exit/Support/Resistance markers
 ////
 //
 //import SwiftUI
@@ -1218,12 +1598,16 @@ struct ClusterExpansionSheet: View {
 //    @Published var selectedMarker: ChartMarker?
 //    @Published var visibleTypes: Set<MarkerType> = Set(MarkerType.allCases)
 //    @Published var showOnlyMyMarkers: Bool = false
-//    @Published var expandedClusterCandleIndex: Int? = nil
+//    
+//    /// Tracks if we should show a "like existing marker" prompt
+//    @Published var duplicateMarkerToLike: ChartMarker?
+//    @Published var showDuplicateAlert: Bool = false
 //    
 //    private let currentUserId: String
 //    private let currentGuildId: String
 //    
 //    var guildId: String { currentGuildId }
+//    var userId: String { currentUserId }
 //    
 //    init(userId: String = "user123", guildId: String = "guild1") {
 //        self.currentUserId = userId
@@ -1267,11 +1651,29 @@ struct ClusterExpansionSheet: View {
 //    
 //    func clearMarkers() {
 //        markers.removeAll()
-//        expandedClusterCandleIndex = nil
+//        selectedMarker = nil
+//    }
+//    
+//    // MARK: - Duplicate Type Check
+//    
+//    /// Check if a marker of the same type already exists on this candle
+//    /// Returns the existing marker if found
+//    func existingMarkerOfType(_ type: MarkerType, atCandleIndex candleIndex: Int) -> ChartMarker? {
+//        return markers.first { marker in
+//            marker.candleIndex == candleIndex && marker.type == type
+//        }
+//    }
+//    
+//    /// Check if adding a marker is allowed (no duplicate types on same candle)
+//    func canAddMarker(type: MarkerType, atCandleIndex candleIndex: Int) -> Bool {
+//        return existingMarkerOfType(type, atCandleIndex: candleIndex) == nil
 //    }
 //    
 //    // MARK: - Marker CRUD
 //    
+//    /// Add a new marker with proper positioning calculation
+//    /// Returns true if added successfully, false if duplicate type exists
+//    @discardableResult
 //    func addMarker(
 //        candleIndex: Int,
 //        timestamp: Date,
@@ -1279,8 +1681,44 @@ struct ClusterExpansionSheet: View {
 //        type: MarkerType,
 //        username: String,
 //        note: String? = nil,
-//        candles: [Candle]
-//    ) {
+//        candles: [Candle],
+//        horizontalLinePrice: Double? = nil,
+//        targetPrice: Double? = nil,
+//        alertSeverity: MarkerAlertSeverity? = nil,
+//        trendlineDirection: TrendlineDirection? = nil,
+//        selectedIndicator: String? = nil,
+//        chartPattern: ChartPattern? = nil,
+//        selectedEmoji: String? = nil,
+//        pollQuestion: String? = nil,
+//        pollOptions: [PollOption]? = nil
+//    ) -> Bool {
+//        // Check for duplicate type on same candle
+//        if let existingMarker = existingMarkerOfType(type, atCandleIndex: candleIndex) {
+//            duplicateMarkerToLike = existingMarker
+//            showDuplicateAlert = true
+//            return false
+//        }
+//        
+//        // Calculate line price based on marker type
+//        var linePrice = horizontalLinePrice
+//        if type.hasHorizontalLine && linePrice == nil && candleIndex >= 0 && candleIndex < candles.count {
+//            let candle = candles[candleIndex]
+//            switch type.lineSource {
+//            case .candleOpen:
+//                linePrice = candle.open
+//            case .candleClose:
+//                linePrice = candle.close
+//            case .candleHigh:
+//                linePrice = candle.high
+//            case .candleLow:
+//                linePrice = candle.low
+//            case .custom:
+//                linePrice = targetPrice
+//            case .none:
+//                break
+//            }
+//        }
+//        
 //        var marker = ChartMarker(
 //            candleIndex: candleIndex,
 //            timestamp: timestamp,
@@ -1289,9 +1727,19 @@ struct ClusterExpansionSheet: View {
 //            userId: currentUserId,
 //            username: username,
 //            note: note,
-//            guildId: currentGuildId
+//            guildId: currentGuildId,
+//            horizontalLinePrice: linePrice,
+//            targetPrice: targetPrice,
+//            alertSeverity: alertSeverity,
+//            trendlineDirection: trendlineDirection,
+//            selectedIndicator: selectedIndicator,
+//            chartPattern: chartPattern,
+//            selectedEmoji: selectedEmoji,
+//            pollQuestion: pollQuestion,
+//            pollOptions: pollOptions
 //        )
 //        
+//        // Calculate proper position
 //        let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
 //            marker: marker,
 //            existingMarkers: markers,
@@ -1303,30 +1751,7 @@ struct ClusterExpansionSheet: View {
 //        marker.stackIndex = positioning.stackIndex
 //        
 //        markers.append(marker)
-//    }
-//    
-//    func addMarker(
-//        candleIndex: Int,
-//        timestamp: Date,
-//        price: Double,
-//        type: MarkerType,
-//        username: String,
-//        note: String? = nil
-//    ) {
-//        let marker = ChartMarker(
-//            candleIndex: candleIndex,
-//            timestamp: timestamp,
-//            price: price,
-//            type: type,
-//            userId: currentUserId,
-//            username: username,
-//            note: note,
-//            guildId: currentGuildId,
-//            positionedBelow: false,
-//            proximityTier: 0,
-//            stackIndex: markers.filter { $0.candleIndex == candleIndex }.count
-//        )
-//        markers.append(marker)
+//        return true
 //    }
 //    
 //    func deleteMarker(id: UUID) {
@@ -1344,6 +1769,12 @@ struct ClusterExpansionSheet: View {
 //        markers[index].likeCount += markers[index].isLikedByCurrentUser ? 1 : -1
 //    }
 //    
+//    func addComment(markerId: UUID, text: String, username: String) {
+//        guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
+//        let comment = MarkerComment(userId: currentUserId, username: username, text: text)
+//        markers[index].comments.append(comment)
+//    }
+//    
 //    var filteredMarkers: [ChartMarker] {
 //        markers.filter { marker in
 //            guard marker.isVisible else { return false }
@@ -1359,35 +1790,14 @@ struct ClusterExpansionSheet: View {
 //        Dictionary(grouping: filteredMarkers) { $0.candleIndex }
 //    }
 //    
-//    func isCluster(candleIndex: Int) -> Bool {
-//        let group = markersGroupedByCandle()[candleIndex] ?? []
-//        return group.count > MarkerDisplaySettings.shared.maxBeforeCluster && expandedClusterCandleIndex != candleIndex
+//    /// Get count of markers at a specific candle
+//    func markerCount(atCandleIndex candleIndex: Int) -> Int {
+//        markersGroupedByCandle()[candleIndex]?.count ?? 0
 //    }
 //    
-//    func displayMarkers(forCandleIndex candleIndex: Int) -> [ChartMarker] {
-//        let group = markersGroupedByCandle()[candleIndex] ?? []
-//        let maxBeforeCluster = MarkerDisplaySettings.shared.maxBeforeCluster
-//        
-//        if group.count <= maxBeforeCluster || expandedClusterCandleIndex == candleIndex {
-//            return group
-//        } else {
-//            return []
-//        }
-//    }
-//    
-//    func toggleClusterExpansion(candleIndex: Int) {
-//        if expandedClusterCandleIndex == candleIndex {
-//            expandedClusterCandleIndex = nil
-//        } else {
-//            expandedClusterCandleIndex = candleIndex
-//        }
-//    }
-//    
-//    func clusterInfo(forCandleIndex candleIndex: Int) -> (count: Int, types: Set<MarkerType>)? {
-//        let group = markersGroupedByCandle()[candleIndex] ?? []
-//        let maxBeforeCluster = MarkerDisplaySettings.shared.maxBeforeCluster
-//        guard group.count > maxBeforeCluster && expandedClusterCandleIndex != candleIndex else { return nil }
-//        return (group.count, Set(group.map { $0.type }))
+//    /// Check if we should hide usernames (more than 1 marker on candle)
+//    func shouldHideUsername(forCandleIndex candleIndex: Int) -> Bool {
+//        markerCount(atCandleIndex: candleIndex) > 1
 //    }
 //}
 //
@@ -1400,12 +1810,9 @@ struct ClusterExpansionSheet: View {
 //        didSet { UserDefaults.standard.set(baseOffset, forKey: "markerBaseOffset") }
 //    }
 //    
+//    /// REDUCED stack offset for tighter stacking
 //    @Published var stackOffset: CGFloat {
 //        didSet { UserDefaults.standard.set(stackOffset, forKey: "markerStackOffset") }
-//    }
-//    
-//    @Published var maxBeforeCluster: Int {
-//        didSet { UserDefaults.standard.set(maxBeforeCluster, forKey: "markerMaxBeforeCluster") }
 //    }
 //    
 //    @Published var proximityTierOffset: CGFloat {
@@ -1417,19 +1824,18 @@ struct ClusterExpansionSheet: View {
 //    }
 //    
 //    private init() {
-//        // INCREASED baseOffset from 75 to 90 for better candle clearance
-//        self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 90
-//        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 40
-//        self.maxBeforeCluster = UserDefaults.standard.object(forKey: "markerMaxBeforeCluster") as? Int ?? 3
-//        self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 35
+//        // Adjusted offsets for new stacking behavior
+//        self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 70
+//        // REDUCED from 55 to 28 for tighter stacking
+//        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 28
+//        self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 25
 //        self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 40
 //    }
 //    
 //    func resetToDefaults() {
-//        baseOffset = 90
-//        stackOffset = 40
-//        maxBeforeCluster = 3
-//        proximityTierOffset = 35
+//        baseOffset = 70
+//        stackOffset = 28
+//        proximityTierOffset = 25
 //        placementExtraOffset = 40
 //    }
 //}
@@ -1441,19 +1847,16 @@ struct ClusterExpansionSheet: View {
 //    static var settings: MarkerDisplaySettings { MarkerDisplaySettings.shared }
 //    static var baseOffset: CGFloat { settings.baseOffset }
 //    static var stackOffset: CGFloat { settings.stackOffset }
-//    static var maxBeforeCluster: Int { settings.maxBeforeCluster }
 //    static let proximityRange = 3
-//    /// INCREASED hit radius for better tap detection
 //    static let hitRadius: CGFloat = 28
 //    
 //    static var placementOffset: CGFloat {
 //        settings.baseOffset + settings.placementExtraOffset
 //    }
 //    
-//    // MARK: - SHARED Position Calculation (Used by BOTH drawing AND hit detection)
+//    // MARK: - SHARED Position Calculation
 //    
 //    /// Calculate the screen position for a marker using its STORED properties
-//    /// This is the SINGLE SOURCE OF TRUTH - ensures drawing and hit detection match
 //    static func computeMarkerScreenPosition(
 //        marker: ChartMarker,
 //        candleHighY: CGFloat,
@@ -1478,6 +1881,78 @@ struct ClusterExpansionSheet: View {
 //        return CGPoint(x: centerX, y: markerY)
 //    }
 //    
+//    /// Calculate PREVIEW position for new marker placement
+//    /// UPDATED: Now favors top placement by default
+//    static func calculatePreviewPosition(
+//        candleIndex: Int,
+//        existingMarkers: [ChartMarker],
+//        candles: [Candle],
+//        candleHighY: CGFloat,
+//        candleLowY: CGFloat,
+//        centerX: CGFloat
+//    ) -> (position: CGPoint, isBelow: Bool) {
+//        let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
+//        
+//        // NEW LOGIC: Default to ABOVE (false = not below)
+//        // Only go below if:
+//        // 1. There are already markers above and we need to alternate
+//        // 2. It's a severe peak (lower candles on both sides)
+//        
+//        let shouldBeBelow: Bool
+//        
+//        if markersAtCandle.isEmpty {
+//            // No existing markers - check for severe peak first, otherwise default to above
+//            let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+//            let isSevereTrough = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: false)
+//            
+//            if isSeverePeak && !isSevereTrough {
+//                // Severe peak - place below
+//                shouldBeBelow = true
+//            } else {
+//                // Default to above (including severe troughs and neutral cases)
+//                shouldBeBelow = false
+//            }
+//            
+//            // Check nearby marker density and adjust if needed
+//            let nearbyMarkers = existingMarkers.filter {
+//                abs($0.candleIndex - candleIndex) <= proximityRange
+//            }
+//            let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
+//            let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
+//            
+//            // If above is very crowded, consider below
+//            if neighborsAbove > neighborsBelow + 3 && !isSevereTrough {
+//                let baseY = candleLowY + placementOffset
+//                return (CGPoint(x: centerX, y: baseY), true)
+//            }
+//        } else {
+//            // FIXED: Has existing markers - place on SAME side as existing ones
+//            // This ensures all markers stack together instead of alternating
+//            if let firstMarker = markersAtCandle.first {
+//                shouldBeBelow = firstMarker.positionedBelow
+//            } else {
+//                shouldBeBelow = false // Fallback - should never reach here
+//            }
+//        }
+//        
+//        let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
+//        let baseY: CGFloat
+//        let stackDirection: CGFloat
+//        
+//        if shouldBeBelow {
+//            baseY = candleLowY + placementOffset
+//            stackDirection = 1.0
+//        } else {
+//            baseY = candleHighY - placementOffset
+//            stackDirection = -1.0
+//        }
+//        
+//        let stackOffsetValue = CGFloat(stackIndex) * stackOffset * stackDirection
+//        let markerY = baseY + stackOffsetValue
+//        
+//        return (CGPoint(x: centerX, y: markerY), shouldBeBelow)
+//    }
+//    
 //    // MARK: - Stable Position Assignment
 //    
 //    static func assignStablePositions(
@@ -1491,60 +1966,64 @@ struct ClusterExpansionSheet: View {
 //        
 //        var usedAboveTiers: [Int: Set<Int>] = [:]
 //        var usedBelowTiers: [Int: Set<Int>] = [:]
-//        var positionDecisions: [Int: Bool] = [:]
 //        
 //        for candleIndex in sortedIndices {
 //            guard let markersAtCandle = grouped[candleIndex] else { continue }
 //            
 //            let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-//            let useSingleMarkerLogic = sorted.count == 1
 //            
-//            for (stackIndex, marker) in sorted.enumerated() {
+//            // Track markers placed above and below for this candle
+//            var aboveStackIndex = 0
+//            var belowStackIndex = 0
+//            
+//            for marker in sorted {
 //                guard let resultIndex = result.firstIndex(where: { $0.id == marker.id }) else { continue }
 //                
+//                // NEW: Favor above placement
+//                // First marker always goes above unless severe peak
+//                // Subsequent markers alternate
 //                let shouldBeBelow: Bool
 //                
-//                if useSingleMarkerLogic {
-//                    // Use IMPROVED peak/valley detection
-//                    let preferBelow = shouldPositionBelowUsingPeakValleyDetection(
-//                        candleIndex: candleIndex,
-//                        candles: candles
-//                    )
-//                    
-//                    let leftIsAbove = positionDecisions[candleIndex - 1] == true
-//                    let rightIsAbove = positionDecisions[candleIndex + 1] == true
-//                    let leftIsBelow = positionDecisions[candleIndex - 1] == false
-//                    let rightIsBelow = positionDecisions[candleIndex + 1] == false
-//                    
-//                    if leftIsAbove || rightIsAbove {
-//                        shouldBeBelow = true
-//                    } else if leftIsBelow || rightIsBelow {
+//                // FIXED: All markers on same candle should be on the same side
+//                // First marker determines side, all others follow
+//                if sorted.count == 1 {
+//                    // Single marker - check for severe peak
+//                    let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+//                    shouldBeBelow = isSeverePeak
+//                } else {
+//                    // Multiple markers - ALL go on same side
+//                    // First marker (aboveStackIndex == 0 && belowStackIndex == 0) determines side
+//                    if aboveStackIndex == 0 && belowStackIndex == 0 {
+//                        let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+//                        shouldBeBelow = isSeverePeak
+//                    } else if aboveStackIndex > 0 {
+//                        // We already have markers above, keep stacking above
 //                        shouldBeBelow = false
 //                    } else {
-//                        shouldBeBelow = preferBelow
+//                        // We already have markers below, keep stacking below
+//                        shouldBeBelow = true
 //                    }
-//                    
-//                    positionDecisions[candleIndex] = !shouldBeBelow
+//                }
+//                
+//                let stackIndex: Int
+//                if shouldBeBelow {
+//                    stackIndex = belowStackIndex
+//                    belowStackIndex += 1
 //                } else {
-//                    shouldBeBelow = stackIndex % 2 == 1
+//                    stackIndex = aboveStackIndex
+//                    aboveStackIndex += 1
 //                }
 //                
 //                let tier: Int
 //                if shouldBeBelow {
-//                    tier = calculateProximityTierInternal(
-//                        candleIndex: candleIndex,
-//                        usedTiers: &usedBelowTiers
-//                    )
+//                    tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedBelowTiers)
 //                } else {
-//                    tier = calculateProximityTierInternal(
-//                        candleIndex: candleIndex,
-//                        usedTiers: &usedAboveTiers
-//                    )
+//                    tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedAboveTiers)
 //                }
 //                
 //                result[resultIndex].positionedBelow = shouldBeBelow
 //                result[resultIndex].proximityTier = tier
-//                result[resultIndex].stackIndex = stackIndex / 2
+//                result[resultIndex].stackIndex = stackIndex
 //            }
 //        }
 //        
@@ -1558,30 +2037,41 @@ struct ClusterExpansionSheet: View {
 //    ) -> (isBelow: Bool, tier: Int, stackIndex: Int) {
 //        let candleIndex = marker.candleIndex
 //        let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
-//        let stackIndex = markersAtCandle.count
 //        
 //        let shouldBeBelow: Bool
 //        
 //        if markersAtCandle.isEmpty {
-//            shouldBeBelow = shouldPositionBelowUsingPeakValleyDetection(
-//                candleIndex: candleIndex,
-//                candles: candles
-//            )
+//            // NEW: Default to above unless severe peak
+//            let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+//            shouldBeBelow = isSeverePeak
 //            
+//            // Check nearby marker density
 //            let nearbyMarkers = existingMarkers.filter {
 //                abs($0.candleIndex - candleIndex) <= proximityRange
 //            }
 //            let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
 //            let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
 //            
-//            if neighborsAbove > neighborsBelow + 2 {
-//                return (isBelow: true, tier: 0, stackIndex: 0)
-//            } else if neighborsBelow > neighborsAbove + 2 {
-//                return (isBelow: false, tier: 0, stackIndex: 0)
+//            if neighborsAbove > neighborsBelow + 3 {
+//                // Above is crowded, go below
+//                let sameSideNearby = existingMarkers.filter {
+//                    abs($0.candleIndex - candleIndex) <= proximityRange && $0.positionedBelow
+//                }
+//                let usedTiers = Set(sameSideNearby.map { $0.proximityTier })
+//                var tier = 0
+//                while usedTiers.contains(tier) { tier += 1 }
+//                return (isBelow: true, tier: tier, stackIndex: 0)
 //            }
 //        } else {
-//            shouldBeBelow = stackIndex % 2 == 1
+//            // FIXED: Has existing markers - place on SAME side as existing ones
+//            if let firstMarker = markersAtCandle.first {
+//                shouldBeBelow = firstMarker.positionedBelow
+//            } else {
+//                shouldBeBelow = false
+//            }
 //        }
+//        
+//        let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
 //        
 //        let sameSideNearby = existingMarkers.filter {
 //            abs($0.candleIndex - candleIndex) <= proximityRange &&
@@ -1594,59 +2084,31 @@ struct ClusterExpansionSheet: View {
 //            tier += 1
 //        }
 //        
-//        return (isBelow: shouldBeBelow, tier: tier, stackIndex: stackIndex / 2)
+//        return (isBelow: shouldBeBelow, tier: tier, stackIndex: stackIndex)
 //    }
 //    
-//    // MARK: - IMPROVED Peak/Valley Detection
+//    // MARK: - Severe Peak/Trough Detection
 //    
-//    private static func shouldPositionBelowUsingPeakValleyDetection(
+//    /// Check if a candle is a severe peak (for placing below) or severe trough (for placing above)
+//    /// A severe peak/trough requires BOTH neighbors to be lower/higher
+//    private static func isSeverePeakOrTrough(
 //        candleIndex: Int,
-//        candles: [Candle]
+//        candles: [Candle],
+//        checkPeak: Bool
 //    ) -> Bool {
-//        guard candleIndex >= 0 && candleIndex < candles.count else { return false }
+//        guard candleIndex > 0 && candleIndex < candles.count - 1 else { return false }
 //        
-//        let windowSize = 5
 //        let candle = candles[candleIndex]
+//        let leftCandle = candles[candleIndex - 1]
+//        let rightCandle = candles[candleIndex + 1]
 //        
-//        var lowerHighsCount = 0
-//        var higherLowsCount = 0
-//        
-//        for delta in 1...windowSize {
-//            if candleIndex - delta >= 0 {
-//                let leftCandle = candles[candleIndex - delta]
-//                if leftCandle.high < candle.high { lowerHighsCount += 1 }
-//                if leftCandle.low > candle.low { higherLowsCount += 1 }
-//            }
-//            
-//            if candleIndex + delta < candles.count {
-//                let rightCandle = candles[candleIndex + delta]
-//                if rightCandle.high < candle.high { lowerHighsCount += 1 }
-//                if rightCandle.low > candle.low { higherLowsCount += 1 }
-//            }
-//        }
-//        
-//        let isPeak = lowerHighsCount >= windowSize * 2 - 2
-//        let isValley = higherLowsCount >= windowSize * 2 - 2
-//        
-//        if isPeak {
-//            return false // Position above at peaks
-//        } else if isValley {
-//            return true // Position below at valleys
+//        if checkPeak {
+//            // Severe peak: candle high is above BOTH neighbors' highs
+//            return candle.high > leftCandle.high && candle.high > rightCandle.high
 //        } else {
-//            if candleIndex > 0 {
-//                return candle.high < candles[candleIndex - 1].high
-//            }
-//            return false
+//            // Severe trough: candle low is below BOTH neighbors' lows
+//            return candle.low < leftCandle.low && candle.low < rightCandle.low
 //        }
-//    }
-//    
-//    static func calculateProximityTier(
-//        candleIndex: Int,
-//        allMarkers: [ChartMarker],
-//        isBelow: Bool,
-//        usedTiers: inout [Int: Set<Int>]
-//    ) -> Int {
-//        return calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedTiers)
 //    }
 //    
 //    static func offsetForTier(_ tier: Int) -> CGFloat {
@@ -1697,13 +2159,47 @@ struct ClusterExpansionSheet: View {
 //        totalCandleWidth: CGFloat,
 //        actualCandleWidth: CGFloat,
 //        totalOffset: CGFloat,
-//        expandedClusterIndex: Int? = nil,
 //        markerManager: MarkerManager? = nil,
-//        tappedMarkerId: UUID? = nil
+//        selectedMarkerId: UUID? = nil
 //    ) {
 //        let scaledHeight = chartSize.height * priceScale
 //        let allVisibleMarkers = markers.filter { $0.isVisible }
 //        let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
+//        
+//        // Draw horizontal lines for selected marker first (behind markers)
+//        if let selectedId = selectedMarkerId,
+//           let selectedMarker = markers.first(where: { $0.id == selectedId }),
+//           selectedMarker.type.hasHorizontalLine,
+//           selectedMarker.candleIndex >= 0 && selectedMarker.candleIndex < candles.count {
+//            let candle = candles[selectedMarker.candleIndex]
+//            if let linePrice = selectedMarker.getLinePrice(candle: candle) {
+//                drawHorizontalLine(
+//                    context: context,
+//                    price: linePrice,
+//                    chartSize: chartSize,
+//                    priceRange: priceRange,
+//                    priceScale: priceScale,
+//                    verticalOffset: verticalOffset,
+//                    color: selectedMarker.type.color,
+//                    markerX: CGFloat(selectedMarker.candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+//                )
+//            }
+//            
+//            // Draw target price line for prediction markers
+//            if selectedMarker.type == .predictionTarget, let targetPrice = selectedMarker.targetPrice {
+//                drawHorizontalLine(
+//                    context: context,
+//                    price: targetPrice,
+//                    chartSize: chartSize,
+//                    priceRange: priceRange,
+//                    priceScale: priceScale,
+//                    verticalOffset: verticalOffset,
+//                    color: .red.opacity(0.8),
+//                    markerX: CGFloat(selectedMarker.candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2,
+//                    isDashed: true
+//                )
+//            }
+//        }
 //        
 //        for (candleIndex, markersAtCandle) in groupedMarkers {
 //            guard candleIndex >= 0 && candleIndex < candles.count else { continue }
@@ -1719,80 +2215,95 @@ struct ClusterExpansionSheet: View {
 //            let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
 //            let centerX = x + actualCandleWidth / 2
 //            
-//            let isCluster = markersAtCandle.count > MarkerPositionCalculator.maxBeforeCluster && expandedClusterIndex != candleIndex
+//            // No clustering - show all markers
+//            let sortedMarkers = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+//            let hideUsernames = markersAtCandle.count > 1
 //            
-//            if isCluster {
-//                let typeCounts = Dictionary(grouping: markersAtCandle, by: { $0.type }).mapValues { $0.count }
-//                let dominantType = typeCounts.max { a, b in
-//                    if a.value == b.value {
-//                        return a.key.rawValue > b.key.rawValue
-//                    }
-//                    return a.value < b.value
-//                }?.key
-//                let primaryColor = dominantType?.color ?? .blue
-//                
-//                drawClusterIndicator(
-//                    context: context,
-//                    position: CGPoint(x: centerX, y: candleHighY - MarkerPositionCalculator.baseOffset),
-//                    candleHighPoint: CGPoint(x: centerX, y: candleHighY),
-//                    count: markersAtCandle.count,
-//                    primaryColor: primaryColor
+//            var markerPositions: [(marker: ChartMarker, position: CGPoint)] = []
+//            for marker in sortedMarkers {
+//                let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+//                    marker: marker,
+//                    candleHighY: candleHighY,
+//                    candleLowY: candleLowY,
+//                    centerX: centerX
 //                )
-//            } else {
-//                let sortedMarkers = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+//                markerPositions.append((marker, position))
+//            }
+//            
+//            let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
+//            let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
+//            
+//            drawStackedConnectionLines(context: context, markers: aboveMarkers, anchorY: candleHighY, centerX: centerX, isBelow: false)
+//            drawStackedConnectionLines(context: context, markers: belowMarkers, anchorY: candleLowY, centerX: centerX, isBelow: true)
+//            
+//            for (marker, position) in markerPositions {
+//                let isSelected = selectedMarkerId == marker.id
+//                let scale: CGFloat = isSelected ? 1.3 : 1.0
 //                
-//                // Calculate positions using SHARED function
-//                var markerPositions: [(marker: ChartMarker, position: CGPoint)] = []
-//                for marker in sortedMarkers {
-//                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
-//                        marker: marker,
-//                        candleHighY: candleHighY,
-//                        candleLowY: candleLowY,
-//                        centerX: centerX
-//                    )
-//                    markerPositions.append((marker, position))
-//                }
-//                
-//                // Separate by side for proper connection line drawing
-//                let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
-//                let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
-//                
-//                // Draw SEGMENTED connection lines
-//                drawStackedConnectionLines(
+//                drawSingleMarker(
 //                    context: context,
-//                    markers: aboveMarkers,
-//                    anchorY: candleHighY,
-//                    centerX: centerX,
-//                    isBelow: false
+//                    marker: marker,
+//                    position: position,
+//                    isBelow: marker.positionedBelow,
+//                    scale: scale,
+//                    hideUsername: hideUsernames,
+//                    isSelected: isSelected
 //                )
-//                
-//                drawStackedConnectionLines(
-//                    context: context,
-//                    markers: belowMarkers,
-//                    anchorY: candleLowY,
-//                    centerX: centerX,
-//                    isBelow: true
-//                )
-//                
-//                // Draw marker bodies (on top of lines)
-//                for (marker, position) in markerPositions {
-//                    let isAnimated = tappedMarkerId == marker.id
-//                    let scale: CGFloat = isAnimated ? 1.3 : 1.0
-//                    
-//                    drawSingleMarker(
-//                        context: context,
-//                        marker: marker,
-//                        position: position,
-//                        anchorPoint: CGPoint(x: centerX, y: marker.positionedBelow ? candleLowY : candleHighY),
-//                        isBelow: marker.positionedBelow,
-//                        scale: scale
-//                    )
-//                }
 //            }
 //        }
 //    }
 //    
-//    /// Draw connected lines for stacked markers - lines stop at each marker edge
+//    private static func drawHorizontalLine(
+//        context: GraphicsContext,
+//        price: Double,
+//        chartSize: CGSize,
+//        priceRange: (min: Double, max: Double),
+//        priceScale: CGFloat,
+//        verticalOffset: CGFloat,
+//        color: Color,
+//        markerX: CGFloat,
+//        isDashed: Bool = false
+//    ) {
+//        let scaledHeight = chartSize.height * priceScale
+//        let y = chartSize.height - (CGFloat(price - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+//        
+//        // Draw line from left edge to right edge (changed from stopping before Y-axis)
+//        // Updated per instruction to stop BEFORE the Y-axis
+//        let linePath = Path { path in
+//            path.move(to: CGPoint(x: 0, y: y))
+//            path.addLine(to: CGPoint(x: chartSize.width - 65, y: y))
+//        }
+//        
+//        let strokeStyle = isDashed ?
+//            StrokeStyle(lineWidth: 1.5, dash: [6, 4]) :
+//            StrokeStyle(lineWidth: 2)
+//        
+//        context.stroke(linePath, with: .color(color.opacity(0.6)), style: strokeStyle)
+//        
+//        // Moved price label to inside the Y-axis band (assumed 65pt width), with padding
+//        let labelWidth: CGFloat = 60
+//        let labelHeight: CGFloat = 18
+//        // Place inside the Y-axis band (assumed 65pt wide), with 5pt padding from its left edge
+//        let axisWidth: CGFloat = 65
+//        let labelX = chartSize.width - axisWidth + 5
+//        let labelRect = CGRect(
+//            x: labelX,
+//            y: y - labelHeight / 2,
+//            width: labelWidth,
+//            height: labelHeight
+//        )
+//        context.fill(Path(roundedRect: labelRect, cornerRadius: 3), with: .color(color))
+//        
+//        // Format price
+//        let priceText = String(format: "%.5f", price)
+//        context.draw(
+//            Text(priceText)
+//                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+//                .foregroundColor(.white),
+//            at: CGPoint(x: labelX + labelWidth / 2, y: y)
+//        )
+//    }
+//    
 //    private static func drawStackedConnectionLines(
 //        context: GraphicsContext,
 //        markers: [(marker: ChartMarker, position: CGPoint)],
@@ -1802,16 +2313,11 @@ struct ClusterExpansionSheet: View {
 //    ) {
 //        guard !markers.isEmpty else { return }
 //        
-//        let baseRadius: CGFloat = 16
+//        let baseRadius: CGFloat = 14
 //        var previousY = anchorY
 //        
 //        for (marker, position) in markers {
-//            let markerEdgeY: CGFloat
-//            if isBelow {
-//                markerEdgeY = position.y - baseRadius
-//            } else {
-//                markerEdgeY = position.y + baseRadius
-//            }
+//            let markerEdgeY: CGFloat = isBelow ? position.y - baseRadius : position.y + baseRadius
 //            
 //            let linePath = Path { path in
 //                path.move(to: CGPoint(x: centerX, y: previousY))
@@ -1820,15 +2326,11 @@ struct ClusterExpansionSheet: View {
 //            
 //            context.stroke(
 //                linePath,
-//                with: .color(marker.type.color.opacity(0.7)),
-//                style: StrokeStyle(lineWidth: 2, dash: [4, 3])
+//                with: .color(marker.type.color.opacity(0.6)),
+//                style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
 //            )
 //            
-//            if isBelow {
-//                previousY = position.y + baseRadius
-//            } else {
-//                previousY = position.y - baseRadius
-//            }
+//            previousY = isBelow ? position.y + baseRadius : position.y - baseRadius
 //        }
 //    }
 //    
@@ -1836,21 +2338,33 @@ struct ClusterExpansionSheet: View {
 //        context: GraphicsContext,
 //        marker: ChartMarker,
 //        position: CGPoint,
-//        anchorPoint: CGPoint,
 //        isBelow: Bool,
-//        scale: CGFloat = 1.0
+//        scale: CGFloat = 1.0,
+//        hideUsername: Bool = false,
+//        isSelected: Bool = false
 //    ) {
-//        let baseRadius: CGFloat = 16
+//        let baseRadius: CGFloat = 14
 //        let scaledRadius = baseRadius * scale
+//        
+//        // Selection glow effect
+//        if isSelected {
+//            let glowRect = CGRect(
+//                x: position.x - scaledRadius - 4,
+//                y: position.y - scaledRadius - 4,
+//                width: (scaledRadius + 4) * 2,
+//                height: (scaledRadius + 4) * 2
+//            )
+//            context.fill(Path(ellipseIn: glowRect), with: .color(marker.type.color.opacity(0.3)))
+//        }
 //        
 //        // Shadow
 //        let shadowRect = CGRect(
-//            x: position.x - scaledRadius + 2,
-//            y: position.y - scaledRadius + 2,
+//            x: position.x - scaledRadius + 1.5,
+//            y: position.y - scaledRadius + 1.5,
 //            width: scaledRadius * 2,
 //            height: scaledRadius * 2
 //        )
-//        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.3)))
+//        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.35)))
 //        
 //        // Main circle
 //        let circleRect = CGRect(
@@ -1859,11 +2373,13 @@ struct ClusterExpansionSheet: View {
 //            width: scaledRadius * 2,
 //            height: scaledRadius * 2
 //        )
-//        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.9)))
-//        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: 3 * scale)
+//        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.85)))
 //        
-//        // Icon
-//        let iconRadius: CGFloat = 10 * scale
+//        let borderWidth: CGFloat = isSelected ? 3.5 : 2.5
+//        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: borderWidth * scale)
+//        
+//        // Inner colored circle
+//        let iconRadius: CGFloat = 9 * scale
 //        let iconCircle = CGRect(
 //            x: position.x - iconRadius,
 //            y: position.y - iconRadius,
@@ -1872,79 +2388,80 @@ struct ClusterExpansionSheet: View {
 //        )
 //        context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color))
 //        
+//        // Draw SF Symbol icon instead of first letter
+//        // For emoji markers, show the emoji
+//        let displayText: String
+//        if marker.type == .emoji, let emoji = marker.selectedEmoji {
+//            displayText = emoji
+//        } else {
+//            // Use a unicode character that resembles the SF Symbol
+//            // (Canvas can't render SF Symbols directly, so we use similar characters)
+//            displayText = getIconCharacter(for: marker.type)
+//        }
+//        
 //        context.draw(
-//            Text(String(marker.type.rawValue.prefix(1)))
-//                .font(.system(size: 12 * scale, weight: .bold))
+//            Text(displayText)
+//                .font(.system(size: 10 * scale, weight: .bold))
 //                .foregroundColor(.white),
 //            at: position
 //        )
 //        
 //        // Like badge
 //        if marker.likeCount > 0 {
-//            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 3) : (scaledRadius - 13)
+//            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 3) : (scaledRadius - 10)
 //            let likeCircleRect = CGRect(
 //                x: position.x + 8,
 //                y: position.y + badgeOffset,
-//                width: 14,
-//                height: 14
+//                width: 12,
+//                height: 12
 //            )
 //            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
 //            
 //            context.draw(
 //                Text("\(marker.likeCount)")
-//                    .font(.system(size: 9, weight: .bold))
+//                    .font(.system(size: 8, weight: .bold))
 //                    .foregroundColor(.white),
-//                at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 6)
+//                at: CGPoint(x: position.x + 14, y: position.y + badgeOffset + 6)
 //            )
 //        }
 //        
-//        // Username label
-//        let labelY = isBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
-//        context.draw(
-//            Text(marker.username)
-//                .font(.system(size: 9, weight: .medium))
-//                .foregroundColor(.white.opacity(0.85)),
-//            at: CGPoint(x: position.x, y: labelY)
-//        )
-//    }
-//    
-//    private static func drawClusterIndicator(
-//        context: GraphicsContext,
-//        position: CGPoint,
-//        candleHighPoint: CGPoint,
-//        count: Int,
-//        primaryColor: Color
-//    ) {
-//        let connectionPath = Path { path in
-//            path.move(to: CGPoint(x: position.x, y: position.y + 22))
-//            path.addLine(to: candleHighPoint)
+//        // Username label - only show if not hidden
+//        if !hideUsername {
+//            let labelY = isBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
+//            context.draw(
+//                Text(marker.username)
+//                    .font(.system(size: 8, weight: .medium))
+//                    .foregroundColor(.white.opacity(0.85)),
+//                at: CGPoint(x: position.x, y: labelY)
+//            )
 //        }
-//        context.stroke(
-//            connectionPath,
-//            with: .color(.white.opacity(0.5)),
-//            style: StrokeStyle(lineWidth: 2, dash: [4, 4])
-//        )
-//        
-//        let clusterRadius: CGFloat = 22
-//        let circleRect = CGRect(
-//            x: position.x - clusterRadius,
-//            y: position.y - clusterRadius,
-//            width: clusterRadius * 2,
-//            height: clusterRadius * 2
-//        )
-//        
-//        context.fill(Path(ellipseIn: circleRect), with: .color(primaryColor.opacity(0.9)))
-//        context.stroke(Path(ellipseIn: circleRect), with: .color(.white), lineWidth: 2)
-//        
-//        context.draw(
-//            Text("\(count)")
-//                .font(.system(size: 14, weight: .bold))
-//                .foregroundColor(.white),
-//            at: position
-//        )
 //    }
 //    
-//    // MARK: - Hit Detection (Uses SAME position calculation as drawing)
+//    /// Get a unicode character that represents the marker type
+//    /// (Since Canvas can't render SF Symbols directly)
+//    private static func getIconCharacter(for type: MarkerType) -> String {
+//        switch type {
+//            case .note: return "✎"
+//            case .question: return "?"
+//            case .alert: return "!"
+//            case .entry: return "↑"
+//            case .exit: return "↓"
+//            case .stopLoss: return "✕"      // ADD THIS
+//            case .takeProfit: return "✓"    // ADD THIS
+//            case .support: return "S"
+//            case .resistance: return "R"
+//            case .indicator: return "★"
+//            case .trendline: return "⤴"
+//            case .pattern: return "◇"
+//            case .volumeSpike: return "⚡"
+//            case .predictionTarget: return "⊛"
+//            case .emoji: return "☺"
+//            case .poll: return "✓"
+//            case .personal: return "●"
+//        }
+//    }
+//    
+//    // MARK: - Hit Detection
 //    
 //    static func findMarkerAtLocation(
 //        _ location: CGPoint,
@@ -1956,9 +2473,8 @@ struct ClusterExpansionSheet: View {
 //        verticalOffset: CGFloat,
 //        totalCandleWidth: CGFloat,
 //        actualCandleWidth: CGFloat,
-//        totalOffset: CGFloat,
-//        expandedClusterIndex: Int? = nil
-//    ) -> (marker: ChartMarker?, isCluster: Bool, clusterCandleIndex: Int?) {
+//        totalOffset: CGFloat
+//    ) -> ChartMarker? {
 //        let scaledHeight = chartSize.height * priceScale
 //        let allVisibleMarkers = markers.filter { $0.isVisible }
 //        let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
@@ -1977,39 +2493,28 @@ struct ClusterExpansionSheet: View {
 //            let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
 //            let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
 //            
-//            let isCluster = markersAtCandle.count > MarkerPositionCalculator.maxBeforeCluster && expandedClusterIndex != candleIndex
+//            let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
 //            
-//            if isCluster {
-//                let clusterY = candleHighY - MarkerPositionCalculator.baseOffset
-//                let distance = hypot(location.x - centerX, location.y - clusterY)
-//                if distance <= 25 {
-//                    return (nil, true, candleIndex)
-//                }
-//            } else {
-//                let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
+//            for marker in sorted.reversed() {
+//                let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+//                    marker: marker,
+//                    candleHighY: candleHighY,
+//                    candleLowY: candleLowY,
+//                    centerX: centerX
+//                )
 //                
-//                for marker in sorted.reversed() {
-//                    // Use SHARED position calculation - ensures hit matches draw
-//                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
-//                        marker: marker,
-//                        candleHighY: candleHighY,
-//                        candleLowY: candleLowY,
-//                        centerX: centerX
-//                    )
-//                    
-//                    let distance = hypot(location.x - position.x, location.y - position.y)
-//                    if distance <= hitRadius {
-//                        return (marker, false, nil)
-//                    }
+//                let distance = hypot(location.x - position.x, location.y - position.y)
+//                if distance <= hitRadius {
+//                    return marker
 //                }
 //            }
 //        }
 //        
-//        return (nil, false, nil)
+//        return nil
 //    }
 //}
 //
-//// MARK: - Sheet Views (Unchanged)
+//// MARK: - Marker Creation Sheet
 //
 //struct MarkerCreationSheet: View {
 //    @Environment(\.dismiss) private var dismiss
@@ -2019,29 +2524,32 @@ struct ClusterExpansionSheet: View {
 //    let price: Double
 //    let username: String
 //    let chartData: ChartDataManager
+//    let candles: [Candle]
+//    let markerType: MarkerType
 //    
-//    @State private var selectedType: MarkerType = .entry
 //    @State private var note: String = ""
+//    
+//    // Type-specific state
+//    @State private var alertSeverity: MarkerAlertSeverity = .moderate
+//    @State private var trendlineDirection: TrendlineDirection = .up
+//    @State private var selectedIndicator: String = "RSI"
+//    @State private var chartPattern: ChartPattern = .doubleTop
+//    @State private var selectedEmoji: String = "🎯"
+//    @State private var pollQuestion: String = ""
+//    @State private var pollOption1: String = ""
+//    @State private var pollOption2: String = ""
+//    @State private var targetPrice: String = ""
 //    
 //    var body: some View {
 //        NavigationView {
 //            Form {
-//                Section("Marker Type") {
-//                    ForEach(MarkerType.allCases, id: \.rawValue) { type in
-//                        Button(action: { selectedType = type }) {
-//                            HStack {
-//                                Image(systemName: type.icon)
-//                                    .foregroundColor(type.color)
-//                                    .frame(width: 30)
-//                                Text(type.rawValue)
-//                                    .foregroundColor(.primary)
-//                                Spacer()
-//                                if selectedType == type {
-//                                    Image(systemName: "checkmark")
-//                                        .foregroundColor(.blue)
-//                                }
-//                            }
-//                        }
+//                Section("Marker Info") {
+//                    HStack {
+//                        Image(systemName: markerType.icon)
+//                            .foregroundColor(markerType.color)
+//                            .frame(width: 30)
+//                        Text(markerType.rawValue)
+//                            .foregroundColor(.primary)
 //                    }
 //                }
 //                
@@ -2060,12 +2568,15 @@ struct ClusterExpansionSheet: View {
 //                    }
 //                }
 //                
+//                // Type-specific options
+//                typeSpecificOptions
+//                
 //                Section("Note (Optional)") {
 //                    TextEditor(text: $note)
 //                        .frame(minHeight: 80)
 //                }
 //            }
-//            .navigationTitle("Add Marker")
+//            .navigationTitle("Add \(markerType.rawValue)")
 //            .navigationBarTitleDisplayMode(.inline)
 //            .toolbar {
 //                ToolbarItem(placement: .cancellationAction) {
@@ -2073,24 +2584,234 @@ struct ClusterExpansionSheet: View {
 //                }
 //                ToolbarItem(placement: .confirmationAction) {
 //                    Button("Add") {
-//                        markerManager.addMarker(
-//                            candleIndex: candleIndex,
-//                            timestamp: timestamp,
-//                            price: price,
-//                            type: selectedType,
-//                            username: username,
-//                            note: note.isEmpty ? nil : note
-//                        )
-//                        dismiss()
+//                        addMarker()
 //                    }
 //                }
 //            }
 //        }
-//        .presentationDetents([.medium, .large])
+//        .presentationDetents([.fraction(0.25), .medium, .large])
 //        .presentationDragIndicator(.visible)
-//        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+//        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
+//        .interactiveDismissDisabled(true)
+//    }
+//    
+//    @ViewBuilder
+//    private var typeSpecificOptions: some View {
+//        switch markerType {
+//        case .alert:
+//            Section("Alert Severity") {
+//                Picker("Severity", selection: $alertSeverity) {
+//                    ForEach(MarkerAlertSeverity.allCases, id: \.self) { severity in
+//                        HStack {
+//                            Circle()
+//                                .fill(severity.color)
+//                                .frame(width: 12, height: 12)
+//                            Text(severity.rawValue)
+//                        }
+//                        .tag(severity)
+//                    }
+//                }
+//                .pickerStyle(.menu)
+//            }
+//            
+//        case .trendline:
+//            Section("Trend Direction") {
+//                Picker("Direction", selection: $trendlineDirection) {
+//                    ForEach(TrendlineDirection.allCases, id: \.self) { direction in
+//                        Text(direction.rawValue).tag(direction)
+//                    }
+//                }
+//                .pickerStyle(.segmented)
+//            }
+//            
+//        case .indicator:
+//            Section("Indicator") {
+//                Picker("Select Indicator", selection: $selectedIndicator) {
+//                    Text("RSI").tag("RSI")
+//                    Text("MACD").tag("MACD")
+//                    Text("Moving Average").tag("MA")
+//                    Text("Bollinger Bands").tag("BB")
+//                    Text("Stochastic").tag("STOCH")
+//                    Text("ATR").tag("ATR")
+//                }
+//                .pickerStyle(.menu)
+//            }
+//            
+//        case .pattern:
+//            Section("Chart Pattern") {
+//                Picker("Pattern", selection: $chartPattern) {
+//                    ForEach(ChartPattern.allCases, id: \.self) { pattern in
+//                        Text(pattern.rawValue).tag(pattern)
+//                    }
+//                }
+//                .pickerStyle(.menu)
+//            }
+//            
+//        case .emoji:
+//            Section("Select Emoji") {
+//                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+//                    ForEach(["🎯", "🚀", "💰", "⚠️", "📈", "📉", "💎", "🔥", "⭐", "💡", "🤔", "👀"], id: \.self) { emoji in
+//                        Button {
+//                            selectedEmoji = emoji
+//                        } label: {
+//                            Text(emoji)
+//                                .font(.title)
+//                                .padding(8)
+//                                .background(selectedEmoji == emoji ? Color.blue.opacity(0.3) : Color.clear)
+//                                .cornerRadius(8)
+//                        }
+//                        .buttonStyle(.borderless)  // FIXED: Allows button taps in Form
+//                    }
+//                }
+//            }
+//            
+//        case .poll:
+//            Section("Poll Question") {
+//                TextField("Question", text: $pollQuestion)
+//            }
+//            Section("Options") {
+//                TextField("Option 1", text: $pollOption1)
+//                TextField("Option 2", text: $pollOption2)
+//            }
+//            
+//        case .predictionTarget:
+//            Section("Target Price") {
+//                TextField("Enter target price", text: $targetPrice)
+//                    .keyboardType(.decimalPad)
+//                Text("A horizontal line will be drawn at the target price")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//        
+//        // FIXED: Explicit handling for markers that show horizontal lines
+//        case .entry:
+//            Section("Entry Details") {
+//                HStack {
+//                    Text("Entry Price")
+//                    Spacer()
+//                    Text(chartData.formatPrice(price))
+//                        .foregroundColor(.green)
+//                        .fontWeight(.semibold)
+//                }
+//                Text("A horizontal line will be drawn at the candle close price")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .exit:
+//            Section("Exit Details") {
+//                HStack {
+//                    Text("Exit Price")
+//                    Spacer()
+//                    Text(chartData.formatPrice(price))
+//                        .foregroundColor(.orange)
+//                        .fontWeight(.semibold)
+//                }
+//                Text("A horizontal line will be drawn at the candle close price")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .stopLoss:
+//            Section("Stop Loss Details") {
+//                HStack {
+//                    Text("Stop Loss Price")
+//                    Spacer()
+//                    Text(chartData.formatPrice(price))
+//                        .foregroundColor(.red)
+//                        .fontWeight(.semibold)
+//                }
+//                Text("A horizontal line will be drawn at this price level")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .takeProfit:
+//            Section("Take Profit Details") {
+//                HStack {
+//                    Text("Take Profit Price")
+//                    Spacer()
+//                    Text(chartData.formatPrice(price))
+//                        .foregroundColor(.blue)
+//                        .fontWeight(.semibold)
+//                }
+//                Text("A horizontal line will be drawn at this price level")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .support:
+//            Section("Support Level") {
+//                HStack {
+//                    Text("Support Price")
+//                    Spacer()
+//                    if candleIndex >= 0 && candleIndex < candles.count {
+//                        Text(chartData.formatPrice(candles[candleIndex].low))
+//                            .foregroundColor(.purple)
+//                            .fontWeight(.semibold)
+//                    }
+//                }
+//                Text("A horizontal line will be drawn at the candle low")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .resistance:
+//            Section("Resistance Level") {
+//                HStack {
+//                    Text("Resistance Price")
+//                    Spacer()
+//                    if candleIndex >= 0 && candleIndex < candles.count {
+//                        Text(chartData.formatPrice(candles[candleIndex].high))
+//                            .foregroundColor(.pink)
+//                            .fontWeight(.semibold)
+//                    }
+//                }
+//                Text("A horizontal line will be drawn at the candle high")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//        
+//        // Simple markers that just need notes
+//        case .note, .question, .volumeSpike, .personal:
+//            EmptyView()  // These just use the standard Note section
+//        }
+//    }
+//    
+//    private func addMarker() {
+//        var pollOptions: [PollOption]? = nil
+//        if markerType == .poll && !pollOption1.isEmpty {
+//            pollOptions = [
+//                PollOption(text: pollOption1),
+//                PollOption(text: pollOption2.isEmpty ? "Option 2" : pollOption2)
+//            ]
+//        }
+//        
+//        let target = Double(targetPrice)
+//        
+//        markerManager.addMarker(
+//            candleIndex: candleIndex,
+//            timestamp: timestamp,
+//            price: price,
+//            type: markerType,
+//            username: username,
+//            note: note.isEmpty ? nil : note,
+//            candles: candles,
+//            targetPrice: target,
+//            alertSeverity: markerType == .alert ? alertSeverity : nil,
+//            trendlineDirection: markerType == .trendline ? trendlineDirection : nil,
+//            selectedIndicator: markerType == .indicator ? selectedIndicator : nil,
+//            chartPattern: markerType == .pattern ? chartPattern : nil,
+//            selectedEmoji: markerType == .emoji ? selectedEmoji : nil,
+//            pollQuestion: markerType == .poll ? pollQuestion : nil,
+//            pollOptions: pollOptions
+//        )
+//        
+//        dismiss()
 //    }
 //}
+//
+//// MARK: - Marker Detail Sheet
 //
 //struct MarkerDetailSheet: View {
 //    @Environment(\.dismiss) private var dismiss
@@ -2101,6 +2822,7 @@ struct ClusterExpansionSheet: View {
 //    
 //    @State private var isEditing = false
 //    @State private var editedNote: String = ""
+//    @State private var newComment: String = ""
 //    
 //    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String) {
 //        self.markerManager = markerManager
@@ -2152,6 +2874,9 @@ struct ClusterExpansionSheet: View {
 //                    }
 //                }
 //                
+//                // Type-specific info
+//                typeSpecificInfo
+//                
 //                if let note = marker.note, !note.isEmpty {
 //                    Section("Note") {
 //                        if isEditing {
@@ -2172,6 +2897,59 @@ struct ClusterExpansionSheet: View {
 //                                .foregroundColor(marker.isLikedByCurrentUser ? .red : .gray)
 //                            Text("\(marker.likeCount) likes")
 //                        }
+//                    }
+//                }
+//                
+//                // Comments section
+//                Section("Comments") {
+//                    ForEach(marker.comments) { comment in
+//                        VStack(alignment: .leading, spacing: 4) {
+//                            HStack {
+//                                Text(comment.username)
+//                                    .font(.caption)
+//                                    .fontWeight(.semibold)
+//                                Spacer()
+//                                Text(comment.createdAt, style: .relative)
+//                                    .font(.caption2)
+//                                    .foregroundColor(.secondary)
+//                            }
+//                            Text(comment.text)
+//                                .font(.subheadline)
+//                        }
+//                        .padding(.vertical, 4)
+//                    }
+//                    
+//                    HStack {
+//                        TextField("Add comment...", text: $newComment)
+//                        Button {
+//                            guard !newComment.isEmpty else { return }
+//                            markerManager.addComment(markerId: marker.id, text: newComment, username: "You")
+//                            newComment = ""
+//                        } label: {
+//                            Image(systemName: "arrow.up.circle.fill")
+//                                .foregroundColor(.blue)
+//                        }
+//                    }
+//                }
+//                
+//                // Share/Save/Report buttons
+//                Section {
+//                    Button {
+//                        // Share action
+//                    } label: {
+//                        Label("Share", systemImage: "square.and.arrow.up")
+//                    }
+//                    
+//                    Button {
+//                        // Save action
+//                    } label: {
+//                        Label("Save", systemImage: "bookmark")
+//                    }
+//                    
+//                    Button(role: .destructive) {
+//                        // Report action
+//                    } label: {
+//                        Label("Report", systemImage: "flag")
 //                    }
 //                }
 //                
@@ -2204,95 +2982,80 @@ struct ClusterExpansionSheet: View {
 //                }
 //            }
 //        }
-//        .presentationDetents([.medium, .large])
+//        .presentationDetents([.fraction(0.25), .medium, .large])
 //        .presentationDragIndicator(.visible)
-//        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+//        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
 //        .onAppear {
 //            editedNote = marker.note ?? ""
 //        }
 //    }
-//}
-//
-//struct ClusterExpansionSheet: View {
-//    @Environment(\.dismiss) private var dismiss
-//    @ObservedObject var markerManager: MarkerManager
-//    let candleIndex: Int
-//    let chartData: ChartDataManager
-//    let onSelectMarker: (ChartMarker) -> Void
 //    
-//    private var markersAtCandle: [ChartMarker] {
-//        markerManager.filteredMarkers.filter { $0.candleIndex == candleIndex }
-//    }
-//    
-//    var body: some View {
-//        NavigationView {
-//            List {
-//                ForEach(markersAtCandle) { marker in
-//                    Button(action: {
-//                        dismiss()
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-//                            onSelectMarker(marker)
-//                        }
-//                    }) {
-//                        HStack(spacing: 12) {
-//                            Circle()
-//                                .fill(marker.type.color)
-//                                .frame(width: 32, height: 32)
-//                                .overlay {
-//                                    Image(systemName: marker.type.icon)
-//                                        .font(.system(size: 14))
-//                                        .foregroundColor(.white)
-//                                }
-//                            
-//                            VStack(alignment: .leading, spacing: 4) {
-//                                Text(marker.type.rawValue)
-//                                    .font(.headline)
-//                                    .foregroundColor(.white)
-//                                
-//                                Text("by \(marker.username)")
-//                                    .font(.caption)
-//                                    .foregroundColor(.secondary)
-//                            }
-//                            
-//                            Spacer()
-//                            
-//                            if marker.likeCount > 0 {
-//                                HStack(spacing: 2) {
-//                                    Image(systemName: "heart.fill")
-//                                        .font(.caption)
-//                                        .foregroundColor(.red)
-//                                    Text("\(marker.likeCount)")
-//                                        .font(.caption)
-//                                        .foregroundColor(.secondary)
-//                                }
-//                            }
-//                            
-//                            Image(systemName: "chevron.right")
-//                                .font(.caption)
-//                                .foregroundColor(.secondary)
-//                        }
-//                        .padding(.vertical, 4)
+//    @ViewBuilder
+//    private var typeSpecificInfo: some View {
+//        switch marker.type {
+//        case .alert:
+//            if let severity = marker.alertSeverity {
+//                Section("Alert Details") {
+//                    HStack {
+//                        Circle()
+//                            .fill(severity.color)
+//                            .frame(width: 12, height: 12)
+//                        Text(severity.rawValue)
 //                    }
 //                }
 //            }
-//            .navigationTitle("\(markersAtCandle.count) Markers")
-//            .navigationBarTitleDisplayMode(.inline)
-//            .toolbar {
-//                ToolbarItem(placement: .confirmationAction) {
-//                    Button("Done") { dismiss() }
+//            
+//        case .trendline:
+//            if let direction = marker.trendlineDirection {
+//                Section("Trendline Direction") {
+//                    Text(direction.rawValue)
 //                }
 //            }
+//            
+//        case .indicator:
+//            if let indicator = marker.selectedIndicator {
+//                Section("Indicator") {
+//                    Text(indicator)
+//                }
+//            }
+//            
+//        case .pattern:
+//            if let pattern = marker.chartPattern {
+//                Section("Chart Pattern") {
+//                    Text(pattern.rawValue)
+//                }
+//            }
+//            
+//        case .predictionTarget:
+//            if let target = marker.targetPrice {
+//                Section("Prediction") {
+//                    HStack {
+//                        Text("Target Price")
+//                        Spacer()
+//                        Text(chartData.formatPrice(target))
+//                            .foregroundColor(.secondary)
+//                    }
+//                }
+//            }
+//            
+//        case .poll:
+//            if let question = marker.pollQuestion, let options = marker.pollOptions {
+//                Section("Poll: \(question)") {
+//                    ForEach(options) { option in
+//                        HStack {
+//                            Text(option.text)
+//                            Spacer()
+//                            Text("\(option.voteCount)")
+//                                .foregroundColor(.secondary)
+//                        }
+//                    }
+//                }
+//            }
+//            
+//        default:
+//            EmptyView()
 //        }
-//        .presentationDetents([.medium])
-//        .presentationDragIndicator(.visible)
-//        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
 //    }
 //}
-
-
-
-
-
-
-
-
+//
+//
