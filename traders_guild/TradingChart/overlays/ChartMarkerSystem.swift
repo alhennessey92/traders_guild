@@ -60,6 +60,22 @@ class MarkerManager: ObservableObject {
                 candles: candles
             )
             
+            // ISSUE #2 FIX: Complete reset of positioning fields to force proper recalculation
+            // Historical markers might have stale positioning data that causes overlaps
+            // We need to clear ALL positioning data, not just the main fields
+            for i in 0..<positionedMarkers.count {
+                positionedMarkers[i].positionedBelow = false
+                positionedMarkers[i].proximityTier = 0
+                positionedMarkers[i].stackIndex = 0
+                // Clear any cached visual properties that might affect rendering
+                positionedMarkers[i].isVisible = true
+            }
+            
+            // Force a stable sort by creation date before recalculating positions
+            // This ensures consistent stacking order
+            positionedMarkers.sort { $0.createdAt < $1.createdAt }
+            
+            // Now calculate proper positions with fresh state
             positionedMarkers = MarkerPositionCalculator.assignStablePositions(
                 markers: positionedMarkers,
                 candles: candles
@@ -250,15 +266,15 @@ class MarkerDisplaySettings: ObservableObject {
     private init() {
         // Adjusted offsets for new stacking behavior
         self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 70
-        // REDUCED from 55 to 28 for tighter stacking
-        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 28
+        // REDUCED from 28 to 20 for tighter stacking (Issue #1 fix)
+        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 20
         self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 25
         self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 40
     }
     
     func resetToDefaults() {
         baseOffset = 70
-        stackOffset = 28
+        stackOffset = 20
         proximityTierOffset = 25
         placementExtraOffset = 40
     }
@@ -281,41 +297,70 @@ struct MarkerPositionCalculator {
     // MARK: - SHARED Position Calculation
     
     /// Calculate the screen position for a marker using its STORED properties
+    /// FIXED: Now accepts priceScale to scale marker distance when vertically zooming
     static func computeMarkerScreenPosition(
         marker: ChartMarker,
         candleHighY: CGFloat,
         candleLowY: CGFloat,
-        centerX: CGFloat
+        centerX: CGFloat,
+        priceScale: CGFloat = 1.0  // NEW: Scale marker distance with vertical zoom
     ) -> CGPoint {
         let baseY: CGFloat
         let stackDirection: CGFloat
         
+        // FIXED: Apply dampening to priceScale to make scaling less extreme
+        // Dampening factor of 0.5 means markers scale at 50% of the rate of candles
+        // Examples: 2x zoom → 1.5x marker distance, 3x zoom → 2x marker distance
+        let dampenedScale = dampenPriceScale(priceScale, dampening: 0.75)
+        
+        let scaledBaseOffset = baseOffset * dampenedScale
+        let scaledStackOffset = stackOffset * dampenedScale
+        let scaledTierOffset = offsetForTier(marker.proximityTier) * dampenedScale
+        
         if marker.positionedBelow {
-            baseY = candleLowY + baseOffset
+            baseY = candleLowY + scaledBaseOffset
             stackDirection = 1.0
         } else {
-            baseY = candleHighY - baseOffset
+            baseY = candleHighY - scaledBaseOffset
             stackDirection = -1.0
         }
         
-        let stackOffsetValue = CGFloat(marker.stackIndex) * stackOffset * stackDirection
-        let tierOffset = offsetForTier(marker.proximityTier) * stackDirection
+        let stackOffsetValue = CGFloat(marker.stackIndex) * scaledStackOffset * stackDirection
+        let tierOffset = scaledTierOffset * stackDirection
         let markerY = baseY + stackOffsetValue + tierOffset
         
         return CGPoint(x: centerX, y: markerY)
     }
     
+    /// Apply dampening to price scale to make marker scaling less extreme
+    /// - Parameters:
+    ///   - priceScale: The raw vertical zoom scale (1.0 = normal, 2.0 = 2x zoom, etc.)
+    ///   - dampening: How much to dampen (0.0 = no scaling, 1.0 = full scaling)
+    /// - Returns: Dampened scale factor
+    private static func dampenPriceScale(_ priceScale: CGFloat, dampening: CGFloat) -> CGFloat {
+        // Use interpolation between 1.0 (no scale) and priceScale (full scale)
+        // dampening = 0.5 means halfway between no scaling and full scaling
+        return 1.0 + (priceScale - 1.0) * dampening
+    }
+    
     /// Calculate PREVIEW position for new marker placement
     /// UPDATED: Now favors top placement by default
+    /// FIXED: Now accepts priceScale to scale preview marker distance
     static func calculatePreviewPosition(
         candleIndex: Int,
         existingMarkers: [ChartMarker],
         candles: [Candle],
         candleHighY: CGFloat,
         candleLowY: CGFloat,
-        centerX: CGFloat
+        centerX: CGFloat,
+        priceScale: CGFloat = 1.0  // NEW: Scale preview marker distance
     ) -> (position: CGPoint, isBelow: Bool) {
         let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
+        
+        // FIXED: Apply dampening to priceScale for preview marker too
+        let dampenedScale = dampenPriceScale(priceScale, dampening: 0.75)
+        let scaledPlacementOffset = placementOffset * dampenedScale
+        let scaledStackOffset = stackOffset * dampenedScale
         
         // NEW LOGIC: Default to ABOVE (false = not below)
         // Only go below if:
@@ -346,7 +391,7 @@ struct MarkerPositionCalculator {
             
             // If above is very crowded, consider below
             if neighborsAbove > neighborsBelow + 3 && !isSevereTrough {
-                let baseY = candleLowY + placementOffset
+                let baseY = candleLowY + scaledPlacementOffset
                 return (CGPoint(x: centerX, y: baseY), true)
             }
         } else {
@@ -364,14 +409,14 @@ struct MarkerPositionCalculator {
         let stackDirection: CGFloat
         
         if shouldBeBelow {
-            baseY = candleLowY + placementOffset
+            baseY = candleLowY + scaledPlacementOffset
             stackDirection = 1.0
         } else {
-            baseY = candleHighY - placementOffset
+            baseY = candleHighY - scaledPlacementOffset
             stackDirection = -1.0
         }
         
-        let stackOffsetValue = CGFloat(stackIndex) * stackOffset * stackDirection
+        let stackOffsetValue = CGFloat(stackIndex) * scaledStackOffset * stackDirection
         let markerY = baseY + stackOffsetValue
         
         return (CGPoint(x: centerX, y: markerY), shouldBeBelow)
@@ -591,6 +636,11 @@ struct ChartMarkerSystem {
         let allVisibleMarkers = markers.filter { $0.isVisible }
         let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
         
+        // HORIZONTAL LINES REMOVED FROM CANVAS
+        // Now drawn in MarkerPriceLinesOverlay (SwiftUI layer on top of y-axis)
+        // This ensures price labels appear above the y-axis overlay
+        
+        /*
         // Draw horizontal lines for selected marker first (behind markers)
         if let selectedId = selectedMarkerId,
            let selectedMarker = markers.first(where: { $0.id == selectedId }),
@@ -627,6 +677,7 @@ struct ChartMarkerSystem {
                 )
             }
         }
+        */
         
         for (candleIndex, markersAtCandle) in groupedMarkers {
             guard candleIndex >= 0 && candleIndex < candles.count else { continue }
@@ -652,7 +703,8 @@ struct ChartMarkerSystem {
                     marker: marker,
                     candleHighY: candleHighY,
                     candleLowY: candleLowY,
-                    centerX: centerX
+                    centerX: centerX,
+                    priceScale: priceScale  // FIXED: Pass priceScale for vertical zoom scaling
                 )
                 markerPositions.append((marker, position))
             }
@@ -830,27 +882,45 @@ struct ChartMarkerSystem {
         
         context.draw(
             Text(displayText)
-                .font(.system(size: 10 * scale, weight: .heavy))
-                .foregroundColor(.white),
+                .font(.system(size: 12 * scale, weight: .heavy))
+                .foregroundColor(.white.opacity(0.8)),
             at: position
         )
         
         // Like badge
+//        if marker.likeCount > 0 {
+//            let badgeOffset: CGFloat = (scaledRadius - 11)
+//            let likeCircleRect = CGRect(
+//                x: position.x + 7,
+//                y: position.y + badgeOffset,
+//                width: 12,
+//                height: 12
+//            )
+//            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
+//            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.8)
+//            context.draw(
+//                Text("\(marker.likeCount)")
+//                    .font(.system(size: 8, weight: .bold))
+//                    .foregroundColor(.white),
+//                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
+//            )
+//        }
+        
         if marker.likeCount > 0 {
             let badgeOffset: CGFloat = (scaledRadius - 11)
             let likeCircleRect = CGRect(
                 x: position.x + 7,
                 y: position.y + badgeOffset,
-                width: 12,
-                height: 12
+                width: 13,
+                height: 13
             )
-            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
-            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.8)
+            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red.opacity(0.8)))
+            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 1)
             context.draw(
                 Text("\(marker.likeCount)")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white),
-                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
+                at: CGPoint(x: position.x + 14, y: position.y + badgeOffset + 6)
             )
         }
 //        if marker.likeCount > 0 {
@@ -946,7 +1016,8 @@ struct ChartMarkerSystem {
                     marker: marker,
                     candleHighY: candleHighY,
                     candleLowY: candleLowY,
-                    centerX: centerX
+                    centerX: centerX,
+                    priceScale: priceScale  // FIXED: Pass priceScale for vertical zoom scaling
                 )
                 
                 let distance = hypot(location.x - position.x, location.y - position.y)
@@ -1573,7 +1644,6 @@ struct MarkerPlacementPriceIndicator: View {
 }
 
 
-
 ////
 ////  ChartMarkerSystem.swift
 ////  traders_guild
@@ -1636,6 +1706,22 @@ struct MarkerPlacementPriceIndicator: View {
 //                candles: candles
 //            )
 //            
+//            // ISSUE #2 FIX: Complete reset of positioning fields to force proper recalculation
+//            // Historical markers might have stale positioning data that causes overlaps
+//            // We need to clear ALL positioning data, not just the main fields
+//            for i in 0..<positionedMarkers.count {
+//                positionedMarkers[i].positionedBelow = false
+//                positionedMarkers[i].proximityTier = 0
+//                positionedMarkers[i].stackIndex = 0
+//                // Clear any cached visual properties that might affect rendering
+//                positionedMarkers[i].isVisible = true
+//            }
+//            
+//            // Force a stable sort by creation date before recalculating positions
+//            // This ensures consistent stacking order
+//            positionedMarkers.sort { $0.createdAt < $1.createdAt }
+//            
+//            // Now calculate proper positions with fresh state
 //            positionedMarkers = MarkerPositionCalculator.assignStablePositions(
 //                markers: positionedMarkers,
 //                candles: candles
@@ -1826,15 +1912,15 @@ struct MarkerPlacementPriceIndicator: View {
 //    private init() {
 //        // Adjusted offsets for new stacking behavior
 //        self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 70
-//        // REDUCED from 55 to 28 for tighter stacking
-//        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 28
+//        // REDUCED from 28 to 20 for tighter stacking (Issue #1 fix)
+//        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 20
 //        self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 25
 //        self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 40
 //    }
 //    
 //    func resetToDefaults() {
 //        baseOffset = 70
-//        stackOffset = 28
+//        stackOffset = 20
 //        proximityTierOffset = 25
 //        placementExtraOffset = 40
 //    }
@@ -1857,41 +1943,70 @@ struct MarkerPlacementPriceIndicator: View {
 //    // MARK: - SHARED Position Calculation
 //    
 //    /// Calculate the screen position for a marker using its STORED properties
+//    /// FIXED: Now accepts priceScale to scale marker distance when vertically zooming
 //    static func computeMarkerScreenPosition(
 //        marker: ChartMarker,
 //        candleHighY: CGFloat,
 //        candleLowY: CGFloat,
-//        centerX: CGFloat
+//        centerX: CGFloat,
+//        priceScale: CGFloat = 1.0  // NEW: Scale marker distance with vertical zoom
 //    ) -> CGPoint {
 //        let baseY: CGFloat
 //        let stackDirection: CGFloat
 //        
+//        // FIXED: Apply dampening to priceScale to make scaling less extreme
+//        // Dampening factor of 0.5 means markers scale at 50% of the rate of candles
+//        // Examples: 2x zoom → 1.5x marker distance, 3x zoom → 2x marker distance
+//        let dampenedScale = dampenPriceScale(priceScale, dampening: 0.75)
+//        
+//        let scaledBaseOffset = baseOffset * dampenedScale
+//        let scaledStackOffset = stackOffset * dampenedScale
+//        let scaledTierOffset = offsetForTier(marker.proximityTier) * dampenedScale
+//        
 //        if marker.positionedBelow {
-//            baseY = candleLowY + baseOffset
+//            baseY = candleLowY + scaledBaseOffset
 //            stackDirection = 1.0
 //        } else {
-//            baseY = candleHighY - baseOffset
+//            baseY = candleHighY - scaledBaseOffset
 //            stackDirection = -1.0
 //        }
 //        
-//        let stackOffsetValue = CGFloat(marker.stackIndex) * stackOffset * stackDirection
-//        let tierOffset = offsetForTier(marker.proximityTier) * stackDirection
+//        let stackOffsetValue = CGFloat(marker.stackIndex) * scaledStackOffset * stackDirection
+//        let tierOffset = scaledTierOffset * stackDirection
 //        let markerY = baseY + stackOffsetValue + tierOffset
 //        
 //        return CGPoint(x: centerX, y: markerY)
 //    }
 //    
+//    /// Apply dampening to price scale to make marker scaling less extreme
+//    /// - Parameters:
+//    ///   - priceScale: The raw vertical zoom scale (1.0 = normal, 2.0 = 2x zoom, etc.)
+//    ///   - dampening: How much to dampen (0.0 = no scaling, 1.0 = full scaling)
+//    /// - Returns: Dampened scale factor
+//    private static func dampenPriceScale(_ priceScale: CGFloat, dampening: CGFloat) -> CGFloat {
+//        // Use interpolation between 1.0 (no scale) and priceScale (full scale)
+//        // dampening = 0.5 means halfway between no scaling and full scaling
+//        return 1.0 + (priceScale - 1.0) * dampening
+//    }
+//    
 //    /// Calculate PREVIEW position for new marker placement
 //    /// UPDATED: Now favors top placement by default
+//    /// FIXED: Now accepts priceScale to scale preview marker distance
 //    static func calculatePreviewPosition(
 //        candleIndex: Int,
 //        existingMarkers: [ChartMarker],
 //        candles: [Candle],
 //        candleHighY: CGFloat,
 //        candleLowY: CGFloat,
-//        centerX: CGFloat
+//        centerX: CGFloat,
+//        priceScale: CGFloat = 1.0  // NEW: Scale preview marker distance
 //    ) -> (position: CGPoint, isBelow: Bool) {
 //        let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
+//        
+//        // FIXED: Apply dampening to priceScale for preview marker too
+//        let dampenedScale = dampenPriceScale(priceScale, dampening: 0.75)
+//        let scaledPlacementOffset = placementOffset * dampenedScale
+//        let scaledStackOffset = stackOffset * dampenedScale
 //        
 //        // NEW LOGIC: Default to ABOVE (false = not below)
 //        // Only go below if:
@@ -1922,7 +2037,7 @@ struct MarkerPlacementPriceIndicator: View {
 //            
 //            // If above is very crowded, consider below
 //            if neighborsAbove > neighborsBelow + 3 && !isSevereTrough {
-//                let baseY = candleLowY + placementOffset
+//                let baseY = candleLowY + scaledPlacementOffset
 //                return (CGPoint(x: centerX, y: baseY), true)
 //            }
 //        } else {
@@ -1940,14 +2055,14 @@ struct MarkerPlacementPriceIndicator: View {
 //        let stackDirection: CGFloat
 //        
 //        if shouldBeBelow {
-//            baseY = candleLowY + placementOffset
+//            baseY = candleLowY + scaledPlacementOffset
 //            stackDirection = 1.0
 //        } else {
-//            baseY = candleHighY - placementOffset
+//            baseY = candleHighY - scaledPlacementOffset
 //            stackDirection = -1.0
 //        }
 //        
-//        let stackOffsetValue = CGFloat(stackIndex) * stackOffset * stackDirection
+//        let stackOffsetValue = CGFloat(stackIndex) * scaledStackOffset * stackDirection
 //        let markerY = baseY + stackOffsetValue
 //        
 //        return (CGPoint(x: centerX, y: markerY), shouldBeBelow)
@@ -2160,12 +2275,18 @@ struct MarkerPlacementPriceIndicator: View {
 //        actualCandleWidth: CGFloat,
 //        totalOffset: CGFloat,
 //        markerManager: MarkerManager? = nil,
-//        selectedMarkerId: UUID? = nil
+//        selectedMarkerId: UUID? = nil,
+//        chartData: ChartDataManager? = nil
 //    ) {
 //        let scaledHeight = chartSize.height * priceScale
 //        let allVisibleMarkers = markers.filter { $0.isVisible }
 //        let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
 //        
+//        // HORIZONTAL LINES REMOVED FROM CANVAS
+//        // Now drawn in MarkerPriceLinesOverlay (SwiftUI layer on top of y-axis)
+//        // This ensures price labels appear above the y-axis overlay
+//        
+//        /*
 //        // Draw horizontal lines for selected marker first (behind markers)
 //        if let selectedId = selectedMarkerId,
 //           let selectedMarker = markers.first(where: { $0.id == selectedId }),
@@ -2181,7 +2302,8 @@ struct MarkerPlacementPriceIndicator: View {
 //                    priceScale: priceScale,
 //                    verticalOffset: verticalOffset,
 //                    color: selectedMarker.type.color,
-//                    markerX: CGFloat(selectedMarker.candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+//                    markerX: CGFloat(selectedMarker.candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2,
+//                    chartData: chartData
 //                )
 //            }
 //            
@@ -2196,10 +2318,12 @@ struct MarkerPlacementPriceIndicator: View {
 //                    verticalOffset: verticalOffset,
 //                    color: .red.opacity(0.8),
 //                    markerX: CGFloat(selectedMarker.candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2,
-//                    isDashed: true
+//                    isDashed: true,
+//                    chartData: chartData
 //                )
 //            }
 //        }
+//        */
 //        
 //        for (candleIndex, markersAtCandle) in groupedMarkers {
 //            guard candleIndex >= 0 && candleIndex < candles.count else { continue }
@@ -2225,7 +2349,8 @@ struct MarkerPlacementPriceIndicator: View {
 //                    marker: marker,
 //                    candleHighY: candleHighY,
 //                    candleLowY: candleLowY,
-//                    centerX: centerX
+//                    centerX: centerX,
+//                    priceScale: priceScale  // FIXED: Pass priceScale for vertical zoom scaling
 //                )
 //                markerPositions.append((marker, position))
 //            }
@@ -2262,16 +2387,17 @@ struct MarkerPlacementPriceIndicator: View {
 //        verticalOffset: CGFloat,
 //        color: Color,
 //        markerX: CGFloat,
-//        isDashed: Bool = false
+//        isDashed: Bool = false,
+//        chartData: ChartDataManager? = nil
 //    ) {
 //        let scaledHeight = chartSize.height * priceScale
 //        let y = chartSize.height - (CGFloat(price - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
 //        
-//        // Draw line from left edge to right edge (changed from stopping before Y-axis)
-//        // Updated per instruction to stop BEFORE the Y-axis
+//        // Draw line from left edge, stopping before Y-axis (matching PriceIndicatorView)
+//        let lineEndX = chartSize.width - 60
 //        let linePath = Path { path in
 //            path.move(to: CGPoint(x: 0, y: y))
-//            path.addLine(to: CGPoint(x: chartSize.width - 65, y: y))
+//            path.addLine(to: CGPoint(x: lineEndX, y: y))
 //        }
 //        
 //        let strokeStyle = isDashed ?
@@ -2280,27 +2406,28 @@ struct MarkerPlacementPriceIndicator: View {
 //        
 //        context.stroke(linePath, with: .color(color.opacity(0.6)), style: strokeStyle)
 //        
-//        // Moved price label to inside the Y-axis band (assumed 65pt width), with padding
-//        let labelWidth: CGFloat = 60
-//        let labelHeight: CGFloat = 18
-//        // Place inside the Y-axis band (assumed 65pt wide), with 5pt padding from its left edge
-//        let axisWidth: CGFloat = 65
-//        let labelX = chartSize.width - axisWidth + 5
+//        // Y-axis price label (matching PriceIndicatorView style)
+//        let labelX = chartSize.width - 35
 //        let labelRect = CGRect(
-//            x: labelX,
-//            y: y - labelHeight / 2,
-//            width: labelWidth,
-//            height: labelHeight
+//            x: labelX - 35,
+//            y: y - 11,
+//            width: 70,
+//            height: 22
 //        )
-//        context.fill(Path(roundedRect: labelRect, cornerRadius: 3), with: .color(color))
 //        
-//        // Format price
-//        let priceText = String(format: "%.5f", price)
+//        // Draw label background with marker color
+//        let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
+//        context.fill(roundedPath, with: .color(color))
+//        
+//        // Format price using symbol-aware formatting if chartData available
+//        let priceText = chartData?.formatPrice(price) ?? String(format: "%.5f", price)
+//        
+//        // Draw price text (white text on colored background)
 //        context.draw(
 //            Text(priceText)
-//                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+//                .font(.system(size: 10, weight: .semibold, design: .monospaced))
 //                .foregroundColor(.white),
-//            at: CGPoint(x: labelX + labelWidth / 2, y: y)
+//            at: CGPoint(x: labelX, y: y)
 //        )
 //    }
 //    
@@ -2373,10 +2500,10 @@ struct MarkerPlacementPriceIndicator: View {
 //            width: scaledRadius * 2,
 //            height: scaledRadius * 2
 //        )
-//        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.85)))
+//        context.fill(Path(ellipseIn: circleRect), with: .color(.black.opacity(0.95)))
 //        
 //        let borderWidth: CGFloat = isSelected ? 3.5 : 2.5
-//        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: borderWidth * scale)
+//        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color.opacity(0.6)), lineWidth: borderWidth * scale)
 //        
 //        // Inner colored circle
 //        let iconRadius: CGFloat = 9 * scale
@@ -2386,7 +2513,7 @@ struct MarkerPlacementPriceIndicator: View {
 //            width: iconRadius * 2,
 //            height: iconRadius * 2
 //        )
-//        context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color))
+//        context.fill(Path(ellipseIn: iconCircle), with: .color(marker.type.color.opacity(0.5)))
 //        
 //        // Draw SF Symbol icon instead of first letter
 //        // For emoji markers, show the emoji
@@ -2401,22 +2528,40 @@ struct MarkerPlacementPriceIndicator: View {
 //        
 //        context.draw(
 //            Text(displayText)
-//                .font(.system(size: 10 * scale, weight: .bold))
-//                .foregroundColor(.white),
+//                .font(.system(size: 12 * scale, weight: .heavy))
+//                .foregroundColor(.white.opacity(0.8)),
 //            at: position
 //        )
 //        
 //        // Like badge
+////        if marker.likeCount > 0 {
+////            let badgeOffset: CGFloat = (scaledRadius - 11)
+////            let likeCircleRect = CGRect(
+////                x: position.x + 7,
+////                y: position.y + badgeOffset,
+////                width: 12,
+////                height: 12
+////            )
+////            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
+////            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.8)
+////            context.draw(
+////                Text("\(marker.likeCount)")
+////                    .font(.system(size: 8, weight: .bold))
+////                    .foregroundColor(.white),
+////                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
+////            )
+////        }
+//        
 //        if marker.likeCount > 0 {
-//            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 3) : (scaledRadius - 10)
+//            let badgeOffset: CGFloat = (scaledRadius - 11)
 //            let likeCircleRect = CGRect(
-//                x: position.x + 8,
+//                x: position.x + 7,
 //                y: position.y + badgeOffset,
-//                width: 12,
-//                height: 12
+//                width: 13,
+//                height: 13
 //            )
-//            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
-//            
+//            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red.opacity(0.8)))
+//            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 1)
 //            context.draw(
 //                Text("\(marker.likeCount)")
 //                    .font(.system(size: 8, weight: .bold))
@@ -2424,6 +2569,23 @@ struct MarkerPlacementPriceIndicator: View {
 //                at: CGPoint(x: position.x + 14, y: position.y + badgeOffset + 6)
 //            )
 //        }
+////        if marker.likeCount > 0 {
+////            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 2) : (scaledRadius - 12)
+////            let likeCircleRect = CGRect(
+////                x: position.x + 6,
+////                y: position.y + badgeOffset,
+////                width: 14,
+////                height: 14
+////            )
+////            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
+////            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.5)
+////            context.draw(
+////                Text("\(marker.likeCount)")
+////                    .font(.system(size: 8, weight: .bold))
+////                    .foregroundColor(.white),
+////                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
+////            )
+////        }
 //        
 //        // Username label - only show if not hidden
 //        if !hideUsername {
@@ -2500,7 +2662,8 @@ struct MarkerPlacementPriceIndicator: View {
 //                    marker: marker,
 //                    candleHighY: candleHighY,
 //                    candleLowY: candleLowY,
-//                    centerX: centerX
+//                    centerX: centerX,
+//                    priceScale: priceScale  // FIXED: Pass priceScale for vertical zoom scaling
 //                )
 //                
 //                let distance = hypot(location.x - position.x, location.y - position.y)
@@ -3058,4 +3221,70 @@ struct MarkerPlacementPriceIndicator: View {
 //    }
 //}
 //
+//// MARK: - Temporary Marker Placement Indicator
 //
+///// Shows a temporary price line indicator while placing a marker
+///// Matches the style of PriceIndicatorView for consistency
+//struct MarkerPlacementPriceIndicator: View {
+//    let price: Double
+//    let markerType: MarkerType
+//    let priceScale: CGFloat
+//    let verticalOffset: CGFloat
+//    let chartHeight: CGFloat
+//    let priceRange: (min: Double, max: Double)
+//    let chartData: ChartDataManager
+//    
+//    private var indicatorYPosition: CGFloat {
+//        let normalizedPrice = (price - priceRange.min) / (priceRange.max - priceRange.min)
+//        return chartHeight - (CGFloat(normalizedPrice) * chartHeight * priceScale) - verticalOffset
+//    }
+//    
+//    private var isVisible: Bool {
+//        indicatorYPosition >= 0 && indicatorYPosition <= chartHeight
+//    }
+//    
+//    private var formattedPrice: String {
+//        chartData.formatPrice(price)
+//    }
+//    
+//    var body: some View {
+//        GeometryReader { geometry in
+//            if isVisible && price > 0 {
+//                Canvas { context, size in
+//                    let y = indicatorYPosition
+//                    let lineEndX = size.width - 60
+//                    
+//                    // Draw horizontal dashed line
+//                    let linePath = Path { path in
+//                        path.move(to: CGPoint(x: 0, y: y))
+//                        path.addLine(to: CGPoint(x: lineEndX, y: y))
+//                    }
+//                    context.stroke(
+//                        linePath,
+//                        with: .color(markerType.color.opacity(0.7)),
+//                        style: StrokeStyle(lineWidth: 1.5, dash: [5, 3])
+//                    )
+//                    
+//                    // Draw price label background (colored by marker type)
+//                    let labelX = size.width - 35
+//                    let labelRect = CGRect(
+//                        x: labelX - 35,
+//                        y: y - 11,
+//                        width: 70,
+//                        height: 22
+//                    )
+//                    let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
+//                    context.fill(roundedPath, with: .color(markerType.color))
+//                    
+//                    // Draw price text
+//                    let text = Text(formattedPrice)
+//                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+//                        .foregroundColor(.white)
+//                    
+//                    context.draw(text, at: CGPoint(x: labelX, y: y))
+//                }
+//            }
+//        }
+//        .allowsHitTesting(false)
+//    }
+//}
