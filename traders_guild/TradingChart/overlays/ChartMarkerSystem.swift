@@ -132,33 +132,65 @@ class MarkerManager: ObservableObject {
         pollQuestion: String? = nil,
         pollOptions: [PollOption]? = nil
     ) -> Bool {
+        print("🔧 === MARKER MANAGER - ADD MARKER ===")
+        print("🔧 Type: \(type)")
+        print("🔧 Candle Index: \(candleIndex)")
+        print("🔧 Price: \(price)")
+        print("🔧 Target Price: \(String(describing: targetPrice))")
+        print("🔧 Horizontal Line Price: \(String(describing: horizontalLinePrice))")
+        print("🔧 Candles count: \(candles.count)")
+        
+        // Validate candle index
+        guard candleIndex >= 0 && candleIndex < candles.count else {
+            print("🔧 ❌ ERROR: Invalid candle index \(candleIndex) (candles: \(candles.count))")
+            return false
+        }
+        
         // Check for duplicate type on same candle
         if let existingMarker = existingMarkerOfType(type, atCandleIndex: candleIndex) {
+            print("🔧 ⚠️ Duplicate marker detected: \(existingMarker.id)")
+            print("🔧 Showing duplicate alert...")
             duplicateMarkerToLike = existingMarker
             showDuplicateAlert = true
             return false
         }
         
+        print("🔧 ✓ No duplicate found")
+        
         // Calculate line price based on marker type
         var linePrice = horizontalLinePrice
         if type.hasHorizontalLine && linePrice == nil && candleIndex >= 0 && candleIndex < candles.count {
             let candle = candles[candleIndex]
-            switch type.lineSource {
-            case .candleOpen:
-                linePrice = candle.open
-            case .candleClose:
-                linePrice = candle.close
-            case .candleHigh:
-                linePrice = candle.high
-            case .candleLow:
-                linePrice = candle.low
-            case .custom:
-                linePrice = targetPrice
-            case .none:
-                break
+            print("🔧 Calculating line price from candle:")
+            print("🔧 Candle: O:\(candle.open) H:\(candle.high) L:\(candle.low) C:\(candle.close)")
+            print("🔧 Line source: \(type.lineSource)")
+            
+            // FIXED: For prediction markers, always use candle close as entry price
+            // The target price is stored separately in the targetPrice field
+            if type == .predictionTarget {
+                linePrice = candle.close  // Entry price is always the candle close
+                print("🔧 Prediction marker - using candle close as entry price: \(linePrice ?? 0)")
+            } else {
+                switch type.lineSource {
+                case .candleOpen:
+                    linePrice = candle.open
+                case .candleClose:
+                    linePrice = candle.close
+                case .candleHigh:
+                    linePrice = candle.high
+                case .candleLow:
+                    linePrice = candle.low
+                case .custom:
+                    linePrice = targetPrice
+                case .none:
+                    break
+                }
             }
+            
+            print("🔧 Calculated line price: \(String(describing: linePrice))")
         }
         
+        print("🔧 Creating ChartMarker...")
         var marker = ChartMarker(
             candleIndex: candleIndex,
             timestamp: timestamp,
@@ -179,18 +211,26 @@ class MarkerManager: ObservableObject {
             pollOptions: pollOptions
         )
         
+        print("🔧 ✓ Marker created: \(marker.id)")
+        print("🔧 Marker has target: \(marker.targetPrice != nil)")
+        print("🔧 Marker has line: \(marker.horizontalLinePrice != nil)")
+        
         // Calculate proper position
+        print("🔧 Calculating position...")
         let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
             marker: marker,
             existingMarkers: markers,
             candles: candles
         )
         
+        print("🔧 Position: below=\(positioning.isBelow) tier=\(positioning.tier) stack=\(positioning.stackIndex)")
+        
         marker.positionedBelow = positioning.isBelow
         marker.proximityTier = positioning.tier
         marker.stackIndex = positioning.stackIndex
         
         markers.append(marker)
+        print("🔧 ✅ Marker appended to array. Total markers: \(markers.count)")
         return true
     }
     
@@ -1043,6 +1083,7 @@ struct MarkerCreationSheet: View {
     let chartData: ChartDataManager
     let candles: [Candle]
     let markerType: MarkerType
+    let initialTargetPrice: Double?  // NEW: For prediction markers
     
     @State private var note: String = ""
     
@@ -1110,6 +1151,13 @@ struct MarkerCreationSheet: View {
         .presentationDragIndicator(.visible)
         .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
         .interactiveDismissDisabled(true)
+        .onAppear {
+            // Initialize target price for prediction markers
+            if let initialTarget = initialTargetPrice {
+                targetPrice = chartData.formatPrice(initialTarget)
+                print("📝 ✓ Initialized target price field: \(targetPrice)")
+            }
+        }
     }
     
     @ViewBuilder
@@ -1296,17 +1344,32 @@ struct MarkerCreationSheet: View {
     }
     
     private func addMarker() {
+        print("📝 === MARKER CREATION SHEET - ADD MARKER ===")
+        print("📝 Marker Type: \(markerType)")
+        print("📝 Candle Index: \(candleIndex)")
+        print("📝 Price: \(price)")
+        print("📝 Timestamp: \(timestamp)")
+        print("📝 Note: \(note.isEmpty ? "(empty)" : note)")
+        print("📝 Target Price String: '\(targetPrice)'")
+        
         var pollOptions: [PollOption]? = nil
         if markerType == .poll && !pollOption1.isEmpty {
             pollOptions = [
                 PollOption(text: pollOption1),
                 PollOption(text: pollOption2.isEmpty ? "Option 2" : pollOption2)
             ]
+            print("📝 Poll Options: \(pollOptions!.count) options")
         }
         
         let target = Double(targetPrice)
+        print("📝 Parsed Target Price: \(String(describing: target))")
         
-        markerManager.addMarker(
+        if markerType == .predictionTarget && target == nil {
+            print("📝 ⚠️ WARNING: Prediction marker without target price!")
+        }
+        
+        print("📝 Calling markerManager.addMarker...")
+        let success = markerManager.addMarker(
             candleIndex: candleIndex,
             timestamp: timestamp,
             price: price,
@@ -1324,7 +1387,13 @@ struct MarkerCreationSheet: View {
             pollOptions: pollOptions
         )
         
-        dismiss()
+        if success {
+            print("📝 ✅ Marker added successfully!")
+            dismiss()
+        } else {
+            print("📝 ❌ Failed to add marker (duplicate detected)")
+            // Note: duplicate alert is shown by MarkerManager
+        }
     }
 }
 
@@ -1644,6 +1713,7 @@ struct MarkerPlacementPriceIndicator: View {
 }
 
 
+
 ////
 ////  ChartMarkerSystem.swift
 ////  traders_guild
@@ -1778,17 +1848,39 @@ struct MarkerPlacementPriceIndicator: View {
 //        pollQuestion: String? = nil,
 //        pollOptions: [PollOption]? = nil
 //    ) -> Bool {
+//        print("🔧 === MARKER MANAGER - ADD MARKER ===")
+//        print("🔧 Type: \(type)")
+//        print("🔧 Candle Index: \(candleIndex)")
+//        print("🔧 Price: \(price)")
+//        print("🔧 Target Price: \(String(describing: targetPrice))")
+//        print("🔧 Horizontal Line Price: \(String(describing: horizontalLinePrice))")
+//        print("🔧 Candles count: \(candles.count)")
+//        
+//        // Validate candle index
+//        guard candleIndex >= 0 && candleIndex < candles.count else {
+//            print("🔧 ❌ ERROR: Invalid candle index \(candleIndex) (candles: \(candles.count))")
+//            return false
+//        }
+//        
 //        // Check for duplicate type on same candle
 //        if let existingMarker = existingMarkerOfType(type, atCandleIndex: candleIndex) {
+//            print("🔧 ⚠️ Duplicate marker detected: \(existingMarker.id)")
+//            print("🔧 Showing duplicate alert...")
 //            duplicateMarkerToLike = existingMarker
 //            showDuplicateAlert = true
 //            return false
 //        }
 //        
+//        print("🔧 ✓ No duplicate found")
+//        
 //        // Calculate line price based on marker type
 //        var linePrice = horizontalLinePrice
 //        if type.hasHorizontalLine && linePrice == nil && candleIndex >= 0 && candleIndex < candles.count {
 //            let candle = candles[candleIndex]
+//            print("🔧 Calculating line price from candle:")
+//            print("🔧 Candle: O:\(candle.open) H:\(candle.high) L:\(candle.low) C:\(candle.close)")
+//            print("🔧 Line source: \(type.lineSource)")
+//            
 //            switch type.lineSource {
 //            case .candleOpen:
 //                linePrice = candle.open
@@ -1803,8 +1895,11 @@ struct MarkerPlacementPriceIndicator: View {
 //            case .none:
 //                break
 //            }
+//            
+//            print("🔧 Calculated line price: \(String(describing: linePrice))")
 //        }
 //        
+//        print("🔧 Creating ChartMarker...")
 //        var marker = ChartMarker(
 //            candleIndex: candleIndex,
 //            timestamp: timestamp,
@@ -1825,18 +1920,26 @@ struct MarkerPlacementPriceIndicator: View {
 //            pollOptions: pollOptions
 //        )
 //        
+//        print("🔧 ✓ Marker created: \(marker.id)")
+//        print("🔧 Marker has target: \(marker.targetPrice != nil)")
+//        print("🔧 Marker has line: \(marker.horizontalLinePrice != nil)")
+//        
 //        // Calculate proper position
+//        print("🔧 Calculating position...")
 //        let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
 //            marker: marker,
 //            existingMarkers: markers,
 //            candles: candles
 //        )
 //        
+//        print("🔧 Position: below=\(positioning.isBelow) tier=\(positioning.tier) stack=\(positioning.stackIndex)")
+//        
 //        marker.positionedBelow = positioning.isBelow
 //        marker.proximityTier = positioning.tier
 //        marker.stackIndex = positioning.stackIndex
 //        
 //        markers.append(marker)
+//        print("🔧 ✅ Marker appended to array. Total markers: \(markers.count)")
 //        return true
 //    }
 //    
@@ -2689,6 +2792,7 @@ struct MarkerPlacementPriceIndicator: View {
 //    let chartData: ChartDataManager
 //    let candles: [Candle]
 //    let markerType: MarkerType
+//    let initialTargetPrice: Double?  // NEW: For prediction markers
 //    
 //    @State private var note: String = ""
 //    
@@ -2756,6 +2860,13 @@ struct MarkerPlacementPriceIndicator: View {
 //        .presentationDragIndicator(.visible)
 //        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
 //        .interactiveDismissDisabled(true)
+//        .onAppear {
+//            // Initialize target price for prediction markers
+//            if let initialTarget = initialTargetPrice {
+//                targetPrice = chartData.formatPrice(initialTarget)
+//                print("📝 ✓ Initialized target price field: \(targetPrice)")
+//            }
+//        }
 //    }
 //    
 //    @ViewBuilder
@@ -2942,17 +3053,32 @@ struct MarkerPlacementPriceIndicator: View {
 //    }
 //    
 //    private func addMarker() {
+//        print("📝 === MARKER CREATION SHEET - ADD MARKER ===")
+//        print("📝 Marker Type: \(markerType)")
+//        print("📝 Candle Index: \(candleIndex)")
+//        print("📝 Price: \(price)")
+//        print("📝 Timestamp: \(timestamp)")
+//        print("📝 Note: \(note.isEmpty ? "(empty)" : note)")
+//        print("📝 Target Price String: '\(targetPrice)'")
+//        
 //        var pollOptions: [PollOption]? = nil
 //        if markerType == .poll && !pollOption1.isEmpty {
 //            pollOptions = [
 //                PollOption(text: pollOption1),
 //                PollOption(text: pollOption2.isEmpty ? "Option 2" : pollOption2)
 //            ]
+//            print("📝 Poll Options: \(pollOptions!.count) options")
 //        }
 //        
 //        let target = Double(targetPrice)
+//        print("📝 Parsed Target Price: \(String(describing: target))")
 //        
-//        markerManager.addMarker(
+//        if markerType == .predictionTarget && target == nil {
+//            print("📝 ⚠️ WARNING: Prediction marker without target price!")
+//        }
+//        
+//        print("📝 Calling markerManager.addMarker...")
+//        let success = markerManager.addMarker(
 //            candleIndex: candleIndex,
 //            timestamp: timestamp,
 //            price: price,
@@ -2970,7 +3096,13 @@ struct MarkerPlacementPriceIndicator: View {
 //            pollOptions: pollOptions
 //        )
 //        
-//        dismiss()
+//        if success {
+//            print("📝 ✅ Marker added successfully!")
+//            dismiss()
+//        } else {
+//            print("📝 ❌ Failed to add marker (duplicate detected)")
+//            // Note: duplicate alert is shown by MarkerManager
+//        }
 //    }
 //}
 //
@@ -3288,3 +3420,8 @@ struct MarkerPlacementPriceIndicator: View {
 //        .allowsHitTesting(false)
 //    }
 //}
+//
+//
+//
+//
+//
