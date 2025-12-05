@@ -384,7 +384,7 @@ struct MarkerPositionCalculator {
     }
     
     /// Calculate PREVIEW position for new marker placement
-    /// UPDATED: Now favors top placement by default
+    /// Uses the same positioning logic as actual marker placement
     /// FIXED: Now accepts priceScale to scale preview marker distance
     static func calculatePreviewPosition(
         candleIndex: Int,
@@ -402,46 +402,22 @@ struct MarkerPositionCalculator {
         let scaledPlacementOffset = placementOffset * dampenedScale
         let scaledStackOffset = stackOffset * dampenedScale
         
-        // NEW LOGIC: Default to ABOVE (false = not below)
-        // Only go below if:
-        // 1. There are already markers above and we need to alternate
-        // 2. It's a severe peak (lower candles on both sides)
-        
         let shouldBeBelow: Bool
         
-        if markersAtCandle.isEmpty {
-            // No existing markers - check for severe peak first, otherwise default to above
-            let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
-            let isSevereTrough = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: false)
-            
-            if isSeverePeak && !isSevereTrough {
-                // Severe peak - place below
-                shouldBeBelow = true
-            } else {
-                // Default to above (including severe troughs and neutral cases)
-                shouldBeBelow = false
-            }
-            
-            // Check nearby marker density and adjust if needed
-            let nearbyMarkers = existingMarkers.filter {
-                abs($0.candleIndex - candleIndex) <= proximityRange
-            }
-            let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
-            let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
-            
-            // If above is very crowded, consider below
-            if neighborsAbove > neighborsBelow + 3 && !isSevereTrough {
-                let baseY = candleLowY + scaledPlacementOffset
-                return (CGPoint(x: centerX, y: baseY), true)
-            }
-        } else {
-            // FIXED: Has existing markers - place on SAME side as existing ones
-            // This ensures all markers stack together instead of alternating
+        if !markersAtCandle.isEmpty {
+            // RULE 1: Has existing markers - place on SAME side as existing ones
             if let firstMarker = markersAtCandle.first {
                 shouldBeBelow = firstMarker.positionedBelow
             } else {
-                shouldBeBelow = false // Fallback - should never reach here
+                shouldBeBelow = false
             }
+        } else {
+            // No existing markers on this candle - use the same logic as new marker placement
+            shouldBeBelow = determineSideForNewMarker(
+                candleIndex: candleIndex,
+                existingMarkers: existingMarkers,
+                candles: candles
+            )
         }
         
         let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
@@ -464,6 +440,10 @@ struct MarkerPositionCalculator {
     
     // MARK: - Stable Position Assignment
     
+    /// Proximity range for determining if markers are "close" to each other
+    /// Used to decide if a marker should flip to opposite side
+    private static let closeProximityRange = 2  // 1-2 candles away
+    
     static func assignStablePositions(
         markers: [ChartMarker],
         candles: [Candle]
@@ -476,59 +456,38 @@ struct MarkerPositionCalculator {
         var usedAboveTiers: [Int: Set<Int>] = [:]
         var usedBelowTiers: [Int: Set<Int>] = [:]
         
+        // Track which side each candle's markers are on (for proximity checks)
+        var candleSideDecisions: [Int: Bool] = [:]  // candleIndex -> isBelow
+        
         for candleIndex in sortedIndices {
             guard let markersAtCandle = grouped[candleIndex] else { continue }
             
             let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
             
-            // Track markers placed above and below for this candle
-            var aboveStackIndex = 0
-            var belowStackIndex = 0
+            // FIXED: Calculate the tier ONCE per candle, not per marker
+            // All markers on the same candle share the same tier but have different stack indices
             
-            for marker in sorted {
+            // Determine which side this candle's markers should be on
+            let shouldBeBelow = determineSideForCandle(
+                candleIndex: candleIndex,
+                candles: candles,
+                existingDecisions: candleSideDecisions
+            )
+            
+            // Record this decision for proximity checks on subsequent candles
+            candleSideDecisions[candleIndex] = shouldBeBelow
+            
+            // Calculate tier ONCE for this candle (all markers share it)
+            let tier: Int
+            if shouldBeBelow {
+                tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedBelowTiers)
+            } else {
+                tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedAboveTiers)
+            }
+            
+            // Assign positions to all markers on this candle
+            for (stackIndex, marker) in sorted.enumerated() {
                 guard let resultIndex = result.firstIndex(where: { $0.id == marker.id }) else { continue }
-                
-                // NEW: Favor above placement
-                // First marker always goes above unless severe peak
-                // Subsequent markers alternate
-                let shouldBeBelow: Bool
-                
-                // FIXED: All markers on same candle should be on the same side
-                // First marker determines side, all others follow
-                if sorted.count == 1 {
-                    // Single marker - check for severe peak
-                    let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
-                    shouldBeBelow = isSeverePeak
-                } else {
-                    // Multiple markers - ALL go on same side
-                    // First marker (aboveStackIndex == 0 && belowStackIndex == 0) determines side
-                    if aboveStackIndex == 0 && belowStackIndex == 0 {
-                        let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
-                        shouldBeBelow = isSeverePeak
-                    } else if aboveStackIndex > 0 {
-                        // We already have markers above, keep stacking above
-                        shouldBeBelow = false
-                    } else {
-                        // We already have markers below, keep stacking below
-                        shouldBeBelow = true
-                    }
-                }
-                
-                let stackIndex: Int
-                if shouldBeBelow {
-                    stackIndex = belowStackIndex
-                    belowStackIndex += 1
-                } else {
-                    stackIndex = aboveStackIndex
-                    aboveStackIndex += 1
-                }
-                
-                let tier: Int
-                if shouldBeBelow {
-                    tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedBelowTiers)
-                } else {
-                    tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedAboveTiers)
-                }
                 
                 result[resultIndex].positionedBelow = shouldBeBelow
                 result[resultIndex].proximityTier = tier
@@ -537,6 +496,65 @@ struct MarkerPositionCalculator {
         }
         
         return result
+    }
+    
+    /// Determines which side (above/below) markers on a candle should be placed
+    /// Priority order:
+    /// 1. If 1-2 candles away from a marker on the same side, flip to opposite side
+    /// 2. If severe trough (lower than neighbors), place below (away from higher neighbors)
+    /// 3. If severe peak (higher than neighbors), place above (away from lower neighbors) - this is the default
+    /// 4. Default to above
+    private static func determineSideForCandle(
+        candleIndex: Int,
+        candles: [Candle],
+        existingDecisions: [Int: Bool]
+    ) -> Bool {
+        // Check for close proximity markers (1-2 candles away)
+        // If there's a marker nearby on above, we should go below (and vice versa)
+        var hasCloseMarkerAbove = false
+        var hasCloseMarkerBelow = false
+        
+        for delta in 1...closeProximityRange {
+            // Check left neighbor
+            if let leftDecision = existingDecisions[candleIndex - delta] {
+                if leftDecision {
+                    hasCloseMarkerBelow = true
+                } else {
+                    hasCloseMarkerAbove = true
+                }
+            }
+            // Note: We don't check right neighbors since we process left-to-right
+            // and haven't decided on those yet
+        }
+        
+        // Priority 1: Flip if there's a close marker on one side
+        if hasCloseMarkerAbove && !hasCloseMarkerBelow {
+            // Nearby marker is above, we go below (unless it's a severe peak - peaks need markers above)
+            let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+            if !isSeverePeak {
+                return true  // Go below
+            }
+        } else if hasCloseMarkerBelow && !hasCloseMarkerAbove {
+            // Nearby marker is below, we go above (unless it's a severe trough - troughs need markers below)
+            let isSevereTrough = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: false)
+            if !isSevereTrough {
+                return false  // Go above
+            }
+        }
+        
+        // Priority 2 & 3: Check for severe peak/trough
+        // Peak = higher than neighbors -> place ABOVE (away from lower neighbors)
+        // Trough = lower than neighbors -> place BELOW (away from higher neighbors)
+        let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+        let isSevereTrough = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: false)
+        
+        if isSevereTrough && !isSeverePeak {
+            return true  // Severe trough -> place below (away from higher neighbors)
+        }
+        // Note: Severe peaks default to above (which is the default anyway)
+        
+        // Priority 4: Default to above
+        return false
     }
     
     static func calculatePositionForNewMarker(
@@ -549,35 +567,20 @@ struct MarkerPositionCalculator {
         
         let shouldBeBelow: Bool
         
-        if markersAtCandle.isEmpty {
-            // NEW: Default to above unless severe peak
-            let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
-            shouldBeBelow = isSeverePeak
-            
-            // Check nearby marker density
-            let nearbyMarkers = existingMarkers.filter {
-                abs($0.candleIndex - candleIndex) <= proximityRange
-            }
-            let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
-            let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
-            
-            if neighborsAbove > neighborsBelow + 3 {
-                // Above is crowded, go below
-                let sameSideNearby = existingMarkers.filter {
-                    abs($0.candleIndex - candleIndex) <= proximityRange && $0.positionedBelow
-                }
-                let usedTiers = Set(sameSideNearby.map { $0.proximityTier })
-                var tier = 0
-                while usedTiers.contains(tier) { tier += 1 }
-                return (isBelow: true, tier: tier, stackIndex: 0)
-            }
-        } else {
-            // FIXED: Has existing markers - place on SAME side as existing ones
+        if !markersAtCandle.isEmpty {
+            // RULE 1: If there's a stack, join it on the same side
             if let firstMarker = markersAtCandle.first {
                 shouldBeBelow = firstMarker.positionedBelow
             } else {
                 shouldBeBelow = false
             }
+        } else {
+            // No existing markers on this candle - determine side based on proximity and candle shape
+            shouldBeBelow = determineSideForNewMarker(
+                candleIndex: candleIndex,
+                existingMarkers: existingMarkers,
+                candles: candles
+            )
         }
         
         let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
@@ -594,6 +597,67 @@ struct MarkerPositionCalculator {
         }
         
         return (isBelow: shouldBeBelow, tier: tier, stackIndex: stackIndex)
+    }
+    
+    /// Determines which side a new marker should be placed on when there's no existing stack
+    /// Priority order:
+    /// 1. If 1-2 candles away from a marker on the same side, flip to opposite side
+    /// 2. If severe trough (lower than neighbors), place below (away from higher neighbors)
+    /// 3. If severe peak (higher than neighbors), place above (away from lower neighbors) - this is the default
+    /// 4. If one side is very crowded nearby (3+ more markers), use the other side
+    /// 5. Default to above
+    private static func determineSideForNewMarker(
+        candleIndex: Int,
+        existingMarkers: [ChartMarker],
+        candles: [Candle]
+    ) -> Bool {
+        // Check for close proximity markers (1-2 candles away)
+        let closeMarkers = existingMarkers.filter {
+            abs($0.candleIndex - candleIndex) <= closeProximityRange
+        }
+        
+        let closeMarkersAbove = closeMarkers.filter { !$0.positionedBelow }
+        let closeMarkersBelow = closeMarkers.filter { $0.positionedBelow }
+        
+        // RULE 2: If there's a close marker on one side, flip to opposite
+        if !closeMarkersAbove.isEmpty && closeMarkersBelow.isEmpty {
+            // Close marker is above, consider going below (unless it's a severe peak - peaks need markers above)
+            let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+            if !isSeverePeak {
+                return true  // Go below
+            }
+        } else if !closeMarkersBelow.isEmpty && closeMarkersAbove.isEmpty {
+            // Close marker is below, consider going above (unless it's a severe trough - troughs need markers below)
+            let isSevereTrough = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: false)
+            if !isSevereTrough {
+                return false  // Go above
+            }
+        }
+        
+        // RULE 3 & 4: Check for severe peak/trough
+        // Peak = higher than neighbors -> place ABOVE (away from lower neighbors)
+        // Trough = lower than neighbors -> place BELOW (away from higher neighbors)
+        let isSeverePeak = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: true)
+        let isSevereTrough = isSeverePeakOrTrough(candleIndex: candleIndex, candles: candles, checkPeak: false)
+        
+        if isSevereTrough && !isSeverePeak {
+            return true  // Severe trough -> place below (away from higher neighbors)
+        }
+        // Note: Severe peaks default to above (which is the default anyway)
+        
+        // RULE 5: Check nearby marker density (wider range)
+        let nearbyMarkers = existingMarkers.filter {
+            abs($0.candleIndex - candleIndex) <= proximityRange
+        }
+        let neighborsAbove = nearbyMarkers.filter { !$0.positionedBelow }.count
+        let neighborsBelow = nearbyMarkers.filter { $0.positionedBelow }.count
+        
+        if neighborsAbove > neighborsBelow + 3 && !isSeverePeak {
+            return true  // Above is crowded, go below (unless it's a peak)
+        }
+        
+        // RULE 6: Default to above
+        return false
     }
     
     // MARK: - Severe Peak/Trough Detection
@@ -1714,6 +1778,11 @@ struct MarkerPlacementPriceIndicator: View {
 
 
 
+
+
+
+
+
 ////
 ////  ChartMarkerSystem.swift
 ////  traders_guild
@@ -1881,19 +1950,26 @@ struct MarkerPlacementPriceIndicator: View {
 //            print("🔧 Candle: O:\(candle.open) H:\(candle.high) L:\(candle.low) C:\(candle.close)")
 //            print("🔧 Line source: \(type.lineSource)")
 //            
-//            switch type.lineSource {
-//            case .candleOpen:
-//                linePrice = candle.open
-//            case .candleClose:
-//                linePrice = candle.close
-//            case .candleHigh:
-//                linePrice = candle.high
-//            case .candleLow:
-//                linePrice = candle.low
-//            case .custom:
-//                linePrice = targetPrice
-//            case .none:
-//                break
+//            // FIXED: For prediction markers, always use candle close as entry price
+//            // The target price is stored separately in the targetPrice field
+//            if type == .predictionTarget {
+//                linePrice = candle.close  // Entry price is always the candle close
+//                print("🔧 Prediction marker - using candle close as entry price: \(linePrice ?? 0)")
+//            } else {
+//                switch type.lineSource {
+//                case .candleOpen:
+//                    linePrice = candle.open
+//                case .candleClose:
+//                    linePrice = candle.close
+//                case .candleHigh:
+//                    linePrice = candle.high
+//                case .candleLow:
+//                    linePrice = candle.low
+//                case .custom:
+//                    linePrice = targetPrice
+//                case .none:
+//                    break
+//                }
 //            }
 //            
 //            print("🔧 Calculated line price: \(String(describing: linePrice))")
@@ -3420,8 +3496,5 @@ struct MarkerPlacementPriceIndicator: View {
 //        .allowsHitTesting(false)
 //    }
 //}
-//
-//
-//
-//
-//
+
+

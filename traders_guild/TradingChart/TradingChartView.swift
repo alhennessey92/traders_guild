@@ -43,7 +43,7 @@ struct TradingChartView: View {
     
     /// Gesture state manager that handles all pan/zoom transformations
     /// This is the single source of truth for chart positioning
-    @StateObject private var gestureState = ChartGestureState()
+    @ObservedObject var gestureState: ChartGestureState
     
     /// Current drag translation for smooth real-time panning feedback
     /// Using @State instead of @GestureState to avoid spring-back animation
@@ -135,7 +135,9 @@ struct TradingChartView: View {
     
     /// Current candle index where the preview marker is positioned
     /// Updates in real-time as user drags during placement mode
-    @State private var previewCandleIndex: Int = 0
+    /// FIXED: Initialized to -1 to indicate "not yet calculated"
+    /// Will be set to center when placement mode starts
+    @State private var previewCandleIndex: Int = -1
     
     /// Track the actual drag position for free-form marker movement
     /// This allows marker to follow finger in 2D before snapping on release
@@ -291,11 +293,13 @@ struct TradingChartView: View {
         username: String = "TestUser",
         guildId: String = "guild1",
         controlViewModel: ChartControlViewModel,
-        chartViewModel: ChartViewModel
+        chartViewModel: ChartViewModel,
+        gestureState: ChartGestureState
     ) {
         _markerManager = StateObject(wrappedValue: MarkerManager(userId: userId, guildId: guildId))
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
+        self.gestureState = gestureState
     }
     
     // MARK: - Target Line Helpers
@@ -376,8 +380,25 @@ struct TradingChartView: View {
     }
     
     /// Effective candle index for marker preview (from pending or placement mode)
+    /// FIXED: Always calculates center dynamically when entering placement mode
+    /// Only uses stored previewCandleIndex after user has dragged the marker
     private var effectiveCandleIndex: Int {
-        pendingMarkerInfo?.candleIndex ?? previewCandleIndex
+        if let pending = pendingMarkerInfo {
+            return pending.candleIndex
+        }
+        // If in placement mode, check if user has dragged (previewCandleIndex >= 0)
+        // If not dragged yet (-1), always calculate center fresh
+        if isMarkerPlacementMode {
+            if previewCandleIndex < 0 {
+                // User hasn't dragged yet - calculate center
+                return calculateCenterCandleIndex()
+            } else {
+                // User has dragged - use their position, but validate it
+                let validIndex = max(0, min(chartData.candles.count - 1, previewCandleIndex))
+                return validIndex
+            }
+        }
+        return max(0, previewCandleIndex)
     }
     
     /// Effective marker type for preview (from pending or placement mode)
@@ -463,17 +484,11 @@ struct TradingChartView: View {
             }
             
             yAxisOverlay(geometry: geometry)
-            
             priceIndicatorView(geometry: geometry)
-            
             xAxisOverlay(geometry: geometry)
-            
             chartInfoBox(geometry: geometry)
-            
             chartControlsBox(geometry: geometry)
-            
             markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-            
             targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
             
             CrosshairView(
@@ -486,6 +501,7 @@ struct TradingChartView: View {
                 instructionBanner(coordinateSystem: coordinateSystem)
             }
         }
+        // Gestures on the ZStack directly
         .gesture(crosshairDismissTapGesture())
         .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
         .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
@@ -512,6 +528,22 @@ struct TradingChartView: View {
         _ = coordinateSystem.updateLiveState(dragState: dragState, pinchScale: 1.0)
         return coordinateSystem
     }
+    
+    
+    
+    
+    // MARK: - Indicators
+    
+    /// Create drawing data for indicators (computed on main thread before Canvas)
+    private var indicatorDrawingData: IndicatorDrawingData {
+        IndicatorDrawingData(
+            configs: chartViewModel.indicatorManager.activeIndicators.enabledMovingAverages,
+            dataMap: chartViewModel.indicatorManager.movingAverageData
+        )
+    }
+    
+    
+    
     
     private func updateChartSize(_ size: CGSize) {
         if chartSize != size {
@@ -1086,8 +1118,13 @@ struct TradingChartView: View {
     
     private func handleMarkerPlacementModeChange(oldValue: Bool, newValue: Bool) {
         if !oldValue && newValue {
-            let centerIndex = calculateCenterCandleIndex()
-            previewCandleIndex = centerIndex
+            // Entering placement mode - keep previewCandleIndex as -1
+            // effectiveCandleIndex will calculate center dynamically until user drags
+            // This ensures we always use the current visible center, not a stale value
+            previewCandleIndex = -1
+        } else if oldValue && !newValue {
+            // Exiting placement mode - reset to invalid index
+            previewCandleIndex = -1
         }
     }
     
@@ -1100,6 +1137,7 @@ struct TradingChartView: View {
                 }
             }
         }
+        chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
     }
     
     private func handleSymbolStringChange(oldValue: String?, newValue: String?) {
@@ -1126,11 +1164,15 @@ struct TradingChartView: View {
                 }
             }
         }
+        chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
     }
     
     private func handleCandleCountChange(oldCount: Int, newCount: Int) {
         if abs(newCount - oldCount) > 10 {
             resetChartToMostRecentCandles()
+        }
+        if newCount != oldCount {
+            chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
         }
     }
     
@@ -1139,7 +1181,11 @@ struct TradingChartView: View {
     private func calculateCenterCandleIndex() -> Int {
         let totalOffset = gestureState.panOffset.width
         let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
-        let candlesOnScreen = Int(chartSize.width / totalCandleWidth)
+        
+        // FIXED: Use screen width as fallback when chartSize not yet set
+        let effectiveWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
+        let candlesOnScreen = Int(effectiveWidth / totalCandleWidth)
+        
         let visibleEndIndex = Swift.min(
             chartData.candles.count,
             visibleStartIndex + candlesOnScreen + 2
@@ -1194,12 +1240,22 @@ struct TradingChartView: View {
     // MARK: - Tap Gesture for Markers
     
     private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
+        // FIXED: Use a longer minimum distance and check start/end proximity
+        // to prevent accidental marker selection while panning
         DragGesture(minimumDistance: 0)
             .onEnded { value in
                 // FIXED: Check pendingMarkerInfo instead of showMarkerSheet/isShowingSheet
                 guard !crosshairManager.isActive &&
                         !isMarkerPlacementMode &&
                         pendingMarkerInfo == nil else { return }
+                
+                // FIXED: Require the gesture to be a deliberate tap, not a pan
+                // Check that finger didn't move much (max 15 points in any direction)
+                let dragDistance = sqrt(
+                    pow(value.translation.width, 2) +
+                    pow(value.translation.height, 2)
+                )
+                guard dragDistance < 15 else { return }
                 
                 let location = value.location
                 let totalOffset = gestureState.panOffset.width
@@ -1237,8 +1293,12 @@ struct TradingChartView: View {
                     return
                 }
                 
-                // FIXED: Added isDraggingTarget to prevent panning while dragging target line
                 if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged && !isDraggingTarget {
+                    // Start tracking on first drag event
+                    if lastDragTranslation == .zero {
+                        gestureState.beginDrag()
+                    }
+                    
                     let incrementalX = value.translation.width - lastDragTranslation.width
                     let incrementalY = -(value.translation.height - lastDragTranslation.height)
                     
@@ -1248,7 +1308,8 @@ struct TradingChartView: View {
                         candleCount: chartData.candles.count,
                         candleWidth: totalCandleWidth,
                         chartHeight: size.height,
-                        priceScale: gestureState.priceScale
+                        priceScale: gestureState.priceScale,
+                        trackVelocity: true  // Enable velocity tracking for momentum
                     )
                     
                     lastDragTranslation = value.translation
@@ -1257,7 +1318,17 @@ struct TradingChartView: View {
             .onEnded { value in
                 if crosshairManager.isActive {
                     crosshairDragStartPosition = nil
+                } else if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged && !isDraggingTarget {
+                    // Trigger momentum scrolling
+                    gestureState.endDrag(
+                        chartWidth: size.width,
+                        candleCount: chartData.candles.count,
+                        candleWidth: totalCandleWidth,
+                        chartHeight: size.height,
+                        priceScale: gestureState.priceScale
+                    )
                 }
+                
                 lastDragTranslation = .zero
                 dragState = .zero
             }
@@ -1910,6 +1981,18 @@ struct TradingChartView: View {
         
         drawGrid(context: drawingContext, size: size)
         drawCandlesticks(context: drawingContext, size: size)
+        
+        IndicatorOverlayRenderer.drawOverlayIndicators(
+            context: drawingContext,
+            size: size,
+            drawingData: indicatorDrawingData,
+            priceRange: chartData.priceRange,
+            priceScale: gestureState.priceScale,
+            verticalOffset: clampedVerticalOffset(chartHeight: size.height),
+            totalCandleWidth: totalCandleWidth,
+            actualCandleWidth: actualCandleWidth,
+            totalOffset: gestureState.panOffset.width
+        )
         
         ChartMarkerSystem.drawMarkers(
             context: drawingContext,
@@ -2582,12 +2665,21 @@ struct StaticTargetLineOverlay: View {
 
 
 
+
+
+
+
+
+
+
 //import SwiftUI
 //
 //// MARK: - Pending Marker Info
 //
 ///// FIXED: Captures marker type at placement time to prevent sheet presentation errors
-//struct PendingMarkerInfo {
+///// Now Identifiable to support sheet(item:) binding for more robust presentation
+//struct PendingMarkerInfo: Identifiable {
+//    let id = UUID()  // FIXED: Add id for Identifiable conformance
 //    let candleIndex: Int
 //    let timestamp: Date
 //    let price: Double
@@ -2625,7 +2717,7 @@ struct StaticTargetLineOverlay: View {
 //    
 //    /// Gesture state manager that handles all pan/zoom transformations
 //    /// This is the single source of truth for chart positioning
-//    @StateObject private var gestureState = ChartGestureState()
+//    @ObservedObject var gestureState: ChartGestureState
 //    
 //    /// Current drag translation for smooth real-time panning feedback
 //    /// Using @State instead of @GestureState to avoid spring-back animation
@@ -2690,9 +2782,6 @@ struct StaticTargetLineOverlay: View {
 //    
 //    // MARK: - UI State
 //    
-//    /// Whether the marker creation sheet is currently showing
-//    @State private var showMarkerSheet = false
-//    
 //    /// Whether we're in marker placement mode (user is positioning new marker)
 //    /// When true, drag gestures move the preview marker instead of panning chart
 //    // Marker placement mode is now controlled by ViewModel
@@ -2707,7 +2796,7 @@ struct StaticTargetLineOverlay: View {
 //    private let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
 //    
 //    /// Temporary storage for marker info before final creation
-//    /// FIXED: Now captures marker type to prevent sheet presentation errors
+//    /// FIXED: Now Identifiable and used with sheet(item:) for robust presentation
 //    /// Contains candle index, timestamp, price, and marker type of pending marker
 //    @State private var pendingMarkerInfo: PendingMarkerInfo?
 //    
@@ -2725,9 +2814,6 @@ struct StaticTargetLineOverlay: View {
 //    /// Track the actual drag position for free-form marker movement
 //    /// This allows marker to follow finger in 2D before snapping on release
 //    @State private var markerDragPosition: CGPoint?
-//    
-//    /// Prevents multiple sheet presentations when user taps rapidly
-//    @State private var isShowingSheet = false
 //    
 //    @State private var chartSize: CGSize = .zero
 //    
@@ -2879,11 +2965,13 @@ struct StaticTargetLineOverlay: View {
 //        username: String = "TestUser",
 //        guildId: String = "guild1",
 //        controlViewModel: ChartControlViewModel,
-//        chartViewModel: ChartViewModel
+//        chartViewModel: ChartViewModel,
+//        gestureState: ChartGestureState
 //    ) {
 //        _markerManager = StateObject(wrappedValue: MarkerManager(userId: userId, guildId: guildId))
 //        self.controlViewModel = controlViewModel
 //        self.chartViewModel = chartViewModel
+//        self.gestureState = gestureState
 //    }
 //    
 //    // MARK: - Target Line Helpers
@@ -2980,7 +3068,8 @@ struct StaticTargetLineOverlay: View {
 //    
 //    /// Whether instruction banner should be shown
 //    private var shouldShowInstructionBanner: Bool {
-//        isMarkerPlacementMode && !showMarkerSheet && !isShowingSheet
+//        // FIXED: Check pendingMarkerInfo instead of showMarkerSheet/isShowingSheet
+//        isMarkerPlacementMode && pendingMarkerInfo == nil
 //    }
 //    
 //    // MARK: - Body
@@ -2991,8 +3080,21 @@ struct StaticTargetLineOverlay: View {
 //                chartContent(geometry: geometry)
 //            }
 //        }
-//        .sheet(isPresented: $showMarkerSheet) {
-//            markerCreationSheetContent
+//        // FIXED: Use sheet(item:) instead of sheet(isPresented:) for more robust presentation
+//        // This ensures the sheet content always has valid data when shown
+//        .sheet(item: $pendingMarkerInfo) { info in
+//            MarkerCreationSheet(
+//                markerManager: markerManager,
+//                candleIndex: info.candleIndex,
+//                timestamp: info.timestamp,
+//                price: info.price,
+//                username: "TestUser",
+//                chartData: chartData,
+//                candles: chartData.candles,
+//                markerType: info.markerType,
+//                initialTargetPrice: info.targetPrice
+//            )
+//            .onDisappear(perform: handleMarkerSheetDismiss)
 //        }
 //        .sheet(item: $markerManager.selectedMarker) { marker in
 //            MarkerDetailSheet(
@@ -3037,17 +3139,11 @@ struct StaticTargetLineOverlay: View {
 //            }
 //            
 //            yAxisOverlay(geometry: geometry)
-//            
 //            priceIndicatorView(geometry: geometry)
-//            
 //            xAxisOverlay(geometry: geometry)
-//            
 //            chartInfoBox(geometry: geometry)
-//            
 //            chartControlsBox(geometry: geometry)
-//            
 //            markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-//            
 //            targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
 //            
 //            CrosshairView(
@@ -3060,6 +3156,7 @@ struct StaticTargetLineOverlay: View {
 //                instructionBanner(coordinateSystem: coordinateSystem)
 //            }
 //        }
+//        // Gestures on the ZStack directly
 //        .gesture(crosshairDismissTapGesture())
 //        .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
 //        .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
@@ -3086,6 +3183,22 @@ struct StaticTargetLineOverlay: View {
 //        _ = coordinateSystem.updateLiveState(dragState: dragState, pinchScale: 1.0)
 //        return coordinateSystem
 //    }
+//    
+//    
+//    
+//    
+//    // MARK: - Indicators
+//    
+//    /// Create drawing data for indicators (computed on main thread before Canvas)
+//    private var indicatorDrawingData: IndicatorDrawingData {
+//        IndicatorDrawingData(
+//            configs: chartViewModel.indicatorManager.activeIndicators.enabledMovingAverages,
+//            dataMap: chartViewModel.indicatorManager.movingAverageData
+//        )
+//    }
+//    
+//    
+//    
 //    
 //    private func updateChartSize(_ size: CGSize) {
 //        if chartSize != size {
@@ -3252,6 +3365,7 @@ struct StaticTargetLineOverlay: View {
 //        }
 //    }
 //    
+//    
 //    @ViewBuilder
 //    private var duplicateMarkerOverlay: some View {
 //        Color.black.opacity(0.4)
@@ -3259,7 +3373,6 @@ struct StaticTargetLineOverlay: View {
 //            .onTapGesture {
 //                markerManager.showDuplicateAlert = false
 //                markerManager.duplicateMarkerToLike = nil
-//                isShowingSheet = false
 //            }
 //        
 //        duplicateMarkerDialog
@@ -3327,58 +3440,6 @@ struct StaticTargetLineOverlay: View {
 //            }
 //        }
 //        .padding(.horizontal, 30)
-//    }
-//    
-//    // MARK: - Marker Creation Sheet Content
-//    
-//    @ViewBuilder
-//    private var markerCreationSheetContent: some View {
-//        if let info = pendingMarkerInfo {
-//            MarkerCreationSheet(
-//                markerManager: markerManager,
-//                candleIndex: info.candleIndex,
-//                timestamp: info.timestamp,
-//                price: info.price,
-//                username: "TestUser",
-//                chartData: chartData,
-//                candles: chartData.candles,
-//                markerType: info.markerType,
-//                initialTargetPrice: info.targetPrice
-//            )
-//            .onDisappear(perform: handleMarkerSheetDismiss)
-//        } else {
-//            markerCreationErrorView
-//        }
-//    }
-//    
-//    @ViewBuilder
-//    private var markerCreationErrorView: some View {
-//        NavigationView {
-//            VStack(spacing: 20) {
-//                Image(systemName: "exclamationmark.triangle")
-//                    .font(.system(size: 50))
-//                    .foregroundColor(.orange)
-//                Text("Unable to Create Marker")
-//                    .font(.headline)
-//                Text("Please try again")
-//                    .foregroundColor(.secondary)
-//            }
-//            .padding()
-//            .navigationTitle("Error")
-//            .navigationBarTitleDisplayMode(.inline)
-//            .toolbar {
-//                ToolbarItem(placement: .cancellationAction) {
-//                    Button("Dismiss") {
-//                        showMarkerSheet = false
-//                        controlViewModel.cancelMarkerPlacement()
-//                        isShowingSheet = false
-//                    }
-//                }
-//            }
-//        }
-//        .presentationDetents([.medium])
-//        .presentationDragIndicator(.visible)
-//        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
 //    }
 //    
 //    // MARK: - Instruction Banner
@@ -3585,7 +3646,8 @@ struct StaticTargetLineOverlay: View {
 //    // MARK: - Button Action Handlers
 //    
 //    private func handleConfirmTargetPress(coordinateSystem: ChartCoordinateSystem) {
-//        guard !isShowingSheet else { return }
+//        // FIXED: Check pendingMarkerInfo instead of isShowingSheet
+//        guard pendingMarkerInfo == nil else { return }
 //        
 //        guard let timestamp = coordinateSystem.timestamp(forCandleIndex: previewCandleIndex),
 //              previewCandleIndex >= 0,
@@ -3598,6 +3660,7 @@ struct StaticTargetLineOverlay: View {
 //        let candle = chartData.candles[previewCandleIndex]
 //        markerManager.selectedMarker = nil
 //        
+//        // FIXED: Setting pendingMarkerInfo automatically presents the sheet via sheet(item:)
 //        pendingMarkerInfo = PendingMarkerInfo(
 //            candleIndex: previewCandleIndex,
 //            timestamp: timestamp,
@@ -3608,12 +3671,11 @@ struct StaticTargetLineOverlay: View {
 //        
 //        isAwaitingTargetSelection = false
 //        impactFeedback.impactOccurred()
-//        isShowingSheet = true
-//        showMarkerSheet = true
 //    }
 //    
 //    private func handlePlaceMarkerPress(coordinateSystem: ChartCoordinateSystem) {
-//        guard !isShowingSheet else { return }
+//        // FIXED: Check pendingMarkerInfo instead of isShowingSheet
+//        guard pendingMarkerInfo == nil else { return }
 //        
 //        guard let timestamp = coordinateSystem.timestamp(forCandleIndex: previewCandleIndex),
 //              previewCandleIndex >= 0,
@@ -3640,6 +3702,7 @@ struct StaticTargetLineOverlay: View {
 //        } else {
 //            markerManager.selectedMarker = nil
 //            
+//            // FIXED: Setting pendingMarkerInfo automatically presents the sheet via sheet(item:)
 //            pendingMarkerInfo = PendingMarkerInfo(
 //                candleIndex: previewCandleIndex,
 //                timestamp: timestamp,
@@ -3648,8 +3711,6 @@ struct StaticTargetLineOverlay: View {
 //            )
 //            
 //            impactFeedback.impactOccurred()
-//            isShowingSheet = true
-//            showMarkerSheet = true
 //        }
 //    }
 //    
@@ -3670,19 +3731,17 @@ struct StaticTargetLineOverlay: View {
 //        }
 //        markerManager.duplicateMarkerToLike = nil
 //        markerManager.showDuplicateAlert = false
-//        isShowingSheet = false
 //    }
 //    
 //    private func handleDismissDuplicateAlert() {
 //        markerManager.duplicateMarkerToLike = nil
 //        markerManager.showDuplicateAlert = false
-//        isShowingSheet = false
 //    }
 //    
 //    private func handleMarkerSheetDismiss() {
 //        controlViewModel.cancelMarkerPlacement()
-//        isShowingSheet = false
 //        markerManager.selectedMarker = nil
+//        // FIXED: Setting pendingMarkerInfo to nil automatically dismisses sheet via sheet(item:)
 //        pendingMarkerInfo = nil
 //        isAwaitingTargetSelection = false
 //        predictionTargetPrice = nil
@@ -3728,6 +3787,7 @@ struct StaticTargetLineOverlay: View {
 //                }
 //            }
 //        }
+//        chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
 //    }
 //    
 //    private func handleSymbolStringChange(oldValue: String?, newValue: String?) {
@@ -3754,11 +3814,15 @@ struct StaticTargetLineOverlay: View {
 //                }
 //            }
 //        }
+//        chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
 //    }
 //    
 //    private func handleCandleCountChange(oldCount: Int, newCount: Int) {
 //        if abs(newCount - oldCount) > 10 {
 //            resetChartToMostRecentCandles()
+//        }
+//        if newCount != oldCount {
+//            chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
 //        }
 //    }
 //    
@@ -3824,10 +3888,10 @@ struct StaticTargetLineOverlay: View {
 //    private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
 //        DragGesture(minimumDistance: 0)
 //            .onEnded { value in
+//                // FIXED: Check pendingMarkerInfo instead of showMarkerSheet/isShowingSheet
 //                guard !crosshairManager.isActive &&
 //                        !isMarkerPlacementMode &&
-//                        !showMarkerSheet &&
-//                        !isShowingSheet else { return }
+//                        pendingMarkerInfo == nil else { return }
 //                
 //                let location = value.location
 //                let totalOffset = gestureState.panOffset.width
@@ -3865,7 +3929,12 @@ struct StaticTargetLineOverlay: View {
 //                    return
 //                }
 //                
-//                if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged {
+//                if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged && !isDraggingTarget {
+//                    // Start tracking on first drag event
+//                    if lastDragTranslation == .zero {
+//                        gestureState.beginDrag()
+//                    }
+//                    
 //                    let incrementalX = value.translation.width - lastDragTranslation.width
 //                    let incrementalY = -(value.translation.height - lastDragTranslation.height)
 //                    
@@ -3875,7 +3944,8 @@ struct StaticTargetLineOverlay: View {
 //                        candleCount: chartData.candles.count,
 //                        candleWidth: totalCandleWidth,
 //                        chartHeight: size.height,
-//                        priceScale: gestureState.priceScale
+//                        priceScale: gestureState.priceScale,
+//                        trackVelocity: true  // Enable velocity tracking for momentum
 //                    )
 //                    
 //                    lastDragTranslation = value.translation
@@ -3884,7 +3954,17 @@ struct StaticTargetLineOverlay: View {
 //            .onEnded { value in
 //                if crosshairManager.isActive {
 //                    crosshairDragStartPosition = nil
+//                } else if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged && !isDraggingTarget {
+//                    // Trigger momentum scrolling
+//                    gestureState.endDrag(
+//                        chartWidth: size.width,
+//                        candleCount: chartData.candles.count,
+//                        candleWidth: totalCandleWidth,
+//                        chartHeight: size.height,
+//                        priceScale: gestureState.priceScale
+//                    )
 //                }
+//                
 //                lastDragTranslation = .zero
 //                dragState = .zero
 //            }
@@ -4538,6 +4618,18 @@ struct StaticTargetLineOverlay: View {
 //        drawGrid(context: drawingContext, size: size)
 //        drawCandlesticks(context: drawingContext, size: size)
 //        
+//        IndicatorOverlayRenderer.drawOverlayIndicators(
+//            context: drawingContext,
+//            size: size,
+//            drawingData: indicatorDrawingData,
+//            priceRange: chartData.priceRange,
+//            priceScale: gestureState.priceScale,
+//            verticalOffset: clampedVerticalOffset(chartHeight: size.height),
+//            totalCandleWidth: totalCandleWidth,
+//            actualCandleWidth: actualCandleWidth,
+//            totalOffset: gestureState.panOffset.width
+//        )
+//        
 //        ChartMarkerSystem.drawMarkers(
 //            context: drawingContext,
 //            markers: markerManager.filteredMarkers,
@@ -4896,20 +4988,33 @@ struct StaticTargetLineOverlay: View {
 //    private func drawSelectedMarkerLine(context: GraphicsContext, size: CGSize) {
 //        guard let marker = selectedMarker,
 //              marker.type.hasHorizontalLine,
-//              let candle = getCandleForMarker(marker),
-//              let linePrice = marker.getLinePrice(candle: candle) else { return }
+//              let candle = getCandleForMarker(marker) else { return }
 //        
-//        let label = marker.type == .predictionTarget ? "Entry" : nil
+//        // FIXED: For prediction markers, use horizontalLinePrice (entry price) directly
+//        // since getLinePrice may return nil for custom line source types
+//        let linePrice: Double?
+//        if marker.type == .predictionTarget {
+//            // Use stored entry price for prediction markers
+//            linePrice = marker.horizontalLinePrice ?? marker.getLinePrice(candle: candle)
+//        } else {
+//            linePrice = marker.getLinePrice(candle: candle)
+//        }
 //        
-//        drawPriceLine(
-//            context: context,
-//            size: size,
-//            price: linePrice,
-//            color: marker.type.color,
-//            isDashed: false,
-//            label: label
-//        )
+//        // Draw entry/main line if we have a price
+//        if let price = linePrice {
+//            let label = marker.type == .predictionTarget ? "Entry" : nil
+//            
+//            drawPriceLine(
+//                context: context,
+//                size: size,
+//                price: price,
+//                color: marker.type.color,
+//                isDashed: false,
+//                label: label
+//            )
+//        }
 //        
+//        // Draw target price line for prediction markers
 //        if marker.type == .predictionTarget, let targetPrice = marker.targetPrice {
 //            drawPriceLine(
 //                context: context,
@@ -5020,12 +5125,16 @@ struct StaticTargetLineOverlay: View {
 //    let chartHeight: CGFloat
 //    let chartData: ChartDataManager
 //    
+//    // FIXED: Store initial Y position when drag starts to prevent feedback loop
+//    @State private var dragStartY: CGFloat = 0
+//    @State private var dragStartPrice: Double = 0
+//    
 //    var body: some View {
 //        ZStack {
 //            targetLineCanvas
 //            
-//            if isInteractive, let targetPrice = targetPrice {
-//                draggableArea(targetPrice: targetPrice)
+//            if isInteractive, let currentTargetPrice = targetPrice {
+//                draggableArea(currentTargetPrice: currentTargetPrice)
 //            }
 //        }
 //    }
@@ -5102,33 +5211,42 @@ struct StaticTargetLineOverlay: View {
 //    }
 //    
 //    @ViewBuilder
-//    private func draggableArea(targetPrice: Double) -> some View {
-//        let y = coordinateSystem.yPosition(forPrice: targetPrice)
-//        
-//        Rectangle()
-//            .fill(Color.clear)
-//            .frame(height: 44)
-//            .position(x: chartWidth / 2, y: y)
-//            .gesture(targetDragGesture)
-//    }
-//    
-//    private var targetDragGesture: some Gesture {
-//        DragGesture(minimumDistance: 0)
-//            .onChanged { value in
-//                isDragging = true
-//                
-//                let touchY = value.location.y
-//                let price = coordinateSystem.price(atYPosition: touchY)
-//                
-//                let minPrice = chartData.priceRange.min
-//                let maxPrice = chartData.priceRange.max
-//                let clampedPrice = max(minPrice, min(maxPrice, price))
-//                
-//                self.targetPrice = clampedPrice
-//            }
-//            .onEnded { _ in
-//                isDragging = false
-//            }
+//    private func draggableArea(currentTargetPrice: Double) -> some View {
+//        // FIXED: Capture initial position on drag start to prevent feedback loop
+//        GeometryReader { geo in
+//            let currentY = coordinateSystem.yPosition(forPrice: currentTargetPrice)
+//            
+//            Color.clear
+//                .contentShape(Rectangle())
+//                .frame(width: geo.size.width, height: 60)
+//                .position(x: geo.size.width / 2, y: currentY)
+//                .highPriorityGesture(
+//                    DragGesture(minimumDistance: 0)
+//                        .onChanged { value in
+//                            if !isDragging {
+//                                // FIXED: Capture starting position on first touch
+//                                isDragging = true
+//                                dragStartY = currentY
+//                                dragStartPrice = currentTargetPrice
+//                            }
+//                            
+//                            // FIXED: Calculate new Y based on drag translation from START position
+//                            // This prevents the feedback loop where changing price changes Y
+//                            let newY = dragStartY + value.translation.height
+//                            
+//                            // Convert to price
+//                            let newPrice = coordinateSystem.price(atYPosition: newY)
+//                            
+//                            // Clamp to visible price range
+//                            let minPrice = chartData.priceRange.min
+//                            let maxPrice = chartData.priceRange.max
+//                            self.targetPrice = max(minPrice, min(maxPrice, newPrice))
+//                        }
+//                        .onEnded { _ in
+//                            isDragging = false
+//                        }
+//                )
+//        }
 //    }
 //}
 //
@@ -5180,13 +5298,5 @@ struct StaticTargetLineOverlay: View {
 //        .allowsHitTesting(false)
 //    }
 //}
-//
-//
-//
-//
-//
-//
-//
-//
 //
 //

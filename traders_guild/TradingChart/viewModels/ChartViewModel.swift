@@ -33,6 +33,26 @@ class ChartViewModel: ObservableObject {
     @Published var personalWatchlist: [TradingSymbol] = []
     @Published var guildWatchlist: [TradingSymbol] = []
     
+    
+    // MARK: Indicator manager
+    
+    // IMPORTANT: Expose gestureState for RSI panel synchronization
+    let gestureState = ChartGestureState()
+    
+    @Published var indicatorManager = IndicatorManager()
+    
+    // In ChartViewModel.swift, add:
+    var totalCandleWidth: CGFloat {
+        baseCandleWidth * gestureState.candleWidthScale + candleSpacing
+    }
+
+    var actualCandleWidth: CGFloat {
+        baseCandleWidth * gestureState.candleWidthScale
+    }
+
+    private let baseCandleWidth: CGFloat = 12
+    private let candleSpacing: CGFloat = 4
+    
     var combinedWatchlist: [TradingSymbol] {
         let combined = personalWatchlist + guildWatchlist
         var seen = Set<UUID>()
@@ -88,6 +108,8 @@ class ChartViewModel: ObservableObject {
         }
         
         isLoadingData = false
+        // ADD: After data is loaded, calculate indicators
+        indicatorManager.recalculateIndicators(candles: dataManager.candles)
     }
     
     /// Set the current symbol and regenerate chart data
@@ -120,6 +142,9 @@ class ChartViewModel: ObservableObject {
         // Use the symbol-aware regeneration method
         dataManager.regenerateMockData(symbol: symbol, timeframe: currentTimeframe)
         
+        // ADD: Recalculate indicators
+        indicatorManager.recalculateIndicators(candles: dataManager.candles)
+        
         // TODO: When backend is ready, replace with:
         // Task {
         //     let candles = try await api.fetchHistoricalCandles(
@@ -140,6 +165,9 @@ class ChartViewModel: ObservableObject {
             // Fallback without symbol
             dataManager.regenerateMockData(timeframe: currentTimeframe)
         }
+        
+        // ADD: Recalculate indicators
+        indicatorManager.recalculateIndicators(candles: dataManager.candles)
         
         // TODO: When backend is ready, replace with:
         // Task {
@@ -181,4 +209,12 @@ class ChartViewModel: ObservableObject {
             candles: dataManager.candles
         )
     }
+    
+    // Add recalculation trigger method
+    func recalculateIndicators() {
+        indicatorManager.recalculateIndicators(candles: dataManager.candles)
+    }
 }
+
+
+
