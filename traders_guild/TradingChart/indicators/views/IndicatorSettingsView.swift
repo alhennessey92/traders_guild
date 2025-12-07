@@ -23,6 +23,12 @@ struct IndicatorSettingsContent: View {
     @State private var editingMAConfig: MovingAverageConfig?
     @State private var editingRSIConfig: RSIConfig?
     
+    /// Check if there are any indicators (enabled or disabled)
+    private var hasAnyIndicators: Bool {
+        !indicatorManager.activeIndicators.movingAverages.isEmpty ||
+        indicatorManager.activeIndicators.rsi != nil
+    }
+    
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 20) {
@@ -33,7 +39,7 @@ struct IndicatorSettingsContent: View {
                 addIndicatorButtons
                 
                 // Active Indicators List
-                if indicatorManager.activeIndicatorCount > 0 {
+                if hasAnyIndicators {
                     activeIndicatorsSection
                 } else {
                     emptyStateView
@@ -60,8 +66,11 @@ struct IndicatorSettingsContent: View {
                 
                 Spacer()
                 
-                if indicatorManager.activeIndicatorCount > 0 {
-                    Text("\(indicatorManager.activeIndicatorCount) active")
+                if hasAnyIndicators {
+                    let enabledCount = indicatorManager.activeIndicatorCount
+                    let totalCount = indicatorManager.activeIndicators.movingAverages.count +
+                        (indicatorManager.activeIndicators.rsi != nil ? 1 : 0)
+                    Text("\(enabledCount)/\(totalCount) active")
                         .font(.caption)
                         .foregroundColor(.gray)
                         .padding(.horizontal, 10)
@@ -375,7 +384,7 @@ struct AddEMASheet: View {
                         HStack {
                             Text("Custom:")
                                 .foregroundColor(.gray)
-                            Stepper("\(selectedPeriod)", value: $selectedPeriod, in: 5...300)
+                            Stepper("\(selectedPeriod)", value: $selectedPeriod, in: 2...300)
                                 .foregroundColor(.white)
                         }
                         .padding()
@@ -593,7 +602,7 @@ struct EditEMASheet: View {
         NavigationStack {
             Form {
                 Section("Period") {
-                    Stepper("Period: \(config.period)", value: $config.period, in: 5...300)
+                    Stepper("Period: \(config.period)", value: $config.period, in: 2...300)
                 }
                 
                 Section("Appearance") {
@@ -725,3 +734,4 @@ struct PeriodButton: View {
 
 extension MovingAverageConfig: Identifiable {}
 extension RSIConfig: Identifiable {}
+

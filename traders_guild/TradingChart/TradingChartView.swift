@@ -45,6 +45,9 @@ struct TradingChartView: View {
     /// This is the single source of truth for chart positioning
     @ObservedObject var gestureState: ChartGestureState
     
+    /// RSI panel height binding for control box positioning
+    @Binding var rsiPanelHeight: CGFloat
+    
     /// Current drag translation for smooth real-time panning feedback
     /// Using @State instead of @GestureState to avoid spring-back animation
     @State private var dragState: CGSize = .zero
@@ -288,18 +291,21 @@ struct TradingChartView: View {
     ///   - guildId: Guild context for marker filtering
     ///   - controlViewModel: View model for chart controls
     ///   - chartViewModel: View model for chart data and state
+    ///   - rsiPanelHeight: Binding to RSI panel height (for control box positioning)
     init(
         userId: String = "user123",
         username: String = "TestUser",
         guildId: String = "guild1",
         controlViewModel: ChartControlViewModel,
         chartViewModel: ChartViewModel,
-        gestureState: ChartGestureState
+        gestureState: ChartGestureState,
+        rsiPanelHeight: Binding<CGFloat> = .constant(120)
     ) {
         _markerManager = StateObject(wrappedValue: MarkerManager(userId: userId, guildId: guildId))
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
         self.gestureState = gestureState
+        self._rsiPanelHeight = rsiPanelHeight
     }
     
     // MARK: - Target Line Helpers
@@ -1084,13 +1090,20 @@ struct TradingChartView: View {
     }
     
     private func handleMarkerSheetDismiss() {
+        // FIXED: Don't set selectedMarker here - it can cause the detail sheet to briefly appear
+        // when there's timing issues between sheets
         controlViewModel.cancelMarkerPlacement()
-        markerManager.selectedMarker = nil
-        // FIXED: Setting pendingMarkerInfo to nil automatically dismisses sheet via sheet(item:)
-        pendingMarkerInfo = nil
-        isAwaitingTargetSelection = false
-        predictionTargetPrice = nil
-        isDraggingTarget = false
+        
+        // Small delay to let SwiftUI finish the sheet dismissal animation
+        // before cleaning up state that might affect other sheets
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Only clear if we're not showing another sheet
+            if self.pendingMarkerInfo == nil {
+                self.isAwaitingTargetSelection = false
+                self.predictionTargetPrice = nil
+                self.isDraggingTarget = false
+            }
+        }
     }
     
     // MARK: - Lifecycle Handlers
@@ -1462,10 +1475,15 @@ struct TradingChartView: View {
     func xAxisOverlay(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.11
         
+        // Hide x-axis labels when RSI panel is active (RSI panel has its own)
+        let rsiPanelActive = chartViewModel.indicatorManager.shouldShowRSIPanel
+        
         VStack(spacing: 0) {
             Spacer()
             
-            xAxisLabelsCanvas(geometry: geometry)
+            if !rsiPanelActive {
+                xAxisLabelsCanvas(geometry: geometry)
+            }
             
             Rectangle()
                 .fill(Color.black)
@@ -1489,72 +1507,94 @@ struct TradingChartView: View {
         let totalOffset = gestureState.panOffset.width
         let timeframe = chartViewModel.currentTimeframe
         
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 30)
-        let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 60)
+        guard chartData.candles.count >= 2 else { return }
         
-        guard visibleStartIndex < visibleEndIndex else { return }
+        // Get the time range we need to cover
+        let firstCandle = chartData.candles.first!
+        let lastCandle = chartData.candles.last!
         
-        let niceInterval = getNiceTimeInterval(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
+        // Calculate nice time step based on timeframe and zoom
+        let niceTimeStep = getNiceTimeStep(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
         
-        var drawnPositions: [CGFloat] = []
+        // Calculate the time span per candle from actual data
+        let timePerCandle = chartData.candles[1].timestamp.timeIntervalSince(chartData.candles[0].timestamp)
+        guard timePerCandle > 0 else { return }
         
-        let minLabelSpacing: CGFloat = getMinLabelSpacing(for: timeframe)
+        // Find the first "nice" time boundary before our data starts
+        let calendar = Calendar.current
+        let startTime = firstCandle.timestamp.timeIntervalSince1970
+        let alignedStart = floor(startTime / niceTimeStep) * niceTimeStep
         
-        // First pass: Draw DATE labels at midnight
-        for i in visibleStartIndex..<visibleEndIndex {
-            guard i >= 0 && i < chartData.candles.count else { continue }
+        // Draw labels at regular time intervals
+        var currentTime = alignedStart
+        let endTime = lastCandle.timestamp.timeIntervalSince1970 + timePerCandle * 10
+        
+        var lastDrawnX: CGFloat = -200  // Track last x to avoid overlap
+        let minSpacing: CGFloat = getMinLabelSpacing(for: timeframe)
+        
+        while currentTime <= endTime {
+            // Convert time to candle index
+            let candleIndex = (currentTime - startTime) / timePerCandle
             
-            let candle = chartData.candles[i]
-            let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+            // Convert candle index to screen x position
+            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
             
-            guard x >= -50 && x <= size.width + 50 else { continue }
-            
-            if isAtMidnight(candle.timestamp, timeframe: timeframe) {
-                let tooClose = drawnPositions.contains { abs($0 - x) < minLabelSpacing }
-                if tooClose { continue }
+            // Only draw if in visible area and not too close to last label
+            if x >= -50 && x <= size.width + 50 && (x - lastDrawnX) >= minSpacing {
+                let date = Date(timeIntervalSince1970: currentTime)
+                let components = calendar.dateComponents([.hour, .minute], from: date)
+                let hour = components.hour ?? 0
+                let minute = components.minute ?? 0
+                let isMidnight = hour == 0 && minute == 0
                 
-                let dateText = formatDateLabel(candle.timestamp, timeframe: timeframe)
-                
-                context.draw(
-                    Text(dateText)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white),
-                    at: CGPoint(x: x, y: 10)
-                )
-                
-                drawnPositions.append(x)
+                if isMidnight {
+                    let text = formatDateLabel(date, timeframe: timeframe)
+                    context.draw(
+                        Text(text)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white),
+                        at: CGPoint(x: x, y: 10)
+                    )
+                } else {
+                    let text = formatTimeLabel(date, timeframe: timeframe)
+                    context.draw(
+                        Text(text)
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray),
+                        at: CGPoint(x: x, y: 10)
+                    )
+                }
+                lastDrawnX = x
             }
+            
+            currentTime += niceTimeStep
         }
-        
-        // Second pass: Draw TIME labels
-        for i in visibleStartIndex..<visibleEndIndex {
-            guard i >= 0 && i < chartData.candles.count else { continue }
-            
-            let candle = chartData.candles[i]
-            let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
-            
-            guard x >= -50 && x <= size.width + 50 else { continue }
-            
-            if isAtMidnight(candle.timestamp, timeframe: timeframe) {
-                continue
-            }
-            
-            if isNiceTimeBoundary(candle.timestamp, interval: niceInterval, timeframe: timeframe) {
-                let tooClose = drawnPositions.contains { abs($0 - x) < minLabelSpacing }
-                if tooClose { continue }
-                
-                let timeText = formatTimeLabel(candle.timestamp, timeframe: timeframe)
-                
-                context.draw(
-                    Text(timeText)
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray),
-                    at: CGPoint(x: x, y: 10)
-                )
-                
-                drawnPositions.append(x)
-            }
+    }
+    
+    /// Get nice time step in seconds based on timeframe and zoom
+    private func getNiceTimeStep(timeframe: ChartTimeframe, zoomScale: CGFloat) -> Double {
+        let baseStep: Double
+        switch timeframe {
+        case .m1:
+            baseStep = zoomScale > 1.5 ? 300 : (zoomScale > 0.7 ? 600 : 1800)  // 5min, 10min, 30min
+        case .m5:
+            baseStep = zoomScale > 1.5 ? 1800 : (zoomScale > 0.7 ? 3600 : 7200)  // 30min, 1h, 2h
+        case .m15:
+            baseStep = zoomScale > 1.5 ? 3600 : (zoomScale > 0.7 ? 7200 : 14400)  // 1h, 2h, 4h
+        case .m30:
+            baseStep = zoomScale > 1.5 ? 7200 : (zoomScale > 0.7 ? 14400 : 28800)  // 2h, 4h, 8h
+        case .h1:
+            baseStep = zoomScale > 1.5 ? 14400 : (zoomScale > 0.7 ? 28800 : 86400)  // 4h, 8h, 1day
+        case .h4:
+            baseStep = zoomScale > 1.5 ? 43200 : (zoomScale > 0.7 ? 86400 : 172800)  // 12h, 1day, 2day
+        case .d1:
+            baseStep = zoomScale > 1.5 ? 86400 : (zoomScale > 0.7 ? 172800 : 604800)  // 1day, 2day, 1week
+        case .w1:
+            baseStep = zoomScale > 1.5 ? 604800 : 1209600  // 1week, 2weeks
+        case .mn:
+            baseStep = 2592000  // ~30 days
         }
+        return baseStep
     }
     
     private func getMinLabelSpacing(for timeframe: ChartTimeframe) -> CGFloat {
@@ -1942,10 +1982,29 @@ struct TradingChartView: View {
     func chartControlsBox(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.11 + 40
         let yaxisOverlayWidth = yAxisWidth + 10
+        
+        // Add extra padding when RSI panel is active
+        // Use actual panel height + resize handle (22) + x-axis (22)
+        let rsiPanelActive = chartViewModel.indicatorManager.shouldShowRSIPanel
+        let rsiPanelPadding: CGFloat = rsiPanelActive ? rsiPanelHeight + 44 : 0
+        
         VStack {
             Spacer()
             HStack(spacing: 10) {
                 Spacer()
+                
+                // Marker visibility toggle
+                ChartBottomControlButton(
+                    title: markerManager.markersHidden ? "Show" : "Hide",
+                    icon: markerManager.markersHidden ? "eye" : "eye.slash",
+                    color: markerManager.markersHidden ? .orange : .white.opacity(0.5)
+                ) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        markerManager.markersHidden.toggle()
+                    }
+                }
+                .allowsHitTesting(true)
+                
                 ChartBottomControlButton(
                     title: "Reset",
                     icon: "arrow.counterclockwise",
@@ -1964,7 +2023,7 @@ struct TradingChartView: View {
                 }
                 .allowsHitTesting(true)
             }
-            .padding(.bottom, bottomAreaHeight)
+            .padding(.bottom, bottomAreaHeight + rsiPanelPadding)
             .padding(.trailing, yaxisOverlayWidth)
         }
     }
@@ -2671,7 +2730,6 @@ struct StaticTargetLineOverlay: View {
 
 
 
-
 //import SwiftUI
 //
 //// MARK: - Pending Marker Info
@@ -2809,7 +2867,9 @@ struct StaticTargetLineOverlay: View {
 //    
 //    /// Current candle index where the preview marker is positioned
 //    /// Updates in real-time as user drags during placement mode
-//    @State private var previewCandleIndex: Int = 0
+//    /// FIXED: Initialized to -1 to indicate "not yet calculated"
+//    /// Will be set to center when placement mode starts
+//    @State private var previewCandleIndex: Int = -1
 //    
 //    /// Track the actual drag position for free-form marker movement
 //    /// This allows marker to follow finger in 2D before snapping on release
@@ -3052,8 +3112,25 @@ struct StaticTargetLineOverlay: View {
 //    }
 //    
 //    /// Effective candle index for marker preview (from pending or placement mode)
+//    /// FIXED: Always calculates center dynamically when entering placement mode
+//    /// Only uses stored previewCandleIndex after user has dragged the marker
 //    private var effectiveCandleIndex: Int {
-//        pendingMarkerInfo?.candleIndex ?? previewCandleIndex
+//        if let pending = pendingMarkerInfo {
+//            return pending.candleIndex
+//        }
+//        // If in placement mode, check if user has dragged (previewCandleIndex >= 0)
+//        // If not dragged yet (-1), always calculate center fresh
+//        if isMarkerPlacementMode {
+//            if previewCandleIndex < 0 {
+//                // User hasn't dragged yet - calculate center
+//                return calculateCenterCandleIndex()
+//            } else {
+//                // User has dragged - use their position, but validate it
+//                let validIndex = max(0, min(chartData.candles.count - 1, previewCandleIndex))
+//                return validIndex
+//            }
+//        }
+//        return max(0, previewCandleIndex)
 //    }
 //    
 //    /// Effective marker type for preview (from pending or placement mode)
@@ -3739,13 +3816,20 @@ struct StaticTargetLineOverlay: View {
 //    }
 //    
 //    private func handleMarkerSheetDismiss() {
+//        // FIXED: Don't set selectedMarker here - it can cause the detail sheet to briefly appear
+//        // when there's timing issues between sheets
 //        controlViewModel.cancelMarkerPlacement()
-//        markerManager.selectedMarker = nil
-//        // FIXED: Setting pendingMarkerInfo to nil automatically dismisses sheet via sheet(item:)
-//        pendingMarkerInfo = nil
-//        isAwaitingTargetSelection = false
-//        predictionTargetPrice = nil
-//        isDraggingTarget = false
+//        
+//        // Small delay to let SwiftUI finish the sheet dismissal animation
+//        // before cleaning up state that might affect other sheets
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+//            // Only clear if we're not showing another sheet
+//            if self.pendingMarkerInfo == nil {
+//                self.isAwaitingTargetSelection = false
+//                self.predictionTargetPrice = nil
+//                self.isDraggingTarget = false
+//            }
+//        }
 //    }
 //    
 //    // MARK: - Lifecycle Handlers
@@ -3773,8 +3857,13 @@ struct StaticTargetLineOverlay: View {
 //    
 //    private func handleMarkerPlacementModeChange(oldValue: Bool, newValue: Bool) {
 //        if !oldValue && newValue {
-//            let centerIndex = calculateCenterCandleIndex()
-//            previewCandleIndex = centerIndex
+//            // Entering placement mode - keep previewCandleIndex as -1
+//            // effectiveCandleIndex will calculate center dynamically until user drags
+//            // This ensures we always use the current visible center, not a stale value
+//            previewCandleIndex = -1
+//        } else if oldValue && !newValue {
+//            // Exiting placement mode - reset to invalid index
+//            previewCandleIndex = -1
 //        }
 //    }
 //    
@@ -3831,7 +3920,11 @@ struct StaticTargetLineOverlay: View {
 //    private func calculateCenterCandleIndex() -> Int {
 //        let totalOffset = gestureState.panOffset.width
 //        let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
-//        let candlesOnScreen = Int(chartSize.width / totalCandleWidth)
+//        
+//        // FIXED: Use screen width as fallback when chartSize not yet set
+//        let effectiveWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
+//        let candlesOnScreen = Int(effectiveWidth / totalCandleWidth)
+//        
 //        let visibleEndIndex = Swift.min(
 //            chartData.candles.count,
 //            visibleStartIndex + candlesOnScreen + 2
@@ -3886,12 +3979,22 @@ struct StaticTargetLineOverlay: View {
 //    // MARK: - Tap Gesture for Markers
 //    
 //    private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
+//        // FIXED: Use a longer minimum distance and check start/end proximity
+//        // to prevent accidental marker selection while panning
 //        DragGesture(minimumDistance: 0)
 //            .onEnded { value in
 //                // FIXED: Check pendingMarkerInfo instead of showMarkerSheet/isShowingSheet
 //                guard !crosshairManager.isActive &&
 //                        !isMarkerPlacementMode &&
 //                        pendingMarkerInfo == nil else { return }
+//                
+//                // FIXED: Require the gesture to be a deliberate tap, not a pan
+//                // Check that finger didn't move much (max 15 points in any direction)
+//                let dragDistance = sqrt(
+//                    pow(value.translation.width, 2) +
+//                    pow(value.translation.height, 2)
+//                )
+//                guard dragDistance < 15 else { return }
 //                
 //                let location = value.location
 //                let totalOffset = gestureState.panOffset.width
@@ -5298,5 +5401,18 @@ struct StaticTargetLineOverlay: View {
 //        .allowsHitTesting(false)
 //    }
 //}
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 //
 //
