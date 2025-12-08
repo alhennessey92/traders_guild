@@ -2,16 +2,7 @@
 //  ChartMarkerSystem.swift
 //  traders_guild
 //
-//  COMPREHENSIVE UPDATE v6 - Major refactor:
-//  1. Markers favor top placement (only below for severe troughs)
-//  2. Tighter stacking with reduced spacing
-//  3. Remove clustering - show all markers individually
-//  4. One type per candle restriction (offer like instead)
-//  5. Display SF Symbol icons instead of first letter
-//  6. Selected marker scales up and shows custom views (lines)
-//  7. Hide usernames when multiple markers on same candle
-//  8. Horizontal lines for Entry/Exit/Support/Resistance markers
-//
+// TODO: - add app state here for real guildid and user id for api
 
 import SwiftUI
 
@@ -290,13 +281,19 @@ class MarkerManager: ObservableObject {
 class MarkerDisplaySettings: ObservableObject {
     static let shared = MarkerDisplaySettings()
     
+    /// Distance from candle high/low to marker center (user adjustable)
     @Published var baseOffset: CGFloat {
         didSet { UserDefaults.standard.set(baseOffset, forKey: "markerBaseOffset") }
     }
     
-    /// REDUCED stack offset for tighter stacking
+    /// Distance between stacked markers
     @Published var stackOffset: CGFloat {
         didSet { UserDefaults.standard.set(stackOffset, forKey: "markerStackOffset") }
+    }
+    
+    /// Minimum stack spacing regardless of scale (prevents overlap)
+    @Published var minStackSpacing: CGFloat {
+        didSet { UserDefaults.standard.set(minStackSpacing, forKey: "markerMinStackSpacing") }
     }
     
     @Published var proximityTierOffset: CGFloat {
@@ -308,17 +305,20 @@ class MarkerDisplaySettings: ObservableObject {
     }
     
     private init() {
-        // Adjusted offsets for new stacking behavior
+        // Distance from candle to marker (user adjustable in settings)
         self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 70
-        // REDUCED from 28 to 20 for tighter stacking (Issue #1 fix)
-        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 20
+        // Stack spacing between markers (marker diameter is 32px)
+        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 36
+        // Minimum stack spacing to prevent overlap at any scale (must be > marker diameter of 32)
+        self.minStackSpacing = UserDefaults.standard.object(forKey: "markerMinStackSpacing") as? CGFloat ?? 34
         self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 25
         self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 40
     }
     
     func resetToDefaults() {
         baseOffset = 70
-        stackOffset = 20
+        stackOffset = 36
+        minStackSpacing = 34
         proximityTierOffset = 25
         placementExtraOffset = 40
     }
@@ -331,6 +331,7 @@ struct MarkerPositionCalculator {
     static var settings: MarkerDisplaySettings { MarkerDisplaySettings.shared }
     static var baseOffset: CGFloat { settings.baseOffset }
     static var stackOffset: CGFloat { settings.stackOffset }
+    static var minStackSpacing: CGFloat { settings.minStackSpacing }
     static let proximityRange = 3
     static let hitRadius: CGFloat = 28
     
@@ -352,14 +353,17 @@ struct MarkerPositionCalculator {
         let baseY: CGFloat
         let stackDirection: CGFloat
         
-        // FIXED: Apply dampening to priceScale to make scaling less extreme
-        // Dampening factor of 0.5 means markers scale at 50% of the rate of candles
-        // Examples: 2x zoom → 1.5x marker distance, 3x zoom → 2x marker distance
-        let dampenedScale = dampenPriceScale(priceScale, dampening: 0.75)
+        // Apply dampening to priceScale to make scaling less extreme
+        // Base offset follows the candle more closely
+        let dampenedBaseScale = dampenPriceScale(priceScale, dampening: 0.75)
         
-        let scaledBaseOffset = baseOffset * dampenedScale
-        let scaledStackOffset = stackOffset * dampenedScale
-        let scaledTierOffset = offsetForTier(marker.proximityTier) * dampenedScale
+        // Stack offset scales but has a MINIMUM to prevent overlap
+        let scaledStackOffsetRaw = stackOffset * dampenPriceScale(priceScale, dampening: 0.5)
+        // Ensure stack spacing never goes below minimum
+        let scaledStackOffset = Swift.max(minStackSpacing, scaledStackOffsetRaw)
+        
+        let scaledBaseOffset = baseOffset * dampenedBaseScale
+        let scaledTierOffset = offsetForTier(marker.proximityTier) * dampenedBaseScale
         
         if marker.positionedBelow {
             baseY = candleLowY + scaledBaseOffset
@@ -401,10 +405,13 @@ struct MarkerPositionCalculator {
     ) -> (position: CGPoint, isBelow: Bool) {
         let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
         
-        // FIXED: Apply dampening to priceScale for preview marker too
-        let dampenedScale = dampenPriceScale(priceScale, dampening: 0.75)
-        let scaledPlacementOffset = placementOffset * dampenedScale
-        let scaledStackOffset = stackOffset * dampenedScale
+        // Apply dampening with minimum floor for stack offset
+        let dampenedBaseScale = dampenPriceScale(priceScale, dampening: 0.75)
+        let scaledPlacementOffset = placementOffset * dampenedBaseScale
+        
+        // Stack offset scales but has a MINIMUM to prevent overlap
+        let scaledStackOffsetRaw = stackOffset * dampenPriceScale(priceScale, dampening: 0.5)
+        let scaledStackOffset = Swift.max(minStackSpacing, scaledStackOffsetRaw)
         
         let shouldBeBelow: Bool
         
@@ -505,7 +512,7 @@ struct MarkerPositionCalculator {
     /// Determines which side (above/below) markers on a candle should be placed
     /// Priority order:
     /// 1. If 1-2 candles away from a marker on the same side, flip to opposite side
-    /// 2. EMA trend: If EMA2 > EMA5, uptrend -> place above; else downtrend -> place below
+    /// 2. EMA trend: If EMA2 > EMA10, uptrend -> place above; else downtrend -> place below
     /// 3. Default to above
     private static func determineSideForCandle(
         candleIndex: Int,
@@ -538,7 +545,7 @@ struct MarkerPositionCalculator {
         }
         
         // Priority 2: EMA trend-based placement
-        // If EMA2 > EMA5 (uptrend), place above; else (downtrend) place below
+        // If EMA2 > EMA10 (uptrend), place above; else (downtrend) place below
         if let emaTrend = calculateEMATrend(candleIndex: candleIndex, candles: candles) {
             return !emaTrend  // emaTrend true = uptrend = above (false), downtrend = below (true)
         }
@@ -549,20 +556,20 @@ struct MarkerPositionCalculator {
     
     // MARK: - EMA Trend Calculation
     
-    /// Calculate whether EMA2 > EMA5 at a given candle index
-    /// Returns true if uptrend (EMA2 > EMA5), false if downtrend, nil if not enough data
+    /// Calculate whether EMA2 > EMA10 at a given candle index
+    /// Returns true if uptrend (EMA2 > EMA10), false if downtrend, nil if not enough data
     private static func calculateEMATrend(candleIndex: Int, candles: [Candle]) -> Bool? {
-        // Need at least 5 candles to calculate EMA5
-        guard candleIndex >= 4 && candleIndex < candles.count else { return nil }
+        // Need at least 10 candles to calculate EMA10
+        guard candleIndex >= 9 && candleIndex < candles.count else { return nil }
         
-        // Calculate EMA2 and EMA5 at this candle
+        // Calculate EMA2 and EMA10 at this candle
         let ema2 = calculateEMAAtIndex(candles: candles, period: 2, atIndex: candleIndex)
-        let ema5 = calculateEMAAtIndex(candles: candles, period: 5, atIndex: candleIndex)
+        let ema10 = calculateEMAAtIndex(candles: candles, period: 10, atIndex: candleIndex)
         
-        guard let e2 = ema2, let e5 = ema5 else { return nil }
+        guard let e2 = ema2, let e10 = ema10 else { return nil }
         
-        // Uptrend if EMA2 > EMA5
-        return e2 > e5
+        // Uptrend if EMA2 > EMA10
+        return e2 > e10
     }
     
     /// Calculate EMA value at a specific candle index
@@ -947,24 +954,6 @@ struct ChartMarkerSystem {
             at: position
         )
         
-        // Like badge
-//        if marker.likeCount > 0 {
-//            let badgeOffset: CGFloat = (scaledRadius - 11)
-//            let likeCircleRect = CGRect(
-//                x: position.x + 7,
-//                y: position.y + badgeOffset,
-//                width: 12,
-//                height: 12
-//            )
-//            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
-//            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.8)
-//            context.draw(
-//                Text("\(marker.likeCount)")
-//                    .font(.system(size: 8, weight: .bold))
-//                    .foregroundColor(.white),
-//                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
-//            )
-//        }
         
         if marker.likeCount > 0 {
             let badgeOffset: CGFloat = (scaledRadius - 13)
@@ -983,23 +972,7 @@ struct ChartMarkerSystem {
                 at: CGPoint(x: position.x + 12, y: position.y + badgeOffset + 7)
             )
         }
-//        if marker.likeCount > 0 {
-//            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 2) : (scaledRadius - 12)
-//            let likeCircleRect = CGRect(
-//                x: position.x + 6,
-//                y: position.y + badgeOffset,
-//                width: 14,
-//                height: 14
-//            )
-//            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
-//            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.5)
-//            context.draw(
-//                Text("\(marker.likeCount)")
-//                    .font(.system(size: 8, weight: .bold))
-//                    .foregroundColor(.white),
-//                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
-//            )
-//        }
+
         
         // Username label - only show if not hidden
         if !hideUsername {
@@ -1732,6 +1705,129 @@ struct MarkerPlacementPriceIndicator: View {
     }
 }
 
+// MARK: - Marker Settings View (User-Adjustable Distance)
+
+struct MarkerSettingsView: View {
+    @ObservedObject var settings = MarkerDisplaySettings.shared
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Marker Distance")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Distance from Candle")
+                            Spacer()
+                            Text("\(Int(settings.baseOffset)) pts")
+                                .foregroundColor(.secondary)
+                                .font(.system(.body, design: .monospaced))
+                        }
+                        
+                        Slider(
+                            value: $settings.baseOffset,
+                            in: 40...120,
+                            step: 5
+                        )
+                        .tint(.cyan)
+                        
+                        Text("How far markers appear from candle high/low")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                
+                Section(header: Text("Stack Spacing")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Space Between Stacked Markers")
+                            Spacer()
+                            Text("\(Int(settings.stackOffset)) pts")
+                                .foregroundColor(.secondary)
+                                .font(.system(.body, design: .monospaced))
+                        }
+                        
+                        Slider(
+                            value: $settings.stackOffset,
+                            in: 34...60,
+                            step: 2
+                        )
+                        .tint(.cyan)
+                        
+                        Text("Vertical spacing when multiple markers on same candle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Minimum Stack Spacing")
+                            Spacer()
+                            Text("\(Int(settings.minStackSpacing)) pts")
+                                .foregroundColor(.secondary)
+                                .font(.system(.body, design: .monospaced))
+                        }
+                        
+                        Slider(
+                            value: $settings.minStackSpacing,
+                            in: 32...50,
+                            step: 2
+                        )
+                        .tint(.orange)
+                        
+                        Text("Prevents overlap when chart is zoomed out vertically")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                
+                Section {
+                    Button(action: {
+                        settings.resetToDefaults()
+                    }) {
+                        HStack {
+                            Image(systemName: "arrow.counterclockwise")
+                            Text("Reset to Defaults")
+                        }
+                        .foregroundColor(.orange)
+                    }
+                }
+            }
+            .navigationTitle("Marker Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Marker Settings Button (for Chart Controls)
+
+struct MarkerSettingsButton: View {
+    @State private var showSettings = false
+    
+    var body: some View {
+        Button(action: {
+            showSettings = true
+        }) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white.opacity(0.8))
+        }
+        .sheet(isPresented: $showSettings) {
+            MarkerSettingsView()
+                .presentationDetents([.medium])
+        }
+    }
+}
 
 
 
@@ -1747,16 +1843,7 @@ struct MarkerPlacementPriceIndicator: View {
 ////  ChartMarkerSystem.swift
 ////  traders_guild
 ////
-////  COMPREHENSIVE UPDATE v6 - Major refactor:
-////  1. Markers favor top placement (only below for severe troughs)
-////  2. Tighter stacking with reduced spacing
-////  3. Remove clustering - show all markers individually
-////  4. One type per candle restriction (offer like instead)
-////  5. Display SF Symbol icons instead of first letter
-////  6. Selected marker scales up and shows custom views (lines)
-////  7. Hide usernames when multiple markers on same candle
-////  8. Horizontal lines for Entry/Exit/Support/Resistance markers
-////
+//// TODO: - add app state here for real guildid and user id for api
 //
 //import SwiftUI
 //
@@ -1767,6 +1854,7 @@ struct MarkerPlacementPriceIndicator: View {
 //    @Published var selectedMarker: ChartMarker?
 //    @Published var visibleTypes: Set<MarkerType> = Set(MarkerType.allCases)
 //    @Published var showOnlyMyMarkers: Bool = false
+//    @Published var markersHidden: Bool = false  // Toggle to hide all markers
 //    
 //    /// Tracks if we should show a "like existing marker" prompt
 //    @Published var duplicateMarkerToLike: ChartMarker?
@@ -2001,7 +2089,10 @@ struct MarkerPlacementPriceIndicator: View {
 //    }
 //    
 //    var filteredMarkers: [ChartMarker] {
-//        markers.filter { marker in
+//        // If markers are hidden globally, return empty array
+//        if markersHidden { return [] }
+//        
+//        return markers.filter { marker in
 //            guard marker.isVisible else { return false }
 //            guard visibleTypes.contains(marker.type) else { return false }
 //            if showOnlyMyMarkers && marker.userId != currentUserId {
@@ -2688,24 +2779,6 @@ struct MarkerPlacementPriceIndicator: View {
 //            at: position
 //        )
 //        
-//        // Like badge
-////        if marker.likeCount > 0 {
-////            let badgeOffset: CGFloat = (scaledRadius - 11)
-////            let likeCircleRect = CGRect(
-////                x: position.x + 7,
-////                y: position.y + badgeOffset,
-////                width: 12,
-////                height: 12
-////            )
-////            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
-////            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.8)
-////            context.draw(
-////                Text("\(marker.likeCount)")
-////                    .font(.system(size: 8, weight: .bold))
-////                    .foregroundColor(.white),
-////                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
-////            )
-////        }
 //        
 //        if marker.likeCount > 0 {
 //            let badgeOffset: CGFloat = (scaledRadius - 13)
@@ -2724,23 +2797,7 @@ struct MarkerPlacementPriceIndicator: View {
 //                at: CGPoint(x: position.x + 12, y: position.y + badgeOffset + 7)
 //            )
 //        }
-////        if marker.likeCount > 0 {
-////            let badgeOffset: CGFloat = isBelow ? -(scaledRadius + 2) : (scaledRadius - 12)
-////            let likeCircleRect = CGRect(
-////                x: position.x + 6,
-////                y: position.y + badgeOffset,
-////                width: 14,
-////                height: 14
-////            )
-////            context.fill(Path(ellipseIn: likeCircleRect), with: .color(.red))
-////            context.stroke(Path(ellipseIn: likeCircleRect), with: .color(.black), lineWidth: 0.5)
-////            context.draw(
-////                Text("\(marker.likeCount)")
-////                    .font(.system(size: 8, weight: .bold))
-////                    .foregroundColor(.white),
-////                at: CGPoint(x: position.x + 13, y: position.y + badgeOffset + 6)
-////            )
-////        }
+//
 //        
 //        // Username label - only show if not hidden
 //        if !hideUsername {
@@ -3472,6 +3529,4 @@ struct MarkerPlacementPriceIndicator: View {
 //        .allowsHitTesting(false)
 //    }
 //}
-//
-//
 //

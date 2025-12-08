@@ -1,6 +1,3 @@
-
-
-
 //
 //  ChartCrosshairAndNavigation.swift
 //  traders_guild
@@ -48,6 +45,16 @@ struct CrosshairView: View {
     let chartSize: CGSize
     let chartData: ChartDataManager
     
+    // RSI Panel state - for positioning time label correctly
+    var rsiPanelActive: Bool = false
+    var rsiPanelHeight: CGFloat = 120
+    
+    // Indicator manager for showing indicator values
+    var indicatorManager: IndicatorManager? = nil
+    
+    // Current timeframe for time formatting
+    var timeframe: ChartTimeframe = .h1
+    
     /// Backwards-compatible initializer (creates fallback ChartDataManager)
     init(crosshairManager: CrosshairManager, chartSize: CGSize) {
         self.crosshairManager = crosshairManager
@@ -60,6 +67,34 @@ struct CrosshairView: View {
         self.crosshairManager = crosshairManager
         self.chartSize = chartSize
         self.chartData = chartData
+    }
+    
+    /// Extended initializer with RSI panel state, indicators, and timeframe
+    init(
+        crosshairManager: CrosshairManager,
+        chartSize: CGSize,
+        chartData: ChartDataManager,
+        rsiPanelActive: Bool,
+        rsiPanelHeight: CGFloat,
+        indicatorManager: IndicatorManager?,
+        timeframe: ChartTimeframe
+    ) {
+        self.crosshairManager = crosshairManager
+        self.chartSize = chartSize
+        self.chartData = chartData
+        self.rsiPanelActive = rsiPanelActive
+        self.rsiPanelHeight = rsiPanelHeight
+        self.indicatorManager = indicatorManager
+        self.timeframe = timeframe
+    }
+    
+    /// Computed property for time label Y position
+    /// Always positioned at the x-axis area at the bottom of the chart
+    private var timeLabelY: CGFloat {
+        let bottomAreaHeight = chartSize.height * 0.11
+        // Position inline with x-axis labels (22pt canvas + 10pt padding = 32pt total, center at ~21pt from bottom of canvas)
+        // This positions it at the same y as the x-axis labels regardless of RSI panel
+        return chartSize.height - bottomAreaHeight - 21
     }
     
     var body: some View {
@@ -92,19 +127,22 @@ struct CrosshairView: View {
                 )
                 .position(x: chartSize.width - 35, y: crosshairManager.position.y)
                 
-                // Time label on X-axis
-                if let candle = crosshairManager.targetCandle {
-                    CrosshairTimeLabel(timestamp: candle.timestamp)
-                        .position(x: crosshairManager.position.x, y: chartSize.height - 12)
+                // Time label on X-axis - only show when RSI panel is NOT active
+                // (RSI panel has its own time label on its x-axis)
+                if !rsiPanelActive, let candle = crosshairManager.targetCandle {
+                    CrosshairTimeLabel(timestamp: candle.timestamp, timeframe: timeframe)
+                        .position(x: crosshairManager.position.x, y: timeLabelY)
                 }
                 
-                // Compact info popup
+                // Compact info popup with indicator values
                 CrosshairInfoPopupCompact(
                     candle: crosshairManager.targetCandle,
                     price: crosshairManager.targetPrice,
                     position: crosshairManager.position,
                     chartSize: chartSize,
-                    chartData: chartData
+                    chartData: chartData,
+                    indicatorManager: indicatorManager,
+                    timeframe: timeframe
                 )
             }
             .allowsHitTesting(false)
@@ -119,15 +157,23 @@ struct CrosshairPriceLabel: View {
     let chartData: ChartDataManager
     
     var body: some View {
-        Text(chartData.formatPrice(price))
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
-            .foregroundColor(.black)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white.opacity(0.9))
-            )
+        HStack(spacing: 2) {
+            // Arrow pointing to crosshair
+            Image(systemName: "arrowtriangle.left.fill")
+                .font(.system(size: 6))
+                .foregroundColor(.yellow)
+            
+            Text(chartData.formatPrice(price))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundColor(.black)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.yellow.opacity(0.95))
+                        .shadow(color: .yellow.opacity(0.4), radius: 3, x: 0, y: 1)
+                )
+        }
     }
 }
 
@@ -135,17 +181,50 @@ struct CrosshairPriceLabel: View {
 
 struct CrosshairTimeLabel: View {
     let timestamp: Date
+    var timeframe: ChartTimeframe = .h1
+    
+    /// Format time based on timeframe
+    /// - Daily and above: Just show date (no time)
+    /// - Below daily: Show date and time (hour:minute)
+    private var formattedTime: String {
+        let formatter = DateFormatter()
+        
+        switch timeframe {
+        case .d1, .w1, .mn:
+            // Daily and above - just show date
+            formatter.dateFormat = "dd MMM yyyy"
+        case .h4:
+            // 4-hour - show date and hour
+            formatter.dateFormat = "dd MMM HH:mm"
+        case .h1:
+            // Hourly - show date and time
+            formatter.dateFormat = "dd MMM HH:mm"
+        case .m30, .m15, .m5, .m1:
+            // Sub-hourly - show date and time
+            formatter.dateFormat = "dd MMM HH:mm"
+        }
+        
+        return formatter.string(from: timestamp)
+    }
     
     var body: some View {
-        Text(timestamp.shortTimeLabel)
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
-            .foregroundColor(.black)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white.opacity(0.9))
-            )
+        VStack(spacing: 2) {
+            // Arrow indicator pointing up to the crosshair
+            Image(systemName: "arrowtriangle.up.fill")
+                .font(.system(size: 6))
+                .foregroundColor(.cyan)
+            
+            Text(formattedTime)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.cyan.opacity(0.9))
+                        .shadow(color: .cyan.opacity(0.4), radius: 3, x: 0, y: 1)
+                )
+        }
     }
 }
 
@@ -157,6 +236,8 @@ struct CrosshairInfoPopupCompact: View {
     let position: CGPoint
     let chartSize: CGSize
     let chartData: ChartDataManager
+    var indicatorManager: IndicatorManager? = nil
+    var timeframe: ChartTimeframe = .h1
     
     private var popupPosition: CGPoint {
         var x = position.x + 60
@@ -176,45 +257,158 @@ struct CrosshairInfoPopupCompact: View {
         return CGPoint(x: x, y: y)
     }
     
+    /// Format time based on timeframe for the info popup header
+    private func formatTimeForHeader(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        
+        switch timeframe {
+        case .d1, .w1, .mn:
+            // Daily and above - just date
+            formatter.dateFormat = "EEE, dd MMM yyyy"
+        case .h4, .h1:
+            // Hourly - date and time
+            formatter.dateFormat = "dd MMM HH:mm"
+        case .m30, .m15, .m5, .m1:
+            // Sub-hourly - full timestamp
+            formatter.dateFormat = "dd MMM HH:mm"
+        }
+        
+        return formatter.string(from: date)
+    }
+    
+    /// Get EMA values at the crosshair candle index
+    private var emaValues: [(period: Int, value: Double, color: Color)]? {
+        guard let manager = indicatorManager,
+              let candle = candle,
+              let candleIndex = chartData.candles.firstIndex(where: { $0.timestamp == candle.timestamp })
+        else { return nil }
+        
+        var values: [(period: Int, value: Double, color: Color)] = []
+        
+        for maConfig in manager.activeIndicators.movingAverages where maConfig.isEnabled {
+            // Get the calculated values from indicator manager
+            if let maDataPoints = manager.movingAverageData[maConfig.id] {
+                // Find the data point for this candle index
+                if let dataPoint = maDataPoints.first(where: { $0.candleIndex == candleIndex }) {
+                    if !dataPoint.value.isNaN {
+                        // Convert CodableColor to Color using .color property
+                        values.append((period: maConfig.period, value: dataPoint.value, color: maConfig.color.color))
+                    }
+                }
+            }
+        }
+        
+        return values.isEmpty ? nil : values
+    }
+    
+    /// Get RSI value at the crosshair candle index
+    private var rsiValue: Double? {
+        guard let manager = indicatorManager,
+              let rsiConfig = manager.activeIndicators.rsi,
+              rsiConfig.isEnabled,
+              let candle = candle,
+              let candleIndex = chartData.candles.firstIndex(where: { $0.timestamp == candle.timestamp })
+        else { return nil }
+        
+        // Find RSI data point for this candle index
+        if let dataPoint = manager.rsiData.first(where: { $0.candleIndex == candleIndex }) {
+            return dataPoint.value.isNaN ? nil : dataPoint.value
+        }
+        
+        return nil
+    }
+    
     var body: some View {
         Group {
             if let candle = candle {
                 VStack(alignment: .leading, spacing: 2) {
-                    // Time header
-                    Text(candle.timestamp.chartTimeLabel)
-                        .font(.system(size: 9, weight: .semibold))
+                    // Time header - timeframe aware
+                    Text(formatTimeForHeader(candle.timestamp))
+                        .font(.system(size: 8, weight: .semibold))
                         .foregroundColor(.white.opacity(0.7))
                     
-                    // OHLC in compact format
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 1) {
+                    // OHLC in ultra-compact format
+                    HStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 0) {
                             PriceRow(label: "O", value: chartData.formatPrice(candle.open), color: .white)
                             PriceRow(label: "L", value: chartData.formatPrice(candle.low), color: .red)
                         }
-                        VStack(alignment: .leading, spacing: 1) {
+                        VStack(alignment: .leading, spacing: 0) {
                             PriceRow(label: "H", value: chartData.formatPrice(candle.high), color: .green)
                             PriceRow(label: "C", value: chartData.formatPrice(candle.close), color: candle.isBullish ? .green : .red)
                         }
                     }
                     
-                    // Volume if available
+                    // Volume if available - more compact
                     if let volume = candle.volume {
-                        Text("Vol: \(volume.formattedVolume)")
-                            .font(.system(size: 8))
-                            .foregroundColor(.white.opacity(0.5))
+                        Text("V:\(volume.formattedVolume)")
+                            .font(.system(size: 7))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    
+                    // Indicator values section - more compact
+                    if emaValues != nil || rsiValue != nil {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.15))
+                            .frame(height: 0.5)
+                            .padding(.vertical, 1)
+                        
+                        // EMA values - inline format
+                        if let emas = emaValues {
+                            ForEach(emas, id: \.period) { ema in
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(ema.color)
+                                        .frame(width: 5, height: 5)
+                                    Text("\(ema.period)")
+                                        .font(.system(size: 7, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text(chartData.formatPrice(ema.value))
+                                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                        .foregroundColor(ema.color)
+                                }
+                            }
+                        }
+                        
+                        // RSI value
+                        if let rsi = rsiValue {
+                            HStack(spacing: 3) {
+                                Circle()
+                                    .fill(rsiColor(for: rsi))
+                                    .frame(width: 5, height: 5)
+                                Text("RSI")
+                                    .font(.system(size: 7, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.5))
+                                Text(String(format: "%.0f", rsi))
+                                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                    .foregroundColor(rsiColor(for: rsi))
+                            }
+                        }
                     }
                 }
-                .padding(6)
+                .padding(5)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.black.opacity(0.75))
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.black.opacity(0.85))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: 5)
                                 .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
                         )
                 )
+                .fixedSize()  // Prevent expansion - use intrinsic size
                 .position(popupPosition)
             }
+        }
+    }
+    
+    /// Color for RSI based on value (overbought/oversold zones)
+    private func rsiColor(for value: Double) -> Color {
+        if value >= 70 {
+            return .red  // Overbought
+        } else if value <= 30 {
+            return .green  // Oversold
+        } else {
+            return .purple  // Neutral
         }
     }
 }
