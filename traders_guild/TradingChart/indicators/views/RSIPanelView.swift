@@ -2,7 +2,9 @@
 //  RSIPanelView.swift
 //  traders_guild
 //
-
+//  UPDATED VERSION - Supports stacked panels with isBottomPanel parameter
+//  When isBottomPanel=false, X-axis labels are hidden (shown only on bottom panel)
+//
 
 import SwiftUI
 
@@ -14,11 +16,10 @@ struct RSIPanelView: View {
     
     @ObservedObject var indicatorManager: IndicatorManager
     @ObservedObject var chartData: ChartDataManager
-    @ObservedObject var gestureState: ChartGestureState  // Must observe for pan sync
+    @ObservedObject var gestureState: ChartGestureState
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
     
-    /// Current chart timeframe for x-axis formatting
     var timeframe: ChartTimeframe = .h1
     
     // Panel height state
@@ -26,20 +27,22 @@ struct RSIPanelView: View {
     var minPanelHeight: CGFloat = 80
     var maxPanelHeight: CGFloat = 300
     
+    /// NEW: Whether this is the bottom panel (shows X-axis labels)
+    /// When stacking multiple panels, only the bottom one shows the X-axis
+    var isBottomPanel: Bool = true
+    
     // MARK: - Private State
     
     @State private var isDraggingHandle = false
     @State private var dragStartHeight: CGFloat = 0
-    @State private var lastDragTranslation: CGSize = .zero  // For pan gesture
+    @State private var lastDragTranslation: CGSize = .zero
     
     // MARK: - Computed Properties
     
-    /// Total width of each candle including spacing
     private var totalCandleWidth: CGFloat {
         baseCandleWidth * gestureState.candleWidthScale + candleSpacing
     }
     
-    /// Actual candle body width (without spacing)
     private var actualCandleWidth: CGFloat {
         baseCandleWidth * gestureState.candleWidthScale
     }
@@ -56,48 +59,46 @@ struct RSIPanelView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Resize handle - completely separate gesture context
+            // Resize handle
             resizeHandleBar
             
-            // RSI content area with pan gesture (syncs with main chart)
+            // RSI content area with pan gesture
             rsiContentArea
                 .frame(height: panelHeight)
                 .gesture(panGesture)
             
-            // X-axis labels at the bottom of RSI panel
-            xAxisLabels
+            // X-axis labels only if this is the bottom panel
+            if isBottomPanel {
+                xAxisLabels
+            }
         }
         .background(Color.black)
     }
     
-    // MARK: - Pan Gesture (syncs with main chart)
+    // MARK: - Pan Gesture
     
     private var panGesture: some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
-                // Start tracking on first drag event
                 if lastDragTranslation == .zero {
                     gestureState.beginDrag()
                 }
                 
                 let incrementalX = value.translation.width - lastDragTranslation.width
-                // RSI panel only supports horizontal panning
-                let incrementalY: CGFloat = 0
                 
                 gestureState.applyPan(
-                    translation: CGSize(width: incrementalX, height: incrementalY),
+                    translation: CGSize(width: incrementalX, height: 0),
                     chartWidth: UIScreen.main.bounds.width,
                     candleCount: chartData.candles.count,
                     candleWidth: totalCandleWidth,
                     chartHeight: panelHeight,
-                    priceScale: 1.0,  // RSI doesn't use price scale
+                    priceScale: 1.0,
                     trackVelocity: true
                 )
                 
                 lastDragTranslation = value.translation
             }
             .onEnded { value in
-                // Trigger momentum scrolling
                 gestureState.endDrag(
                     chartWidth: UIScreen.main.bounds.width,
                     candleCount: chartData.candles.count,
@@ -109,220 +110,13 @@ struct RSIPanelView: View {
             }
     }
     
-    // MARK: - X-Axis Labels
-    
-    // Cached date formatters for performance
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "dd MMM"
-        return f
-    }()
-    
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-    
-    private var xAxisLabels: some View {
-        // Explicit dependency on panOffset to force redraw
-        let _ = gestureState.panOffset.width
-        let _ = gestureState.candleWidthScale
-        let _ = gestureState.crosshairActive  // Force redraw on crosshair change
-        let _ = gestureState.crosshairX
-        
-        return ZStack {
-            Canvas { context, size in
-                drawXAxisLabels(context: context, size: size)
-            }
-            .frame(height: 22)
-            .background(Color.black)
-            
-            // Crosshair time label overlay
-            if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
-                crosshairTimeLabelOverlay(timestamp: timestamp)
-            }
-        }
-        .frame(height: 22)
-    }
-    
-    /// Time label for crosshair on x-axis
-    @ViewBuilder
-    private func crosshairTimeLabelOverlay(timestamp: Date) -> some View {
-        VStack(spacing: 1) {
-            Image(systemName: "arrowtriangle.up.fill")
-                .font(.system(size: 5))
-                .foregroundColor(.cyan)
-            
-            Text(formatCrosshairTime(timestamp))
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.cyan.opacity(0.9))
-                )
-        }
-        .position(x: gestureState.crosshairX, y: 11)
-    }
-    
-    /// Format timestamp for crosshair label based on timeframe
-    private func formatCrosshairTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        switch timeframe {
-        case .d1, .w1, .mn:
-            formatter.dateFormat = "dd MMM yyyy"
-        default:
-            formatter.dateFormat = "dd MMM HH:mm"
-        }
-        return formatter.string(from: date)
-    }
-    
-    private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {
-        guard chartData.candles.count >= 2 else { return }
-        
-        // Get the time range we need to cover
-        let firstCandle = chartData.candles.first!
-        let lastCandle = chartData.candles.last!
-        
-        // Derive time per candle from actual data
-        let timePerCandle = chartData.candles[1].timestamp.timeIntervalSince(chartData.candles[0].timestamp)
-        guard timePerCandle > 0 else { return }
-        
-        // Use the same getNiceTimeStep calculation as main chart
-        let niceTimeStep = getNiceTimeStep(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
-        
-        // Find the first "nice" time boundary before our data starts
-        let calendar = Calendar.current
-        let startTime = firstCandle.timestamp.timeIntervalSince1970
-        let alignedStart = floor(startTime / niceTimeStep) * niceTimeStep
-        
-        // Draw labels at regular time intervals
-        var currentTime = alignedStart
-        let endTime = lastCandle.timestamp.timeIntervalSince1970 + timePerCandle * 10
-        
-        var lastDrawnX: CGFloat = -200
-        let minSpacing: CGFloat = 30  // Minimal - adaptive getNiceTimeStep handles density
-        
-        while currentTime <= endTime {
-            // Convert time to candle index
-            let candleIndex = (currentTime - startTime) / timePerCandle
-            
-            // Convert candle index to screen x position
-            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
-            
-            // Only draw if in visible area and not too close to last label
-            if x >= -50 && x <= size.width + 50 && (x - lastDrawnX) >= minSpacing {
-                let date = Date(timeIntervalSince1970: currentTime)
-                let components = calendar.dateComponents([.hour, .minute], from: date)
-                let hour = components.hour ?? 0
-                let minute = components.minute ?? 0
-                let isMidnight = hour == 0 && minute == 0
-                
-                if isMidnight {
-                    let text = Self.dateFormatter.string(from: date)
-                    context.draw(
-                        Text(text)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white),
-                        at: CGPoint(x: x, y: 10)
-                    )
-                } else {
-                    let text = Self.timeFormatter.string(from: date)
-                    context.draw(
-                        Text(text)
-                            .font(.system(size: 9))
-                            .foregroundColor(.gray),
-                        at: CGPoint(x: x, y: 10)
-                    )
-                }
-                lastDrawnX = x
-            }
-            
-            currentTime += niceTimeStep
-        }
-    }
-    
-    /// Get nice time step in seconds based on timeframe and zoom - matches main chart
-    /// UPDATED: Targets 4-6 labels on screen at all zoom levels
-    private func getNiceTimeStep(timeframe: ChartTimeframe, zoomScale: CGFloat) -> Double {
-        // Calculate approximate visible candles based on screen width and zoom
-        let screenWidth: CGFloat = UIScreen.main.bounds.width
-        let visibleCandles = screenWidth / totalCandleWidth
-        
-        // Get seconds per candle for this timeframe
-        let secondsPerCandle: Double
-        switch timeframe {
-        case .m1: secondsPerCandle = 60
-        case .m5: secondsPerCandle = 300
-        case .m15: secondsPerCandle = 900
-        case .m30: secondsPerCandle = 1800
-        case .h1: secondsPerCandle = 3600
-        case .h4: secondsPerCandle = 14400
-        case .d1: secondsPerCandle = 86400
-        case .w1: secondsPerCandle = 604800
-        case .mn: secondsPerCandle = 2592000
-        }
-        
-        // Calculate total visible time span
-        let visibleTimeSpan = Double(visibleCandles) * secondsPerCandle
-        
-        // Target 5 labels on screen (4-6 range)
-        let targetLabels: Double = 5.0
-        let roughStep = visibleTimeSpan / targetLabels
-        
-        // Round to "nice" time intervals
-        let niceStep = roundToNiceTimeInterval(roughStep)
-        
-        return niceStep
-    }
-    
-    /// Round a rough time step to a "nice" interval (e.g., 5min, 15min, 1h, 4h, etc.)
-    private func roundToNiceTimeInterval(_ roughStep: Double) -> Double {
-        // Define nice intervals in seconds
-        let niceIntervals: [Double] = [
-            60,        // 1 min
-            120,       // 2 min
-            300,       // 5 min
-            600,       // 10 min
-            900,       // 15 min
-            1800,      // 30 min
-            3600,      // 1 hour
-            7200,      // 2 hours
-            14400,     // 4 hours
-            21600,     // 6 hours
-            28800,     // 8 hours
-            43200,     // 12 hours
-            86400,     // 1 day
-            172800,    // 2 days
-            259200,    // 3 days
-            432000,    // 5 days
-            604800,    // 1 week
-            1209600,   // 2 weeks
-            2592000,   // 30 days
-            5184000    // 60 days
-        ]
-        
-        // Find the closest nice interval that's >= roughStep
-        for interval in niceIntervals {
-            if interval >= roughStep * 0.7 {  // Allow some flexibility
-                return interval
-            }
-        }
-        
-        return niceIntervals.last!
-    }
-    
     // MARK: - Resize Handle
     
     private var resizeHandleBar: some View {
         ZStack {
-            // Full-width tap area
             Rectangle()
                 .fill(Color(white: 0.08))
             
-            // Visual indicator
             VStack(spacing: 3) {
                 Capsule()
                     .fill(isDraggingHandle ? Color.white.opacity(0.8) : Color.gray.opacity(0.5))
@@ -339,7 +133,6 @@ struct RSIPanelView: View {
                         dragStartHeight = panelHeight
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
-                    // Dragging UP (negative translation) INCREASES height
                     let delta = -value.translation.height
                     let newHeight = dragStartHeight + delta
                     panelHeight = min(maxPanelHeight, max(minPanelHeight, newHeight))
@@ -350,7 +143,6 @@ struct RSIPanelView: View {
                 }
         )
         .overlay(
-            // Separator line at bottom
             Rectangle()
                 .fill(Color.gray.opacity(0.3))
                 .frame(height: 1),
@@ -361,55 +153,54 @@ struct RSIPanelView: View {
     // MARK: - RSI Content
     
     private var rsiContentArea: some View {
-        // Explicit dependencies to ensure Canvas redraws on gesture changes
         let _ = gestureState.panOffset.width
         let _ = gestureState.candleWidthScale
-        let _ = gestureState.crosshairActive  // Redraw on crosshair change
+        let _ = gestureState.crosshairActive
         
         return ZStack {
-            // Background
             Color.black.opacity(0.95)
             
-            // Canvas drawing
             Canvas { context, size in
                 drawRSIPanel(context: context, size: size)
             }
             
-            // Crosshair vertical line (synced with main chart)
             if gestureState.crosshairActive {
                 crosshairLine
             }
             
-            // Y-axis labels
             yAxisLabelsOverlay
-            
-            // Current RSI value indicator (like price indicator) - ON TOP of y-axis
             currentRSIIndicator
-            
-            // Header with current value
             panelHeaderOverlay
         }
         .clipped()
     }
     
-    // MARK: - Current RSI Value Indicator
+    // MARK: - Crosshair Line
     
-    /// Shows horizontal line at current RSI value with label (like price indicator)
+    private var crosshairLine: some View {
+        GeometryReader { geometry in
+            Path { path in
+                path.move(to: CGPoint(x: gestureState.crosshairX, y: 0))
+                path.addLine(to: CGPoint(x: gestureState.crosshairX, y: geometry.size.height))
+            }
+            .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
+        }
+        .allowsHitTesting(false)
+    }
+    
+    // MARK: - Current RSI Indicator
+    
     private var currentRSIIndicator: some View {
         GeometryReader { geometry in
             if let latestRSI = indicatorManager.latestRSI {
                 let rsiValue = latestRSI.value
-                
-                // RSI range is 0-100, calculate y position
                 let normalizedRSI = rsiValue / 100.0
                 let y = geometry.size.height * (1 - normalizedRSI)
                 
-                // Only show if in visible range
                 if y >= 0 && y <= geometry.size.height && !rsiValue.isNaN {
                     Canvas { context, size in
-                        let lineEndX = size.width - 45
+                        let lineEndX = size.width - 30
                         
-                        // Draw horizontal dashed line
                         let linePath = Path { path in
                             path.move(to: CGPoint(x: 0, y: y))
                             path.addLine(to: CGPoint(x: lineEndX, y: y))
@@ -422,18 +213,11 @@ struct RSIPanelView: View {
                             style: StrokeStyle(lineWidth: 1, dash: [5, 3])
                         )
                         
-                        // Draw RSI label background
-                        let labelX = size.width - 22
-                        let labelRect = CGRect(
-                            x: labelX - 20,
-                            y: y - 9,
-                            width: 40,
-                            height: 18
-                        )
+                        let labelX = size.width - 15
+                        let labelRect = CGRect(x: labelX - 20, y: y - 9, width: 40, height: 18)
                         let roundedPath = Path(roundedRect: labelRect, cornerRadius: 3)
                         context.fill(roundedPath, with: .color(lineColor))
                         
-                        // Draw RSI text
                         let text = Text(String(format: "%.1f", rsiValue))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
@@ -446,7 +230,6 @@ struct RSIPanelView: View {
         .allowsHitTesting(false)
     }
     
-    /// Color for RSI indicator based on value
     private func rsiIndicatorColor(for value: Double) -> Color {
         let overbought = rsiConfig?.overboughtLevel ?? 70
         let oversold = rsiConfig?.oversoldLevel ?? 30
@@ -460,21 +243,7 @@ struct RSIPanelView: View {
         }
     }
     
-    // MARK: - Crosshair Line
-    
-    /// Vertical crosshair line synced with main chart
-    private var crosshairLine: some View {
-        GeometryReader { geometry in
-            Path { path in
-                path.move(to: CGPoint(x: gestureState.crosshairX, y: 0))
-                path.addLine(to: CGPoint(x: gestureState.crosshairX, y: geometry.size.height))
-            }
-            .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
-        }
-        .allowsHitTesting(false)
-    }
-    
-    // MARK: - Header
+    // MARK: - Panel Header
     
     private var panelHeaderOverlay: some View {
         VStack {
@@ -483,12 +252,12 @@ struct RSIPanelView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
                 
-                if let latestRSI = indicatorManager.latestRSI {
-                    Text(String(format: "%.1f", latestRSI.value))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(rsiValueColor(latestRSI.value))
+                if let latest = indicatorManager.latestRSI {
+                    Text(String(format: "%.1f", latest.value))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(rsiValueColor(latest.value))
                     
-                    rsiConditionBadge(value: latestRSI.value)
+                    rsiConditionBadge(value: latest.value)
                 }
                 
                 Spacer()
@@ -499,8 +268,6 @@ struct RSIPanelView: View {
             Spacer()
         }
     }
-    
-    // MARK: - RSI Condition Badge
     
     @ViewBuilder
     private func rsiConditionBadge(value: Double) -> some View {
@@ -563,14 +330,29 @@ struct RSIPanelView: View {
         let drawableHeight = size.height - 20
         let topPadding: CGFloat = 18
         
-        // Draw zones first (background)
         drawZones(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
-        
-        // Draw reference levels
         drawReferenceLevels(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
-        
-        // Draw RSI line on top
         drawRSILine(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
+    }
+    
+    private func drawZones(context: GraphicsContext, size: CGSize, config: RSIConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
+        guard config.showLevels else { return }
+        
+        let overboughtY = yPosition(for: config.overboughtLevel, height: drawableHeight, topPadding: topPadding)
+        let oversoldY = yPosition(for: config.oversoldLevel, height: drawableHeight, topPadding: topPadding)
+        let topY = yPosition(for: 100, height: drawableHeight, topPadding: topPadding)
+        let bottomY = yPosition(for: 0, height: drawableHeight, topPadding: topPadding)
+        let lineEndX = size.width - 30
+        
+        let overboughtZone = Path { p in
+            p.addRect(CGRect(x: 0, y: topY, width: lineEndX, height: overboughtY - topY))
+        }
+        context.fill(overboughtZone, with: .color(.red.opacity(0.08)))
+        
+        let oversoldZone = Path { p in
+            p.addRect(CGRect(x: 0, y: oversoldY, width: lineEndX, height: bottomY - oversoldY))
+        }
+        context.fill(oversoldZone, with: .color(.green.opacity(0.08)))
     }
     
     private func drawReferenceLevels(context: GraphicsContext, size: CGSize, config: RSIConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
@@ -579,19 +361,16 @@ struct RSIPanelView: View {
         let middleY = yPosition(for: 50, height: drawableHeight, topPadding: topPadding)
         let lineEndX = size.width - 30
         
-        // Overbought line
         var path = Path()
         path.move(to: CGPoint(x: 0, y: overboughtY))
         path.addLine(to: CGPoint(x: lineEndX, y: overboughtY))
         context.stroke(path, with: .color(.red.opacity(0.4)), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
         
-        // Middle line
         path = Path()
         path.move(to: CGPoint(x: 0, y: middleY))
         path.addLine(to: CGPoint(x: lineEndX, y: middleY))
         context.stroke(path, with: .color(.gray.opacity(0.3)), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
         
-        // Oversold line
         path = Path()
         path.move(to: CGPoint(x: 0, y: oversoldY))
         path.addLine(to: CGPoint(x: lineEndX, y: oversoldY))
@@ -628,24 +407,6 @@ struct RSIPanelView: View {
         context.stroke(path, with: .color(config.color.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
     }
     
-    private func drawZones(context: GraphicsContext, size: CGSize, config: RSIConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
-        guard config.showLevels else { return }
-        
-        let overboughtY = yPosition(for: config.overboughtLevel, height: drawableHeight, topPadding: topPadding)
-        let oversoldY = yPosition(for: config.oversoldLevel, height: drawableHeight, topPadding: topPadding)
-        let topY = yPosition(for: 100, height: drawableHeight, topPadding: topPadding)
-        let bottomY = yPosition(for: 0, height: drawableHeight, topPadding: topPadding)
-        let lineEndX = size.width - 30
-        
-        // Overbought zone
-        let overboughtZone = Path { p in p.addRect(CGRect(x: 0, y: topY, width: lineEndX, height: overboughtY - topY)) }
-        context.fill(overboughtZone, with: .color(.red.opacity(0.08)))
-        
-        // Oversold zone
-        let oversoldZone = Path { p in p.addRect(CGRect(x: 0, y: oversoldY, width: lineEndX, height: bottomY - oversoldY)) }
-        context.fill(oversoldZone, with: .color(.green.opacity(0.08)))
-    }
-    
     // MARK: - Coordinate Helpers
     
     private func xPosition(for candleIndex: Int) -> CGFloat {
@@ -664,54 +425,166 @@ struct RSIPanelView: View {
         if value <= oversold { return .green }
         return .white.opacity(0.9)
     }
-}
-
-// MARK: - Preview
-
-#if DEBUG
-struct RSIPanelView_Previews: PreviewProvider {
-    static var previews: some View {
-        RSIPanelPreviewWrapper()
-            .preferredColorScheme(.dark)
-    }
-}
-
-struct RSIPanelPreviewWrapper: View {
-    @State private var panelHeight: CGFloat = 120
-    @StateObject private var manager = IndicatorManager()
-    @StateObject private var gestureState = ChartGestureState()
-    @StateObject private var chartData = ChartDataManager()
     
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            VStack {
-                Text("Chart Area")
-                    .foregroundColor(.gray)
-                Spacer()
+    // MARK: - X-Axis Labels
+    
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "dd MMM"
+        return f
+    }()
+    
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+    
+    private var xAxisLabels: some View {
+        let _ = gestureState.panOffset.width
+        let _ = gestureState.candleWidthScale
+        let _ = gestureState.crosshairActive
+        let _ = gestureState.crosshairX
+        
+        return ZStack {
+            Canvas { context, size in
+                drawXAxisLabels(context: context, size: size)
             }
+            .frame(height: 22)
+            .background(Color.black)
             
-            VStack {
-                Spacer()
-                
-                RSIPanelView(
-                    indicatorManager: manager,
-                    chartData: chartData,
-                    gestureState: gestureState,
-                    baseCandleWidth: 12,
-                    candleSpacing: 4,
-                    panelHeight: $panelHeight
-                )
-                
-                // Simulated bottom sheet
-                Color.gray.opacity(0.2)
-                    .frame(height: 100)
+            if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
+                crosshairTimeLabelOverlay(timestamp: timestamp)
             }
         }
-        .onAppear { manager.enableRSI() }
+        .frame(height: 22)
+    }
+    
+    @ViewBuilder
+    private func crosshairTimeLabelOverlay(timestamp: Date) -> some View {
+        VStack(spacing: 1) {
+            Image(systemName: "arrowtriangle.up.fill")
+                .font(.system(size: 5))
+                .foregroundColor(.cyan)
+            
+            Text(formatCrosshairTime(timestamp))
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.cyan.opacity(0.9))
+                )
+        }
+        .position(x: gestureState.crosshairX, y: 11)
+    }
+    
+    private func formatCrosshairTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        switch timeframe {
+        case .d1, .w1, .mn:
+            formatter.dateFormat = "dd MMM yyyy"
+        default:
+            formatter.dateFormat = "dd MMM HH:mm"
+        }
+        return formatter.string(from: date)
+    }
+    
+    private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {
+        guard chartData.candles.count >= 2 else { return }
+        
+        let firstCandle = chartData.candles.first!
+        let lastCandle = chartData.candles.last!
+        let timePerCandle = chartData.candles[1].timestamp.timeIntervalSince(chartData.candles[0].timestamp)
+        guard timePerCandle > 0 else { return }
+        
+        let niceTimeStep = getNiceTimeStep(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
+        
+        let calendar = Calendar.current
+        let startTime = firstCandle.timestamp.timeIntervalSince1970
+        let alignedStart = floor(startTime / niceTimeStep) * niceTimeStep
+        
+        var currentTime = alignedStart
+        let endTime = lastCandle.timestamp.timeIntervalSince1970 + timePerCandle * 10
+        
+        var lastDrawnX: CGFloat = -200
+        let minSpacing: CGFloat = 30
+        
+        while currentTime <= endTime {
+            let candleIndex = (currentTime - startTime) / timePerCandle
+            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+            
+            if x >= -50 && x <= size.width + 50 && (x - lastDrawnX) >= minSpacing {
+                let date = Date(timeIntervalSince1970: currentTime)
+                let components = calendar.dateComponents([.hour, .minute], from: date)
+                let hour = components.hour ?? 0
+                let minute = components.minute ?? 0
+                let isMidnight = hour == 0 && minute == 0
+                
+                if isMidnight {
+                    let text = Self.dateFormatter.string(from: date)
+                    context.draw(
+                        Text(text)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white),
+                        at: CGPoint(x: x, y: 10)
+                    )
+                } else {
+                    let text = Self.timeFormatter.string(from: date)
+                    context.draw(
+                        Text(text)
+                            .font(.system(size: 9))
+                            .foregroundColor(.gray),
+                        at: CGPoint(x: x, y: 10)
+                    )
+                }
+                lastDrawnX = x
+            }
+            
+            currentTime += niceTimeStep
+        }
+    }
+    
+    private func getNiceTimeStep(timeframe: ChartTimeframe, zoomScale: CGFloat) -> Double {
+        let screenWidth: CGFloat = UIScreen.main.bounds.width
+        let visibleCandles = screenWidth / totalCandleWidth
+        
+        let secondsPerCandle: Double
+        switch timeframe {
+        case .m1: secondsPerCandle = 60
+        case .m5: secondsPerCandle = 300
+        case .m15: secondsPerCandle = 900
+        case .m30: secondsPerCandle = 1800
+        case .h1: secondsPerCandle = 3600
+        case .h4: secondsPerCandle = 14400
+        case .d1: secondsPerCandle = 86400
+        case .w1: secondsPerCandle = 604800
+        case .mn: secondsPerCandle = 2592000
+        }
+        
+        let visibleTimeSpan = Double(visibleCandles) * secondsPerCandle
+        let targetLabels: Double = 5.0
+        let roughStep = visibleTimeSpan / targetLabels
+        
+        return roundToNiceTimeInterval(roughStep)
+    }
+    
+    private func roundToNiceTimeInterval(_ roughStep: Double) -> Double {
+        let niceIntervals: [Double] = [
+            60, 120, 300, 600, 900, 1800,
+            3600, 7200, 14400, 21600, 28800, 43200,
+            86400, 172800, 259200, 432000,
+            604800, 1209600, 2592000, 5184000
+        ]
+        
+        for interval in niceIntervals {
+            if interval >= roughStep * 0.7 {
+                return interval
+            }
+        }
+        
+        return niceIntervals.last!
     }
 }
-#endif
-
 
