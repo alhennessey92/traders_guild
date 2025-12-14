@@ -2,8 +2,9 @@
 //  IndicatorOverlayRenderer.swift
 //  traders_guild
 //
-//  EXPANDED VERSION - Renders EMA, SMA, Bollinger Bands, and VWAP
-//  Designed to integrate with TradingChartView canvas drawing
+//  EXPANDED VERSION - Renders all overlay indicators
+//  Trend: EMA, SMA, WMA, HMA, VWAP, Parabolic SAR
+//  Volatility: Bollinger Bands, Donchian Channels, Keltner Channels
 //
 
 import SwiftUI
@@ -13,20 +14,41 @@ import SwiftUI
 /// Pre-computed data for drawing indicators (avoids MainActor issues)
 struct IndicatorDrawingData {
     let movingAverages: [(config: MovingAverageConfig, data: [MovingAverageDataPoint])]
-    let bollingerBands: (config: BollingerBandsConfig, data: [BollingerBandsDataPoint])?
     let vwap: (config: VWAPConfig, data: [VWAPDataPoint])?
+    let parabolicSAR: (config: ParabolicSARConfig, data: [ParabolicSARDataPoint])?
+    let bollingerBands: (config: BollingerBandsConfig, data: [BollingerBandsDataPoint])?
+    let donchianChannels: (config: DonchianChannelsConfig, data: [DonchianChannelsDataPoint])?
+    let keltnerChannels: (config: KeltnerChannelsConfig, data: [KeltnerChannelsDataPoint])?
     
     init(
         maConfigs: [MovingAverageConfig],
         maDataMap: [UUID: [MovingAverageDataPoint]],
+        vwapConfig: VWAPConfig? = nil,
+        vwapData: [VWAPDataPoint] = [],
+        sarConfig: ParabolicSARConfig? = nil,
+        sarData: [ParabolicSARDataPoint] = [],
         bbConfig: BollingerBandsConfig? = nil,
         bbData: [BollingerBandsDataPoint] = [],
-        vwapConfig: VWAPConfig? = nil,
-        vwapData: [VWAPDataPoint] = []
+        dcConfig: DonchianChannelsConfig? = nil,
+        dcData: [DonchianChannelsDataPoint] = [],
+        kcConfig: KeltnerChannelsConfig? = nil,
+        kcData: [KeltnerChannelsDataPoint] = []
     ) {
         self.movingAverages = maConfigs.compactMap { config in
             guard let data = maDataMap[config.id], !data.isEmpty else { return nil }
             return (config: config, data: data)
+        }
+        
+        if let vwapConfig = vwapConfig, vwapConfig.isEnabled, !vwapData.isEmpty {
+            self.vwap = (config: vwapConfig, data: vwapData)
+        } else {
+            self.vwap = nil
+        }
+        
+        if let sarConfig = sarConfig, sarConfig.isEnabled, !sarData.isEmpty {
+            self.parabolicSAR = (config: sarConfig, data: sarData)
+        } else {
+            self.parabolicSAR = nil
         }
         
         if let bbConfig = bbConfig, bbConfig.isEnabled, !bbData.isEmpty {
@@ -35,10 +57,16 @@ struct IndicatorDrawingData {
             self.bollingerBands = nil
         }
         
-        if let vwapConfig = vwapConfig, vwapConfig.isEnabled, !vwapData.isEmpty {
-            self.vwap = (config: vwapConfig, data: vwapData)
+        if let dcConfig = dcConfig, dcConfig.isEnabled, !dcData.isEmpty {
+            self.donchianChannels = (config: dcConfig, data: dcData)
         } else {
-            self.vwap = nil
+            self.donchianChannels = nil
+        }
+        
+        if let kcConfig = kcConfig, kcConfig.isEnabled, !kcData.isEmpty {
+            self.keltnerChannels = (config: kcConfig, data: kcData)
+        } else {
+            self.keltnerChannels = nil
         }
     }
     
@@ -64,51 +92,59 @@ struct IndicatorOverlayRenderer {
     ) {
         let scaledHeight = size.height * priceScale
         
-        // Draw Bollinger Bands first (behind other indicators)
+        // Draw channel indicators first (behind everything)
+        
+        // Donchian Channels
+        if let (dcConfig, dcData) = drawingData.donchianChannels {
+            drawDonchianChannels(
+                context: context, size: size, dataPoints: dcData, config: dcConfig,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset
+            )
+        }
+        
+        // Keltner Channels
+        if let (kcConfig, kcData) = drawingData.keltnerChannels {
+            drawKeltnerChannels(
+                context: context, size: size, dataPoints: kcData, config: kcConfig,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset
+            )
+        }
+        
+        // Bollinger Bands
         if let (bbConfig, bbData) = drawingData.bollingerBands {
             drawBollingerBands(
-                context: context,
-                size: size,
-                dataPoints: bbData,
-                config: bbConfig,
-                priceRange: priceRange,
-                scaledHeight: scaledHeight,
-                verticalOffset: verticalOffset,
-                totalCandleWidth: totalCandleWidth,
-                actualCandleWidth: actualCandleWidth,
-                totalOffset: totalOffset
+                context: context, size: size, dataPoints: bbData, config: bbConfig,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset
             )
         }
         
         // Draw VWAP
         if let (vwapConfig, vwapData) = drawingData.vwap {
             drawVWAP(
-                context: context,
-                size: size,
-                dataPoints: vwapData,
-                config: vwapConfig,
-                priceRange: priceRange,
-                scaledHeight: scaledHeight,
-                verticalOffset: verticalOffset,
-                totalCandleWidth: totalCandleWidth,
-                actualCandleWidth: actualCandleWidth,
-                totalOffset: totalOffset
+                context: context, size: size, dataPoints: vwapData, config: vwapConfig,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset
             )
         }
         
-        // Draw moving averages on top
+        // Draw moving averages
         for (config, dataPoints) in drawingData.movingAverages {
             drawMovingAverage(
-                context: context,
-                size: size,
-                dataPoints: dataPoints,
-                config: config,
-                priceRange: priceRange,
-                scaledHeight: scaledHeight,
-                verticalOffset: verticalOffset,
-                totalCandleWidth: totalCandleWidth,
-                actualCandleWidth: actualCandleWidth,
-                totalOffset: totalOffset
+                context: context, size: size, dataPoints: dataPoints, config: config,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset
+            )
+        }
+        
+        // Draw Parabolic SAR on top (dots need visibility)
+        if let (sarConfig, sarData) = drawingData.parabolicSAR {
+            drawParabolicSAR(
+                context: context, size: size, dataPoints: sarData, config: sarConfig,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset
             )
         }
     }
@@ -129,11 +165,7 @@ struct IndicatorOverlayRenderer {
     ) {
         guard dataPoints.count >= 2 else { return }
         
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
-        let visibleEndIndex = min(
-            dataPoints.last?.candleIndex ?? 0,
-            visibleStartIndex + Int(size.width / totalCandleWidth) + 10
-        )
+        let (visibleStartIndex, visibleEndIndex) = visibleRange(totalOffset: totalOffset, totalCandleWidth: totalCandleWidth, chartWidth: size.width, lastIndex: dataPoints.last?.candleIndex ?? 0)
         
         let visiblePoints = dataPoints.filter { point in
             point.candleIndex >= visibleStartIndex && point.candleIndex <= visibleEndIndex
@@ -177,99 +209,134 @@ struct IndicatorOverlayRenderer {
     ) {
         guard dataPoints.count >= 2 else { return }
         
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
-        let visibleEndIndex = min(
-            dataPoints.last?.candleIndex ?? 0,
-            visibleStartIndex + Int(size.width / totalCandleWidth) + 10
-        )
+        let (visibleStartIndex, visibleEndIndex) = visibleRange(totalOffset: totalOffset, totalCandleWidth: totalCandleWidth, chartWidth: size.width, lastIndex: dataPoints.last?.candleIndex ?? 0)
         
-        let visiblePoints = dataPoints.filter { point in
-            point.candleIndex >= visibleStartIndex && point.candleIndex <= visibleEndIndex
-        }
-        
+        let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
         guard visiblePoints.count >= 2 else { return }
         
         // Draw fill between bands if enabled
         if config.showFill {
-            var fillPath = Path()
-            var upperPoints: [CGPoint] = []
-            var lowerPoints: [CGPoint] = []
-            
-            for point in visiblePoints {
-                let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
-                guard x >= -50 && x <= size.width + 50 else { continue }
-                
-                let upperY = yPosition(for: point.upperBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
-                let lowerY = yPosition(for: point.lowerBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
-                
-                upperPoints.append(CGPoint(x: x, y: upperY))
-                lowerPoints.append(CGPoint(x: x, y: lowerY))
-            }
-            
-            if !upperPoints.isEmpty {
-                fillPath.move(to: upperPoints[0])
-                for point in upperPoints.dropFirst() {
-                    fillPath.addLine(to: point)
-                }
-                for point in lowerPoints.reversed() {
-                    fillPath.addLine(to: point)
-                }
-                fillPath.closeSubpath()
-                
-                context.fill(fillPath, with: .color(config.fillColor.color))
-            }
+            drawChannelFill(context: context, size: size, visiblePoints: visiblePoints,
+                           upperGetter: { $0.upperBand }, lowerGetter: { $0.lowerBand },
+                           fillColor: config.fillColor.color,
+                           priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                           totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
         }
         
-        // Draw upper band
-        var upperPath = Path()
-        var isFirst = true
-        for point in visiblePoints {
-            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
-            guard x >= -50 && x <= size.width + 50 else { continue }
-            let y = yPosition(for: point.upperBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
-            
-            if isFirst {
-                upperPath.move(to: CGPoint(x: x, y: y))
-                isFirst = false
-            } else {
-                upperPath.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-        context.stroke(upperPath, with: .color(config.upperBandColor.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
+        // Draw bands
+        drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.upperBand },
+                color: config.upperBandColor.color, lineWidth: config.lineWidth,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
         
-        // Draw lower band
-        var lowerPath = Path()
-        isFirst = true
-        for point in visiblePoints {
-            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
-            guard x >= -50 && x <= size.width + 50 else { continue }
-            let y = yPosition(for: point.lowerBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
-            
-            if isFirst {
-                lowerPath.move(to: CGPoint(x: x, y: y))
-                isFirst = false
-            } else {
-                lowerPath.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-        context.stroke(lowerPath, with: .color(config.lowerBandColor.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
+        drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.lowerBand },
+                color: config.lowerBandColor.color, lineWidth: config.lineWidth,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
         
-        // Draw middle band (SMA)
-        var middlePath = Path()
-        isFirst = true
-        for point in visiblePoints {
-            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
-            guard x >= -50 && x <= size.width + 50 else { continue }
-            let y = yPosition(for: point.middleBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
-            
-            if isFirst {
-                middlePath.move(to: CGPoint(x: x, y: y))
-                isFirst = false
-            } else {
-                middlePath.addLine(to: CGPoint(x: x, y: y))
-            }
+        // Middle band (dashed)
+        drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.middleBand },
+                color: config.color.color, lineWidth: config.lineWidth, dash: [4, 2],
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+    }
+    
+    // MARK: - Donchian Channels Drawing
+    
+    private static func drawDonchianChannels(
+        context: GraphicsContext,
+        size: CGSize,
+        dataPoints: [DonchianChannelsDataPoint],
+        config: DonchianChannelsConfig,
+        priceRange: (min: Double, max: Double),
+        scaledHeight: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat
+    ) {
+        guard dataPoints.count >= 2 else { return }
+        
+        let (visibleStartIndex, visibleEndIndex) = visibleRange(totalOffset: totalOffset, totalCandleWidth: totalCandleWidth, chartWidth: size.width, lastIndex: dataPoints.last?.candleIndex ?? 0)
+        
+        let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
+        guard visiblePoints.count >= 2 else { return }
+        
+        // Draw fill
+        if config.showFill {
+            drawChannelFill(context: context, size: size, visiblePoints: visiblePoints,
+                           upperGetter: { $0.upperBand }, lowerGetter: { $0.lowerBand },
+                           fillColor: config.fillColor.color,
+                           priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                           totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
         }
-        context.stroke(middlePath, with: .color(config.color.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round, dash: [4, 2]))
+        
+        // Draw bands
+        drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.upperBand },
+                color: config.upperBandColor.color, lineWidth: config.lineWidth,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+        
+        drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.lowerBand },
+                color: config.lowerBandColor.color, lineWidth: config.lineWidth,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+        
+        // Middle line (optional)
+        if config.showMiddleLine {
+            drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.middleLine },
+                    color: config.color.color, lineWidth: config.lineWidth, dash: [4, 2],
+                    priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                    totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+        }
+    }
+    
+    // MARK: - Keltner Channels Drawing
+    
+    private static func drawKeltnerChannels(
+        context: GraphicsContext,
+        size: CGSize,
+        dataPoints: [KeltnerChannelsDataPoint],
+        config: KeltnerChannelsConfig,
+        priceRange: (min: Double, max: Double),
+        scaledHeight: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat
+    ) {
+        guard dataPoints.count >= 2 else { return }
+        
+        let (visibleStartIndex, visibleEndIndex) = visibleRange(totalOffset: totalOffset, totalCandleWidth: totalCandleWidth, chartWidth: size.width, lastIndex: dataPoints.last?.candleIndex ?? 0)
+        
+        let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
+        guard visiblePoints.count >= 2 else { return }
+        
+        // Draw fill
+        if config.showFill {
+            drawChannelFill(context: context, size: size, visiblePoints: visiblePoints,
+                           upperGetter: { $0.upperBand }, lowerGetter: { $0.lowerBand },
+                           fillColor: config.fillColor.color,
+                           priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                           totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+        }
+        
+        // Draw bands
+        drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.upperBand },
+                color: config.upperBandColor.color, lineWidth: config.lineWidth,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+        
+        drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.lowerBand },
+                color: config.lowerBandColor.color, lineWidth: config.lineWidth,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+        
+        // EMA (middle)
+        drawLine(context: context, size: size, points: visiblePoints, valueGetter: { $0.ema },
+                color: config.color.color, lineWidth: config.lineWidth,
+                priceRange: priceRange, scaledHeight: scaledHeight, verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
     }
     
     // MARK: - VWAP Drawing
@@ -288,20 +355,17 @@ struct IndicatorOverlayRenderer {
     ) {
         guard dataPoints.count >= 2 else { return }
         
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
-        let visibleEndIndex = min(
-            dataPoints.last?.candleIndex ?? 0,
-            visibleStartIndex + Int(size.width / totalCandleWidth) + 10
-        )
+        let (visibleStartIndex, visibleEndIndex) = visibleRange(totalOffset: totalOffset, totalCandleWidth: totalCandleWidth, chartWidth: size.width, lastIndex: dataPoints.last?.candleIndex ?? 0)
         
-        let visiblePoints = dataPoints.filter { point in
-            point.candleIndex >= visibleStartIndex && point.candleIndex <= visibleEndIndex
-        }
-        
+        let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
         guard visiblePoints.count >= 2 else { return }
         
         // Draw standard deviation bands if enabled
         if config.showStandardDeviationBands {
+            for point in visiblePoints where point.upperBand != nil && point.lowerBand != nil {
+                // We'll draw these as dashed lines
+            }
+            
             // Upper band
             var upperPath = Path()
             var isFirst = true
@@ -360,7 +424,147 @@ struct IndicatorOverlayRenderer {
         context.stroke(path, with: .color(config.color.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
     }
     
+    // MARK: - Parabolic SAR Drawing
+    
+    private static func drawParabolicSAR(
+        context: GraphicsContext,
+        size: CGSize,
+        dataPoints: [ParabolicSARDataPoint],
+        config: ParabolicSARConfig,
+        priceRange: (min: Double, max: Double),
+        scaledHeight: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat
+    ) {
+        let (visibleStartIndex, visibleEndIndex) = visibleRange(totalOffset: totalOffset, totalCandleWidth: totalCandleWidth, chartWidth: size.width, lastIndex: dataPoints.last?.candleIndex ?? 0)
+        
+        let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
+        
+        let dotRadius: CGFloat = max(2.0, actualCandleWidth * 0.15)
+        
+        for point in visiblePoints {
+            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+            guard x >= -20 && x <= size.width + 20 else { continue }
+            
+            let y = yPosition(for: point.sar, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+            
+            let color = point.isUptrend ? config.bullishColor.color : config.bearishColor.color
+            
+            let dotRect = CGRect(x: x - dotRadius, y: y - dotRadius, width: dotRadius * 2, height: dotRadius * 2)
+            let dotPath = Path(ellipseIn: dotRect)
+            
+            context.fill(dotPath, with: .color(color))
+        }
+    }
+    
+    // MARK: - Generic Line Drawing Helper
+    
+    private static func drawLine<T>(
+        context: GraphicsContext,
+        size: CGSize,
+        points: [T],
+        valueGetter: (T) -> Double,
+        color: Color,
+        lineWidth: CGFloat,
+        dash: [CGFloat]? = nil,
+        priceRange: (min: Double, max: Double),
+        scaledHeight: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat
+    ) where T: Any {
+        var path = Path()
+        var isFirst = true
+        
+        for point in points {
+            let candleIndex: Int
+            if let p = point as? BollingerBandsDataPoint { candleIndex = p.candleIndex }
+            else if let p = point as? DonchianChannelsDataPoint { candleIndex = p.candleIndex }
+            else if let p = point as? KeltnerChannelsDataPoint { candleIndex = p.candleIndex }
+            else { continue }
+            
+            let x = xPosition(for: candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+            guard x >= -50 && x <= size.width + 50 else { continue }
+            
+            let y = yPosition(for: valueGetter(point), priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+            
+            if isFirst {
+                path.move(to: CGPoint(x: x, y: y))
+                isFirst = false
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        
+        var style = StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+        if let dash = dash {
+            style.dash = dash
+        }
+        
+        context.stroke(path, with: .color(color), style: style)
+    }
+    
+    // MARK: - Generic Channel Fill Helper
+    
+    private static func drawChannelFill<T>(
+        context: GraphicsContext,
+        size: CGSize,
+        visiblePoints: [T],
+        upperGetter: (T) -> Double,
+        lowerGetter: (T) -> Double,
+        fillColor: Color,
+        priceRange: (min: Double, max: Double),
+        scaledHeight: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat
+    ) where T: Any {
+        var fillPath = Path()
+        var upperPoints: [CGPoint] = []
+        var lowerPoints: [CGPoint] = []
+        
+        for point in visiblePoints {
+            let candleIndex: Int
+            if let p = point as? BollingerBandsDataPoint { candleIndex = p.candleIndex }
+            else if let p = point as? DonchianChannelsDataPoint { candleIndex = p.candleIndex }
+            else if let p = point as? KeltnerChannelsDataPoint { candleIndex = p.candleIndex }
+            else { continue }
+            
+            let x = xPosition(for: candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+            guard x >= -50 && x <= size.width + 50 else { continue }
+            
+            let upperY = yPosition(for: upperGetter(point), priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+            let lowerY = yPosition(for: lowerGetter(point), priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+            
+            upperPoints.append(CGPoint(x: x, y: upperY))
+            lowerPoints.append(CGPoint(x: x, y: lowerY))
+        }
+        
+        if !upperPoints.isEmpty {
+            fillPath.move(to: upperPoints[0])
+            for point in upperPoints.dropFirst() {
+                fillPath.addLine(to: point)
+            }
+            for point in lowerPoints.reversed() {
+                fillPath.addLine(to: point)
+            }
+            fillPath.closeSubpath()
+            
+            context.fill(fillPath, with: .color(fillColor))
+        }
+    }
+    
     // MARK: - Coordinate Helpers
+    
+    private static func visibleRange(totalOffset: CGFloat, totalCandleWidth: CGFloat, chartWidth: CGFloat, lastIndex: Int) -> (start: Int, end: Int) {
+        let start = max(0, Int(-totalOffset / totalCandleWidth) - 5)
+        let end = min(lastIndex, start + Int(chartWidth / totalCandleWidth) + 10)
+        return (start, end)
+    }
     
     private static func xPosition(for candleIndex: Int, totalCandleWidth: CGFloat, actualCandleWidth: CGFloat, totalOffset: CGFloat) -> CGFloat {
         CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
@@ -375,28 +579,12 @@ struct IndicatorOverlayRenderer {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 ////
 ////  IndicatorOverlayRenderer.swift
 ////  traders_guild
 ////
-////  Renders overlay indicators (EMA, SMA) directly on the chart canvas
-////  Designed to integrate with the existing TradingChartView canvas drawing
-////
-////  NOTE: This renderer uses pre-computed data passed as parameters to avoid
-////  MainActor isolation issues when called from Canvas drawing contexts.
+////  EXPANDED VERSION - Renders EMA, SMA, Bollinger Bands, and VWAP
+////  Designed to integrate with TradingChartView canvas drawing
 ////
 //
 //import SwiftUI
@@ -404,39 +592,46 @@ struct IndicatorOverlayRenderer {
 //// MARK: - Indicator Drawing Data
 //
 ///// Pre-computed data for drawing indicators (avoids MainActor issues)
-///// Create this on the main thread before passing to Canvas
 //struct IndicatorDrawingData {
 //    let movingAverages: [(config: MovingAverageConfig, data: [MovingAverageDataPoint])]
+//    let bollingerBands: (config: BollingerBandsConfig, data: [BollingerBandsDataPoint])?
+//    let vwap: (config: VWAPConfig, data: [VWAPDataPoint])?
 //    
-//    init(configs: [MovingAverageConfig], dataMap: [UUID: [MovingAverageDataPoint]]) {
-//        self.movingAverages = configs.compactMap { config in
-//            guard let data = dataMap[config.id], !data.isEmpty else { return nil }
+//    init(
+//        maConfigs: [MovingAverageConfig],
+//        maDataMap: [UUID: [MovingAverageDataPoint]],
+//        bbConfig: BollingerBandsConfig? = nil,
+//        bbData: [BollingerBandsDataPoint] = [],
+//        vwapConfig: VWAPConfig? = nil,
+//        vwapData: [VWAPDataPoint] = []
+//    ) {
+//        self.movingAverages = maConfigs.compactMap { config in
+//            guard let data = maDataMap[config.id], !data.isEmpty else { return nil }
 //            return (config: config, data: data)
+//        }
+//        
+//        if let bbConfig = bbConfig, bbConfig.isEnabled, !bbData.isEmpty {
+//            self.bollingerBands = (config: bbConfig, data: bbData)
+//        } else {
+//            self.bollingerBands = nil
+//        }
+//        
+//        if let vwapConfig = vwapConfig, vwapConfig.isEnabled, !vwapData.isEmpty {
+//            self.vwap = (config: vwapConfig, data: vwapData)
+//        } else {
+//            self.vwap = nil
 //        }
 //    }
 //    
-//    static let empty = IndicatorDrawingData(configs: [], dataMap: [:])
+//    static let empty = IndicatorDrawingData(maConfigs: [], maDataMap: [:])
 //}
 //
 //// MARK: - Indicator Overlay Renderer
 //
-///// Static methods for rendering indicator overlays on the chart canvas
-///// Call these from within the TradingChartView's Canvas drawing context
 //struct IndicatorOverlayRenderer {
 //    
 //    // MARK: - Main Drawing Entry Point
 //    
-//    /// Draw all active overlay indicators on the chart
-//    /// - Parameters:
-//    ///   - context: The graphics context from Canvas
-//    ///   - size: The canvas size
-//    ///   - drawingData: Pre-computed indicator data (create on main thread)
-//    ///   - priceRange: The chart's price range
-//    ///   - priceScale: Current vertical zoom scale
-//    ///   - verticalOffset: Current vertical pan offset
-//    ///   - totalCandleWidth: Width of each candle including spacing
-//    ///   - actualCandleWidth: Actual candle width without spacing
-//    ///   - totalOffset: Current horizontal pan offset
 //    static func drawOverlayIndicators(
 //        context: GraphicsContext,
 //        size: CGSize,
@@ -450,7 +645,39 @@ struct IndicatorOverlayRenderer {
 //    ) {
 //        let scaledHeight = size.height * priceScale
 //        
-//        // Draw each enabled moving average
+//        // Draw Bollinger Bands first (behind other indicators)
+//        if let (bbConfig, bbData) = drawingData.bollingerBands {
+//            drawBollingerBands(
+//                context: context,
+//                size: size,
+//                dataPoints: bbData,
+//                config: bbConfig,
+//                priceRange: priceRange,
+//                scaledHeight: scaledHeight,
+//                verticalOffset: verticalOffset,
+//                totalCandleWidth: totalCandleWidth,
+//                actualCandleWidth: actualCandleWidth,
+//                totalOffset: totalOffset
+//            )
+//        }
+//        
+//        // Draw VWAP
+//        if let (vwapConfig, vwapData) = drawingData.vwap {
+//            drawVWAP(
+//                context: context,
+//                size: size,
+//                dataPoints: vwapData,
+//                config: vwapConfig,
+//                priceRange: priceRange,
+//                scaledHeight: scaledHeight,
+//                verticalOffset: verticalOffset,
+//                totalCandleWidth: totalCandleWidth,
+//                actualCandleWidth: actualCandleWidth,
+//                totalOffset: totalOffset
+//            )
+//        }
+//        
+//        // Draw moving averages on top
 //        for (config, dataPoints) in drawingData.movingAverages {
 //            drawMovingAverage(
 //                context: context,
@@ -469,7 +696,6 @@ struct IndicatorOverlayRenderer {
 //    
 //    // MARK: - Moving Average Drawing
 //    
-//    /// Draw a single moving average line
 //    private static func drawMovingAverage(
 //        context: GraphicsContext,
 //        size: CGSize,
@@ -484,41 +710,25 @@ struct IndicatorOverlayRenderer {
 //    ) {
 //        guard dataPoints.count >= 2 else { return }
 //        
-//        // Calculate visible range for optimization
 //        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
 //        let visibleEndIndex = min(
 //            dataPoints.last?.candleIndex ?? 0,
 //            visibleStartIndex + Int(size.width / totalCandleWidth) + 10
 //        )
 //        
-//        // Filter to visible data points
 //        let visiblePoints = dataPoints.filter { point in
 //            point.candleIndex >= visibleStartIndex && point.candleIndex <= visibleEndIndex
 //        }
 //        
 //        guard visiblePoints.count >= 2 else { return }
 //        
-//        // Build the path
 //        var path = Path()
 //        var isFirstPoint = true
 //        
 //        for point in visiblePoints {
-//            let x = xPosition(
-//                for: point.candleIndex,
-//                totalCandleWidth: totalCandleWidth,
-//                actualCandleWidth: actualCandleWidth,
-//                totalOffset: totalOffset
-//            )
+//            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+//            let y = yPosition(for: point.value, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
 //            
-//            let y = yPosition(
-//                for: point.value,
-//                priceRange: priceRange,
-//                scaledHeight: scaledHeight,
-//                chartHeight: size.height,
-//                verticalOffset: verticalOffset
-//            )
-//            
-//            // Skip points outside visible area
 //            guard x >= -50 && x <= size.width + 50 else { continue }
 //            
 //            if isFirstPoint {
@@ -529,175 +739,229 @@ struct IndicatorOverlayRenderer {
 //            }
 //        }
 //        
-//        // Draw the line
-//        context.stroke(
-//            path,
-//            with: .color(config.color.color),
-//            style: StrokeStyle(
-//                lineWidth: config.lineWidth,
-//                lineCap: .round,
-//                lineJoin: .round
-//            )
+//        context.stroke(path, with: .color(config.color.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
+//    }
+//    
+//    // MARK: - Bollinger Bands Drawing
+//    
+//    private static func drawBollingerBands(
+//        context: GraphicsContext,
+//        size: CGSize,
+//        dataPoints: [BollingerBandsDataPoint],
+//        config: BollingerBandsConfig,
+//        priceRange: (min: Double, max: Double),
+//        scaledHeight: CGFloat,
+//        verticalOffset: CGFloat,
+//        totalCandleWidth: CGFloat,
+//        actualCandleWidth: CGFloat,
+//        totalOffset: CGFloat
+//    ) {
+//        guard dataPoints.count >= 2 else { return }
+//        
+//        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
+//        let visibleEndIndex = min(
+//            dataPoints.last?.candleIndex ?? 0,
+//            visibleStartIndex + Int(size.width / totalCandleWidth) + 10
 //        )
+//        
+//        let visiblePoints = dataPoints.filter { point in
+//            point.candleIndex >= visibleStartIndex && point.candleIndex <= visibleEndIndex
+//        }
+//        
+//        guard visiblePoints.count >= 2 else { return }
+//        
+//        // Draw fill between bands if enabled
+//        if config.showFill {
+//            var fillPath = Path()
+//            var upperPoints: [CGPoint] = []
+//            var lowerPoints: [CGPoint] = []
+//            
+//            for point in visiblePoints {
+//                let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+//                guard x >= -50 && x <= size.width + 50 else { continue }
+//                
+//                let upperY = yPosition(for: point.upperBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+//                let lowerY = yPosition(for: point.lowerBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+//                
+//                upperPoints.append(CGPoint(x: x, y: upperY))
+//                lowerPoints.append(CGPoint(x: x, y: lowerY))
+//            }
+//            
+//            if !upperPoints.isEmpty {
+//                fillPath.move(to: upperPoints[0])
+//                for point in upperPoints.dropFirst() {
+//                    fillPath.addLine(to: point)
+//                }
+//                for point in lowerPoints.reversed() {
+//                    fillPath.addLine(to: point)
+//                }
+//                fillPath.closeSubpath()
+//                
+//                context.fill(fillPath, with: .color(config.fillColor.color))
+//            }
+//        }
+//        
+//        // Draw upper band
+//        var upperPath = Path()
+//        var isFirst = true
+//        for point in visiblePoints {
+//            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+//            guard x >= -50 && x <= size.width + 50 else { continue }
+//            let y = yPosition(for: point.upperBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+//            
+//            if isFirst {
+//                upperPath.move(to: CGPoint(x: x, y: y))
+//                isFirst = false
+//            } else {
+//                upperPath.addLine(to: CGPoint(x: x, y: y))
+//            }
+//        }
+//        context.stroke(upperPath, with: .color(config.upperBandColor.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
+//        
+//        // Draw lower band
+//        var lowerPath = Path()
+//        isFirst = true
+//        for point in visiblePoints {
+//            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+//            guard x >= -50 && x <= size.width + 50 else { continue }
+//            let y = yPosition(for: point.lowerBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+//            
+//            if isFirst {
+//                lowerPath.move(to: CGPoint(x: x, y: y))
+//                isFirst = false
+//            } else {
+//                lowerPath.addLine(to: CGPoint(x: x, y: y))
+//            }
+//        }
+//        context.stroke(lowerPath, with: .color(config.lowerBandColor.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
+//        
+//        // Draw middle band (SMA)
+//        var middlePath = Path()
+//        isFirst = true
+//        for point in visiblePoints {
+//            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+//            guard x >= -50 && x <= size.width + 50 else { continue }
+//            let y = yPosition(for: point.middleBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+//            
+//            if isFirst {
+//                middlePath.move(to: CGPoint(x: x, y: y))
+//                isFirst = false
+//            } else {
+//                middlePath.addLine(to: CGPoint(x: x, y: y))
+//            }
+//        }
+//        context.stroke(middlePath, with: .color(config.color.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round, dash: [4, 2]))
+//    }
+//    
+//    // MARK: - VWAP Drawing
+//    
+//    private static func drawVWAP(
+//        context: GraphicsContext,
+//        size: CGSize,
+//        dataPoints: [VWAPDataPoint],
+//        config: VWAPConfig,
+//        priceRange: (min: Double, max: Double),
+//        scaledHeight: CGFloat,
+//        verticalOffset: CGFloat,
+//        totalCandleWidth: CGFloat,
+//        actualCandleWidth: CGFloat,
+//        totalOffset: CGFloat
+//    ) {
+//        guard dataPoints.count >= 2 else { return }
+//        
+//        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
+//        let visibleEndIndex = min(
+//            dataPoints.last?.candleIndex ?? 0,
+//            visibleStartIndex + Int(size.width / totalCandleWidth) + 10
+//        )
+//        
+//        let visiblePoints = dataPoints.filter { point in
+//            point.candleIndex >= visibleStartIndex && point.candleIndex <= visibleEndIndex
+//        }
+//        
+//        guard visiblePoints.count >= 2 else { return }
+//        
+//        // Draw standard deviation bands if enabled
+//        if config.showStandardDeviationBands {
+//            // Upper band
+//            var upperPath = Path()
+//            var isFirst = true
+//            for point in visiblePoints {
+//                guard let upperBand = point.upperBand else { continue }
+//                let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+//                guard x >= -50 && x <= size.width + 50 else { continue }
+//                let y = yPosition(for: upperBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+//                
+//                if isFirst {
+//                    upperPath.move(to: CGPoint(x: x, y: y))
+//                    isFirst = false
+//                } else {
+//                    upperPath.addLine(to: CGPoint(x: x, y: y))
+//                }
+//            }
+//            context.stroke(upperPath, with: .color(config.upperBandColor.color), style: StrokeStyle(lineWidth: config.lineWidth * 0.7, lineCap: .round, lineJoin: .round, dash: [3, 3]))
+//            
+//            // Lower band
+//            var lowerPath = Path()
+//            isFirst = true
+//            for point in visiblePoints {
+//                guard let lowerBand = point.lowerBand else { continue }
+//                let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+//                guard x >= -50 && x <= size.width + 50 else { continue }
+//                let y = yPosition(for: lowerBand, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+//                
+//                if isFirst {
+//                    lowerPath.move(to: CGPoint(x: x, y: y))
+//                    isFirst = false
+//                } else {
+//                    lowerPath.addLine(to: CGPoint(x: x, y: y))
+//                }
+//            }
+//            context.stroke(lowerPath, with: .color(config.lowerBandColor.color), style: StrokeStyle(lineWidth: config.lineWidth * 0.7, lineCap: .round, lineJoin: .round, dash: [3, 3]))
+//        }
+//        
+//        // Draw main VWAP line
+//        var path = Path()
+//        var isFirstPoint = true
+//        
+//        for point in visiblePoints {
+//            let x = xPosition(for: point.candleIndex, totalCandleWidth: totalCandleWidth, actualCandleWidth: actualCandleWidth, totalOffset: totalOffset)
+//            let y = yPosition(for: point.vwap, priceRange: priceRange, scaledHeight: scaledHeight, chartHeight: size.height, verticalOffset: verticalOffset)
+//            
+//            guard x >= -50 && x <= size.width + 50 else { continue }
+//            
+//            if isFirstPoint {
+//                path.move(to: CGPoint(x: x, y: y))
+//                isFirstPoint = false
+//            } else {
+//                path.addLine(to: CGPoint(x: x, y: y))
+//            }
+//        }
+//        
+//        context.stroke(path, with: .color(config.color.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
 //    }
 //    
 //    // MARK: - Coordinate Helpers
 //    
-//    /// Calculate X position for a candle index
-//    private static func xPosition(
-//        for candleIndex: Int,
-//        totalCandleWidth: CGFloat,
-//        actualCandleWidth: CGFloat,
-//        totalOffset: CGFloat
-//    ) -> CGFloat {
+//    private static func xPosition(for candleIndex: Int, totalCandleWidth: CGFloat, actualCandleWidth: CGFloat, totalOffset: CGFloat) -> CGFloat {
 //        CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
 //    }
 //    
-//    /// Calculate Y position for a price value
-//    private static func yPosition(
-//        for price: Double,
-//        priceRange: (min: Double, max: Double),
-//        scaledHeight: CGFloat,
-//        chartHeight: CGFloat,
-//        verticalOffset: CGFloat
-//    ) -> CGFloat {
+//    private static func yPosition(for price: Double, priceRange: (min: Double, max: Double), scaledHeight: CGFloat, chartHeight: CGFloat, verticalOffset: CGFloat) -> CGFloat {
 //        let normalizedPrice = (price - priceRange.min) / (priceRange.max - priceRange.min)
 //        return chartHeight - (CGFloat(normalizedPrice) * scaledHeight) - verticalOffset
 //    }
-//    
-//    // MARK: - Label Drawing (Optional)
-//    
-//    /// Draw indicator labels on the right edge of visible lines
-//    static func drawIndicatorLabels(
-//        context: GraphicsContext,
-//        size: CGSize,
-//        drawingData: IndicatorDrawingData,
-//        priceRange: (min: Double, max: Double),
-//        priceScale: CGFloat,
-//        verticalOffset: CGFloat,
-//        yAxisWidth: CGFloat = 60
-//    ) {
-//        let scaledHeight = size.height * priceScale
-//        let labelX = size.width - yAxisWidth - 8
-//        
-//        // Draw labels for each MA at its current value
-//        for (config, dataPoints) in drawingData.movingAverages {
-//            guard let lastPoint = dataPoints.last else { continue }
-//            
-//            let y = yPosition(
-//                for: lastPoint.value,
-//                priceRange: priceRange,
-//                scaledHeight: scaledHeight,
-//                chartHeight: size.height,
-//                verticalOffset: verticalOffset
-//            )
-//            
-//            // Only draw if visible
-//            guard y >= 10 && y <= size.height - 10 else { continue }
-//            
-//            // Draw label background
-//            let labelWidth: CGFloat = 50
-//            let labelHeight: CGFloat = 16
-//            let labelRect = CGRect(
-//                x: labelX - labelWidth,
-//                y: y - labelHeight / 2,
-//                width: labelWidth,
-//                height: labelHeight
-//            )
-//            
-//            let bgPath = Path(roundedRect: labelRect, cornerRadius: 3)
-//            context.fill(bgPath, with: .color(config.color.color.opacity(0.8)))
-//            
-//            // Draw label text
-//            let labelText = Text(config.label)
-//                .font(.system(size: 9, weight: .semibold))
-//                .foregroundColor(.white)
-//            
-//            context.draw(labelText, at: CGPoint(x: labelX - labelWidth / 2, y: y))
-//        }
-//    }
 //}
 //
-//// MARK: - Smooth Line Drawing (Alternative)
 //
-//extension IndicatorOverlayRenderer {
-//    
-//    /// Draw a smoother moving average using quadratic curves
-//    /// Use this for a more polished look at the cost of slight performance
-//    static func drawSmoothMovingAverage(
-//        context: GraphicsContext,
-//        size: CGSize,
-//        dataPoints: [MovingAverageDataPoint],
-//        config: MovingAverageConfig,
-//        priceRange: (min: Double, max: Double),
-//        scaledHeight: CGFloat,
-//        verticalOffset: CGFloat,
-//        totalCandleWidth: CGFloat,
-//        actualCandleWidth: CGFloat,
-//        totalOffset: CGFloat
-//    ) {
-//        guard dataPoints.count >= 3 else { return }
-//        
-//        // Convert to screen points
-//        var screenPoints: [CGPoint] = []
-//        
-//        for point in dataPoints {
-//            let x = xPosition(
-//                for: point.candleIndex,
-//                totalCandleWidth: totalCandleWidth,
-//                actualCandleWidth: actualCandleWidth,
-//                totalOffset: totalOffset
-//            )
-//            
-//            let y = yPosition(
-//                for: point.value,
-//                priceRange: priceRange,
-//                scaledHeight: scaledHeight,
-//                chartHeight: size.height,
-//                verticalOffset: verticalOffset
-//            )
-//            
-//            // Only include visible points (with buffer)
-//            if x >= -100 && x <= size.width + 100 {
-//                screenPoints.append(CGPoint(x: x, y: y))
-//            }
-//        }
-//        
-//        guard screenPoints.count >= 3 else { return }
-//        
-//        // Build smooth path using Catmull-Rom spline approximation
-//        var path = Path()
-//        path.move(to: screenPoints[0])
-//        
-//        for i in 1..<screenPoints.count - 1 {
-//            let p0 = i > 0 ? screenPoints[i - 1] : screenPoints[i]
-//            let p1 = screenPoints[i]
-//            let p2 = screenPoints[i + 1]
-//            
-//            // Control point for smoothing
-//            let controlX = (p0.x + p2.x) / 2
-//            let controlY = (p0.y + p2.y) / 2
-//            
-//            // Blend between linear and curved
-//            let midX = (p1.x + controlX) / 2
-//            let midY = (p1.y + controlY) / 2
-//            
-//            path.addQuadCurve(to: p1, control: CGPoint(x: midX, y: midY))
-//        }
-//        
-//        // Add last point
-//        if let last = screenPoints.last {
-//            path.addLine(to: last)
-//        }
-//        
-//        context.stroke(
-//            path,
-//            with: .color(config.color.color),
-//            style: StrokeStyle(
-//                lineWidth: config.lineWidth,
-//                lineCap: .round,
-//                lineJoin: .round
-//            )
-//        )
-//    }
-//}
+
+
+
+
+
+
+
+
+
+
+

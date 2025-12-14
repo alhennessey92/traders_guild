@@ -148,6 +148,21 @@ enum ChartTimeframe: String, Codable, CaseIterable {
         case .d1, .w1, .mn: return .daily
         }
     }
+    
+    
+    /// MARK - AL
+    var xAxisFormat: String {
+        switch self {
+        case .m1, .m5, .m15, .m30, .h1:
+            return "HH:mm"
+        case .h4:
+            return "MMM d HH:mm"
+        case .d1, .w1:
+            return "MMM d"
+        case .mn:
+            return "MMM yyyy"
+        }
+    }
 }
 
 enum TimeframeGroup: String, CaseIterable {
@@ -538,6 +553,4 @@ struct ChartMarker: Identifiable, Codable, Hashable {
         hasher.combine(id)
     }
 }
-
-
 

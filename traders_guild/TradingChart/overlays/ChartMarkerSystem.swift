@@ -1064,7 +1064,7 @@ struct ChartMarkerSystem {
     }
 }
 
-// MARK: - Marker Creation Sheet
+
 
 struct MarkerCreationSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -1076,7 +1076,7 @@ struct MarkerCreationSheet: View {
     let chartData: ChartDataManager
     let candles: [Candle]
     let markerType: MarkerType
-    let initialTargetPrice: Double?  // NEW: For prediction markers
+    let initialTargetPrice: Double?
     
     @State private var note: String = ""
     
@@ -1092,276 +1092,639 @@ struct MarkerCreationSheet: View {
     @State private var targetPrice: String = ""
     
     var body: some View {
-        NavigationView {
-            Form {
-                Section("Marker Info") {
-                    HStack {
-                        Image(systemName: markerType.icon)
-                            .foregroundColor(markerType.color)
-                            .frame(width: 30)
-                        Text(markerType.rawValue)
-                            .foregroundColor(.primary)
-                    }
+        VStack(spacing: 0) {
+            // Custom Header
+            headerView
+            
+            Divider()
+            
+            // Form Content
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 20) {
+                    // Context Info Card
+                    contextInfoCard
+                    
+                    // Type-specific options
+                    typeSpecificOptionsView
+                    
+                    // Note Section
+                    noteSection
                 }
-                
-                Section("Details") {
-                    HStack {
-                        Text("Time")
-                        Spacer()
-                        Text(timestamp.chartTimeLabel)
-                            .foregroundColor(.secondary)
-                    }
-                    HStack {
-                        Text("Price")
-                        Spacer()
-                        Text(chartData.formatPrice(price))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                // Type-specific options
-                typeSpecificOptions
-                
-                Section("Note (Optional)") {
-                    TextEditor(text: $note)
-                        .frame(minHeight: 80)
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 20)
             }
-            .navigationTitle("Add \(markerType.rawValue)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        addMarker()
-                    }
-                }
-            }
+            
+            Divider()
+            
+            // Action Buttons
+            actionButtons
         }
-        .presentationDetents([.fraction(0.25), .medium, .large])
-        .presentationDragIndicator(.visible)
-        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
+        .background(
+            ZStack {
+                Color.clear
+                    .background(.ultraThinMaterial)
+                AppColors.sheetBackground
+                StaticPatternView()
+            }
+        )
         .interactiveDismissDisabled(true)
         .onAppear {
             // Initialize target price for prediction markers
             if let initialTarget = initialTargetPrice {
                 targetPrice = chartData.formatPrice(initialTarget)
-                print("📝 ✓ Initialized target price field: \(targetPrice)")
             }
         }
     }
     
+    // MARK: - Header
+    
+    private var headerView: some View {
+        HStack(spacing: 15) {
+            // Marker Icon
+            ZStack {
+                Circle()
+                    .fill(markerType.color.opacity(0.3))
+                    .frame(width: 50, height: 50)
+                
+                Image(systemName: markerType.icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(markerType.color)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Add \(markerType.rawValue)")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                
+                Text("Configure marker details")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+            }
+            
+            Spacer()
+            
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(
+            LinearGradient(
+                colors: [
+                    AppColors.gradientBackgroundDark.opacity(0.3),
+                    AppColors.sheetBackground
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+    
+    // MARK: - Context Info Card
+    
+    private var contextInfoCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "info.circle")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Marker Context")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Time")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                    Spacer()
+                    Text(timestamp.chartTimeLabel)
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText)
+                }
+                
+                HStack {
+                    Text("Price")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                    Spacer()
+                    Text(chartData.formatPrice(price))
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(markerType.color)
+                }
+            }
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.2))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Type-Specific Options
+    
     @ViewBuilder
-    private var typeSpecificOptions: some View {
+    private var typeSpecificOptionsView: some View {
         switch markerType {
         case .alert:
-            Section("Alert Severity") {
-                Picker("Severity", selection: $alertSeverity) {
-                    ForEach(MarkerAlertSeverity.allCases, id: \.self) { severity in
+            alertOptionsCard
+        case .trendline:
+            trendlineOptionsCard
+        case .indicator:
+            indicatorOptionsCard
+        case .pattern:
+            patternOptionsCard
+        case .emoji:
+            emojiOptionsCard
+        case .poll:
+            pollOptionsCard
+        case .predictionTarget:
+            predictionOptionsCard
+        case .entry:
+            entryDetailsCard
+        case .exit:
+            exitDetailsCard
+        case .stopLoss:
+            stopLossDetailsCard
+        case .takeProfit:
+            takeProfitDetailsCard
+        case .support:
+            supportDetailsCard
+        case .resistance:
+            resistanceDetailsCard
+        case .note, .question, .volumeSpike, .personal:
+            EmptyView()
+        }
+    }
+    
+    // MARK: - Alert Options
+    
+    private var alertOptionsCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "bell.circle")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Alert Severity")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            VStack(spacing: 8) {
+                ForEach(MarkerAlertSeverity.allCases, id: \.self) { severity in
+                    Button(action: {
+                        alertSeverity = severity
+                        HapticFeedback.light.trigger()
+                    }) {
                         HStack {
                             Circle()
                                 .fill(severity.color)
                                 .frame(width: 12, height: 12)
                             Text(severity.rawValue)
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.whiteText)
+                            Spacer()
+                            if alertSeverity == severity {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(AppColors.accentColor)
+                            }
                         }
-                        .tag(severity)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            alertSeverity == severity ?
+                            AppColors.gradientBackgroundDark.opacity(0.3) :
+                            Color.clear
+                        )
+                        .cornerRadius(8)
                     }
-                }
-                .pickerStyle(.menu)
-            }
-            
-        case .trendline:
-            Section("Trend Direction") {
-                Picker("Direction", selection: $trendlineDirection) {
-                    ForEach(TrendlineDirection.allCases, id: \.self) { direction in
-                        Text(direction.rawValue).tag(direction)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-            
-        case .indicator:
-            Section("Indicator") {
-                Picker("Select Indicator", selection: $selectedIndicator) {
-                    Text("RSI").tag("RSI")
-                    Text("MACD").tag("MACD")
-                    Text("Moving Average").tag("MA")
-                    Text("Bollinger Bands").tag("BB")
-                    Text("Stochastic").tag("STOCH")
-                    Text("ATR").tag("ATR")
-                }
-                .pickerStyle(.menu)
-            }
-            
-        case .pattern:
-            Section("Chart Pattern") {
-                Picker("Pattern", selection: $chartPattern) {
-                    ForEach(ChartPattern.allCases, id: \.self) { pattern in
-                        Text(pattern.rawValue).tag(pattern)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-            
-        case .emoji:
-            Section("Select Emoji") {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
-                    ForEach(["🎯", "🚀", "💰", "⚠️", "📈", "📉", "💎", "🔥", "⭐", "💡", "🤔", "👀"], id: \.self) { emoji in
-                        Button {
-                            selectedEmoji = emoji
-                        } label: {
-                            Text(emoji)
-                                .font(.title)
-                                .padding(8)
-                                .background(selectedEmoji == emoji ? Color.blue.opacity(0.3) : Color.clear)
-                                .cornerRadius(8)
-                        }
-                        .buttonStyle(.borderless)  // FIXED: Allows button taps in Form
-                    }
+                    .buttonStyle(.plain)
                 }
             }
-            
-        case .poll:
-            Section("Poll Question") {
-                TextField("Question", text: $pollQuestion)
-            }
-            Section("Options") {
-                TextField("Option 1", text: $pollOption1)
-                TextField("Option 2", text: $pollOption2)
-            }
-            
-        case .predictionTarget:
-            Section("Target Price") {
-                TextField("Enter target price", text: $targetPrice)
-                    .keyboardType(.decimalPad)
-                Text("A horizontal line will be drawn at the target price")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        
-        // FIXED: Explicit handling for markers that show horizontal lines
-        case .entry:
-            Section("Entry Details") {
-                HStack {
-                    Text("Entry Price")
-                    Spacer()
-                    Text(chartData.formatPrice(price))
-                        .foregroundColor(.green)
-                        .fontWeight(.semibold)
-                }
-                Text("A horizontal line will be drawn at the candle close price")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-        case .exit:
-            Section("Exit Details") {
-                HStack {
-                    Text("Exit Price")
-                    Spacer()
-                    Text(chartData.formatPrice(price))
-                        .foregroundColor(.orange)
-                        .fontWeight(.semibold)
-                }
-                Text("A horizontal line will be drawn at the candle close price")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-        case .stopLoss:
-            Section("Stop Loss Details") {
-                HStack {
-                    Text("Stop Loss Price")
-                    Spacer()
-                    Text(chartData.formatPrice(price))
-                        .foregroundColor(.red)
-                        .fontWeight(.semibold)
-                }
-                Text("A horizontal line will be drawn at this price level")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-        case .takeProfit:
-            Section("Take Profit Details") {
-                HStack {
-                    Text("Take Profit Price")
-                    Spacer()
-                    Text(chartData.formatPrice(price))
-                        .foregroundColor(.blue)
-                        .fontWeight(.semibold)
-                }
-                Text("A horizontal line will be drawn at this price level")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-        case .support:
-            Section("Support Level") {
-                HStack {
-                    Text("Support Price")
-                    Spacer()
-                    if candleIndex >= 0 && candleIndex < candles.count {
-                        Text(chartData.formatPrice(candles[candleIndex].low))
-                            .foregroundColor(.purple)
-                            .fontWeight(.semibold)
-                    }
-                }
-                Text("A horizontal line will be drawn at the candle low")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-        case .resistance:
-            Section("Resistance Level") {
-                HStack {
-                    Text("Resistance Price")
-                    Spacer()
-                    if candleIndex >= 0 && candleIndex < candles.count {
-                        Text(chartData.formatPrice(candles[candleIndex].high))
-                            .foregroundColor(.pink)
-                            .fontWeight(.semibold)
-                    }
-                }
-                Text("A horizontal line will be drawn at the candle high")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        
-        // Simple markers that just need notes
-        case .note, .question, .volumeSpike, .personal:
-            EmptyView()  // These just use the standard Note section
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
         }
     }
     
+    // MARK: - Trendline Options
+    
+    private var trendlineOptionsCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis.circle")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Trend Direction")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            HStack(spacing: 8) {
+                ForEach(TrendlineDirection.allCases, id: \.self) { direction in
+                    Button(action: {
+                        trendlineDirection = direction
+                        HapticFeedback.light.trigger()
+                    }) {
+                        Text(direction.rawValue)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(trendlineDirection == direction ? .white : AppColors.greyText)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                trendlineDirection == direction ?
+                                AppColors.accentColor :
+                                AppColors.gradientBackgroundDark.opacity(0.2)
+                            )
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Indicator Options
+    
+    private var indicatorOptionsCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "star.circle")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Select Indicator")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            Picker("Indicator", selection: $selectedIndicator) {
+                Text("RSI").tag("RSI")
+                Text("MACD").tag("MACD")
+                Text("Moving Average").tag("MA")
+                Text("Bollinger Bands").tag("BB")
+                Text("Stochastic").tag("STOCH")
+                Text("ATR").tag("ATR")
+            }
+            .pickerStyle(.menu)
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Pattern Options
+    
+    private var patternOptionsCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "circle.hexagongrid.circle")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Chart Pattern")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            Picker("Pattern", selection: $chartPattern) {
+                ForEach(ChartPattern.allCases, id: \.self) { pattern in
+                    Text(pattern.rawValue).tag(pattern)
+                }
+            }
+            .pickerStyle(.menu)
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Emoji Options
+    
+    private var emojiOptionsCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "face.smiling")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Select Emoji")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                ForEach(["🎯", "🚀", "💰", "⚠️", "📈", "📉", "💎", "🔥", "⭐", "💡", "🤔", "👀"], id: \.self) { emoji in
+                    Button(action: {
+                        selectedEmoji = emoji
+                        HapticFeedback.light.trigger()
+                    }) {
+                        Text(emoji)
+                            .font(.title)
+                            .frame(width: 50, height: 50)
+                            .background(
+                                selectedEmoji == emoji ?
+                                AppColors.accentColor.opacity(0.3) :
+                                AppColors.gradientBackgroundDark.opacity(0.2)
+                            )
+                            .cornerRadius(10)
+                    }
+                }
+            }
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Poll Options
+    
+    private var pollOptionsCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "newspaper.circle")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Poll Details")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            VStack(spacing: 12) {
+                TextField("Poll question", text: $pollQuestion)
+                    .font(.subheadline)
+                    .padding()
+                    .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                    .cornerRadius(8)
+                
+                TextField("Option 1", text: $pollOption1)
+                    .font(.subheadline)
+                    .padding()
+                    .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                    .cornerRadius(8)
+                
+                TextField("Option 2", text: $pollOption2)
+                    .font(.subheadline)
+                    .padding()
+                    .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                    .cornerRadius(8)
+            }
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Prediction Options
+    
+    private var predictionOptionsCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "staroflife.circle")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Target Price")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            VStack(spacing: 8) {
+                TextField("Enter target price", text: $targetPrice)
+                    .font(.subheadline)
+                    .keyboardType(.decimalPad)
+                    .padding()
+                    .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                    .cornerRadius(8)
+                
+                Text("A horizontal line will be drawn at the target price")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+            }
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Entry/Exit/Stop Loss/Take Profit Details
+    
+    private var entryDetailsCard: some View {
+        priceDetailsCard(
+            title: "Entry Details",
+            icon: "arrow.up.circle",
+            priceLabel: "Entry Price",
+            priceValue: price,
+            priceColor: .green,
+            description: "A horizontal line will be drawn at the candle close price"
+        )
+    }
+    
+    private var exitDetailsCard: some View {
+        priceDetailsCard(
+            title: "Exit Details",
+            icon: "arrow.down.circle",
+            priceLabel: "Exit Price",
+            priceValue: price,
+            priceColor: .orange,
+            description: "A horizontal line will be drawn at the candle close price"
+        )
+    }
+    
+    private var stopLossDetailsCard: some View {
+        priceDetailsCard(
+            title: "Stop Loss Details",
+            icon: "xmark.shield",
+            priceLabel: "Stop Loss Price",
+            priceValue: price,
+            priceColor: .red,
+            description: "A horizontal line will be drawn at this price level"
+        )
+    }
+    
+    private var takeProfitDetailsCard: some View {
+        priceDetailsCard(
+            title: "Take Profit Details",
+            icon: "checkmark.shield",
+            priceLabel: "Take Profit Price",
+            priceValue: price,
+            priceColor: .blue,
+            description: "A horizontal line will be drawn at this price level"
+        )
+    }
+    
+    @ViewBuilder
+    private var supportDetailsCard: some View {
+        if candleIndex >= 0 && candleIndex < candles.count {
+            priceDetailsCard(
+                title: "Support Level",
+                icon: "s.circle",
+                priceLabel: "Support Price",
+                priceValue: candles[candleIndex].low,
+                priceColor: .purple,
+                description: "A horizontal line will be drawn at the candle low"
+            )
+        }
+    }
+    
+    @ViewBuilder
+    private var resistanceDetailsCard: some View {
+        if candleIndex >= 0 && candleIndex < candles.count {
+            priceDetailsCard(
+                title: "Resistance Level",
+                icon: "r.circle",
+                priceLabel: "Resistance Price",
+                priceValue: candles[candleIndex].high,
+                priceColor: .pink,
+                description: "A horizontal line will be drawn at the candle high"
+            )
+        }
+    }
+    
+    private func priceDetailsCard(title: String, icon: String, priceLabel: String, priceValue: Double, priceColor: Color, description: String) -> some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            VStack(spacing: 8) {
+                HStack {
+                    Text(priceLabel)
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                    Spacer()
+                    Text(chartData.formatPrice(priceValue))
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(priceColor)
+                }
+                .padding()
+                .background(AppColors.gradientBackgroundDark.opacity(0.2))
+                .cornerRadius(8)
+                
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding()
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Note Section
+    
+    private var noteSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "text.bubble")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Add Note (Optional)")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            
+            ZStack(alignment: .topLeading) {
+                if note.isEmpty {
+                    Text("Add additional context or analysis...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText.opacity(0.6))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 14)
+                }
+                
+                TextEditor(text: $note)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.whiteText)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 100)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 10)
+            }
+            .background(AppColors.gradientBackgroundDark.opacity(0.15))
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Action Buttons
+    
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            Button(action: { dismiss() }) {
+                Text("Cancel")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(AppColors.gradientBackgroundDark.opacity(0.3))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(AppColors.whiteText.opacity(0.3), lineWidth: 0.5)
+                    )
+                    .cornerRadius(10)
+            }
+            
+            Button(action: addMarker) {
+                Text("Add Marker")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(AppColors.accentColor)
+                    .cornerRadius(10)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(AppColors.sheetBackground)
+    }
+    
+    // MARK: - Add Marker Action
+    
     private func addMarker() {
-        print("📝 === MARKER CREATION SHEET - ADD MARKER ===")
-        print("📝 Marker Type: \(markerType)")
-        print("📝 Candle Index: \(candleIndex)")
-        print("📝 Price: \(price)")
-        print("📝 Timestamp: \(timestamp)")
-        print("📝 Note: \(note.isEmpty ? "(empty)" : note)")
-        print("📝 Target Price String: '\(targetPrice)'")
-        
         var pollOptions: [PollOption]? = nil
         if markerType == .poll && !pollOption1.isEmpty {
             pollOptions = [
                 PollOption(text: pollOption1),
                 PollOption(text: pollOption2.isEmpty ? "Option 2" : pollOption2)
             ]
-            print("📝 Poll Options: \(pollOptions!.count) options")
         }
         
         let target = Double(targetPrice)
-        print("📝 Parsed Target Price: \(String(describing: target))")
         
-        if markerType == .predictionTarget && target == nil {
-            print("📝 ⚠️ WARNING: Prediction marker without target price!")
-        }
-        
-        print("📝 Calling markerManager.addMarker...")
         let success = markerManager.addMarker(
             candleIndex: candleIndex,
             timestamp: timestamp,
@@ -1381,261 +1744,587 @@ struct MarkerCreationSheet: View {
         )
         
         if success {
-            print("📝 ✅ Marker added successfully!")
+            HapticFeedback.success.trigger()
             dismiss()
         } else {
-            print("📝 ❌ Failed to add marker (duplicate detected)")
-            // Note: duplicate alert is shown by MarkerManager
+            HapticFeedback.warning.trigger()
         }
     }
 }
+
+
+// MARK: - Marker Creation Sheet
+
+//struct MarkerCreationSheet: View {
+//    @Environment(\.dismiss) private var dismiss
+//    @ObservedObject var markerManager: MarkerManager
+//    let candleIndex: Int
+//    let timestamp: Date
+//    let price: Double
+//    let username: String
+//    let chartData: ChartDataManager
+//    let candles: [Candle]
+//    let markerType: MarkerType
+//    let initialTargetPrice: Double?  // NEW: For prediction markers
+//    
+//    @State private var note: String = ""
+//    
+//    // Type-specific state
+//    @State private var alertSeverity: MarkerAlertSeverity = .moderate
+//    @State private var trendlineDirection: TrendlineDirection = .up
+//    @State private var selectedIndicator: String = "RSI"
+//    @State private var chartPattern: ChartPattern = .doubleTop
+//    @State private var selectedEmoji: String = "🎯"
+//    @State private var pollQuestion: String = ""
+//    @State private var pollOption1: String = ""
+//    @State private var pollOption2: String = ""
+//    @State private var targetPrice: String = ""
+//    
+//    var body: some View {
+//        NavigationView {
+//            Form {
+//                Section("Marker Info") {
+//                    HStack {
+//                        Image(systemName: markerType.icon)
+//                            .foregroundColor(markerType.color)
+//                            .frame(width: 30)
+//                        Text(markerType.rawValue)
+//                            .foregroundColor(.primary)
+//                    }
+//                }
+//                
+//                Section("Details") {
+//                    HStack {
+//                        Text("Time")
+//                        Spacer()
+//                        Text(timestamp.chartTimeLabel)
+//                            .foregroundColor(.secondary)
+//                    }
+//                    HStack {
+//                        Text("Price")
+//                        Spacer()
+//                        Text(chartData.formatPrice(price))
+//                            .foregroundColor(.secondary)
+//                    }
+//                }
+//                
+//                // Type-specific options
+//                typeSpecificOptions
+//                
+//                Section("Note (Optional)") {
+//                    TextEditor(text: $note)
+//                        .frame(minHeight: 80)
+//                }
+//            }
+//            .navigationTitle("Add \(markerType.rawValue)")
+//            .navigationBarTitleDisplayMode(.inline)
+//            .toolbar {
+//                ToolbarItem(placement: .cancellationAction) {
+//                    Button("Cancel") { dismiss() }
+//                }
+//                ToolbarItem(placement: .confirmationAction) {
+//                    Button("Add") {
+//                        addMarker()
+//                    }
+//                }
+//            }
+//        }
+//        .presentationDetents([.fraction(0.25), .medium, .large])
+//        .presentationDragIndicator(.visible)
+//        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
+//        .interactiveDismissDisabled(true)
+//        .onAppear {
+//            // Initialize target price for prediction markers
+//            if let initialTarget = initialTargetPrice {
+//                targetPrice = chartData.formatPrice(initialTarget)
+//                print("📝 ✓ Initialized target price field: \(targetPrice)")
+//            }
+//        }
+//    }
+//    
+//    @ViewBuilder
+//    private var typeSpecificOptions: some View {
+//        switch markerType {
+//        case .alert:
+//            Section("Alert Severity") {
+//                Picker("Severity", selection: $alertSeverity) {
+//                    ForEach(MarkerAlertSeverity.allCases, id: \.self) { severity in
+//                        HStack {
+//                            Circle()
+//                                .fill(severity.color)
+//                                .frame(width: 12, height: 12)
+//                            Text(severity.rawValue)
+//                        }
+//                        .tag(severity)
+//                    }
+//                }
+//                .pickerStyle(.menu)
+//            }
+//            
+//        case .trendline:
+//            Section("Trend Direction") {
+//                Picker("Direction", selection: $trendlineDirection) {
+//                    ForEach(TrendlineDirection.allCases, id: \.self) { direction in
+//                        Text(direction.rawValue).tag(direction)
+//                    }
+//                }
+//                .pickerStyle(.segmented)
+//            }
+//            
+//        case .indicator:
+//            Section("Indicator") {
+//                Picker("Select Indicator", selection: $selectedIndicator) {
+//                    Text("RSI").tag("RSI")
+//                    Text("MACD").tag("MACD")
+//                    Text("Moving Average").tag("MA")
+//                    Text("Bollinger Bands").tag("BB")
+//                    Text("Stochastic").tag("STOCH")
+//                    Text("ATR").tag("ATR")
+//                }
+//                .pickerStyle(.menu)
+//            }
+//            
+//        case .pattern:
+//            Section("Chart Pattern") {
+//                Picker("Pattern", selection: $chartPattern) {
+//                    ForEach(ChartPattern.allCases, id: \.self) { pattern in
+//                        Text(pattern.rawValue).tag(pattern)
+//                    }
+//                }
+//                .pickerStyle(.menu)
+//            }
+//            
+//        case .emoji:
+//            Section("Select Emoji") {
+//                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+//                    ForEach(["🎯", "🚀", "💰", "⚠️", "📈", "📉", "💎", "🔥", "⭐", "💡", "🤔", "👀"], id: \.self) { emoji in
+//                        Button {
+//                            selectedEmoji = emoji
+//                        } label: {
+//                            Text(emoji)
+//                                .font(.title)
+//                                .padding(8)
+//                                .background(selectedEmoji == emoji ? Color.blue.opacity(0.3) : Color.clear)
+//                                .cornerRadius(8)
+//                        }
+//                        .buttonStyle(.borderless)  // FIXED: Allows button taps in Form
+//                    }
+//                }
+//            }
+//            
+//        case .poll:
+//            Section("Poll Question") {
+//                TextField("Question", text: $pollQuestion)
+//            }
+//            Section("Options") {
+//                TextField("Option 1", text: $pollOption1)
+//                TextField("Option 2", text: $pollOption2)
+//            }
+//            
+//        case .predictionTarget:
+//            Section("Target Price") {
+//                TextField("Enter target price", text: $targetPrice)
+//                    .keyboardType(.decimalPad)
+//                Text("A horizontal line will be drawn at the target price")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//        
+//        // FIXED: Explicit handling for markers that show horizontal lines
+//        case .entry:
+//            Section("Entry Details") {
+//                HStack {
+//                    Text("Entry Price")
+//                    Spacer()
+//                    Text(chartData.formatPrice(price))
+//                        .foregroundColor(.green)
+//                        .fontWeight(.semibold)
+//                }
+//                Text("A horizontal line will be drawn at the candle close price")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .exit:
+//            Section("Exit Details") {
+//                HStack {
+//                    Text("Exit Price")
+//                    Spacer()
+//                    Text(chartData.formatPrice(price))
+//                        .foregroundColor(.orange)
+//                        .fontWeight(.semibold)
+//                }
+//                Text("A horizontal line will be drawn at the candle close price")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .stopLoss:
+//            Section("Stop Loss Details") {
+//                HStack {
+//                    Text("Stop Loss Price")
+//                    Spacer()
+//                    Text(chartData.formatPrice(price))
+//                        .foregroundColor(.red)
+//                        .fontWeight(.semibold)
+//                }
+//                Text("A horizontal line will be drawn at this price level")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .takeProfit:
+//            Section("Take Profit Details") {
+//                HStack {
+//                    Text("Take Profit Price")
+//                    Spacer()
+//                    Text(chartData.formatPrice(price))
+//                        .foregroundColor(.blue)
+//                        .fontWeight(.semibold)
+//                }
+//                Text("A horizontal line will be drawn at this price level")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .support:
+//            Section("Support Level") {
+//                HStack {
+//                    Text("Support Price")
+//                    Spacer()
+//                    if candleIndex >= 0 && candleIndex < candles.count {
+//                        Text(chartData.formatPrice(candles[candleIndex].low))
+//                            .foregroundColor(.purple)
+//                            .fontWeight(.semibold)
+//                    }
+//                }
+//                Text("A horizontal line will be drawn at the candle low")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//            
+//        case .resistance:
+//            Section("Resistance Level") {
+//                HStack {
+//                    Text("Resistance Price")
+//                    Spacer()
+//                    if candleIndex >= 0 && candleIndex < candles.count {
+//                        Text(chartData.formatPrice(candles[candleIndex].high))
+//                            .foregroundColor(.pink)
+//                            .fontWeight(.semibold)
+//                    }
+//                }
+//                Text("A horizontal line will be drawn at the candle high")
+//                    .font(.caption)
+//                    .foregroundColor(.secondary)
+//            }
+//        
+//        // Simple markers that just need notes
+//        case .note, .question, .volumeSpike, .personal:
+//            EmptyView()  // These just use the standard Note section
+//        }
+//    }
+//    
+//    private func addMarker() {
+//        print("📝 === MARKER CREATION SHEET - ADD MARKER ===")
+//        print("📝 Marker Type: \(markerType)")
+//        print("📝 Candle Index: \(candleIndex)")
+//        print("📝 Price: \(price)")
+//        print("📝 Timestamp: \(timestamp)")
+//        print("📝 Note: \(note.isEmpty ? "(empty)" : note)")
+//        print("📝 Target Price String: '\(targetPrice)'")
+//        
+//        var pollOptions: [PollOption]? = nil
+//        if markerType == .poll && !pollOption1.isEmpty {
+//            pollOptions = [
+//                PollOption(text: pollOption1),
+//                PollOption(text: pollOption2.isEmpty ? "Option 2" : pollOption2)
+//            ]
+//            print("📝 Poll Options: \(pollOptions!.count) options")
+//        }
+//        
+//        let target = Double(targetPrice)
+//        print("📝 Parsed Target Price: \(String(describing: target))")
+//        
+//        if markerType == .predictionTarget && target == nil {
+//            print("📝 ⚠️ WARNING: Prediction marker without target price!")
+//        }
+//        
+//        print("📝 Calling markerManager.addMarker...")
+//        let success = markerManager.addMarker(
+//            candleIndex: candleIndex,
+//            timestamp: timestamp,
+//            price: price,
+//            type: markerType,
+//            username: username,
+//            note: note.isEmpty ? nil : note,
+//            candles: candles,
+//            targetPrice: target,
+//            alertSeverity: markerType == .alert ? alertSeverity : nil,
+//            trendlineDirection: markerType == .trendline ? trendlineDirection : nil,
+//            selectedIndicator: markerType == .indicator ? selectedIndicator : nil,
+//            chartPattern: markerType == .pattern ? chartPattern : nil,
+//            selectedEmoji: markerType == .emoji ? selectedEmoji : nil,
+//            pollQuestion: markerType == .poll ? pollQuestion : nil,
+//            pollOptions: pollOptions
+//        )
+//        
+//        if success {
+//            print("📝 ✅ Marker added successfully!")
+//            dismiss()
+//        } else {
+//            print("📝 ❌ Failed to add marker (duplicate detected)")
+//            // Note: duplicate alert is shown by MarkerManager
+//        }
+//    }
+//}
 
 // MARK: - Marker Detail Sheet
 
-struct MarkerDetailSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var markerManager: MarkerManager
-    let marker: ChartMarker
-    let currentUserId: String
-    let chartData: ChartDataManager
-    
-    @State private var isEditing = false
-    @State private var editedNote: String = ""
-    @State private var newComment: String = ""
-    
-    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String) {
-        self.markerManager = markerManager
-        self.marker = marker
-        self.currentUserId = currentUserId
-        self.chartData = ChartDataManager()
-    }
-    
-    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String, chartData: ChartDataManager) {
-        self.markerManager = markerManager
-        self.marker = marker
-        self.currentUserId = currentUserId
-        self.chartData = chartData
-    }
-    
-    private var isOwnMarker: Bool {
-        marker.userId == currentUserId
-    }
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Marker Info") {
-                    HStack {
-                        Image(systemName: marker.type.icon)
-                            .foregroundColor(marker.type.color)
-                        Text(marker.type.rawValue)
-                    }
-                    
-                    HStack {
-                        Text("Price")
-                        Spacer()
-                        Text(chartData.formatPrice(marker.price))
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        Text("Time")
-                        Spacer()
-                        Text(marker.timestamp.chartTimeLabel)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        Text("By")
-                        Spacer()
-                        Text(marker.username)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                // Type-specific info
-                typeSpecificInfo
-                
-                if let note = marker.note, !note.isEmpty {
-                    Section("Note") {
-                        if isEditing {
-                            TextEditor(text: $editedNote)
-                                .frame(minHeight: 100)
-                        } else {
-                            Text(note)
-                        }
-                    }
-                }
-                
-                Section {
-                    Button(action: {
-                        markerManager.toggleLike(markerId: marker.id)
-                    }) {
-                        HStack {
-                            Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
-                                .foregroundColor(marker.isLikedByCurrentUser ? .red : .gray)
-                            Text("\(marker.likeCount) likes")
-                        }
-                    }
-                }
-                
-                // Comments section
-                Section("Comments") {
-                    ForEach(marker.comments) { comment in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(comment.username)
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                Spacer()
-                                Text(comment.createdAt, style: .relative)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            Text(comment.text)
-                                .font(.subheadline)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    
-                    HStack {
-                        TextField("Add comment...", text: $newComment)
-                        Button {
-                            guard !newComment.isEmpty else { return }
-                            markerManager.addComment(markerId: marker.id, text: newComment, username: "You")
-                            newComment = ""
-                        } label: {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .foregroundColor(.blue)
-                        }
-                    }
-                }
-                
-                // Share/Save/Report buttons
-                Section {
-                    Button {
-                        // Share action
-                    } label: {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                    
-                    Button {
-                        // Save action
-                    } label: {
-                        Label("Save", systemImage: "bookmark")
-                    }
-                    
-                    Button(role: .destructive) {
-                        // Report action
-                    } label: {
-                        Label("Report", systemImage: "flag")
-                    }
-                }
-                
-                if isOwnMarker {
-                    Section {
-                        if isEditing {
-                            Button("Save Changes") {
-                                markerManager.updateMarker(id: marker.id, note: editedNote)
-                                isEditing = false
-                            }
-                        } else {
-                            Button("Edit Note") {
-                                editedNote = marker.note ?? ""
-                                isEditing = true
-                            }
-                        }
-                        
-                        Button("Delete Marker", role: .destructive) {
-                            markerManager.deleteMarker(id: marker.id)
-                            dismiss()
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Marker Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.fraction(0.25), .medium, .large])
-        .presentationDragIndicator(.visible)
-        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
-        .onAppear {
-            editedNote = marker.note ?? ""
-        }
-    }
-    
-    @ViewBuilder
-    private var typeSpecificInfo: some View {
-        switch marker.type {
-        case .alert:
-            if let severity = marker.alertSeverity {
-                Section("Alert Details") {
-                    HStack {
-                        Circle()
-                            .fill(severity.color)
-                            .frame(width: 12, height: 12)
-                        Text(severity.rawValue)
-                    }
-                }
-            }
-            
-        case .trendline:
-            if let direction = marker.trendlineDirection {
-                Section("Trendline Direction") {
-                    Text(direction.rawValue)
-                }
-            }
-            
-        case .indicator:
-            if let indicator = marker.selectedIndicator {
-                Section("Indicator") {
-                    Text(indicator)
-                }
-            }
-            
-        case .pattern:
-            if let pattern = marker.chartPattern {
-                Section("Chart Pattern") {
-                    Text(pattern.rawValue)
-                }
-            }
-            
-        case .predictionTarget:
-            if let target = marker.targetPrice {
-                Section("Prediction") {
-                    HStack {
-                        Text("Target Price")
-                        Spacer()
-                        Text(chartData.formatPrice(target))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            
-        case .poll:
-            if let question = marker.pollQuestion, let options = marker.pollOptions {
-                Section("Poll: \(question)") {
-                    ForEach(options) { option in
-                        HStack {
-                            Text(option.text)
-                            Spacer()
-                            Text("\(option.voteCount)")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-            }
-            
-        default:
-            EmptyView()
-        }
-    }
-}
+//struct MarkerDetailSheet: View {
+//    @Environment(\.dismiss) private var dismiss
+//    @ObservedObject var markerManager: MarkerManager
+//    let marker: ChartMarker
+//    let currentUserId: String
+//    let chartData: ChartDataManager
+//    
+//    @State private var isEditing = false
+//    @State private var editedNote: String = ""
+//    @State private var newComment: String = ""
+//    
+//    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String) {
+//        self.markerManager = markerManager
+//        self.marker = marker
+//        self.currentUserId = currentUserId
+//        self.chartData = ChartDataManager()
+//    }
+//    
+//    init(markerManager: MarkerManager, marker: ChartMarker, currentUserId: String, chartData: ChartDataManager) {
+//        self.markerManager = markerManager
+//        self.marker = marker
+//        self.currentUserId = currentUserId
+//        self.chartData = chartData
+//    }
+//    
+//    private var isOwnMarker: Bool {
+//        marker.userId == currentUserId
+//    }
+//    
+//    var body: some View {
+//        NavigationView {
+//            Form {
+//                Section("Marker Info") {
+//                    HStack {
+//                        Image(systemName: marker.type.icon)
+//                            .foregroundColor(marker.type.color)
+//                        Text(marker.type.rawValue)
+//                    }
+//                    
+//                    HStack {
+//                        Text("Price")
+//                        Spacer()
+//                        Text(chartData.formatPrice(marker.price))
+//                            .foregroundColor(.secondary)
+//                    }
+//                    
+//                    HStack {
+//                        Text("Time")
+//                        Spacer()
+//                        Text(marker.timestamp.chartTimeLabel)
+//                            .foregroundColor(.secondary)
+//                    }
+//                    
+//                    HStack {
+//                        Text("By")
+//                        Spacer()
+//                        Text(marker.username)
+//                            .foregroundColor(.secondary)
+//                    }
+//                }
+//                
+//                // Type-specific info
+//                typeSpecificInfo
+//                
+//                if let note = marker.note, !note.isEmpty {
+//                    Section("Note") {
+//                        if isEditing {
+//                            TextEditor(text: $editedNote)
+//                                .frame(minHeight: 100)
+//                        } else {
+//                            Text(note)
+//                        }
+//                    }
+//                }
+//                
+//                Section {
+//                    Button(action: {
+//                        markerManager.toggleLike(markerId: marker.id)
+//                    }) {
+//                        HStack {
+//                            Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
+//                                .foregroundColor(marker.isLikedByCurrentUser ? .red : .gray)
+//                            Text("\(marker.likeCount) likes")
+//                        }
+//                    }
+//                }
+//                
+//                // Comments section
+//                Section("Comments") {
+//                    ForEach(marker.comments) { comment in
+//                        VStack(alignment: .leading, spacing: 4) {
+//                            HStack {
+//                                Text(comment.username)
+//                                    .font(.caption)
+//                                    .fontWeight(.semibold)
+//                                Spacer()
+//                                Text(comment.createdAt, style: .relative)
+//                                    .font(.caption2)
+//                                    .foregroundColor(.secondary)
+//                            }
+//                            Text(comment.text)
+//                                .font(.subheadline)
+//                        }
+//                        .padding(.vertical, 4)
+//                    }
+//                    
+//                    HStack {
+//                        TextField("Add comment...", text: $newComment)
+//                        Button {
+//                            guard !newComment.isEmpty else { return }
+//                            markerManager.addComment(markerId: marker.id, text: newComment, username: "You")
+//                            newComment = ""
+//                        } label: {
+//                            Image(systemName: "arrow.up.circle.fill")
+//                                .foregroundColor(.blue)
+//                        }
+//                    }
+//                }
+//                
+//                // Share/Save/Report buttons
+//                Section {
+//                    Button {
+//                        // Share action
+//                    } label: {
+//                        Label("Share", systemImage: "square.and.arrow.up")
+//                    }
+//                    
+//                    Button {
+//                        // Save action
+//                    } label: {
+//                        Label("Save", systemImage: "bookmark")
+//                    }
+//                    
+//                    Button(role: .destructive) {
+//                        // Report action
+//                    } label: {
+//                        Label("Report", systemImage: "flag")
+//                    }
+//                }
+//                
+//                if isOwnMarker {
+//                    Section {
+//                        if isEditing {
+//                            Button("Save Changes") {
+//                                markerManager.updateMarker(id: marker.id, note: editedNote)
+//                                isEditing = false
+//                            }
+//                        } else {
+//                            Button("Edit Note") {
+//                                editedNote = marker.note ?? ""
+//                                isEditing = true
+//                            }
+//                        }
+//                        
+//                        Button("Delete Marker", role: .destructive) {
+//                            markerManager.deleteMarker(id: marker.id)
+//                            dismiss()
+//                        }
+//                    }
+//                }
+//            }
+//            .navigationTitle("Marker Details")
+//            .navigationBarTitleDisplayMode(.inline)
+//            .toolbar {
+//                ToolbarItem(placement: .confirmationAction) {
+//                    Button("Done") { dismiss() }
+//                }
+//            }
+//        }
+//        .presentationDetents([.fraction(0.25), .medium, .large])
+//        .presentationDragIndicator(.visible)
+//        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.25)))
+//        .onAppear {
+//            editedNote = marker.note ?? ""
+//        }
+//    }
+//    
+//    @ViewBuilder
+//    private var typeSpecificInfo: some View {
+//        switch marker.type {
+//        case .alert:
+//            if let severity = marker.alertSeverity {
+//                Section("Alert Details") {
+//                    HStack {
+//                        Circle()
+//                            .fill(severity.color)
+//                            .frame(width: 12, height: 12)
+//                        Text(severity.rawValue)
+//                    }
+//                }
+//            }
+//            
+//        case .trendline:
+//            if let direction = marker.trendlineDirection {
+//                Section("Trendline Direction") {
+//                    Text(direction.rawValue)
+//                }
+//            }
+//            
+//        case .indicator:
+//            if let indicator = marker.selectedIndicator {
+//                Section("Indicator") {
+//                    Text(indicator)
+//                }
+//            }
+//            
+//        case .pattern:
+//            if let pattern = marker.chartPattern {
+//                Section("Chart Pattern") {
+//                    Text(pattern.rawValue)
+//                }
+//            }
+//            
+//        case .predictionTarget:
+//            if let target = marker.targetPrice {
+//                Section("Prediction") {
+//                    HStack {
+//                        Text("Target Price")
+//                        Spacer()
+//                        Text(chartData.formatPrice(target))
+//                            .foregroundColor(.secondary)
+//                    }
+//                }
+//            }
+//            
+//        case .poll:
+//            if let question = marker.pollQuestion, let options = marker.pollOptions {
+//                Section("Poll: \(question)") {
+//                    ForEach(options) { option in
+//                        HStack {
+//                            Text(option.text)
+//                            Spacer()
+//                            Text("\(option.voteCount)")
+//                                .foregroundColor(.secondary)
+//                        }
+//                    }
+//                }
+//            }
+//            
+//        default:
+//            EmptyView()
+//        }
+//    }
+//}
 
 // MARK: - Temporary Marker Placement Indicator
 

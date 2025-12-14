@@ -59,6 +59,10 @@ struct MainView: View {
     @State private var rsiPanelHeight: CGFloat = 120
     @State private var macdPanelHeight: CGFloat = 140
     @State private var stochasticPanelHeight: CGFloat = 120
+    @State private var cciPanelHeight: CGFloat = 120
+    @State private var williamsRPanelHeight: CGFloat = 120
+    @State private var atrPanelHeight: CGFloat = 120
+    @State private var volumePanelHeight: CGFloat = 120
     
     // MARK: - Computed Properties
     private var screenSize: CGSize {
@@ -84,6 +88,14 @@ struct MainView: View {
                 totalHeight += macdPanelHeight + 22
             case .stochastic:
                 totalHeight += stochasticPanelHeight + 22
+            case .cci:
+                totalHeight += cciPanelHeight + 22
+            case .williamsR:
+                totalHeight += williamsRPanelHeight + 22
+            case .atr:
+                totalHeight += atrPanelHeight + 22
+            case .volume:
+                totalHeight += volumePanelHeight + 22
             }
         }
         
@@ -134,7 +146,11 @@ struct MainView: View {
                             timeframe: chartViewModel.currentTimeframe,
                             rsiPanelHeight: $rsiPanelHeight,
                             macdPanelHeight: $macdPanelHeight,
-                            stochasticPanelHeight: $stochasticPanelHeight
+                            stochasticPanelHeight: $stochasticPanelHeight,
+                            cciPanelHeight: $cciPanelHeight,
+                            williamsRPanelHeight: $williamsRPanelHeight,
+                            atrPanelHeight: $atrPanelHeight,
+                            volumePanelHeight: $volumePanelHeight
                         )
                         
                         // DYNAMIC bottom padding - accounts for minimized bottom sheet
@@ -1012,8 +1028,7 @@ struct ChartControlButton: View {
 ////  MainView.swift
 ////  traders_guild
 ////
-////  COMPLETE CORRECTED VERSION
-////  Based on your working commented version with ChartViewModel added
+////  UPDATED VERSION - Fixes bottom controls overlap with multiple indicator panels
 ////
 //
 //import SwiftUI
@@ -1066,10 +1081,8 @@ struct ChartControlButton: View {
 //    @State private var dismissRightSheetsSignal: Bool = false
 //    @State private var dismissLeftSheetsSignal: Bool = false
 //    
-//    // MARK: - Indicators
-//    // RSI Panel state
+//    // MARK: - Indicator Panel State
 //    @State private var rsiPanelHeight: CGFloat = 120
-//    
 //    @State private var macdPanelHeight: CGFloat = 140
 //    @State private var stochasticPanelHeight: CGFloat = 120
 //    
@@ -1080,6 +1093,36 @@ struct ChartControlButton: View {
 //    
 //    private var drawerWidth: CGFloat {
 //        screenSize.width * LayoutConstants.drawerWidthRatio
+//    }
+//    
+//    /// Calculate total height of active indicator panels for bottom padding
+//    private var indicatorPanelsTotalHeight: CGFloat {
+//        let activePanels = chartViewModel.indicatorManager.activeIndicators.activePanelTypes
+//        guard !activePanels.isEmpty else { return 0 }
+//        
+//        var totalHeight: CGFloat = 0
+//        
+//        for panelType in activePanels {
+//            switch panelType {
+//            case .rsi:
+//                totalHeight += rsiPanelHeight + 22  // +22 for resize handle
+//            case .macd:
+//                totalHeight += macdPanelHeight + 22
+//            case .stochastic:
+//                totalHeight += stochasticPanelHeight + 22
+//            }
+//        }
+//        
+//        // Add X-axis labels height
+//        totalHeight += 22
+//        
+//        return totalHeight
+//    }
+//    
+//    /// Bottom padding for controls that need to float above indicator panels
+//    private var bottomControlsPadding: CGFloat {
+//        // Base padding for minimized bottom sheet + indicator panels
+//        return indicatorPanelsTotalHeight + 100
 //    }
 //    
 //    // MARK: - Initialization
@@ -1102,7 +1145,7 @@ struct ChartControlButton: View {
 //                mainContentStack
 //                    .disabled(showLeftDrawer || showRightDrawer)
 //                
-//                // MARK: - RSI Panel Overlay
+//                // MARK: - Indicator Panels Overlay
 //                // Positioned ABOVE main content, BELOW bottom sheet
 //                if chartViewModel.indicatorManager.shouldShowAnyPanel {
 //                    VStack {
@@ -1120,6 +1163,7 @@ struct ChartControlButton: View {
 //                            stochasticPanelHeight: $stochasticPanelHeight
 //                        )
 //                        
+//                        // DYNAMIC bottom padding - accounts for minimized bottom sheet
 //                        Color.clear
 //                            .frame(height: 100)
 //                    }
@@ -1209,7 +1253,6 @@ struct ChartControlButton: View {
 //                await leftDrawerViewModel.preloadData(for: guild.id, appState: appState)
 //                await rightDrawerViewModel.preloadData(for: guild.id, appState: appState)
 //                
-//                // FIXED: Correct method signature
 //                notificationNavigationManager.configure(
 //                    appState: appState,
 //                    messagingManager: messagingManager,
@@ -1317,13 +1360,14 @@ struct ChartControlButton: View {
 //        }
 //    }
 //    
-//    // FIXED: chartView function that uses TradingChartView with ChartViewModel
+//    // UPDATED: Pass total indicator panel height for proper bottom controls positioning
 //    private func chartView(controlViewModel: ChartControlViewModel) -> some View {
 //        TradingChartView(
 //            controlViewModel: controlViewModel,
 //            chartViewModel: chartViewModel,
 //            gestureState: chartGestureState,
-//            rsiPanelHeight: $rsiPanelHeight
+//            rsiPanelHeight: $rsiPanelHeight,
+//            indicatorPanelBottomPadding: indicatorPanelsTotalHeight
 //        )
 //    }
 //    
@@ -1476,7 +1520,6 @@ struct ChartControlButton: View {
 //        case chat = "Chat"
 //        case indicator = "Indicator"
 //        case markers = "Markers"
-////        case controls = "Controls"
 //        
 //        var icon: String {
 //            switch self {
@@ -1484,7 +1527,6 @@ struct ChartControlButton: View {
 //            case .chat: return "message.fill"
 //            case .indicator: return "chart.line.uptrend.xyaxis.circle"
 //            case .markers: return "mappin.circle.fill"
-//
 //            }
 //        }
 //    }
@@ -1508,8 +1550,6 @@ struct ChartControlButton: View {
 //                            indicatorContent
 //                        case .markers:
 //                            markersContent
-////                        case .controls:
-////                            chartControlsContent
 //                        }
 //                    }
 //                    .padding(.horizontal, 16)
@@ -1595,7 +1635,6 @@ struct ChartControlButton: View {
 //                                selectedView = .markers
 //                            }
 //                        }
-//                        
 //                    }
 //                }
 //                .padding(.horizontal, 16)
@@ -1798,8 +1837,6 @@ struct ChartControlButton: View {
 //        }
 //    }
 //    
-//    // MARK: - Other Tab Contents
-//    
 //    private var chatContent: some View {
 //        VStack(spacing: 16) {
 //            Text("Chart Chat")
@@ -1823,26 +1860,15 @@ struct ChartControlButton: View {
 //        )
 //    }
 //    
-//
-//    /// Updated markersContent with specific marker type buttons
-//    /// Each button triggers placement mode for its specific marker type
 //    var markersContent: some View {
-//        
 //        chartSheetMarkersView(
 //            chartViewModel: chartViewModel,
 //            controlViewModel: controlViewModel
 //        )
-//        
-//        
 //    }
-//    
-//
 //}
 //
-//
-//
-//
-//
+//// MARK: - Supporting Views
 //
 //struct SymbolRow: View {
 //    let symbol: TradingSymbol
@@ -1884,7 +1910,6 @@ struct ChartControlButton: View {
 //                }
 //            }
 //            .padding()
-//            // EVEN BETTER ✅
 //            .background(
 //                LinearGradient(
 //                    colors: isSelected
@@ -2004,18 +2029,5 @@ struct ChartControlButton: View {
 //        .buttonStyle(.plain)
 //    }
 //}
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
