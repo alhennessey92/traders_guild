@@ -23,7 +23,7 @@ class ChartViewModel: ObservableObject {
     // MARK: - Published State
     
     @Published var currentSymbol: TradingSymbol?
-    @Published var currentTimeframe: ChartTimeframe = .h1
+    @Published var currentTimeframe: ChartTimeframe = .m5
     @Published var availableSymbols: [TradingSymbol] = []
     @Published var isLoadingData: Bool = false
     @Published var errorMessage: String?

@@ -22,12 +22,22 @@ struct chartSheetMarkersView: View {
     var body: some View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Add a Marker")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 15)
+                HStack{
+                    Text("Add a Marker")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 15)
+                    
+                    Spacer()
+                    
+                    MarkerSettingsButton()
+                        .padding(.trailing, 15)
+                        .padding(.top, 15)
+                    
+                }
+                
                 
                 Text("Place markers on the chart to share insights with your guild. Each candle can have one of each marker type.")
                     .font(.caption)
@@ -141,8 +151,8 @@ struct chartSheetMarkersView: View {
                             controlViewModel: controlViewModel
                         )
                         
-                        Spacer()
-                        Spacer()
+//                        Spacer()
+//                        Spacer()
                     }
                     
                     // MARK: - Social Markers Section
@@ -173,22 +183,22 @@ struct chartSheetMarkersView: View {
                         )
                     }
                     
-                    // MARK: - Marker Settings Section
-                    Divider()
-                        .background(Color.white.opacity(0.2))
-                        .padding(.top, 16)
-                    
-                    HStack {
-                        Text("Marker Display Settings")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                        
-                        Spacer()
-                        
-                        MarkerSettingsButton()
-                    }
-                    .padding(.top, 8)
-                    .padding(.bottom, 20)
+//                    // MARK: - Marker Settings Section
+//                    Divider()
+//                        .background(Color.white.opacity(0.2))
+//                        .padding(.top, 16)
+//                    
+//                    HStack {
+//                        Text("Marker Display Settings")
+//                            .font(.subheadline)
+//                            .foregroundColor(.gray)
+//                        
+////                        Spacer()
+////                        
+////                        MarkerSettingsButton()
+//                    }
+//                    .padding(.top, 8)
+//                    .padding(.bottom, 20)
                 }
             }
         }
@@ -236,7 +246,7 @@ struct MarkerButton: View {
             .background(
                 isActive ?
                 Color.red :
-                Color.white.opacity(0.1)
+                Color.white.opacity(0.05)
             )
             .cornerRadius(12)
         }

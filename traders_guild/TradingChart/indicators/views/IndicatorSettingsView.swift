@@ -454,7 +454,7 @@ struct AddButton: View {
             }
             .foregroundColor(color)
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .background(color.opacity(0.15))
             .cornerRadius(6)
         }

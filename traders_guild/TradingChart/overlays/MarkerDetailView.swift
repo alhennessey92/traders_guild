@@ -1,3 +1,5 @@
+
+
 //
 //  MarkerDetailView.swift
 //  traders_guild
@@ -182,6 +184,7 @@ struct MarkerDetailView: View {
                     .font(.subheadline)
                     .lineLimit(1...5)
                     .submitLabel(.send)
+                    .padding(.leading, 5)
                     .onSubmit {
                         handleAddComment()
                     }
