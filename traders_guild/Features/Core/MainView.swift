@@ -498,7 +498,9 @@ struct MainView: View {
 // MARK: - Drawer Side
 enum DrawerSide { case left, right }
 
+
 // MARK: - Chart Bottom Sheet
+// UPDATED: Chat view now manages its own scroll, so we don't wrap it in the outer ScrollView
 struct ChartBottomSheet: View {
     @State private var selectedView: ChartView = .symbol
     @ObservedObject var controlViewModel: ChartControlViewModel
@@ -529,30 +531,36 @@ struct ChartBottomSheet: View {
         VStack(spacing: 0) {
             // Content Area
             if isExpanded {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        switch selectedView {
-                        case .symbol:
-                            symbolAndSettingsContent
-                        case .chat:
-                            chatContent
-                        case .indicator:
-                            indicatorContent
-                        case .markers:
-                            markersContent
+                // IMPORTANT: Chat view manages its own scroll, so don't wrap it
+                if selectedView == .chat {
+                    chatContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Other views use the standard scrollable layout
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            switch selectedView {
+                            case .symbol:
+                                symbolAndSettingsContent
+                            case .indicator:
+                                indicatorContent
+                            case .markers:
+                                markersContent
+                            case .chat:
+                                EmptyView() // Handled above
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 20)
+                        .padding(.bottom, 20)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 20)
-                    .padding(.bottom, 20)
-                    .animation(.easeInOut(duration: 0.3), value: selectedView)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Spacer()
             }
             
-            // Fixed Button Bar
+            // Fixed Button Bar - ignores keyboard so only chat input moves up
             VStack(spacing: 0) {
                 if isExpanded {
                     Rectangle()
@@ -633,21 +641,25 @@ struct ChartBottomSheet: View {
             }
             .frame(height: isExpanded ? 70 : 68)
         }
+        .ignoresSafeArea(.keyboard)
+        .animation(.easeInOut(duration: 0.3), value: selectedView)
     }
     
-    // MARK: - Symbol Tab Content (NEW - Enhanced with timeframe and watchlist)
+    // MARK: - Symbol Tab Content
     private var symbolAndSettingsContent: some View {
         chartSheetSymbolView(
             chartViewModel: chartViewModel
         )
     }
     
+    // MARK: - Chat Tab Content
     private var chatContent: some View {
         chartSheetChatView(
             chartViewModel: chartViewModel
         )
     }
     
+    // MARK: - Indicator Tab Content
     private var indicatorContent: some View {
         IndicatorSettingsContent(
             indicatorManager: chartViewModel.indicatorManager,
@@ -657,6 +669,7 @@ struct ChartBottomSheet: View {
         )
     }
     
+    // MARK: - Markers Tab Content
     var markersContent: some View {
         chartSheetMarkersView(
             chartViewModel: chartViewModel,
@@ -664,6 +677,186 @@ struct ChartBottomSheet: View {
         )
     }
 }
+
+// MARK: - Chart Bottom Sheet
+// UPDATED: Chat view now manages its own scroll, so we don't wrap it in the outer ScrollView
+//struct ChartBottomSheet: View {
+//    @State private var selectedView: ChartView = .symbol
+//    @ObservedObject var controlViewModel: ChartControlViewModel
+//    @ObservedObject var chartViewModel: ChartViewModel
+//    @Binding var selectedDetent: PresentationDetent
+//    
+//    enum ChartView: String, CaseIterable {
+//        case symbol = "Symbol"
+//        case chat = "Chat"
+//        case indicator = "Indicator"
+//        case markers = "Markers"
+//        
+//        var icon: String {
+//            switch self {
+//            case .symbol: return "chart.bar.fill"
+//            case .chat: return "message.fill"
+//            case .indicator: return "chart.line.uptrend.xyaxis.circle"
+//            case .markers: return "mappin.circle.fill"
+//            }
+//        }
+//    }
+//    
+//    private var isExpanded: Bool {
+//        selectedDetent != .fraction(0.11)
+//    }
+//    
+//    var body: some View {
+//        VStack(spacing: 0) {
+//            // Content Area
+//            if isExpanded {
+//                // IMPORTANT: Chat view manages its own scroll, so don't wrap it
+//                if selectedView == .chat {
+//                    chatContent
+//                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+//                } else {
+//                    // Other views use the standard scrollable layout
+//                    ScrollView {
+//                        VStack(spacing: 16) {
+//                            switch selectedView {
+//                            case .symbol:
+//                                symbolAndSettingsContent
+//                            case .indicator:
+//                                indicatorContent
+//                            case .markers:
+//                                markersContent
+//                            case .chat:
+//                                EmptyView() // Handled above
+//                            }
+//                        }
+//                        .padding(.horizontal, 16)
+//                        .padding(.top, 20)
+//                        .padding(.bottom, 20)
+//                    }
+//                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+//                }
+//            } else {
+//                Spacer()
+//            }
+//            
+//            // Fixed Button Bar - ignores keyboard so only chat input moves up
+//            VStack(spacing: 0) {
+//                if isExpanded {
+//                    Rectangle()
+//                        .fill(Color.gray.opacity(0.2))
+//                        .frame(height: 0.5)
+//                }
+//                
+//                HStack(spacing: 4) {
+//                    // Symbol button
+//                    RootBottomBarSymbolButton(
+//                        symbol: chartViewModel.currentSymbol?.symbol ?? "EUR/USD",
+//                        backgroundColor: selectedView == .symbol ?
+//                            AppColors.gradientBackgroundDark :
+//                            AppColors.gradientBackgroundMid.opacity(0.9),
+//                        foregroundColor: selectedView == .symbol ?
+//                            .white :
+//                            AppColors.whiteText.opacity(0.8)
+//                    ) {
+//                        withAnimation(.easeInOut(duration: 0.25)) {
+//                            selectedView = .symbol
+//                        }
+//                    }
+//                    
+//                    Spacer()
+//                    
+//                    HStack(spacing: 4) {
+//                        // Chat button
+//                        RootBottomBarIconButton(
+//                            systemName: "message.fill",
+//                            backgroundColor: selectedView == .chat ?
+//                                AppColors.gradientBackgroundDark :
+//                                AppColors.gradientBackgroundMid.opacity(0.9),
+//                            foregroundColor: selectedView == .chat ?
+//                                .white :
+//                                AppColors.whiteText.opacity(0.8)
+//                        ) {
+//                            withAnimation(.easeInOut(duration: 0.25)) {
+//                                selectedView = .chat
+//                            }
+//                        }
+//                        
+//                        // Indicator button
+//                        RootBottomBarIconButton(
+//                            systemName: "chart.line.uptrend.xyaxis.circle",
+//                            fontSize: 25,
+//                            backgroundColor: selectedView == .indicator ?
+//                                AppColors.gradientBackgroundDark :
+//                                AppColors.gradientBackgroundMid.opacity(0.9),
+//                            foregroundColor: selectedView == .indicator ?
+//                                .white :
+//                                AppColors.whiteText.opacity(0.8)
+//                        ) {
+//                            withAnimation(.easeInOut(duration: 0.25)) {
+//                                selectedView = .indicator
+//                            }
+//                        }
+//                        
+//                        // Markers button
+//                        RootBottomBarIconButton(
+//                            systemName: "target",
+//                            fontSize: 25,
+//                            backgroundColor: selectedView == .markers ?
+//                                AppColors.whiteText :
+//                                AppColors.whiteText.opacity(0.5),
+//                            foregroundColor: selectedView == .markers ?
+//                                AppColors.gradientBackgroundDark :
+//                                AppColors.gradientBackgroundDark.opacity(0.8)
+//                        ) {
+//                            withAnimation(.easeInOut(duration: 0.25)) {
+//                                selectedView = .markers
+//                            }
+//                        }
+//                    }
+//                }
+//                .padding(.horizontal, 16)
+//                .padding(.top, isExpanded ? 16 : 0)
+//                .padding(.bottom, 2)
+//            }
+//            .frame(height: isExpanded ? 70 : 68)
+//        }
+//        .ignoresSafeArea(.keyboard)
+//        .animation(.easeInOut(duration: 0.3), value: selectedView)
+//    }
+//    
+//    // MARK: - Symbol Tab Content
+//    private var symbolAndSettingsContent: some View {
+//        chartSheetSymbolView(
+//            chartViewModel: chartViewModel
+//        )
+//    }
+//    
+//    // MARK: - Chat Tab Content
+//    private var chatContent: some View {
+//        chartSheetChatView(
+//            chartViewModel: chartViewModel
+//        )
+//    }
+//    
+//    // MARK: - Indicator Tab Content
+//    private var indicatorContent: some View {
+//        IndicatorSettingsContent(
+//            indicatorManager: chartViewModel.indicatorManager,
+//            onRecalculate: {
+//                chartViewModel.recalculateIndicators()
+//            }
+//        )
+//    }
+//    
+//    // MARK: - Markers Tab Content
+//    var markersContent: some View {
+//        chartSheetMarkersView(
+//            chartViewModel: chartViewModel,
+//            controlViewModel: controlViewModel
+//        )
+//    }
+//}
+
 
 
 

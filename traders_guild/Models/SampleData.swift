@@ -4201,6 +4201,8 @@ struct SampleData {
             let hoursAgo = Double.random(in: 1...72)
             let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
             
+            let comments = SampleData.generateMarkerComments()
+            
             var marker = ChartMarker(
                 id: UUID(),
                 candleIndex: candleIndex,
@@ -4211,7 +4213,8 @@ struct SampleData {
                 username: member.username,
                 note: note,
                 guildId: guildId,
-                createdAt: timestamp
+                createdAt: timestamp,
+                comments: comments 
             )
             
             marker.likeCount = Int.random(in: 0...15)
@@ -4271,6 +4274,273 @@ struct SampleData {
 
 
 
+//
+//  SampleData+ChartChat.swift
+//  traders_guild
+//
+//  Created by Al Hennessey on 14/12/2025.
+//
+//  Sample data for chart chat functionality
 
 
 
+extension SampleData {
+    
+    // MARK: - Chart Chat Sample Data
+    
+    /// Sample chart chat for a symbol/guild combination
+    static func chartChatForSymbol(symbolId: UUID, guildId: UUID) -> ChartChatDTO {
+        let symbol = personalWatchlist.first(where: { $0.id == symbolId }) ?? personalWatchlist[0]
+        let guild = userGuilds[0]
+        
+        return ChartChatDTO(
+            id: UUID(),
+            symbolId: symbolId,
+            symbolTicker: symbol.symbol,  // FIXED: TradingSymbol uses 'symbol' not 'ticker'
+            guildId: guildId,
+            guildName: guild.name,
+            lastMessage: chartChatMessages.last,
+            lastActivity: Date().addingTimeInterval(-300), // 5 minutes ago
+            lastActivityFormatted: "5m ago",
+            unreadCount: 0,
+            activeUsers: Array(guildMemberships.prefix(3)),
+            activeUserCount: 3,
+            canSendMessages: true
+        )
+    }
+    
+    /// Sample chart chat messages
+    static var chartChatMessages: [ChartChatMessageDTO] {
+        let now = Date()
+        
+        return [
+            ChartChatMessageDTO(
+                id: UUID(),
+                chartChatId: UUID(),
+                author: guildMemberships[0],
+                content: "Strong resistance at 0.8500, watching for a breakout",
+                timestamp: now.addingTimeInterval(-3600), // 1 hour ago
+                timestampFormatted: "1h ago",
+                isEdited: false,
+                isCurrentUserMessage: false,
+                canEdit: false,
+                canDelete: false
+            ),
+            ChartChatMessageDTO(
+                id: UUID(),
+                chartChatId: UUID(),
+                author: guildMemberships[1],
+                content: "RSI showing divergence on the 4H chart, could signal reversal",
+                timestamp: now.addingTimeInterval(-2400), // 40 min ago
+                timestampFormatted: "40m ago",
+                isEdited: false,
+                isCurrentUserMessage: false,
+                canEdit: false,
+                canDelete: false
+            ),
+            ChartChatMessageDTO(
+                id: UUID(),
+                chartChatId: UUID(),
+                author: guildMemberships[2],
+                content: "Volume is picking up, breakout might be imminent",
+                timestamp: now.addingTimeInterval(-1800), // 30 min ago
+                timestampFormatted: "30m ago",
+                isEdited: false,
+                isCurrentUserMessage: false,
+                canEdit: false,
+                canDelete: false
+            ),
+            ChartChatMessageDTO(
+                id: UUID(),
+                chartChatId: UUID(),
+                author: currentUser.guildMembership,
+                content: "Placed a prediction marker at 0.8550, let's see how it plays out",
+                timestamp: now.addingTimeInterval(-900), // 15 min ago
+                timestampFormatted: "15m ago",
+                isEdited: false,
+                isCurrentUserMessage: true,
+                canEdit: true,
+                canDelete: true
+            ),
+            ChartChatMessageDTO(
+                id: UUID(),
+                chartChatId: UUID(),
+                author: guildMemberships[0],
+                content: "Good call! I'm watching the same level",
+                timestamp: now.addingTimeInterval(-300), // 5 min ago
+                timestampFormatted: "5m ago",
+                isEdited: false,
+                isCurrentUserMessage: false,
+                canEdit: false,
+                canDelete: false
+            )
+        ]
+    }
+    
+    /// Create a new chart chat message (for sending)
+    static func createChartChatMessage(
+        chatId: UUID,
+        content: String,
+        authorId: UUID
+    ) -> ChartChatMessageDTO {
+        let author = currentUser.guildMembership
+        
+        return ChartChatMessageDTO(
+            id: UUID(),
+            chartChatId: chatId,
+            author: author,
+            content: content,
+            timestamp: Date(),
+            timestampFormatted: "Just now",
+            isEdited: false,
+            isCurrentUserMessage: true,
+            canEdit: true,
+            canDelete: true
+        )
+    }
+}
+
+
+
+//
+//  SampleData+MarkerComments.swift
+//  traders_guild
+//
+//  Sample data for marker comments
+//  Add this to your existing SampleData.swift or as an extension
+
+extension SampleData {
+    
+    // MARK: - Marker Comment Sample Data
+    
+    /// Sample usernames and user IDs for comments
+    private static let commentUsers: [(userId: String, username: String)] = [
+        ("user001", "TradingPro"),
+        ("user002", "ChartMaster"),
+        ("user003", "SwingTrader"),
+        ("user004", "ForexKing"),
+        ("user005", "CryptoQueen"),
+        (currentUser.id.uuidString, currentUser.name) // Current user
+    ]
+    
+    /// Sample comment texts
+    private static let commentTexts: [String] = [
+        "Great analysis! I see the same setup.",
+        "What's your stop loss on this?",
+        "Risk/reward looks solid here.",
+        "I'm watching this level too.",
+        "Nice catch! Almost missed this.",
+        "Agreed, volume confirms the move.",
+        "Target seems realistic based on ATR.",
+        "Be careful, there's resistance above.",
+        "Good call, entered the same trade.",
+        "How long do you plan to hold?",
+        "RSI divergence supports this view.",
+        "Thanks for sharing!",
+        "Following this setup closely.",
+        "What timeframe are you using?",
+        "Solid technical analysis here."
+    ]
+    
+    /// Generate random marker comments
+    static func generateMarkerComments(count: Int = 0) -> [MarkerComment] {
+        // Random count between 0 and 5 if not specified
+        let commentCount = count > 0 ? count : Int.random(in: 0...5)
+        guard commentCount > 0 else { return [] }
+        
+        var comments: [MarkerComment] = []
+        
+        for i in 0..<commentCount {
+            let user = commentUsers[Int.random(in: 0..<commentUsers.count)]
+            let text = commentTexts[Int.random(in: 0..<commentTexts.count)]
+            let hoursAgo = Double.random(in: 0.5...48)
+            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
+            
+            let comment = MarkerComment(
+                id: UUID(),
+                userId: user.userId,
+                username: user.username,
+                text: text,
+                createdAt: timestamp
+            )
+            
+            comments.append(comment)
+        }
+        
+        // Sort by creation date
+        return comments.sorted { $0.createdAt < $1.createdAt }
+    }
+    
+    /// Updated generateChartMarkers that includes comments
+    /// Replace the existing generateChartMarkers function with this one
+    static func generateChartMarkersWithComments(
+        forSymbol symbol: String,
+        guildId: String,
+        candleCount: Int
+    ) -> [ChartMarker] {
+        let markerCount = min(8, max(3, candleCount / 30))
+        var markers: [ChartMarker] = []
+        var usedIndices: [Int] = []
+        
+        let startIndex = max(5, candleCount - Int(Double(candleCount) * 0.9))
+        let endIndex = candleCount - 5
+        let range = endIndex - startIndex
+        let count = min(markerCount, range / 3)
+        
+        for i in 0..<count {
+            var baseIndex: Int
+            if count == 1 {
+                baseIndex = startIndex + range / 2
+            } else {
+                let step = range / count
+                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
+            }
+            
+            let candleIndex = min(endIndex, max(startIndex, baseIndex))
+            usedIndices.append(candleIndex)
+            
+            let member = chartMarkerMembers[i % chartMarkerMembers.count]
+            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
+            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
+            let placeholderPrice = 1.0850
+            
+            let hoursAgo = Double.random(in: 1...72)
+            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
+            
+            // Generate comments for this marker
+            let comments = generateMarkerComments()
+            
+            var marker = ChartMarker(
+                id: UUID(),
+                candleIndex: candleIndex,
+                timestamp: timestamp,
+                price: placeholderPrice,
+                type: markerType,
+                userId: member.userId,
+                username: member.username,
+                note: note,
+                guildId: guildId,
+                createdAt: timestamp,
+                comments: comments
+            )
+            
+            marker.likeCount = Int.random(in: 0...15)
+            marker.isLikedByCurrentUser = marker.likeCount > 0 && Bool.random()
+            
+            markers.append(marker)
+        }
+        
+        return markers
+    }
+}
+
+// MARK: - Update to existing generateChartMarkers
+// If you want to update the existing function instead, add this after marker creation:
+/*
+ // Inside the for loop, after creating the marker:
+ let comments = SampleData.generateMarkerComments()
+ marker = ChartMarker(
+     ...existing parameters...,
+     comments: comments
+ )
+*/

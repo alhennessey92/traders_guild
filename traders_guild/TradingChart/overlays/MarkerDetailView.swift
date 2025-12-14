@@ -1,16 +1,16 @@
-
-
 //
 //  MarkerDetailView.swift
 //  traders_guild
 //
 //  Comprehensive marker detail view with:
-//  - Header: Icon, name, user, timestamp
+//  - Header: Gradient background, icon, user info, stats
 //  - Tabs: Info (type-specific) and Comments
-//  - Footer: Action buttons (like, share, report)
+//  - Footer: Circular action buttons matching profile view design
 //
+//  NOTE: Requires KeyboardHandler.swift in your project (shared utility)
 
 import SwiftUI
+import Combine
 
 // MARK: - Marker Detail View
 
@@ -27,7 +27,11 @@ struct MarkerDetailView: View {
     @State private var isLiked: Bool = false
     @State private var likeCount: Int = 0
     @State private var comments: [MarkerComment] = []
-    @State private var keyboardHeight: CGFloat = 0
+    @State private var isSendingComment: Bool = false
+    @State private var showDeleteMarkerConfirmation: Bool = false
+    @State private var showReportConfirmation: Bool = false
+    @StateObject private var keyboardHandler = KeyboardHandler()
+    @FocusState private var isCommentInputFocused: Bool
     
     enum MarkerTab: String, CaseIterable {
         case info = "Info"
@@ -39,86 +43,65 @@ struct MarkerDetailView: View {
         self.markerManager = markerManager
         self._selectedDetent = selectedDetent
         
-        // Initialize state from marker
         _isLiked = State(initialValue: marker.isLikedByCurrentUser)
         _likeCount = State(initialValue: marker.likeCount)
         _comments = State(initialValue: marker.comments)
     }
     
+    private let footerHeight: CGFloat = 70
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            MarkerDetailHeaderView(marker: marker)
-            
-            // Tab Headers - Fixed
-            tabHeader
-            
-            Divider()
-            
-            // Content area - grows/shrinks with keyboard
-            ZStack(alignment: .bottom) {
-                // Scrollable Content
-                ScrollView(.vertical, showsIndicators: false) {
-                    if selectedTab == .info {
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) {
+                // Header with gradient
+                MarkerDetailHeaderView(
+                    marker: marker,
+                    isLiked: isLiked,
+                    likeCount: likeCount,
+                    commentCount: comments.count
+                )
+                
+                // Tab Headers
+                tabHeader
+                
+                Divider()
+                
+                // Content area
+                if selectedTab == .info {
+                    ScrollView(.vertical, showsIndicators: false) {
                         MarkerInfoContent(marker: marker)
                             .padding(.horizontal, 25)
                             .padding(.vertical, 20)
-                    } else {
-                        // Comments list
-                        MarkerCommentsListContent(
-                            comments: $comments,
-                            currentUserId: markerManager.userId
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        .padding(.bottom, selectedTab == .comments ? 70 : 20) // Space for input
                     }
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .simultaneousGesture(
-                    TapGesture()
-                        .onEnded { _ in
-                            hideKeyboard()
-                        }
-                )
-                
-                // Comment Input - Overlaid at bottom
-                if selectedTab == .comments {
-                    VStack(spacing: 0) {
-                        Divider()
-                        commentInputView
-                    }
-                    .background(AppColors.sheetBackground)
+                    
+                    Divider()
+                    
+                    // Footer
+                    MarkerDetailFooterView(
+                        marker: marker,
+                        isLiked: $isLiked,
+                        likeCount: $likeCount,
+                        isOwner: marker.userId == markerManager.userId,
+                        onLike: handleLike,
+                        onShare: handleShare,
+                        onReport: { showReportConfirmation = true },
+                        onDelete: { showDeleteMarkerConfirmation = true }
+                    )
+                } else {
+                    commentsTabContent
                 }
             }
-            .padding(.bottom, keyboardHeight)
-            .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(
+                ZStack {
+                    Color.clear
+                        .background(.ultraThinMaterial)
+                    AppColors.sheetBackground
+                    StaticPatternView()
+                }
+            )
             
-            // Footer - Fixed at bottom, goes off screen with keyboard
-            if keyboardHeight == 0 {
-                Divider()
-                MarkerDetailFooterView(
-                    marker: marker,
-                    isLiked: $isLiked,
-                    likeCount: $likeCount,
-                    onLike: handleLike,
-                    onShare: handleShare,
-                    onReport: handleReport,
-                    onDelete: marker.userId == markerManager.userId ? handleDelete : nil
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(
-            ZStack {
-                Color.clear
-                    .background(.ultraThinMaterial)
-                AppColors.sheetBackground
-                StaticPatternView()
-            }
-        )
-        .overlay(alignment: .topTrailing) {
+            // Floating dismiss button
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
@@ -127,18 +110,99 @@ struct MarkerDetailView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .onAppear {
-            subscribeToKeyboardEvents()
+        .ignoresSafeArea(.keyboard)
+        .alert("Delete Marker", isPresented: $showDeleteMarkerConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                handleDelete()
+            }
+        } message: {
+            Text("Are you sure you want to delete this marker? This action cannot be undone.")
+        }
+        .alert("Report Marker", isPresented: $showReportConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Report", role: .destructive) {
+                handleReport()
+            }
+        } message: {
+            Text("Report this marker as inappropriate or misleading?")
         }
     }
     
+    // MARK: - Comments Tab Content
+    
+    private var commentsTabContent: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    if comments.isEmpty {
+                        emptyCommentsView
+                            .padding(.top, 60)
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            ForEach(comments.sorted(by: { $0.createdAt < $1.createdAt })) { comment in
+                                MessageStyleCommentRow(
+                                    comment: comment,
+                                    isCurrentUser: comment.userId == markerManager.userId,
+                                    onDelete: comment.userId == markerManager.userId ? {
+                                        handleDeleteComment(comment)
+                                    } : nil
+                                )
+                                .id(comment.id)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 20)
+                    }
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onTapGesture {
+                    isCommentInputFocused = false
+                }
+                .onChange(of: comments.count) { _ in
+                    if let lastComment = comments.last {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo(lastComment.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            
+            // Comment input
+            commentInputView
+                .padding(.bottom, keyboardHandler.keyboardHeight > 0 ? keyboardHandler.keyboardHeight - footerHeight : 0)
+                .animation(.easeOut(duration: 0.25), value: keyboardHandler.keyboardHeight)
+            
+            // Footer - hidden when keyboard is open
+            if keyboardHandler.keyboardHeight == 0 {
+                Divider()
+                
+                MarkerDetailFooterView(
+                    marker: marker,
+                    isLiked: $isLiked,
+                    likeCount: $likeCount,
+                    isOwner: marker.userId == markerManager.userId,
+                    onLike: handleLike,
+                    onShare: handleShare,
+                    onReport: { showReportConfirmation = true },
+                    onDelete: { showDeleteMarkerConfirmation = true }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: keyboardHandler.keyboardHeight)
+    }
+    
     // MARK: - Tab Header
+    
     private var tabHeader: some View {
         HStack(spacing: 0) {
             ForEach(MarkerTab.allCases, id: \.self) { tab in
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedTab = tab
+                        isCommentInputFocused = false
                     }
                 }) {
                     VStack(spacing: 8) {
@@ -148,7 +212,6 @@ struct MarkerDetailView: View {
                                 .fontWeight(selectedTab == tab ? .semibold : .regular)
                                 .foregroundColor(selectedTab == tab ? AppColors.accentColor : AppColors.greyText)
                             
-                            // Comment count badge
                             if tab == .comments && !comments.isEmpty {
                                 Text("\(comments.count)")
                                     .font(.caption2)
@@ -161,7 +224,6 @@ struct MarkerDetailView: View {
                             }
                         }
                         
-                        // Active indicator
                         Rectangle()
                             .fill(selectedTab == tab ? AppColors.accentColor : Color.clear)
                             .frame(height: 2)
@@ -178,63 +240,89 @@ struct MarkerDetailView: View {
     // MARK: - Comment Input View
     
     private var commentInputView: some View {
-        HStack(spacing: 0) {
+        VStack(spacing: 0) {
+            Divider()
+                .background(Color.gray.opacity(0.3))
+            
             HStack(spacing: 12) {
-                TextField("Add a comment...", text: $commentText, axis: .vertical)
-                    .font(.subheadline)
-                    .lineLimit(1...5)
-                    .submitLabel(.send)
-                    .padding(.leading, 5)
-                    .onSubmit {
-                        handleAddComment()
-                    }
+                // User avatar
+                Circle()
+                    .fill(AppColors.accentColor.opacity(0.3))
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Text(String(appState.currentUser?.name.prefix(2) ?? "??"))
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                    )
                 
-                Button(action: {
-                    handleAddComment()
-                }) {
-                    Image(systemName: "chevron.forward.2")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : AppColors.gradientBackgroundDark.opacity(0.8))
-                        .frame(width: 40, height: 40)
-                        .padding(.leading, 2)
-                        .background(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppColors.whiteText.opacity(0.3) : AppColors.whiteText)
-                        .clipShape(Capsule())
+                // Text input
+                HStack(spacing: 8) {
+                    TextField("Add a comment...", text: $commentText, axis: .vertical)
+                        .font(.subheadline)
+                        .lineLimit(1...4)
+                        .submitLabel(.send)
+                        .focused($isCommentInputFocused)
+                        .disabled(isSendingComment)
+                        .onSubmit {
+                            handleAddComment()
+                        }
+                    
+                    // Send button
+                    if isSendingComment {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .frame(width: 28, height: 28)
+                    } else {
+                        Button(action: handleAddComment) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(
+                                    commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? AppColors.greyText.opacity(0.4)
+                                    : AppColors.accentColor
+                                )
+                        }
+                        .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
                 }
-                .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(AppColors.whiteText.opacity(0.08))
+                .cornerRadius(20)
             }
-            .padding(.leading, 10)
-            .frame(minHeight: 44)
-            .background(AppColors.whiteText.opacity(0.08))
-            .cornerRadius(25)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .background(AppColors.sheetBackground)
     }
     
-    // MARK: - Keyboard Handling
+    // MARK: - Empty Comments View
     
-    private func subscribeToKeyboardEvents() {
-        NotificationCenter.default.addObserver(
-            forName: UIResponder.keyboardWillShowNotification,
-            object: nil,
-            queue: .main
-        ) { notification in
-            guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-            keyboardHeight = keyboardFrame.height
+    private var emptyCommentsView: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.accentColor.opacity(0.1))
+                    .frame(width: 80, height: 80)
+                
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 32))
+                    .foregroundColor(AppColors.accentColor.opacity(0.6))
+            }
+            
+            VStack(spacing: 6) {
+                Text("No comments yet")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                
+                Text("Be the first to share your thoughts")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.greyText)
+            }
         }
-        
-        NotificationCenter.default.addObserver(
-            forName: UIResponder.keyboardWillHideNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            keyboardHeight = 0
-        }
-    }
-    
-    private func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        .frame(maxWidth: .infinity)
     }
     
     // MARK: - Actions
@@ -242,24 +330,23 @@ struct MarkerDetailView: View {
     private func handleLike() {
         HapticFeedback.light.trigger()
         
-        // Optimistic update
-        isLiked.toggle()
-        likeCount += isLiked ? 1 : -1
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            isLiked.toggle()
+            likeCount += isLiked ? 1 : -1
+        }
         
         Task {
             do {
-                // TODO: Call API to like/unlike marker
-                // try await appState.toggleMarkerLike(markerId: marker.id)
-                
-                // Update marker in manager
+                // TODO: Call API
                 if let index = markerManager.markers.firstIndex(where: { $0.id == marker.id }) {
                     markerManager.markers[index].isLikedByCurrentUser = isLiked
                     markerManager.markers[index].likeCount = likeCount
                 }
             } catch {
-                // Revert on error
-                isLiked.toggle()
-                likeCount += isLiked ? 1 : -1
+                withAnimation {
+                    isLiked.toggle()
+                    likeCount += isLiked ? 1 : -1
+                }
                 appState.showError(error, title: "Failed to Like", style: .toast)
             }
         }
@@ -267,19 +354,16 @@ struct MarkerDetailView: View {
     
     private func handleShare() {
         HapticFeedback.medium.trigger()
-        // TODO: Implement share functionality
-        // - Deep link to marker
-        // - Screenshot of marker on chart
-        // - Share via iOS share sheet
+        // TODO: Implement share
         print("Share marker: \(marker.id)")
     }
     
     private func handleReport() {
         HapticFeedback.medium.trigger()
-        // TODO: Implement report functionality
-        // - Show report reasons
-        // - Submit report to API
-        print("Report marker: \(marker.id)")
+        Task {
+            // TODO: Call API
+            appState.showSuccess("Marker reported. Thank you for your feedback.")
+        }
     }
     
     private func handleDelete() {
@@ -287,12 +371,8 @@ struct MarkerDetailView: View {
         
         Task {
             do {
-                // TODO: Call API to delete marker
-                // try await appState.deleteMarker(markerId: marker.id)
-                
-                // Remove from manager
                 markerManager.markers.removeAll { $0.id == marker.id }
-                
+                appState.showSuccess("Marker deleted")
                 dismiss()
             } catch {
                 appState.showError(error, title: "Failed to Delete", style: .toast)
@@ -301,34 +381,53 @@ struct MarkerDetailView: View {
     }
     
     private func handleAddComment() {
-        guard !commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let trimmedText = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
         
-        HapticFeedback.medium.trigger()
+        isSendingComment = true
+        isCommentInputFocused = false
         
         let newComment = MarkerComment(
             userId: markerManager.userId,
             username: appState.currentUser?.name ?? "Unknown",
-            text: commentText,
+            text: trimmedText,
             createdAt: Date()
         )
         
-        // Optimistic update
-        comments.append(newComment)
+        withAnimation(.easeOut(duration: 0.2)) {
+            comments.append(newComment)
+        }
         commentText = ""
         
         Task {
             do {
-                // TODO: Call API to add comment
-                // try await appState.addMarkerComment(markerId: marker.id, text: newComment.text)
-                
-                // Update marker in manager
                 if let index = markerManager.markers.firstIndex(where: { $0.id == marker.id }) {
                     markerManager.markers[index].comments.append(newComment)
                 }
+                HapticFeedback.light.trigger()
             } catch {
-                // Revert on error
-                comments.removeLast()
+                comments.removeAll { $0.id == newComment.id }
                 appState.showError(error, title: "Failed to Add Comment", style: .toast)
+            }
+            isSendingComment = false
+        }
+    }
+    
+    private func handleDeleteComment(_ comment: MarkerComment) {
+        HapticFeedback.light.trigger()
+        
+        withAnimation(.easeOut(duration: 0.2)) {
+            comments.removeAll { $0.id == comment.id }
+        }
+        
+        Task {
+            do {
+                if let index = markerManager.markers.firstIndex(where: { $0.id == marker.id }) {
+                    markerManager.markers[index].comments.removeAll { $0.id == comment.id }
+                }
+            } catch {
+                comments.append(comment)
+                appState.showError(error, title: "Failed to Delete Comment", style: .toast)
             }
         }
     }
@@ -338,16 +437,23 @@ struct MarkerDetailView: View {
 
 struct MarkerDetailHeaderView: View {
     let marker: ChartMarker
+    let isLiked: Bool
+    let likeCount: Int
+    let commentCount: Int
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Top section with icon and marker info
+        VStack(alignment: .leading, spacing: 16) {
+            // Main header row
             HStack(spacing: 15) {
-                // Marker type icon
+                // Marker type icon with colored background
                 ZStack {
                     Circle()
-                        .fill(marker.type.color.opacity(0.3))
-                        .frame(width: 60, height: 60)
+                        .fill(marker.type.color.opacity(0.2))
+                        .frame(width: 56, height: 56)
+                    
+                    Circle()
+                        .stroke(marker.type.color.opacity(0.4), lineWidth: 2)
+                        .frame(width: 56, height: 56)
                     
                     Image(systemName: marker.type.icon)
                         .font(.system(size: 24, weight: .semibold))
@@ -358,16 +464,26 @@ struct MarkerDetailHeaderView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(marker.type.rawValue)
                         .font(.title3)
-                        .fontWeight(.medium)
+                        .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
                     
+                    // User info row
                     HStack(spacing: 6) {
-                        Text("by \(marker.username)")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
+                        Circle()
+                            .fill(AppColors.accentColor.opacity(0.3))
+                            .frame(width: 18, height: 18)
+                            .overlay(
+                                Text(String(marker.username.prefix(1)))
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(AppColors.accentColor)
+                            )
+                        
+                        Text(marker.username)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.whiteText.opacity(0.8))
                         
                         Circle()
-                            .fill(AppColors.greyText)
+                            .fill(AppColors.greyText.opacity(0.5))
                             .frame(width: 3, height: 3)
                         
                         Text(marker.createdAt.timeAgoDisplay())
@@ -376,54 +492,64 @@ struct MarkerDetailHeaderView: View {
                     }
                 }
                 
-                Spacer(minLength: 60) // Space for dismiss button
+                Spacer(minLength: 50)
             }
-            .padding(.horizontal, 25)
-            .padding(.top, 25)
             
-            // Price and timestamp info
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
+            // Note (if present)
+            if let note = marker.note, !note.isEmpty {
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.whiteText.opacity(0.85))
+                    .lineLimit(3)
+                    .padding(.top, 4)
+            }
+            
+            // Stats row
+            HStack(spacing: 16) {
+                // Likes
+                HStack(spacing: 4) {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.greyText)
-                    Text(marker.timestamp.formatted(date: .abbreviated, time: .shortened))
+                        .foregroundColor(isLiked ? .red : AppColors.greyText)
+                    Text("\(likeCount)")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.greyText)
                 }
                 
-                HStack(alignment: .center, spacing: 6) {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
+                // Comments
+                HStack(spacing: 4) {
+                    Image(systemName: "bubble.left")
                         .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text(String(format: "%.5f", marker.price))
+                        .foregroundColor(AppColors.greyText)
+                    Text("\(commentCount)")
                         .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    
-                    // Show horizontal line price if different
-                    if let linePrice = marker.horizontalLinePrice, linePrice != marker.price {
-                        Image(systemName: "arrow.right")
-                            .font(.caption2)
-                            .foregroundColor(AppColors.greyText)
-                        Text(String(format: "%.5f", linePrice))
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.greyText)
-                    }
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
                 }
+                
+                Spacer()
+                
+                // Price badge
+                Text(String(format: "%.5f", marker.price))
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(marker.type.color)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(marker.type.color.opacity(0.15))
+                    .clipShape(Capsule())
             }
-            .padding(.horizontal, 25)
             
             Divider()
         }
+        .padding(.horizontal, 25)
+        .padding(.top, 25)
+        .padding(.bottom, 8)
         .background(
             LinearGradient(
                 colors: [
-                    AppColors.gradientBackgroundDark.opacity(0.3),
+                    marker.type.color.opacity(0.15),
                     AppColors.sheetBackground
                 ],
                 startPoint: .top,
@@ -433,51 +559,236 @@ struct MarkerDetailHeaderView: View {
     }
 }
 
+// MARK: - Marker Detail Footer
+
+struct MarkerDetailFooterView: View {
+    let marker: ChartMarker
+    @Binding var isLiked: Bool
+    @Binding var likeCount: Int
+    let isOwner: Bool
+    let onLike: () -> Void
+    let onShare: () -> Void
+    let onReport: () -> Void
+    let onDelete: () -> Void
+    
+    @State private var likeScale: CGFloat = 1.0
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            // Like button - capsule with animation
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                    likeScale = 1.3
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                        likeScale = 1.0
+                    }
+                }
+                onLike()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(isLiked ? .white : AppColors.whiteText.opacity(0.9))
+                        .scaleEffect(likeScale)
+                    
+                    Text("\(likeCount)")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isLiked ? .white : AppColors.whiteText.opacity(0.9))
+                }
+                .frame(height: 44)
+                .padding(.horizontal, 16)
+                .background(
+                    Capsule()
+                        .fill(isLiked ? Color.red : AppColors.gradientBackgroundDark.opacity(0.3))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isLiked ? Color.red.opacity(0.5) : AppColors.whiteText.opacity(0.2),
+                            lineWidth: 1
+                        )
+                )
+            }
+            
+            Spacer()
+            
+            // Share button - circular
+            DrawerActionButton(
+                imageName: "square.and.arrow.up",
+                backgroundColor: AppColors.gradientBackgroundDark.opacity(0.3),
+                foregroundColor: AppColors.whiteText.opacity(0.9),
+                strokeColor: AppColors.whiteText.opacity(0.2),
+                strokeWidth: 1,
+                action: onShare
+            )
+            
+            // Report or Delete button - circular
+            if isOwner {
+                DrawerActionButton(
+                    imageName: "trash",
+                    backgroundColor: AppColors.bearCandleRed.opacity(0.15),
+                    foregroundColor: AppColors.bearCandleRed,
+                    strokeColor: AppColors.bearCandleRed.opacity(0.4),
+                    strokeWidth: 1,
+                    action: onDelete
+                )
+            } else {
+                DrawerActionButton(
+                    imageName: "flag",
+                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.3),
+                    foregroundColor: AppColors.whiteText.opacity(0.9),
+                    strokeColor: AppColors.whiteText.opacity(0.2),
+                    strokeWidth: 1,
+                    action: onReport
+                )
+            }
+        }
+        .padding(.horizontal, 25)
+        .padding(.vertical, 16)
+        .background(AppColors.sheetBackground)
+    }
+}
+
+// MARK: - Message-Style Comment Row
+
+struct MessageStyleCommentRow: View {
+    let comment: MarkerComment
+    let isCurrentUser: Bool
+    var onDelete: (() -> Void)? = nil
+    
+    @State private var showDeleteConfirmation = false
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if isCurrentUser {
+                Spacer(minLength: 60)
+            } else {
+                // Avatar
+                Circle()
+                    .fill(AppColors.accentColor.opacity(0.3))
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Text(String(comment.username.prefix(2)))
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                    )
+            }
+            
+            VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
+                if !isCurrentUser {
+                    Text(comment.username)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                }
+                
+                Text(comment.text)
+                    .font(.subheadline)
+                    .foregroundColor(isCurrentUser ? .white : AppColors.whiteText)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        isCurrentUser
+                        ? AppColors.accentColor
+                        : AppColors.whiteText.opacity(0.1)
+                    )
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: isCurrentUser ? 18 : 4,
+                            bottomLeadingRadius: 18,
+                            bottomTrailingRadius: 18,
+                            topTrailingRadius: isCurrentUser ? 4 : 18
+                        )
+                    )
+                    .contextMenu {
+                        Button {
+                            UIPasteboard.general.string = comment.text
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                        }
+                        
+                        if let onDelete = onDelete {
+                            Button(role: .destructive) {
+                                showDeleteConfirmation = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                
+                Text(comment.createdAt.timeAgoDisplay())
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText.opacity(0.7))
+            }
+            
+            if !isCurrentUser {
+                Spacer(minLength: 60)
+            }
+        }
+        .alert("Delete Comment", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                onDelete?()
+            }
+        } message: {
+            Text("Are you sure you want to delete this comment?")
+        }
+    }
+}
+
 // MARK: - Marker Info Content
 
 struct MarkerInfoContent: View {
     let marker: ChartMarker
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Basic info section (always shown)
-            basicInfoSection
-            
-            // Type-specific sections
-            typeSpecificSections
-            
-            // Note section (if present)
-            if let note = marker.note, !note.isEmpty {
-                noteSection(note)
-            }
-        }
-    }
-    
-    // MARK: - Basic Info
-    
-    private var basicInfoSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Basic Info", icon: "info.circle")
-            
-            VStack(spacing: 8) {
-                infoRow(label: "Type", value: marker.type.rawValue, color: marker.type.color)
-                infoRow(label: "Created", value: marker.createdAt.formatted(date: .long, time: .shortened))
-                infoRow(label: "Price", value: String(format: "%.5f", marker.price))
-                
-                if marker.type.hasHorizontalLine, let linePrice = marker.horizontalLinePrice {
-                    infoRow(label: "Line Price", value: String(format: "%.5f", linePrice))
+        VStack(alignment: .leading, spacing: 24) {
+            // Price & Time info card
+            infoCard {
+                VStack(spacing: 12) {
+                    infoRow(
+                        icon: "chart.line.uptrend.xyaxis",
+                        label: "Price Level",
+                        value: String(format: "%.5f", marker.price),
+                        valueColor: marker.type.color
+                    )
+                    
+                    Divider()
+                        .background(AppColors.whiteText.opacity(0.1))
+                    
+                    infoRow(
+                        icon: "clock",
+                        label: "Created",
+                        value: marker.createdAt.formatted(date: .abbreviated, time: .shortened)
+                    )
+                    
+                    if marker.type.hasHorizontalLine, let linePrice = marker.horizontalLinePrice {
+                        Divider()
+                            .background(AppColors.whiteText.opacity(0.1))
+                        
+                        infoRow(
+                            icon: "minus",
+                            label: "Line Price",
+                            value: String(format: "%.5f", linePrice),
+                            valueColor: marker.type.color
+                        )
+                    }
                 }
             }
-            .padding()
-            .background(AppColors.gradientBackgroundDark.opacity(0.15))
-            .cornerRadius(12)
+            
+            // Type-specific content
+            typeSpecificSection
         }
     }
     
-    // MARK: - Type-Specific Sections
+    // MARK: - Type-Specific Section
     
     @ViewBuilder
-    private var typeSpecificSections: some View {
+    private var typeSpecificSection: some View {
         switch marker.type {
         case .predictionTarget:
             predictionSection
@@ -503,7 +814,7 @@ struct MarkerInfoContent: View {
         case .poll:
             pollSection
             
-        case .entry, .exit:
+        case .entry, .exit, .stopLoss, .takeProfit:
             tradeSection
             
         default:
@@ -516,34 +827,63 @@ struct MarkerInfoContent: View {
     @ViewBuilder
     private var predictionSection: some View {
         if let targetPrice = marker.targetPrice {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Prediction Details", icon: "staroflife.circle")
-                
-                VStack(spacing: 8) {
-                    infoRow(label: "Entry Price", value: String(format: "%.5f", marker.horizontalLinePrice ?? marker.price))
-                    infoRow(label: "Target Price", value: String(format: "%.5f", targetPrice))
+            let entryPrice = marker.horizontalLinePrice ?? marker.price
+            let percentChange = ((targetPrice - entryPrice) / entryPrice) * 100
+            let isLong = percentChange > 0
+            
+            infoCard {
+                VStack(spacing: 16) {
+                    // Direction indicator
+                    HStack {
+                        Image(systemName: isLong ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                        
+                        Text(isLong ? "Long Position" : "Short Position")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.whiteText)
+                        
+                        Spacer()
+                        
+                        Text(String(format: "%+.2f%%", percentChange))
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                    }
                     
-                    // Calculate profit/loss percentage
-                    let entryPrice = marker.horizontalLinePrice ?? marker.price
-                    let percentChange = ((targetPrice - entryPrice) / entryPrice) * 100
-                    let direction = percentChange > 0 ? "Long" : "Short"
-                    let color = percentChange > 0 ? AppColors.bullCandleGreen : AppColors.bearCandleRed
+                    Divider()
+                        .background(AppColors.whiteText.opacity(0.1))
                     
-                    infoRow(
-                        label: "Direction",
-                        value: direction,
-                        color: color
-                    )
-                    
-                    infoRow(
-                        label: "Target Move",
-                        value: String(format: "%+.2f%%", percentChange),
-                        color: color
-                    )
+                    // Price levels
+                    HStack(spacing: 20) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Entry")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                            Text(String(format: "%.5f", entryPrice))
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.whiteText)
+                        }
+                        
+                        Image(systemName: "arrow.right")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Target")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                            Text(String(format: "%.5f", targetPrice))
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                        }
+                        
+                        Spacer()
+                    }
                 }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.15))
-                .cornerRadius(12)
             }
         }
     }
@@ -553,19 +893,19 @@ struct MarkerInfoContent: View {
     @ViewBuilder
     private var alertSection: some View {
         if let severity = marker.alertSeverity {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Alert Details", icon: "bell.circle")
-                
-                VStack(spacing: 8) {
-                    infoRow(
-                        label: "Severity",
-                        value: severity.rawValue,
-                        color: severity.color
-                    )
+            infoCard {
+                HStack {
+                    Circle()
+                        .fill(severity.color)
+                        .frame(width: 12, height: 12)
+                    
+                    Text("Severity: \(severity.rawValue)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                    Spacer()
                 }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.15))
-                .cornerRadius(12)
             }
         }
     }
@@ -574,17 +914,25 @@ struct MarkerInfoContent: View {
     
     @ViewBuilder
     private var levelSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(marker.type == .support ? "Support Level" : "Resistance Level", icon: "chart.line.uptrend.xyaxis")
-            
-            VStack(spacing: 8) {
-                if let linePrice = marker.horizontalLinePrice {
-                    infoRow(label: "Level Price", value: String(format: "%.5f", linePrice))
+        infoCard {
+            HStack {
+                Image(systemName: marker.type == .support ? "arrow.down.to.line" : "arrow.up.to.line")
+                    .font(.title3)
+                    .foregroundColor(marker.type.color)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(marker.type == .support ? "Support Level" : "Resistance Level")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                    Text("Price may \(marker.type == .support ? "bounce up" : "reverse down") at this level")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
                 }
+                
+                Spacer()
             }
-            .padding()
-            .background(AppColors.gradientBackgroundDark.opacity(0.15))
-            .cornerRadius(12)
         }
     }
     
@@ -593,23 +941,27 @@ struct MarkerInfoContent: View {
     @ViewBuilder
     private var trendlineSection: some View {
         if let direction = marker.trendlineDirection {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Trendline", icon: "chart.line.uptrend.xyaxis.circle")
-                
-                VStack(spacing: 8) {
-                    let color: Color = {
-                        switch direction {
-                        case .up: return AppColors.bullCandleGreen
-                        case .down: return AppColors.bearCandleRed
-                        case .sideways: return AppColors.greyText
-                        }
-                    }()
-                    
-                    infoRow(label: "Direction", value: direction.rawValue, color: color)
+            let color: Color = {
+                switch direction {
+                case .up: return AppColors.bullCandleGreen
+                case .down: return AppColors.bearCandleRed
+                case .sideways: return AppColors.greyText
                 }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.15))
-                .cornerRadius(12)
+            }()
+            
+            infoCard {
+                HStack {
+                    Image(systemName: direction == .up ? "arrow.up.right" : direction == .down ? "arrow.down.right" : "arrow.right")
+                        .font(.title3)
+                        .foregroundColor(color)
+                    
+                    Text(direction.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                    Spacer()
+                }
             }
         }
     }
@@ -619,15 +971,19 @@ struct MarkerInfoContent: View {
     @ViewBuilder
     private var patternSection: some View {
         if let pattern = marker.chartPattern {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Chart Pattern", icon: "circle.hexagongrid.circle")
-                
-                VStack(spacing: 8) {
-                    infoRow(label: "Pattern", value: pattern.rawValue)
+            infoCard {
+                HStack {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                        .font(.title3)
+                        .foregroundColor(marker.type.color)
+                    
+                    Text(pattern.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                    Spacer()
                 }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.15))
-                .cornerRadius(12)
             }
         }
     }
@@ -637,15 +993,24 @@ struct MarkerInfoContent: View {
     @ViewBuilder
     private var indicatorSection: some View {
         if let indicator = marker.selectedIndicator {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Indicator Signal", icon: "star.circle")
-                
-                VStack(spacing: 8) {
-                    infoRow(label: "Indicator", value: indicator)
+            infoCard {
+                HStack {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.title3)
+                        .foregroundColor(marker.type.color)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Indicator Signal")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Text(indicator)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.whiteText)
+                    }
+                    
+                    Spacer()
                 }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.15))
-                .cornerRadius(12)
             }
         }
     }
@@ -655,17 +1020,13 @@ struct MarkerInfoContent: View {
     @ViewBuilder
     private var emojiSection: some View {
         if let emoji = marker.selectedEmoji {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Reaction", icon: "face.smiling")
-                
+            infoCard {
                 HStack {
                     Text(emoji)
-                        .font(.system(size: 40))
+                        .font(.system(size: 44))
+                    
                     Spacer()
                 }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.15))
-                .cornerRadius(12)
             }
         }
     }
@@ -675,13 +1036,11 @@ struct MarkerInfoContent: View {
     @ViewBuilder
     private var pollSection: some View {
         if let question = marker.pollQuestion, let options = marker.pollOptions {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Poll", icon: "newspaper.circle")
-                
+            infoCard {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(question)
                         .font(.subheadline)
-                        .fontWeight(.medium)
+                        .fontWeight(.semibold)
                         .foregroundColor(AppColors.whiteText)
                     
                     ForEach(options) { option in
@@ -692,9 +1051,6 @@ struct MarkerInfoContent: View {
                         )
                     }
                 }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.15))
-                .cornerRadius(12)
             }
         }
     }
@@ -703,53 +1059,53 @@ struct MarkerInfoContent: View {
     
     @ViewBuilder
     private var tradeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(marker.type == .entry ? "Entry Signal" : "Exit Signal", icon: marker.type.icon)
-            
-            VStack(spacing: 8) {
-                if let linePrice = marker.horizontalLinePrice {
-                    infoRow(label: marker.type == .entry ? "Entry Price" : "Exit Price", value: String(format: "%.5f", linePrice))
+        let isEntry = marker.type == .entry || marker.type == .takeProfit
+        
+        infoCard {
+            HStack {
+                Image(systemName: isEntry ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(isEntry ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(marker.type.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                    if let linePrice = marker.horizontalLinePrice {
+                        Text(String(format: "%.5f", linePrice))
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                    }
                 }
+                
+                Spacer()
             }
-            .padding()
-            .background(AppColors.gradientBackgroundDark.opacity(0.15))
-            .cornerRadius(12)
-        }
-    }
-    
-    // MARK: - Note Section
-    
-    private func noteSection(_ note: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Note", icon: "text.bubble")
-            
-            Text(note)
-                .font(.subheadline)
-                .foregroundColor(AppColors.whiteText)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.gradientBackgroundDark.opacity(0.15))
-                .cornerRadius(12)
         }
     }
     
     // MARK: - Helper Views
     
-    private func sectionHeader(_ title: String, icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.subheadline)
-                .foregroundColor(AppColors.accentColor)
-            Text(title)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(AppColors.whiteText)
-        }
-        .padding(.top, 8)
+    private func infoCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppColors.whiteText.opacity(0.05))
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+            )
     }
     
-    private func infoRow(label: String, value: String, color: Color? = nil) -> some View {
+    private func infoRow(icon: String, label: String, value: String, valueColor: Color = AppColors.whiteText) -> some View {
         HStack {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundColor(AppColors.greyText)
+                .frame(width: 20)
+            
             Text(label)
                 .font(.subheadline)
                 .foregroundColor(AppColors.greyText)
@@ -759,9 +1115,8 @@ struct MarkerInfoContent: View {
             Text(value)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(color ?? AppColors.whiteText)
+                .foregroundColor(valueColor)
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -787,7 +1142,7 @@ struct PollOptionRow: View {
                 
                 Spacer()
                 
-                Text("\(option.voteCount)")
+                Text("\(Int(percentage * 100))%")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.greyText)
@@ -795,12 +1150,10 @@ struct PollOptionRow: View {
             
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    // Background
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(AppColors.gradientBackgroundDark.opacity(0.2))
+                        .fill(AppColors.whiteText.opacity(0.1))
                         .frame(height: 6)
                     
-                    // Progress
                     RoundedRectangle(cornerRadius: 4)
                         .fill(hasVoted ? AppColors.accentColor : AppColors.greyText.opacity(0.5))
                         .frame(width: geometry.size.width * percentage, height: 6)
@@ -808,207 +1161,11 @@ struct PollOptionRow: View {
             }
             .frame(height: 6)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
     }
 }
 
-// MARK: - Marker Comments List Content (Comments Only - No Input)
-
-struct MarkerCommentsListContent: View {
-    @Binding var comments: [MarkerComment]
-    let currentUserId: String
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            if comments.isEmpty {
-                emptyCommentsView
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 60)
-            } else {
-                LazyVStack(spacing: 12) {
-                    ForEach(comments.sorted(by: { $0.createdAt < $1.createdAt })) { comment in
-                        MessageStyleCommentRow(
-                            comment: comment,
-                            isCurrentUser: comment.userId == currentUserId
-                        )
-                    }
-                }
-            }
-        }
-    }
-    
-    // MARK: - Empty State
-    
-    private var emptyCommentsView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40))
-                .foregroundColor(AppColors.greyText.opacity(0.5))
-            
-            Text("No comments yet")
-                .font(.subheadline)
-                .foregroundColor(AppColors.greyText)
-            
-            Text("Be the first to comment on this marker")
-                .font(.caption)
-                .foregroundColor(AppColors.greyText.opacity(0.7))
-                .multilineTextAlignment(.center)
-        }
-    }
-}
-
-// MARK: - Message-Style Comment Row
-
-struct MessageStyleCommentRow: View {
-    let comment: MarkerComment
-    let isCurrentUser: Bool
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            if isCurrentUser {
-                Spacer()
-            } else {
-                // Avatar
-                Circle()
-                    .fill(AppColors.accentColor.opacity(0.3))
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Text(String(comment.username.prefix(2)))
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                    )
-            }
-            
-            // Message bubble
-            VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
-                // Username (if not current user)
-                if !isCurrentUser {
-                    Text(comment.username)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.greyText)
-                }
-                
-                // Comment text
-                Text(comment.text)
-                    .font(.subheadline)
-                    .foregroundColor(isCurrentUser ? .white : AppColors.whiteText)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        isCurrentUser ?
-                        AppColors.accentColor.opacity(0.8) :
-                        AppColors.gradientBackgroundDark.opacity(0.3)
-                    )
-                    .clipShape(messageBubbleShape(isFromCurrentUser: isCurrentUser))
-                
-                // Timestamp
-                Text(comment.createdAt.timeAgoDisplay())
-                    .font(.caption2)
-                    .foregroundColor(AppColors.greyText)
-            }
-            
-            if !isCurrentUser {
-                Spacer()
-            }
-        }
-    }
-    
-    private func messageBubbleShape(isFromCurrentUser: Bool) -> some Shape {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 16,
-            bottomLeadingRadius: isFromCurrentUser ? 16 : 4,
-            bottomTrailingRadius: isFromCurrentUser ? 4 : 16,
-            topTrailingRadius: 16
-        )
-    }
-}
-
-// MARK: - Marker Detail Footer
-
-struct MarkerDetailFooterView: View {
-    let marker: ChartMarker
-    @Binding var isLiked: Bool
-    @Binding var likeCount: Int
-    let onLike: () -> Void
-    let onShare: () -> Void
-    let onReport: () -> Void
-    let onDelete: (() -> Void)?
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            // Like button
-            Button(action: onLike) {
-                HStack(spacing: 6) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(isLiked ? .red : AppColors.whiteText.opacity(0.9))
-                    
-                    Text("\(likeCount)")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.whiteText.opacity(0.9))
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    isLiked
-                    ? Color.red.opacity(0.2)
-                    : AppColors.gradientBackgroundDark.opacity(0.2)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(
-                            isLiked
-                            ? Color.red.opacity(0.3)
-                            : AppColors.whiteText.opacity(0.3),
-                            lineWidth: 0.5
-                        )
-                )
-                .cornerRadius(10)
-            }
-            
-            Spacer()
-            
-            // Share button
-            DrawerActionButton(
-                imageName: "square.and.arrow.up",
-                backgroundColor: AppColors.gradientBackgroundDark.opacity(0.2),
-                foregroundColor: AppColors.whiteText.opacity(0.9),
-                strokeColor: AppColors.whiteText.opacity(0.3),
-                strokeWidth: 0.5,
-                action: onShare
-            )
-            
-            // Report/Delete button
-            if let onDelete = onDelete {
-                DrawerActionButton(
-                    imageName: "trash",
-                    backgroundColor: AppColors.bearCandleRed.opacity(0.2),
-                    foregroundColor: AppColors.bearCandleRed,
-                    strokeColor: AppColors.bearCandleRed.opacity(0.3),
-                    strokeWidth: 0.5,
-                    action: onDelete
-                )
-            } else {
-                DrawerActionButton(
-                    imageName: "exclamationmark.triangle",
-                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.2),
-                    foregroundColor: AppColors.whiteText.opacity(0.9),
-                    strokeColor: AppColors.whiteText.opacity(0.3),
-                    strokeWidth: 0.5,
-                    action: onReport
-                )
-            }
-        }
-        .padding(.horizontal, 25)
-        .padding(.top, 20)
-        .background(AppColors.sheetBackground)
-    }
-}
-
-// MARK: - Date Extension for Time Ago Display
+// MARK: - Date Extension
 
 extension Date {
     func timeAgoDisplay() -> String {
@@ -1018,41 +1175,4 @@ extension Date {
     }
 }
 
-// MARK: - Preview
 
-#Preview {
-    let markerManager = MarkerManager(userId: "user123", guildId: "guild1")
-    
-    let sampleMarker = ChartMarker(
-        candleIndex: 0,
-        timestamp: Date(),
-        price: 1.08455,
-        type: .predictionTarget,
-        userId: "user123",
-        username: "TraderPro",
-        note: "Strong bullish setup forming. Expecting breakout above resistance with volume confirmation.",
-        guildId: "guild1",
-        targetPrice: 1.09200,
-        comments: [
-            MarkerComment(
-                userId: "user456",
-                username: "ChartMaster",
-                text: "Great analysis! I agree with your target. Looking at the same setup.",
-                createdAt: Date().addingTimeInterval(-3600)
-            ),
-            MarkerComment(
-                userId: "user789",
-                username: "SwingTrader",
-                text: "What's your stop loss on this?",
-                createdAt: Date().addingTimeInterval(-1800)
-            )
-        ]
-    )
-    
-    MarkerDetailView(
-        marker: sampleMarker,
-        markerManager: markerManager,
-        selectedDetent: .constant(.fraction(0.9))
-    )
-    .environmentObject(AppState())
-}

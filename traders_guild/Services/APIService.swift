@@ -423,6 +423,147 @@ struct authResponse {
 }
 
 
+
+//
+//  APIService+ChartChat.swift
+//  traders_guild
+//
+//  Created by Al Hennessey on 14/12/2025.
+//
+//  API methods for chart chat functionality
+
+
+
+extension MockAPIService {
+    
+    // MARK: - Chart Chat API
+    
+    /// Fetch or create a chart chat for a specific symbol and guild
+    func fetchOrCreateChartChat(symbolId: UUID, guildId: UUID) async throws -> ChartChatDTO {
+        try await simulateNetworkDelay()
+        
+        // Mock: Return chart chat for this symbol/guild combo
+        // In production, this would fetch from backend or create if doesn't exist
+        return SampleData.chartChatForSymbol(symbolId: symbolId, guildId: guildId)
+    }
+    
+    /// Fetch messages for a chart chat
+    func fetchChartChatMessages(chatId: UUID) async throws -> [ChartChatMessageDTO] {
+        try await simulateNetworkDelay()
+        
+        // Mock: Return sample messages
+        return SampleData.chartChatMessages
+    }
+    
+    /// Send a new message to a chart chat
+    func sendChartChatMessage(chatId: UUID, content: String, authorId: UUID) async throws -> ChartChatMessageDTO {
+        try await simulateNetworkDelay()
+        
+        // Mock: Create and return new message
+        return SampleData.createChartChatMessage(
+            chatId: chatId,
+            content: content,
+            authorId: authorId
+        )
+    }
+    
+    /// Edit an existing chart chat message
+    func editChartChatMessage(messageId: UUID, newContent: String, chatId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful edit
+    }
+    
+    /// Delete a chart chat message
+    func deleteChartChatMessage(messageId: UUID, chatId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful delete
+    }
+    
+    /// Mark chart chat as read
+    func markChartChatAsRead(chatId: UUID, userId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful mark as read
+    }
+}
+//
+//  APIService+MarkerComments.swift
+//  traders_guild
+//
+//  API methods for marker comment functionality
+//  Add this to your existing APIService.swift or as an extension
+
+extension MockAPIService {
+    
+    // MARK: - Marker Comments API
+    
+    /// Add a comment to a marker
+    func addMarkerComment(
+        markerId: UUID,
+        userId: UUID,
+        username: String,
+        text: String
+    ) async throws -> MarkerComment {
+        try await simulateNetworkDelay()
+        
+        return MarkerComment(
+            id: UUID(),
+            userId: userId.uuidString,
+            username: username,
+            text: text,
+            createdAt: Date()
+        )
+    }
+    
+    /// Delete a comment from a marker
+    func deleteMarkerComment(
+        markerId: UUID,
+        commentId: UUID
+    ) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful delete
+    }
+    
+    /// Edit a comment on a marker
+    func editMarkerComment(
+        markerId: UUID,
+        commentId: UUID,
+        newText: String
+    ) async throws -> MarkerComment {
+        try await simulateNetworkDelay()
+        
+        // Mock: return updated comment
+        return MarkerComment(
+            id: commentId,
+            userId: SampleData.currentUser.id.uuidString,
+            username: SampleData.currentUser.name,
+            text: newText,
+            createdAt: Date()
+        )
+    }
+    
+    /// Fetch comments for a marker (if loading separately from marker)
+    func fetchMarkerComments(markerId: UUID) async throws -> [MarkerComment] {
+        try await simulateNetworkDelay()
+        return SampleData.generateMarkerComments()
+    }
+    
+    /// Report a marker
+    func reportMarker(
+        markerId: UUID,
+        userId: UUID,
+        reason: String
+    ) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful report
+    }
+    
+    /// Share a marker (get shareable link/data)
+    func shareMarker(markerId: UUID) async throws -> String {
+        try await simulateNetworkDelay()
+        return "https://tradersguild.app/marker/\(markerId.uuidString)"
+    }
+}
+
 //
 //  MockAPIService+Chart.swift
 //
