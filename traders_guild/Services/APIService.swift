@@ -348,10 +348,56 @@ class MockAPIService {
     
     
     
-    //
-    //  ADD THESE METHODS INSIDE YOUR EXISTING MockAPIService CLASS
-    //  (Paste inside the class, after the existing chart methods)
-    //
+    // MARK: - Chart Chat API
+    
+    /// Fetch or create a chart chat for a specific symbol and guild
+    func fetchOrCreateChartChat(symbolId: UUID, guildId: UUID) async throws -> ChartChatDTO {
+        try await simulateNetworkDelay()
+        
+        // Mock: Return chart chat for this symbol/guild combo
+        // In production, this would fetch from backend or create if doesn't exist
+        return SampleData.chartChatForSymbol(symbolId: symbolId, guildId: guildId)
+    }
+    
+    /// Fetch messages for a chart chat
+    func fetchChartChatMessages(chatId: UUID) async throws -> [ChartChatMessageDTO] {
+        try await simulateNetworkDelay()
+        
+        // Mock: Return sample messages
+        return SampleData.chartChatMessages
+    }
+    
+    /// Send a new message to a chart chat
+    func sendChartChatMessage(chatId: UUID, content: String, authorId: UUID) async throws -> ChartChatMessageDTO {
+        try await simulateNetworkDelay()
+        
+        // Mock: Create and return new message
+        return SampleData.createChartChatMessage(
+            chatId: chatId,
+            content: content,
+            authorId: authorId
+        )
+    }
+    
+    /// Edit an existing chart chat message
+    func editChartChatMessage(messageId: UUID, newContent: String, chatId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful edit
+    }
+    
+    /// Delete a chart chat message
+    func deleteChartChatMessage(messageId: UUID, chatId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful delete
+    }
+    
+    /// Mark chart chat as read
+    func markChartChatAsRead(chatId: UUID, userId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // Mock: successful mark as read
+    }
+
+    
 
     // ================================================================================================
     // MARK: - Chart Markers - API
@@ -410,89 +456,6 @@ class MockAPIService {
         let newLikeCount = Int.random(in: 1...15)
         return (newLikeCount, true)
     }
-
-}
-
-// ================================================================================================
-// MARK: - Response Models
-// ================================================================================================
-
-struct authResponse {
-    let user: CurrentUserDTO
-    let token: String
-}
-
-
-
-//
-//  APIService+ChartChat.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 14/12/2025.
-//
-//  API methods for chart chat functionality
-
-
-
-extension MockAPIService {
-    
-    // MARK: - Chart Chat API
-    
-    /// Fetch or create a chart chat for a specific symbol and guild
-    func fetchOrCreateChartChat(symbolId: UUID, guildId: UUID) async throws -> ChartChatDTO {
-        try await simulateNetworkDelay()
-        
-        // Mock: Return chart chat for this symbol/guild combo
-        // In production, this would fetch from backend or create if doesn't exist
-        return SampleData.chartChatForSymbol(symbolId: symbolId, guildId: guildId)
-    }
-    
-    /// Fetch messages for a chart chat
-    func fetchChartChatMessages(chatId: UUID) async throws -> [ChartChatMessageDTO] {
-        try await simulateNetworkDelay()
-        
-        // Mock: Return sample messages
-        return SampleData.chartChatMessages
-    }
-    
-    /// Send a new message to a chart chat
-    func sendChartChatMessage(chatId: UUID, content: String, authorId: UUID) async throws -> ChartChatMessageDTO {
-        try await simulateNetworkDelay()
-        
-        // Mock: Create and return new message
-        return SampleData.createChartChatMessage(
-            chatId: chatId,
-            content: content,
-            authorId: authorId
-        )
-    }
-    
-    /// Edit an existing chart chat message
-    func editChartChatMessage(messageId: UUID, newContent: String, chatId: UUID) async throws {
-        try await simulateNetworkDelay()
-        // Mock: successful edit
-    }
-    
-    /// Delete a chart chat message
-    func deleteChartChatMessage(messageId: UUID, chatId: UUID) async throws {
-        try await simulateNetworkDelay()
-        // Mock: successful delete
-    }
-    
-    /// Mark chart chat as read
-    func markChartChatAsRead(chatId: UUID, userId: UUID) async throws {
-        try await simulateNetworkDelay()
-        // Mock: successful mark as read
-    }
-}
-//
-//  APIService+MarkerComments.swift
-//  traders_guild
-//
-//  API methods for marker comment functionality
-//  Add this to your existing APIService.swift or as an extension
-
-extension MockAPIService {
     
     // MARK: - Marker Comments API
     
@@ -562,14 +525,21 @@ extension MockAPIService {
         try await simulateNetworkDelay()
         return "https://tradersguild.app/marker/\(markerId.uuidString)"
     }
+
 }
 
-//
-//  MockAPIService+Chart.swift
-//
-//  EXACT CODE TO ADD TO YOUR APIService.swift
-//  Copy everything below and paste at the end of your APIService.swift file
-//  (after the authResponse struct)
-//
+// ================================================================================================
+// MARK: - Response Models
+// ================================================================================================
+
+struct authResponse {
+    let user: CurrentUserDTO
+    let token: String
+}
+
+
+
+
+
 
 

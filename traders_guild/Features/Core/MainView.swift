@@ -498,14 +498,19 @@ struct MainView: View {
 // MARK: - Drawer Side
 enum DrawerSide { case left, right }
 
-
-// MARK: - Chart Bottom Sheet
-// UPDATED: Chat view now manages its own scroll, so we don't wrap it in the outer ScrollView
+// MARK: - Chart Bottom Sheet (IMPROVED CHAT VERSION)
+// When in chat mode, the tab bar is replaced with chat input + back button
 struct ChartBottomSheet: View {
     @State private var selectedView: ChartView = .symbol
     @ObservedObject var controlViewModel: ChartControlViewModel
     @ObservedObject var chartViewModel: ChartViewModel
     @Binding var selectedDetent: PresentationDetent
+    @EnvironmentObject var appState: AppState
+    
+    // Chat state - managed here since parent handles input
+    @StateObject private var chartChatManager = ChartChatManager()
+    @State private var chatMessageText: String = ""
+    @FocusState private var isChatInputFocused: Bool
     
     enum ChartView: String, CaseIterable {
         case symbol = "Symbol"
@@ -531,12 +536,12 @@ struct ChartBottomSheet: View {
         VStack(spacing: 0) {
             // Content Area
             if isExpanded {
-                // IMPORTANT: Chat view manages its own scroll, so don't wrap it
                 if selectedView == .chat {
+                    // Chat view - manages its own scroll and keyboard
                     chatContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // Other views use the standard scrollable layout
+                    // Other views use standard scrollable layout
                     ScrollView {
                         VStack(spacing: 16) {
                             switch selectedView {
@@ -560,101 +565,249 @@ struct ChartBottomSheet: View {
                 Spacer()
             }
             
-            // Fixed Button Bar - ignores keyboard so only chat input moves up
-            VStack(spacing: 0) {
-                if isExpanded {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 0.5)
+            // Conditional Footer: Tab Bar OR Chat Input
+            if selectedView == .chat && isExpanded {
+                // Chat Input Footer (replaces tab bar)
+                chatInputFooter
+            } else {
+                // Standard Tab Bar
+                standardTabBar
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: selectedView)
+        .onAppear {
+            chartChatManager.configure(with: appState)
+        }
+        .onChange(of: chartViewModel.currentSymbol) { _ in
+            loadChatForCurrentSymbol()
+        }
+        .onChange(of: appState.currentGuild) { _ in
+            loadChatForCurrentSymbol()
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func loadChatForCurrentSymbol() {
+        guard let symbol = chartViewModel.currentSymbol,
+              let guildId = appState.currentGuild?.id else {
+            chartChatManager.closeChat()
+            return
+        }
+        
+        Task {
+            await chartChatManager.updateForSymbol(
+                symbol,
+                guildId: guildId,
+                api: MockAPIService()
+            )
+        }
+    }
+    
+    // MARK: - Chat Input Footer (Replaces Tab Bar in Chat Mode)
+    
+    private var chatInputFooter: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .background(Color.gray.opacity(0.3))
+            
+            HStack(spacing: 12) {
+                // Back button - circular like tab buttons
+                Button(action: {
+                    isChatInputFocused = false
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        selectedView = .symbol
+                    }
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.9))
+                        .frame(width: 50, height: 50)
+                        .background(AppColors.gradientBackgroundDark)
+                        .clipShape(Circle())
+                        .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+                }
+                .padding(.horizontal, 4)
+                
+                // Chat input (matching MarkerDetailView/MessagingState style)
+                HStack(spacing: 12) {
+                    // Plus button
+                    Button(action: {
+                        isChatInputFocused = false
+                        // Handle attachments
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                            .frame(width: 32, height: 32)
+                    }
+                    .compositingGroup()
+                    
+                    // Text field
+                    TextField("Message #\(chartChatManager.activeChartChat?.symbolTicker.lowercased() ?? "chat")...", text: $chatMessageText)
+                        .font(.subheadline)
+                        .submitLabel(.send)
+                        .focused($isChatInputFocused)
+                        .onSubmit {
+                            sendChatMessage()
+                        }
+                    
+                    HStack(spacing: 8) {
+                        // Mic button
+                        Button(action: {
+                            isChatInputFocused = false
+                            // Handle voice
+                        }) {
+                            Image(systemName: "mic.fill")
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                                .frame(width: 32, height: 32)
+                        }
+                        .compositingGroup()
+                        
+                        // Send button
+                        Button(action: {
+                            sendChatMessage()
+                        }) {
+                            Image(systemName: "chevron.forward.2")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(chatMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : AppColors.gradientBackgroundDark.opacity(0.8))
+                                .frame(width: 40, height: 40)
+                                .padding(.leading, 2)
+                                .background(chatMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppColors.whiteText.opacity(0.3) : AppColors.whiteText)
+                                .clipShape(Capsule())
+                        }
+                        .disabled(chatMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .compositingGroup()
+                    }
+                }
+                .padding(.leading, 10)
+                .frame(height: 44)
+                .background(AppColors.whiteText.opacity(0.08))
+                .cornerRadius(25)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(AppColors.sheetBackground)
+        }
+        .frame(height: 70)
+    }
+    
+    // MARK: - Chat Message Sending
+    
+    private func sendChatMessage() {
+        let trimmed = chatMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
+        // Clear input immediately for responsive feel
+        let messageToSend = trimmed
+        chatMessageText = ""
+        isChatInputFocused = false
+        
+        Task {
+            do {
+                try await chartChatManager.sendMessage(
+                    content: messageToSend,
+                    api: MockAPIService()
+                )
+                HapticFeedback.light.trigger()
+            } catch {
+                // Restore message on error
+                chatMessageText = messageToSend
+                appState.showError(error, title: "Failed to Send Message")
+            }
+        }
+    }
+    
+    // MARK: - Standard Tab Bar
+    
+    private var standardTabBar: some View {
+        VStack(spacing: 0) {
+            if isExpanded {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 0.5)
+            }
+            
+            HStack(spacing: 4) {
+                // Symbol button
+                RootBottomBarSymbolButton(
+                    symbol: chartViewModel.currentSymbol?.symbol ?? "EUR/USD",
+                    backgroundColor: selectedView == .symbol ?
+                        AppColors.gradientBackgroundDark :
+                        AppColors.gradientBackgroundMid.opacity(0.9),
+                    foregroundColor: selectedView == .symbol ?
+                        .white :
+                        AppColors.whiteText.opacity(0.8)
+                ) {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        selectedView = .symbol
+                    }
                 }
                 
-                HStack(spacing: 4) {
-                    // Symbol button
-                    RootBottomBarSymbolButton(
-                        symbol: chartViewModel.currentSymbol?.symbol ?? "EUR/USD",
-                        backgroundColor: selectedView == .symbol ?
+                Spacer()
+                
+                HStack(spacing: 6) {
+                    // Chat button
+                    RootBottomBarIconButton(
+                        systemName: "message.fill",
+                        backgroundColor: selectedView == .chat ?
                             AppColors.gradientBackgroundDark :
                             AppColors.gradientBackgroundMid.opacity(0.9),
-                        foregroundColor: selectedView == .symbol ?
+                        foregroundColor: selectedView == .chat ?
                             .white :
                             AppColors.whiteText.opacity(0.8)
                     ) {
                         withAnimation(.easeInOut(duration: 0.25)) {
-                            selectedView = .symbol
+                            selectedView = .chat
                         }
                     }
                     
-                    Spacer()
+                    // Indicator button
+                    RootBottomBarIconButton(
+                        systemName: "chart.line.uptrend.xyaxis.circle",
+                        fontSize: 25,
+                        backgroundColor: selectedView == .indicator ?
+                            AppColors.gradientBackgroundDark :
+                            AppColors.gradientBackgroundMid.opacity(0.9),
+                        foregroundColor: selectedView == .indicator ?
+                            .white :
+                            AppColors.whiteText.opacity(0.8)
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            selectedView = .indicator
+                        }
+                    }
                     
-                    HStack(spacing: 4) {
-                        // Chat button
-                        RootBottomBarIconButton(
-                            systemName: "message.fill",
-                            backgroundColor: selectedView == .chat ?
-                                AppColors.gradientBackgroundDark :
-                                AppColors.gradientBackgroundMid.opacity(0.9),
-                            foregroundColor: selectedView == .chat ?
-                                .white :
-                                AppColors.whiteText.opacity(0.8)
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                selectedView = .chat
-                            }
-                        }
-                        
-                        // Indicator button
-                        RootBottomBarIconButton(
-                            systemName: "chart.line.uptrend.xyaxis.circle",
-                            fontSize: 25,
-                            backgroundColor: selectedView == .indicator ?
-                                AppColors.gradientBackgroundDark :
-                                AppColors.gradientBackgroundMid.opacity(0.9),
-                            foregroundColor: selectedView == .indicator ?
-                                .white :
-                                AppColors.whiteText.opacity(0.8)
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                selectedView = .indicator
-                            }
-                        }
-                        
-                        // Markers button
-                        RootBottomBarIconButton(
-                            systemName: "target",
-                            fontSize: 25,
-                            backgroundColor: selectedView == .markers ?
-                                AppColors.whiteText :
-                                AppColors.whiteText.opacity(0.5),
-                            foregroundColor: selectedView == .markers ?
-                                AppColors.gradientBackgroundDark :
-                                AppColors.gradientBackgroundDark.opacity(0.8)
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                selectedView = .markers
-                            }
+                    // Markers button
+                    RootBottomBarIconButton(
+                        systemName: "target",
+                        fontSize: 25,
+                        backgroundColor: selectedView == .markers ?
+                            AppColors.whiteText :
+                            AppColors.whiteText.opacity(0.5),
+                        foregroundColor: selectedView == .markers ?
+                            AppColors.gradientBackgroundDark :
+                            AppColors.gradientBackgroundDark.opacity(0.8)
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            selectedView = .markers
                         }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, isExpanded ? 16 : 0)
-                .padding(.bottom, 2)
             }
-            .frame(height: isExpanded ? 70 : 68)
+            .padding(.horizontal, 16)
+            .padding(.top, isExpanded ? 16 : 0)
+            .padding(.bottom, 2)
         }
+        .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard)
-        .animation(.easeInOut(duration: 0.3), value: selectedView)
     }
     
     // MARK: - Symbol Tab Content
     private var symbolAndSettingsContent: some View {
         chartSheetSymbolView(
-            chartViewModel: chartViewModel
-        )
-    }
-    
-    // MARK: - Chat Tab Content
-    private var chatContent: some View {
-        chartSheetChatView(
             chartViewModel: chartViewModel
         )
     }
@@ -670,14 +823,24 @@ struct ChartBottomSheet: View {
     }
     
     // MARK: - Markers Tab Content
-    var markersContent: some View {
+    private var markersContent: some View {
         chartSheetMarkersView(
             chartViewModel: chartViewModel,
             controlViewModel: controlViewModel
         )
     }
+    
+    // MARK: - Chat Tab Content
+    private var chatContent: some View {
+        ImprovedChartSheetChatView(
+            chartViewModel: chartViewModel,
+            chartChatManager: chartChatManager,
+            selectedDetent: $selectedDetent,
+            messageText: $chatMessageText
+        )
+        .environmentObject(appState)
+    }
 }
-
 // MARK: - Chart Bottom Sheet
 // UPDATED: Chat view now manages its own scroll, so we don't wrap it in the outer ScrollView
 //struct ChartBottomSheet: View {
@@ -765,7 +928,7 @@ struct ChartBottomSheet: View {
 //                    
 //                    Spacer()
 //                    
-//                    HStack(spacing: 4) {
+//                    HStack(spacing: 6) {
 //                        // Chat button
 //                        RootBottomBarIconButton(
 //                            systemName: "message.fill",
@@ -856,10 +1019,6 @@ struct ChartBottomSheet: View {
 //        )
 //    }
 //}
-
-
-
-
 
 
 struct IndicatorItem: View {

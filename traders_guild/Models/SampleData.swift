@@ -4252,6 +4252,7 @@ struct SampleData {
                 price = (candle.high + candle.low) / 2
             }
             
+            // Create updated marker with comments parameter
             var updatedMarker = ChartMarker(
                 id: marker.id,
                 candleIndex: marker.candleIndex,
@@ -4262,10 +4263,25 @@ struct SampleData {
                 username: marker.username,
                 note: marker.note,
                 guildId: marker.guildId,
-                createdAt: marker.createdAt
+                createdAt: marker.createdAt,
+                comments: marker.comments  // ✅ FIXED: Now preserving comments
             )
+            
+            // Copy over additional properties
             updatedMarker.likeCount = marker.likeCount
             updatedMarker.isLikedByCurrentUser = marker.isLikedByCurrentUser
+            
+            // Copy over any other properties that might exist
+            updatedMarker.horizontalLinePrice = marker.horizontalLinePrice
+            updatedMarker.targetPrice = marker.targetPrice
+            updatedMarker.alertSeverity = marker.alertSeverity
+            updatedMarker.trendlineDirection = marker.trendlineDirection
+            updatedMarker.chartPattern = marker.chartPattern
+            updatedMarker.selectedIndicator = marker.selectedIndicator
+            updatedMarker.selectedEmoji = marker.selectedEmoji
+            updatedMarker.pollQuestion = marker.pollQuestion
+            updatedMarker.pollOptions = marker.pollOptions
+            updatedMarker.userPollVote = marker.userPollVote
             
             return updatedMarker
         }
