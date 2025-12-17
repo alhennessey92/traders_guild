@@ -626,14 +626,6 @@ struct GuildFriendDTO: Identifiable, Codable, Equatable {
 
 
 
-
-
-
-
-
-
-
-
 // ================================================================================================
 // MARK: - Symbol / Charting DTOs
 // ================================================================================================
@@ -746,78 +738,3 @@ enum AlertDisplayStyle {
 
 
 
-
-
-//
-//  ChartChatDTOs.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 14/12/2025.
-//
-//  DTOs for chart-specific chat functionality
-//  Follows the same patterns as DMDTO and GuildChatroomDTO
-
-
-
-// MARK: - Chart Chat DTO
-/// Represents a chat channel specific to a symbol and guild combination
-/// Used for real-time collaboration on chart analysis
-struct ChartChatDTO: Identifiable, Codable, Equatable {
-    let id: UUID                        // Chat unique ID
-    let symbolId: UUID                  // Symbol being discussed
-    let symbolTicker: String            // Symbol ticker (e.g., "BTC/USD")
-    let guildId: UUID                   // Guild context
-    let guildName: String               // Guild name for display
-    let lastMessage: ChartChatMessageDTO?   // Most recent message
-    let lastActivity: Date              // Timestamp of last message
-    let lastActivityFormatted: String   // Pre-formatted time
-    var unreadCount: Int                // Unread messages (personalized)
-    let activeUsers: [GuildMembershipDTO]   // Currently active users in chat
-    let activeUserCount: Int            // Total active users
-    let canSendMessages: Bool           // Can current user post?
-    
-    /// Check if has unread messages
-    var hasUnread: Bool {
-        unreadCount > 0
-    }
-    
-    /// Display name for the chat
-    var displayName: String {
-        "\(symbolTicker) • \(guildName)"
-    }
-    
-    /// Preview text for conversation list
-    var preview: String {
-        lastMessage?.content ?? "Start analyzing \(symbolTicker)"
-    }
-    
-    /// Active users preview text
-    var activeUsersDisplay: String {
-        switch activeUserCount {
-        case 0: return "No one active"
-        case 1: return "1 person analyzing"
-        default: return "\(activeUserCount) people analyzing"
-        }
-    }
-}
-
-// MARK: - Chart Chat Message DTO
-/// Individual message in a chart chat
-/// Contains all display data including author and permissions
-struct ChartChatMessageDTO: Identifiable, Codable, Equatable {
-    let id: UUID                        // Message unique ID
-    let chartChatId: UUID               // Parent chat ID
-    let author: GuildMembershipDTO      // EMBEDDED sender info
-    let content: String                 // Message text content
-    let timestamp: Date                 // When message was sent
-    let timestampFormatted: String      // Pre-formatted time
-    let isEdited: Bool                  // Has message been edited
-    let isCurrentUserMessage: Bool      // Did current user send this?
-    let canEdit: Bool                   // Can current user edit?
-    let canDelete: Bool                 // Can current user delete?
-    
-    /// Message alignment in chat UI
-    var alignment: HorizontalAlignment {
-        isCurrentUserMessage ? .trailing : .leading
-    }
-}

@@ -1,3 +1,5 @@
+
+
 import SwiftUI
 
 // MARK: - Pending Marker Info
@@ -44,6 +46,20 @@ struct TradingChartView: View {
     /// Gesture state manager that handles all pan/zoom transformations
     /// This is the single source of truth for chart positioning
     @ObservedObject var gestureState: ChartGestureState
+    
+    // MARK: - Overlay Managers
+    
+    /// Manages all markers on the chart (creation, deletion, filtering)
+    @StateObject private var markerManager: MarkerManager
+    
+    /// Manages crosshair functionality for price inspection
+    /// Activated by long press, allows precise price/time reading
+    @StateObject private var crosshairManager = CrosshairManager()
+    
+    /// Manages chart navigation controls (auto-scroll, jump to latest, etc)
+    @StateObject private var navigationManager = ChartNavigationManager()
+    
+    
     
     /// RSI panel height binding for control box positioning
     @Binding var rsiPanelHeight: CGFloat
@@ -101,17 +117,7 @@ struct TradingChartView: View {
     /// Track the center of visible candles for centered scaling operations
     @State private var visibleCandlesCenter: CGFloat = 0
     
-    // MARK: - Overlay Managers
     
-    /// Manages all markers on the chart (creation, deletion, filtering)
-    @StateObject private var markerManager: MarkerManager
-    
-    /// Manages crosshair functionality for price inspection
-    /// Activated by long press, allows precise price/time reading
-    @StateObject private var crosshairManager = CrosshairManager()
-    
-    /// Manages chart navigation controls (auto-scroll, jump to latest, etc)
-    @StateObject private var navigationManager = ChartNavigationManager()
     
     // MARK: - UI State
     
@@ -341,7 +347,7 @@ struct TradingChartView: View {
     // MARK: - Marker Preview Helpers
     
     /// Get the currently selected or tapped marker
-    private var activeSelectedMarker: ChartMarker? {
+    private var activeSelectedMarker: ChartMarkerDTO? {
         if let selected = markerManager.selectedMarker {
             return selected
         }
@@ -2331,16 +2337,20 @@ struct TradingChartView: View {
         guard !chartData.candles.isEmpty else { return }
         
         let symbol = chartViewModel.currentSymbol?.symbol ?? "EURUSD"
+        let symbolId = chartViewModel.currentSymbol?.id ?? UUID()
         let guildId = markerManager.guildId
+        let currentUserId = markerManager.userId
         
-        var markers = SampleData.generateChartMarkers(
+        var markers = SampleData.generateChartMarkerDTOs(
             forSymbol: symbol,
+            symbolId: symbolId,
             guildId: guildId,
             candleCount: chartData.candles.count,
+            currentUserId: currentUserId,
             count: 8
         )
         
-        markers = SampleData.updateMarkerPrices(
+        markers = SampleData.updateMarkerDTOPrices(
             markers: markers,
             candles: chartData.candles
         )
@@ -2473,7 +2483,7 @@ struct MarkerHorizontalLinePreview: View {
 // MARK: - Marker Price Lines Overlay
 
 struct MarkerPriceLinesOverlay: View {
-    let selectedMarker: ChartMarker?
+    let selectedMarker: ChartMarkerDTO?
     let previewMarker: (candle: Candle, type: MarkerType)?
     let coordinateSystem: ChartCoordinateSystem
     let chartWidth: CGFloat
@@ -2556,7 +2566,7 @@ struct MarkerPriceLinesOverlay: View {
         )
     }
     
-    private func getCandleForMarker(_ marker: ChartMarker) -> Candle? {
+    private func getCandleForMarker(_ marker: ChartMarkerDTO) -> Candle? {
         guard marker.candleIndex >= 0 && marker.candleIndex < chartData.candles.count else {
             return nil
         }

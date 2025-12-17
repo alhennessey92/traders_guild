@@ -4163,129 +4163,129 @@ struct SampleData {
     ]
     
     /// Generate sample chart markers for testing
-    static func generateChartMarkers(
-        forSymbol symbol: String,
-        guildId: String,
-        candleCount: Int,
-        count: Int = 8
-    ) -> [ChartMarker] {
-        guard candleCount >= 30 else { return [] }
-        
-        var markers: [ChartMarker] = []
-        let startIndex = 15
-        let endIndex = candleCount - 10
-        let range = endIndex - startIndex
-        
-        guard range > count else { return [] }
-        
-        var usedIndices: [Int] = []
-        
-        for i in 0..<count {
-            // 20% chance to cluster with previous marker
-            let baseIndex: Int
-            if i > 0 && Int.random(in: 0...4) == 0 {
-                baseIndex = usedIndices.last! + Int.random(in: 0...2)
-            } else {
-                let step = range / count
-                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
-            }
-            
-            let candleIndex = min(endIndex, max(startIndex, baseIndex))
-            usedIndices.append(candleIndex)
-            
-            let member = chartMarkerMembers[i % chartMarkerMembers.count]
-            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
-            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
-            let placeholderPrice = 1.0850
-            
-            let hoursAgo = Double.random(in: 1...72)
-            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
-            
-            let comments = SampleData.generateMarkerComments()
-            
-            var marker = ChartMarker(
-                id: UUID(),
-                candleIndex: candleIndex,
-                timestamp: timestamp,
-                price: placeholderPrice,
-                type: markerType,
-                userId: member.userId,
-                username: member.username,
-                note: note,
-                guildId: guildId,
-                createdAt: timestamp,
-                comments: comments 
-            )
-            
-            marker.likeCount = Int.random(in: 0...15)
-            marker.isLikedByCurrentUser = marker.likeCount > 0 && Bool.random()
-            
-            markers.append(marker)
-        }
-        
-        return markers
-    }
+//    static func generateChartMarkers(
+//        forSymbol symbol: String,
+//        guildId: String,
+//        candleCount: Int,
+//        count: Int = 8
+//    ) -> [ChartMarker] {
+//        guard candleCount >= 30 else { return [] }
+//        
+//        var markers: [ChartMarker] = []
+//        let startIndex = 15
+//        let endIndex = candleCount - 10
+//        let range = endIndex - startIndex
+//        
+//        guard range > count else { return [] }
+//        
+//        var usedIndices: [Int] = []
+//        
+//        for i in 0..<count {
+//            // 20% chance to cluster with previous marker
+//            let baseIndex: Int
+//            if i > 0 && Int.random(in: 0...4) == 0 {
+//                baseIndex = usedIndices.last! + Int.random(in: 0...2)
+//            } else {
+//                let step = range / count
+//                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
+//            }
+//            
+//            let candleIndex = min(endIndex, max(startIndex, baseIndex))
+//            usedIndices.append(candleIndex)
+//            
+//            let member = chartMarkerMembers[i % chartMarkerMembers.count]
+//            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
+//            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
+//            let placeholderPrice = 1.0850
+//            
+//            let hoursAgo = Double.random(in: 1...72)
+//            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
+//            
+//            let comments = SampleData.generateMarkerComments()
+//            
+//            var marker = ChartMarker(
+//                id: UUID(),
+//                candleIndex: candleIndex,
+//                timestamp: timestamp,
+//                price: placeholderPrice,
+//                type: markerType,
+//                userId: member.userId,
+//                username: member.username,
+//                note: note,
+//                guildId: guildId,
+//                createdAt: timestamp,
+//                comments: comments 
+//            )
+//            
+//            marker.likeCount = Int.random(in: 0...15)
+//            marker.isLikedByCurrentUser = marker.likeCount > 0 && Bool.random()
+//            
+//            markers.append(marker)
+//        }
+//        
+//        return markers
+//    }
     
     /// Update marker prices based on actual candle data
-    static func updateMarkerPrices(
-        markers: [ChartMarker],
-        candles: [Candle]
-    ) -> [ChartMarker] {
-        return markers.map { marker in
-            guard marker.candleIndex >= 0 && marker.candleIndex < candles.count else {
-                return marker
-            }
-            
-            let candle = candles[marker.candleIndex]
-            let price: Double
-            
-            switch marker.type {
-            case .support:
-                price = candle.low
-            case .resistance:
-                price = candle.high
-            case .entry, .takeProfit:
-                price = candle.close
-            case .exit, .stopLoss:
-                price = candle.open
-            default:
-                price = (candle.high + candle.low) / 2
-            }
-            
-            // Create updated marker with comments parameter
-            var updatedMarker = ChartMarker(
-                id: marker.id,
-                candleIndex: marker.candleIndex,
-                timestamp: candle.timestamp,
-                price: price,
-                type: marker.type,
-                userId: marker.userId,
-                username: marker.username,
-                note: marker.note,
-                guildId: marker.guildId,
-                createdAt: marker.createdAt,
-                comments: marker.comments  // ✅ FIXED: Now preserving comments
-            )
-            
-            // Copy over additional properties
-            updatedMarker.likeCount = marker.likeCount
-            updatedMarker.isLikedByCurrentUser = marker.isLikedByCurrentUser
-            
-            // Copy over any other properties that might exist
-            updatedMarker.horizontalLinePrice = marker.horizontalLinePrice
-            updatedMarker.targetPrice = marker.targetPrice
-            updatedMarker.alertSeverity = marker.alertSeverity
-            updatedMarker.trendlineDirection = marker.trendlineDirection
-            updatedMarker.chartPattern = marker.chartPattern
-            updatedMarker.selectedIndicator = marker.selectedIndicator
-            updatedMarker.selectedEmoji = marker.selectedEmoji
-            updatedMarker.pollQuestion = marker.pollQuestion
-            updatedMarker.pollOptions = marker.pollOptions
-            updatedMarker.userPollVote = marker.userPollVote
-            
-            return updatedMarker
-        }
-    }
+//    static func updateMarkerPrices(
+//        markers: [ChartMarker],
+//        candles: [Candle]
+//    ) -> [ChartMarker] {
+//        return markers.map { marker in
+//            guard marker.candleIndex >= 0 && marker.candleIndex < candles.count else {
+//                return marker
+//            }
+//            
+//            let candle = candles[marker.candleIndex]
+//            let price: Double
+//            
+//            switch marker.type {
+//            case .support:
+//                price = candle.low
+//            case .resistance:
+//                price = candle.high
+//            case .entry, .takeProfit:
+//                price = candle.close
+//            case .exit, .stopLoss:
+//                price = candle.open
+//            default:
+//                price = (candle.high + candle.low) / 2
+//            }
+//            
+//            // Create updated marker with comments parameter
+//            var updatedMarker = ChartMarker(
+//                id: marker.id,
+//                candleIndex: marker.candleIndex,
+//                timestamp: candle.timestamp,
+//                price: price,
+//                type: marker.type,
+//                userId: marker.userId,
+//                username: marker.username,
+//                note: marker.note,
+//                guildId: marker.guildId,
+//                createdAt: marker.createdAt,
+//                comments: marker.comments  // ✅ FIXED: Now preserving comments
+//            )
+//            
+//            // Copy over additional properties
+//            updatedMarker.likeCount = marker.likeCount
+//            updatedMarker.isLikedByCurrentUser = marker.isLikedByCurrentUser
+//            
+//            // Copy over any other properties that might exist
+//            updatedMarker.horizontalLinePrice = marker.horizontalLinePrice
+//            updatedMarker.targetPrice = marker.targetPrice
+//            updatedMarker.alertSeverity = marker.alertSeverity
+//            updatedMarker.trendlineDirection = marker.trendlineDirection
+//            updatedMarker.chartPattern = marker.chartPattern
+//            updatedMarker.selectedIndicator = marker.selectedIndicator
+//            updatedMarker.selectedEmoji = marker.selectedEmoji
+//            updatedMarker.pollQuestion = marker.pollQuestion
+//            updatedMarker.pollOptions = marker.pollOptions
+//            updatedMarker.userPollVote = marker.userPollVote
+//            
+//            return updatedMarker
+//        }
+//    }
 }
 
 
@@ -4459,95 +4459,95 @@ extension SampleData {
     ]
     
     /// Generate random marker comments
-    static func generateMarkerComments(count: Int = 0) -> [MarkerComment] {
-        // Random count between 0 and 5 if not specified
-        let commentCount = count > 0 ? count : Int.random(in: 0...5)
-        guard commentCount > 0 else { return [] }
-        
-        var comments: [MarkerComment] = []
-        
-        for i in 0..<commentCount {
-            let user = commentUsers[Int.random(in: 0..<commentUsers.count)]
-            let text = commentTexts[Int.random(in: 0..<commentTexts.count)]
-            let hoursAgo = Double.random(in: 0.5...48)
-            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
-            
-            let comment = MarkerComment(
-                id: UUID(),
-                userId: user.userId,
-                username: user.username,
-                text: text,
-                createdAt: timestamp
-            )
-            
-            comments.append(comment)
-        }
-        
-        // Sort by creation date
-        return comments.sorted { $0.createdAt < $1.createdAt }
-    }
+//    static func generateMarkerComments(count: Int = 0) -> [MarkerComment] {
+//        // Random count between 0 and 5 if not specified
+//        let commentCount = count > 0 ? count : Int.random(in: 0...5)
+//        guard commentCount > 0 else { return [] }
+//        
+//        var comments: [MarkerComment] = []
+//        
+//        for i in 0..<commentCount {
+//            let user = commentUsers[Int.random(in: 0..<commentUsers.count)]
+//            let text = commentTexts[Int.random(in: 0..<commentTexts.count)]
+//            let hoursAgo = Double.random(in: 0.5...48)
+//            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
+//            
+//            let comment = MarkerComment(
+//                id: UUID(),
+//                userId: user.userId,
+//                username: user.username,
+//                text: text,
+//                createdAt: timestamp
+//            )
+//            
+//            comments.append(comment)
+//        }
+//        
+//        // Sort by creation date
+//        return comments.sorted { $0.createdAt < $1.createdAt }
+//    }
     
     /// Updated generateChartMarkers that includes comments
     /// Replace the existing generateChartMarkers function with this one
-    static func generateChartMarkersWithComments(
-        forSymbol symbol: String,
-        guildId: String,
-        candleCount: Int
-    ) -> [ChartMarker] {
-        let markerCount = min(8, max(3, candleCount / 30))
-        var markers: [ChartMarker] = []
-        var usedIndices: [Int] = []
-        
-        let startIndex = max(5, candleCount - Int(Double(candleCount) * 0.9))
-        let endIndex = candleCount - 5
-        let range = endIndex - startIndex
-        let count = min(markerCount, range / 3)
-        
-        for i in 0..<count {
-            var baseIndex: Int
-            if count == 1 {
-                baseIndex = startIndex + range / 2
-            } else {
-                let step = range / count
-                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
-            }
-            
-            let candleIndex = min(endIndex, max(startIndex, baseIndex))
-            usedIndices.append(candleIndex)
-            
-            let member = chartMarkerMembers[i % chartMarkerMembers.count]
-            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
-            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
-            let placeholderPrice = 1.0850
-            
-            let hoursAgo = Double.random(in: 1...72)
-            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
-            
-            // Generate comments for this marker
-            let comments = generateMarkerComments()
-            
-            var marker = ChartMarker(
-                id: UUID(),
-                candleIndex: candleIndex,
-                timestamp: timestamp,
-                price: placeholderPrice,
-                type: markerType,
-                userId: member.userId,
-                username: member.username,
-                note: note,
-                guildId: guildId,
-                createdAt: timestamp,
-                comments: comments
-            )
-            
-            marker.likeCount = Int.random(in: 0...15)
-            marker.isLikedByCurrentUser = marker.likeCount > 0 && Bool.random()
-            
-            markers.append(marker)
-        }
-        
-        return markers
-    }
+//    static func generateChartMarkersWithComments(
+//        forSymbol symbol: String,
+//        guildId: String,
+//        candleCount: Int
+//    ) -> [ChartMarker] {
+//        let markerCount = min(8, max(3, candleCount / 30))
+//        var markers: [ChartMarker] = []
+//        var usedIndices: [Int] = []
+//        
+//        let startIndex = max(5, candleCount - Int(Double(candleCount) * 0.9))
+//        let endIndex = candleCount - 5
+//        let range = endIndex - startIndex
+//        let count = min(markerCount, range / 3)
+//        
+//        for i in 0..<count {
+//            var baseIndex: Int
+//            if count == 1 {
+//                baseIndex = startIndex + range / 2
+//            } else {
+//                let step = range / count
+//                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
+//            }
+//            
+//            let candleIndex = min(endIndex, max(startIndex, baseIndex))
+//            usedIndices.append(candleIndex)
+//            
+//            let member = chartMarkerMembers[i % chartMarkerMembers.count]
+//            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
+//            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
+//            let placeholderPrice = 1.0850
+//            
+//            let hoursAgo = Double.random(in: 1...72)
+//            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
+//            
+//            // Generate comments for this marker
+//            let comments = generateMarkerComments()
+//            
+//            var marker = ChartMarker(
+//                id: UUID(),
+//                candleIndex: candleIndex,
+//                timestamp: timestamp,
+//                price: placeholderPrice,
+//                type: markerType,
+//                userId: member.userId,
+//                username: member.username,
+//                note: note,
+//                guildId: guildId,
+//                createdAt: timestamp,
+//                comments: comments
+//            )
+//            
+//            marker.likeCount = Int.random(in: 0...15)
+//            marker.isLikedByCurrentUser = marker.likeCount > 0 && Bool.random()
+//            
+//            markers.append(marker)
+//        }
+//        
+//        return markers
+//    }
 }
 
 // MARK: - Update to existing generateChartMarkers
@@ -4560,3 +4560,517 @@ extension SampleData {
      comments: comments
  )
 */
+
+
+//
+//  SampleData+ChartMarkerDTO.swift
+//  traders_guild
+//
+//  Extension for generating ChartMarkerDTO sample data
+//  Replaces legacy generateChartMarkers and updateMarkerPrices methods
+//
+
+
+extension SampleData {
+    
+    // MARK: - Sample Author Guild Memberships for Markers
+    
+    /// Sample guild memberships for marker authors
+    /// These are embedded in each ChartMarkerDTO for direct access
+    static let markerAuthorMemberships: [GuildMembershipDTO] = [
+        // Alex_Trader
+        GuildMembershipDTO(
+            id: UUID(uuidString: "a1111111-1111-1111-1111-111111111111")!,
+            globalMember: GlobalMemberDTO(
+                id: UUID(uuidString: "a1111111-1111-1111-1111-111111111112")!,
+                email: "alex.trader@email.com",
+                name: "Alex Trader",
+                username: "Alex_Trader",
+                avatarURL: "https://cdn.tradersguild.com/avatars/alex.jpg",
+                isOnline: true,
+                globalReputation: 1850
+            ),
+            guild: userGuilds[0],
+            roleInGuild: .member,
+            dateJoined: Date(timeIntervalSince1970: 1700000000),
+            reputation: 450,
+            daysInGuild: 120,
+            contributionScore: 65,
+            isOnline: true,
+            isFriend: false,
+            isBlocked: false
+        ),
+        // SarahFX
+        GuildMembershipDTO(
+            id: UUID(uuidString: "a2222222-2222-2222-2222-222222222221")!,
+            globalMember: GlobalMemberDTO(
+                id: UUID(uuidString: "a2222222-2222-2222-2222-222222222222")!,
+                email: "sarah.fx@email.com",
+                name: "Sarah FX",
+                username: "SarahFX",
+                avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+                isOnline: true,
+                globalReputation: 3200
+            ),
+            guild: userGuilds[0],
+            roleInGuild: .moderator,
+            dateJoined: Date(timeIntervalSince1970: 1690000000),
+            reputation: 820,
+            daysInGuild: 200,
+            contributionScore: 85,
+            isOnline: true,
+            isFriend: true,
+            isBlocked: false
+        ),
+        // MikeTheChart
+        GuildMembershipDTO(
+            id: UUID(uuidString: "a3333333-3333-3333-3333-333333333331")!,
+            globalMember: GlobalMemberDTO(
+                id: UUID(uuidString: "a3333333-3333-3333-3333-333333333332")!,
+                email: "mike.chart@email.com",
+                name: "Mike Chart",
+                username: "MikeTheChart",
+                avatarURL: nil,
+                isOnline: false,
+                globalReputation: 950
+            ),
+            guild: userGuilds[0],
+            roleInGuild: .member,
+            dateJoined: Date(timeIntervalSince1970: 1710000000),
+            reputation: 280,
+            daysInGuild: 90,
+            contributionScore: 45,
+            isOnline: false,
+            isFriend: false,
+            isBlocked: false
+        ),
+        // EmmaSwings
+        GuildMembershipDTO(
+            id: UUID(uuidString: "a4444444-4444-4444-4444-444444444441")!,
+            globalMember: GlobalMemberDTO(
+                id: UUID(uuidString: "a4444444-4444-4444-4444-444444444442")!,
+                email: "emma.swings@email.com",
+                name: "Emma Swings",
+                username: "EmmaSwings",
+                avatarURL: "https://cdn.tradersguild.com/avatars/emma.jpg",
+                isOnline: true,
+                globalReputation: 2100
+            ),
+            guild: userGuilds[0],
+            roleInGuild: .member,
+            dateJoined: Date(timeIntervalSince1970: 1695000000),
+            reputation: 520,
+            daysInGuild: 150,
+            contributionScore: 72,
+            isOnline: true,
+            isFriend: true,
+            isBlocked: false
+        ),
+        // JamesPips
+        GuildMembershipDTO(
+            id: UUID(uuidString: "a5555555-5555-5555-5555-555555555551")!,
+            globalMember: GlobalMemberDTO(
+                id: UUID(uuidString: "a5555555-5555-5555-5555-555555555552")!,
+                email: "james.pips@email.com",
+                name: "James Pips",
+                username: "JamesPips",
+                avatarURL: "https://cdn.tradersguild.com/avatars/james.jpg",
+                isOnline: false,
+                globalReputation: 1400
+            ),
+            guild: userGuilds[0],
+            roleInGuild: .member,
+            dateJoined: Date(timeIntervalSince1970: 1705000000),
+            reputation: 380,
+            daysInGuild: 100,
+            contributionScore: 55,
+            isOnline: false,
+            isFriend: false,
+            isBlocked: false
+        )
+    ]
+    
+    // MARK: - Generate ChartMarkerDTO Array
+    
+    /// Generate sample chart markers using the DTO pattern
+    /// Returns ChartMarkerDTO with embedded author info - no lookups required
+    static func generateChartMarkerDTOs(
+        forSymbol symbol: String,
+        symbolId: UUID,
+        guildId: UUID,
+        candleCount: Int,
+        currentUserId: UUID,
+        count: Int = 8
+    ) -> [ChartMarkerDTO] {
+        guard candleCount >= 30 else { return [] }
+        
+        var markers: [ChartMarkerDTO] = []
+        let startIndex = 15
+        let endIndex = candleCount - 10
+        let range = endIndex - startIndex
+        
+        guard range > count else { return [] }
+        
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        
+        var usedIndices: [Int] = []
+        
+        for i in 0..<count {
+            // 20% chance to cluster with previous marker
+            let baseIndex: Int
+            if i > 0 && Int.random(in: 0...4) == 0 {
+                baseIndex = usedIndices.last! + Int.random(in: 0...2)
+            } else {
+                let step = range / count
+                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
+            }
+            
+            let candleIndex = min(endIndex, max(startIndex, baseIndex))
+            usedIndices.append(candleIndex)
+            
+            // Get author - some markers from current user, most from others
+            let isCurrentUserMarker = i == 2 || i == 5 // Make 2nd and 5th marker from current user
+            let author: GuildMembershipDTO
+            if isCurrentUserMarker {
+                author = currentUser.guildMembership
+            } else {
+                author = markerAuthorMemberships[i % markerAuthorMemberships.count]
+            }
+            
+            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
+            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
+            let placeholderPrice = 1.0850
+            
+            let hoursAgo = Double.random(in: 1...72)
+            let createdAt = Date().addingTimeInterval(-hoursAgo * 3600)
+            
+            // Generate comments for this marker
+            let comments = generateMarkerCommentDTOs(
+                markerId: UUID(),
+                count: Int.random(in: 0...5),
+                currentUserId: currentUserId
+            )
+            
+            let likeCount = Int.random(in: 0...15)
+            let isLikedByCurrentUser = likeCount > 0 && Bool.random()
+            
+            let marker = ChartMarkerDTO(
+                id: UUID(),
+                symbolId: symbolId,
+                guildId: guildId,
+                author: author,
+                candleIndex: candleIndex,
+                timestamp: createdAt,
+                price: placeholderPrice,
+                type: markerType,
+                note: note,
+                createdAt: createdAt,
+                createdAtFormatted: formatter.localizedString(for: createdAt, relativeTo: Date()),
+                isVisible: true,
+                likeCount: likeCount,
+                isLikedByCurrentUser: isLikedByCurrentUser,
+                commentCount: comments.count,
+                comments: comments,
+                isCurrentUserMarker: isCurrentUserMarker,
+                canEdit: isCurrentUserMarker,
+                canDelete: isCurrentUserMarker,
+                positionedBelow: false,
+                proximityTier: 0,
+                stackIndex: 0,
+                horizontalLinePrice: nil,
+                targetPrice: nil,
+                alertSeverity: markerType == .alert ? MarkerAlertSeverity.allCases.randomElement() : nil,
+                trendlineDirection: markerType == .trendline ? TrendlineDirection.allCases.randomElement() : nil,
+                selectedIndicator: markerType == .indicator ? ["RSI", "MACD", "Stochastic", "Moving Average"].randomElement() : nil,
+                chartPattern: markerType == .pattern ? ChartPattern.allCases.randomElement() : nil,
+                selectedEmoji: markerType == .emoji ? ["🚀", "📈", "📉", "💰", "⚠️", "🎯"].randomElement() : nil,
+                pollQuestion: nil,
+                pollOptions: nil,
+                userPollVote: nil
+            )
+            
+            markers.append(marker)
+        }
+        
+        return markers
+    }
+    
+    // MARK: - Generate Marker Comment DTOs
+    
+    /// Sample comment texts for markers
+    private static let markerCommentTexts: [String] = [
+        "Great analysis! I see the same setup.",
+        "What's your stop loss on this?",
+        "Risk/reward looks solid here.",
+        "I'm watching this level too.",
+        "Nice catch! Almost missed this.",
+        "Agreed, volume confirms the move.",
+        "Target seems realistic based on ATR.",
+        "Be careful, there's resistance above.",
+        "Good call, entered the same trade.",
+        "How long do you plan to hold?",
+        "RSI divergence supports this view.",
+        "Thanks for sharing!",
+        "Following this setup closely.",
+        "What timeframe are you using?",
+        "Solid technical analysis here."
+    ]
+    
+    /// Generate sample marker comments using DTO pattern
+    static func generateMarkerCommentDTOs(
+        markerId: UUID,
+        count: Int = 0,
+        currentUserId: UUID
+    ) -> [MarkerCommentDTO] {
+        let commentCount = count > 0 ? count : Int.random(in: 0...5)
+        guard commentCount > 0 else { return [] }
+        
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        
+        var comments: [MarkerCommentDTO] = []
+        
+        for i in 0..<commentCount {
+            // Some comments from current user
+            let isCurrentUser = i == 1 && commentCount > 2
+            let author: GuildMembershipDTO
+            if isCurrentUser {
+                author = currentUser.guildMembership
+            } else {
+                author = markerAuthorMemberships[Int.random(in: 0..<markerAuthorMemberships.count)]
+            }
+            
+            let text = markerCommentTexts[Int.random(in: 0..<markerCommentTexts.count)]
+            let hoursAgo = Double.random(in: 0.5...48)
+            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
+            
+            let comment = MarkerCommentDTO(
+                id: UUID(),
+                markerId: markerId,
+                author: author,
+                content: text,
+                timestamp: timestamp,
+                timestampFormatted: formatter.localizedString(for: timestamp, relativeTo: Date()),
+                isEdited: Bool.random() && Int.random(in: 0...5) == 0, // 16% chance of edited
+                isCurrentUserMessage: isCurrentUser,
+                canEdit: isCurrentUser,
+                canDelete: isCurrentUser || currentUser.guildMembership.roleInGuild.canModerate
+            )
+            
+            comments.append(comment)
+        }
+        
+        // Sort by timestamp
+        return comments.sorted { $0.timestamp < $1.timestamp }
+    }
+    
+    // MARK: - Update Marker DTO Prices
+    
+    /// Update marker prices based on actual candle data
+    /// Returns updated ChartMarkerDTOs with correct prices
+    static func updateMarkerDTOPrices(
+        markers: [ChartMarkerDTO],
+        candles: [Candle]
+    ) -> [ChartMarkerDTO] {
+        return markers.map { marker in
+            guard marker.candleIndex >= 0 && marker.candleIndex < candles.count else {
+                return marker
+            }
+            
+            let candle = candles[marker.candleIndex]
+            let price: Double
+            var linePrice: Double? = nil
+            
+            switch marker.type {
+            case .support:
+                price = candle.low
+                linePrice = candle.low
+            case .resistance:
+                price = candle.high
+                linePrice = candle.high
+            case .entry, .takeProfit:
+                price = candle.close
+                linePrice = candle.close
+            case .exit, .stopLoss:
+                price = candle.open
+                linePrice = candle.open
+            case .predictionTarget:
+                price = candle.close
+                linePrice = candle.close
+            default:
+                price = (candle.high + candle.low) / 2
+            }
+            
+            // Create updated marker with new price
+            var updatedMarker = marker
+            updatedMarker.price = price
+            updatedMarker.timestamp = candle.timestamp
+            
+            // Set horizontal line price for types that have lines
+            if marker.type.hasHorizontalLine {
+                updatedMarker.horizontalLinePrice = linePrice
+            }
+            
+            return updatedMarker
+        }
+    }
+}
+
+// MARK: - MockAPIService Extension for ChartMarkerDTO
+
+//extension MockAPIService {
+//    
+//    /// Fetch chart markers as DTOs (replaces legacy fetchGuildChartMarkers)
+//    func fetchGuildChartMarkerDTOs(
+//        symbol: String,
+//        guildId: UUID,
+//        timeframe: ChartTimeframe,
+//        candleCount: Int
+//    ) async throws -> [ChartMarkerDTO] {
+//        // Simulate network delay
+//        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+//        
+//        // Generate sample markers
+//        let symbolId = SampleData.allTradingSymbols.first { $0.symbol == symbol }?.id ?? UUID()
+//        let currentUserId = SampleData.currentUser.id
+//        
+//        return SampleData.generateChartMarkerDTOs(
+//            forSymbol: symbol,
+//            symbolId: symbolId,
+//            guildId: guildId,
+//            candleCount: candleCount,
+//            currentUserId: currentUserId,
+//            count: 8
+//        )
+//    }
+//    
+//    /// Add a comment to a marker
+//    func addMarkerCommentDTO(
+//        markerId: UUID,
+//        content: String
+//    ) async throws -> MarkerCommentDTO {
+//        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+//        
+//        let formatter = RelativeDateTimeFormatter()
+//        formatter.unitsStyle = .abbreviated
+//        
+//        return MarkerCommentDTO(
+//            id: UUID(),
+//            markerId: markerId,
+//            author: SampleData.currentUser.guildMembership,
+//            content: content,
+//            timestamp: Date(),
+//            timestampFormatted: "Just now",
+//            isEdited: false,
+//            isCurrentUserMessage: true,
+//            canEdit: true,
+//            canDelete: true
+//        )
+//    }
+//    
+//    /// Edit a marker comment
+//    func editMarkerCommentDTO(
+//        markerId: UUID,
+//        commentId: UUID,
+//        newContent: String
+//    ) async throws -> MarkerCommentDTO {
+//        try await Task.sleep(nanoseconds: 100_000_000)
+//        
+//        let formatter = RelativeDateTimeFormatter()
+//        formatter.unitsStyle = .abbreviated
+//        
+//        return MarkerCommentDTO(
+//            id: commentId,
+//            markerId: markerId,
+//            author: SampleData.currentUser.guildMembership,
+//            content: newContent,
+//            timestamp: Date(),
+//            timestampFormatted: formatter.localizedString(for: Date(), relativeTo: Date()),
+//            isEdited: true,
+//            isCurrentUserMessage: true,
+//            canEdit: true,
+//            canDelete: true
+//        )
+//    }
+//    
+//    /// Delete a marker comment
+//    func deleteMarkerCommentDTO(markerId: UUID, commentId: UUID) async throws {
+//        try await Task.sleep(nanoseconds: 100_000_000)
+//        // In real impl, would delete from backend
+//    }
+//    
+//    /// Toggle like on a marker
+//    func toggleMarkerLike(markerId: UUID) async throws -> (isLiked: Bool, likeCount: Int) {
+//        try await Task.sleep(nanoseconds: 100_000_000)
+//        // Return toggled state - in real impl would come from backend
+//        return (true, Int.random(in: 1...20))
+//    }
+//    
+//    /// Create a new marker
+//    func createChartMarkerDTO(
+//        symbolId: UUID,
+//        guildId: UUID,
+//        candleIndex: Int,
+//        timestamp: Date,
+//        price: Double,
+//        type: MarkerType,
+//        note: String?
+//    ) async throws -> ChartMarkerDTO {
+//        try await Task.sleep(nanoseconds: 150_000_000)
+//        
+//        let formatter = RelativeDateTimeFormatter()
+//        formatter.unitsStyle = .abbreviated
+//        
+//        return ChartMarkerDTO(
+//            id: UUID(),
+//            symbolId: symbolId,
+//            guildId: guildId,
+//            author: SampleData.currentUser.guildMembership,
+//            candleIndex: candleIndex,
+//            timestamp: timestamp,
+//            price: price,
+//            type: type,
+//            note: note,
+//            createdAt: Date(),
+//            createdAtFormatted: "Just now",
+//            isVisible: true,
+//            likeCount: 0,
+//            isLikedByCurrentUser: false,
+//            commentCount: 0,
+//            comments: [],
+//            isCurrentUserMarker: true,
+//            canEdit: true,
+//            canDelete: true,
+//            positionedBelow: false,
+//            proximityTier: 0,
+//            stackIndex: 0,
+//            horizontalLinePrice: type.hasHorizontalLine ? price : nil,
+//            targetPrice: nil,
+//            alertSeverity: nil,
+//            trendlineDirection: nil,
+//            selectedIndicator: nil,
+//            chartPattern: nil,
+//            selectedEmoji: nil,
+//            pollQuestion: nil,
+//            pollOptions: nil,
+//            userPollVote: nil
+//        )
+//    }
+//    
+//    /// Delete a marker
+//    func deleteChartMarkerDTO(markerId: UUID) async throws {
+//        try await Task.sleep(nanoseconds: 100_000_000)
+//        // In real impl, would delete from backend
+//    }
+//    
+//    /// Update a marker's note
+//    func updateChartMarkerDTO(markerId: UUID, note: String) async throws {
+//        try await Task.sleep(nanoseconds: 100_000_000)
+//        // In real impl, would update backend
+//    }
+//}
+
+
+
+

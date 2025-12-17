@@ -398,118 +398,162 @@ class MockAPIService {
     }
 
     
-
-    // ================================================================================================
-    // MARK: - Chart Markers - API
-    // ================================================================================================
     
-    /// Fetch chart markers for a specific symbol and guild
-    func fetchGuildChartMarkers(
+    
+    /// Fetch chart markers as DTOs (replaces legacy fetchGuildChartMarkers)
+    func fetchGuildChartMarkerDTOs(
         symbol: String,
         guildId: UUID,
         timeframe: ChartTimeframe,
         candleCount: Int
-    ) async throws -> [ChartMarker] {
-        try await simulateNetworkDelay()
-        return SampleData.generateChartMarkers(
+    ) async throws -> [ChartMarkerDTO] {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+        
+        // Generate sample markers
+        let symbolId = SampleData.allTradingSymbols.first { $0.symbol == symbol }?.id ?? UUID()
+        let currentUserId = SampleData.currentUser.id
+        
+        return SampleData.generateChartMarkerDTOs(
             forSymbol: symbol,
-            guildId: guildId.uuidString,
-            candleCount: candleCount
+            symbolId: symbolId,
+            guildId: guildId,
+            candleCount: candleCount,
+            currentUserId: currentUserId,
+            count: 8
         )
     }
     
-    /// Fetch markers for a specific user
-    func fetchUserChartMarkers(
-        userId: UUID,
-        symbol: String,
-        guildId: UUID
-    ) async throws -> [ChartMarker] {
-        try await simulateNetworkDelay()
-        let allMarkers = SampleData.generateChartMarkers(
-            forSymbol: symbol,
-            guildId: guildId.uuidString,
-            candleCount: 200
+    /// Add a comment to a marker
+    func addMarkerCommentDTO(
+        markerId: UUID,
+        content: String
+    ) async throws -> MarkerCommentDTO {
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        
+        return MarkerCommentDTO(
+            id: UUID(),
+            markerId: markerId,
+            author: SampleData.currentUser.guildMembership,
+            content: content,
+            timestamp: Date(),
+            timestampFormatted: "Just now",
+            isEdited: false,
+            isCurrentUserMessage: true,
+            canEdit: true,
+            canDelete: true
         )
-        return allMarkers.filter { $0.userId == userId.uuidString }
     }
     
-    /// Post a new marker to the backend
-    func postChartMarker(_ marker: ChartMarker) async throws -> ChartMarker {
-        try await simulateNetworkDelay()
-        return marker
+    /// Edit a marker comment
+    func editMarkerCommentDTO(
+        markerId: UUID,
+        commentId: UUID,
+        newContent: String
+    ) async throws -> MarkerCommentDTO {
+        try await Task.sleep(nanoseconds: 100_000_000)
+        
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        
+        return MarkerCommentDTO(
+            id: commentId,
+            markerId: markerId,
+            author: SampleData.currentUser.guildMembership,
+            content: newContent,
+            timestamp: Date(),
+            timestampFormatted: formatter.localizedString(for: Date(), relativeTo: Date()),
+            isEdited: true,
+            isCurrentUserMessage: true,
+            canEdit: true,
+            canDelete: true
+        )
     }
     
-    /// Delete a marker
-    func deleteChartMarker(markerId: UUID, guildId: UUID) async throws {
-        try await simulateNetworkDelay()
-    }
-    
-    /// Update a marker (edit note, etc.)
-    func updateChartMarker(_ marker: ChartMarker) async throws -> ChartMarker {
-        try await simulateNetworkDelay()
-        return marker
+    /// Delete a marker comment
+    func deleteMarkerCommentDTO(markerId: UUID, commentId: UUID) async throws {
+        try await Task.sleep(nanoseconds: 100_000_000)
+        // In real impl, would delete from backend
     }
     
     /// Toggle like on a marker
-    func toggleMarkerLike(markerId: UUID, userId: UUID) async throws -> (likeCount: Int, isLiked: Bool) {
-        try await simulateNetworkDelay()
-        let newLikeCount = Int.random(in: 1...15)
-        return (newLikeCount, true)
+    func toggleMarkerLike(markerId: UUID) async throws -> (isLiked: Bool, likeCount: Int) {
+        try await Task.sleep(nanoseconds: 100_000_000)
+        // Return toggled state - in real impl would come from backend
+        return (true, Int.random(in: 1...20))
     }
     
-    // MARK: - Marker Comments API
-    
-    /// Add a comment to a marker
-    func addMarkerComment(
-        markerId: UUID,
-        userId: UUID,
-        username: String,
-        text: String
-    ) async throws -> MarkerComment {
-        try await simulateNetworkDelay()
+    /// Create a new marker
+    func createChartMarkerDTO(
+        symbolId: UUID,
+        guildId: UUID,
+        candleIndex: Int,
+        timestamp: Date,
+        price: Double,
+        type: MarkerType,
+        note: String?
+    ) async throws -> ChartMarkerDTO {
+        try await Task.sleep(nanoseconds: 150_000_000)
         
-        return MarkerComment(
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        
+        return ChartMarkerDTO(
             id: UUID(),
-            userId: userId.uuidString,
-            username: username,
-            text: text,
-            createdAt: Date()
+            symbolId: symbolId,
+            guildId: guildId,
+            author: SampleData.currentUser.guildMembership,
+            candleIndex: candleIndex,
+            timestamp: timestamp,
+            price: price,
+            type: type,
+            note: note,
+            createdAt: Date(),
+            createdAtFormatted: "Just now",
+            isVisible: true,
+            likeCount: 0,
+            isLikedByCurrentUser: false,
+            commentCount: 0,
+            comments: [],
+            isCurrentUserMarker: true,
+            canEdit: true,
+            canDelete: true,
+            positionedBelow: false,
+            proximityTier: 0,
+            stackIndex: 0,
+            horizontalLinePrice: type.hasHorizontalLine ? price : nil,
+            targetPrice: nil,
+            alertSeverity: nil,
+            trendlineDirection: nil,
+            selectedIndicator: nil,
+            chartPattern: nil,
+            selectedEmoji: nil,
+            pollQuestion: nil,
+            pollOptions: nil,
+            userPollVote: nil
         )
     }
     
-    /// Delete a comment from a marker
-    func deleteMarkerComment(
-        markerId: UUID,
-        commentId: UUID
-    ) async throws {
-        try await simulateNetworkDelay()
-        // Mock: successful delete
+    /// Delete a marker
+    func deleteChartMarkerDTO(markerId: UUID) async throws {
+        try await Task.sleep(nanoseconds: 100_000_000)
+        // In real impl, would delete from backend
     }
     
-    /// Edit a comment on a marker
-    func editMarkerComment(
-        markerId: UUID,
-        commentId: UUID,
-        newText: String
-    ) async throws -> MarkerComment {
-        try await simulateNetworkDelay()
-        
-        // Mock: return updated comment
-        return MarkerComment(
-            id: commentId,
-            userId: SampleData.currentUser.id.uuidString,
-            username: SampleData.currentUser.name,
-            text: newText,
-            createdAt: Date()
-        )
+    /// Update a marker's note
+    func updateChartMarkerDTO(markerId: UUID, note: String) async throws {
+        try await Task.sleep(nanoseconds: 100_000_000)
+        // In real impl, would update backend
     }
     
-    /// Fetch comments for a marker (if loading separately from marker)
-    func fetchMarkerComments(markerId: UUID) async throws -> [MarkerComment] {
-        try await simulateNetworkDelay()
-        return SampleData.generateMarkerComments()
-    }
     
+    
+    
+    
+
     /// Report a marker
     func reportMarker(
         markerId: UUID,
