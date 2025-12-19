@@ -50,11 +50,11 @@ class MockAPIService {
     }
     
     /// Fetch guilds user is joined
-    func fetchUserGuilds() async throws -> [GuildDTO] {
-        try await simulateNetworkDelay()
-        // ✅ Return guilds the user is a member of
-        return SampleData.userGuilds  // User is member of this guild
-    }
+//    func fetchUserGuilds() async throws -> [GuildDTO] {
+//        try await simulateNetworkDelay()
+//        // ✅ Return guilds the user is a member of
+//        return SampleData.userGuilds  // User is member of this guild
+//    }
     
     /// Fetch guilds user is joined
     func fetchUserGuildMemberships() async throws -> [GuildMembershipDTO] {
@@ -397,9 +397,6 @@ class MockAPIService {
         // Mock: successful mark as read
     }
 
-    
-    
-    
     /// Fetch chart markers as DTOs (replaces legacy fetchGuildChartMarkers)
     func fetchGuildChartMarkerDTOs(
         symbol: String,
@@ -549,11 +546,6 @@ class MockAPIService {
         // In real impl, would update backend
     }
     
-    
-    
-    
-    
-
     /// Report a marker
     func reportMarker(
         markerId: UUID,

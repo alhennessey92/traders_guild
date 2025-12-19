@@ -9,8 +9,7 @@ import Foundation
 
 struct SampleData {
     
-    // MARK: - Current User
-    // MARK: - Current User
+    // MARK: - Current User DTO
     static let currentUser = CurrentUserDTO(
         id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174000")!,
         email: "john.developer@email.com",
@@ -66,6 +65,14 @@ struct SampleData {
         )
     )
     
+    
+    
+    
+    // ================================================================================================
+    // MARK: - Guild Sample Data
+    // ================================================================================================
+    
+    // MARK: - Sample Guild when signing up
     static let sampleGuild = GuildMembershipDTO(
         id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174008")!,
         globalMember: GlobalMemberDTO(
@@ -111,7 +118,7 @@ struct SampleData {
         isBlocked: false
     )
     
-    // MARK: - Open Guilds (with embedded GlobalMemberDTO owner)
+    // MARK: - Guilds User is a member of - return GuildDTO - need to change this
     static let userGuilds: [GuildDTO] = [
         
         GuildDTO(
@@ -165,6 +172,7 @@ struct SampleData {
         
     ]
     
+    // MARK: - Guilds User is member of - return GuildMembership
     static let userMembershipGuilds: [GuildMembershipDTO] = [
         GuildMembershipDTO(
             id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174008")!,
@@ -256,8 +264,7 @@ struct SampleData {
         )
     ]
     
-    
-    // MARK: - Open Guilds (with embedded GlobalMemberDTO owner)
+    // MARK: - Open Guilds - available to join
     static let openGuilds: [GuildDTO] = [
         
         GuildDTO(
@@ -311,82 +318,83 @@ struct SampleData {
         
     ]
     
-    // MARK: - Guilds (with embedded GlobalMemberDTO owner)
-    static let guilds: [GuildDTO] = [
-        GuildDTO(
-            id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
-            name: "KAOS Trading Guild",
-            description: "Premier guild for forex and cryptocurrency traders. We focus on technical analysis, risk management, and collaborative learning. All skill levels welcome!",
-            reputation: 45000,
-            accuracy: 78,
-            memberCount: 156,
-            owner: GlobalMemberDTO(
-                id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
-                email: "sarah.masters@email.com",
-                name: "Sarah Masters",
-                username: "tradingqueen",
-                avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
-                isOnline: true,
-                globalReputation: 5820
-            ),
-            ownerRole: .admin,
-            dateCreated: Date(timeIntervalSince1970: 1705314600),
-            imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
-            isJoined: true,
-            currentMemberRole: .moderator,
-            isOpen: true,
-            membersOnline: 12
-        ),
-        GuildDTO(
-            id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426614174004")!,
-            name: "Crypto Warriors",
-            description: "Cryptocurrency enthusiasts unite! Day trading, swing trading, and long-term investing strategies.",
-            reputation: 38000,
-            accuracy: 72,
-            memberCount: 203,
-            owner: GlobalMemberDTO(
-                id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
-                email: "crypto.king@email.com",
-                name: "Crypto King",
-                username: "cryptoking",
-                avatarURL: nil,
-                isOnline: false,
-                globalReputation: 4200
-            ),
-            ownerRole: .admin,
-            dateCreated: Date(timeIntervalSince1970: 1710936900),
-            imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
-            isJoined: false,
-            currentMemberRole: nil,
-            isOpen: true,
-            membersOnline: 12
-        ),
-        GuildDTO(
-            id: UUID(uuidString: "f23e4567-e89b-12d3-a456-426614174006")!,
-            name: "Forex Masters",
-            description: "Advanced forex trading strategies and live trading sessions daily.",
-            reputation: 52000,
-            accuracy: 82,
-            memberCount: 89,
-            owner: GlobalMemberDTO(
-                id: UUID(uuidString: "023e4567-e89b-12d3-a456-426614174007")!,
-                email: "mike.trader@email.com",
-                name: "Mike Trader",
-                username: "miketrader",
-                avatarURL: "https://cdn.tradersguild.com/avatars/mike.jpg",
-                isOnline: false,
-                globalReputation: 3200
-            ),
-            ownerRole: .admin,
-            dateCreated: Date(timeIntervalSince1970: 1698249000),
-            imageURL: "https://cdn.tradersguild.com/guilds/forex.jpg",
-            isJoined: true,
-            currentMemberRole: .member,
-            isOpen: false,
-            membersOnline: 12
-        )
-    ]
+//    // MARK: - Guilds (with embedded GlobalMemberDTO owner)
+//    static let guilds: [GuildDTO] = [
+//        GuildDTO(
+//            id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//            name: "KAOS Trading Guild",
+//            description: "Premier guild for forex and cryptocurrency traders. We focus on technical analysis, risk management, and collaborative learning. All skill levels welcome!",
+//            reputation: 45000,
+//            accuracy: 78,
+//            memberCount: 156,
+//            owner: GlobalMemberDTO(
+//                id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                email: "sarah.masters@email.com",
+//                name: "Sarah Masters",
+//                username: "tradingqueen",
+//                avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                isOnline: true,
+//                globalReputation: 5820
+//            ),
+//            ownerRole: .admin,
+//            dateCreated: Date(timeIntervalSince1970: 1705314600),
+//            imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//            isJoined: true,
+//            currentMemberRole: .moderator,
+//            isOpen: true,
+//            membersOnline: 12
+//        ),
+//        GuildDTO(
+//            id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426614174004")!,
+//            name: "Crypto Warriors",
+//            description: "Cryptocurrency enthusiasts unite! Day trading, swing trading, and long-term investing strategies.",
+//            reputation: 38000,
+//            accuracy: 72,
+//            memberCount: 203,
+//            owner: GlobalMemberDTO(
+//                id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
+//                email: "crypto.king@email.com",
+//                name: "Crypto King",
+//                username: "cryptoking",
+//                avatarURL: nil,
+//                isOnline: false,
+//                globalReputation: 4200
+//            ),
+//            ownerRole: .admin,
+//            dateCreated: Date(timeIntervalSince1970: 1710936900),
+//            imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
+//            isJoined: false,
+//            currentMemberRole: nil,
+//            isOpen: true,
+//            membersOnline: 12
+//        ),
+//        GuildDTO(
+//            id: UUID(uuidString: "f23e4567-e89b-12d3-a456-426614174006")!,
+//            name: "Forex Masters",
+//            description: "Advanced forex trading strategies and live trading sessions daily.",
+//            reputation: 52000,
+//            accuracy: 82,
+//            memberCount: 89,
+//            owner: GlobalMemberDTO(
+//                id: UUID(uuidString: "023e4567-e89b-12d3-a456-426614174007")!,
+//                email: "mike.trader@email.com",
+//                name: "Mike Trader",
+//                username: "miketrader",
+//                avatarURL: "https://cdn.tradersguild.com/avatars/mike.jpg",
+//                isOnline: false,
+//                globalReputation: 3200
+//            ),
+//            ownerRole: .admin,
+//            dateCreated: Date(timeIntervalSince1970: 1698249000),
+//            imageURL: "https://cdn.tradersguild.com/guilds/forex.jpg",
+//            isJoined: true,
+//            currentMemberRole: .member,
+//            isOpen: false,
+//            membersOnline: 12
+//        )
+//    ]
     
+    // MARK: - Current Guild Statistics
     static let guildStatistics: GuildStatisticsDTO =
         // MARK: - Watchlist 1: Tech Stocks
         GuildStatisticsDTO(
@@ -402,115 +410,115 @@ struct SampleData {
             reputationEarned: 34123
         )
     
-    // MARK: - Guild Summaries (with embedded GuildMembershipDTO owner)
-    static let guildSummaries: [GuildSummaryDTO] = [
-        GuildSummaryDTO(
-            id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
-            name: "KAOS Trading",
-            memberCount: 156,
-            imageURL: "https://cdn.tradersguild.com/guilds/kaos.jpg",
-            reputation: 45000,
-            owner: GuildMembershipDTO(
-                id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174008")!,
-                globalMember: GlobalMemberDTO(
-                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
-                    email: "sarah.masters@email.com",
-                    name: "Sarah Masters",
-                    username: "tradingqueen",
-                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
-                    isOnline: true,
-                    globalReputation: 5820
-                ),
-                guild: GuildDTO(
-                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
-                    name: "KAOS Trading",
-                    description: "Premier guild for forex and cryptocurrency traders.",
-                    reputation: 45000,
-                    accuracy: 78,
-                    memberCount: 156,
-                    owner: GlobalMemberDTO(
-                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
-                        email: "sarah.masters@email.com",
-                        name: "Sarah Masters",
-                        username: "tradingqueen",
-                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
-                        isOnline: true,
-                        globalReputation: 5820
-                    ),
-                    ownerRole: .admin,
-                    dateCreated: Date(timeIntervalSince1970: 1705314600),
-                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
-                    isJoined: true,
-                    currentMemberRole: .admin,
-                    isOpen: true,
-                    membersOnline: 12
-                ),
-                roleInGuild: .admin,
-                dateJoined: Date(timeIntervalSince1970: 1705314600),
-                reputation: 5820,
-                daysInGuild: 282,
-                contributionScore: 95,
-                isOnline: true,
-                isFriend: true,
-                isBlocked: false
-            ),
-            isOpen: true
-        ),
-        GuildSummaryDTO(
-            id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426614174004")!,
-            name: "Crypto Warriors",
-            memberCount: 203,
-            imageURL: "https://cdn.tradersguild.com/guilds/crypto.jpg",
-            reputation: 38000,
-            owner: GuildMembershipDTO(
-                id: UUID(uuidString: "223e4567-e89b-12d3-a456-426614174009")!,
-                globalMember: GlobalMemberDTO(
-                    id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
-                    email: "crypto.king@email.com",
-                    name: "Crypto King",
-                    username: "cryptoking",
-                    avatarURL: nil,
-                    isOnline: false,
-                    globalReputation: 4200
-                ),
-                guild: GuildDTO(
-                    id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426614174004")!,
-                    name: "Crypto Warriors",
-                    description: "Cryptocurrency enthusiasts unite!",
-                    reputation: 38000,
-                    accuracy: 72,
-                    memberCount: 203,
-                    owner: GlobalMemberDTO(
-                        id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
-                        email: "crypto.king@email.com",
-                        name: "Crypto King",
-                        username: "cryptoking",
-                        avatarURL: nil,
-                        isOnline: false,
-                        globalReputation: 4200
-                    ),
-                    ownerRole: .admin,
-                    dateCreated: Date(timeIntervalSince1970: 1710936900),
-                    imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
-                    isJoined: false,
-                    currentMemberRole: nil,
-                    isOpen: true,
-                    membersOnline: 12
-                ),
-                roleInGuild: .admin,
-                dateJoined: Date(timeIntervalSince1970: 1710936900),
-                reputation: 4200,
-                daysInGuild: 217,
-                contributionScore: 92,
-                isOnline: false,
-                isFriend: false,
-                isBlocked: false
-            ),
-            isOpen: true
-        )
-    ]
+//    // MARK: - Guild Summaries (with embedded GuildMembershipDTO owner)
+//    static let guildSummaries: [GuildSummaryDTO] = [
+//        GuildSummaryDTO(
+//            id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//            name: "KAOS Trading",
+//            memberCount: 156,
+//            imageURL: "https://cdn.tradersguild.com/guilds/kaos.jpg",
+//            reputation: 45000,
+//            owner: GuildMembershipDTO(
+//                id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174008")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                    email: "sarah.masters@email.com",
+//                    name: "Sarah Masters",
+//                    username: "tradingqueen",
+//                    avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                    isOnline: true,
+//                    globalReputation: 5820
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "b23e4567-e89b-12d3-a456-426614174002")!,
+//                    name: "KAOS Trading",
+//                    description: "Premier guild for forex and cryptocurrency traders.",
+//                    reputation: 45000,
+//                    accuracy: 78,
+//                    memberCount: 156,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "c23e4567-e89b-12d3-a456-426614174003")!,
+//                        email: "sarah.masters@email.com",
+//                        name: "Sarah Masters",
+//                        username: "tradingqueen",
+//                        avatarURL: "https://cdn.tradersguild.com/avatars/sarah.jpg",
+//                        isOnline: true,
+//                        globalReputation: 5820
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1705314600),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/kaos-banner.jpg",
+//                    isJoined: true,
+//                    currentMemberRole: .admin,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .admin,
+//                dateJoined: Date(timeIntervalSince1970: 1705314600),
+//                reputation: 5820,
+//                daysInGuild: 282,
+//                contributionScore: 95,
+//                isOnline: true,
+//                isFriend: true,
+//                isBlocked: false
+//            ),
+//            isOpen: true
+//        ),
+//        GuildSummaryDTO(
+//            id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426614174004")!,
+//            name: "Crypto Warriors",
+//            memberCount: 203,
+//            imageURL: "https://cdn.tradersguild.com/guilds/crypto.jpg",
+//            reputation: 38000,
+//            owner: GuildMembershipDTO(
+//                id: UUID(uuidString: "223e4567-e89b-12d3-a456-426614174009")!,
+//                globalMember: GlobalMemberDTO(
+//                    id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
+//                    email: "crypto.king@email.com",
+//                    name: "Crypto King",
+//                    username: "cryptoking",
+//                    avatarURL: nil,
+//                    isOnline: false,
+//                    globalReputation: 4200
+//                ),
+//                guild: GuildDTO(
+//                    id: UUID(uuidString: "d23e4567-e89b-12d3-a456-426614174004")!,
+//                    name: "Crypto Warriors",
+//                    description: "Cryptocurrency enthusiasts unite!",
+//                    reputation: 38000,
+//                    accuracy: 72,
+//                    memberCount: 203,
+//                    owner: GlobalMemberDTO(
+//                        id: UUID(uuidString: "e23e4567-e89b-12d3-a456-426614174005")!,
+//                        email: "crypto.king@email.com",
+//                        name: "Crypto King",
+//                        username: "cryptoking",
+//                        avatarURL: nil,
+//                        isOnline: false,
+//                        globalReputation: 4200
+//                    ),
+//                    ownerRole: .admin,
+//                    dateCreated: Date(timeIntervalSince1970: 1710936900),
+//                    imageURL: "https://cdn.tradersguild.com/guilds/crypto-banner.jpg",
+//                    isJoined: false,
+//                    currentMemberRole: nil,
+//                    isOpen: true,
+//                    membersOnline: 12
+//                ),
+//                roleInGuild: .admin,
+//                dateJoined: Date(timeIntervalSince1970: 1710936900),
+//                reputation: 4200,
+//                daysInGuild: 217,
+//                contributionScore: 92,
+//                isOnline: false,
+//                isFriend: false,
+//                isBlocked: false
+//            ),
+//            isOpen: true
+//        )
+//    ]
     
-    // MARK: - Guild Memberships (with embedded GlobalMemberDTO + GuildDTO)
+    // MARK: -  Current Guild Memberships (with embedded GlobalMemberDTO + GuildDTO)
     static let guildMemberships: [GuildMembershipDTO] = [
         GuildMembershipDTO(
             id: UUID(uuidString: "123e4567-e89b-12d3-a456-426614174008")!,
@@ -1107,116 +1115,116 @@ struct SampleData {
         )
     ]
     
-    // MARK: - Symbols
-    static let symbols: [SymbolDTO] = [
-        SymbolDTO(
-            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174040")!,
-            ticker: "AAPL",
-            name: "Apple Inc.",
-            price: 182.52,
-            priceFormatted: "$182.52",
-            change: 4.27,
-            changeFormatted: "+2.34%",
-            changeColor: "green",
-            volume: 52345678,
-            volumeFormatted: "52.3M",
-            marketCap: "2.85T",
-            symbolType: .stocks,
-            symbolStatus: .closed
-        ),
-        SymbolDTO(
-            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174042")!,
-            ticker: "MSFT",
-            name: "Microsoft Corporation",
-            price: 378.91,
-            priceFormatted: "$378.91",
-            change: -2.15,
-            changeFormatted: "-0.56%",
-            changeColor: "red",
-            volume: 28934521,
-            volumeFormatted: "28.9M",
-            marketCap: "2.81T",
-            symbolType: .stocks,
-            symbolStatus: .closed
-        ),
-        SymbolDTO(
-            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174041")!,
-            ticker: "GOOGL",
-            name: "Alphabet Inc.",
-            price: 141.73,
-            priceFormatted: "$141.73",
-            change: 1.89,
-            changeFormatted: "+1.35%",
-            changeColor: "green",
-            volume: 19876543,
-            volumeFormatted: "19.9M",
-            marketCap: "1.76T",
-            symbolType: .stocks,
-            symbolStatus: .closed
-        ),
-        SymbolDTO(
-            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174043")!,
-            ticker: "EUR/USD",
-            name: "Euro / US Dollar",
-            price: 1.0856,
-            priceFormatted: "1.0856",
-            change: -0.0023,
-            changeFormatted: "-0.21%",
-            changeColor: "red",
-            volume: 0,
-            volumeFormatted: "N/A",
-            marketCap: nil,
-            symbolType: .forex,
-            symbolStatus: .open
-        ),
-        SymbolDTO(
-            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174044")!,
-            ticker: "BTC",
-            name: "Bitcoin",
-            price: 67234.50,
-            priceFormatted: "$67,234.50",
-            change: 1832.75,
-            changeFormatted: "+2.80%",
-            changeColor: "green",
-            volume: 28934521000,
-            volumeFormatted: "28.9B",
-            marketCap: "1.32T",
-            symbolType: .cryptocurrency,
-            symbolStatus: .open
-        ),
-        SymbolDTO(
-            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174045")!,
-            ticker: "ETH",
-            name: "Ethereum",
-            price: 3524.18,
-            priceFormatted: "$3,524.18",
-            change: 87.92,
-            changeFormatted: "+2.56%",
-            changeColor: "green",
-            volume: 15234789000,
-            volumeFormatted: "15.2B",
-            marketCap: "423.5B",
-            symbolType: .cryptocurrency,
-            symbolStatus: .open
-        ),
-        SymbolDTO(
-            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174046")!,
-            ticker: "XAUUSD",
-            name: "Gold",
-            price: 2654.30,
-            priceFormatted: "$2,654.30",
-            change: -12.45,
-            changeFormatted: "-0.47%",
-            changeColor: "red",
-            volume: 0,
-            volumeFormatted: "N/A",
-            marketCap: nil,
-            symbolType: .commodities,
-            symbolStatus: .open
-        )
-    ]
+//    // MARK: - Symbols
+//    static let symbols: [SymbolDTO] = [
+//        SymbolDTO(
+//            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174040")!,
+//            ticker: "AAPL",
+//            name: "Apple Inc.",
+//            price: 182.52,
+//            priceFormatted: "$182.52",
+//            change: 4.27,
+//            changeFormatted: "+2.34%",
+//            changeColor: "green",
+//            volume: 52345678,
+//            volumeFormatted: "52.3M",
+//            marketCap: "2.85T",
+//            symbolType: .stocks,
+//            symbolStatus: .closed
+//        ),
+//        SymbolDTO(
+//            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174042")!,
+//            ticker: "MSFT",
+//            name: "Microsoft Corporation",
+//            price: 378.91,
+//            priceFormatted: "$378.91",
+//            change: -2.15,
+//            changeFormatted: "-0.56%",
+//            changeColor: "red",
+//            volume: 28934521,
+//            volumeFormatted: "28.9M",
+//            marketCap: "2.81T",
+//            symbolType: .stocks,
+//            symbolStatus: .closed
+//        ),
+//        SymbolDTO(
+//            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174041")!,
+//            ticker: "GOOGL",
+//            name: "Alphabet Inc.",
+//            price: 141.73,
+//            priceFormatted: "$141.73",
+//            change: 1.89,
+//            changeFormatted: "+1.35%",
+//            changeColor: "green",
+//            volume: 19876543,
+//            volumeFormatted: "19.9M",
+//            marketCap: "1.76T",
+//            symbolType: .stocks,
+//            symbolStatus: .closed
+//        ),
+//        SymbolDTO(
+//            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174043")!,
+//            ticker: "EUR/USD",
+//            name: "Euro / US Dollar",
+//            price: 1.0856,
+//            priceFormatted: "1.0856",
+//            change: -0.0023,
+//            changeFormatted: "-0.21%",
+//            changeColor: "red",
+//            volume: 0,
+//            volumeFormatted: "N/A",
+//            marketCap: nil,
+//            symbolType: .forex,
+//            symbolStatus: .open
+//        ),
+//        SymbolDTO(
+//            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174044")!,
+//            ticker: "BTC",
+//            name: "Bitcoin",
+//            price: 67234.50,
+//            priceFormatted: "$67,234.50",
+//            change: 1832.75,
+//            changeFormatted: "+2.80%",
+//            changeColor: "green",
+//            volume: 28934521000,
+//            volumeFormatted: "28.9B",
+//            marketCap: "1.32T",
+//            symbolType: .cryptocurrency,
+//            symbolStatus: .open
+//        ),
+//        SymbolDTO(
+//            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174045")!,
+//            ticker: "ETH",
+//            name: "Ethereum",
+//            price: 3524.18,
+//            priceFormatted: "$3,524.18",
+//            change: 87.92,
+//            changeFormatted: "+2.56%",
+//            changeColor: "green",
+//            volume: 15234789000,
+//            volumeFormatted: "15.2B",
+//            marketCap: "423.5B",
+//            symbolType: .cryptocurrency,
+//            symbolStatus: .open
+//        ),
+//        SymbolDTO(
+//            id: UUID(uuidString: "743e4567-e89b-12d3-a456-426614174046")!,
+//            ticker: "XAUUSD",
+//            name: "Gold",
+//            price: 2654.30,
+//            priceFormatted: "$2,654.30",
+//            change: -12.45,
+//            changeFormatted: "-0.47%",
+//            changeColor: "red",
+//            volume: 0,
+//            volumeFormatted: "N/A",
+//            marketCap: nil,
+//            symbolType: .commodities,
+//            symbolStatus: .open
+//        )
+//    ]
     
-    // MARK: - Sample Symbols (Embedded)
+    // MARK: - Current Guild Watchlist - Sample Symbols
     static let guildWatchlist: GuildWatchlistDTO =
         // MARK: - Watchlist 1: Tech Stocks
         GuildWatchlistDTO(
@@ -1319,10 +1327,7 @@ struct SampleData {
             lastUpdated: "Updated 5 min ago"
         )
     
-    
-    
     // MARK: - Get sample notifications for user in guild
-
     static let userNotifications: [GuildNotificationDTO] = [
         // 1. Personal - New Message (DM)
         GuildNotificationDTO(
@@ -2040,7 +2045,13 @@ struct SampleData {
         )
     ]
     
-    // MARK: - Chatroom Messages (with embedded GuildMembershipDTO author)
+    
+    // ================================================================================================
+    // MARK: - Chat Sample Data
+    // ================================================================================================
+    
+    
+    // MARK: - Chatroom Messages for current chatroom
     static let chatroomMessages: [ChatroomMessageDTO] = [
         ChatroomMessageDTO(
             id: UUID(uuidString: "a43e4567-e89b-12d3-a456-426614174070")!,
@@ -2209,7 +2220,7 @@ struct SampleData {
         )
     ]
     
-    // MARK: - Chatrooms (with embedded ChatroomMessageDTO as lastMessage)
+    // MARK: - All Guild Chatrooms (with embedded ChatroomMessageDTO as lastMessage)
     static let allGuildChatrooms: [GuildChatroomDTO] = [
         GuildChatroomDTO(
             id: UUID(uuidString: "943e4567-e89b-12d3-a456-426614174060")!,
@@ -2369,7 +2380,7 @@ struct SampleData {
             canSendMessages: true
         )
     
-    // MARK: - DM Messages (with embedded GuildMembershipDTO author)
+    // MARK: - DM Messages for current DM (with embedded GuildMembershipDTO author)
     static let dmMessages: [DMMessageDTO] = [
         DMMessageDTO(
             id: UUID(uuidString: "c43e4567-e89b-12d3-a456-426614174090")!,
@@ -2815,7 +2826,6 @@ struct SampleData {
             unreadCount: 3,
             isBlocked: false
         )
-    
     
     // MARK: - All Guild Friend DMs
     static let allGuildFriendDM: [DMDTO] = [
@@ -3911,7 +3921,21 @@ struct SampleData {
         )
     ]
     
-    /// All available trading symbols across different asset classes
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    // ================================================================================================
+    // MARK: - Chart Sample Data
+    // ================================================================================================
+    
+    
+    // MARK: - All available trading symbols
     static let allTradingSymbols: [TradingSymbol] = [
         
         // MARK: Forex
@@ -4095,27 +4119,16 @@ struct SampleData {
         )
     ]
     
-    /// User's personal watchlist (first few symbols)
+    // MARK: - Users Personal Watchlist
     static var personalWatchlist: [TradingSymbol] {
         Array(allTradingSymbols.prefix(5))
     }
     
-    /// Guild's chart watchlist (RENAMED to avoid conflict with existing GuildWatchlistDTO)
+    // MARK: - Fetch Guild Watchlist - return Symbols
     static var chartGuildWatchlist: [TradingSymbol] {
         Array(allTradingSymbols.suffix(5))
     }
     
-    
-    
-    
-    //
-    //  ADD THIS CODE INSIDE YOUR EXISTING SampleData STRUCT
-    //  (Paste before the final closing brace of the struct)
-    //
-
-    // ================================================================================================
-    // MARK: - Chart Marker Sample Data
-    // ================================================================================================
     
     /// Sample guild members who have placed markers
     static let chartMarkerMembers: [(userId: String, username: String, avatarURL: String?)] = [
@@ -4162,145 +4175,6 @@ struct SampleData {
         .note, .note
     ]
     
-    /// Generate sample chart markers for testing
-//    static func generateChartMarkers(
-//        forSymbol symbol: String,
-//        guildId: String,
-//        candleCount: Int,
-//        count: Int = 8
-//    ) -> [ChartMarker] {
-//        guard candleCount >= 30 else { return [] }
-//        
-//        var markers: [ChartMarker] = []
-//        let startIndex = 15
-//        let endIndex = candleCount - 10
-//        let range = endIndex - startIndex
-//        
-//        guard range > count else { return [] }
-//        
-//        var usedIndices: [Int] = []
-//        
-//        for i in 0..<count {
-//            // 20% chance to cluster with previous marker
-//            let baseIndex: Int
-//            if i > 0 && Int.random(in: 0...4) == 0 {
-//                baseIndex = usedIndices.last! + Int.random(in: 0...2)
-//            } else {
-//                let step = range / count
-//                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
-//            }
-//            
-//            let candleIndex = min(endIndex, max(startIndex, baseIndex))
-//            usedIndices.append(candleIndex)
-//            
-//            let member = chartMarkerMembers[i % chartMarkerMembers.count]
-//            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
-//            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
-//            let placeholderPrice = 1.0850
-//            
-//            let hoursAgo = Double.random(in: 1...72)
-//            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
-//            
-//            let comments = SampleData.generateMarkerComments()
-//            
-//            var marker = ChartMarker(
-//                id: UUID(),
-//                candleIndex: candleIndex,
-//                timestamp: timestamp,
-//                price: placeholderPrice,
-//                type: markerType,
-//                userId: member.userId,
-//                username: member.username,
-//                note: note,
-//                guildId: guildId,
-//                createdAt: timestamp,
-//                comments: comments 
-//            )
-//            
-//            marker.likeCount = Int.random(in: 0...15)
-//            marker.isLikedByCurrentUser = marker.likeCount > 0 && Bool.random()
-//            
-//            markers.append(marker)
-//        }
-//        
-//        return markers
-//    }
-    
-    /// Update marker prices based on actual candle data
-//    static func updateMarkerPrices(
-//        markers: [ChartMarker],
-//        candles: [Candle]
-//    ) -> [ChartMarker] {
-//        return markers.map { marker in
-//            guard marker.candleIndex >= 0 && marker.candleIndex < candles.count else {
-//                return marker
-//            }
-//            
-//            let candle = candles[marker.candleIndex]
-//            let price: Double
-//            
-//            switch marker.type {
-//            case .support:
-//                price = candle.low
-//            case .resistance:
-//                price = candle.high
-//            case .entry, .takeProfit:
-//                price = candle.close
-//            case .exit, .stopLoss:
-//                price = candle.open
-//            default:
-//                price = (candle.high + candle.low) / 2
-//            }
-//            
-//            // Create updated marker with comments parameter
-//            var updatedMarker = ChartMarker(
-//                id: marker.id,
-//                candleIndex: marker.candleIndex,
-//                timestamp: candle.timestamp,
-//                price: price,
-//                type: marker.type,
-//                userId: marker.userId,
-//                username: marker.username,
-//                note: marker.note,
-//                guildId: marker.guildId,
-//                createdAt: marker.createdAt,
-//                comments: marker.comments  // ✅ FIXED: Now preserving comments
-//            )
-//            
-//            // Copy over additional properties
-//            updatedMarker.likeCount = marker.likeCount
-//            updatedMarker.isLikedByCurrentUser = marker.isLikedByCurrentUser
-//            
-//            // Copy over any other properties that might exist
-//            updatedMarker.horizontalLinePrice = marker.horizontalLinePrice
-//            updatedMarker.targetPrice = marker.targetPrice
-//            updatedMarker.alertSeverity = marker.alertSeverity
-//            updatedMarker.trendlineDirection = marker.trendlineDirection
-//            updatedMarker.chartPattern = marker.chartPattern
-//            updatedMarker.selectedIndicator = marker.selectedIndicator
-//            updatedMarker.selectedEmoji = marker.selectedEmoji
-//            updatedMarker.pollQuestion = marker.pollQuestion
-//            updatedMarker.pollOptions = marker.pollOptions
-//            updatedMarker.userPollVote = marker.userPollVote
-//            
-//            return updatedMarker
-//        }
-//    }
-}
-
-
-
-//
-//  SampleData+ChartChat.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 14/12/2025.
-//
-//  Sample data for chart chat functionality
-
-
-
-extension SampleData {
     
     // MARK: - Chart Chat Sample Data
     
@@ -4414,18 +4288,6 @@ extension SampleData {
             canDelete: true
         )
     }
-}
-
-
-
-//
-//  SampleData+MarkerComments.swift
-//  traders_guild
-//
-//  Sample data for marker comments
-//  Add this to your existing SampleData.swift or as an extension
-
-extension SampleData {
     
     // MARK: - Marker Comment Sample Data
     
@@ -4457,121 +4319,6 @@ extension SampleData {
         "What timeframe are you using?",
         "Solid technical analysis here."
     ]
-    
-    /// Generate random marker comments
-//    static func generateMarkerComments(count: Int = 0) -> [MarkerComment] {
-//        // Random count between 0 and 5 if not specified
-//        let commentCount = count > 0 ? count : Int.random(in: 0...5)
-//        guard commentCount > 0 else { return [] }
-//        
-//        var comments: [MarkerComment] = []
-//        
-//        for i in 0..<commentCount {
-//            let user = commentUsers[Int.random(in: 0..<commentUsers.count)]
-//            let text = commentTexts[Int.random(in: 0..<commentTexts.count)]
-//            let hoursAgo = Double.random(in: 0.5...48)
-//            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
-//            
-//            let comment = MarkerComment(
-//                id: UUID(),
-//                userId: user.userId,
-//                username: user.username,
-//                text: text,
-//                createdAt: timestamp
-//            )
-//            
-//            comments.append(comment)
-//        }
-//        
-//        // Sort by creation date
-//        return comments.sorted { $0.createdAt < $1.createdAt }
-//    }
-    
-    /// Updated generateChartMarkers that includes comments
-    /// Replace the existing generateChartMarkers function with this one
-//    static func generateChartMarkersWithComments(
-//        forSymbol symbol: String,
-//        guildId: String,
-//        candleCount: Int
-//    ) -> [ChartMarker] {
-//        let markerCount = min(8, max(3, candleCount / 30))
-//        var markers: [ChartMarker] = []
-//        var usedIndices: [Int] = []
-//        
-//        let startIndex = max(5, candleCount - Int(Double(candleCount) * 0.9))
-//        let endIndex = candleCount - 5
-//        let range = endIndex - startIndex
-//        let count = min(markerCount, range / 3)
-//        
-//        for i in 0..<count {
-//            var baseIndex: Int
-//            if count == 1 {
-//                baseIndex = startIndex + range / 2
-//            } else {
-//                let step = range / count
-//                baseIndex = startIndex + (i * step) + Int.random(in: 0...max(1, step/2))
-//            }
-//            
-//            let candleIndex = min(endIndex, max(startIndex, baseIndex))
-//            usedIndices.append(candleIndex)
-//            
-//            let member = chartMarkerMembers[i % chartMarkerMembers.count]
-//            let markerType = markerTypeDistribution[Int.random(in: 0..<markerTypeDistribution.count)]
-//            let note = chartMarkerNotes[Int.random(in: 0..<chartMarkerNotes.count)]
-//            let placeholderPrice = 1.0850
-//            
-//            let hoursAgo = Double.random(in: 1...72)
-//            let timestamp = Date().addingTimeInterval(-hoursAgo * 3600)
-//            
-//            // Generate comments for this marker
-//            let comments = generateMarkerComments()
-//            
-//            var marker = ChartMarker(
-//                id: UUID(),
-//                candleIndex: candleIndex,
-//                timestamp: timestamp,
-//                price: placeholderPrice,
-//                type: markerType,
-//                userId: member.userId,
-//                username: member.username,
-//                note: note,
-//                guildId: guildId,
-//                createdAt: timestamp,
-//                comments: comments
-//            )
-//            
-//            marker.likeCount = Int.random(in: 0...15)
-//            marker.isLikedByCurrentUser = marker.likeCount > 0 && Bool.random()
-//            
-//            markers.append(marker)
-//        }
-//        
-//        return markers
-//    }
-}
-
-// MARK: - Update to existing generateChartMarkers
-// If you want to update the existing function instead, add this after marker creation:
-/*
- // Inside the for loop, after creating the marker:
- let comments = SampleData.generateMarkerComments()
- marker = ChartMarker(
-     ...existing parameters...,
-     comments: comments
- )
-*/
-
-
-//
-//  SampleData+ChartMarkerDTO.swift
-//  traders_guild
-//
-//  Extension for generating ChartMarkerDTO sample data
-//  Replaces legacy generateChartMarkers and updateMarkerPrices methods
-//
-
-
-extension SampleData {
     
     // MARK: - Sample Author Guild Memberships for Markers
     
@@ -4915,162 +4662,683 @@ extension SampleData {
             return updatedMarker
         }
     }
+
 }
 
-// MARK: - MockAPIService Extension for ChartMarkerDTO
-
-//extension MockAPIService {
-//    
-//    /// Fetch chart markers as DTOs (replaces legacy fetchGuildChartMarkers)
-//    func fetchGuildChartMarkerDTOs(
-//        symbol: String,
-//        guildId: UUID,
-//        timeframe: ChartTimeframe,
-//        candleCount: Int
-//    ) async throws -> [ChartMarkerDTO] {
-//        // Simulate network delay
-//        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-//        
-//        // Generate sample markers
-//        let symbolId = SampleData.allTradingSymbols.first { $0.symbol == symbol }?.id ?? UUID()
-//        let currentUserId = SampleData.currentUser.id
-//        
-//        return SampleData.generateChartMarkerDTOs(
-//            forSymbol: symbol,
-//            symbolId: symbolId,
-//            guildId: guildId,
-//            candleCount: candleCount,
-//            currentUserId: currentUserId,
-//            count: 8
-//        )
-//    }
-//    
-//    /// Add a comment to a marker
-//    func addMarkerCommentDTO(
-//        markerId: UUID,
-//        content: String
-//    ) async throws -> MarkerCommentDTO {
-//        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-//        
-//        let formatter = RelativeDateTimeFormatter()
-//        formatter.unitsStyle = .abbreviated
-//        
-//        return MarkerCommentDTO(
-//            id: UUID(),
-//            markerId: markerId,
-//            author: SampleData.currentUser.guildMembership,
-//            content: content,
-//            timestamp: Date(),
-//            timestampFormatted: "Just now",
-//            isEdited: false,
-//            isCurrentUserMessage: true,
-//            canEdit: true,
-//            canDelete: true
-//        )
-//    }
-//    
-//    /// Edit a marker comment
-//    func editMarkerCommentDTO(
-//        markerId: UUID,
-//        commentId: UUID,
-//        newContent: String
-//    ) async throws -> MarkerCommentDTO {
-//        try await Task.sleep(nanoseconds: 100_000_000)
-//        
-//        let formatter = RelativeDateTimeFormatter()
-//        formatter.unitsStyle = .abbreviated
-//        
-//        return MarkerCommentDTO(
-//            id: commentId,
-//            markerId: markerId,
-//            author: SampleData.currentUser.guildMembership,
-//            content: newContent,
-//            timestamp: Date(),
-//            timestampFormatted: formatter.localizedString(for: Date(), relativeTo: Date()),
-//            isEdited: true,
-//            isCurrentUserMessage: true,
-//            canEdit: true,
-//            canDelete: true
-//        )
-//    }
-//    
-//    /// Delete a marker comment
-//    func deleteMarkerCommentDTO(markerId: UUID, commentId: UUID) async throws {
-//        try await Task.sleep(nanoseconds: 100_000_000)
-//        // In real impl, would delete from backend
-//    }
-//    
-//    /// Toggle like on a marker
-//    func toggleMarkerLike(markerId: UUID) async throws -> (isLiked: Bool, likeCount: Int) {
-//        try await Task.sleep(nanoseconds: 100_000_000)
-//        // Return toggled state - in real impl would come from backend
-//        return (true, Int.random(in: 1...20))
-//    }
-//    
-//    /// Create a new marker
-//    func createChartMarkerDTO(
-//        symbolId: UUID,
-//        guildId: UUID,
-//        candleIndex: Int,
-//        timestamp: Date,
-//        price: Double,
-//        type: MarkerType,
-//        note: String?
-//    ) async throws -> ChartMarkerDTO {
-//        try await Task.sleep(nanoseconds: 150_000_000)
-//        
-//        let formatter = RelativeDateTimeFormatter()
-//        formatter.unitsStyle = .abbreviated
-//        
-//        return ChartMarkerDTO(
-//            id: UUID(),
-//            symbolId: symbolId,
-//            guildId: guildId,
-//            author: SampleData.currentUser.guildMembership,
-//            candleIndex: candleIndex,
-//            timestamp: timestamp,
-//            price: price,
-//            type: type,
-//            note: note,
-//            createdAt: Date(),
-//            createdAtFormatted: "Just now",
-//            isVisible: true,
-//            likeCount: 0,
-//            isLikedByCurrentUser: false,
-//            commentCount: 0,
-//            comments: [],
-//            isCurrentUserMarker: true,
-//            canEdit: true,
-//            canDelete: true,
-//            positionedBelow: false,
-//            proximityTier: 0,
-//            stackIndex: 0,
-//            horizontalLinePrice: type.hasHorizontalLine ? price : nil,
-//            targetPrice: nil,
-//            alertSeverity: nil,
-//            trendlineDirection: nil,
-//            selectedIndicator: nil,
-//            chartPattern: nil,
-//            selectedEmoji: nil,
-//            pollQuestion: nil,
-//            pollOptions: nil,
-//            userPollVote: nil
-//        )
-//    }
-//    
-//    /// Delete a marker
-//    func deleteChartMarkerDTO(markerId: UUID) async throws {
-//        try await Task.sleep(nanoseconds: 100_000_000)
-//        // In real impl, would delete from backend
-//    }
-//    
-//    /// Update a marker's note
-//    func updateChartMarkerDTO(markerId: UUID, note: String) async throws {
-//        try await Task.sleep(nanoseconds: 100_000_000)
-//        // In real impl, would update backend
-//    }
-//}
 
 
 
 
+// MARK: - TradingSymbolDTO Sample Data Extension
+extension SampleData {
+    
+    // ================================================================================================
+    // MARK: - TRADING SYMBOL DTOs (NEW)
+    // ================================================================================================
+    
+    /// All available trading symbols using new DTO format
+    /// Use this instead of allTradingSymbols once migration is complete
+    static let allTradingSymbolDTOs: [TradingSymbolDTO] = [
+        
+        // MARK: Forex Pairs
+        TradingSymbolDTO(
+            id: UUID(uuidString: "a1111111-e89b-12d3-a456-426614174001")!,
+            ticker: "EURUSD",
+            displayName: "Euro / US Dollar",
+            assetClass: .forex,
+            exchange: "Forex",
+            tickSize: 0.00001,
+            lotSize: 1000,
+            isActive: true,
+            iconName: "icon_eurusd",          // Has SVG icon
+            primaryColor: "#003399",           // EU blue
+            secondaryColor: "#FFCC00",         // EU gold/yellow
+            currentPrice: 1.08452,
+            priceFormatted: "1.08452",
+            change24h: 0.00234,
+            changePercent24h: 0.22,
+            changeFormatted: "+0.22%",
+            isUp: true,
+            high24h: 1.08678,
+            low24h: 1.08102,
+            volume24h: 2_450_000_000,
+            volumeFormatted: "2.45B"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "a2222222-e89b-12d3-a456-426614174002")!,
+            ticker: "GBPUSD",
+            displayName: "British Pound / US Dollar",
+            assetClass: .forex,
+            exchange: "Forex",
+            tickSize: 0.00001,
+            lotSize: 1000,
+            isActive: true,
+            iconName: "icon_gbpusd",          // Has SVG icon
+            primaryColor: "#012169",           // UK Navy blue
+            secondaryColor: "#C8102E",         // UK Red
+            currentPrice: 1.27185,
+            priceFormatted: "1.27185",
+            change24h: -0.00412,
+            changePercent24h: -0.32,
+            changeFormatted: "-0.32%",
+            isUp: false,
+            high24h: 1.27823,
+            low24h: 1.26945,
+            volume24h: 1_890_000_000,
+            volumeFormatted: "1.89B"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "a3333333-e89b-12d3-a456-426614174003")!,
+            ticker: "USDJPY",
+            displayName: "US Dollar / Japanese Yen",
+            assetClass: .forex,
+            exchange: "Forex",
+            tickSize: 0.001,
+            lotSize: 1000,
+            isActive: true,
+            iconName: "icon_usdjpy",          // Has SVG icon
+            primaryColor: "#85BB65",           // Dollar green
+            secondaryColor: "#BC002D",         // Japan red
+            currentPrice: 149.856,
+            priceFormatted: "149.85600",
+            change24h: 0.523,
+            changePercent24h: 0.35,
+            changeFormatted: "+0.35%",
+            isUp: true,
+            high24h: 150.234,
+            low24h: 149.456,
+            volume24h: 3_120_000_000,
+            volumeFormatted: "3.12B"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "a4444444-e89b-12d3-a456-426614174004")!,
+            ticker: "AUDUSD",
+            displayName: "Australian Dollar / US Dollar",
+            assetClass: .forex,
+            exchange: "Forex",
+            tickSize: 0.00001,
+            lotSize: 1000,
+            isActive: true,
+            iconName: "icon_audusd",          // Has SVG icon
+            primaryColor: "#00843D",           // Australian green
+            secondaryColor: "#FFCD00",         // Australian gold
+            currentPrice: 0.63842,
+            priceFormatted: "0.63842",
+            change24h: 0.00156,
+            changePercent24h: 0.24,
+            changeFormatted: "+0.24%",
+            isUp: true,
+            high24h: 0.64012,
+            low24h: 0.63678,
+            volume24h: 1_450_000_000,
+            volumeFormatted: "1.45B"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "a5555555-e89b-12d3-a456-426614174005")!,
+            ticker: "USDCHF",
+            displayName: "US Dollar / Swiss Franc",
+            assetClass: .forex,
+            exchange: "Forex",
+            tickSize: 0.00001,
+            lotSize: 1000,
+            isActive: true,
+            iconName: "icon_usdchf",          // Has SVG icon
+            primaryColor: "#DA291C",           // Swiss red
+            secondaryColor: "#FFFFFF",         // Swiss white
+            currentPrice: 0.88234,
+            priceFormatted: "0.88234",
+            change24h: -0.00089,
+            changePercent24h: -0.10,
+            changeFormatted: "-0.10%",
+            isUp: false,
+            high24h: 0.88456,
+            low24h: 0.88123,
+            volume24h: 980_000_000,
+            volumeFormatted: "980M"
+        ),
+        
+        // MARK: Cryptocurrencies
+        TradingSymbolDTO(
+            id: UUID(uuidString: "b1111111-e89b-12d3-a456-426614174006")!,
+            ticker: "BTCUSD",
+            displayName: "Bitcoin / US Dollar",
+            assetClass: .crypto,
+            exchange: "Binance",
+            tickSize: 0.01,
+            lotSize: 0.001,
+            isActive: true,
+            iconName: "icon_btc",             // Has SVG icon
+            primaryColor: "#F7931A",           // Bitcoin orange
+            secondaryColor: "#000000",         // Black
+            currentPrice: 42_856.34,
+            priceFormatted: "$42,856.34",
+            change24h: 1_234.56,
+            changePercent24h: 2.97,
+            changeFormatted: "+2.97%",
+            isUp: true,
+            high24h: 43_123.89,
+            low24h: 41_456.78,
+            volume24h: 28_450_000_000,
+            volumeFormatted: "28.45B"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "b2222222-e89b-12d3-a456-426614174007")!,
+            ticker: "ETHUSD",
+            displayName: "Ethereum / US Dollar",
+            assetClass: .crypto,
+            exchange: "Binance",
+            tickSize: 0.01,
+            lotSize: 0.01,
+            isActive: true,
+            iconName: "icon_eth",             // Has SVG icon
+            primaryColor: "#627EEA",           // Ethereum blue/purple
+            secondaryColor: "#FFFFFF",         // White
+            currentPrice: 2_234.67,
+            priceFormatted: "$2,234.67",
+            change24h: -45.23,
+            changePercent24h: -1.98,
+            changeFormatted: "-1.98%",
+            isUp: false,
+            high24h: 2_289.45,
+            low24h: 2_198.34,
+            volume24h: 12_340_000_000,
+            volumeFormatted: "12.34B"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "b3333333-e89b-12d3-a456-426614174008")!,
+            ticker: "SOLUSD",
+            displayName: "Solana / US Dollar",
+            assetClass: .crypto,
+            exchange: "Binance",
+            tickSize: 0.01,
+            lotSize: 0.1,
+            isActive: true,
+            iconName: "icon_sol",             // Has SVG icon
+            primaryColor: "#14F195",           // Solana green/cyan
+            secondaryColor: "#9945FF",         // Solana purple
+            currentPrice: 98.56,
+            priceFormatted: "$98.56",
+            change24h: 4.23,
+            changePercent24h: 4.48,
+            changeFormatted: "+4.48%",
+            isUp: true,
+            high24h: 99.87,
+            low24h: 93.45,
+            volume24h: 1_890_000_000,
+            volumeFormatted: "1.89B"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "b4444444-e89b-12d3-a456-426614174009")!,
+            ticker: "ADAUSD",
+            displayName: "Cardano / US Dollar",
+            assetClass: .crypto,
+            exchange: "Binance",
+            tickSize: 0.0001,
+            lotSize: 10,
+            isActive: true,
+            iconName: "icon_ada",             // Has SVG icon
+            primaryColor: "#0033AD",           // Cardano blue
+            secondaryColor: "#FFFFFF",         // White
+            currentPrice: 0.5234,
+            priceFormatted: "$0.523400",
+            change24h: 0.0123,
+            changePercent24h: 2.40,
+            changeFormatted: "+2.40%",
+            isUp: true,
+            high24h: 0.5345,
+            low24h: 0.5089,
+            volume24h: 567_000_000,
+            volumeFormatted: "567M"
+        ),
+        
+        // MARK: US Stocks
+        TradingSymbolDTO(
+            id: UUID(uuidString: "c1111111-e89b-12d3-a456-426614174010")!,
+            ticker: "AAPL",
+            displayName: "Apple Inc.",
+            assetClass: .stocks,
+            exchange: "NASDAQ",
+            tickSize: 0.01,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "A" fallback
+            primaryColor: "#555555",           // Space gray
+            secondaryColor: "#FFFFFF",         // White
+            currentPrice: 178.42,
+            priceFormatted: "$178.42",
+            change24h: 2.34,
+            changePercent24h: 1.33,
+            changeFormatted: "+1.33%",
+            isUp: true,
+            high24h: 179.23,
+            low24h: 176.45,
+            volume24h: 54_230_000,
+            volumeFormatted: "54.23M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "c2222222-e89b-12d3-a456-426614174011")!,
+            ticker: "MSFT",
+            displayName: "Microsoft Corporation",
+            assetClass: .stocks,
+            exchange: "NASDAQ",
+            tickSize: 0.01,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "M" fallback
+            primaryColor: "#00A4EF",           // Microsoft blue
+            secondaryColor: "#F25022",         // Microsoft red
+            currentPrice: 398.67,
+            priceFormatted: "$398.67",
+            change24h: -3.45,
+            changePercent24h: -0.86,
+            changeFormatted: "-0.86%",
+            isUp: false,
+            high24h: 402.89,
+            low24h: 397.23,
+            volume24h: 23_450_000,
+            volumeFormatted: "23.45M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "c3333333-e89b-12d3-a456-426614174012")!,
+            ticker: "GOOGL",
+            displayName: "Alphabet Inc. (Google)",
+            assetClass: .stocks,
+            exchange: "NASDAQ",
+            tickSize: 0.01,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "G" fallback
+            primaryColor: "#4285F4",           // Google blue
+            secondaryColor: "#EA4335",         // Google red
+            currentPrice: 142.58,
+            priceFormatted: "$142.58",
+            change24h: 1.67,
+            changePercent24h: 1.19,
+            changeFormatted: "+1.19%",
+            isUp: true,
+            high24h: 143.12,
+            low24h: 140.89,
+            volume24h: 19_870_000,
+            volumeFormatted: "19.87M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "c4444444-e89b-12d3-a456-426614174013")!,
+            ticker: "TSLA",
+            displayName: "Tesla Inc.",
+            assetClass: .stocks,
+            exchange: "NASDAQ",
+            tickSize: 0.01,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "T" fallback
+            primaryColor: "#E82127",           // Tesla red
+            secondaryColor: "#000000",         // Black
+            currentPrice: 248.92,
+            priceFormatted: "$248.92",
+            change24h: 5.67,
+            changePercent24h: 2.33,
+            changeFormatted: "+2.33%",
+            isUp: true,
+            high24h: 251.34,
+            low24h: 243.56,
+            volume24h: 98_760_000,
+            volumeFormatted: "98.76M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "c5555555-e89b-12d3-a456-426614174014")!,
+            ticker: "NVDA",
+            displayName: "NVIDIA Corporation",
+            assetClass: .stocks,
+            exchange: "NASDAQ",
+            tickSize: 0.01,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "N" fallback
+            primaryColor: "#76B900",           // NVIDIA green
+            secondaryColor: "#000000",         // Black
+            currentPrice: 495.23,
+            priceFormatted: "$495.23",
+            change24h: 12.45,
+            changePercent24h: 2.58,
+            changeFormatted: "+2.58%",
+            isUp: true,
+            high24h: 498.67,
+            low24h: 481.23,
+            volume24h: 45_230_000,
+            volumeFormatted: "45.23M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "c6666666-e89b-12d3-a456-426614174015")!,
+            ticker: "AMZN",
+            displayName: "Amazon.com Inc.",
+            assetClass: .stocks,
+            exchange: "NASDAQ",
+            tickSize: 0.01,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "A" fallback
+            primaryColor: "#FF9900",           // Amazon orange
+            secondaryColor: "#146EB4",         // Amazon blue
+            currentPrice: 152.34,
+            priceFormatted: "$152.34",
+            change24h: -1.23,
+            changePercent24h: -0.80,
+            changeFormatted: "-0.80%",
+            isUp: false,
+            high24h: 154.12,
+            low24h: 151.89,
+            volume24h: 34_560_000,
+            volumeFormatted: "34.56M"
+        ),
+        
+        // MARK: Commodities
+        TradingSymbolDTO(
+            id: UUID(uuidString: "d1111111-e89b-12d3-a456-426614174016")!,
+            ticker: "XAUUSD",
+            displayName: "Gold / US Dollar",
+            assetClass: .commodities,
+            exchange: "Forex",
+            tickSize: 0.01,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "X" fallback
+            primaryColor: "#FFD700",           // Gold color
+            secondaryColor: "#8B4513",         // Brown/bronze
+            currentPrice: 2_045.67,
+            priceFormatted: "$2,045.67",
+            change24h: 12.34,
+            changePercent24h: 0.61,
+            changeFormatted: "+0.61%",
+            isUp: true,
+            high24h: 2_052.89,
+            low24h: 2_031.23,
+            volume24h: 156_000_000,
+            volumeFormatted: "156M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "d2222222-e89b-12d3-a456-426614174017")!,
+            ticker: "XAGUSD",
+            displayName: "Silver / US Dollar",
+            assetClass: .commodities,
+            exchange: "Forex",
+            tickSize: 0.001,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "X" fallback
+            primaryColor: "#C0C0C0",           // Silver color
+            secondaryColor: "#696969",         // Dark gray
+            currentPrice: 24.567,
+            priceFormatted: "$24.57",
+            change24h: -0.234,
+            changePercent24h: -0.94,
+            changeFormatted: "-0.94%",
+            isUp: false,
+            high24h: 24.891,
+            low24h: 24.456,
+            volume24h: 89_000_000,
+            volumeFormatted: "89M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "d3333333-e89b-12d3-a456-426614174018")!,
+            ticker: "WTIUSD",
+            displayName: "Crude Oil WTI / US Dollar",
+            assetClass: .commodities,
+            exchange: "NYMEX",
+            tickSize: 0.01,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "W" fallback
+            primaryColor: "#1A1A1A",           // Dark oil color
+            secondaryColor: "#FF6B35",         // Orange/fire
+            currentPrice: 78.45,
+            priceFormatted: "$78.45",
+            change24h: 1.23,
+            changePercent24h: 1.59,
+            changeFormatted: "+1.59%",
+            isUp: true,
+            high24h: 79.12,
+            low24h: 77.34,
+            volume24h: 234_000_000,
+            volumeFormatted: "234M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "d4444444-e89b-12d3-a456-426614174019")!,
+            ticker: "NATGAS",
+            displayName: "Natural Gas",
+            assetClass: .commodities,
+            exchange: "NYMEX",
+            tickSize: 0.001,
+            lotSize: 10,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "N" fallback
+            primaryColor: "#4A90E2",           // Blue (gas flame)
+            secondaryColor: "#FF9500",         // Orange
+            currentPrice: 3.456,
+            priceFormatted: "$3.46",
+            change24h: -0.089,
+            changePercent24h: -2.51,
+            changeFormatted: "-2.51%",
+            isUp: false,
+            high24h: 3.567,
+            low24h: 3.423,
+            volume24h: 45_000_000,
+            volumeFormatted: "45M"
+        ),
+        
+        // MARK: Indices
+        TradingSymbolDTO(
+            id: UUID(uuidString: "e1111111-e89b-12d3-a456-426614174020")!,
+            ticker: "US30",
+            displayName: "Dow Jones Industrial Average",
+            assetClass: .indices,
+            exchange: "NYSE",
+            tickSize: 1.0,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "U" fallback
+            primaryColor: "#003087",           // NYSE blue
+            secondaryColor: "#FFFFFF",         // White
+            currentPrice: 37_845.23,
+            priceFormatted: "37,845.23",
+            change24h: 234.56,
+            changePercent24h: 0.62,
+            changeFormatted: "+0.62%",
+            isUp: true,
+            high24h: 37_923.45,
+            low24h: 37_654.12,
+            volume24h: nil,
+            volumeFormatted: nil
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "e2222222-e89b-12d3-a456-426614174021")!,
+            ticker: "SPX500",
+            displayName: "S&P 500",
+            assetClass: .indices,
+            exchange: "NYSE",
+            tickSize: 0.25,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "S" fallback
+            primaryColor: "#0057B8",           // S&P blue
+            secondaryColor: "#FFD100",         // Gold
+            currentPrice: 4_756.89,
+            priceFormatted: "4,756.89",
+            change24h: 23.45,
+            changePercent24h: 0.50,
+            changeFormatted: "+0.50%",
+            isUp: true,
+            high24h: 4_768.23,
+            low24h: 4_734.56,
+            volume24h: nil,
+            volumeFormatted: nil
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "e3333333-e89b-12d3-a456-426614174022")!,
+            ticker: "NAS100",
+            displayName: "NASDAQ 100",
+            assetClass: .indices,
+            exchange: "NASDAQ",
+            tickSize: 0.25,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "N" fallback
+            primaryColor: "#00A8E0",           // NASDAQ cyan
+            secondaryColor: "#003366",         // Dark blue
+            currentPrice: 16_456.78,
+            priceFormatted: "16,456.78",
+            change24h: 145.67,
+            changePercent24h: 0.89,
+            changeFormatted: "+0.89%",
+            isUp: true,
+            high24h: 16_523.45,
+            low24h: 16_312.34,
+            volume24h: nil,
+            volumeFormatted: nil
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "e4444444-e89b-12d3-a456-426614174023")!,
+            ticker: "DAX40",
+            displayName: "DAX 40 (Germany)",
+            assetClass: .indices,
+            exchange: "XETRA",
+            tickSize: 0.5,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "D" fallback
+            primaryColor: "#000000",           // Black (German flag)
+            secondaryColor: "#DD0000",         // Red (German flag)
+            currentPrice: 16_234.56,
+            priceFormatted: "16,234.56",
+            change24h: -87.34,
+            changePercent24h: -0.54,
+            changeFormatted: "-0.54%",
+            isUp: false,
+            high24h: 16_345.67,
+            low24h: 16_198.23,
+            volume24h: nil,
+            volumeFormatted: nil
+        ),
+        
+        // MARK: Futures
+        TradingSymbolDTO(
+            id: UUID(uuidString: "f1111111-e89b-12d3-a456-426614174024")!,
+            ticker: "ES",
+            displayName: "E-mini S&P 500 Futures",
+            assetClass: .futures,
+            exchange: "CME",
+            tickSize: 0.25,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "E" fallback
+            primaryColor: "#FF6600",           // CME orange
+            secondaryColor: "#003366",         // Dark blue
+            currentPrice: 4_758.50,
+            priceFormatted: "4,758.50",
+            change24h: 18.75,
+            changePercent24h: 0.40,
+            changeFormatted: "+0.40%",
+            isUp: true,
+            high24h: 4_765.25,
+            low24h: 4_738.00,
+            volume24h: 1_234_000,
+            volumeFormatted: "1.23M"
+        ),
+        
+        TradingSymbolDTO(
+            id: UUID(uuidString: "f2222222-e89b-12d3-a456-426614174025")!,
+            ticker: "NQ",
+            displayName: "E-mini NASDAQ 100 Futures",
+            assetClass: .futures,
+            exchange: "CME",
+            tickSize: 0.25,
+            lotSize: 1,
+            isActive: true,
+            iconName: nil,                    // No icon - will use "N" fallback
+            primaryColor: "#34C759",           // Green
+            secondaryColor: "#00A8E0",         // NASDAQ cyan
+            currentPrice: 16_467.25,
+            priceFormatted: "16,467.25",
+            change24h: 132.50,
+            changePercent24h: 0.81,
+            changeFormatted: "+0.81%",
+            isUp: true,
+            high24h: 16_498.75,
+            low24h: 16_323.50,
+            volume24h: 876_000,
+            volumeFormatted: "876K"
+        )
+    ]
+    
+    // MARK: - Convenience Accessors (NEW)
+    
+    /// User's personal watchlist symbols (NEW DTO format)
+    static var personalWatchlistDTOs: [TradingSymbolDTO] {
+        Array(allTradingSymbolDTOs.prefix(6))
+    }
+    
+    /// Guild watchlist symbols (NEW DTO format)
+    static var chartGuildWatchlistDTOs: [TradingSymbolDTO] {
+        Array(allTradingSymbolDTOs.suffix(6))
+    }
+    
+    /// Get symbols by asset class (NEW DTO format)
+    static func symbolsByAssetClass(_ assetClass: AssetClass) -> [TradingSymbolDTO] {
+        allTradingSymbolDTOs.filter { $0.assetClass == assetClass }
+    }
+    
+    /// Get a specific symbol by ticker (NEW DTO format)
+    static func symbolByTicker(_ ticker: String) -> TradingSymbolDTO? {
+        allTradingSymbolDTOs.first { $0.ticker == ticker }
+    }
+    
+    /// Popular/trending symbols (NEW DTO format)
+    static var trendingSymbolDTOs: [TradingSymbolDTO] {
+        [
+            symbolByTicker("BTCUSD")!,
+            symbolByTicker("NVDA")!,
+            symbolByTicker("EURUSD")!,
+            symbolByTicker("XAUUSD")!,
+            symbolByTicker("SPX500")!
+        ]
+    }
+    
+    /// Top movers (highest percentage change) (NEW DTO format)
+    static var topMoverSymbolDTOs: [TradingSymbolDTO] {
+        allTradingSymbolDTOs
+            .sorted { abs($0.changePercent24h) > abs($1.changePercent24h) }
+            .prefix(5)
+            .map { $0 }
+    }
+    
+    // MARK: - Migration Helper
+    
+    /// Find a TradingSymbolDTO equivalent for a legacy TradingSymbol
+    /// Useful during migration when you need to convert old references
+    static func findDTOEquivalent(for legacySymbol: TradingSymbol) -> TradingSymbolDTO? {
+        // Match by ticker/symbol name
+        allTradingSymbolDTOs.first { $0.ticker == legacySymbol.symbol }
+    }
+    
+    /// Convert array of legacy symbols to DTOs
+    static func convertToDTO(_ legacySymbols: [TradingSymbol]) -> [TradingSymbolDTO] {
+        legacySymbols.compactMap { findDTOEquivalent(for: $0) }
+    }
+}
