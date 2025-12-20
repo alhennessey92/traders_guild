@@ -36,7 +36,7 @@ struct TradingChartView: View {
         chartViewModel.currentTimeframe
     }
 
-    private var currentSymbol: TradingSymbol? {
+    private var currentSymbol: TradingSymbolDTO? {
         chartViewModel.currentSymbol
     }
     
@@ -358,7 +358,7 @@ struct TradingChartView: View {
     }
     
     /// Get preview marker data for price line display
-    private var previewMarkerForPriceLine: (candle: Candle, type: MarkerType)? {
+    private var previewMarkerForPriceLine: (candle: CandleDTO, type: MarkerType)? {
         // When sheet is open (pendingMarkerInfo exists), use that data
         if let pending = pendingMarkerInfo,
            pending.candleIndex >= 0,
@@ -489,7 +489,7 @@ struct TradingChartView: View {
         .onChange(of: chartViewModel.currentSymbol) { oldValue, newValue in
             handleSymbolChange(oldValue: oldValue, newValue: newValue)
         }
-        .onChange(of: chartViewModel.currentSymbol?.symbol) { oldValue, newValue in
+        .onChange(of: chartViewModel.currentSymbol?.ticker) { oldValue, newValue in
             handleSymbolStringChange(oldValue: oldValue, newValue: newValue)
         }
         .onChange(of: chartViewModel.currentTimeframe) { oldValue, newValue in
@@ -965,7 +965,7 @@ struct TradingChartView: View {
     }
     
     @ViewBuilder
-    private func previewMarkerContent(candle: Candle, x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
+    private func previewMarkerContent(candle: CandleDTO, x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
         ZStack {
             Circle()
                 .fill(Color.clear)
@@ -997,7 +997,7 @@ struct TradingChartView: View {
     }
     
     @ViewBuilder
-    private func previewMarkerInfoBox(candle: Candle) -> some View {
+    private func previewMarkerInfoBox(candle: CandleDTO) -> some View {
         VStack(spacing: 2) {
             Text(candle.timestamp.chartTimeLabel)
                 .font(.caption2)
@@ -1183,7 +1183,7 @@ struct TradingChartView: View {
         }
     }
     
-    private func handleSymbolChange(oldValue: TradingSymbol?, newValue: TradingSymbol?) {
+    private func handleSymbolChange(oldValue: TradingSymbolDTO?, newValue: TradingSymbolDTO?) {
         if oldValue == nil && newValue != nil && !chartData.candles.isEmpty {
             if !hasInitializedPosition {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -2030,7 +2030,7 @@ struct TradingChartView: View {
     @ViewBuilder
     private var symbolTimeframeRow: some View {
         HStack(spacing: 8) {
-            Text(currentSymbol?.symbol ?? "—")
+            Text(currentSymbol?.ticker ?? "—")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white)
             
@@ -2336,7 +2336,7 @@ struct TradingChartView: View {
     private func loadMarkersFromAPI() async {
         guard !chartData.candles.isEmpty else { return }
         
-        let symbol = chartViewModel.currentSymbol?.symbol ?? "EURUSD"
+        let symbol = chartViewModel.currentSymbol?.ticker ?? "EURUSD"
         let symbolId = chartViewModel.currentSymbol?.id ?? UUID()
         let guildId = markerManager.guildId
         let currentUserId = markerManager.userId
@@ -2437,7 +2437,7 @@ struct ChartBottomControlButton: View {
 // MARK: - Horizontal Line Preview Helper View
 
 struct MarkerHorizontalLinePreview: View {
-    let candle: Candle
+    let candle: CandleDTO
     let markerType: MarkerType
     let coordinateSystem: ChartCoordinateSystem
     let chartWidth: CGFloat
@@ -2484,7 +2484,7 @@ struct MarkerHorizontalLinePreview: View {
 
 struct MarkerPriceLinesOverlay: View {
     let selectedMarker: ChartMarkerDTO?
-    let previewMarker: (candle: Candle, type: MarkerType)?
+    let previewMarker: (candle: CandleDTO, type: MarkerType)?
     let coordinateSystem: ChartCoordinateSystem
     let chartWidth: CGFloat
     let chartHeight: CGFloat
@@ -2566,7 +2566,7 @@ struct MarkerPriceLinesOverlay: View {
         )
     }
     
-    private func getCandleForMarker(_ marker: ChartMarkerDTO) -> Candle? {
+    private func getCandleForMarker(_ marker: ChartMarkerDTO) -> CandleDTO? {
         guard marker.candleIndex >= 0 && marker.candleIndex < chartData.candles.count else {
             return nil
         }

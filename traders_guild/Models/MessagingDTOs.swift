@@ -80,7 +80,6 @@ struct ChatroomMessageDTO: Identifiable, Codable, Equatable {
 
 
 
-
 // MARK: - Direct Message DTO
 /// Represents a 1-on-1 conversation with another user
 /// Direct messages exist outside of guild context
@@ -146,7 +145,6 @@ struct DMMessageDTO: Identifiable, Codable, Equatable {
         isCurrentUserMessage ? .trailing : .leading
     }
 }
-
 
 
 
@@ -235,34 +233,6 @@ struct MarkerCommentDTO: Identifiable, Codable, Equatable {
         isCurrentUserMessage ? .trailing : .leading
     }
 }
-
-// MARK: - Marker Comment
-
-//struct MarkerComment: Codable, Hashable, Identifiable {
-//    let id: UUID
-//    
-//    let userId: String
-//    let username: String
-//    let text: String
-//    let createdAt: Date
-//    
-//    init(id: UUID = UUID(), userId: String, username: String, text: String, createdAt: Date = Date()) {
-//        self.id = id
-//        self.userId = userId
-//        self.username = username
-//        self.text = text
-//        self.createdAt = createdAt
-//    }
-//}
-
-
-//
-//  MessagingDTOs+Extensions.swift
-//  traders_guild
-//
-//  Extensions for MessagingDTOs - adds computed properties and ChatMessageDisplayable conformance
-//
-
 
 
 // MARK: - MarkerCommentDTO Extensions

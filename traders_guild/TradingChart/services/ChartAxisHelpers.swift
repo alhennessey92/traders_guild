@@ -255,7 +255,7 @@ struct TimeAxisHelper {
 struct PriceAxisHelper {
     
     /// The trading symbol for context-aware formatting
-    let symbol: TradingSymbol?
+    let symbol: TradingSymbolDTO?
     
     /// The visible price range (from chart data)
     let priceRange: (min: Double, max: Double)
@@ -266,7 +266,7 @@ struct PriceAxisHelper {
     /// Optional: actual chart height for more precise calculations
     let chartHeight: CGFloat?
     
-    init(symbol: TradingSymbol?, priceRange: (min: Double, max: Double), priceScale: CGFloat, chartHeight: CGFloat? = nil) {
+    init(symbol: TradingSymbolDTO?, priceRange: (min: Double, max: Double), priceScale: CGFloat, chartHeight: CGFloat? = nil) {
         self.symbol = symbol
         self.priceRange = priceRange
         self.priceScale = priceScale
@@ -352,7 +352,7 @@ struct PriceAxisHelper {
         
         switch symbol.assetClass {
         case .forex:
-            if symbol.symbol.contains("JPY") {
+            if symbol.ticker.contains("JPY") {
                 return 3
             } else {
                 return 5
@@ -434,15 +434,15 @@ struct PriceAxisHelper {
 }
 
 
-// MARK: - Extended TradingSymbol Formatting
+// MARK: - Extended TradingSymbolDTO Formatting
 
-extension TradingSymbol {
+extension TradingSymbolDTO {
     
     /// Get the recommended decimal places for this symbol
     var recommendedDecimalPlaces: Int {
         switch assetClass {
         case .forex:
-            return symbol.contains("JPY") ? 3 : 5
+            return ticker.contains("JPY") ? 3 : 5
         case .crypto:
             return 2
         case .stocks, .commodities, .futures:

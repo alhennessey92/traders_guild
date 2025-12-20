@@ -35,7 +35,7 @@ class ChartChatManager: ObservableObject {
     }
     
     /// Open or create a chart chat for a specific symbol and guild
-    func openChartChat(symbol: TradingSymbol, guildId: UUID, api: MockAPIService) async {
+    func openChartChat(symbol: TradingSymbolDTO, guildId: UUID, api: MockAPIService) async {
         let cacheKey = "\(symbol.id)-\(guildId)"
         
         // Check cache first
@@ -150,7 +150,7 @@ class ChartChatManager: ObservableObject {
     }
     
     /// Update chat when symbol or guild changes
-    func updateForSymbol(_ symbol: TradingSymbol?, guildId: UUID?, api: MockAPIService) async {
+    func updateForSymbol(_ symbol: TradingSymbolDTO?, guildId: UUID?, api: MockAPIService) async {
         guard let symbol = symbol, let guildId = guildId else {
             closeChat()
             return

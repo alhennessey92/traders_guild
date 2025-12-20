@@ -69,7 +69,7 @@ class MarkerManager: ObservableObject {
         symbol: String,
         guildId: UUID,
         timeframe: ChartTimeframe,
-        candles: [Candle]
+        candles: [CandleDTO]
     ) async {
         do {
             // Fetch markers from API - now returns ChartMarkerDTO directly
@@ -138,7 +138,7 @@ class MarkerManager: ObservableObject {
         price: Double,
         type: MarkerType,
         note: String? = nil,
-        candles: [Candle],
+        candles: [CandleDTO],
         horizontalLinePrice: Double? = nil,
         targetPrice: Double? = nil,
         alertSeverity: MarkerAlertSeverity? = nil,
@@ -400,7 +400,7 @@ struct MarkerPositionCalculator {
     static func calculatePreviewPosition(
         candleIndex: Int,
         existingMarkers: [ChartMarkerDTO],
-        candles: [Candle],
+        candles: [CandleDTO],
         candleHighY: CGFloat,
         candleLowY: CGFloat,
         centerX: CGFloat,
@@ -453,7 +453,7 @@ struct MarkerPositionCalculator {
     
     static func assignStablePositions(
         markers: [ChartMarkerDTO],
-        candles: [Candle]
+        candles: [CandleDTO]
     ) -> [ChartMarkerDTO] {
         var result = markers
         
@@ -499,7 +499,7 @@ struct MarkerPositionCalculator {
     static func calculatePositionForNewMarker(
         marker: ChartMarkerDTO,
         existingMarkers: [ChartMarkerDTO],
-        candles: [Candle]
+        candles: [CandleDTO]
     ) -> (isBelow: Bool, tier: Int, stackIndex: Int) {
         let candleIndex = marker.candleIndex
         let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
@@ -539,7 +539,7 @@ struct MarkerPositionCalculator {
     private static func determineSideForNewMarker(
         candleIndex: Int,
         existingMarkers: [ChartMarkerDTO],
-        candles: [Candle]
+        candles: [CandleDTO]
     ) -> Bool {
         var aboveCount = 0
         var belowCount = 0
@@ -572,7 +572,7 @@ struct MarkerPositionCalculator {
     
     private static func determineSideForCandle(
         candleIndex: Int,
-        candles: [Candle],
+        candles: [CandleDTO],
         existingDecisions: [Int: Bool]
     ) -> Bool {
         var aboveCount = 0
@@ -683,7 +683,7 @@ struct ChartMarkerSystem {
     static func drawMarkers(
         context: GraphicsContext,
         markers: [ChartMarkerDTO],
-        candles: [Candle],
+        candles: [CandleDTO],
         chartSize: CGSize,
         priceRange: (min: Double, max: Double),
         priceScale: CGFloat,
@@ -895,7 +895,7 @@ struct ChartMarkerSystem {
     static func findMarkerAtLocation(
         _ location: CGPoint,
         markers: [ChartMarkerDTO],
-        candles: [Candle],
+        candles: [CandleDTO],
         chartSize: CGSize,
         priceRange: (min: Double, max: Double),
         priceScale: CGFloat,

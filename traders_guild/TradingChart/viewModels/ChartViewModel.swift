@@ -22,16 +22,16 @@ class ChartViewModel: ObservableObject {
     
     // MARK: - Published State
     
-    @Published var currentSymbol: TradingSymbol?
+    @Published var currentSymbol: TradingSymbolDTO?
     @Published var currentTimeframe: ChartTimeframe = .m5
-    @Published var availableSymbols: [TradingSymbol] = []
+    @Published var availableSymbols: [TradingSymbolDTO] = []
     @Published var isLoadingData: Bool = false
     @Published var errorMessage: String?
     
     // MARK: - Watchlists
     
-    @Published var personalWatchlist: [TradingSymbol] = []
-    @Published var guildWatchlist: [TradingSymbol] = []
+    @Published var personalWatchlist: [TradingSymbolDTO] = []
+    @Published var guildWatchlist: [TradingSymbolDTO] = []
     
     
     // MARK: Indicator manager
@@ -53,7 +53,7 @@ class ChartViewModel: ObservableObject {
     private let baseCandleWidth: CGFloat = 12
     private let candleSpacing: CGFloat = 4
     
-    var combinedWatchlist: [TradingSymbol] {
+    var combinedWatchlist: [TradingSymbolDTO] {
         let combined = personalWatchlist + guildWatchlist
         var seen = Set<UUID>()
         return combined.filter { symbol in
@@ -113,7 +113,7 @@ class ChartViewModel: ObservableObject {
     }
     
     /// Set the current symbol and regenerate chart data
-    func setSymbol(_ symbol: TradingSymbol) {
+    func setSymbol(_ symbol: TradingSymbolDTO) {
         guard currentSymbol?.id != symbol.id else { return }
         
         currentSymbol = symbol
@@ -203,7 +203,7 @@ class ChartViewModel: ObservableObject {
         
         await markerManager.loadMarkersFromAPI(
             api: api,
-            symbol: symbol.symbol,
+            symbol: symbol.ticker,
             guildId: guildId,
             timeframe: currentTimeframe,
             candles: dataManager.candles

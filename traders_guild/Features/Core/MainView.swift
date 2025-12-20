@@ -733,7 +733,7 @@ struct ChartBottomSheet: View {
             HStack(spacing: 4) {
                 // Symbol button
                 RootBottomBarSymbolButton(
-                    symbol: chartViewModel.currentSymbol?.symbol ?? "EUR/USD",
+                    symbol: chartViewModel.currentSymbol?.ticker ?? "EUR/USD",
                     backgroundColor: selectedView == .symbol ?
                         AppColors.gradientBackgroundDark :
                         AppColors.gradientBackgroundMid.opacity(0.9),

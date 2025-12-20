@@ -179,7 +179,7 @@ struct PriceLevelsView: View {
 // MARK: - Volume Indicator
 
 struct VolumeIndicatorView: View {
-    let candles: [Candle]
+    let candles: [CandleDTO]
     let panOffset: CGSize
     let candleWidth: CGFloat
     let candleSpacing: CGFloat

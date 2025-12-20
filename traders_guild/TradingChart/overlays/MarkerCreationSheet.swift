@@ -24,7 +24,7 @@ struct MarkerCreationSheet: View {
     let price: Double
     let username: String
     let chartData: ChartDataManager
-    let candles: [Candle]
+    let candles: [CandleDTO]
     let markerType: MarkerType
     let initialTargetPrice: Double?
     

@@ -294,24 +294,24 @@ class MockAPIService {
     // ================================================================================================
     
     /// Fetch user's personal trading watchlist
-    func fetchPersonalWatchlist(userId: UUID) async throws -> [TradingSymbol] {
+    func fetchPersonalWatchlist(userId: UUID) async throws -> [TradingSymbolDTO] {
         try await simulateNetworkDelay()
-        return SampleData.personalWatchlist
+        return SampleData.personalWatchlistDTOs
     }
     
     /// Fetch guild's trading watchlist (RENAMED to avoid conflict)
-    func fetchChartGuildWatchlist(guildId: UUID) async throws -> [TradingSymbol] {
+    func fetchChartGuildWatchlist(guildId: UUID) async throws -> [TradingSymbolDTO] {
         try await simulateNetworkDelay()
-        return SampleData.chartGuildWatchlist  // UPDATED: Using renamed property
+        return SampleData.chartGuildWatchlistDTOs  // UPDATED: Using renamed property
     }
     
     /// Search for trading symbols by query
-    func searchSymbols(query: String) async throws -> [TradingSymbol] {
+    func searchSymbols(query: String) async throws -> [TradingSymbolDTO] {
         try await simulateNetworkDelay()
         
         let lowercasedQuery = query.lowercased()
-        return SampleData.allTradingSymbols.filter { symbol in
-            symbol.symbol.lowercased().contains(lowercasedQuery) ||
+        return SampleData.allTradingSymbolDTOs.filter { symbol in
+            symbol.ticker.lowercased().contains(lowercasedQuery) ||
             symbol.displayName.lowercased().contains(lowercasedQuery)
         }
     }
@@ -336,12 +336,12 @@ class MockAPIService {
         symbol: String,
         timeframe: ChartTimeframe,
         limit: Int = 200
-    ) async throws -> [Candle] {
+    ) async throws -> [CandleDTO] {
         try await simulateNetworkDelay()
         
         // For now, generate mock data
         // When backend is ready, this will make a real API call
-        return Candle.generateSampleData(count: limit)
+        return CandleDTO.generateSampleData(count: limit)
     }
     
     
@@ -408,7 +408,7 @@ class MockAPIService {
         try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
         
         // Generate sample markers
-        let symbolId = SampleData.allTradingSymbols.first { $0.symbol == symbol }?.id ?? UUID()
+        let symbolId = SampleData.allTradingSymbolDTOs.first { $0.ticker == symbol }?.id ?? UUID()
         let currentUserId = SampleData.currentUser.id
         
         return SampleData.generateChartMarkerDTOs(

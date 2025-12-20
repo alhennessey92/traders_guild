@@ -32,7 +32,7 @@ struct chartSheetSymbolView: View {
                                     Text(symbol.displayName)
                                         .foregroundColor(.white)
                                         .font(.headline)
-                                    Text(symbol.symbol)
+                                    Text(symbol.ticker)
                                         .foregroundColor(.white.opacity(0.6))
                                         .font(.caption)
                                 }
@@ -211,7 +211,7 @@ struct chartSheetSymbolView: View {
 // MARK: - Supporting Views
 
 struct SymbolRow: View {
-    let symbol: TradingSymbol
+    let symbol: TradingSymbolDTO
     let isSelected: Bool
     let action: () -> Void
     
@@ -229,7 +229,7 @@ struct SymbolRow: View {
                         .font(.subheadline)
                         .fontWeight(isSelected ? .semibold : .regular)
                     HStack(spacing: 6) {
-                        Text(symbol.symbol)
+                        Text(symbol.ticker)
                             .foregroundColor(.gray)
                             .font(.caption)
                         Text("•")

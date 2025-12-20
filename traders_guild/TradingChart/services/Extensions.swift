@@ -196,7 +196,7 @@ struct SizePreferenceKey: PreferenceKey {
 
 // MARK: - Array Extensions
 
-extension Array where Element == Candle {
+extension Array where Element == CandleDTO {
     /// Calculate the price range for the array of candles
     var priceRange: (min: Double, max: Double) {
         guard !isEmpty else { return (0, 100) }
@@ -213,7 +213,7 @@ extension Array where Element == Candle {
     }
     
     /// Get visible candles for a given index range
-    func visibleCandles(in range: Range<Int>) -> ArraySlice<Candle> {
+    func visibleCandles(in range: Range<Int>) -> ArraySlice<CandleDTO> {
         let safeRange = Swift.max(0, range.lowerBound)..<Swift.min(count, range.upperBound)
         return self[safeRange]
     }
