@@ -2,18 +2,19 @@
   "images" : [
     {
       "filename" : "sol.svg",
-      "idiom" : "iphone",
-      "scale" : "1x"
+      "idiom" : "iphone"
     },
     {
       "filename" : "sol@2x.svg",
       "idiom" : "iphone",
-      "scale" : "2x"
+      "scale" : "2x",
+      "unassigned" : true
     },
     {
       "filename" : "sol@3x.svg",
       "idiom" : "iphone",
-      "scale" : "3x"
+      "scale" : "3x",
+      "unassigned" : true
     }
   ],
   "info" : {
@@ -22,6 +23,6 @@
   },
   "properties" : {
     "preserves-vector-representation" : true,
-    "template-rendering-intent" : "template"
+    "template-rendering-intent" : "original"
   }
 }
