@@ -29,6 +29,9 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var userNotifications: [GuildNotificationDTO] = []
     @Published var statistics: GuildStatisticsDTO?
     
+    @Published var guildTradingWatchlist: [TradingSymbolDTO] = []
+    @Published var personalTradingWatchlist: [TradingSymbolDTO] = []
+    
     @Published var isLoading: Bool = false
     @Published var lastRefresh: Date?
     
@@ -96,7 +99,6 @@ class LeftDrawerViewModel: ObservableObject {
     // ================================================================================================
     // MARK: - Preload Data
     // ================================================================================================
-    
     /// Preload all drawer data in parallel
     func preloadData(for guildId: UUID, appState: AppState) async {
         guard shouldRefresh(for: guildId) else { return }
@@ -104,19 +106,31 @@ class LeftDrawerViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
+        // CRITICAL: Capture userId BEFORE async let block to avoid MainActor isolation error
+        let userId = appState.currentUser?.id
+        
         async let announcementsTask = appState.fetchGuildAnnouncements(guildId: guildId)
         async let eventsTask = appState.fetchGuildEvents(guildId: guildId)
         async let membersTask = appState.fetchGuildMembers(guildId: guildId)
         async let watchlistTask = appState.fetchGuildWatchlist(guildId: guildId)
+        async let tradingWatchlistTask = appState.fetchGuildTradingWatchlist(guildId: guildId)
         async let userNotificationsTask = appState.fetchGuildUserNotifications(guildId: guildId)
         async let statisticsTask = appState.fetchGuildStatistics(guildId: guildId)
         
+        // Fetch personal watchlist separately using captured userId
+        async let personalTradingWatchlistTask: [TradingSymbolDTO] = {
+            guard let id = userId else { return [] }
+            return (try? await appState.fetchPersonalTradingWatchlist(userId: id)) ?? []
+        }()
+        
         do {
-            let (fetchedAnnouncements, fetchedEvents, fetchedMembers, fetchedWatchlist, fetchedUserNotifications, fetchedStatistics) = try await (
+            let (fetchedAnnouncements, fetchedEvents, fetchedMembers, fetchedWatchlist, fetchedTradingWatchlist, fetchedPersonalTradingWatchlist, fetchedUserNotifications, fetchedStatistics) = try await (
                 announcementsTask,
                 eventsTask,
                 membersTask,
                 watchlistTask,
+                tradingWatchlistTask,
+                personalTradingWatchlistTask,
                 userNotificationsTask,
                 statisticsTask
             )
@@ -125,6 +139,8 @@ class LeftDrawerViewModel: ObservableObject {
             self.upcomingEvents = fetchedEvents
             self.members = fetchedMembers
             self.watchlist = fetchedWatchlist
+            self.guildTradingWatchlist = fetchedTradingWatchlist
+            self.personalTradingWatchlist = fetchedPersonalTradingWatchlist
             self.userNotifications = fetchedUserNotifications
             self.statistics = fetchedStatistics
             self.lastRefresh = Date()
@@ -137,6 +153,55 @@ class LeftDrawerViewModel: ObservableObject {
             appState.showError(error, title: "Failed to load data", style: .toast)
         }
     }
+//    /// Preload all drawer data in parallel
+//    func preloadData(for guildId: UUID, appState: AppState) async {
+//        guard shouldRefresh(for: guildId) else { return }
+//        
+//        isLoading = true
+//        defer { isLoading = false }
+//        
+//        async let announcementsTask = appState.fetchGuildAnnouncements(guildId: guildId)
+//        async let eventsTask = appState.fetchGuildEvents(guildId: guildId)
+//        async let membersTask = appState.fetchGuildMembers(guildId: guildId)
+//        async let watchlistTask = appState.fetchGuildWatchlist(guildId: guildId)
+//        async let tradingWatchlistTask = appState.fetchGuildTradingWatchlist(guildId: guildId)
+//        async let personalTradingWatchlistTask: [TradingSymbolDTO] = {
+//            guard let userId = appState.currentUser?.id else { return [] }
+//            return (try? await appState.fetchPersonalTradingWatchlist(userId: userId)) ?? []
+//        }()
+//        async let userNotificationsTask = appState.fetchGuildUserNotifications(guildId: guildId)
+//        async let statisticsTask = appState.fetchGuildStatistics(guildId: guildId)
+//        
+//        do {
+//            let (fetchedAnnouncements, fetchedEvents, fetchedMembers, fetchedWatchlist, fetchedTradingWatchlist, fetchedPersonalTradingWatchlist, fetchedUserNotifications, fetchedStatistics) = try await (
+//                announcementsTask,
+//                eventsTask,
+//                membersTask,
+//                watchlistTask,
+//                tradingWatchlistTask,
+//                personalTradingWatchlistTask,
+//                userNotificationsTask,
+//                statisticsTask
+//            )
+//            
+//            self.announcements = fetchedAnnouncements
+//            self.upcomingEvents = fetchedEvents
+//            self.members = fetchedMembers
+//            self.watchlist = fetchedWatchlist
+//            self.guildTradingWatchlist = fetchedTradingWatchlist
+//            self.personalTradingWatchlist = fetchedPersonalTradingWatchlist
+//            self.userNotifications = fetchedUserNotifications
+//            self.statistics = fetchedStatistics
+//            self.lastRefresh = Date()
+//            self.currentGuildId = guildId
+//            
+//        } catch is CancellationError {
+//            return
+//        } catch {
+//            print("⚠️ Failed to preload drawer data: \(error)")
+//            appState.showError(error, title: "Failed to load data", style: .toast)
+//        }
+//    }
     
     /// Manual refresh - forces reload
     func refresh(for guildId: UUID, appState: AppState) async {
@@ -150,6 +215,8 @@ class LeftDrawerViewModel: ObservableObject {
         upcomingEvents = []
         members = []
         watchlist = nil
+        guildTradingWatchlist = []
+        personalTradingWatchlist = []
         userNotifications = []
         statistics = nil
         lastRefresh = nil
@@ -168,7 +235,7 @@ class LeftDrawerViewModel: ObservableObject {
         }
         
         // Refresh if cache is empty
-        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil && userNotifications.isEmpty && statistics == nil  {
+        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil && userNotifications.isEmpty && statistics == nil && guildTradingWatchlist.isEmpty && personalTradingWatchlist.isEmpty {
             return true
         }
         
@@ -202,132 +269,3 @@ class LeftDrawerViewModel: ObservableObject {
         statistics != nil
     }
 }
-
-//@MainActor
-//class LeftDrawerViewModel: ObservableObject {
-//    
-//    // ================================================================================================
-//    // MARK: - Published State
-//    // ================================================================================================
-//    
-//    @Published var announcements: [GuildAnnouncementDTO] = []
-//    @Published var upcomingEvents: [GuildEventDTO] = []
-//    @Published var members: [GuildMembershipDTO] = []
-//    @Published var watchlist: GuildWatchlistDTO?  // ✅ Single object, not array
-//    @Published var userNotifications: [GuildNotificationDTO] = []
-//    @Published var statistics: GuildStatisticsDTO?  // ✅ Single object, not array
-//    
-//    @Published var isLoading: Bool = false
-//    @Published var lastRefresh: Date?
-//    
-//    private var currentGuildId: UUID?
-//    
-//    // ================================================================================================
-//    // MARK: - Preload Data
-//    // ================================================================================================
-//    
-//    /// Preload all drawer data in parallel
-//    func preloadData(for guildId: UUID, appState: AppState) async {
-//        guard shouldRefresh(for: guildId) else { return }
-//        
-//        isLoading = true
-//        defer { isLoading = false }
-//        
-//        async let announcementsTask = appState.fetchGuildAnnouncements(guildId: guildId)
-//        async let eventsTask = appState.fetchGuildEvents(guildId: guildId)
-//        async let membersTask = appState.fetchGuildMembers(guildId: guildId)
-//        async let watchlistTask = appState.fetchGuildWatchlist(guildId: guildId)  // Returns single object
-//        async let userNotificationsTask = appState.fetchGuildUserNotifications(guildId: guildId)
-//        async let statisticsTask = appState.fetchGuildStatistics(guildId: guildId)  // Returns single object
-//        
-//        do {
-//            let (fetchedAnnouncements, fetchedEvents, fetchedMembers, fetchedWatchlist, fetchedUserNotifications, fetchedStatistics) = try await (
-//                announcementsTask,
-//                eventsTask,
-//                membersTask,
-//                watchlistTask,
-//                userNotificationsTask,
-//                statisticsTask
-//            )
-//            
-//            self.announcements = fetchedAnnouncements
-//            self.upcomingEvents = fetchedEvents
-//            self.members = fetchedMembers
-//            self.watchlist = fetchedWatchlist  // ✅ Single assignment
-//            self.userNotifications = fetchedUserNotifications
-//            self.statistics = fetchedStatistics
-//            self.lastRefresh = Date()
-//            self.currentGuildId = guildId
-//            
-//        } catch is CancellationError {
-//            return
-//        } catch {
-//            print("⚠️ Failed to preload drawer data: \(error)")
-//            appState.showError(error, title: "Failed to load data", style: .toast)
-//        }
-//    }
-//    
-//    /// Manual refresh - forces reload
-//    func refresh(for guildId: UUID, appState: AppState) async {
-//        lastRefresh = nil
-//        await preloadData(for: guildId, appState: appState)
-//    }
-//    
-//    /// Clear all cached data
-//    func clearCache() {
-//        announcements = []
-//        upcomingEvents = []
-//        members = []
-//        watchlist = nil  // ✅ Set to nil instead of empty array
-//        userNotifications = []
-//        statistics = nil  // ✅ Set to nil instead of empty array
-//        lastRefresh = nil
-//        currentGuildId = nil
-//    }
-//    
-//    // ================================================================================================
-//    // MARK: - Cache Logic
-//    // ================================================================================================
-//    
-//    /// Check if data should be refreshed
-//    private func shouldRefresh(for guildId: UUID) -> Bool {
-//        // Always refresh if guild changed
-//        if currentGuildId != guildId {
-//            return true
-//        }
-//        
-//        // Refresh if cache is empty
-//        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil && userNotifications.isEmpty && statistics == nil  {
-//            return true
-//        }
-//        
-//        // Refresh if data is stale (5 minutes old)
-//        guard let lastRefresh = lastRefresh else { return true }
-//        return Date().timeIntervalSince(lastRefresh) > 300
-//    }
-//    
-//    // ================================================================================================
-//    // MARK: - Computed Properties
-//    // ================================================================================================
-//    
-//    /// Recent announcements (last 7 days)
-//    var recentAnnouncements: [GuildAnnouncementDTO] {
-//        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-//        return announcements.filter { $0.postedAt >= sevenDaysAgo }
-//    }
-//    
-//    /// Online members count
-//    var onlineMembersCount: Int {
-//        members.filter { $0.isOnline }.count
-//    }
-//    
-//    /// Has watchlist been loaded
-//    var hasWatchlist: Bool {
-//        watchlist != nil
-//    }
-//    
-//    /// Has statistics been loaded
-//    var hasStatistics: Bool {
-//        statistics != nil
-//    }
-//}

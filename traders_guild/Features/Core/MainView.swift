@@ -263,6 +263,20 @@ struct MainView: View {
                     }
                 }
             }
+//            .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
+//                if let symbol = notification.userInfo?["symbol"] as? TradingSymbolDTO {
+//                    // Dismiss keyboard first
+//                    dismissKeyboard()
+//                    
+//                    // Update chart
+//                    chartViewModel.setSymbol(symbol)
+//                    
+//                    // Close drawer if open
+//                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+//                        showLeftDrawer = false
+//                    }
+//                }
+//            }
         } else {
             VStack(spacing: 20) {
                 ProgressView()
@@ -295,6 +309,20 @@ struct MainView: View {
                 }
                 .opacity(fadeIn ? 1 : 0)
                 .animation(.easeIn(duration: 1.5), value: fadeIn)
+                .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
+                    if let symbol = notification.userInfo?["symbol"] as? TradingSymbolDTO {
+                        // Dismiss keyboard first
+                        dismissKeyboard()
+                        
+                        // Update chart
+                        chartViewModel.setSymbol(symbol)
+                        
+                        // Close drawer if open
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showLeftDrawer = false
+                        }
+                    }
+                }
             }
             .toolbar {
                 // Left Drawer Button
@@ -307,7 +335,9 @@ struct MainView: View {
                         foregroundStyle: AppColors.whiteText,
                         padding: 8
                     ) {
+                        
                         withAnimation(AnimationConstants.standard) {
+                            dismissKeyboard()
                             selectedDetent = .fraction(0.11)
                             showLeftDrawer.toggle()
                             showRightDrawer = false
@@ -335,6 +365,7 @@ struct MainView: View {
                         padding: 8
                     ) {
                         withAnimation(AnimationConstants.standard) {
+                            dismissKeyboard()
                             selectedDetent = .fraction(0.11)
                             showRightDrawer.toggle()
                             showLeftDrawer = false
@@ -366,6 +397,7 @@ struct MainView: View {
             .ignoresSafeArea()
             .onTapGesture {
                 withAnimation(AnimationConstants.standard) {
+                    dismissKeyboard()
                     showLeftDrawer = false
                     showRightDrawer = false
                     leftDragTranslation = 0
@@ -396,6 +428,7 @@ struct MainView: View {
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
             LeftDrawerMainView(sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
+                dismissKeyboard()
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false
                     leftDragTranslation = 0
@@ -431,6 +464,7 @@ struct MainView: View {
             Spacer(minLength: 0)
             RightDrawerMainView(
                 onClose: {
+                    dismissKeyboard()
                     withAnimation(AnimationConstants.standard) {
                         showRightDrawer = false
                         rightDragTranslation = 0
@@ -465,6 +499,7 @@ struct MainView: View {
     private func handleDrawerDragEnd(currentPosition: CGFloat) {
         if showLeftDrawer {
             if currentPosition < -LayoutConstants.drawerDismissThreshold {
+                dismissKeyboard()
                 withAnimation(AnimationConstants.standard) {
                     showLeftDrawer = false
                     leftDragTranslation = 0
@@ -479,6 +514,7 @@ struct MainView: View {
             }
         } else if showRightDrawer {
             if currentPosition > LayoutConstants.drawerDismissThreshold {
+                dismissKeyboard()
                 withAnimation(AnimationConstants.standard) {
                     showRightDrawer = false
                     rightDragTranslation = 0
@@ -492,6 +528,11 @@ struct MainView: View {
                 }
             }
         }
+    }
+    
+    
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 
@@ -560,6 +601,7 @@ struct ChartBottomSheet: View {
                         .padding(.bottom, 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .scrollDismissesKeyboard(.interactively) 
                 }
             } else {
                 Spacer()
@@ -722,6 +764,14 @@ struct ChartBottomSheet: View {
     
     // MARK: - Standard Tab Bar
     
+    
+    // Helper to get current symbol as DTO for icon display
+    private var currentSymbolDTO: TradingSymbolDTO? {
+        guard let currentSymbol = chartViewModel.currentSymbol else { return nil }
+        // TradingSymbol uses .symbol, TradingSymbolDTO uses .ticker
+        return SampleData.allTradingSymbolDTOs.first { $0.ticker == currentSymbol.ticker }
+    }
+    
     private var standardTabBar: some View {
         VStack(spacing: 0) {
             if isExpanded {
@@ -731,9 +781,10 @@ struct ChartBottomSheet: View {
             }
             
             HStack(spacing: 4) {
-                // Symbol button
+                // Symbol button - NOW WITH PROPER ICON
                 RootBottomBarSymbolButton(
-                    symbol: chartViewModel.currentSymbol?.ticker ?? "EUR/USD",
+                    symbol: chartViewModel.currentSymbol?.ticker ?? "EURUSD",
+                    symbolDTO: currentSymbolDTO,  // <-- ADD THIS LINE
                     backgroundColor: selectedView == .symbol ?
                         AppColors.gradientBackgroundDark :
                         AppColors.gradientBackgroundMid.opacity(0.9),
@@ -763,6 +814,7 @@ struct ChartBottomSheet: View {
                             selectedView = .chat
                         }
                     }
+
                     
                     // Indicator button
                     RootBottomBarIconButton(
@@ -805,9 +857,10 @@ struct ChartBottomSheet: View {
         .ignoresSafeArea(.keyboard)
     }
     
+    
     // MARK: - Symbol Tab Content
     private var symbolAndSettingsContent: some View {
-        chartSheetSymbolView(
+        ChartSheetSymbolView(
             chartViewModel: chartViewModel
         )
     }
@@ -841,184 +894,7 @@ struct ChartBottomSheet: View {
         .environmentObject(appState)
     }
 }
-// MARK: - Chart Bottom Sheet
-// UPDATED: Chat view now manages its own scroll, so we don't wrap it in the outer ScrollView
-//struct ChartBottomSheet: View {
-//    @State private var selectedView: ChartView = .symbol
-//    @ObservedObject var controlViewModel: ChartControlViewModel
-//    @ObservedObject var chartViewModel: ChartViewModel
-//    @Binding var selectedDetent: PresentationDetent
-//    
-//    enum ChartView: String, CaseIterable {
-//        case symbol = "Symbol"
-//        case chat = "Chat"
-//        case indicator = "Indicator"
-//        case markers = "Markers"
-//        
-//        var icon: String {
-//            switch self {
-//            case .symbol: return "chart.bar.fill"
-//            case .chat: return "message.fill"
-//            case .indicator: return "chart.line.uptrend.xyaxis.circle"
-//            case .markers: return "mappin.circle.fill"
-//            }
-//        }
-//    }
-//    
-//    private var isExpanded: Bool {
-//        selectedDetent != .fraction(0.11)
-//    }
-//    
-//    var body: some View {
-//        VStack(spacing: 0) {
-//            // Content Area
-//            if isExpanded {
-//                // IMPORTANT: Chat view manages its own scroll, so don't wrap it
-//                if selectedView == .chat {
-//                    chatContent
-//                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-//                } else {
-//                    // Other views use the standard scrollable layout
-//                    ScrollView {
-//                        VStack(spacing: 16) {
-//                            switch selectedView {
-//                            case .symbol:
-//                                symbolAndSettingsContent
-//                            case .indicator:
-//                                indicatorContent
-//                            case .markers:
-//                                markersContent
-//                            case .chat:
-//                                EmptyView() // Handled above
-//                            }
-//                        }
-//                        .padding(.horizontal, 16)
-//                        .padding(.top, 20)
-//                        .padding(.bottom, 20)
-//                    }
-//                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-//                }
-//            } else {
-//                Spacer()
-//            }
-//            
-//            // Fixed Button Bar - ignores keyboard so only chat input moves up
-//            VStack(spacing: 0) {
-//                if isExpanded {
-//                    Rectangle()
-//                        .fill(Color.gray.opacity(0.2))
-//                        .frame(height: 0.5)
-//                }
-//                
-//                HStack(spacing: 4) {
-//                    // Symbol button
-//                    RootBottomBarSymbolButton(
-//                        symbol: chartViewModel.currentSymbol?.symbol ?? "EUR/USD",
-//                        backgroundColor: selectedView == .symbol ?
-//                            AppColors.gradientBackgroundDark :
-//                            AppColors.gradientBackgroundMid.opacity(0.9),
-//                        foregroundColor: selectedView == .symbol ?
-//                            .white :
-//                            AppColors.whiteText.opacity(0.8)
-//                    ) {
-//                        withAnimation(.easeInOut(duration: 0.25)) {
-//                            selectedView = .symbol
-//                        }
-//                    }
-//                    
-//                    Spacer()
-//                    
-//                    HStack(spacing: 6) {
-//                        // Chat button
-//                        RootBottomBarIconButton(
-//                            systemName: "message.fill",
-//                            backgroundColor: selectedView == .chat ?
-//                                AppColors.gradientBackgroundDark :
-//                                AppColors.gradientBackgroundMid.opacity(0.9),
-//                            foregroundColor: selectedView == .chat ?
-//                                .white :
-//                                AppColors.whiteText.opacity(0.8)
-//                        ) {
-//                            withAnimation(.easeInOut(duration: 0.25)) {
-//                                selectedView = .chat
-//                            }
-//                        }
-//                        
-//                        // Indicator button
-//                        RootBottomBarIconButton(
-//                            systemName: "chart.line.uptrend.xyaxis.circle",
-//                            fontSize: 25,
-//                            backgroundColor: selectedView == .indicator ?
-//                                AppColors.gradientBackgroundDark :
-//                                AppColors.gradientBackgroundMid.opacity(0.9),
-//                            foregroundColor: selectedView == .indicator ?
-//                                .white :
-//                                AppColors.whiteText.opacity(0.8)
-//                        ) {
-//                            withAnimation(.easeInOut(duration: 0.25)) {
-//                                selectedView = .indicator
-//                            }
-//                        }
-//                        
-//                        // Markers button
-//                        RootBottomBarIconButton(
-//                            systemName: "target",
-//                            fontSize: 25,
-//                            backgroundColor: selectedView == .markers ?
-//                                AppColors.whiteText :
-//                                AppColors.whiteText.opacity(0.5),
-//                            foregroundColor: selectedView == .markers ?
-//                                AppColors.gradientBackgroundDark :
-//                                AppColors.gradientBackgroundDark.opacity(0.8)
-//                        ) {
-//                            withAnimation(.easeInOut(duration: 0.25)) {
-//                                selectedView = .markers
-//                            }
-//                        }
-//                    }
-//                }
-//                .padding(.horizontal, 16)
-//                .padding(.top, isExpanded ? 16 : 0)
-//                .padding(.bottom, 2)
-//            }
-//            .frame(height: isExpanded ? 70 : 68)
-//        }
-//        .ignoresSafeArea(.keyboard)
-//        .animation(.easeInOut(duration: 0.3), value: selectedView)
-//    }
-//    
-//    // MARK: - Symbol Tab Content
-//    private var symbolAndSettingsContent: some View {
-//        chartSheetSymbolView(
-//            chartViewModel: chartViewModel
-//        )
-//    }
-//    
-//    // MARK: - Chat Tab Content
-//    private var chatContent: some View {
-//        chartSheetChatView(
-//            chartViewModel: chartViewModel
-//        )
-//    }
-//    
-//    // MARK: - Indicator Tab Content
-//    private var indicatorContent: some View {
-//        IndicatorSettingsContent(
-//            indicatorManager: chartViewModel.indicatorManager,
-//            onRecalculate: {
-//                chartViewModel.recalculateIndicators()
-//            }
-//        )
-//    }
-//    
-//    // MARK: - Markers Tab Content
-//    var markersContent: some View {
-//        chartSheetMarkersView(
-//            chartViewModel: chartViewModel,
-//            controlViewModel: controlViewModel
-//        )
-//    }
-//}
+
 
 
 struct IndicatorItem: View {

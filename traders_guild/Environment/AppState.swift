@@ -465,6 +465,77 @@ class AppState: ObservableObject {
         }
     }
     
+
+
+    // ================================================================================================
+    // MARK: - Trading Watchlist Methods (TradingSymbolDTO)
+    // ================================================================================================
+    
+    /// Fetch guild's trading watchlist as TradingSymbolDTOs (for chart-style display)
+    func fetchGuildTradingWatchlist(guildId: UUID) async throws -> [TradingSymbolDTO] {
+        do {
+            return try await api.fetchGuildTradingWatchlist(guildId: guildId)
+        } catch {
+            print("⚠️ Failed to fetch guild trading watchlist: \(error)")
+            throw error
+        }
+    }
+    
+    /// Add symbol to guild watchlist
+    func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
+        do {
+            try await api.addToGuildWatchlist(guildId: guildId, symbolId: symbolId)
+        } catch {
+            print("⚠️ Failed to add to guild watchlist: \(error)")
+            throw error
+        }
+    }
+    
+    /// Remove symbol from guild watchlist
+    func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
+        do {
+            try await api.removeFromGuildWatchlist(guildId: guildId, symbolId: symbolId)
+        } catch {
+            print("⚠️ Failed to remove from guild watchlist: \(error)")
+            throw error
+        }
+    }
+    
+    /// Add symbol to user's personal watchlist
+    func addToPersonalWatchlist(userId: UUID, symbolId: UUID) async throws {
+        do {
+            try await api.addToPersonalWatchlist(userId: userId, symbolId: symbolId)
+        } catch {
+            print("⚠️ Failed to add to personal watchlist: \(error)")
+            throw error
+        }
+    }
+    
+    /// Remove symbol from user's personal watchlist
+    func removeFromPersonalWatchlist(userId: UUID, symbolId: UUID) async throws {
+        do {
+            try await api.removeFromPersonalWatchlist(userId: userId, symbolId: symbolId)
+        } catch {
+            print("⚠️ Failed to remove from personal watchlist: \(error)")
+            throw error
+        }
+    }
+    
+    
+    /// Fetch user's personal trading watchlist as TradingSymbolDTOs
+    func fetchPersonalTradingWatchlist(userId: UUID) async throws -> [TradingSymbolDTO] {
+        do {
+            return try await api.fetchPersonalWatchlist(userId: userId)
+        } catch {
+            print("⚠️ Failed to fetch personal trading watchlist: \(error)")
+            throw error
+        }
+    }
+    
+    
+    
+    
+    
     /// Fetch user notifications for a guild
     func fetchGuildUserNotifications(guildId: UUID) async throws -> [GuildNotificationDTO] {
         errorMessage = nil

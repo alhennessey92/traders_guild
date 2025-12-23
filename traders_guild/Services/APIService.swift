@@ -561,6 +561,45 @@ class MockAPIService {
         try await simulateNetworkDelay()
         return "https://tradersguild.app/marker/\(markerId.uuidString)"
     }
+    
+    
+
+
+    // MARK: - Guild Trading Watchlist (TradingSymbolDTO)
+    
+    /// Fetch guild's trading watchlist as TradingSymbolDTOs (for chart-style display)
+    func fetchGuildTradingWatchlist(guildId: UUID) async throws -> [TradingSymbolDTO] {
+        try await simulateNetworkDelay()
+        return SampleData.chartGuildWatchlistDTOs
+    }
+    
+    /// Add symbol to guild watchlist
+    func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // TODO: Implement real API call when backend is ready
+        print("API: Added symbol \(symbolId) to guild \(guildId) watchlist")
+    }
+    
+    /// Remove symbol from guild watchlist
+    func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // TODO: Implement real API call when backend is ready
+        print("API: Removed symbol \(symbolId) from guild \(guildId) watchlist")
+    }
+    
+    /// Add symbol to user's personal watchlist
+    func addToPersonalWatchlist(userId: UUID, symbolId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // TODO: Implement real API call when backend is ready
+        print("API: Added symbol \(symbolId) to user \(userId) personal watchlist")
+    }
+    
+    /// Remove symbol from user's personal watchlist
+    func removeFromPersonalWatchlist(userId: UUID, symbolId: UUID) async throws {
+        try await simulateNetworkDelay()
+        // TODO: Implement real API call when backend is ready
+        print("API: Removed symbol \(symbolId) from user \(userId) personal watchlist")
+    }
 
 }
 
