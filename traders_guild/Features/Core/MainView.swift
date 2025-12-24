@@ -427,16 +427,31 @@ struct MainView: View {
     // FIXED: Using LeftDrawerMainView (correct name)
     private var leftDrawerView: some View {
         HStack(spacing: 0) {
-            LeftDrawerMainView(sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal) {
-                dismissKeyboard()
-                withAnimation(AnimationConstants.standard) {
-                    showLeftDrawer = false
-                    leftDragTranslation = 0
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    showOverlay = false
-                }
-            }
+            LeftDrawerMainView(
+                sheetOverlayVisible: $showSheetOverlay,
+                dismissSheetsSignal: $dismissLeftSheetsSignal,
+                onClose: {
+                    dismissKeyboard()
+                    withAnimation(AnimationConstants.standard) {
+                        showLeftDrawer = false
+                        leftDragTranslation = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        showOverlay = false
+                    }
+                },
+                currentSymbolId: chartViewModel.currentSymbol?.id
+            )
+//            LeftDrawerMainView(sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal, currentSymbolId: chartViewModel.currentSymbol?.id) {
+//                dismissKeyboard()
+//                withAnimation(AnimationConstants.standard) {
+//                    showLeftDrawer = false
+//                    leftDragTranslation = 0
+//                }
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+//                    showOverlay = false
+//                }
+//            }
             .frame(width: drawerWidth)
             .frame(maxHeight: .infinity)
             .offset(x: leftDragTranslation)

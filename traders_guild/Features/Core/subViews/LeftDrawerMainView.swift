@@ -73,6 +73,8 @@ struct LeftDrawerMainView: View {
     @State private var bottomSheetContent: BottomSheetContent? = nil
     @State private var selectedDetent: PresentationDetent = .fraction(0.6)
     
+    var currentSymbolId: UUID? = nil
+    
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -105,7 +107,8 @@ struct LeftDrawerMainView: View {
                         currentSection: navigationState,
                         bottomSheetContent: $bottomSheetContent,
                         onClose: onClose,
-                        dragTranslation: $dragTranslation
+                        dragTranslation: $dragTranslation,
+                        currentSymbolId: currentSymbolId 
                     )
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing),
@@ -211,7 +214,7 @@ struct MainDrawerView: View {
         ("bell.fill", "Notifications", .notifications),
         ("chart.line.uptrend.xyaxis", "Today's Top Markers", .topMarkers),
         ("trophy.fill", "Leaderboard", .leaderboard),
-        ("star.fill", "Guild Watchlist", .guildWatchlist),
+        ("star.fill", "Watchlists", .guildWatchlist),
         ("calendar.badge.clock", "Events", .events),
         ("person.2.fill", "User List", .userList),
         ("chart.bar.fill", "Statistics", .statistics)
@@ -418,6 +421,8 @@ struct SectionDrawerView: View {
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     
+    var currentSymbolId: UUID? = nil
+    
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -520,7 +525,7 @@ struct SectionDrawerView: View {
         case .leaderboard:
             LeaderboardListView(bottomSheetContent: $bottomSheetContent)
         case .guildWatchlist:
-            WatchlistView()
+            WatchlistView(currentSymbolId: currentSymbolId)
         case .events:
             EventsListView(bottomSheetContent: $bottomSheetContent)
         case .userList:
