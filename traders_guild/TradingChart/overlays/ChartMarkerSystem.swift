@@ -840,11 +840,11 @@ struct ChartMarkerSystem {
         
         // Like count badge
         if marker.likeCount > 0 {
-            let badgeOffset: CGFloat = isBelow ? -10 : 10
+            let badgeOffset: CGFloat = isBelow ? -17 : 5
             let badgeRect = CGRect(
                 x: position.x + 8,
                 y: position.y + badgeOffset,
-                width: 18,
+                width: 14,
                 height: 14
             )
             context.fill(Path(roundedRect: badgeRect, cornerRadius: 7), with: .color(.red))
@@ -852,7 +852,7 @@ struct ChartMarkerSystem {
                 Text("\(marker.likeCount)")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white),
-                at: CGPoint(x: position.x + 12, y: position.y + badgeOffset + 7)
+                at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 7)
             )
         }
         

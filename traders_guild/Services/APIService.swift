@@ -600,6 +600,11 @@ class MockAPIService {
         // TODO: Implement real API call when backend is ready
         print("API: Removed symbol \(symbolId) from user \(userId) personal watchlist")
     }
+    
+    func requestGuildWatchlistAddition(guildId: UUID, userId: UUID, symbolId: UUID) async throws {
+        try await simulateNetworkDelay()
+        print("API: User \(userId) requested to add symbol \(symbolId) to guild \(guildId) watchlist")
+    }
 
 }
 

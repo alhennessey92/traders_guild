@@ -271,8 +271,8 @@ enum UnifiedTabSize {
     var verticalPadding: CGFloat {
         switch self {
         case .compact: return 8
-        case .standard: return 10
-        case .iconOnly: return 10
+        case .standard: return 12
+        case .iconOnly: return 12
         }
     }
     
@@ -470,8 +470,8 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
         let title = tab.title
         // Shorten long titles
         switch title.lowercased() {
-        case "volatility": return "Volat."
-        case "momentum": return "Mom."
+        case "volatility": return "Volatility"
+        case "momentum": return "Momentum"
         default: return title
         }
     }
@@ -480,15 +480,15 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                 Text(compactTitle)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundColor(isSelected ? .white : .gray)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
             .background(isSelected ? selectedGradient : unselectedGradient)
             .clipShape(Capsule())
             .overlay(
@@ -722,6 +722,21 @@ func assetClassColor(_ assetClass: AssetClass) -> Color {
     case .commodities: return .yellow
     case .indices: return .purple
     case .futures: return .cyan
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - UNIFFIED VIEWS
+// MARK: - ================================================================================================
+
+struct UnifiedStaticBackground: View {
+    var body: some View {
+        ZStack {
+            Color.clear
+                .background(.ultraThinMaterial)
+            AppColors.sheetBackground
+            StaticPatternView()
+        }
     }
 }
 

@@ -202,7 +202,7 @@ struct MainView: View {
             .globalMessaging()
             
             // MARK: - Bottom Sheet
-            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer)) {
+            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !appState.showingTransition)) {
                 ChartBottomSheet(
                     controlViewModel: chartControlVM,
                     chartViewModel: chartViewModel,
@@ -251,6 +251,8 @@ struct MainView: View {
                 
                 // Initialize chart with data
                 await chartViewModel.initialize()
+                
+                appState.chartDidBecomeReady()
             }
             .onChange(of: appState.currentGuild?.id) { oldValue, newValue in
                 if let guildId = newValue, oldValue != newValue {
@@ -260,6 +262,7 @@ struct MainView: View {
                         await leftDrawerViewModel.preloadData(for: guildId, appState: appState)
                         await rightDrawerViewModel.preloadData(for: guildId, appState: appState)
                         await chartViewModel.initialize()
+                        appState.chartDidBecomeReady()
                     }
                 }
             }
