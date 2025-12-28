@@ -580,53 +580,53 @@ struct DrawerMenuButton: View {
 
 
 /// Simple list showcasing top markers/performers.
-struct TopMarkersView: View {
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(1...10, id: \.self) { index in
-                HStack(spacing: 12) {
-                    Text("\(index)")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(index <= 3 ? AppColors.accentColor : AppColors.whiteText.opacity(0.6))
-                        .frame(width: 30)
-                    
-                    Circle()
-                        .fill(AppColors.accentColor)
-                        .frame(width: 36, height: 36)
-                        .overlay(
-                            Text("U\(index)")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                        )
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("TopTrader\(index)")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText)
-                        Text("Accuracy: \(95 - index)%")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-                    }
-                    
-                    Spacer()
-                    
-                    Text("+\(150 - index * 10)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.bullCandleGreen)
-                }
-                .padding()
-                .background(Color.white.opacity(index <= 3 ? 0.12 : 0.08))
-                .cornerRadius(10)
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
-
+//struct TopMarkersView: View {
+//    var body: some View {
+//        VStack(spacing: 10) {
+//            ForEach(1...10, id: \.self) { index in
+//                HStack(spacing: 12) {
+//                    Text("\(index)")
+//                        .font(.headline)
+//                        .fontWeight(.bold)
+//                        .foregroundColor(index <= 3 ? AppColors.accentColor : AppColors.whiteText.opacity(0.6))
+//                        .frame(width: 30)
+//                    
+//                    Circle()
+//                        .fill(AppColors.accentColor)
+//                        .frame(width: 36, height: 36)
+//                        .overlay(
+//                            Text("U\(index)")
+//                                .font(.caption2)
+//                                .fontWeight(.bold)
+//                                .foregroundColor(.white)
+//                        )
+//                    
+//                    VStack(alignment: .leading, spacing: 4) {
+//                        Text("TopTrader\(index)")
+//                            .font(.subheadline)
+//                            .fontWeight(.semibold)
+//                            .foregroundColor(AppColors.whiteText)
+//                        Text("Accuracy: \(95 - index)%")
+//                            .font(.caption)
+//                            .foregroundColor(AppColors.whiteText.opacity(0.6))
+//                    }
+//                    
+//                    Spacer()
+//                    
+//                    Text("+\(150 - index * 10)")
+//                        .font(.subheadline)
+//                        .fontWeight(.bold)
+//                        .foregroundColor(AppColors.bullCandleGreen)
+//                }//
+//                .padding()
+//                .background(Color.white.opacity(index <= 3 ? 0.12 : 0.08))
+//                .cornerRadius(10)
+//            }
+//        }
+//        .padding(.horizontal, 16)
+//    }
+//}
+//
 
 
 /// Container for detail content presented as a sheet from the left drawer.

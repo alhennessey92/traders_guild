@@ -735,6 +735,146 @@ class AppState: ObservableObject {
     }
     
     
+    // ================================================================================================
+    // MARK: - Top Markers - API
+    // ================================================================================================
+    
+    /// Fetch all top markers data for the current guild
+    func fetchTopMarkers(guildId: UUID) async throws -> TopMarkersResponseDTO {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        
+        do {
+            let response = try await api.fetchTopMarkers(guildId: guildId, userId: currentUser.id)
+            return response
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Fetch Top Markers", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch today's trending markers for a guild
+    func fetchTrendingMarkers(guildId: UUID, limit: Int = 20) async throws -> [TopMarkerDTO] {
+        errorMessage = nil
+        
+        do {
+            let markers = try await api.fetchTrendingMarkers(guildId: guildId, limit: limit)
+            return markers
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Fetch Trending Markers", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch markers grouped by trading symbol
+    func fetchMarkersBySymbol(guildId: UUID) async throws -> [String: [TopMarkerDTO]] {
+        errorMessage = nil
+        
+        do {
+            let groupedMarkers = try await api.fetchMarkersBySymbol(guildId: guildId)
+            return groupedMarkers
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Fetch Markers by Symbol", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch markers from users the current user follows
+    func fetchFollowingMarkers(guildId: UUID, limit: Int = 20) async throws -> [TopMarkerDTO] {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        
+        do {
+            let markers = try await api.fetchFollowingMarkers(guildId: guildId, userId: currentUser.id, limit: limit)
+            return markers
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Fetch Following Markers", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch current user's own markers
+    func fetchMyMarkers(guildId: UUID, limit: Int = 50) async throws -> [TopMarkerDTO] {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        
+        do {
+            let markers = try await api.fetchMyMarkers(guildId: guildId, userId: currentUser.id, limit: limit)
+            return markers
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Fetch Your Markers", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Toggle like status on a top marker
+    func toggleTopMarkerLike(markerId: UUID) async throws -> (isLiked: Bool, likeCount: Int) {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        
+        do {
+            let result = try await api.toggleTopMarkerLike(markerId: markerId, userId: currentUser.id)
+            return result
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Update Like", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Get navigation info to jump to a marker on the chart
+    func getMarkerNavigationInfo(markerId: UUID) async throws -> MarkerNavigationInfo? {
+        errorMessage = nil
+        
+        do {
+            let navInfo = try await api.getMarkerNavigationInfo(markerId: markerId)
+            return navInfo
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Get Marker Info", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Force refresh all top markers data
+    func refreshTopMarkers(guildId: UUID) async throws -> TopMarkersResponseDTO {
+        errorMessage = nil
+        guard let currentUser = currentUser else {
+            throw AppError.unauthorized
+        }
+        
+        do {
+            let response = try await api.refreshTopMarkers(guildId: guildId, userId: currentUser.id)
+            return response
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            showError(error, title: "Failed to Refresh Markers", style: .toast)
+            throw error
+        }
+    }
+    
+    
     
     
     // ================================================================================================

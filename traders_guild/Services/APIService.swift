@@ -11,7 +11,7 @@ import Foundation
 class MockAPIService {
     
     // Simulate network delay
-    private func simulateNetworkDelay() async throws {
+    func simulateNetworkDelay() async throws {
         try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
     }
     
@@ -156,6 +156,67 @@ class MockAPIService {
         try await simulateNetworkDelay()
         // Mock: record notification view
     }
+    
+    
+    // ================================================================================================
+    // MARK: - Top Markers - API
+    // ================================================================================================
+    
+    /// Fetch all top markers data (trending, by symbol, following, mine)
+    func fetchTopMarkers(guildId: UUID, userId: UUID) async throws -> TopMarkersResponseDTO {
+        try await simulateNetworkDelay()
+        return SampleData.topMarkersResponse
+    }
+    
+    /// Fetch today's trending markers sorted by engagement score
+    func fetchTrendingMarkers(guildId: UUID, limit: Int = 20) async throws -> [TopMarkerDTO] {
+        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 second
+        return Array(SampleData.trendingTopMarkers.prefix(limit))
+    }
+    
+    /// Fetch markers grouped by trading symbol
+    func fetchMarkersBySymbol(guildId: UUID) async throws -> [String: [TopMarkerDTO]] {
+        try await Task.sleep(nanoseconds: 500_000_000)
+        return SampleData.symbolGroupedTopMarkers
+    }
+    
+    /// Fetch markers from users the current user follows
+    func fetchFollowingMarkers(guildId: UUID, userId: UUID, limit: Int = 20) async throws -> [TopMarkerDTO] {
+        try await Task.sleep(nanoseconds: 500_000_000)
+        return Array(SampleData.followingTopMarkers.prefix(limit))
+    }
+    
+    /// Fetch current user's own markers
+    func fetchMyMarkers(guildId: UUID, userId: UUID, limit: Int = 50) async throws -> [TopMarkerDTO] {
+        try await Task.sleep(nanoseconds: 500_000_000)
+        return Array(SampleData.myTopMarkers.prefix(limit))
+    }
+    
+    /// Toggle like status on a top marker
+    func toggleTopMarkerLike(markerId: UUID, userId: UUID) async throws -> (isLiked: Bool, likeCount: Int) {
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 second
+        // Simulate toggled state
+        let isNowLiked = Bool.random()
+        let newCount = Int.random(in: 10...100)
+        return (isNowLiked, newCount)
+    }
+    
+    /// Get information needed to navigate to a specific marker on the chart
+    func getMarkerNavigationInfo(markerId: UUID) async throws -> MarkerNavigationInfo? {
+        try await Task.sleep(nanoseconds: 200_000_000)
+        if let marker = SampleData.trendingTopMarkers.first(where: { $0.id == markerId }) {
+            return MarkerNavigationInfo(from: marker)
+        }
+        return nil
+    }
+    
+    /// Force refresh top markers (bypasses cache)
+    func refreshTopMarkers(guildId: UUID, userId: UUID) async throws -> TopMarkersResponseDTO {
+        try await Task.sleep(nanoseconds: 800_000_000) // 0.8 second
+        return SampleData.topMarkersResponse
+    }
+    
+    
     
     
     // ================================================================================================

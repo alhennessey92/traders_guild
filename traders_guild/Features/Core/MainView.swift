@@ -1,3 +1,6 @@
+
+
+
 //
 //  MainView.swift
 //  traders_guild
@@ -201,6 +204,18 @@ struct MainView: View {
             .ignoresSafeArea()
             .globalMessaging()
             
+            .observeMarkerNavigation(
+                leftDrawerViewModel: leftDrawerViewModel,
+                chartViewModel: chartViewModel,
+                gestureState: chartGestureState,
+                onCloseDrawer: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showLeftDrawer = false
+                        showOverlay = false
+                    }
+                }
+            )
+            
             // MARK: - Bottom Sheet
             .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !appState.showingTransition)) {
                 ChartBottomSheet(
@@ -266,6 +281,7 @@ struct MainView: View {
                     }
                 }
             }
+            
 //            .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
 //                if let symbol = notification.userInfo?["symbol"] as? TradingSymbolDTO {
 //                    // Dismiss keyboard first
