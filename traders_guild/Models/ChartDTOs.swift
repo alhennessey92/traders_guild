@@ -657,6 +657,112 @@ struct CandleDTO: Identifiable, Codable, Equatable {
     var lowerWick: Double {
         min(open, close) - low
     }
+    
+    
+    /// Generate a random candle for testing purposes
+    /// Uses realistic price movements based on volatility
+    static func random(
+        basePrice: Double,
+        timestamp: Date,
+        volatility: Double = 0.02
+    ) -> CandleDTO {
+        // Generate open price with some variance from base
+        let open = basePrice + (Double.random(in: -volatility...volatility) * basePrice)
+        
+        // Generate close price with variance from open
+        let close = open + (Double.random(in: -volatility...volatility) * basePrice)
+        
+        // Ensure high is actually the highest value
+        let bodyHigh = max(open, close)
+        let bodyLow = min(open, close)
+        
+        // Add wicks that extend beyond the body
+        // Upper wick can be up to half the volatility above body
+        let high = bodyHigh + (Double.random(in: 0...(volatility/2)) * basePrice)
+        
+        // Lower wick can be up to half the volatility below body
+        let low = bodyLow - (Double.random(in: 0...(volatility/2)) * basePrice)
+        
+        let volume = Double.random(in: 100000...1000000)
+        
+        return CandleDTO(
+            id: UUID(),
+            timestamp: timestamp,
+            timestampFormatted: formatTimestamp(timestamp),
+            open: open,
+            high: high,
+            low: low,
+            close: close,
+            volume: volume,
+            volumeFormatted: formatVolume(volume)
+        )
+    }
+    
+    /// Generate an array of sample candles for initial chart display
+    static func generateSampleData(
+        count: Int = 200,
+        startDate: Date = Date(),
+        startPrice: Double = 100.0,
+        timeInterval: TimeInterval = 300 // 5 minutes default
+    ) -> [CandleDTO] {
+        var candles: [CandleDTO] = []
+        var currentPrice = startPrice
+        var currentDate = startDate
+        
+        for _ in 0..<count {
+            // Generate candle based on current price
+            let candle = CandleDTO.random(basePrice: currentPrice, timestamp: currentDate)
+            candles.append(candle)
+            
+            // Update price for next candle to create trending behavior
+            // This creates more realistic connected price movement
+            currentPrice = candle.close
+            
+            // Move to previous time period
+            currentDate = currentDate.addingTimeInterval(-timeInterval)
+        }
+        
+        // Reverse so newest candles are at the end
+        return candles.reversed()
+    }
+    
+    /// Generate candles for a specific symbol and timeframe
+    static func generateSampleData(
+        for symbol: TradingSymbolDTO,
+        timeframe: ChartTimeframe,
+        startDate: Date = Date()
+    ) -> [CandleDTO] {
+        let count = timeframe.initialCandlesCount
+        let interval = timeframe.seconds
+        
+        return generateSampleData(
+            count: count,
+            startDate: startDate,
+            startPrice: symbol.currentPrice,
+            timeInterval: interval
+        )
+    }
+    
+    // MARK: - Formatting Helpers
+    
+    private static func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    private static func formatVolume(_ volume: Double) -> String {
+        if volume >= 1_000_000_000 {
+            return String(format: "%.2fB", volume / 1_000_000_000)
+        } else if volume >= 1_000_000 {
+            return String(format: "%.2fM", volume / 1_000_000)
+        } else if volume >= 1_000 {
+            return String(format: "%.2fK", volume / 1_000)
+        } else {
+            return String(format: "%.0f", volume)
+        }
+    }
 }
 
 

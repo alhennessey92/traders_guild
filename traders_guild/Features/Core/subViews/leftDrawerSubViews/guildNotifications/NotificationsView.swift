@@ -1,101 +1,206 @@
 //
-//  Notifications.swift
+//  NotificationsView.swift
 //  traders_guild
 //
-//  Created by Al Hennessey on 12/10/2025.
-//
-
-//
-//  LeaderboardView.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 09/10/2025.
+//  Notifications View for Left Drawer
+//  Displays user notifications with filtering tabs
+//  Uses UnifiedComponents for consistent styling
 //
 
 import SwiftUI
 
+// MARK: - ================================================================================================
+// MARK: - NOTIFICATION TAB DEFINITION
+// MARK: - ================================================================================================
+
+/// Tab enum for notification filtering
+enum NotificationTab: String, CaseIterable, UnifiedTabItem {
+    case all = "All"
+    case guild = "Guild"
+    case personal = "Personal"
+    
+    var title: String { rawValue }
+    
+    var icon: String {
+        switch self {
+        case .all: return "bell.fill"
+        case .guild: return "person.3.fill"
+        case .personal: return "person.fill"
+        }
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - NOTIFICATIONS LIST VIEW
+// MARK: - ================================================================================================
+
 struct NotificationsListView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager  // ✅ ADD THIS
+    @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
+    @EnvironmentObject var appState: AppState
+    
+    // Tab state
+    @State private var selectedTab: NotificationTab = .all
     
     var body: some View {
-        VStack(spacing: 10) {
-            // Loading state
-            if leftDrawerViewModel.isLoading && leftDrawerViewModel.userNotifications.isEmpty {
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                    Text("Loading Notifications...")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+        VStack(spacing: 0) {
+            // Tab selector - OUTSIDE ScrollView (fixed)
+            UnifiedTabBar(
+                selectedTab: $selectedTab,
+                size: .compact,
+                theme: .blue,
+                countForTab: { tab in getCountForTab(tab) },
+                spacing: 6
+            )
+            .padding(.horizontal, 12)
+            .padding(.top, 4)
+            .padding(.bottom, 12)
+            
+            // Scrollable content with pull to refresh
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 8) {
+                    switch selectedTab {
+                    case .all:
+                        allNotificationsContent
+                    case .guild:
+                        guildNotificationsContent
+                    case .personal:
+                        personalNotificationsContent
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 40)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 20)
             }
-            // Empty state
-            else if leftDrawerViewModel.userNotifications.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "bell.slash")
-                        .font(.largeTitle)
-                        .foregroundColor(AppColors.whiteText.opacity(0.3))
-                    Text("No Notifications yet")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.whiteText.opacity(0.5))
-                    Text("Check back later for guild updates")
-                        .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.4))
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
+            .refreshable {
+                await refreshNotifications()
+            }
+        }
+        // Loading overlay for navigation
+        .overlay {
+            if notificationNavigationManager.isNavigating {
+                NavigationLoadingOverlay()
+            }
+        }
+    }
+    
+    // MARK: - Refresh
+    
+    private func refreshNotifications() async {
+        guard let guild = appState.currentGuild else { return }
+        await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
+    }
+    
+    // MARK: - Tab Counts
+    
+    private func getCountForTab(_ tab: NotificationTab) -> Int {
+        switch tab {
+        case .all:
+            return leftDrawerViewModel.userNotifications.count
+        case .guild:
+            return filteredNotifications(for: .guild).count
+        case .personal:
+            return filteredNotifications(for: .personal).count
+        }
+    }
+    
+    // MARK: - Filtered Notifications
+    
+    private func filteredNotifications(for tab: NotificationTab) -> [GuildNotificationDTO] {
+        switch tab {
+        case .all:
+            return leftDrawerViewModel.userNotifications
+        case .guild:
+            // Guild tab: symbol-related, announcements, events
+            return leftDrawerViewModel.userNotifications.filter { $0.notificationType == .symbol }
+        case .personal:
+            // Personal tab: DMs, mentions, friend-related
+            return leftDrawerViewModel.userNotifications.filter { $0.notificationType == .personal }
+        }
+    }
+    
+    // MARK: - All Notifications Content
+    
+    private var allNotificationsContent: some View {
+        Group {
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.userNotifications.isEmpty {
+                UnifiedLoadingState(message: "Loading notifications...")
+                    .padding(.top, 40)
+            } else if leftDrawerViewModel.userNotifications.isEmpty {
+                UnifiedEmptyState(
+                    icon: "bell.slash",
+                    title: "No notifications",
+                    subtitle: "You're all caught up!"
+                )
                 .padding(.top, 40)
             } else {
-                // Notifications list
-                ForEach(leftDrawerViewModel.userNotifications) { notification in
-                    NotificationRowView(
-                        notification: notification,
-                        onTap: {
-                            // Optional: Additional action on tap
-                        }
-                    )
+                LazyVStack(spacing: 8) {
+                    ForEach(leftDrawerViewModel.userNotifications) { notification in
+                        NotificationCard(notification: notification)
+                    }
                 }
             }
         }
-        .padding(.horizontal, 16)
-        // ✅ ADD THIS: Loading overlay
-        .overlay {
-            if notificationNavigationManager.isNavigating {
-                ZStack {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                    
-                    VStack(spacing: 12) {
-                        ProgressView()
-                            .scaleEffect(1.2)
-                        Text("Opening...")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
+    }
+    
+    // MARK: - Guild Notifications Content
+    
+    private var guildNotificationsContent: some View {
+        Group {
+            let notifications = filteredNotifications(for: .guild)
+            
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.userNotifications.isEmpty {
+                UnifiedLoadingState(message: "Loading notifications...")
+                    .padding(.top, 40)
+            } else if notifications.isEmpty {
+                UnifiedEmptyState(
+                    icon: "person.3",
+                    title: "No guild notifications",
+                    subtitle: "Guild activity will appear here"
+                )
+                .padding(.top, 40)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(notifications) { notification in
+                        NotificationCard(notification: notification)
                     }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.black.opacity(0.8))
-                    )
+                }
+            }
+        }
+    }
+    
+    // MARK: - Personal Notifications Content
+    
+    private var personalNotificationsContent: some View {
+        Group {
+            let notifications = filteredNotifications(for: .personal)
+            
+            if leftDrawerViewModel.isLoading && leftDrawerViewModel.userNotifications.isEmpty {
+                UnifiedLoadingState(message: "Loading notifications...")
+                    .padding(.top, 40)
+            } else if notifications.isEmpty {
+                UnifiedEmptyState(
+                    icon: "person",
+                    title: "No personal notifications",
+                    subtitle: "Messages and mentions will appear here"
+                )
+                .padding(.top, 40)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(notifications) { notification in
+                        NotificationCard(notification: notification)
+                    }
                 }
             }
         }
     }
 }
 
+// MARK: - ================================================================================================
+// MARK: - NOTIFICATION CARD
+// MARK: - ================================================================================================
 
-
-
-// MARK: - Notification Row View
-
-// MARK: - Notification Row View
-
-struct NotificationRowView: View {
+struct NotificationCard: View {
     let notification: GuildNotificationDTO
-    let onTap: () -> Void
     
     @State private var isPressed = false
     @State private var hasRecordedView = false
@@ -105,86 +210,94 @@ struct NotificationRowView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
     
-    init(notification: GuildNotificationDTO, onTap: @escaping () -> Void) {
+    init(notification: GuildNotificationDTO) {
         self.notification = notification
-        self.onTap = onTap
         _showAsUnread = State(initialValue: !notification.isRead)
     }
     
+    /// Icon and color based on notification type
+    private var notificationIcon: String {
+        switch notification.notificationType {
+        case .personal:
+            return "person.crop.circle.fill"
+        case .symbol:
+            return "chart.line.uptrend.xyaxis"
+        }
+    }
+    
+    private var notificationColor: Color {
+        switch notification.notificationType {
+        case .personal:
+            return AppColors.friendAccent
+        case .symbol:
+            return AppColors.bullCandleGreen
+        }
+    }
+    
     var body: some View {
-        Button(action: {
-            Task {
-                await notificationNavigationManager.navigate(to: notification)
-            }
-            HapticFeedback.light.trigger()
-            onTap()
-        }) {
-            HStack(alignment: .top, spacing: 12) {
-                // Icon
+        Button(action: handleTap) {
+            HStack(alignment: .top, spacing: 10) {
+                // Icon badge
                 ZStack {
-                    switch notification.notificationType {
-                    case .personal:
-                        // Profile picture or default icon
-                        Image(systemName: "person.2.shield")
-                            .font(.title3)
-                            .foregroundColor(AppColors.friendAccent)
-                            .frame(width: 24)
-                    case .symbol:
-                        Image(systemName: "chart.line.uptrend.xyaxis.circle")
-                            .font(.title3)
-                            .foregroundColor(AppColors.bullCandleGreen)
-                            .frame(width: 24)
-                    }
+                    Circle()
+                        .fill(notificationColor.opacity(0.2))
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: notificationIcon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(notificationColor)
                 }
                 
                 // Content
-                VStack(alignment: .leading, spacing: 4) {  // ✅ CHANGED: Reduced spacing from 6 to 4
-                    // Title with unread indicator and time
-                    HStack(alignment: .top, spacing: 6) {
-//                        if showAsUnread {
-//                            Circle()
-//                                .fill(AppColors.accentDarkColor)
-//                                .stroke(AppColors.accentColor, lineWidth: 2)
-//                                .frame(width: 6, height: 6)
-//                                .padding(.top, 6)
-//                        }
-                        
+                VStack(alignment: .leading, spacing: 4) {
+                    // Title row with time
+                    HStack(alignment: .top) {
                         Text(notification.title)
-                            .font(.footnote)
-                            .fontWeight(.semibold)
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(AppColors.whiteText)
-                            .multilineTextAlignment(.leading)
                             .lineLimit(2)
+                            .multilineTextAlignment(.leading)
                         
                         Spacer()
                         
                         Text(notification.timeAgoFormatted)
-                            .font(.caption2)
-                            .foregroundColor(AppColors.whiteText.opacity(0.5))
+                            .font(.system(size: 10))
+                            .foregroundColor(AppColors.whiteText.opacity(0.4))
                     }
                     
-                    // Content text
+                    // Content preview
                     Text(notification.content)
-                        .font(.caption)
+                        .font(.system(size: 12))
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
                 
-                
+                // Chevron for navigable notifications
+                if notification.destination != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.3))
+                        .padding(.top, 4)
+                }
             }
-            .padding(.horizontal, 14)  // ✅ CHANGED: More specific horizontal padding
-            .padding(.vertical, 10)     // ✅ CHANGED: Reduced from 16 to 10 for thinner height
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(isPressed ? 0.1 : showAsUnread ? 0.05 : 0.03))
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(isPressed ? 0.08 : 0.04))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(showAsUnread ? AppColors.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(
+                                showAsUnread ? AppColors.accentColor.opacity(0.4) : Color.clear,
+                                lineWidth: 1
+                            )
                     )
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isPressed)
         .disabled(notificationNavigationManager.isNavigating)
         .opacity(notificationNavigationManager.isNavigating ? 0.6 : 1.0)
         .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
@@ -196,12 +309,26 @@ struct NotificationRowView: View {
             recordNotificationView()
         }
         .onDisappear {
-            if showAsUnread {
-                withAnimation {
-                    showAsUnread = false
-                }
-                leftDrawerViewModel.markNotificationAsRead(notificationId: notification.id)
+            markAsReadIfNeeded()
+        }
+    }
+    
+    // MARK: - Actions
+    
+    private func handleTap() {
+        HapticFeedback.light.trigger()
+        
+        // Mark as read immediately on tap
+        if showAsUnread {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showAsUnread = false
             }
+            leftDrawerViewModel.markNotificationAsRead(notificationId: notification.id)
+        }
+        
+        // Navigate to destination
+        Task {
+            await notificationNavigationManager.navigate(to: notification)
         }
     }
     
@@ -217,4 +344,55 @@ struct NotificationRowView: View {
             }
         }
     }
+    
+    private func markAsReadIfNeeded() {
+        if showAsUnread {
+            withAnimation {
+                showAsUnread = false
+            }
+            leftDrawerViewModel.markNotificationAsRead(notificationId: notification.id)
+        }
+    }
 }
+
+// MARK: - ================================================================================================
+// MARK: - NAVIGATION LOADING OVERLAY
+// MARK: - ================================================================================================
+
+struct NavigationLoadingOverlay: View {
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 12) {
+                ProgressView()
+                    .scaleEffect(1.2)
+                    .tint(.white)
+                Text("Opening...")
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+            }
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.black.opacity(0.8))
+            )
+        }
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - LEGACY SUPPORT (Rename if needed)
+// MARK: - ================================================================================================
+
+/// Original row view - kept for reference, replaced by NotificationCard
+struct NotificationRowView: View {
+    let notification: GuildNotificationDTO
+    let onTap: () -> Void
+    
+    var body: some View {
+        NotificationCard(notification: notification)
+    }
+}
+

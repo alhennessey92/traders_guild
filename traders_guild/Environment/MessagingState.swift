@@ -309,7 +309,23 @@ struct MessagingSheet: View {
             Divider()
             
             GuildMemberProfileHeaderView(user: user)
-            GuildUserProfileContent(user: user)
+            
+            // Updated: Using ProfileContentView instead of GuildUserProfileContent
+            ProfileContentView(
+                extendedProfile: SampleData.memberExtendedProfile,
+                markersSummary: SampleData.memberMarkersSummary,
+                userMarkers: Array(SampleData.userPlacedMarkers.prefix(5)),
+                awards: SampleData.memberAwards,
+                awardsSummary: SampleData.awardsSummary,
+                stats: SampleData.profileStats,
+                isCurrentUser: false,
+                username: user.globalMember.username,
+                onMarkerTap: { marker in
+                    // Close profile and messaging, then navigate to marker
+                    messagingManager.closeMessage()
+                    dismiss()
+                }
+            )
             
             Divider()
             
@@ -783,10 +799,4 @@ struct UserDMMessageView: View {
         }
     }
 }
-
-
-
-
-
-
 

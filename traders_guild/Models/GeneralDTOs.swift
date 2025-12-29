@@ -337,6 +337,8 @@ struct GuildMembershipDTO: Identifiable, Codable, Equatable {
     }
 }
 
+
+
 // MARK: - Notification Type
 enum NotificationType: String, Codable, CaseIterable {
     case personal = "Personal"
@@ -624,6 +626,414 @@ struct GuildFriendDTO: Identifiable, Codable, Equatable {
 
 
 
+// MARK: - ================================================================================================
+// MARK: - TOP MARKER DTO
+// MARK: - ================================================================================================
+
+/// Lightweight marker DTO optimized for the Top Markers list display
+/// Contains essential display info without full marker detail overhead
+struct TopMarkerDTO: Identifiable, Equatable {
+    let id: UUID                        // Marker unique ID
+    let symbolId: UUID                  // Symbol this marker is on
+    let symbolTicker: String            // Symbol ticker (e.g., "EURUSD")
+    let symbolBrandColor: String?       // Brand color hex for symbol
+    let symbolAssetClass: AssetClass    // Asset class for grouping
+    let guildId: UUID                   // Guild context
+    
+    // Author info (embedded for no lookup)
+    let authorId: UUID                  // Author's user ID
+    let authorUsername: String          // Author's username
+    let authorInitials: String          // Author's initials for avatar
+    let authorAvatarURL: String?        // Author's avatar URL
+    let authorIsOnline: Bool            // Is author currently online
+    let authorReputation: Int           // Author's reputation score
+    let authorRole: MemberRole          // Author's role in guild
+    
+    // Marker properties
+    let type: MarkerType                // Type of marker
+    let notePreview: String?            // First ~100 chars of note
+    let createdAt: Date                 // When marker was created
+    let createdAtFormatted: String      // Pre-formatted time (e.g., "2h ago")
+    
+    // Chart position info (for navigation)
+    let candleIndex: Int                // Index in candle array
+    let timestamp: Date                 // Candle timestamp
+    let price: Double                   // Price level
+    let timeframe: ChartTimeframe       // Timeframe of the chart
+    
+    // Engagement data
+    var likeCount: Int                  // Number of likes
+    var isLikedByCurrentUser: Bool      // Has current user liked?
+    var commentCount: Int               // Number of comments
+    
+    // Ranking data (internal use for sorting)
+    var trendingScore: Double           // Score for trending algorithm
+    
+    // Permissions
+    let isCurrentUserMarker: Bool       // Did current user create this?
+    
+    // MARK: - Equatable (by ID only for performance)
+    
+    static func == (lhs: TopMarkerDTO, rhs: TopMarkerDTO) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - TOP MARKERS RESPONSE DTO
+// MARK: - ================================================================================================
+
+/// Response from top markers API endpoint
+struct TopMarkersResponseDTO {
+    let trending: [TopMarkerDTO]            // Today's trending markers
+    let bySymbol: [String: [TopMarkerDTO]]  // Grouped by symbol ticker
+    let following: [TopMarkerDTO]           // From users you follow
+    let mine: [TopMarkerDTO]                // Your own markers
+    let lastUpdated: Date                   // When this data was fetched
+}
+
+// MARK: - ================================================================================================
+// MARK: - MARKER NAVIGATION INFO
+// MARK: - ================================================================================================
+
+/// Information needed to navigate to a marker on the chart
+struct MarkerNavigationInfo: Identifiable {
+    let id: UUID                        // For Identifiable
+    let markerId: UUID                  // The marker to navigate to
+    let symbolId: UUID                  // Symbol to load
+    let symbolTicker: String            // Symbol ticker
+    let timeframe: ChartTimeframe       // Timeframe to use
+    let candleIndex: Int                // Index to scroll to
+    let timestamp: Date                 // Timestamp for positioning
+    let price: Double                   // Price level
+    
+    init(from marker: TopMarkerDTO) {
+        self.id = UUID()
+        self.markerId = marker.id
+        self.symbolId = marker.symbolId
+        self.symbolTicker = marker.symbolTicker
+        self.timeframe = marker.timeframe
+        self.candleIndex = marker.candleIndex
+        self.timestamp = marker.timestamp
+        self.price = marker.price
+    }
+}
+
+
+
+// MARK: - ================================================================================================
+// MARK: - PROFILE TAB DEFINITION
+// MARK: - ================================================================================================
+
+/// Tab enum for profile sections - used by both current user and member profiles
+enum ProfileTab: String, CaseIterable, UnifiedTabItem {
+    case overview = "Overview"
+    case markers = "Markers"
+    case awards = "Awards"
+    
+    var title: String { rawValue }
+    
+    var icon: String {
+        switch self {
+        case .overview: return "person.text.rectangle"
+        case .markers: return "mappin.and.ellipse"
+        case .awards: return "trophy.fill"
+        }
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - AWARD DTOs
+// MARK: - ================================================================================================
+
+/// Category of awards
+enum AwardCategory: String, Codable, CaseIterable {
+    case trading = "Trading"
+    case community = "Community"
+    case milestones = "Milestones"
+    case special = "Special"
+    
+    var color: Color {
+        switch self {
+        case .trading: return .green
+        case .community: return .blue
+        case .milestones: return .orange
+        case .special: return .purple
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .trading: return "chart.line.uptrend.xyaxis"
+        case .community: return "person.3.fill"
+        case .milestones: return "flag.fill"
+        case .special: return "sparkles"
+        }
+    }
+}
+
+/// Rarity level of awards
+enum AwardRarity: String, Codable, CaseIterable {
+    case common = "Common"
+    case uncommon = "Uncommon"
+    case rare = "Rare"
+    case epic = "Epic"
+    case legendary = "Legendary"
+    
+    var color: Color {
+        switch self {
+        case .common: return .gray
+        case .uncommon: return .green
+        case .rare: return .blue
+        case .epic: return .purple
+        case .legendary: return .orange
+        }
+    }
+    
+    var glowColor: Color {
+        switch self {
+        case .common: return .clear
+        case .uncommon: return .green.opacity(0.3)
+        case .rare: return .blue.opacity(0.4)
+        case .epic: return .purple.opacity(0.5)
+        case .legendary: return .orange.opacity(0.6)
+        }
+    }
+    
+    /// Points value for display
+    var pointValue: Int {
+        switch self {
+        case .common: return 10
+        case .uncommon: return 25
+        case .rare: return 50
+        case .epic: return 100
+        case .legendary: return 250
+        }
+    }
+}
+
+/// Individual award earned by a user
+struct UserAwardDTO: Identifiable, Codable, Equatable {
+    let id: UUID
+    let awardId: UUID                   // Reference to award definition
+    let name: String                    // Award name (e.g., "First Trade")
+    let description: String             // How to earn this award
+    let icon: String                    // SF Symbol name
+    let category: AwardCategory
+    let rarity: AwardRarity
+    let earnedAt: Date                  // When user earned this
+    let progress: Double?               // Progress toward award (0.0-1.0, nil if complete)
+    let isNew: Bool                     // Show "New" badge
+    
+    /// Formatted earned date
+    var earnedAtFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: earnedAt)
+    }
+    
+    /// Whether award is fully earned
+    var isEarned: Bool {
+        progress == nil || progress! >= 1.0
+    }
+    
+    /// Progress percentage for display
+    var progressPercentage: Int {
+        guard let progress = progress else { return 100 }
+        return Int(progress * 100)
+    }
+}
+
+/// Summary of user's awards for profile header
+struct AwardsSummaryDTO: Codable, Equatable {
+    let totalAwards: Int
+    let totalPoints: Int
+    let rarityBreakdown: [AwardRarity: Int]
+    let recentAwards: [UserAwardDTO]    // Last 3 awards earned
+    
+    /// Formatted points display
+    var pointsFormatted: String {
+        if totalPoints > 1000 {
+            return String(format: "%.1fk", Double(totalPoints) / 1000)
+        }
+        return "\(totalPoints)"
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - USER PROFILE EXTENDED INFO
+// MARK: - ================================================================================================
+
+/// Trading experience level
+enum TradingExperience: String, Codable, CaseIterable {
+    case beginner = "Beginner"
+    case intermediate = "Intermediate"
+    case advanced = "Advanced"
+    case expert = "Expert"
+    case professional = "Professional"
+    
+    var color: Color {
+        switch self {
+        case .beginner: return .gray
+        case .intermediate: return .blue
+        case .advanced: return .green
+        case .expert: return .purple
+        case .professional: return .orange
+        }
+    }
+    
+    var yearsRange: String {
+        switch self {
+        case .beginner: return "< 1 year"
+        case .intermediate: return "1-3 years"
+        case .advanced: return "3-5 years"
+        case .expert: return "5-10 years"
+        case .professional: return "10+ years"
+        }
+    }
+}
+
+/// Trading interest/specialty
+struct TradingInterestDTO: Identifiable, Codable, Equatable {
+    let id: UUID
+    let name: String                    // e.g., "Forex", "Crypto", "Options"
+    let icon: String                    // SF Symbol
+    let isPrimary: Bool                 // Main interest
+    
+    static let forex = TradingInterestDTO(id: UUID(), name: "Forex", icon: "dollarsign.circle.fill", isPrimary: true)
+    static let crypto = TradingInterestDTO(id: UUID(), name: "Crypto", icon: "bitcoinsign.circle.fill", isPrimary: false)
+    static let stocks = TradingInterestDTO(id: UUID(), name: "Stocks", icon: "chart.bar.fill", isPrimary: false)
+    static let options = TradingInterestDTO(id: UUID(), name: "Options", icon: "chart.line.uptrend.xyaxis.circle.fill", isPrimary: false)
+    static let commodities = TradingInterestDTO(id: UUID(), name: "Commodities", icon: "leaf.circle.fill", isPrimary: false)
+    static let indices = TradingInterestDTO(id: UUID(), name: "Indices", icon: "list.bullet.circle.fill", isPrimary: false)
+}
+
+/// Extended user profile information
+struct UserProfileExtendedDTO: Codable, Equatable {
+    let userId: UUID
+    let bio: String?                    // User's bio/about section
+    let location: String?               // City, Country
+    let timezone: String?               // e.g., "GMT+0", "EST"
+    let dateOfBirth: Date?              // For age calculation
+    let experience: TradingExperience
+    let tradingStyle: String?           // e.g., "Day Trader", "Swing Trader", "Scalper"
+    let interests: [TradingInterestDTO]
+    let preferredPairs: [String]        // e.g., ["EUR/USD", "GBP/JPY"]
+    let socialLinks: [SocialLinkDTO]
+    let joinedPlatform: Date            // When they joined the platform
+    let lastActive: Date                // Last activity timestamp
+    
+    /// Calculate age from DOB
+    var age: Int? {
+        guard let dob = dateOfBirth else { return nil }
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year], from: dob, to: Date())
+        return components.year
+    }
+    
+    /// Formatted member since
+    var memberSinceFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: joinedPlatform)
+    }
+    
+    /// Days on platform
+    var daysOnPlatform: Int {
+        Calendar.current.dateComponents([.day], from: joinedPlatform, to: Date()).day ?? 0
+    }
+}
+
+/// Social media/external links
+struct SocialLinkDTO: Identifiable, Codable, Equatable {
+    let id: UUID
+    let platform: SocialPlatform
+    let username: String
+    let url: String?
+    
+    enum SocialPlatform: String, Codable {
+        case twitter = "Twitter"
+        case discord = "Discord"
+        case telegram = "Telegram"
+        case tradingView = "TradingView"
+        case youtube = "YouTube"
+        
+        var icon: String {
+            switch self {
+            case .twitter: return "bird"
+            case .discord: return "bubble.left.and.bubble.right"
+            case .telegram: return "paperplane.fill"
+            case .tradingView: return "chart.xyaxis.line"
+            case .youtube: return "play.rectangle.fill"
+            }
+        }
+        
+        var color: Color {
+            switch self {
+            case .twitter: return .blue
+            case .discord: return .indigo
+            case .telegram: return .cyan
+            case .tradingView: return .orange
+            case .youtube: return .red
+            }
+        }
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - USER MARKERS SUMMARY
+// MARK: - ================================================================================================
+
+/// Summary of user's marker activity
+struct UserMarkersSummaryDTO: Codable, Equatable {
+    let totalMarkers: Int
+    let totalLikes: Int
+    let totalComments: Int
+    let accuracyRate: Double            // Percentage of successful predictions
+    let topSymbols: [String]            // Most marked symbols
+    let markersByType: [MarkerType: Int]
+    
+    /// Formatted accuracy
+    var accuracyFormatted: String {
+        String(format: "%.1f%%", accuracyRate * 100)
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - PROFILE STATISTICS
+// MARK: - ================================================================================================
+
+/// Statistics card data for profile overview
+struct ProfileStatDTO: Identifiable {
+    let id = UUID()
+    let label: String
+    let value: String
+    let icon: String
+    let color: Color
+    let trend: StatTrend?
+    
+    enum StatTrend {
+        case up(String)     // "+12%"
+        case down(String)   // "-5%"
+        case neutral
+        
+        var color: Color {
+            switch self {
+            case .up: return .green
+            case .down: return .red
+            case .neutral: return .gray
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .up: return "arrow.up.right"
+            case .down: return "arrow.down.right"
+            case .neutral: return "minus"
+            }
+        }
+    }
+}
 
 
 // ================================================================================================
@@ -691,6 +1101,12 @@ struct SymbolDTO: Identifiable, Codable, Equatable {
     }
 }
 
+
+
+
+// ================================================================================================
+// MARK: - Alert / Notification DTO
+// ================================================================================================
 
 
 /// Represents an alert/message to display to the user

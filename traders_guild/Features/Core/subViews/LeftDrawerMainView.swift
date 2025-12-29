@@ -108,7 +108,7 @@ struct LeftDrawerMainView: View {
                         bottomSheetContent: $bottomSheetContent,
                         onClose: onClose,
                         dragTranslation: $dragTranslation,
-                        currentSymbolId: currentSymbolId 
+                        currentSymbolId: currentSymbolId
                     )
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing),
@@ -480,18 +480,34 @@ struct SectionDrawerView: View {
                     .frame(height: 0.5)
                 
                 // Content for the specific section
-                ScrollView {
+                // Some sections handle their own scrolling (with sticky tab bars)
+                if sectionHandlesOwnScrolling {
                     sectionContent
                         .padding(.top, 12)
-                        .padding(.bottom, 20)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .refreshable {
-                    await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
+                } else {
+                    ScrollView {
+                        sectionContent
+                            .padding(.top, 12)
+                            .padding(.bottom, 20)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .refreshable {
+                        await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
+                    }
                 }
             }
         } else {
             EmptyView()
+        }
+    }
+    
+    /// Whether the current section handles its own scrolling (has sticky tab bars)
+    private var sectionHandlesOwnScrolling: Bool {
+        switch currentSection {
+        case .topMarkers, .leaderboard, .userList, .guildWatchlist, .notifications:
+            return true
+        default:
+            return false
         }
     }
 
@@ -590,7 +606,7 @@ struct DrawerMenuButton: View {
 //                        .fontWeight(.bold)
 //                        .foregroundColor(index <= 3 ? AppColors.accentColor : AppColors.whiteText.opacity(0.6))
 //                        .frame(width: 30)
-//                    
+//
 //                    Circle()
 //                        .fill(AppColors.accentColor)
 //                        .frame(width: 36, height: 36)
@@ -600,7 +616,7 @@ struct DrawerMenuButton: View {
 //                                .fontWeight(.bold)
 //                                .foregroundColor(.white)
 //                        )
-//                    
+//
 //                    VStack(alignment: .leading, spacing: 4) {
 //                        Text("TopTrader\(index)")
 //                            .font(.subheadline)
@@ -610,9 +626,9 @@ struct DrawerMenuButton: View {
 //                            .font(.caption)
 //                            .foregroundColor(AppColors.whiteText.opacity(0.6))
 //                    }
-//                    
+//
 //                    Spacer()
-//                    
+//
 //                    Text("+\(150 - index * 10)")
 //                        .font(.subheadline)
 //                        .fontWeight(.bold)
@@ -636,6 +652,7 @@ struct BottomSheetView: View {
     let content: BottomSheetContent
     @Binding var selectedDetent: PresentationDetent
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -646,6 +663,7 @@ struct BottomSheetView: View {
                 EventDetailView(event: event)
             case .profile:  // Changed from 'user' to 'membership'
                 UserProfileDetailView(selectedDetent: $selectedDetent)
+                    .environmentObject(leftDrawerViewModel)
             case .guildMember(let user):
                 GuildUserDetailView(user: user)
                 

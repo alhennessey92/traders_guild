@@ -3,7 +3,9 @@
 //  traders_guild
 //
 //  Created by Al Hennessey on 12/10/2025.
+//  UPDATED: Now uses ProfileContentView for unified tab styling
 //
+
 import SwiftUI
 
 
@@ -18,16 +20,18 @@ enum UserSheetContent {
 struct UserProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    
     @State private var currentContent: UserSheetContent = .profile
-    @State private var selectedTab: ProfileTab = .overview  // ADD THIS
     @Binding var selectedDetent: PresentationDetent
-
-    // Define your tabs
-    enum ProfileTab: String, CaseIterable {
-        case overview = "Overview"
-        case activity = "Activity"
-        case achievements = "Achievements"
-    }
+    
+    // Profile data loading
+    @State private var extendedProfile: UserProfileExtendedDTO? = nil
+    @State private var markersSummary: UserMarkersSummaryDTO? = nil
+    @State private var userMarkers: [TopMarkerDTO] = []
+    @State private var awards: [UserAwardDTO] = []
+    @State private var awardsSummary: AwardsSummaryDTO? = nil
+    @State private var isLoading = true
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -77,30 +81,52 @@ struct UserProfileDetailView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
+        .task {
+            await loadProfileData()
+        }
     }
+    
+    // MARK: - Profile View
     
     private var profileView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            
+            // Keep existing header
             UserProfileHeaderView()
             
-            
-            
-            // Tab Headers - Fixed
-            tabHeader
-            
-            Divider()
-            
-            // Scrollable Tab Content
-            ScrollView(.vertical, showsIndicators: false) {
-                tabContent
-                    .padding(.horizontal, 25)
-                    .padding(.vertical, 20)
+            // New unified profile content with tabs (Overview, Markers, Awards)
+            if isLoading {
+                VStack {
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading profile...")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                        .padding(.top, 12)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ProfileContentView(
+                    extendedProfile: extendedProfile,
+                    markersSummary: markersSummary,
+                    userMarkers: userMarkers,
+                    awards: awards,
+                    awardsSummary: awardsSummary,
+                    stats: buildStats(),
+                    isCurrentUser: true,
+                    username: appState.currentUser?.username ?? "",
+                    onMarkerTap: { marker in
+                        // Navigate to marker on chart
+                        leftDrawerViewModel.requestNavigationToMarker(marker)
+                        dismiss()
+                    }
+                )
             }
             
             Divider()
             
-            // Action Buttons
+            // Keep existing footer buttons
             HStack(spacing: 8) {
                 DrawerActionButton(
                     title: "Switch Guild",
@@ -161,130 +187,59 @@ struct UserProfileDetailView: View {
         )
     }
     
-    // MARK: - Tab Header
-    private var tabHeader: some View {
-        HStack(spacing: 0) {
-            ForEach(ProfileTab.allCases, id: \.self) { tab in
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedTab = tab
-                    }
-                }) {
-                    VStack(spacing: 8) {
-                        Text(tab.rawValue)
-                            .font(.subheadline)
-                            .fontWeight(selectedTab == tab ? .semibold : .regular)
-                            .foregroundColor(selectedTab == tab ? AppColors.accentColor : AppColors.greyText)
-                        
-                        // Active indicator
-                        Rectangle()
-                            .fill(selectedTab == tab ? AppColors.accentColor : Color.clear)
-                            .frame(height: 2)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.horizontal, 25)
-        .padding(.top, 12)
-        .background(AppColors.sheetBackground)
-    }
+    // MARK: - Load Profile Data
     
-    // MARK: - Tab Content
-    @ViewBuilder
-    private var tabContent: some View {
-        switch selectedTab {
-        case .overview:
-            overviewContent
-        case .activity:
-            activityContent
-        case .achievements:
-            achievementsContent
+    private func loadProfileData() async {
+        // In production, these would be API calls via LeftDrawerViewModel
+        // For now, use sample data with a small delay to show loading state
+        
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        
+        await MainActor.run {
+            extendedProfile = SampleData.currentUserExtendedProfile
+            markersSummary = SampleData.currentUserMarkersSummary
+            userMarkers = SampleData.userPlacedMarkers
+            awards = SampleData.currentUserAwards
+            awardsSummary = SampleData.awardsSummary
+            isLoading = false
         }
     }
     
-    private var overviewContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Overview")
-                .font(.title3)
-                .fontWeight(.bold)
-            
-            // Add your overview content here
-            Text("User stats, bio, and other overview information...")
-                .foregroundColor(AppColors.greyText)
-            
-            // Example content to demonstrate scrolling
-            ForEach(0..<5) { i in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Section \(i + 1)")
-                        .font(.headline)
-                    Text("Some content here that makes the view scrollable...")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.greyText)
-                }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.2))
-                .cornerRadius(12)
-            }
-        }
-    }
+    // MARK: - Build Stats
     
-    private var activityContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recent Activity")
-                .font(.title3)
-                .fontWeight(.bold)
-            
-            // Add your activity content here
-            ForEach(0..<8) { i in
-                HStack(spacing: 12) {
-                    Image(systemName: "circle.fill")
-                        .font(.caption)
-                        .foregroundColor(AppColors.accentColor)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Activity \(i + 1)")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Text("Description of the activity")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                    }
-                    
-                    Spacer()
-                }
-                .padding()
-                .background(AppColors.gradientBackgroundDark.opacity(0.1))
-                .cornerRadius(10)
-            }
-        }
-    }
-    
-    private var achievementsContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Achievements")
-                .font(.title3)
-                .fontWeight(.bold)
-            
-            // Add your achievements content here
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                ForEach(0..<10) { i in
-                    VStack(spacing: 8) {
-                        Image(systemName: "star.fill")
-                            .font(.title)
-                            .foregroundColor(AppColors.accentColor)
-                        Text("Achievement \(i + 1)")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(AppColors.gradientBackgroundDark.opacity(0.2))
-                    .cornerRadius(12)
-                }
-            }
-        }
+    private func buildStats() -> [ProfileStatDTO] {
+        guard let user = appState.currentUser else { return [] }
+        
+        return [
+            ProfileStatDTO(
+                label: "Guild Reputation",
+                value: "\(user.guildMembership.reputation)",
+                icon: "shield.checkered",
+                color: AppColors.accentColor,
+                trend: .up("+32 this week")
+            ),
+            ProfileStatDTO(
+                label: "Global Reputation",
+                value: "\(user.globalReputation)",
+                icon: "globe",
+                color: .blue,
+                trend: nil
+            ),
+            ProfileStatDTO(
+                label: "Days in Guild",
+                value: "\(user.guildMembership.daysInGuild)",
+                icon: "calendar",
+                color: .green,
+                trend: nil
+            ),
+            ProfileStatDTO(
+                label: "Contribution",
+                value: "\(user.guildMembership.contributionScore)%",
+                icon: "chart.bar.fill",
+                color: .orange,
+                trend: .up("+5%")
+            )
+        ]
     }
 }
 
@@ -392,10 +347,10 @@ struct UserProfileHeaderView: View {
 }
 
 
-// MARK: - User Profile Footer Component
+// MARK: - User Profile Footer Component (Legacy - kept for reference)
 struct UserProfileFooterView: View {
     @State private var currentContent: UserSheetContent = .profile
-    @Binding var selectedDetent: PresentationDetent  // ADD THIS
+    @Binding var selectedDetent: PresentationDetent
     
     var body: some View {
         
@@ -413,8 +368,6 @@ struct UserProfileFooterView: View {
                 action: {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         currentContent = .switchGuild
-                        //selectedDetent = .large
-                        // Keep current detent for switch guild
                     }
                 }
             )
@@ -430,7 +383,7 @@ struct UserProfileFooterView: View {
                 action: {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         currentContent = .global
-                        selectedDetent = .large  // EXPAND TO LARGE FOR SETTINGS
+                        selectedDetent = .large
                     }
                 }
             )
@@ -444,7 +397,7 @@ struct UserProfileFooterView: View {
                 action: {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         currentContent = .settings
-                        selectedDetent = .large  // EXPAND TO LARGE FOR SETTINGS
+                        selectedDetent = .large
                     }
                 }
             )
@@ -455,3 +408,4 @@ struct UserProfileFooterView: View {
     }
     
 }
+
