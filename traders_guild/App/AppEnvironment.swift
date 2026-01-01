@@ -5,6 +5,10 @@
 //  Created by Al Hennessey on 16/09/2025.
 //
 
+
+
+// MARK: - Possible terms for deletion - already have appstate
+
 import Foundation
 
 // Optional global app-wide environment

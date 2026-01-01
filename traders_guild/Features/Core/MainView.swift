@@ -9,7 +9,7 @@
 //
 
 import SwiftUI
-import SwiftTradingView
+//import SwiftTradingView
 
 // MARK: - Constants
 enum LayoutConstants {
