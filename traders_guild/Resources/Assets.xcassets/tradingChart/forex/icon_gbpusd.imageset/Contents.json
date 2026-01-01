@@ -1,20 +1,8 @@
 {
   "images" : [
     {
-      "filename" : "gbpusd.svg",
+      "filename" : "gbpusd.pdf",
       "idiom" : "iphone"
-    },
-    {
-      "filename" : "gbpusd@2x.svg",
-      "idiom" : "iphone",
-      "scale" : "2x",
-      "unassigned" : true
-    },
-    {
-      "filename" : "gbpusd@3x.svg",
-      "idiom" : "iphone",
-      "scale" : "3x",
-      "unassigned" : true
     }
   ],
   "info" : {
@@ -22,7 +10,6 @@
     "version" : 1
   },
   "properties" : {
-    "preserves-vector-representation" : true,
-    "template-rendering-intent" : "original"
+    "preserves-vector-representation" : true
   }
 }
