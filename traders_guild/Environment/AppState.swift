@@ -96,7 +96,8 @@ class AppState: ObservableObject {
     // MARK: - Services
     // ================================================================================================
     
-    private let api = MockAPIService()  // TODO: Replace with real API service
+    private let mockApi = MockAPIService()  // TODO: Replace with real API service
+    private let realApi = RealAPIService()
     
     // ================================================================================================
     // MARK: - Initialization
@@ -227,45 +228,124 @@ class AppState: ObservableObject {
     // ================================================================================================
     
     /// Signup with email and password
-    /// /// Signup with email and password
     func signUp(data: SignupData) async throws {
         isLoading = true
         errorMessage = nil
-        isCompletingSignup = true  // ✅ Set flag
+        isCompletingSignup = true
         
         defer {
             isLoading = false
-            isCompletingSignup = false  // ✅ Clear flag
+            isCompletingSignup = false
         }
         
         do {
-            let response = try await api.signUp(data: data)
-            self.currentUser = response.user
-            self.authToken = response.token
+            print("appstate data")
+            print(data)
+            // ✅ REAL API for registration
+            let response = try await realApi.signUp(data: data)
             
-            if let selectedGuildId = data.selectedGuildId {
-                try await joinGuild(guildId: selectedGuildId)
+            // Store token
+            self.authToken = response.token
+            realApi.setAccessToken(response.token)
+            
+            // Set current user
+            self.currentUser = response.user
+            showSuccess("Welcome to Traders Guild, \(response.user.username)!")
+            
+            // Join selected guild (still mock until backend ready)
+            if let guildId = data.selectedGuildId {
+                try await mockApi.joinGuild(guildId: guildId)
                 
                 // TODO: change this to full guild async
-                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
+                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == guildId }) {
                     self.currentGuild = selectedGuild
                 } else {
-                    if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
+                    if let joinedGuild = try await fetchGuildById(guildId: guildId) {
                         self.currentGuild = joinedGuild
                     }
                 }
-                
+                //showSuccess("Welcome to Traders Guild, \(response.user.username)!")
                 // Show transition overlay while chart loads
                 showTransitionForChartLoad()
             }
             
-        } catch is CancellationError {
-            throw CancellationError()
         } catch {
-            errorMessage = "Signup failed: \(error.localizedDescription)"
+            showError(error, title: "Signup Failed", style: .alert)
             throw error
         }
     }
+    
+//    // Helper to create membership when user joins guild during signup
+//    private func createMembershipFromGuild(user: CurrentUserDTO, guild: GuildDTO) -> GuildMembershipDTO {
+//        let member = GlobalMemberDTO(
+//            id: user.id,
+//            email: user.email,
+//            name: user.name,
+//            username: user.username,
+//            avatarURL: user.avatarURL,
+//            isOnline: true,
+//            globalReputation: user.globalReputation
+//        )
+//        
+//        let guildSummary = GuildSummaryDTO(
+//            id: guild.id,
+//            name: guild.name,
+//            memberCount: guild.memberCount,
+//            imageURL: guild.imageURL,
+//            reputation: guild.reputation,
+//            owner: SampleData.currentUser.guildMembership, // Placeholder owner
+//            isOpen: guild.isOpen
+//        )
+//        
+//        return GuildMembershipDTO(
+//            id: UUID(),
+//            globalMember: member,
+//            guild: guildSummary,
+//            role: .member,
+//            reputation: 0,
+//            contributionScore: 0,
+//            joinedAt: Date()
+//        )
+//    }
+    /// /// Signup with email and password
+//    func signUp(data: SignupData) async throws {
+//        isLoading = true
+//        errorMessage = nil
+//        isCompletingSignup = true  // ✅ Set flag
+//        
+//        defer {
+//            isLoading = false
+//            isCompletingSignup = false  // ✅ Clear flag
+//        }
+//        
+//        do {
+//            let response = try await mockApi.signUp(data: data)
+//            self.currentUser = response.user
+//            self.authToken = response.token
+//            
+//            if let selectedGuildId = data.selectedGuildId {
+//                try await joinGuild(guildId: selectedGuildId)
+//                
+//                // TODO: change this to full guild async
+//                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
+//                    self.currentGuild = selectedGuild
+//                } else {
+//                    if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
+//                        self.currentGuild = joinedGuild
+//                    }
+//                }
+//                
+//                // Show transition overlay while chart loads
+//                showTransitionForChartLoad()
+//            }
+//            
+//        } catch is CancellationError {
+//            throw CancellationError()
+//        } catch {
+//            errorMessage = "Signup failed: \(error.localizedDescription)"
+//            throw error
+//        }
+//    }
 
     /// Login with email and password
     func login(email: String, password: String) async throws {
@@ -277,7 +357,7 @@ class AppState: ObservableObject {
         }
         
         do {
-            let response = try await api.login(email: email, password: password)
+            let response = try await mockApi.login(email: email, password: password)
             self.currentUser = response.user
             self.authToken = response.token
             
@@ -305,26 +385,44 @@ class AppState: ObservableObject {
         //showLoginSheet = true
     }
     
-    /// Restore saved session from storage
-    private func restoreSession() async {
-        if let savedToken = getTokenFromKeychain(),
-           let savedUser = getUserFromKeychain() {
-            
-            self.authToken = savedToken
-            self.currentUser = savedUser
-            
-            // Restore current guild if exists
-            if let savedGuild = getCurrentGuildFromKeychain() {
-                self.currentGuild = savedGuild
-            }
-            
-            // TODO: Validate token with backend
-            
+    
+    func restoreSession() async {
+        // Restore token to real API
+        if let token = getTokenFromKeychain() {
+            self.authToken = token
+            realApi.setAccessToken(token)  // ✅ Important!
         }
-        // Mark initial load as complete
-        hasCompletedInitialLoad = true
+    
+        if let user = getUserFromKeychain() {
+            self.currentUser = user
+        }
+    
+        if let guild = getCurrentGuildFromKeychain() {
+            self.currentGuild = guild
+        }
+    
         isSessionRestored = true
     }
+//    /// Restore saved session from storage
+//    private func restoreSession() async {
+//        if let savedToken = getTokenFromKeychain(),
+//           let savedUser = getUserFromKeychain() {
+//            
+//            self.authToken = savedToken
+//            self.currentUser = savedUser
+//            
+//            // Restore current guild if exists
+//            if let savedGuild = getCurrentGuildFromKeychain() {
+//                self.currentGuild = savedGuild
+//            }
+//            
+//            // TODO: Validate token with backend
+//            
+//        }
+//        // Mark initial load as complete
+//        hasCompletedInitialLoad = true
+//        isSessionRestored = true
+//    }
     
 
     
@@ -360,7 +458,7 @@ class AppState: ObservableObject {
         defer { isLoading = false }
         
         do {
-            let guilds = try await api.fetchOpenGuilds()
+            let guilds = try await mockApi.fetchOpenGuilds()
             return guilds
         } catch {
             showError(error, title: "Failed to Fetch Guilds", style: .toast)
@@ -375,7 +473,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            let guilds = try await api.fetchUserGuildMemberships()
+            let guilds = try await mockApi.fetchUserGuildMemberships()
             return guilds
         } catch {
             showError(error, title: "Failed to Fetch User Guilds", style: .toast)
@@ -390,7 +488,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let guild = try await api.fetchGuildById(guildId: guildId)
+            let guild = try await mockApi.fetchGuildById(guildId: guildId)
             return guild
         } catch {
             showError(error, title: "Failed to Load Guild", style: .toast)
@@ -403,7 +501,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            try await api.joinGuild(guildId: guildId)
+            try await mockApi.joinGuild(guildId: guildId)
         } catch {
             showError(error, title: "Failed to Join Guild", style: .toast)
             throw error
@@ -422,7 +520,7 @@ class AppState: ObservableObject {
         defer { isLoading = false }
         
         do {
-            try await api.leaveGuild(guildId: guild.id)
+            try await mockApi.leaveGuild(guildId: guild.id)
             currentGuild = nil
         } catch {
             showError(error, title: "Failed to Leave Guild", style: .toast)
@@ -435,7 +533,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let announcements = try await api.fetchGuildAnnouncements(guildId: guildId)
+            let announcements = try await mockApi.fetchGuildAnnouncements(guildId: guildId)
             return announcements
         } catch is CancellationError {
             throw CancellationError()
@@ -450,7 +548,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let events = try await api.fetchGuildEvents(guildId: guildId)
+            let events = try await mockApi.fetchGuildEvents(guildId: guildId)
             return events
         } catch is CancellationError {
             throw CancellationError()
@@ -465,7 +563,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let members = try await api.fetchGuildMembers(guildId: guildId)
+            let members = try await mockApi.fetchGuildMembers(guildId: guildId)
             return members
         } catch is CancellationError {
             throw CancellationError()
@@ -480,7 +578,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let watchlist = try await api.fetchGuildWatchlist(guildId: guildId)
+            let watchlist = try await mockApi.fetchGuildWatchlist(guildId: guildId)
             return watchlist
         } catch is CancellationError {
             throw CancellationError()
@@ -499,7 +597,7 @@ class AppState: ObservableObject {
     /// Fetch guild's trading watchlist as TradingSymbolDTOs (for chart-style display)
     func fetchGuildTradingWatchlist(guildId: UUID) async throws -> [TradingSymbolDTO] {
         do {
-            return try await api.fetchGuildTradingWatchlist(guildId: guildId)
+            return try await mockApi.fetchGuildTradingWatchlist(guildId: guildId)
         } catch {
             print("⚠️ Failed to fetch guild trading watchlist: \(error)")
             throw error
@@ -509,7 +607,7 @@ class AppState: ObservableObject {
     /// Add symbol to guild watchlist
     func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
         do {
-            try await api.addToGuildWatchlist(guildId: guildId, symbolId: symbolId)
+            try await mockApi.addToGuildWatchlist(guildId: guildId, symbolId: symbolId)
         } catch {
             print("⚠️ Failed to add to guild watchlist: \(error)")
             throw error
@@ -519,7 +617,7 @@ class AppState: ObservableObject {
     /// Remove symbol from guild watchlist
     func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
         do {
-            try await api.removeFromGuildWatchlist(guildId: guildId, symbolId: symbolId)
+            try await mockApi.removeFromGuildWatchlist(guildId: guildId, symbolId: symbolId)
         } catch {
             print("⚠️ Failed to remove from guild watchlist: \(error)")
             throw error
@@ -529,7 +627,7 @@ class AppState: ObservableObject {
     /// Add symbol to user's personal watchlist
     func addToPersonalWatchlist(userId: UUID, symbolId: UUID) async throws {
         do {
-            try await api.addToPersonalWatchlist(userId: userId, symbolId: symbolId)
+            try await mockApi.addToPersonalWatchlist(userId: userId, symbolId: symbolId)
         } catch {
             print("⚠️ Failed to add to personal watchlist: \(error)")
             throw error
@@ -539,7 +637,7 @@ class AppState: ObservableObject {
     /// Remove symbol from user's personal watchlist
     func removeFromPersonalWatchlist(userId: UUID, symbolId: UUID) async throws {
         do {
-            try await api.removeFromPersonalWatchlist(userId: userId, symbolId: symbolId)
+            try await mockApi.removeFromPersonalWatchlist(userId: userId, symbolId: symbolId)
         } catch {
             print("⚠️ Failed to remove from personal watchlist: \(error)")
             throw error
@@ -550,7 +648,7 @@ class AppState: ObservableObject {
     /// Fetch user's personal trading watchlist as TradingSymbolDTOs
     func fetchPersonalTradingWatchlist(userId: UUID) async throws -> [TradingSymbolDTO] {
         do {
-            return try await api.fetchPersonalWatchlist(userId: userId)
+            return try await mockApi.fetchPersonalWatchlist(userId: userId)
         } catch {
             print("⚠️ Failed to fetch personal trading watchlist: \(error)")
             throw error
@@ -561,7 +659,7 @@ class AppState: ObservableObject {
     
     func requestGuildWatchlistAddition(guildId: UUID, userId: UUID, symbolId: UUID) async throws {
         do {
-            try await api.requestGuildWatchlistAddition(guildId: guildId, userId: userId, symbolId: symbolId)
+            try await mockApi.requestGuildWatchlistAddition(guildId: guildId, userId: userId, symbolId: symbolId)
         } catch {
             print("⚠️ Failed to fetch personal trading watchlist: \(error)")
             throw error
@@ -588,7 +686,7 @@ class AppState: ObservableObject {
         }
         
         do {
-            let notifications = try await api.fetchUserNotifications(
+            let notifications = try await mockApi.fetchUserNotifications(
                 guildId: guildId,
                 userId: currentUser.id
             )
@@ -606,7 +704,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let statistics = try await api.fetchGuildStatistics(guildId: guildId)
+            let statistics = try await mockApi.fetchGuildStatistics(guildId: guildId)
             return statistics
         } catch is CancellationError {
             throw CancellationError()
@@ -630,7 +728,7 @@ class AppState: ObservableObject {
             throw AppError.unauthorized
         }
         do {
-            try await api.recordAnnouncementView(announcementId: announcementId, userId: currentUser.id, guildId: currentGuild.id)
+            try await mockApi.recordAnnouncementView(announcementId: announcementId, userId: currentUser.id, guildId: currentGuild.id)
         } catch {
             showError(error, title: "Failed to record announcement view", style: .toast)
             throw error
@@ -654,7 +752,7 @@ class AppState: ObservableObject {
             throw AppError.unauthorized
         }
         do {
-            try await api.attendEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
+            try await mockApi.attendEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
         } catch {
             showError(error, title: "Failed to attend event", style: .toast)
             throw error
@@ -671,7 +769,7 @@ class AppState: ObservableObject {
             throw AppError.unauthorized
         }
         do {
-            try await api.unAttendEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
+            try await mockApi.unAttendEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
         } catch {
             showError(error, title: "Failed to attend event", style: .toast)
             throw error
@@ -688,7 +786,7 @@ class AppState: ObservableObject {
             throw AppError.unauthorized
         }
         do {
-            try await api.shareEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id, friendId: friendId)
+            try await mockApi.shareEvent(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id, friendId: friendId)
         } catch {
             showError(error, title: "Failed to attend event", style: .toast)
             throw error
@@ -705,7 +803,7 @@ class AppState: ObservableObject {
             throw AppError.unauthorized
         }
         do {
-            try await api.recordEventView(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
+            try await mockApi.recordEventView(eventId: eventId, userId: currentUser.id, guildId: currentGuild.id)
         } catch {
             showError(error, title: "Failed to record event view", style: .toast)
             throw error
@@ -727,7 +825,7 @@ class AppState: ObservableObject {
             throw AppError.unauthorized
         }
         do {
-            try await api.recordNotificationView(notificationId: notificationId, userId: currentUser.id, guildId: currentGuild.id)
+            try await mockApi.recordNotificationView(notificationId: notificationId, userId: currentUser.id, guildId: currentGuild.id)
         } catch {
             showError(error, title: "Failed to record notification view", style: .toast)
             throw error
@@ -747,7 +845,7 @@ class AppState: ObservableObject {
         }
         
         do {
-            let response = try await api.fetchTopMarkers(guildId: guildId, userId: currentUser.id)
+            let response = try await mockApi.fetchTopMarkers(guildId: guildId, userId: currentUser.id)
             return response
         } catch is CancellationError {
             throw CancellationError()
@@ -762,7 +860,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let markers = try await api.fetchTrendingMarkers(guildId: guildId, limit: limit)
+            let markers = try await mockApi.fetchTrendingMarkers(guildId: guildId, limit: limit)
             return markers
         } catch is CancellationError {
             throw CancellationError()
@@ -777,7 +875,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let groupedMarkers = try await api.fetchMarkersBySymbol(guildId: guildId)
+            let groupedMarkers = try await mockApi.fetchMarkersBySymbol(guildId: guildId)
             return groupedMarkers
         } catch is CancellationError {
             throw CancellationError()
@@ -795,7 +893,7 @@ class AppState: ObservableObject {
         }
         
         do {
-            let markers = try await api.fetchFollowingMarkers(guildId: guildId, userId: currentUser.id, limit: limit)
+            let markers = try await mockApi.fetchFollowingMarkers(guildId: guildId, userId: currentUser.id, limit: limit)
             return markers
         } catch is CancellationError {
             throw CancellationError()
@@ -813,7 +911,7 @@ class AppState: ObservableObject {
         }
         
         do {
-            let markers = try await api.fetchMyMarkers(guildId: guildId, userId: currentUser.id, limit: limit)
+            let markers = try await mockApi.fetchMyMarkers(guildId: guildId, userId: currentUser.id, limit: limit)
             return markers
         } catch is CancellationError {
             throw CancellationError()
@@ -831,7 +929,7 @@ class AppState: ObservableObject {
         }
         
         do {
-            let result = try await api.toggleTopMarkerLike(markerId: markerId, userId: currentUser.id)
+            let result = try await mockApi.toggleTopMarkerLike(markerId: markerId, userId: currentUser.id)
             return result
         } catch is CancellationError {
             throw CancellationError()
@@ -846,7 +944,7 @@ class AppState: ObservableObject {
         errorMessage = nil
         
         do {
-            let navInfo = try await api.getMarkerNavigationInfo(markerId: markerId)
+            let navInfo = try await mockApi.getMarkerNavigationInfo(markerId: markerId)
             return navInfo
         } catch is CancellationError {
             throw CancellationError()
@@ -864,7 +962,7 @@ class AppState: ObservableObject {
         }
         
         do {
-            let response = try await api.refreshTopMarkers(guildId: guildId, userId: currentUser.id)
+            let response = try await mockApi.refreshTopMarkers(guildId: guildId, userId: currentUser.id)
             return response
         } catch is CancellationError {
             throw CancellationError()
@@ -995,7 +1093,7 @@ class AppState: ObservableObject {
     func fetchOrCreateUserDM(userId: UUID) async throws -> DMDTO{
         errorMessage = nil
         do {
-            let dmdto = try await api.fetchOrCreateUserDM(userId: userId)
+            let dmdto = try await mockApi.fetchOrCreateUserDM(userId: userId)
             return dmdto
         } catch is CancellationError {
             throw CancellationError()
@@ -1009,7 +1107,7 @@ class AppState: ObservableObject {
     func fetchChatroomById(chatroomId: UUID) async throws -> GuildChatroomDTO{
         errorMessage = nil
         do {
-            let chatroomdto = try await api.fetchChatroomById(chatroomId: chatroomId)
+            let chatroomdto = try await mockApi.fetchChatroomById(chatroomId: chatroomId)
             return chatroomdto
         } catch is CancellationError {
             throw CancellationError()
@@ -1023,7 +1121,7 @@ class AppState: ObservableObject {
     func fetchDMMessages(dmId: UUID) async throws -> [DMMessageDTO]{
         errorMessage = nil
         do {
-            let dmmessages = try await api.fetchDMMessagesByDmId(dmId: dmId)
+            let dmmessages = try await mockApi.fetchDMMessagesByDmId(dmId: dmId)
             return dmmessages
         } catch is CancellationError {
             throw CancellationError()
@@ -1037,7 +1135,7 @@ class AppState: ObservableObject {
     func fetchGuildChatrooms(guildId: UUID) async throws -> [GuildChatroomDTO]{
         errorMessage = nil
         do {
-            let guildChatroom = try await api.fetchGuildChatrooms(guildId: guildId)
+            let guildChatroom = try await mockApi.fetchGuildChatrooms(guildId: guildId)
             return guildChatroom
         } catch is CancellationError {
             throw CancellationError()
@@ -1051,7 +1149,7 @@ class AppState: ObservableObject {
     func fetchChatroomMessages(chatroomId: UUID) async throws -> [ChatroomMessageDTO]{
         errorMessage = nil
         do {
-            let chatroommessages = try await api.fetchChatroomMessagesByChatroomId(chatroomId: chatroomId)
+            let chatroommessages = try await mockApi.fetchChatroomMessagesByChatroomId(chatroomId: chatroomId)
             return chatroommessages
         } catch is CancellationError {
             throw CancellationError()
@@ -1065,7 +1163,7 @@ class AppState: ObservableObject {
     func fetchGuildFriendDM(guildId: UUID) async throws -> [DMDTO]{
         errorMessage = nil
         do {
-            let friendDM = try await api.fetchGuildFriendDM(guildId: guildId)
+            let friendDM = try await mockApi.fetchGuildFriendDM(guildId: guildId)
             return friendDM
         } catch is CancellationError {
             throw CancellationError()
@@ -1079,7 +1177,7 @@ class AppState: ObservableObject {
     func fetchGuildOnlineNonFriendDM(guildId: UUID) async throws -> [DMDTO]{
         errorMessage = nil
         do {
-            let onlineDM = try await api.fetchGuildOnlineNonFriendDM(guildId: guildId)
+            let onlineDM = try await mockApi.fetchGuildOnlineNonFriendDM(guildId: guildId)
             return onlineDM
         } catch is CancellationError {
             throw CancellationError()
@@ -1093,7 +1191,7 @@ class AppState: ObservableObject {
     func fetchGuildOfflineNonFriendDM(guildId: UUID) async throws -> [DMDTO]{
         errorMessage = nil
         do {
-            let offlineDM = try await api.fetchGuildOfflineNonFriendDM(guildId: guildId)
+            let offlineDM = try await mockApi.fetchGuildOfflineNonFriendDM(guildId: guildId)
             return offlineDM
         } catch is CancellationError {
             throw CancellationError()
@@ -1111,7 +1209,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.sendChatroomMessage(chatroomId: chatroomId, userId: currentUser.id, content: content)
+            try await mockApi.sendChatroomMessage(chatroomId: chatroomId, userId: currentUser.id, content: content)
         } catch {
             showError(error, title: "Failed to send message to Chatroom", style: .toast)
             throw error
@@ -1126,7 +1224,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.sendDMMessage(dmId: dmId, userId: currentUser.id, content: content)
+            try await mockApi.sendDMMessage(dmId: dmId, userId: currentUser.id, content: content)
         } catch {
             showError(error, title: "Failed to send message to DM", style: .toast)
             throw error
@@ -1142,7 +1240,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.deleteChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId)
+            try await mockApi.deleteChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId)
         } catch {
             showError(error, title: "Failed to delete chatroom message", style: .toast)
             throw error
@@ -1157,7 +1255,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.reportChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId)
+            try await mockApi.reportChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId)
         } catch {
             showError(error, title: "Failed to report chatroom message", style: .toast)
             throw error
@@ -1172,7 +1270,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.editChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId, newContent: newContent)
+            try await mockApi.editChatroomMessage(messageId: messageId, userId: currentUser.id, chatroomId: chatroomId, newContent: newContent)
         } catch {
             showError(error, title: "Failed to edit chatroom message", style: .toast)
             throw error
@@ -1187,7 +1285,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.deleteDMMessage(messageId: messageId, userId: currentUser.id, dmId: dmId)
+            try await mockApi.deleteDMMessage(messageId: messageId, userId: currentUser.id, dmId: dmId)
         } catch {
             showError(error, title: "Failed to delete DM message", style: .toast)
             throw error
@@ -1203,7 +1301,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.editDMMessage(messageId: messageId, userId: currentUser.id, dmId: dmId, newContent: newContent)
+            try await mockApi.editDMMessage(messageId: messageId, userId: currentUser.id, dmId: dmId, newContent: newContent)
         } catch {
             showError(error, title: "Failed to edit DM message", style: .toast)
             throw error
@@ -1221,7 +1319,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.deleteDMMessagesEntire(guildId: currentGuild.id, userId: currentUser.id, dmId: dmId)
+            try await mockApi.deleteDMMessagesEntire(guildId: currentGuild.id, userId: currentUser.id, dmId: dmId)
         } catch {
             showError(error, title: "Failed to delete entire DM message", style: .toast)
             throw error
@@ -1239,7 +1337,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.reportChatroom(guildId: currentGuild.id, chatroomId: chatroomId, userId: currentUser.id, reason: reason)
+            try await mockApi.reportChatroom(guildId: currentGuild.id, chatroomId: chatroomId, userId: currentUser.id, reason: reason)
         } catch {
             showError(error, title: "Failed to report chatroom", style: .toast)
             throw error
@@ -1257,7 +1355,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.markDMAsRead(guildId: currentGuild.id, userId: currentUser.id, dmId: dmId)
+            try await mockApi.markDMAsRead(guildId: currentGuild.id, userId: currentUser.id, dmId: dmId)
             
             
         } catch {
@@ -1277,7 +1375,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.markChatroomAsRead(guildId: currentGuild.id, chatroomId: chatroomId, userId: currentUser.id)
+            try await mockApi.markChatroomAsRead(guildId: currentGuild.id, chatroomId: chatroomId, userId: currentUser.id)
             
         } catch {
             showError(error, title: "Failed to mark chatroom as read", style: .toast)
@@ -1301,7 +1399,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.blockUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
+            try await mockApi.blockUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
         } catch {
             showError(error, title: "Failed to Block User", style: .toast)
             throw error
@@ -1318,7 +1416,7 @@ class AppState: ObservableObject {
                 throw AppError.unauthorized
             }
         do {
-            try await api.unBlockUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
+            try await mockApi.unBlockUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
         } catch {
             showError(error, title: "Failed to Un Block User", style: .toast)
             throw error
@@ -1335,7 +1433,7 @@ class AppState: ObservableObject {
                 throw AppError.unauthorized
             }
         do {
-            try await api.sendFriendRequest(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
+            try await mockApi.sendFriendRequest(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
         } catch {
             showError(error, title: "Failed to send Friend Request", style: .toast)
             throw error
@@ -1352,7 +1450,7 @@ class AppState: ObservableObject {
                 throw AppError.unauthorized
             }
         do {
-            try await api.sendCancelFriendship(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
+            try await mockApi.sendCancelFriendship(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id)
         } catch {
             showError(error, title: "Failed to end friendship", style: .toast)
             throw error
@@ -1370,7 +1468,7 @@ class AppState: ObservableObject {
             }
         
         do {
-            try await api.reportUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id, reason: reason)
+            try await mockApi.reportUser(userId: userId, guildId: currentGuild.id, currentUserId: currentUser.id, reason: reason)
         } catch {
             showError(error, title: "Failed to Block User", style: .toast)
             throw error

@@ -13,7 +13,7 @@ struct SignupBasicsView: View {
     @Binding var path: [SignupStep]
     
     // MARK: - State
-    @State private var username: String = ""
+    //@State private var username: String = ""
     
     
 
@@ -106,7 +106,7 @@ struct SignupBasicsView: View {
                             action:{
                                 
                                 // Handle validation of username
-                                data.username = username
+                                
                                 path.append(.guild)
                             }
                         )
