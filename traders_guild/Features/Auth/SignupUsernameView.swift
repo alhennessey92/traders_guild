@@ -21,8 +21,8 @@ import SwiftUI
 
 
 struct SignupUsernameView: View {
-    @Binding var data: SignupData
-    @Binding var path: [SignupStep]
+    @Binding var data: RLSignupData
+    @Binding var path: [RLSignupStep]
     
     // MARK: - State
     @State private var username: String = ""
@@ -132,17 +132,17 @@ struct SignupUsernameView: View {
         
     }
 }
-
-#Preview {
-    SignupUsernameView(
-        data: .constant(SignupData(
-            name: "Preview User",
-            email: "test@example.com",
-            dob: Date(),
-            password: "password123",
-            username: "alhennessey92"
-        )),
-        path: .constant([.username]) // starting at topics step
-    )
-}
+//
+//#Preview {
+//    SignupUsernameView(
+//        data: .constant(SignupData(
+//            name: "Preview User",
+//            email: "test@example.com",
+//            dob: Date(),
+//            password: "password123",
+//            username: "alhennessey92"
+//        )),
+//        path: .constant([.username]) // starting at topics step
+//    )
+//}
 

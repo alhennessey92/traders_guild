@@ -11,18 +11,26 @@ import SwiftUI
 
 @main
 struct traders_guildApp: App {
+    
+    @StateObject private var rlAppState = RLAppState()
+    
+    
     @StateObject private var messagingManager = MessagingManager()
     @StateObject private var appState = AppState()
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     
     init() {
-        let appState = AppState()
+        let rlAppState = RLAppState()
+        
+        let appState = AppState() //TODO: Remove
         let messagingManager = MessagingManager()
         
         // ✅ Configure the connection
         messagingManager.configure(with: appState)
         
-        _appState = StateObject(wrappedValue: appState)
+        _rlAppState = StateObject(wrappedValue: rlAppState)
+        
+        _appState = StateObject(wrappedValue: appState) //TODO: Remove
         _messagingManager = StateObject(wrappedValue: messagingManager)
     }
     
@@ -32,39 +40,45 @@ struct traders_guildApp: App {
                 // ✅ CHANGED: MainContent loads in background (not in if/else)
                 // This allows chart to initialize while transition shows
                 mainContent
-                    .environmentObject(appState)
+                    .environmentObject(rlAppState)
+                
+                    .environmentObject(appState) //TODO: remove
                     .environmentObject(messagingManager)
                 
                 // ✅ TransitionView overlays on top until chart is ready
-                if appState.showingTransition {
+                if rlAppState.showingTransition {
                     TransitionView()
-                        .environmentObject(appState)
+                        .environmentObject(rlAppState)
+                    
+                        .environmentObject(appState) // TODO: remove
                         .environmentObject(messagingManager)
                         .transition(.opacity)
                         .zIndex(1) // Ensure it's on top
                 }
             }
-            .animation(.easeOut(duration: 0.5), value: appState.showingTransition)
+            .animation(.easeOut(duration: 0.5), value: rlAppState.showingTransition)
             
             // ✅ Keep blocking alerts - these still use currentAlert
             .alert(
-                appState.currentAlert?.title ?? "Alert",
+                rlAppState.currentAlert?.title ?? "Alert",
                 isPresented: Binding(
-                    get: { appState.currentAlert?.style == .alert },
-                    set: { if !$0 { appState.clearAlert() } }
+                    get: { rlAppState.currentAlert?.style == .alert },
+                    set: { if !$0 { rlAppState.clearAlert() } }
                 )
             ) {
                 Button("OK", role: .cancel) {
-                    appState.clearAlert()
+                    rlAppState.clearAlert()
                 }
             } message: {
-                if let alert = appState.currentAlert {
+                if let alert = rlAppState.currentAlert {
                     Text(alert.message)
                 }
             }
-            .fullScreenCover(isPresented: $appState.showGuildSelectionSheet) {
+            .fullScreenCover(isPresented: $rlAppState.showGuildSelectionSheet) {
                 GuildSelectionFullView()
-                    .environmentObject(appState)
+                    .environmentObject(rlAppState)
+                
+                    .environmentObject(appState) // TODO: remove
                     .environmentObject(messagingManager)
             }
         }
@@ -72,11 +86,11 @@ struct traders_guildApp: App {
     
     @ViewBuilder
     private var mainContent: some View {
-        if appState.isAuthenticated && appState.currentGuild != nil {
+        if rlAppState.isAuthenticated && rlAppState.currentGuild != nil {
             MainView()
                 .preferredColorScheme(.dark)
                 
-        } else if appState.isAuthenticated {
+        } else if rlAppState.isAuthenticated {
             VStack(spacing: 20) {
                 ProgressView()
                     .scaleEffect(1.5)
@@ -90,9 +104,9 @@ struct traders_guildApp: App {
             .background(AppColors.gradientBackgroundDark.opacity(0.9))
            
             .onAppear {
-                if !appState.isCompletingSignup && !appState.showGuildSelectionSheet {
+                if !rlAppState.isCompletingSignup && !rlAppState.showGuildSelectionSheet {
                     Task {
-                        await appState.openGuildSelector()
+                        await rlAppState.openGuildSelector()
                     }
                 }
             }

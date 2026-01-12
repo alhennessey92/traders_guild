@@ -15,8 +15,8 @@ import SwiftUI
 
 
 struct SignupEmailView: View {
-    @Binding var data: SignupData
-    @Binding var path: [SignupStep]
+    @Binding var data: RLSignupData
+    @Binding var path: [RLSignupStep]
     // MARK: - State
     @State private var name: String = ""
     @State private var email: String = ""
@@ -57,8 +57,8 @@ struct SignupEmailView: View {
                     StandardTextFieldView(title: "Email", text: $email)
                         .padding(.bottom, 10)
                     
-                    StandardDatePickerView(title: "Date of Birth", date: $dob)
-                        .padding(.bottom, 10)
+//                    StandardDatePickerView(title: "Date of Birth", date: $dob)
+//                        .padding(.bottom, 10) // TODO: REALAPI
                     
                     Text("Password must contain at least 8 characters, one uppercase letter, one lowercase letter, and one number.")
                         .font(AppFonts.smallNotice())
@@ -91,7 +91,7 @@ struct SignupEmailView: View {
                         action:{
                             data.name = name
                             data.email = email
-                            data.dob = dob
+                            //data.dob = dob
                             data.password = password
                             path.append(.username)
                         }

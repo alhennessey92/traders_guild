@@ -17,40 +17,17 @@ class AppState: ObservableObject {
     // ================================================================================================
     
     /// Currently logged-in user
-    @Published var currentUser: CurrentUserDTO? {
-        didSet {
-            isAuthenticated = currentUser != nil
-            if let user = currentUser {
-                saveUserToKeychain(user)
-            } else {
-                clearKeychain()
-            }
-        }
-    }
+    @Published var currentUser: CurrentUserDTO? = SampleData.currentUser
     
     /// Authentication status
     @Published var isAuthenticated: Bool = false
     
     /// JWT authentication token
-    @Published var authToken: String? {
-        didSet {
-            if let token = authToken {
-                saveTokenToKeychain(token)
-            }
-        }
-    }
+    @Published var authToken: String? = "mock-jwt-token-\(UUID().uuidString)"
     
     /// Currently selected/active guild the user is viewing
     /// This represents which guild's content is currently being displayed
-    @Published var currentGuild: GuildMembershipDTO? {
-        didSet {
-            if let guild = currentGuild {
-                saveCurrentGuildToKeychain(guild)
-            } else {
-                clearCurrentGuild()
-            }
-        }
-    }
+    @Published var currentGuild: GuildMembershipDTO? = SampleData.currentUser.guildMembership
     
     // ================================================================================================
     // MARK: - UI State
@@ -228,124 +205,54 @@ class AppState: ObservableObject {
     // ================================================================================================
     
     /// Signup with email and password
-    func signUp(data: SignupData) async throws {
-        isLoading = true
-        errorMessage = nil
-        isCompletingSignup = true
-        
-        defer {
-            isLoading = false
-            isCompletingSignup = false
-        }
-        
-        do {
-            print("appstate data")
-            print(data)
-            // ✅ REAL API for registration
-            let response = try await realApi.signUp(data: data)
-            
-            // Store token
-            self.authToken = response.token
-            realApi.setAccessToken(response.token)
-            
-            // Set current user
-            self.currentUser = response.user
-            showSuccess("Welcome to Traders Guild, \(response.user.username)!")
-            
-            // Join selected guild (still mock until backend ready)
-            if let guildId = data.selectedGuildId {
-                try await mockApi.joinGuild(guildId: guildId)
-                
-                // TODO: change this to full guild async
-                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == guildId }) {
-                    self.currentGuild = selectedGuild
-                } else {
-                    if let joinedGuild = try await fetchGuildById(guildId: guildId) {
-                        self.currentGuild = joinedGuild
-                    }
-                }
-                //showSuccess("Welcome to Traders Guild, \(response.user.username)!")
-                // Show transition overlay while chart loads
-                showTransitionForChartLoad()
-            }
-            
-        } catch {
-            showError(error, title: "Signup Failed", style: .alert)
-            throw error
-        }
-    }
-    
-//    // Helper to create membership when user joins guild during signup
-//    private func createMembershipFromGuild(user: CurrentUserDTO, guild: GuildDTO) -> GuildMembershipDTO {
-//        let member = GlobalMemberDTO(
-//            id: user.id,
-//            email: user.email,
-//            name: user.name,
-//            username: user.username,
-//            avatarURL: user.avatarURL,
-//            isOnline: true,
-//            globalReputation: user.globalReputation
-//        )
-//        
-//        let guildSummary = GuildSummaryDTO(
-//            id: guild.id,
-//            name: guild.name,
-//            memberCount: guild.memberCount,
-//            imageURL: guild.imageURL,
-//            reputation: guild.reputation,
-//            owner: SampleData.currentUser.guildMembership, // Placeholder owner
-//            isOpen: guild.isOpen
-//        )
-//        
-//        return GuildMembershipDTO(
-//            id: UUID(),
-//            globalMember: member,
-//            guild: guildSummary,
-//            role: .member,
-//            reputation: 0,
-//            contributionScore: 0,
-//            joinedAt: Date()
-//        )
-//    }
-    /// /// Signup with email and password
 //    func signUp(data: SignupData) async throws {
 //        isLoading = true
 //        errorMessage = nil
-//        isCompletingSignup = true  // ✅ Set flag
+//        isCompletingSignup = true
 //        
 //        defer {
 //            isLoading = false
-//            isCompletingSignup = false  // ✅ Clear flag
+//            isCompletingSignup = false
 //        }
 //        
 //        do {
+//            print("appstate data")
+//            print(data)
+//            // ✅ REAL API for registration
 //            let response = try await mockApi.signUp(data: data)
-//            self.currentUser = response.user
-//            self.authToken = response.token
 //            
-//            if let selectedGuildId = data.selectedGuildId {
-//                try await joinGuild(guildId: selectedGuildId)
+//            // Store token
+//            self.authToken = response.token
+//            realApi.setAccessToken(response.token)
+//            
+//            // Set current user
+//            self.currentUser = response.user
+//            showSuccess("Welcome to Traders Guild, \(response.user.username)!")
+//            
+//            // Join selected guild (still mock until backend ready)
+//            if let guildId = data.selectedGuildId {
+//                try await mockApi.joinGuild(guildId: guildId)
 //                
 //                // TODO: change this to full guild async
-//                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == selectedGuildId }) {
+//                if let selectedGuild = availableGuildsForSelection.first(where: { $0.id == guildId }) {
 //                    self.currentGuild = selectedGuild
 //                } else {
-//                    if let joinedGuild = try await fetchGuildById(guildId: selectedGuildId) {
+//                    if let joinedGuild = try await fetchGuildById(guildId: guildId) {
 //                        self.currentGuild = joinedGuild
 //                    }
 //                }
-//                
+//                //showSuccess("Welcome to Traders Guild, \(response.user.username)!")
 //                // Show transition overlay while chart loads
 //                showTransitionForChartLoad()
 //            }
 //            
-//        } catch is CancellationError {
-//            throw CancellationError()
 //        } catch {
-//            errorMessage = "Signup failed: \(error.localizedDescription)"
+//            showError(error, title: "Signup Failed", style: .alert)
 //            throw error
 //        }
 //    }
+//    
+
 
     /// Login with email and password
     func login(email: String, password: String) async throws {
@@ -403,26 +310,7 @@ class AppState: ObservableObject {
     
         isSessionRestored = true
     }
-//    /// Restore saved session from storage
-//    private func restoreSession() async {
-//        if let savedToken = getTokenFromKeychain(),
-//           let savedUser = getUserFromKeychain() {
-//            
-//            self.authToken = savedToken
-//            self.currentUser = savedUser
-//            
-//            // Restore current guild if exists
-//            if let savedGuild = getCurrentGuildFromKeychain() {
-//                self.currentGuild = savedGuild
-//            }
-//            
-//            // TODO: Validate token with backend
-//            
-//        }
-//        // Mark initial load as complete
-//        hasCompletedInitialLoad = true
-//        isSessionRestored = true
-//    }
+
     
 
     

@@ -1,37 +1,34 @@
 //
-//  RealApiService.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 02/01/2026.
-//
-
-//
 //  RealAPIService.swift
 //  traders_guild
 //
-//  Real API service - works alongside MockAPIService
-//  Migrate endpoints gradually: real for auth, mock for everything else
+//  Real API service for backend communication.
+//  Uses DTOs that match backend Pydantic schemas exactly.
 //
 
 import Foundation
 
 // MARK: - API Configuration
+
 enum APIConfig {
     #if targetEnvironment(simulator)
-    static let baseURL = "http://localhost:8001/api/v1"
+    static let baseURL = "http://localhost:8000/api/v1"
     #else
     // ⚠️ UPDATE THIS to your Mac's IP for device testing
-    static let baseURL = "http://192.168.1.182:8001/api/v1"
+    static let baseURL = "http://192.168.1.182:8000/api/v1"
     #endif
 }
 
 // MARK: - API Errors
+
 enum APIError: LocalizedError {
     case invalidURL
     case invalidResponse
     case serverError(Int, String)
     case unauthorized
     case badRequest(String)
+    case decodingError(String)
+    case networkError(String)
     
     var errorDescription: String? {
         switch self {
@@ -40,20 +37,55 @@ enum APIError: LocalizedError {
         case .serverError(let code, let msg): return "Server error (\(code)): \(msg)"
         case .unauthorized: return "Please log in again"
         case .badRequest(let msg): return msg
+        case .decodingError(let msg): return "Failed to parse response: \(msg)"
+        case .networkError(let msg): return "Network error: \(msg)"
         }
     }
 }
 
 // MARK: - Real API Service
+
 class RealAPIService {
     
+    // MARK: - Properties
+    
     private var accessToken: String?
+    private var refreshToken: String?
+    
+    // MARK: - JSON Decoder
     
     private lazy var decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.keyDecodingStrategy = .convertFromSnakeCase
-        d.dateDecodingStrategy = .iso8601
-        return d
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            
+            // Try ISO8601 with fractional seconds
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+            
+            // Try ISO8601 without fractional seconds
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+            
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Cannot decode date: \(dateString)"
+            )
+        }
+        return decoder
+    }()
+    
+    private lazy var encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        return encoder
     }()
     
     // MARK: - Token Management
@@ -62,157 +94,241 @@ class RealAPIService {
         self.accessToken = token
     }
     
+    func setTokens(access: String, refresh: String) {
+        self.accessToken = access
+        self.refreshToken = refresh
+    }
+    
+    func clearTokens() {
+        self.accessToken = nil
+        self.refreshToken = nil
+    }
+    
+    var isAuthenticated: Bool {
+        accessToken != nil
+    }
+    
     // MARK: - Generic Request
     
     private func request<T: Decodable>(
         _ endpoint: String,
         method: String = "GET",
-        body: [String: Any]? = nil,
+        body: Encodable? = nil,
         auth: Bool = false
     ) async throws -> T {
         guard let url = URL(string: "\(APIConfig.baseURL)\(endpoint)") else {
             throw APIError.invalidURL
         }
         
-        var req = URLRequest(url: url)
-        req.httpMethod = method
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         if auth {
-            guard let token = accessToken else { throw APIError.unauthorized }
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            guard let token = accessToken else {
+                throw APIError.unauthorized
+            }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
         if let body = body {
-            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+            request.httpBody = try encoder.encode(body)
         }
         
         #if DEBUG
         print("🌐 \(method) \(endpoint)")
+        if let body = request.httpBody, let str = String(data: body, encoding: .utf8) {
+            print("📤 Request: \(str)")
+        }
         #endif
         
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw APIError.networkError(error.localizedDescription)
+        }
         
-        guard let http = response as? HTTPURLResponse else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
         
         #if DEBUG
-        print("📥 \(http.statusCode)")
-        print(data)
-        if let str = String(data: data, encoding: .utf8)?.prefix(500) { print("📥 \(str)") }
+        print("📥 Status: \(httpResponse.statusCode)")
+        if let str = String(data: data, encoding: .utf8)?.prefix(1000) {
+            print("📥 Response: \(str)")
+        }
         #endif
         
-        guard (200...299).contains(http.statusCode) else {
-            let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["detail"] as? String ?? "Error"
-            if http.statusCode == 401 { throw APIError.unauthorized }
-            if http.statusCode == 400 || http.statusCode == 422 { throw APIError.badRequest(detail) }
-            throw APIError.serverError(http.statusCode, detail)
+        // Handle error responses
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let detail = extractErrorDetail(from: data)
+            
+            switch httpResponse.statusCode {
+            case 401:
+                throw APIError.unauthorized
+            case 400, 422:
+                throw APIError.badRequest(detail)
+            default:
+                throw APIError.serverError(httpResponse.statusCode, detail)
+            }
         }
         
-        return try decoder.decode(T.self, from: data)
+        // Decode response
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch let error as DecodingError {
+            #if DEBUG
+            printDecodingError(error)
+            #endif
+            throw APIError.decodingError(error.localizedDescription)
+        }
     }
     
+    private func extractErrorDetail(from data: Data) -> String {
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let detail = json["detail"] as? String {
+            return detail
+        }
+        return "Unknown error"
+    }
+    
+    #if DEBUG
+    private func printDecodingError(_ error: DecodingError) {
+        print("❌ Decoding error:")
+        switch error {
+        case .keyNotFound(let key, let context):
+            print("   Key '\(key.stringValue)' not found")
+            print("   Path: \(context.codingPath.map { $0.stringValue })")
+        case .typeMismatch(let type, let context):
+            print("   Type '\(type)' mismatch")
+            print("   Path: \(context.codingPath.map { $0.stringValue })")
+        case .valueNotFound(let type, let context):
+            print("   Value of type '\(type)' not found")
+            print("   Path: \(context.codingPath.map { $0.stringValue })")
+        case .dataCorrupted(let context):
+            print("   Data corrupted: \(context.debugDescription)")
+        @unknown default:
+            print("   Unknown error: \(error)")
+        }
+    }
+    #endif
+    
     // ================================================================================================
-    // MARK: - Auth API (REAL) - Same signatures as MockAPIService
+    // MARK: - Auth Endpoints
     // ================================================================================================
     
-    /// Sign up - returns same authResponse type as MockAPIService
-    func signUp(data: SignupData) async throws -> authResponse {
-    
-        let tokens: TokenRes = try await request("/auth/register", method: "POST", body: [
-            "email": data.email,
-            "username": data.username,
-            "password": data.password,
-            "name": data.name
-        ])
+    /// Register new user
+    func register(data: RLSignupData) async throws -> RLRegistrationResponseDTO {
+        let requestBody = data.toRequest()
         
-        self.accessToken = tokens.accessToken
-        
-        let user: UserRes = try await request("/users/me", auth: true)
-        
-        return authResponse(
-            user: user.toCurrentUserDTO(),
-            token: tokens.accessToken
+        let response: RLRegistrationResponseDTO = try await request(
+            "/auth/register",
+            method: "POST",
+            body: requestBody
         )
+        
+        // Store tokens
+        setTokens(access: response.tokens.accessToken, refresh: response.tokens.refreshToken)
+        
+        return response
     }
     
-    /// Login - returns same authResponse type as MockAPIService
-    func login(email: String, password: String) async throws -> authResponse {
-        let tokens: TokenRes = try await request("/auth/login", method: "POST", body: [
-            "email": email,
-            "password": password
-        ])
+    /// Login with email and password
+    func login(email: String, password: String) async throws -> RLLoginResponseDTO {
+        let requestBody = RLLoginRequestDTO(email: email, password: password)
         
-        self.accessToken = tokens.accessToken
-        
-        let user: UserRes = try await request("/users/me", auth: true)
-        
-        return authResponse(
-            user: user.toCurrentUserDTO(),
-            token: tokens.accessToken
+        let response: RLLoginResponseDTO = try await request(
+            "/auth/login",
+            method: "POST",
+            body: requestBody
         )
+        
+        // Store tokens
+        setTokens(access: response.tokens.accessToken, refresh: response.tokens.refreshToken)
+        
+        return response
+    }
+    
+    /// Refresh access token
+    func refreshAccessToken() async throws -> RLTokenDTO {
+        guard let refresh = refreshToken else {
+            throw APIError.unauthorized
+        }
+        
+        let requestBody = RLRefreshTokenRequestDTO(refreshToken: refresh)
+        
+        let response: RLTokenDTO = try await request(
+            "/auth/refresh",
+            method: "POST",
+            body: requestBody
+        )
+        
+        // Update tokens
+        setTokens(access: response.accessToken, refresh: response.refreshToken)
+        
+        return response
+    }
+    
+    /// Logout
+    func logout() async {
+        // Try to call logout endpoint (ignore errors)
+        do {
+            let _: EmptyResponse = try await request("/auth/logout", method: "POST", auth: true)
+        } catch {
+            #if DEBUG
+            print("⚠️ Logout endpoint failed (ignoring): \(error)")
+            #endif
+        }
+        
+        // Always clear local tokens
+        clearTokens()
     }
     
     // ================================================================================================
-    // MARK: - Guild API (Uncomment when backend ready)
+    // MARK: - User Endpoints
     // ================================================================================================
     
-    /*
-    func fetchOpenGuilds() async throws -> [GuildDTO] {
-        let res: GuildListRes = try await request("/guilds?is_open=true")
-        return res.items.map { $0.toGuildDTO() }
+    /// Get current user profile
+    func getCurrentUser() async throws -> RLUserDTO {
+        return try await request("/users/me", auth: true)
     }
     
-    func joinGuild(guildId: UUID) async throws {
-        struct Empty: Codable {}
-        let _: Empty = try await request("/guilds/\(guildId)/members", method: "POST", auth: true)
+    /// Get user by ID
+    func getUser(id: UUID) async throws -> RLUserDTO {
+        return try await request("/users/\(id.uuidString)", auth: true)
     }
-    */
+    
+    // ================================================================================================
+    // MARK: - Guild Endpoints
+    // ================================================================================================
+    
+    /// Get user's guild memberships
+    func getUserGuilds() async throws -> RLGuildListResponseDTO {
+        return try await request("/users/me/guilds", auth: true)
+    }
+    
+    /// Get guild by ID
+    func getGuild(id: UUID) async throws -> RLGuildDTO {
+        return try await request("/guilds/\(id.uuidString)", auth: true)
+    }
+    
+    /// Get open guilds (for discovery)
+    func getOpenGuilds() async throws -> [RLGuildDTO] {
+        return try await request("/guilds?is_open=true", auth: true)
+    }
+    
+    /// Join a guild
+    func joinGuild(guildId: UUID) async throws -> RLGuildMembershipDTO {
+        return try await request("/guilds/\(guildId.uuidString)/join", method: "POST", auth: true)
+    }
+    
+    /// Leave a guild
+    func leaveGuild(guildId: UUID) async throws {
+        let _: EmptyResponse = try await request("/guilds/\(guildId.uuidString)/leave", method: "POST", auth: true)
+    }
 }
 
-// ================================================================================================
-// MARK: - Backend Response Types (Private)
-// ================================================================================================
+// MARK: - Helper Types
 
-private struct TokenRes: Codable {
-    let accessToken: String
-    let refreshToken: String
-    let tokenType: String
-    let expiresIn: Int
-}
-
-private struct UserRes: Codable {
-    let email: String
-    let username: String
-    let displayName: String
-    let avatarUrl: String?
-    let id: UUID
-    let globalReputation: Int
-    let isOnline: Bool
-    let isVerified: Bool
-    let isSuperuser: Bool
-    let lastSeenAt: Date?
-    let createdAt: Date
-    let updatedAt: Date
-    let dateOfBirth: Date?
-    
-    /// Convert backend response to your existing CurrentUserDTO
-    func toCurrentUserDTO() -> CurrentUserDTO {
-        // Reuse SampleData's membership structure as placeholder
-        // This gets replaced when user actually joins/selects a guild
-        let placeholderMembership = SampleData.currentUser.guildMembership
-        
-        return CurrentUserDTO(
-            id: id,
-            email: email,
-            name: displayName,
-            username: username,
-            avatarURL: avatarUrl,
-            globalReputation: globalReputation,
-            notificationCount: 0,
-            unreadMessages: 0,
-            guildMembership: placeholderMembership
-        )
-    }
-}
+private struct EmptyResponse: Decodable {}

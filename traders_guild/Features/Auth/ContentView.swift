@@ -14,15 +14,18 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var path: [SignupStep] = []
-    @State private var data = SignupData()
-    @EnvironmentObject var appState: AppState
+    @State private var path: [RLSignupStep] = []
+    @State private var data = RLSignupData()
+    @EnvironmentObject var RLAppState: RLAppState
+    
+    
+    //@EnvironmentObject var appState: AppState
     
     var body: some View {
         // 👋 No user or no guild, show the signup flow
         NavigationStack(path: $path) {
             WelcomeView(path: $path, data: $data)
-                .navigationDestination(for: SignupStep.self) { step in
+                .navigationDestination(for: RLSignupStep.self) { step in
                     switch step {
                     case .accountInfo:
                         SignupEmailView(data: $data, path: $path)

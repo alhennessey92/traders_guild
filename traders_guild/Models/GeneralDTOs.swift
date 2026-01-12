@@ -17,6 +17,25 @@ import SwiftUI
 // The backend does the heavy lifting of joining tables and formatting data.
 // ================================================================================================
 
+enum SignupStep: Hashable {
+    case accountInfo
+    case username
+    case basics
+    case guild
+    
+}
+struct SignupData {
+    var name: String = ""          // Full name
+    var email: String = ""         // Email address
+    var dob: Date = Date()         // Date of birth
+    var password: String = ""      // Password chosen by user
+    var username: String = ""      // Chosen username
+    var topics: [String] = []      // List of favorite topics selected by user
+    var guild: String = ""         // First guild user joins
+    var selectedGuildId: UUID? = nil     // ID of selected guild during signup
+}
+
+
 // MARK: - User Role Enum
 /// Defines the permission hierarchy within guilds
 /// This determines what actions a user can perform

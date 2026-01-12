@@ -11,9 +11,11 @@ import AuthenticationServices
 // First screen the user sees
 // Offers login via email, signup, or Apple Sign-In
 struct WelcomeView: View {
-    @Binding var path: [SignupStep]
-    @Binding var data: SignupData
-    @EnvironmentObject var appState: AppState // Observe current user  // Change to AppState
+    @Binding var path: [RLSignupStep]
+    @Binding var data: RLSignupData
+    @EnvironmentObject var RLAppState: RLAppState
+    
+    //@EnvironmentObject var appState: AppState // Observe current user  // Change to AppState
     
     @State private var opacity: Double = 0
     

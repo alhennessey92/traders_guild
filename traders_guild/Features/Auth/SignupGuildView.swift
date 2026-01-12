@@ -16,9 +16,13 @@ import SwiftUI
 
 
 struct SignupGuildView: View {
-    @Binding var data: SignupData
-    @Binding var path: [SignupStep]
+    @Binding var data: RLSignupData
+    @Binding var path: [RLSignupStep]
+    @EnvironmentObject var RLAppState: RLAppState
+    
+    
     @EnvironmentObject var appState: AppState
+    
     
     // MARK: - Local State
     @State private var availableGuilds: [GuildDTO] = []
@@ -173,12 +177,12 @@ struct SignupGuildView: View {
     
     private func selectGuild(_ guild: GuildDTO) {
         selectedGuild = guild
-        data.selectedGuildId = guild.id
+        //data.selectedGuildId = guild.id TODO: REALAPI
     }
     
     private func handleSignup() async {
         do {
-            try await appState.signUp(data: data)
+            try await RLAppState.signUp(data: data)
             // ✅ Signup complete - AppState has set currentGuild
             // No need to show guild selection sheet
         } catch is CancellationError {
@@ -365,12 +369,12 @@ struct GuildSelectionRow: View {
 //    }
 }
 
-#Preview {
-    NavigationStack {
-        SignupGuildView(
-            data: .constant(SignupData()),
-            path: .constant([])
-        )
-        .environmentObject(AppState())
-    }
-}
+//#Preview {
+//    NavigationStack {
+//        SignupGuildView(
+//            data: .constant(SignupData()),
+//            path: .constant([])
+//        )
+//        .environmentObject(AppState())
+//    }
+//}

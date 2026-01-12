@@ -9,8 +9,8 @@ import SwiftUI
 
 // Step 1: Collect basic account info
 struct SignupBasicsView: View {
-    @Binding var data: SignupData
-    @Binding var path: [SignupStep]
+    @Binding var data: RLSignupData
+    @Binding var path: [RLSignupStep]
     
     // MARK: - State
     //@State private var username: String = ""

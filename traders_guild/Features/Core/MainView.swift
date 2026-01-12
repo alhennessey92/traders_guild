@@ -28,7 +28,9 @@ enum AnimationConstants {
 // MARK: - Main View
 struct MainView: View {
     // MARK: - Properties
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
+    
+    @EnvironmentObject var appState: AppState // TODO: remove
     @EnvironmentObject var messagingManager: MessagingManager
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
     @StateObject private var rightDrawerViewModel = RightDrawerViewModel()
@@ -123,6 +125,8 @@ struct MainView: View {
             dataManager: dataManager,
             api: MockAPIService()
         ))
+        
+        
     }
     
     // MARK: - Body
@@ -217,7 +221,7 @@ struct MainView: View {
             )
             
             // MARK: - Bottom Sheet
-            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !appState.showingTransition)) {
+            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition)) {
                 ChartBottomSheet(
                     controlViewModel: chartControlVM,
                     chartViewModel: chartViewModel,
@@ -247,6 +251,7 @@ struct MainView: View {
                         showBottomSheet = true
                     }
                 }
+                print(rlAppState.currentUser?.displayUsername ?? "Username")
             }
             .sensoryFeedback(.impact(weight: .light), trigger: showLeftDrawer)
             .sensoryFeedback(.impact(weight: .light), trigger: showRightDrawer)
@@ -267,7 +272,7 @@ struct MainView: View {
                 // Initialize chart with data
                 await chartViewModel.initialize()
                 
-                appState.chartDidBecomeReady()
+                rlAppState.chartDidBecomeReady()
             }
             .onChange(of: appState.currentGuild?.id) { oldValue, newValue in
                 if let guildId = newValue, oldValue != newValue {
@@ -277,7 +282,7 @@ struct MainView: View {
                         await leftDrawerViewModel.preloadData(for: guildId, appState: appState)
                         await rightDrawerViewModel.preloadData(for: guildId, appState: appState)
                         await chartViewModel.initialize()
-                        appState.chartDidBecomeReady()
+                        rlAppState.chartDidBecomeReady()
                     }
                 }
             }
