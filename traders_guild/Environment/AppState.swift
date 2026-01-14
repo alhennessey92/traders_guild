@@ -20,7 +20,7 @@ class AppState: ObservableObject {
     @Published var currentUser: CurrentUserDTO? = SampleData.currentUser
     
     /// Authentication status
-    @Published var isAuthenticated: Bool = false
+    @Published var isAuthenticated: Bool = true //
     
     /// JWT authentication token
     @Published var authToken: String? = "mock-jwt-token-\(UUID().uuidString)"
@@ -37,7 +37,7 @@ class AppState: ObservableObject {
     @Published var isLoading: Bool = false
     
     // In UI State section
-    @Published var isCompletingSignup: Bool = false
+    @Published var isCompletingSignup: Bool = true //
     
     /// Error message for alerts
     @Published var errorMessage: String?
@@ -52,10 +52,10 @@ class AppState: ObservableObject {
     @Published var showingTransition: Bool = true
 
     /// Track if initial load is complete
-    @Published var hasCompletedInitialLoad: Bool = false
+    @Published var hasCompletedInitialLoad: Bool = true
     
     /// Track if chart has finished loading (used by TransitionView)
-    @Published var isChartReady: Bool = false
+    @Published var isChartReady: Bool = true
 
     /// Track if session restoration is complete (used by TransitionView)
     @Published var isSessionRestored: Bool = false

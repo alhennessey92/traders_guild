@@ -189,6 +189,20 @@ struct RLGuildMembershipDTO: Codable, Identifiable, Equatable {
     }
 }
 
+/// Combines backend response of GuildMembershipsDTO and GuildDTO
+struct RLGuildWithMembership: Identifiable {
+    let guild: RLGuildDTO
+    let membership: RLGuildMembershipDTO
+    
+    var id: UUID { guild.id }
+    
+    // Convenience accessors
+    var name: String { guild.name }
+    var role: RLMemberRole { membership.memberRole }
+    var imageUrl: String? { guild.imageUrl }
+    var memberCount: String { guild.memberCountDisplay }
+}
+
 // ================================================================================================
 // MARK: - Token DTO
 // ================================================================================================
@@ -318,6 +332,16 @@ struct RLCurrentUserState: Codable, Equatable {
 struct RLGuildListResponseDTO: Codable {
     let guilds: [RLGuildDTO]
     let guildMemberships: [RLGuildMembershipDTO]   // backend: guild_memberships
+    
+    /// Combines guilds and memberships for easy display
+    var combined: [RLGuildWithMembership] {
+        guildMemberships.compactMap { membership in
+            guard let guild = guilds.first(where: { $0.id == membership.guildId }) else {
+                return nil
+            }
+            return RLGuildWithMembership(guild: guild, membership: membership)
+        }
+    }
 }
 
 // ================================================================================================

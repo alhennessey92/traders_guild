@@ -143,6 +143,7 @@ struct SigninEmailView: View {
         isLoggingIn = true
         
         do {
+            RLAppState.logout()
             try await RLAppState.login(email: emailOrUsername, password: password)
             
             // ✅ Wait a tiny moment for the sheet to present

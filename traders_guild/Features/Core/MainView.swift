@@ -252,6 +252,7 @@ struct MainView: View {
                     }
                 }
                 print(rlAppState.currentUser?.displayUsername ?? "Username")
+                print(rlAppState.currentGuild?.name ?? "Guild Name")
             }
             .sensoryFeedback(.impact(weight: .light), trigger: showLeftDrawer)
             .sensoryFeedback(.impact(weight: .light), trigger: showRightDrawer)
