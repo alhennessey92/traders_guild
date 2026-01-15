@@ -19,7 +19,9 @@ enum UserSheetContent {
 
 struct UserProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appState: AppState
+    
+    @EnvironmentObject var rlAppState: RLAppState
+    
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     @State private var currentContent: UserSheetContent = .profile
@@ -115,7 +117,7 @@ struct UserProfileDetailView: View {
                     awardsSummary: awardsSummary,
                     stats: buildStats(),
                     isCurrentUser: true,
-                    username: appState.currentUser?.username ?? "",
+                    username: rlAppState.currentUser?.username ?? "", // TODO: check for change
                     onMarkerTap: { marker in
                         // Navigate to marker on chart
                         leftDrawerViewModel.requestNavigationToMarker(marker)
@@ -188,7 +190,7 @@ struct UserProfileDetailView: View {
     }
     
     // MARK: - Load Profile Data
-    
+    // TODO: Need prod functionality
     private func loadProfileData() async {
         // In production, these would be API calls via LeftDrawerViewModel
         // For now, use sample data with a small delay to show loading state
@@ -207,13 +209,15 @@ struct UserProfileDetailView: View {
     
     // MARK: - Build Stats
     
+    // TODO: Need prod functionality
     private func buildStats() -> [ProfileStatDTO] {
-        guard let user = appState.currentUser else { return [] }
+        guard let user = rlAppState.currentUser else { return [] }
+        guard let membership = rlAppState.currentMembership else { return [] }
         
         return [
             ProfileStatDTO(
                 label: "Guild Reputation",
-                value: "\(user.guildMembership.reputation)",
+                value: "\(membership.reputation)",
                 icon: "shield.checkered",
                 color: AppColors.accentColor,
                 trend: .up("+32 this week")
@@ -227,14 +231,14 @@ struct UserProfileDetailView: View {
             ),
             ProfileStatDTO(
                 label: "Days in Guild",
-                value: "\(user.guildMembership.daysInGuild)",
+                value: "\(membership.daysInGuild)",
                 icon: "calendar",
                 color: .green,
                 trend: nil
             ),
             ProfileStatDTO(
                 label: "Contribution",
-                value: "\(user.guildMembership.contributionScore)%",
+                value: "\(membership.contributionScore)%",
                 icon: "chart.bar.fill",
                 color: .orange,
                 trend: .up("+5%")
@@ -247,7 +251,7 @@ struct UserProfileDetailView: View {
 // MARK: - User Profile Header Component
 struct UserProfileHeaderView: View {
     
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     
     var body: some View {
         // Top header section with gradient background
@@ -260,7 +264,7 @@ struct UserProfileHeaderView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 60, height: 60)
                         .overlay(
-                            Text(String(appState.currentUser?.name.prefix(2) ?? "Unknown"))
+                            Text(String(rlAppState.currentUser?.displayName.prefix(2) ?? "Unknown"))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
@@ -279,15 +283,15 @@ struct UserProfileHeaderView: View {
                 
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(appState.currentUser?.name ?? "Unknown")
+                    Text(rlAppState.currentUser?.displayName ?? "Unknown")
                         .font(.title3)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
                     
-                    Text(appState.currentUser?.guildMembership.roleInGuild.displayName ?? "Unknown")
+                    Text(rlAppState.currentMembership?.role ?? "Unknown")
                         .font(.caption)
-                        .foregroundColor(appState.currentUser?.guildMembership.roleInGuild.roleForegroundColor)
-                        .fontWeight(appState.currentUser?.guildMembership.roleInGuild.roleFontWeight)
+                        .foregroundColor(rlAppState.currentMembership?.memberRole.color)
+                        .fontWeight(.bold) // TODO: add bold
                         .lineLimit(1)
                 }
                 
@@ -303,7 +307,7 @@ struct UserProfileHeaderView: View {
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.greyText)
-                Text("\(appState.currentUser?.guildMembership.memberSince ?? "Member Since - Unknown")")
+                Text("\(rlAppState.currentMembership?.memberSince ?? "Member Since - Unknown")")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.greyText)
@@ -315,7 +319,7 @@ struct UserProfileHeaderView: View {
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.accentColor)
-                Text("\(appState.currentUser?.guildMembership.reputation ?? 0)")
+                Text("\(rlAppState.currentMembership?.reputation ?? 0)")
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.accentColor)

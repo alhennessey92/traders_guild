@@ -75,7 +75,9 @@ struct LeftDrawerMainView: View {
     
     var currentSymbolId: UUID? = nil
     
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var appState: AppState // TODO: remove
+    
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     /// Dismisses any currently presented sheet from the left drawer.
@@ -85,8 +87,8 @@ struct LeftDrawerMainView: View {
     }
     
     var body: some View {
-        if let user = appState.currentUser,
-           let guild = appState.currentGuild {
+        if let user = rlAppState.currentUser,
+           let guild = rlAppState.currentGuild {
             ZStack {
                 // Main content that changes based on navigation state
                 if navigationState == .main {
@@ -204,7 +206,9 @@ struct MainDrawerView: View {
     @Binding var dragTranslation: CGFloat
     let presentProfile: () -> Void
     
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var appState: AppState // TODO: Remove
+    
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     /// Menu configuration for the left drawer home screen.
@@ -222,8 +226,10 @@ struct MainDrawerView: View {
     
     
     var body: some View {
-        if let user = appState.currentUser,
-           let guild = appState.currentGuild {
+        if let guild = appState.currentGuild,
+           let rlUser = rlAppState.currentUser,
+           let rlGuild = rlAppState.currentGuild,
+           let rlMembership = rlAppState.currentMembership{
             VStack(alignment: .leading, spacing: 0) {
             // Header section
             VStack {
@@ -249,7 +255,7 @@ struct MainDrawerView: View {
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
                     
-                    Text(guild.guild.name)
+                    Text(rlGuild.name)
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -263,7 +269,7 @@ struct MainDrawerView: View {
                 }
                 
                 HStack(spacing: 2) {
-                    Text("\(guild.guild.memberCount)")
+                    Text("\(rlGuild.memberCount)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -276,7 +282,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("\(guild.guild.membersOnline)")
+                    Text("\(rlGuild.membersOnline)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -298,7 +304,7 @@ struct MainDrawerView: View {
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("\(guild.guild.reputation)")
+                    Text("\(rlGuild.reputation)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -311,7 +317,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("\(guild.guild.accuracy)%")
+                    Text("99%") // TODO: Get Guild Accuracy
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -322,7 +328,7 @@ struct MainDrawerView: View {
                 }
                 .padding(.top, 6)
                 
-                Text("\(guild.guild.description)")
+                Text("\(rlGuild.description ?? "No Description Provided")")
                     .font(.caption)
                     .foregroundColor(AppColors.whiteText.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -390,7 +396,7 @@ struct MainDrawerView: View {
                     .padding(.bottom, 2)
                 
                 
-                UserRowView(user: user, onTap: {  // ✅ No unwrapping!
+                UserRowView(user: rlUser, membership: rlMembership, onTap: {  // ✅ No unwrapping!
                     presentProfile()
                 })
                 
@@ -423,7 +429,9 @@ struct SectionDrawerView: View {
     
     var currentSymbolId: UUID? = nil
     
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var appState: AppState // TODO: remove
+    
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {
@@ -593,65 +601,16 @@ struct DrawerMenuButton: View {
 
 
 
-
-
-/// Simple list showcasing top markers/performers.
-//struct TopMarkersView: View {
-//    var body: some View {
-//        VStack(spacing: 10) {
-//            ForEach(1...10, id: \.self) { index in
-//                HStack(spacing: 12) {
-//                    Text("\(index)")
-//                        .font(.headline)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(index <= 3 ? AppColors.accentColor : AppColors.whiteText.opacity(0.6))
-//                        .frame(width: 30)
-//
-//                    Circle()
-//                        .fill(AppColors.accentColor)
-//                        .frame(width: 36, height: 36)
-//                        .overlay(
-//                            Text("U\(index)")
-//                                .font(.caption2)
-//                                .fontWeight(.bold)
-//                                .foregroundColor(.white)
-//                        )
-//
-//                    VStack(alignment: .leading, spacing: 4) {
-//                        Text("TopTrader\(index)")
-//                            .font(.subheadline)
-//                            .fontWeight(.semibold)
-//                            .foregroundColor(AppColors.whiteText)
-//                        Text("Accuracy: \(95 - index)%")
-//                            .font(.caption)
-//                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-//                    }
-//
-//                    Spacer()
-//
-//                    Text("+\(150 - index * 10)")
-//                        .font(.subheadline)
-//                        .fontWeight(.bold)
-//                        .foregroundColor(AppColors.bullCandleGreen)
-//                }//
-//                .padding()
-//                .background(Color.white.opacity(index <= 3 ? 0.12 : 0.08))
-//                .cornerRadius(10)
-//            }
-//        }
-//        .padding(.horizontal, 16)
-//    }
-//}
-//
-
-
 /// Container for detail content presented as a sheet from the left drawer.
 ///
 
 struct BottomSheetView: View {
     let content: BottomSheetContent
     @Binding var selectedDetent: PresentationDetent
-    @EnvironmentObject var appState: AppState
+    
+    @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var appState: AppState // TODO: remove
+    
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     var body: some View {

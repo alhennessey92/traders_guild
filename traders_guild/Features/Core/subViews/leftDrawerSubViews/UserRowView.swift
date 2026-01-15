@@ -17,7 +17,8 @@ import SwiftUI
 
 // MARK: - User Row View button for left drawer
 struct UserRowView: View {
-    let user: CurrentUserDTO
+    let user: RLUserDTO
+    let membership: RLGuildMembershipDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -31,7 +32,7 @@ struct UserRowView: View {
                         .fill(AppColors.accentColor.opacity(0.3))
                         .frame(width: 40, height: 40)
                         .overlay(
-                            Text(user.name)
+                            Text(user.displayName)
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
@@ -52,7 +53,7 @@ struct UserRowView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack (spacing: 2){
 
-                        Text(user.username)
+                        Text(user.displayUsername)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(AppColors.whiteText)
@@ -61,10 +62,10 @@ struct UserRowView: View {
                     
                     
                     HStack (spacing:2){
-                        Text(user.guildMembership.roleInGuild.displayName)
+                        Text(membership.role)
                             .font(.caption)
-                            .foregroundColor(user.guildMembership.roleInGuild.roleForegroundColor)
-                            .fontWeight(user.guildMembership.roleInGuild.roleFontWeight)
+                            .foregroundColor(membership.memberRole.color)
+                            .fontWeight(.bold) //TODO: Change weight
                             .lineLimit(1)
                         Circle()
                             .fill(AppColors.whiteText.opacity(0.7))
@@ -76,7 +77,7 @@ struct UserRowView: View {
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
-                        Text("\(user.guildMembership.reputation)")
+                        Text("\(membership.reputation)")
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.accentColor)

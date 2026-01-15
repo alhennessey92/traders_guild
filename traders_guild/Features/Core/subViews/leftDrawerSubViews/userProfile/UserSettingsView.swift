@@ -9,6 +9,8 @@ import SwiftUI
 
 struct UserSettingsSheetView: View {
     @EnvironmentObject var appState: AppState
+    
+    @EnvironmentObject var RLAppState: RLAppState
     let onBack: () -> Void
     
     @State private var showLogoutConfirmation = false
@@ -721,7 +723,7 @@ struct UserSettingsSheetView: View {
             .alert("Logout", isPresented: $showLogoutConfirmation) {
                 Button("Cancel", role: .cancel) { }
                 Button("Logout", role: .destructive) {
-                    appState.logout()
+                    RLAppState.logout()
                     onBack()
                 }
             } message: {

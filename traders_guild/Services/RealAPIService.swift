@@ -1,4 +1,3 @@
-
 //
 //  RealAPIService.swift
 //  traders_guild
@@ -356,7 +355,7 @@ class RealAPIService {
     // MARK: - Guild Endpoints (port 8001)
     // ================================================================================================
     
-    /// Get user's guild memberships
+    /// Get user's guild memberships - Backend Implemented
     func getUserGuilds() async throws -> RLGuildListResponseDTO {
         return try await request(
             "/users/me/guilds",
@@ -365,7 +364,7 @@ class RealAPIService {
         )
     }
     
-    /// Get guild by ID
+    /// Get guild by ID - Backend Implemented (Not tested)
     func getGuild(id: UUID) async throws -> RLGuildDTO {
         return try await request(
             "/guilds/\(id.uuidString)",
@@ -374,7 +373,7 @@ class RealAPIService {
         )
     }
     
-    /// Get open guilds (for discovery)
+    /// Get open guilds (for discovery) - Backend Implemented (Not tested)
     func getOpenGuilds() async throws -> [RLGuildDTO] {
         return try await request(
             "/guilds?is_open=true",
@@ -383,12 +382,29 @@ class RealAPIService {
         )
     }
     
-    /// Join a guild
-    func joinGuild(guildId: UUID) async throws -> RLGuildMembershipDTO {
+    /// Join a guild - returns both guild and membership
+    func joinGuild(guildId: UUID) async throws -> RLJoinGuildResponseDTO {
         return try await request(
             "/guilds/\(guildId.uuidString)/join",
             service: .core,
             method: "POST",
+            auth: true
+        )
+    }
+    
+    /// Create a new guild - returns both guild and membership
+    func createGuild(name: String, description: String?, isOpen: Bool) async throws -> RLCreateGuildResponseDTO {
+        let requestBody = RLCreateGuildRequestDTO(
+            name: name,
+            description: description,
+            isOpen: isOpen
+        )
+        
+        return try await request(
+            "/guilds",
+            service: .core,
+            method: "POST",
+            body: requestBody,
             auth: true
         )
     }
@@ -410,19 +426,7 @@ private struct EmptyResponse: Decodable {}
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+//
 ////
 ////  RealAPIService.swift
 ////  traders_guild
@@ -430,18 +434,53 @@ private struct EmptyResponse: Decodable {}
 ////  Real API service for backend communication.
 ////  Uses DTOs that match backend Pydantic schemas exactly.
 ////
+////  Supports multiple backend services (auth, core) with different ports in development.
+////  In production, Kong routes everything through one URL.
+////
 //
 //import Foundation
 //
 //// MARK: - API Configuration
 //
-//enum APIConfig {
-//    #if targetEnvironment(simulator)
-//    static let baseURL = "http://localhost:8000/api/v1"
-//    #else
-//    // ⚠️ UPDATE THIS to your Mac's IP for device testing
-//    static let baseURL = "http://192.168.1.182:8000/api/v1"
-//    #endif
+//enum APIEnvironment {
+//    case development
+//    case production
+//    
+//    static var current: APIEnvironment {
+//        #if DEBUG
+//        return .development
+//        #else
+//        return .production
+//        #endif
+//    }
+//}
+//
+//enum APIService {
+//    case auth    // Registration, login, tokens (port 8000)
+//    case core    // Users, guilds, memberships, etc. (port 8001)
+//    
+//    var baseURL: String {
+//        switch APIEnvironment.current {
+//        case .development:
+//            #if targetEnvironment(simulator)
+//            switch self {
+//            case .auth: return "http://localhost:8000/api/v1"
+//            case .core: return "http://localhost:8001/api/v1"
+//            }
+//            #else
+//            // ⚠️ UPDATE THIS to your Mac's IP for device testing
+//            let macIP = "192.168.1.182"
+//            switch self {
+//            case .auth: return "http://\(macIP):8000/api/v1"
+//            case .core: return "http://\(macIP):8001/api/v1"
+//            }
+//            #endif
+//            
+//        case .production:
+//            // Kong routes all services through one URL
+//            return "https://api.tradersguild.com/api/v1"
+//        }
+//    }
 //}
 //
 //// MARK: - API Errors
@@ -537,11 +576,12 @@ private struct EmptyResponse: Decodable {}
 //    
 //    private func request<T: Decodable>(
 //        _ endpoint: String,
+//        service: APIService = .core,  // Default to core service
 //        method: String = "GET",
 //        body: Encodable? = nil,
 //        auth: Bool = false
 //    ) async throws -> T {
-//        guard let url = URL(string: "\(APIConfig.baseURL)\(endpoint)") else {
+//        guard let url = URL(string: "\(service.baseURL)\(endpoint)") else {
 //            throw APIError.invalidURL
 //        }
 //        
@@ -561,7 +601,7 @@ private struct EmptyResponse: Decodable {}
 //        }
 //        
 //        #if DEBUG
-//        print("🌐 \(method) \(endpoint)")
+//        print("🌐 [\(service)] \(method) \(endpoint)")
 //        if let body = request.httpBody, let str = String(data: body, encoding: .utf8) {
 //            print("📤 Request: \(str)")
 //        }
@@ -640,7 +680,7 @@ private struct EmptyResponse: Decodable {}
 //    #endif
 //    
 //    // ================================================================================================
-//    // MARK: - Auth Endpoints
+//    // MARK: - Auth Endpoints (port 8000)
 //    // ================================================================================================
 //    
 //    /// Register new user
@@ -649,6 +689,7 @@ private struct EmptyResponse: Decodable {}
 //        
 //        let response: RLRegistrationResponseDTO = try await request(
 //            "/auth/register",
+//            service: .auth,
 //            method: "POST",
 //            body: requestBody
 //        )
@@ -665,6 +706,7 @@ private struct EmptyResponse: Decodable {}
 //        
 //        let response: RLLoginResponseDTO = try await request(
 //            "/auth/login",
+//            service: .auth,
 //            method: "POST",
 //            body: requestBody
 //        )
@@ -685,6 +727,7 @@ private struct EmptyResponse: Decodable {}
 //        
 //        let response: RLTokenDTO = try await request(
 //            "/auth/refresh",
+//            service: .auth,
 //            method: "POST",
 //            body: requestBody
 //        )
@@ -699,7 +742,12 @@ private struct EmptyResponse: Decodable {}
 //    func logout() async {
 //        // Try to call logout endpoint (ignore errors)
 //        do {
-//            let _: EmptyResponse = try await request("/auth/logout", method: "POST", auth: true)
+//            let _: EmptyResponse = try await request(
+//                "/auth/logout",
+//                service: .auth,
+//                method: "POST",
+//                auth: true
+//            )
 //        } catch {
 //            #if DEBUG
 //            print("⚠️ Logout endpoint failed (ignoring): \(error)")
@@ -711,49 +759,91 @@ private struct EmptyResponse: Decodable {}
 //    }
 //    
 //    // ================================================================================================
-//    // MARK: - User Endpoints
+//    // MARK: - User Endpoints (port 8001)
 //    // ================================================================================================
 //    
 //    /// Get current user profile
 //    func getCurrentUser() async throws -> RLUserDTO {
-//        return try await request("/users/me", auth: true)
+//        return try await request(
+//            "/users/me",
+//            service: .core,
+//            auth: true
+//        )
 //    }
 //    
 //    /// Get user by ID
 //    func getUser(id: UUID) async throws -> RLUserDTO {
-//        return try await request("/users/\(id.uuidString)", auth: true)
+//        return try await request(
+//            "/users/\(id.uuidString)",
+//            service: .core,
+//            auth: true
+//        )
 //    }
 //    
 //    // ================================================================================================
-//    // MARK: - Guild Endpoints
+//    // MARK: - Guild Endpoints (port 8001)
 //    // ================================================================================================
 //    
 //    /// Get user's guild memberships
 //    func getUserGuilds() async throws -> RLGuildListResponseDTO {
-//        return try await request("/users/me/guilds", auth: true)
+//        return try await request(
+//            "/users/me/guilds",
+//            service: .core,
+//            auth: true
+//        )
 //    }
 //    
 //    /// Get guild by ID
 //    func getGuild(id: UUID) async throws -> RLGuildDTO {
-//        return try await request("/guilds/\(id.uuidString)", auth: true)
+//        return try await request(
+//            "/guilds/\(id.uuidString)",
+//            service: .core,
+//            auth: true
+//        )
 //    }
 //    
 //    /// Get open guilds (for discovery)
 //    func getOpenGuilds() async throws -> [RLGuildDTO] {
-//        return try await request("/guilds?is_open=true", auth: true)
+//        return try await request(
+//            "/guilds?is_open=true",
+//            service: .core,
+//            auth: true
+//        )
 //    }
 //    
 //    /// Join a guild
 //    func joinGuild(guildId: UUID) async throws -> RLGuildMembershipDTO {
-//        return try await request("/guilds/\(guildId.uuidString)/join", method: "POST", auth: true)
+//        return try await request(
+//            "/guilds/\(guildId.uuidString)/join",
+//            service: .core,
+//            method: "POST",
+//            auth: true
+//        )
 //    }
 //    
 //    /// Leave a guild
 //    func leaveGuild(guildId: UUID) async throws {
-//        let _: EmptyResponse = try await request("/guilds/\(guildId.uuidString)/leave", method: "POST", auth: true)
+//        let _: EmptyResponse = try await request(
+//            "/guilds/\(guildId.uuidString)/leave",
+//            service: .core,
+//            method: "POST",
+//            auth: true
+//        )
 //    }
 //}
 //
 //// MARK: - Helper Types
 //
 //private struct EmptyResponse: Decodable {}
+//
+//
+//
+//
+
+
+
+
+
+
+
+

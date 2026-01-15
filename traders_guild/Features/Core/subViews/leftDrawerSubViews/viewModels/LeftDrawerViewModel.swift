@@ -13,6 +13,9 @@ import SwiftUI
 @MainActor
 class LeftDrawerViewModel: ObservableObject {
     
+    
+    @EnvironmentObject var rlAppState: RLAppState
+    
     // ================================================================================================
     // MARK: - Published State
     // ================================================================================================

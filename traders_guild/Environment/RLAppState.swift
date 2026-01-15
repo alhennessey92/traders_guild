@@ -34,9 +34,11 @@ class RLAppState: ObservableObject {
     @Published var accessToken: String? {
         didSet {
             if let token = accessToken {
+                print("🔑 AccessToken SET: \(token.prefix(20))...")
                 saveTokenToKeychain(token)
                 realApi.setAccessToken(token)
             } else {
+                print("🔑 AccessToken CLEARED")
                 clearTokenFromKeychain()
                 realApi.setAccessToken(nil)
             }
@@ -383,22 +385,24 @@ class RLAppState: ObservableObject {
         guard index < userGuilds.count else { return }
         
         let selected = userGuilds[index]
-        showTransitionForChartLoad()
-        self.currentGuild = selected.guild
-        self.currentMembership = selected.membership
-        
-        // Dismiss the sheet if it's open
-        if showGuildSelectionSheet {
-            showGuildSelectionSheet = false
-        }
+        selectGuild(selected, showTransition: true)  // Show transition for auto-select (login)
     }
     
     /// Select a guild by ID
     func selectGuild(id: UUID) {
         guard let selected = userGuilds.first(where: { $0.guild.id == id }) else { return }
-        showTransitionForChartLoad()
-        self.currentGuild = selected.guild
-        self.currentMembership = selected.membership
+        selectGuild(selected, showTransition: true)  // Show transition for lookup select
+    }
+    
+    /// Select a guild directly (primary method)
+    /// - Parameter showTransition: Whether to show loading transition (false for manual guild switching)
+    func selectGuild(_ guildWithMembership: RLGuildWithMembership, showTransition: Bool = false) {
+        if showTransition {
+            showTransitionForChartLoad()
+        }
+        
+        self.currentGuild = guildWithMembership.guild
+        self.currentMembership = guildWithMembership.membership
         
         // Dismiss the sheet if it's open
         if showGuildSelectionSheet {
@@ -443,20 +447,49 @@ class RLAppState: ObservableObject {
         }
     }
     
-    /// Join a guild
-    func joinGuild(guildId: UUID) async throws {
+    /// Join a guild - returns the combined guild with membership
+    func joinGuild(guildId: UUID) async throws -> RLGuildWithMembership {
         do {
-            let membership = try await realApi.joinGuild(guildId: guildId)
+            let response = try await realApi.joinGuild(guildId: guildId)
+            let guildWithMembership = response.combined
             
-            // Refresh guild list
-            try await fetchUserGuilds()
+            // Add to local guild list
+            userGuilds.append(guildWithMembership)
             
-            // Select the newly joined guild
-            selectGuild(id: guildId)
+            // Select the newly joined guild (show transition)
+            selectGuild(guildWithMembership, showTransition: true)
             
-            showSuccess("Joined guild successfully!")
+            showSuccess("Joined \(guildWithMembership.guild.name) successfully!")
+            return guildWithMembership
         } catch {
             showError(error, title: "Failed to Join Guild", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Create a new guild - returns the combined guild with membership
+    func createGuild(name: String, description: String?, isOpen: Bool) async throws -> RLGuildWithMembership {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            let response = try await realApi.createGuild(
+                name: name,
+                description: description,
+                isOpen: isOpen
+            )
+            let guildWithMembership = response.combined
+            
+            // Add to local guild list
+            userGuilds.append(guildWithMembership)
+            
+            // Select the newly created guild (show transition)
+            selectGuild(guildWithMembership, showTransition: true)
+            
+            showSuccess("Created \(guildWithMembership.guild.name) successfully!")
+            return guildWithMembership
+        } catch {
+            showError(error, title: "Failed to Create Guild", style: .toast)
             throw error
         }
     }
@@ -588,6 +621,16 @@ enum RLAppError: LocalizedError {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -882,24 +925,37 @@ enum RLAppError: LocalizedError {
 //            // Set user (this triggers isAuthenticated = true)
 //            self.currentUser = response.user
 //            
+//            print("🔐 Login: User set, currentGuild before fetch: \(currentGuild?.name ?? "nil")")
+//            
 //            // Fetch user's guilds
 //            try await fetchUserGuilds()
 //            
+//            print("🔐 Login: Fetched \(userGuilds.count) guilds")
+//            for (i, g) in userGuilds.enumerated() {
+//                print("   [\(i)] \(g.guild.name)")
+//            }
+//            
 //            // Handle guild selection
 //            if userGuilds.isEmpty {
+//                print("🔐 Login: No guilds - showing sheet")
 //                showGuildSelectionSheet = true
-//                isHandlingAuthFlow = false  // ← Clear flag, sheet will handle it
+//                isHandlingAuthFlow = false
 //                showWarning("Please join a guild to continue")
 //            } else if userGuilds.count == 1 {
+//                print("🔐 Login: Single guild - auto-selecting")
 //                // Auto-select single guild
 //                selectGuild(at: 0)
-//                isHandlingAuthFlow = false  // ← Clear flag
+//                isHandlingAuthFlow = false
 //                showTransitionForChartLoad()
 //            } else {
+//                print("🔐 Login: Multiple guilds (\(userGuilds.count)) - showing selection sheet")
+//                print("🔐 Login: showGuildSelectionSheet = true")
 //                // Multiple guilds - show picker
 //                showGuildSelectionSheet = true
-//                isHandlingAuthFlow = false  // ← Clear flag, sheet will handle it
+//                isHandlingAuthFlow = false
 //            }
+//            
+//            print("🔐 Login: Final state - currentGuild: \(currentGuild?.name ?? "nil"), showSheet: \(showGuildSelectionSheet)")
 //            
 //            showSuccess("Welcome back, \(response.user.username)!")
 //            
@@ -933,22 +989,29 @@ enum RLAppError: LocalizedError {
 //    
 //    /// Restore session from keychain
 //    func restoreSession() async {
+//        print("🔄 restoreSession: Starting...")
+//        
 //        if let token = getTokenFromKeychain() {
 //            self.accessToken = token
+//            print("🔄 restoreSession: Found token")
 //        }
 //        
 //        if let user = getUserFromKeychain() {
 //            self.currentUser = user
+//            print("🔄 restoreSession: Found user: \(user.username)")
 //        }
 //        
 //        if let guild = getGuildFromKeychain() {
 //            self.currentGuild = guild
+//            print("🔄 restoreSession: Found guild: \(guild.name)")
 //        }
 //        
 //        if let membership = getMembershipFromKeychain() {
 //            self.currentMembership = membership
+//            print("🔄 restoreSession: Found membership")
 //        }
 //        
+//        print("🔄 restoreSession: Done - isAuthenticated: \(isAuthenticated), hasGuild: \(currentGuild != nil)")
 //        isSessionRestored = true
 //    }
 //    
@@ -967,22 +1030,20 @@ enum RLAppError: LocalizedError {
 //        guard index < userGuilds.count else { return }
 //        
 //        let selected = userGuilds[index]
-//        showTransitionForChartLoad()
-//        self.currentGuild = selected.guild
-//        self.currentMembership = selected.membership
-//        
-//        // Dismiss the sheet if it's open
-//        if showGuildSelectionSheet {
-//            showGuildSelectionSheet = false
-//        }
+//        selectGuild(selected)
 //    }
 //    
 //    /// Select a guild by ID
 //    func selectGuild(id: UUID) {
 //        guard let selected = userGuilds.first(where: { $0.guild.id == id }) else { return }
+//        selectGuild(selected)
+//    }
+//    
+//    /// Select a guild directly (primary method)
+//    func selectGuild(_ guildWithMembership: RLGuildWithMembership) {
 //        showTransitionForChartLoad()
-//        self.currentGuild = selected.guild
-//        self.currentMembership = selected.membership
+//        self.currentGuild = guildWithMembership.guild
+//        self.currentMembership = guildWithMembership.membership
 //        
 //        // Dismiss the sheet if it's open
 //        if showGuildSelectionSheet {
@@ -1027,20 +1088,49 @@ enum RLAppError: LocalizedError {
 //        }
 //    }
 //    
-//    /// Join a guild
-//    func joinGuild(guildId: UUID) async throws {
+//    /// Join a guild - returns the combined guild with membership
+//    func joinGuild(guildId: UUID) async throws -> RLGuildWithMembership {
 //        do {
-//            let membership = try await realApi.joinGuild(guildId: guildId)
+//            let response = try await realApi.joinGuild(guildId: guildId)
+//            let guildWithMembership = response.combined
 //            
-//            // Refresh guild list
-//            try await fetchUserGuilds()
+//            // Add to local guild list
+//            userGuilds.append(guildWithMembership)
 //            
 //            // Select the newly joined guild
-//            selectGuild(id: guildId)
+//            selectGuild(guildWithMembership)
 //            
-//            showSuccess("Joined guild successfully!")
+//            showSuccess("Joined \(guildWithMembership.guild.name) successfully!")
+//            return guildWithMembership
 //        } catch {
 //            showError(error, title: "Failed to Join Guild", style: .toast)
+//            throw error
+//        }
+//    }
+//    
+//    /// Create a new guild - returns the combined guild with membership
+//    func createGuild(name: String, description: String?, isOpen: Bool) async throws -> RLGuildWithMembership {
+//        isLoading = true
+//        defer { isLoading = false }
+//        
+//        do {
+//            let response = try await realApi.createGuild(
+//                name: name,
+//                description: description,
+//                isOpen: isOpen
+//            )
+//            let guildWithMembership = response.combined
+//            
+//            // Add to local guild list
+//            userGuilds.append(guildWithMembership)
+//            
+//            // Select the newly created guild
+//            selectGuild(guildWithMembership)
+//            
+//            showSuccess("Created \(guildWithMembership.guild.name) successfully!")
+//            return guildWithMembership
+//        } catch {
+//            showError(error, title: "Failed to Create Guild", style: .toast)
 //            throw error
 //        }
 //    }
@@ -1172,4 +1262,4 @@ enum RLAppError: LocalizedError {
 //        }
 //    }
 //}
-
+//
