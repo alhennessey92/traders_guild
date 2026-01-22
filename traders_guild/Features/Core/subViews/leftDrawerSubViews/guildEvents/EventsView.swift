@@ -62,7 +62,7 @@ struct EventsListView: View {
 // MARK: - ================================================================================================
 
 struct EventRowView: View {
-    let event: GuildEventDTO
+    let event: RLGuildEventWithAuthorDTO
     let onTap: () -> Void
     
     var body: some View {
@@ -111,8 +111,11 @@ struct EventRowView: View {
                 .padding(.bottom, 12) // More padding before footer
                 
                 // MARK: - Author Footer Bar (Hosted by)
-                UnifiedAuthorFooterFromMembership(
-                    author: event.author,
+                RLAuthorFooter(
+                    displayName: event.authorDisplayName,
+                    avatarUrl: event.authorAvatarUrl,
+                    role: event.authorRole,
+                    timeText: event.timeUntilEvent,
                     cornerRadius: 14
                 )
             }
@@ -125,9 +128,9 @@ struct EventRowView: View {
 // MARK: - ================================================================================================
 
 struct EventDetailView: View {
-    let event: GuildEventDTO
+    let event: RLGuildEventWithAuthorDTO
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     @State private var hasRecordedView = false
@@ -170,7 +173,11 @@ struct EventDetailView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    UnifiedAuthorRowFromMembership(author: event.author)
+                    RLAuthorRow(
+                        displayName: event.authorDisplayName,
+                        avatarUrl: event.authorAvatarUrl,
+                        role: event.authorRole
+                    )
                 }
                 
                 Divider()
@@ -294,58 +301,56 @@ struct EventDetailView: View {
     // MARK: - Action Methods
     
     private func attendEvent() {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+        
         Task {
             do {
-                try await appState.attendEvent(eventId: event.id)
+                _ = try await rlAppState.attendEvent(guildId: guildId, eventId: event.id)
                 leftDrawerViewModel.updateEventAttendance(
                     eventId: event.id,
                     isAttending: true,
                     attendanceCount: event.attendeeCount + 1
                 )
-                appState.showSuccess("Attending Event")
+                rlAppState.showSuccess("Attending Event")
                 dismiss()
             } catch {
-                appState.showError(error, title: "Failed to attend Event")
+                rlAppState.showError(error, title: "Failed to attend Event")
             }
         }
     }
     
     private func unAttendEvent() {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+        
         Task {
             do {
-                try await appState.unAttendEvent(eventId: event.id)
+                try await rlAppState.unattendEvent(guildId: guildId, eventId: event.id)
                 leftDrawerViewModel.updateEventAttendance(
                     eventId: event.id,
                     isAttending: false,
                     attendanceCount: max(0, event.attendeeCount - 1)
                 )
-                appState.showSuccess("Attendance cancelled")
+                rlAppState.showSuccess("Attendance cancelled")
                 dismiss()
             } catch {
-                appState.showError(error, title: "Failed to cancel attendance")
+                rlAppState.showError(error, title: "Failed to cancel attendance")
             }
         }
     }
     
     private func shareEvent() {
-        Task {
-            do {
-                try await appState.shareEvent(eventId: event.id, friendId: UUID().uuidString)
-                appState.showSuccess("Event Shared")
-                dismiss()
-            } catch {
-                appState.showError(error, title: "Failed to share event")
-            }
-        }
+        // TODO: Implement share functionality when backend supports it
+        rlAppState.showInfo("Share feature coming soon!")
     }
     
     private func recordEventView() {
         guard !hasRecordedView else { return }
+        guard let guildId = rlAppState.currentGuild?.id else { return }
         hasRecordedView = true
         
         Task {
             do {
-                try await appState.recordEventView(eventId: event.id)
+                try await rlAppState.recordEventView(guildId: guildId, eventId: event.id)
                 leftDrawerViewModel.markEventAsRead(eventId: event.id)
             } catch {
                 print("Failed to record event view: \(error)")
