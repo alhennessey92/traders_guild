@@ -487,36 +487,42 @@ struct GuildNotificationDTO: Identifiable, Codable, Equatable {
 /// Important guild updates that persist (unlike chat messages)
 /// Announcements are formal, authored communications
 /// Used in: announcement board, guild homepage, notification center
-struct GuildAnnouncementDTO: Identifiable, Codable, Equatable {
-    let id: UUID                    // Announcement unique ID
-    let guildId: UUID               // Guild ID
-    let author: GuildMembershipDTO  // EMBEDDED author info
-    let title: String               // Announcement headline
-    let content: String             // Full announcement body (can be markdown)
-    let preview: String             // Pre-truncated preview (~100 chars) from backend
-    let postedAt: Date              // Timestamp when posted
-    let timeAgoFormatted: String    // Pre-formatted by backend (e.g., "2 hours ago")
-    let isImportant: Bool           // Should be highlighted/pinned at top
-    var isRead: Bool                // Has current user read this? (personalized)
-    let readCount: Int              // Total members who've read (for analytics)
-    
-    /// Color for importance indicator
-    var importanceColor: Color {
-        isImportant ? .red : .primary
-    }
-    
-    /// Show unread dot indicator
-    var showUnreadIndicator: Bool {
-        !isRead
-    }
-    
-    /// Read percentage for guild admins
-    var readPercentage: Double {
-        // This would need memberCount from guild
-        // Just example calculation
-        Double(readCount) / 100.0
-    }
-}
+//struct GuildAnnouncementDTO: Identifiable, Codable, Equatable {
+//    let id: UUID                    // Announcement unique ID
+//    let guildId: UUID               // Guild ID
+//    let author: GuildMembershipDTO  // EMBEDDED author info
+//    let title: String               // Announcement headline
+//    let content: String             // Full announcement body (can be markdown)
+//    let preview: String             // Pre-truncated preview (~100 chars) from backend
+//    let postedAt: Date              // Timestamp when posted
+//    let timeAgoFormatted: String    // Pre-formatted by backend (e.g., "2 hours ago")
+//    let isImportant: Bool           // Should be highlighted/pinned at top
+//    var isRead: Bool                // Has current user read this? (personalized)
+//    let readCount: Int              // Total members who've read (for analytics)
+//    
+//    /// Color for importance indicator
+//    var importanceColor: Color {
+//        isImportant ? .red : .primary
+//    }
+//    
+//    /// Show unread dot indicator
+//    var showUnreadIndicator: Bool {
+//        !isRead
+//    }
+//    
+//    /// Read percentage for guild admins
+//    var readPercentage: Double {
+//        // This would need memberCount from guild
+//        // Just example calculation
+//        Double(readCount) / 100.0
+//    }
+//}
+//
+
+
+
+
+
 
 // MARK: - Guild Event DTO
 /// EVENTUALLY ADD EVENT TYPES  - SUCH AS CHATROOM/SYMBOLS ETC

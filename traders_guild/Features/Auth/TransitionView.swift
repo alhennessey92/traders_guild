@@ -127,8 +127,4 @@ struct TransitionView: View {
     }
 }
 
-//#Preview {
-//    TransitionView()
-//        .environmentObject(AppState())
-//}
 

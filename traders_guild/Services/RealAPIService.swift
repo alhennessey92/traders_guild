@@ -87,6 +87,16 @@ class RealAPIService {
     private var accessToken: String?
     private var refreshToken: String?
     
+    /// Flag to prevent multiple simultaneous refresh attempts
+    private var isRefreshingToken = false
+    
+    /// Callback when authentication fails completely (refresh token expired)
+    /// RLAppState should set this to handle logout
+    var onAuthenticationFailure: (() -> Void)?
+    
+    /// Callback when tokens are refreshed - allows RLAppState to update keychain
+    var onTokensRefreshed: ((_ accessToken: String, _ refreshToken: String) -> Void)?
+    
     // MARK: - JSON Decoder
     
     private lazy var decoder: JSONDecoder = {
@@ -145,12 +155,14 @@ class RealAPIService {
     
     // MARK: - Generic Request
     
+    /// Main request method with automatic token refresh on 401
     private func request<T: Decodable>(
         _ endpoint: String,
-        service: APIService = .core,  // Default to core service
+        service: APIService = .core,
         method: String = "GET",
         body: Encodable? = nil,
-        auth: Bool = false
+        auth: Bool = false,
+        isRetry: Bool = false  // Prevents infinite retry loops
     ) async throws -> T {
         guard let url = URL(string: "\(service.baseURL)\(endpoint)") else {
             throw APIError.invalidURL
@@ -202,6 +214,35 @@ class RealAPIService {
             
             switch httpResponse.statusCode {
             case 401:
+                // Don't retry if this is already a retry or if it's a refresh/auth endpoint
+                let isAuthEndpoint = endpoint.contains("/auth/")
+                if !isRetry && auth && !isAuthEndpoint {
+                    // Try to refresh token and retry the request
+                    do {
+                        try await performTokenRefresh()
+                        #if DEBUG
+                        print("🔄 Token refreshed, retrying request...")
+                        #endif
+                        // Retry with new token (mark as retry to prevent infinite loop)
+                        return try await self.request(
+                            endpoint,
+                            service: service,
+                            method: method,
+                            body: body,
+                            auth: auth,
+                            isRetry: true
+                        )
+                    } catch {
+                        #if DEBUG
+                        print("❌ Token refresh failed: \(error)")
+                        #endif
+                        // Refresh failed - notify app to logout
+                        await MainActor.run {
+                            onAuthenticationFailure?()
+                        }
+                        throw APIError.unauthorized
+                    }
+                }
                 throw APIError.unauthorized
             case 400, 422:
                 throw APIError.badRequest(detail)
@@ -219,6 +260,77 @@ class RealAPIService {
             #endif
             throw APIError.decodingError(error.localizedDescription)
         }
+    }
+    
+    /// Performs token refresh with locking to prevent multiple simultaneous refreshes
+    private func performTokenRefresh() async throws {
+        // If already refreshing, wait a bit and check if we have a new token
+        if isRefreshingToken {
+            #if DEBUG
+            print("🔄 Token refresh already in progress, waiting...")
+            #endif
+            // Wait for the other refresh to complete (with timeout)
+            for _ in 0..<20 { // 2 second timeout
+                try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                if !isRefreshingToken {
+                    if accessToken != nil {
+                        return // Another call refreshed successfully
+                    }
+                    break
+                }
+            }
+            throw APIError.unauthorized
+        }
+        
+        isRefreshingToken = true
+        defer { isRefreshingToken = false }
+        
+        guard let refresh = refreshToken else {
+            throw APIError.unauthorized
+        }
+        
+        #if DEBUG
+        print("🔄 Refreshing access token...")
+        #endif
+        
+        let requestBody = RLRefreshTokenRequestDTO(refreshToken: refresh)
+        
+        // Direct request without auth (refresh endpoint doesn't need access token)
+        guard let url = URL(string: "\(APIService.auth.baseURL)/auth/refresh") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            #if DEBUG
+            print("🔄 Token refresh failed with status: \(httpResponse.statusCode)")
+            #endif
+            throw APIError.unauthorized
+        }
+        
+        let tokenResponse = try decoder.decode(RLTokenDTO.self, from: data)
+        
+        // Update tokens
+        setTokens(access: tokenResponse.accessToken, refresh: tokenResponse.refreshToken)
+        
+        // Notify RLAppState to update keychain
+        await MainActor.run {
+            onTokensRefreshed?(tokenResponse.accessToken, tokenResponse.refreshToken)
+        }
+        
+        #if DEBUG
+        print("✅ Token refreshed successfully")
+        #endif
     }
     
     private func extractErrorDetail(from data: Data) -> String {
@@ -288,25 +400,21 @@ class RealAPIService {
         return response
     }
     
-    /// Refresh access token
+    /// Refresh access token (manual call - usually automatic refresh handles this)
     func refreshAccessToken() async throws -> RLTokenDTO {
-        guard let refresh = refreshToken else {
+        try await performTokenRefresh()
+        
+        // Return current tokens as DTO
+        guard let access = accessToken, let refresh = refreshToken else {
             throw APIError.unauthorized
         }
         
-        let requestBody = RLRefreshTokenRequestDTO(refreshToken: refresh)
-        
-        let response: RLTokenDTO = try await request(
-            "/auth/refresh",
-            service: .auth,
-            method: "POST",
-            body: requestBody
+        return RLTokenDTO(
+            accessToken: access,
+            refreshToken: refresh,
+            tokenType: "bearer",
+            expiresIn: 3600 // Default, actual value came from server
         )
-        
-        // Update tokens
-        setTokens(access: response.accessToken, refresh: response.refreshToken)
-        
-        return response
     }
     
     /// Logout
@@ -477,4 +585,3 @@ class RealAPIService {
 // MARK: - Helper Types
 
 private struct EmptyResponse: Decodable {}
-
