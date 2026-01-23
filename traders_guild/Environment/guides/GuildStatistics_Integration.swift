@@ -15,71 +15,71 @@
 // Delete the old RLGuildStatisticsDTO (line 313-317) - it's unused
 // Replace RLGuildStatisticsResponse with this version that has display computed properties:
 
-/// Guild Statistics Response - matches backend GuildStatisticsResponse exactly
-/// Fetched from: GET /guilds/{guild_id}/statistics
-struct RLGuildStatisticsResponse: Codable {
-    let totalPredictions: Int           // backend: total_predictions
-    let correctPredictions: Int         // backend: correct_predictions
-    let averageAccuracy: Double         // backend: average_accuracy (0.0 - 1.0)
-    let guildRank: Int                  // backend: guild_rank
-    let newMembersWeek: Int             // backend: new_members_week
-    let activeMembersWeek: Int          // backend: active_members_week
-    let predictionsWeek: Int            // backend: predictions_week
-    let reputationEarnedWeek: Int       // backend: reputation_earned_week
-    let lastCalculatedAt: Date          // backend: last_calculated_at
-    
-    // MARK: - Display Computed Properties (used by StatisticsView)
-    
-    var totalPredictionsDisplay: String {
-        formatNumber(totalPredictions)
-    }
-    
-    var correctPredictionsDisplay: String {
-        formatNumber(correctPredictions)
-    }
-    
-    var averageAccuracyDisplay: String {
-        let percentage = averageAccuracy * 100
-        return String(format: "%.1f%%", percentage)
-    }
-    
-    var guildRankDisplay: String {
-        guildRank == 0 ? "Unranked" : "#\(guildRank)"
-    }
-    
-    var newMembersDisplay: String {
-        "+\(newMembersWeek)"
-    }
-    
-    var activeUsersDisplay: String {
-        "\(activeMembersWeek)"
-    }
-    
-    var predictionsMadeDisplay: String {
-        formatNumber(predictionsWeek)
-    }
-    
-    var reputationEarnedDisplay: String {
-        reputationEarnedWeek >= 0 ? "+\(formatNumber(reputationEarnedWeek))" : formatNumber(reputationEarnedWeek)
-    }
-    
-    var lastCalculatedDisplay: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: lastCalculatedAt, relativeTo: Date())
-    }
-    
-    // MARK: - Helper
-    
-    private func formatNumber(_ number: Int) -> String {
-        if number >= 1_000_000 {
-            return String(format: "%.1fM", Double(number) / 1_000_000)
-        } else if number >= 1_000 {
-            return String(format: "%.1fK", Double(number) / 1_000)
-        }
-        return "\(number)"
-    }
-}
+///// Guild Statistics Response - matches backend GuildStatisticsResponse exactly
+///// Fetched from: GET /guilds/{guild_id}/statistics
+//struct RLGuildStatisticsResponse: Codable {
+//    let totalPredictions: Int           // backend: total_predictions
+//    let correctPredictions: Int         // backend: correct_predictions
+//    let averageAccuracy: Double         // backend: average_accuracy (0.0 - 1.0)
+//    let guildRank: Int                  // backend: guild_rank
+//    let newMembersWeek: Int             // backend: new_members_week
+//    let activeMembersWeek: Int          // backend: active_members_week
+//    let predictionsWeek: Int            // backend: predictions_week
+//    let reputationEarnedWeek: Int       // backend: reputation_earned_week
+//    let lastCalculatedAt: Date          // backend: last_calculated_at
+//    
+//    // MARK: - Display Computed Properties (used by StatisticsView)
+//    
+//    var totalPredictionsDisplay: String {
+//        formatNumber(totalPredictions)
+//    }
+//    
+//    var correctPredictionsDisplay: String {
+//        formatNumber(correctPredictions)
+//    }
+//    
+//    var averageAccuracyDisplay: String {
+//        let percentage = averageAccuracy * 100
+//        return String(format: "%.1f%%", percentage)
+//    }
+//    
+//    var guildRankDisplay: String {
+//        guildRank == 0 ? "Unranked" : "#\(guildRank)"
+//    }
+//    
+//    var newMembersDisplay: String {
+//        "+\(newMembersWeek)"
+//    }
+//    
+//    var activeUsersDisplay: String {
+//        "\(activeMembersWeek)"
+//    }
+//    
+//    var predictionsMadeDisplay: String {
+//        formatNumber(predictionsWeek)
+//    }
+//    
+//    var reputationEarnedDisplay: String {
+//        reputationEarnedWeek >= 0 ? "+\(formatNumber(reputationEarnedWeek))" : formatNumber(reputationEarnedWeek)
+//    }
+//    
+//    var lastCalculatedDisplay: String {
+//        let formatter = RelativeDateTimeFormatter()
+//        formatter.unitsStyle = .abbreviated
+//        return formatter.localizedString(for: lastCalculatedAt, relativeTo: Date())
+//    }
+//    
+//    // MARK: - Helper
+//    
+//    private func formatNumber(_ number: Int) -> String {
+//        if number >= 1_000_000 {
+//            return String(format: "%.1fM", Double(number) / 1_000_000)
+//        } else if number >= 1_000 {
+//            return String(format: "%.1fK", Double(number) / 1_000)
+//        }
+//        return "\(number)"
+//    }
+//}
 
 
 // =====================================================================================
