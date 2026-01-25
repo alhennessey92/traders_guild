@@ -146,20 +146,24 @@ struct EventDetailView: View {
         return df
     }()
     
+    private var displayedEvent: RLGuildEventWithAuthorDTO {
+        leftDrawerViewModel.upcomingEvents.first(where: { $0.id == event.id }) ?? event
+    }
+    
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 16) {
                 // Header with date and title
                 HStack(alignment: .top, spacing: 12) {
-                    UnifiedDatePill(date: event.eventDate, width: 56)
+                    UnifiedDatePill(date: displayedEvent.eventDate, width: 56)
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(event.title)
+                        Text(displayedEvent.title)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
                         
-                        Text(dateFormatter.string(from: event.eventDate))
+                        Text(dateFormatter.string(from: displayedEvent.eventDate))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -174,9 +178,9 @@ struct EventDetailView: View {
                         .foregroundColor(.secondary)
                     
                     RLAuthorRow(
-                        displayName: event.authorDisplayName,
-                        avatarUrl: event.authorAvatarUrl,
-                        role: event.authorRole
+                        displayName: displayedEvent.authorDisplayName,
+                        avatarUrl: displayedEvent.authorAvatarUrl,
+                        role: displayedEvent.authorRole
                     )
                 }
                 
@@ -190,7 +194,7 @@ struct EventDetailView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "person.3.fill")
                                     .foregroundColor(AppColors.accentColor)
-                                Text(event.attendanceDisplay)
+                                Text(displayedEvent.attendanceDisplay)
                                     .font(.subheadline)
                                     .foregroundColor(AppColors.accentColor)
                             }
@@ -210,7 +214,7 @@ struct EventDetailView: View {
                                 .font(.headline)
                                 .foregroundColor(.primary)
                             
-                            Text(event.content)
+                            Text(displayedEvent.content)
                                 .font(.body)
                                 .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,14 +243,14 @@ struct EventDetailView: View {
                     )
 
                     DrawerActionButton(
-                        title: event.isAttending ? "Attending" : "Attend",
-                        imageName: event.isAttending ? "calendar.badge.checkmark" : "calendar.badge.plus",
-                        backgroundColor: event.isAttending ? AppColors.whiteText.opacity(0.8) : AppColors.gradientBackgroundDark.opacity(0.2),
-                        foregroundColor: event.isAttending ? Color.black : AppColors.whiteText.opacity(0.8),
-                        strokeColor: event.isAttending ? Color.black : AppColors.whiteText.opacity(0.3),
+                        title: displayedEvent.isAttending ? "Attending" : "Attend",
+                        imageName: displayedEvent.isAttending ? "calendar.badge.checkmark" : "calendar.badge.plus",
+                        backgroundColor: displayedEvent.isAttending ? AppColors.whiteText.opacity(0.8) : AppColors.gradientBackgroundDark.opacity(0.2),
+                        foregroundColor: displayedEvent.isAttending ? Color.black : AppColors.whiteText.opacity(0.8),
+                        strokeColor: displayedEvent.isAttending ? Color.black : AppColors.whiteText.opacity(0.3),
                         strokeWidth: 0.5,
                         action: {
-                            if event.isAttending {
+                            if displayedEvent.isAttending {
                                 showUnAttendConfirmation = true
                             } else {
                                 showAttendConfirmation = true
@@ -309,10 +313,9 @@ struct EventDetailView: View {
                 leftDrawerViewModel.updateEventAttendance(
                     eventId: event.id,
                     isAttending: true,
-                    attendanceCount: event.attendeeCount + 1
+                    attendanceCount: displayedEvent.attendeeCount + 1
                 )
                 rlAppState.showSuccess("Attending Event")
-                dismiss()
             } catch {
                 rlAppState.showError(error, title: "Failed to attend Event")
             }
@@ -328,10 +331,9 @@ struct EventDetailView: View {
                 leftDrawerViewModel.updateEventAttendance(
                     eventId: event.id,
                     isAttending: false,
-                    attendanceCount: max(0, event.attendeeCount - 1)
+                    attendanceCount: max(0, displayedEvent.attendeeCount - 1)
                 )
                 rlAppState.showSuccess("Attendance cancelled")
-                dismiss()
             } catch {
                 rlAppState.showError(error, title: "Failed to cancel attendance")
             }
