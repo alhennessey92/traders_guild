@@ -666,6 +666,657 @@ struct RLGuildEventsListDTO: Codable {
 }
 
 
+
+
+
+// NEW ADDITION FOR GUILD MEMBERS AND USERS ...
+
+// ================================================================================================
+// MARK: - Guild Member DTOs (For Member Lists)
+// ================================================================================================
+
+/// Guild member with embedded user data - matches backend GuildMemberResponse
+/// This combines membership data with user data in one response (no lookups needed!)
+struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
+    // Membership data
+    let membershipId: UUID              // backend: membership_id
+    let role: String
+    let reputation: Int
+    let contributionScore: Int          // backend: contribution_score
+    let dateJoined: Date                // backend: date_joined
+    
+    // User data (embedded - no lookup!)
+    let userId: UUID                    // backend: user_id
+    let username: String
+    let displayName: String             // backend: display_name
+    let avatarUrl: String?              // backend: avatar_url
+    let isOnline: Bool                  // backend: is_online
+    let globalReputation: Int           // backend: global_reputation
+    
+    // Relationship to current user (personalized per request)
+    let isFriend: Bool                  // backend: is_friend
+    let friendshipStatus: String?       // backend: friendship_status (none, pending_sent, pending_received, accepted)
+    let isBlocked: Bool                 // backend: is_blocked
+    let isBlockedBy: Bool               // backend: is_blocked_by
+    
+    var id: UUID { membershipId }
+    
+    // MARK: - Computed Properties
+    
+    var memberRole: RLMemberRole {
+        RLMemberRole(from: role)
+    }
+    
+    var initials: String {
+        let parts = displayName.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(displayName.prefix(2)).uppercased()
+    }
+    
+    var daysInGuild: Int {
+        Calendar.current.dateComponents([.day], from: dateJoined, to: Date()).day ?? 0
+    }
+    
+    var memberSince: String {
+        let days = daysInGuild
+        if days < 7 { return "Member for \(days) days" }
+        else if days < 30 { return "Member for \(days / 7) weeks" }
+        else if days < 365 { return "Member for \(days / 30) months" }
+        else { return "Member for \(days / 365) years" }
+    }
+    
+    var displayUsername: String {
+        "@\(username)"
+    }
+    
+    /// Friendship status display text
+    var friendshipStatusDisplay: String {
+        switch friendshipStatus {
+        case "accepted": return "Friends"
+        case "pending_sent": return "Request Sent"
+        case "pending_received": return "Request Received"
+        default: return "Not Friends"
+        }
+    }
+    
+    /// Whether a friend action button should be shown
+    var canSendFriendRequest: Bool {
+        !isFriend && friendshipStatus == nil && !isBlocked && !isBlockedBy
+    }
+    
+    /// Whether to show "Accept/Decline" buttons
+    var hasPendingIncomingRequest: Bool {
+        friendshipStatus == "pending_received"
+    }
+    
+    /// Whether to show "Cancel Request" option
+    var hasPendingOutgoingRequest: Bool {
+        friendshipStatus == "pending_sent"
+    }
+}
+
+/// Guild members list response - matches backend GuildMembersListResponse
+struct RLGuildMembersListDTO: Codable {
+    let members: [RLGuildMemberDTO]
+    let totalCount: Int                 // backend: total_count
+    let onlineCount: Int                // backend: online_count
+}
+
+
+
+// ================================================================================================
+// MARK: - User Extended Profile DTOs
+// ================================================================================================
+
+/// Social link item - matches backend SocialLinkItem
+struct RLSocialLinkItem: Codable, Identifiable, Equatable, Hashable {
+    var id: String { platform + username }
+    
+    let platform: String                // twitter, discord, telegram, tradingview, youtube
+    let username: String
+    let url: String?
+    
+    var icon: String {
+        switch platform.lowercased() {
+        case "twitter", "x": return "bird"
+        case "discord": return "bubble.left.and.bubble.right"
+        case "telegram": return "paperplane.fill"
+        case "tradingview": return "chart.xyaxis.line"
+        case "youtube": return "play.rectangle.fill"
+        default: return "link"
+        }
+    }
+    
+    var color: Color {
+        switch platform.lowercased() {
+        case "twitter", "x": return .blue
+        case "discord": return .indigo
+        case "telegram": return .cyan
+        case "tradingview": return .orange
+        case "youtube": return .red
+        default: return .gray
+        }
+    }
+    
+    var displayName: String {
+        platform.capitalized
+    }
+}
+
+/// Trading interest item - matches backend TradingInterestItem
+struct RLTradingInterestItem: Codable, Identifiable, Equatable, Hashable {
+    var id: String { name }
+    
+    let name: String                    // Forex, Crypto, Stocks, etc.
+    let icon: String                    // SF Symbol name
+    let isPrimary: Bool                 // backend: is_primary
+}
+
+/// User extended profile - matches backend UserProfileResponse
+struct RLUserProfileDTO: Codable, Equatable {
+    let userId: UUID                    // backend: user_id
+    let bio: String?
+    let location: String?
+    let timezone: String?
+    let experienceLevel: String         // backend: experience_level
+    let tradingStyle: String?           // backend: trading_style
+    let preferredPairs: [String]        // backend: preferred_pairs
+    let socialLinks: [RLSocialLinkItem] // backend: social_links
+    let tradingInterests: [RLTradingInterestItem] // backend: trading_interests
+    let isProfilePublic: Bool           // backend: is_profile_public
+    let showOnlineStatus: Bool          // backend: show_online_status
+    let createdAt: Date                 // backend: created_at
+    let updatedAt: Date                 // backend: updated_at
+    
+    var experienceLevelDisplay: String {
+        experienceLevel.capitalized
+    }
+    
+    var experienceColor: Color {
+        switch experienceLevel.lowercased() {
+        case "beginner": return .gray
+        case "intermediate": return .blue
+        case "advanced": return .green
+        case "expert": return .purple
+        case "professional": return .orange
+        default: return .gray
+        }
+    }
+    
+    var primaryInterest: RLTradingInterestItem? {
+        tradingInterests.first { $0.isPrimary } ?? tradingInterests.first
+    }
+    
+    var hasCompletedProfile: Bool {
+        bio != nil || location != nil || !tradingInterests.isEmpty
+    }
+}
+
+/// Update user profile request - matches backend UserProfileUpdateRequest
+struct RLUserProfileUpdateRequest: Codable {
+    var bio: String?
+    var location: String?
+    var timezone: String?
+    var experienceLevel: String?        // backend: experience_level
+    var tradingStyle: String?           // backend: trading_style
+    var preferredPairs: [String]?       // backend: preferred_pairs
+    var socialLinks: [RLSocialLinkItem]? // backend: social_links
+    var tradingInterests: [RLTradingInterestItem]? // backend: trading_interests
+    var isProfilePublic: Bool?          // backend: is_profile_public
+    var showOnlineStatus: Bool?         // backend: show_online_status
+    
+    init(
+        bio: String? = nil,
+        location: String? = nil,
+        timezone: String? = nil,
+        experienceLevel: String? = nil,
+        tradingStyle: String? = nil,
+        preferredPairs: [String]? = nil,
+        socialLinks: [RLSocialLinkItem]? = nil,
+        tradingInterests: [RLTradingInterestItem]? = nil,
+        isProfilePublic: Bool? = nil,
+        showOnlineStatus: Bool? = nil
+    ) {
+        self.bio = bio
+        self.location = location
+        self.timezone = timezone
+        self.experienceLevel = experienceLevel
+        self.tradingStyle = tradingStyle
+        self.preferredPairs = preferredPairs
+        self.socialLinks = socialLinks
+        self.tradingInterests = tradingInterests
+        self.isProfilePublic = isProfilePublic
+        self.showOnlineStatus = showOnlineStatus
+    }
+}
+
+
+
+// ================================================================================================
+// MARK: - User Statistics DTO
+// ================================================================================================
+
+/// User global statistics - matches backend UserGlobalStatisticsResponse
+struct RLUserGlobalStatisticsDTO: Codable, Equatable {
+    let userId: UUID                    // backend: user_id
+    let totalMarkersPlaced: Int         // backend: total_markers_placed
+    let successfulMarkers: Int          // backend: successful_markers
+    let accuracyRate: Double            // backend: accuracy_rate (0.0 to 1.0)
+    let totalLikesReceived: Int         // backend: total_likes_received
+    let totalCommentsMade: Int          // backend: total_comments_made
+    let currentStreakDays: Int          // backend: current_streak_days
+    let bestStreakDays: Int             // backend: best_streak_days
+    let totalGuildsJoined: Int          // backend: total_guilds_joined
+    let totalAwardsEarned: Int          // backend: total_awards_earned
+    let totalAwardPoints: Int           // backend: total_award_points
+    let topSymbols: [String]            // backend: top_symbols
+    let markersByType: [String: Int]    // backend: markers_by_type
+    let lastCalculatedAt: Date          // backend: last_calculated_at
+    
+    var accuracyFormatted: String {
+        String(format: "%.1f%%", accuracyRate * 100)
+    }
+    
+    var accuracyColor: Color {
+        if accuracyRate >= 0.7 { return .green }
+        else if accuracyRate >= 0.5 { return .orange }
+        else { return .red }
+    }
+    
+    var failedMarkers: Int {
+        totalMarkersPlaced - successfulMarkers
+    }
+    
+    var streakEmoji: String {
+        if currentStreakDays >= 30 { return "🔥" }
+        else if currentStreakDays >= 7 { return "⚡" }
+        else if currentStreakDays >= 3 { return "✨" }
+        else { return "" }
+    }
+}
+
+
+
+// ================================================================================================
+// MARK: - Award DTOs
+// ================================================================================================
+
+
+/// Award type/definition - matches backend AwardTypeResponse
+struct RLAwardTypeDTO: Codable, Identifiable, Equatable, Hashable {
+    let id: UUID
+    let name: String
+    let description: String
+    let icon: String
+    let category: String
+    let rarity: String
+    let pointsValue: Int                // backend: points_value
+    let requiredValue: Int?             // backend: required_value
+    
+    var categoryEnum: RLAwardCategory {
+        RLAwardCategory(rawValue: category) ?? .special
+    }
+    
+    var rarityEnum: RLAwardRarity {
+        RLAwardRarity(rawValue: rarity) ?? .common
+    }
+}
+
+/// User's earned award - matches backend UserAwardResponse
+struct RLUserAwardDTO: Codable, Identifiable, Equatable, Hashable {
+    let id: UUID
+    let membershipId: UUID              // backend: membership_id
+    let guildId: UUID                   // backend: guild_id
+    let awardTypeId: UUID               // backend: award_type_id
+    let name: String                    // From award_type
+    let description: String             // From award_type
+    let icon: String                    // From award_type
+    let category: String                // From award_type
+    let rarity: String                  // From award_type
+    let pointsValue: Int                // backend: points_value
+    let progress: Double?               // 0.0-1.0, nil if complete
+    let currentValue: Int?              // backend: current_value
+    let isNew: Bool                     // backend: is_new
+    let earnedAt: Date                  // backend: earned_at
+    
+    var categoryEnum: RLAwardCategory {
+        RLAwardCategory(rawValue: category) ?? .special
+    }
+    
+    var rarityEnum: RLAwardRarity {
+        RLAwardRarity(rawValue: rarity) ?? .common
+    }
+    
+    var isEarned: Bool {
+        progress == nil || (progress ?? 0) >= 1.0
+    }
+    
+    var progressPercentage: Int {
+        guard let progress = progress else { return 100 }
+        return Int(progress * 100)
+    }
+    
+    var earnedAtFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: earnedAt)
+    }
+    
+    var progressDisplay: String {
+        guard let progress = progress, let currentValue = currentValue else {
+            return "Completed"
+        }
+        return "\(currentValue) (\(Int(progress * 100))%)"
+    }
+}
+
+/// Awards summary - matches backend AwardsSummaryResponse
+struct RLAwardsSummaryDTO: Codable, Equatable {
+    let totalAwards: Int                // backend: total_awards
+    let totalPoints: Int                // backend: total_points
+    let rarityBreakdown: [String: Int]  // backend: rarity_breakdown
+    let recentAwards: [RLUserAwardDTO]  // backend: recent_awards
+    
+    var pointsFormatted: String {
+        if totalPoints >= 1000 {
+            return String(format: "%.1fk", Double(totalPoints) / 1000)
+        }
+        return "\(totalPoints)"
+    }
+    
+    func count(for rarity: RLAwardRarity) -> Int {
+        rarityBreakdown[rarity.rawValue] ?? 0
+    }
+}
+
+/// User awards list - matches backend UserAwardsListResponse
+struct RLUserAwardsListDTO: Codable {
+    let awards: [RLUserAwardDTO]
+}
+
+
+
+// ================================================================================================
+// MARK: - Friend DTOs
+// ================================================================================================
+
+/// Friend in friends list - matches backend FriendResponse
+struct RLFriendDTO: Codable, Identifiable, Equatable, Hashable {
+    let friendshipId: UUID              // backend: friendship_id
+    let membershipId: UUID              // backend: membership_id
+    let userId: UUID                    // backend: user_id
+    let username: String
+    let displayName: String             // backend: display_name
+    let avatarUrl: String?              // backend: avatar_url
+    let isOnline: Bool                  // backend: is_online
+    let globalReputation: Int           // backend: global_reputation
+    let friendsSince: Date              // backend: friends_since
+    
+    var id: UUID { friendshipId }
+    
+    var initials: String {
+        let parts = displayName.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(displayName.prefix(2)).uppercased()
+    }
+    
+    var displayUsername: String {
+        "@\(username)"
+    }
+    
+    var friendsSinceFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM yyyy"
+        return formatter.string(from: friendsSince)
+    }
+    
+    var friendsDuration: String {
+        let days = Calendar.current.dateComponents([.day], from: friendsSince, to: Date()).day ?? 0
+        if days < 7 { return "\(days) days" }
+        else if days < 30 { return "\(days / 7) weeks" }
+        else if days < 365 { return "\(days / 30) months" }
+        else { return "\(days / 365) years" }
+    }
+}
+
+/// Incoming friend request - matches backend FriendRequestIncomingResponse
+struct RLFriendRequestIncomingDTO: Codable, Identifiable, Equatable, Hashable {
+    let id: UUID
+    let fromMembershipId: UUID          // backend: from_membership_id
+    let fromUserId: UUID                // backend: from_user_id
+    let fromUsername: String            // backend: from_username
+    let fromDisplayName: String         // backend: from_display_name
+    let fromAvatarUrl: String?          // backend: from_avatar_url
+    let message: String?
+    let createdAt: Date                 // backend: created_at
+    
+    var initials: String {
+        let parts = fromDisplayName.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(fromDisplayName.prefix(2)).uppercased()
+    }
+    
+    var timeAgo: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: createdAt, relativeTo: Date())
+    }
+}
+
+/// Outgoing friend request - matches backend FriendRequestOutgoingResponse
+struct RLFriendRequestOutgoingDTO: Codable, Identifiable, Equatable, Hashable {
+    let id: UUID
+    let toMembershipId: UUID            // backend: to_membership_id
+    let toUserId: UUID                  // backend: to_user_id
+    let toUsername: String              // backend: to_username
+    let toDisplayName: String           // backend: to_display_name
+    let toAvatarUrl: String?            // backend: to_avatar_url
+    let message: String?
+    let createdAt: Date                 // backend: created_at
+    
+    var initials: String {
+        let parts = toDisplayName.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(toDisplayName.prefix(2)).uppercased()
+    }
+    
+    var timeAgo: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: createdAt, relativeTo: Date())
+    }
+}
+
+/// Friends list response - matches backend FriendsListResponse
+struct RLFriendsListDTO: Codable {
+    let friends: [RLFriendDTO]
+    let totalCount: Int                 // backend: total_count
+    let onlineCount: Int                // backend: online_count
+    
+    var offlineCount: Int {
+        totalCount - onlineCount
+    }
+}
+
+/// Friend requests list response - matches backend FriendRequestsListResponse
+struct RLFriendRequestsListDTO: Codable {
+    let incoming: [RLFriendRequestIncomingDTO]
+    let outgoing: [RLFriendRequestOutgoingDTO]
+    
+    var totalPendingCount: Int {
+        incoming.count + outgoing.count
+    }
+    
+    var hasIncoming: Bool {
+        !incoming.isEmpty
+    }
+}
+
+/// Send friend request - matches backend FriendRequestCreateRequest
+struct RLFriendRequestCreateRequest: Codable {
+    let toMembershipId: UUID            // backend: to_membership_id
+    let message: String?
+    
+    init(toMembershipId: UUID, message: String? = nil) {
+        self.toMembershipId = toMembershipId
+        self.message = message
+    }
+}
+
+/// Friendship response - matches backend FriendshipResponse
+struct RLFriendshipResponseDTO: Codable, Identifiable {
+    let id: UUID
+    let requesterMembershipId: UUID     // backend: requester_membership_id
+    let addresseeMembershipId: UUID     // backend: addressee_membership_id
+    let status: String
+    let message: String?
+    let createdAt: Date                 // backend: created_at
+    let updatedAt: Date                 // backend: updated_at
+    
+    var isAccepted: Bool {
+        status == "accepted"
+    }
+    
+    var isPending: Bool {
+        status == "pending"
+    }
+}
+
+
+
+// ================================================================================================
+// MARK: - Block DTOs
+// ================================================================================================
+
+/// Blocked user in list - matches backend BlockedUserResponse
+struct RLBlockedUserDTO: Codable, Identifiable, Equatable, Hashable {
+    let blockId: UUID                   // backend: block_id
+    let membershipId: UUID              // backend: membership_id
+    let userId: UUID                    // backend: user_id
+    let username: String
+    let displayName: String             // backend: display_name
+    let avatarUrl: String?              // backend: avatar_url
+    let blockedAt: Date                 // backend: blocked_at
+    
+    var id: UUID { blockId }
+    
+    var initials: String {
+        let parts = displayName.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(displayName.prefix(2)).uppercased()
+    }
+    
+    var blockedAtFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: blockedAt)
+    }
+}
+
+/// Blocked users list response - matches backend BlockedUsersListResponse
+struct RLBlockedUsersListDTO: Codable {
+    let blockedUsers: [RLBlockedUserDTO] // backend: blocked_users
+    let totalCount: Int                  // backend: total_count
+}
+
+
+
+// ================================================================================================
+// MARK: - Full User Profile DTO
+// ================================================================================================
+
+/// Complete user profile - matches backend UserFullProfileResponse
+struct RLUserFullProfileDTO: Codable, Equatable {
+    let userId: UUID                    // backend: user_id
+    let username: String
+    let displayName: String             // backend: display_name
+    let avatarUrl: String?              // backend: avatar_url
+    let globalReputation: Int           // backend: global_reputation
+    let isOnline: Bool                  // backend: is_online
+    let isVerified: Bool                // backend: is_verified
+    let createdAt: Date                 // backend: created_at
+    
+    // Extended profile (optional - may be nil if private)
+    let profile: RLUserProfileDTO?
+    
+    // Statistics (optional)
+    let statistics: RLUserGlobalStatisticsDTO?
+    
+    // Awards summary (optional)
+    let awardsSummary: RLAwardsSummaryDTO?  // backend: awards_summary
+    
+    // Relationship to current user (for viewing other profiles)
+    let isFriend: Bool                  // backend: is_friend
+    let friendshipStatus: String?       // backend: friendship_status
+    let isBlocked: Bool                 // backend: is_blocked
+    let isBlockedBy: Bool               // backend: is_blocked_by
+    
+    // Guild context (if viewing within a guild)
+    let guildMembership: RLGuildMemberDTO?  // backend: guild_membership
+    
+    // MARK: - Computed Properties
+    
+    var initials: String {
+        let parts = displayName.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(displayName.prefix(2)).uppercased()
+    }
+    
+    var displayUsername: String {
+        "@\(username)"
+    }
+    
+    var memberSinceFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: createdAt)
+    }
+    
+    var daysOnPlatform: Int {
+        Calendar.current.dateComponents([.day], from: createdAt, to: Date()).day ?? 0
+    }
+    
+    /// Whether current user can send a friend request to this user
+    var canSendFriendRequest: Bool {
+        !isFriend && friendshipStatus == nil && !isBlocked && !isBlockedBy
+    }
+    
+    /// Whether there's a pending incoming request from this user
+    var hasPendingIncomingRequest: Bool {
+        friendshipStatus == "pending_received"
+    }
+    
+    /// Whether current user has sent a pending request to this user
+    var hasPendingOutgoingRequest: Bool {
+        friendshipStatus == "pending_sent"
+    }
+}
+
+
+
+// ================================================================================================
+// MARK: - Simple Response DTOs
+// ================================================================================================
+
+/// Generic detail response for simple operations
+struct RLDetailResponseDTO: Codable {
+    let detail: String
+}
+
+
+
 // ================================================================================================
 // MARK: - Member Role
 // ================================================================================================
@@ -697,6 +1348,14 @@ enum RLMemberRole: String, Codable, CaseIterable {
         }
     }
     
+    var icon: String {
+        switch self {
+        case .admin: return "star.fill"
+        case .moderator: return "shield.fill"
+        case .member: return "person.fill"
+        }
+    }
+    
     var canModerate: Bool {
         self == .moderator || self == .admin
     }
@@ -704,7 +1363,102 @@ enum RLMemberRole: String, Codable, CaseIterable {
     var canAdmin: Bool {
         self == .admin
     }
+    
+    var canManageMembers: Bool {
+        self == .admin
+    }
 }
+
+
+
+
+
+// ================================================================================================
+// MARK: - Award TYPES
+// ================================================================================================
+
+/// Award category enum
+enum RLAwardCategory: String, Codable, CaseIterable {
+    case trading = "trading"
+    case community = "community"
+    case milestones = "milestones"
+    case special = "special"
+    
+    var displayName: String { rawValue.capitalized }
+    
+    var color: Color {
+        switch self {
+        case .trading: return .green
+        case .community: return .blue
+        case .milestones: return .orange
+        case .special: return .purple
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .trading: return "chart.line.uptrend.xyaxis"
+        case .community: return "person.3.fill"
+        case .milestones: return "flag.fill"
+        case .special: return "sparkles"
+        }
+    }
+}
+
+/// Award rarity enum
+enum RLAwardRarity: String, Codable, CaseIterable {
+    case common = "common"
+    case uncommon = "uncommon"
+    case rare = "rare"
+    case epic = "epic"
+    case legendary = "legendary"
+    
+    var displayName: String { rawValue.capitalized }
+    
+    var color: Color {
+        switch self {
+        case .common: return .gray
+        case .uncommon: return .green
+        case .rare: return .blue
+        case .epic: return .purple
+        case .legendary: return .orange
+        }
+    }
+    
+    var glowColor: Color {
+        switch self {
+        case .common: return .clear
+        case .uncommon: return .green.opacity(0.3)
+        case .rare: return .blue.opacity(0.4)
+        case .epic: return .purple.opacity(0.5)
+        case .legendary: return .orange.opacity(0.6)
+        }
+    }
+    
+    var pointValue: Int {
+        switch self {
+        case .common: return 10
+        case .uncommon: return 25
+        case .rare: return 50
+        case .epic: return 100
+        case .legendary: return 250
+        }
+    }
+    
+    var sortOrder: Int {
+        switch self {
+        case .legendary: return 0
+        case .epic: return 1
+        case .rare: return 2
+        case .uncommon: return 3
+        case .common: return 4
+        }
+    }
+}
+
+
+
+
 
 
 // ================================================================================================

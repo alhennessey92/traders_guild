@@ -677,6 +677,386 @@ class RealAPIService {
         print("📊 getGuildStatistics: API returned statistics")
         return result
     }
+    
+    
+    
+    
+    // NEW Additions for guild members/users
+    
+    
+    // =============================================================================================
+    // MARK: - Guild Members
+    // =============================================================================================
+    
+    /// Get guild members with full user data and personalized friend/block status
+    /// GET /guilds/{guild_id}/members
+    ///
+    /// Features:
+    /// - Returns embedded user data (no N+1 queries)
+    /// - Personalized: includes is_friend, is_blocked for each member relative to current user
+    /// - Search by username or display_name
+    /// - Pagination support
+    func getGuildMembers(
+        guildId: UUID,
+        skip: Int = 0,
+        limit: Int = 50,
+        search: String? = nil
+    ) async throws -> RLGuildMembersListDTO {
+        var path = "/guilds/\(guildId.uuidString)/members?skip=\(skip)&limit=\(limit)"
+        if let search = search, !search.isEmpty {
+            path += "&search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Get a specific guild member's info with relationship data
+    /// GET /guilds/{guild_id}/members/{user_id}
+    func getGuildMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberDTO {
+        
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - User Profile
+    // =============================================================================================
+    
+    /// Get current user's full profile with extended info, stats, and awards
+    /// GET /users/me/profile
+    ///
+    /// - Parameter guildId: Optional guild context for guild-specific data
+    /// - Returns: Complete profile with profile, statistics, awards_summary, and optional guild_membership
+    func getCurrentUserFullProfile(guildId: UUID? = nil) async throws -> RLUserFullProfileDTO {
+        var path = "/users/me/profile"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Get current user's extended profile only (bio, location, interests, etc.)
+    /// GET /users/me/profile/extended
+    ///
+    /// Creates default profile if not exists.
+    func getCurrentUserExtendedProfile() async throws -> RLUserProfileDTO {
+        return try await request(
+            "/users/me/profile/extended",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Update current user's extended profile
+    /// PUT /users/me/profile
+    ///
+    /// - Parameter request: Fields to update (only include fields that should change)
+    func updateCurrentUserProfile(_ updateRequest: RLUserProfileUpdateRequest) async throws -> RLUserProfileDTO {
+        
+        return try await request(
+            "/users/me/profile",
+            service: .core,
+            method: "PUT",
+            body: updateRequest,
+            auth: true
+            
+        )
+        
+        
+    }
+    
+    /// Get current user's global statistics
+    /// GET /users/me/statistics
+    ///
+    /// Creates default stats if not exists.
+    func getCurrentUserStatistics() async throws -> RLUserGlobalStatisticsDTO {
+        
+        return try await request(
+            "/users/me/statistics",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Get another user's full profile
+    /// GET /users/{user_id}/profile
+    ///
+    /// Respects privacy settings and block status.
+    /// - Parameters:
+    ///   - userId: Target user's ID
+    ///   - guildId: Optional guild context for relationship data
+    func getUserProfile(userId: UUID, guildId: UUID? = nil) async throws -> RLUserFullProfileDTO {
+        var path = "/users/\(userId.uuidString)/profile"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Awards
+    // =============================================================================================
+    
+    /// Get all awards earned by current user
+    /// GET /users/me/awards
+    ///
+    /// - Parameter guildId: Optional - filter to specific guild's awards
+    func getCurrentUserAwards(guildId: UUID? = nil) async throws -> RLUserAwardsListDTO {
+        var path = "/users/me/awards"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Get awards summary for current user's profile
+    /// GET /users/me/awards/summary
+    ///
+    /// Returns total awards, total points, rarity breakdown, and recent awards
+    func getCurrentUserAwardsSummary(guildId: UUID? = nil) async throws -> RLAwardsSummaryDTO {
+        var path = "/users/me/awards/summary"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Mark an award as seen (removes 'new' badge)
+    /// POST /users/me/awards/{award_id}/mark-seen
+    func markAwardAsSeen(awardId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/awards/\(awardId.uuidString)/mark-seen",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    /// List all available award types
+    /// GET /awards/types
+    ///
+    /// - Parameter category: Optional filter by category (trading, community, milestones, special)
+    func getAwardTypes(category: String? = nil) async throws -> [RLAwardTypeDTO] {
+        var path = "/awards/types"
+        if let category = category {
+            path += "?category=\(category)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Get a specific award type details
+    /// GET /awards/types/{award_id}
+    func getAwardType(awardId: UUID) async throws -> RLAwardTypeDTO {
+        return try await request(
+            "/awards/types/\(awardId.uuidString)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Friends
+    // =============================================================================================
+    
+    /// Get current user's accepted friends list
+    /// GET /users/me/friends
+    ///
+    /// - Parameter guildId: Required - friends are guild-scoped
+    func getFriends(guildId: UUID? = nil) async throws -> RLFriendsListDTO {
+        var path = "/users/me/friends"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Get pending friend requests (both incoming and outgoing)
+    /// GET /users/me/friends/requests
+    ///
+    /// - Parameter guildId: Required - requests are guild-scoped
+    func getFriendRequests(guildId: UUID? = nil) async throws -> RLFriendRequestsListDTO {
+        var path = "/users/me/friends/requests"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Send a friend request to another user
+    /// POST /users/me/friends/request
+    ///
+    /// Validates:
+    /// - Not already friends
+    /// - No pending request exists
+    /// - Not blocked/blocking
+    /// - Both users in same guild
+    func sendFriendRequest(toMembershipId: UUID, message: String? = nil) async throws -> RLFriendshipResponseDTO {
+        let requestBody = RLFriendRequestCreateRequest(toMembershipId: toMembershipId, message: message)
+
+        return try await request(
+            "/users/me/friends/request",
+            service: .core,
+            method: "POST",
+            body: requestBody,
+            auth: true
+        )
+    }
+    
+    
+    /// Accept a pending friend request
+    /// POST /users/me/friends/requests/{request_id}/accept
+    func acceptFriendRequest(requestId: UUID) async throws -> RLFriendshipResponseDTO {
+        
+        return try await request(
+            "/users/me/friends/requests/\(requestId.uuidString)/accept",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    
+    /// Decline a pending friend request
+    /// POST /users/me/friends/requests/{request_id}/decline
+    func declineFriendRequest(requestId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/friends/requests/\(requestId.uuidString)/decline",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    
+    /// Remove a friend / cancel pending request
+    /// DELETE /users/me/friends/{membership_id}
+    ///
+    /// Works for both accepted friendships and pending requests
+    func removeFriend(membershipId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/friends/\(membershipId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Blocks
+    // =============================================================================================
+    
+    /// Get list of users blocked by current user
+    /// GET /users/me/blocked
+    ///
+    /// - Parameter guildId: Required - blocks are guild-scoped
+    func getBlockedUsers(guildId: UUID? = nil) async throws -> RLBlockedUsersListDTO {
+        var path = "/users/me/blocked"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Block a user
+    /// POST /users/me/blocked/{membership_id}
+    ///
+    /// Side effects:
+    /// - Removes any existing friendship
+    /// - Cancels any pending friend requests
+    func blockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/blocked/\(membershipId.uuidString)",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    /// Unblock a user
+    /// DELETE /users/me/blocked/{membership_id}
+    func unblockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/blocked/\(membershipId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 }
 
 // MARK: - Helper Types
