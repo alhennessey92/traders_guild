@@ -38,6 +38,7 @@ enum BottomSheetContent: Identifiable, Equatable {
     case event(RLGuildEventWithAuthorDTO)  // Uses combined DTO from backend
     case profile
     case guildMember(GuildMembershipDTO)
+    case guildMemberRL(RLGuildMemberDTO)
     case createAnnouncement  // <-- ADD THIS LINE
     case createEvent
     
@@ -47,6 +48,7 @@ enum BottomSheetContent: Identifiable, Equatable {
         case .event(let event): return "event-\(event.id)"
         case .profile: return "profile"
         case .guildMember(let user): return "profile-\(user.id)"
+        case .guildMemberRL(let user): return "profile-rl-\(user.id)"
         case .createAnnouncement: return "create-announcement"  // <-- ADD THIS
         case .createEvent: return "create-event"
         }
@@ -62,6 +64,8 @@ enum BottomSheetContent: Identifiable, Equatable {
         case (.profile, .profile):
             return true
         case (.guildMember(let m1), .guildMember(let m2)):
+            return m1.id == m2.id
+        case (.guildMemberRL(let m1), .guildMemberRL(let m2)):
             return m1.id == m2.id
         case (.createAnnouncement, .createAnnouncement):  // <-- ADD THIS
             return true
@@ -216,6 +220,8 @@ struct LeftDrawerMainView: View {
         case .event:
             return [.fraction(0.6), .large]
         case .guildMember:
+            return [.fraction(0.6), .large]
+        case .guildMemberRL:
             return [.fraction(0.6), .large]
         case .createAnnouncement:           // <-- ADD THIS
             return [.large]
@@ -622,7 +628,7 @@ struct SectionDrawerView: View {
         case .events:
             await leftDrawerViewModel.refreshEvents(guildId: guildId, rlAppState: rlAppState)
         case .userList:
-            await leftDrawerViewModel.refreshMembers(guildId: guildId, appState: appState)
+            await leftDrawerViewModel.refreshGuildMembers(guildId: guildId, rlAppState: rlAppState)
         case .notifications:
             await leftDrawerViewModel.refreshNotifications(guildId: guildId, appState: appState)
         case .statistics:
@@ -699,6 +705,8 @@ struct BottomSheetView: View {
                     .environmentObject(leftDrawerViewModel)
             case .guildMember(let user):
                 GuildUserDetailView(user: user)
+            case .guildMemberRL(let member):
+                GuildUserDetailViewRL(member: member)
             case .createAnnouncement:           // <-- ADD THIS
                 CreateAnnouncementView()
             case .createEvent:                  // <-- ADD THIS

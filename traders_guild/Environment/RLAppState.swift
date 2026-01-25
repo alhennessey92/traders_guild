@@ -815,11 +815,93 @@ class RLAppState: ObservableObject {
     // MARK: - Guild Member Management (REAL API)
     // ================================================================================================
     
+    /// Fetch guild members with embedded user data
+    func fetchGuildMembers(
+        guildId: UUID,
+        skip: Int = 0,
+        limit: Int = 50,
+        search: String? = nil
+    ) async throws -> RLGuildMembersListDTO {
+        do {
+            return try await realApi.getGuildMembers(
+                guildId: guildId,
+                skip: skip,
+                limit: limit,
+                search: search
+            )
+        } catch {
+            showError(error, title: "Failed to Load Members", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch a specific guild member's info with relationship data
+    func fetchGuildMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberDTO {
+        do {
+            return try await realApi.getGuildMember(guildId: guildId, userId: userId)
+        } catch {
+            showError(error, title: "Failed to Load Member", style: .toast)
+            throw error
+        }
+    }
+    
     
     
     // ================================================================================================
     // MARK: - User Profile Management (REAL API)
     // ================================================================================================
+    
+    /// Fetch current user's full profile (profile + stats + awards summary)
+    func fetchCurrentUserFullProfile(guildId: UUID? = nil) async throws -> RLUserFullProfileDTO {
+        do {
+            return try await realApi.getCurrentUserFullProfile(guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Profile", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch another user's full profile
+    func fetchUserFullProfile(userId: UUID, guildId: UUID? = nil) async throws -> RLUserFullProfileDTO {
+        do {
+            return try await realApi.getUserProfile(userId: userId, guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Profile", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch current user's extended profile (bio, interests, etc.)
+    func fetchCurrentUserExtendedProfile() async throws -> RLUserProfileDTO {
+        do {
+            return try await realApi.getCurrentUserExtendedProfile()
+        } catch {
+            showError(error, title: "Failed to Load Profile", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Update current user's extended profile
+    func updateCurrentUserProfile(_ updateRequest: RLUserProfileUpdateRequest) async throws -> RLUserProfileDTO {
+        do {
+            let response = try await realApi.updateCurrentUserProfile(updateRequest)
+            showSuccess("Profile updated")
+            return response
+        } catch {
+            showError(error, title: "Failed to Update Profile", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch current user's global statistics
+    func fetchCurrentUserStatistics() async throws -> RLUserGlobalStatisticsDTO {
+        do {
+            return try await realApi.getCurrentUserStatistics()
+        } catch {
+            showError(error, title: "Failed to Load Statistics", style: .toast)
+            throw error
+        }
+    }
     
     
     
@@ -827,17 +909,130 @@ class RLAppState: ObservableObject {
     // MARK: - Awards Management (REAL API)
     // ================================================================================================
     
+    /// Fetch all awards earned by current user
+    func fetchCurrentUserAwards(guildId: UUID? = nil) async throws -> [RLUserAwardDTO] {
+        do {
+            let response = try await realApi.getCurrentUserAwards(guildId: guildId)
+            return response.awards
+        } catch {
+            showError(error, title: "Failed to Load Awards", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch awards summary for current user
+    func fetchCurrentUserAwardsSummary(guildId: UUID? = nil) async throws -> RLAwardsSummaryDTO {
+        do {
+            return try await realApi.getCurrentUserAwardsSummary(guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Awards Summary", style: .toast)
+            throw error
+        }
+    }
+    
     
     
     // ================================================================================================
     // MARK: - Friends Management (REAL API)
     // ================================================================================================
     
+    /// Fetch accepted friends list
+    func fetchFriends(guildId: UUID? = nil) async throws -> RLFriendsListDTO {
+        do {
+            return try await realApi.getFriends(guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Friends", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch pending friend requests (incoming + outgoing)
+    func fetchFriendRequests(guildId: UUID? = nil) async throws -> RLFriendRequestsListDTO {
+        do {
+            return try await realApi.getFriendRequests(guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Friend Requests", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Send a friend request to another member (guild-scoped)
+    func sendFriendRequest(toMembershipId: UUID, message: String? = nil) async throws -> RLFriendshipResponseDTO {
+        do {
+            let response = try await realApi.sendFriendRequest(toMembershipId: toMembershipId, message: message)
+            showSuccess("Friend request sent")
+            return response
+        } catch {
+            showError(error, title: "Failed to Send Friend Request", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Accept a pending friend request
+    func acceptFriendRequest(requestId: UUID) async throws -> RLFriendshipResponseDTO {
+        do {
+            let response = try await realApi.acceptFriendRequest(requestId: requestId)
+            showSuccess("Friend request accepted")
+            return response
+        } catch {
+            showError(error, title: "Failed to Accept Request", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Decline a pending friend request
+    func declineFriendRequest(requestId: UUID) async throws -> RLDetailResponseDTO {
+        do {
+            let response = try await realApi.declineFriendRequest(requestId: requestId)
+            showSuccess("Friend request declined")
+            return response
+        } catch {
+            showError(error, title: "Failed to Decline Request", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Remove a friend or cancel a pending request
+    func removeFriend(membershipId: UUID) async throws -> RLDetailResponseDTO {
+        do {
+            let response = try await realApi.removeFriend(membershipId: membershipId)
+            showSuccess("Friend removed")
+            return response
+        } catch {
+            showError(error, title: "Failed to Remove Friend", style: .toast)
+            throw error
+        }
+    }
+    
     
     
     // ================================================================================================
     // MARK: - Blocks Management (REAL API)
     // ================================================================================================
+    
+    /// Block a user
+    func blockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
+        do {
+            let response = try await realApi.blockUser(membershipId: membershipId)
+            showSuccess("User blocked")
+            return response
+        } catch {
+            showError(error, title: "Failed to Block User", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Unblock a user
+    func unblockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
+        do {
+            let response = try await realApi.unblockUser(membershipId: membershipId)
+            showSuccess("User unblocked")
+            return response
+        } catch {
+            showError(error, title: "Failed to Unblock User", style: .toast)
+            throw error
+        }
+    }
     
     
     

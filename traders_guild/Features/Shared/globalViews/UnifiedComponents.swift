@@ -1338,6 +1338,97 @@ struct UnifiedMemberRow: View {
 }
 
 // MARK: - ================================================================================================
+// MARK: - UNIFIED GUILD MEMBER ROW (REAL API)
+// MARK: - ================================================================================================
+
+/// Standard member row for real API guild members
+/// Use for: Guild member lists backed by RLGuildMemberDTO
+struct UnifiedGuildMemberRow: View {
+    let user: RLGuildMemberDTO
+    let onTap: () -> Void
+    var showReputation: Bool = true
+    
+    @State private var isPressed: Bool = false
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                // Avatar
+                UnifiedMemberAvatar(
+                    username: user.displayName,
+                    avatarURL: user.avatarUrl,
+                    isOnline: user.isOnline
+                )
+                
+                // User info
+                VStack(alignment: .leading, spacing: 3) {
+                    // Username with badges
+                    HStack(spacing: 4) {
+                        if user.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.bearCandleRed)
+                        }
+                        
+                        Text(user.username)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.whiteText)
+                        
+                        if user.isFriend {
+                            Image(systemName: "person.crop.circle")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                        }
+                    }
+                    
+                    // Role and reputation
+                    HStack(spacing: 2) {
+                        Text(user.memberRole.displayName)
+                            .font(.caption)
+                            .foregroundColor(user.memberRole.color)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                        
+                        if showReputation {
+                            UnifiedSeparatorDot(size: 4, opacity: 0.7)
+                            
+                            Image(systemName: "shield.pattern.checkered")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.accentColor)
+                            
+                            Text("\(user.reputation)")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.accentColor)
+                        }
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(isPressed ? 0.06 : 0.03))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isPressed)
+        .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }, perform: {})
+    }
+}
+
+// MARK: - ================================================================================================
 // MARK: - UNIFIED LEADERBOARD ROW
 // MARK: - ================================================================================================
 

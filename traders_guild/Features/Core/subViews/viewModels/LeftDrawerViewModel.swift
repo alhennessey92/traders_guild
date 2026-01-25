@@ -33,8 +33,25 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var userNotifications: [GuildNotificationDTO] = []
     @Published var statistics: RLGuildStatisticsResponse?
     
+    // New: backend-driven guild members
+    @Published var guildMembers: [RLGuildMemberDTO] = []
+    @Published var guildMembersTotalCount: Int = 0
+    @Published var guildMembersOnlineCount: Int = 0
+    @Published var isLoadingGuildMembers: Bool = false
+    
     // Friends list
     @Published var friends: [GuildMembershipDTO] = []
+    
+    // Pending friend requests (real API)
+    @Published var pendingFriendRequestsIncoming: [RLFriendRequestIncomingDTO] = []
+    @Published var pendingFriendRequestsOutgoing: [RLFriendRequestOutgoingDTO] = []
+    @Published var isLoadingFriendRequests: Bool = false
+    
+    // Accepted friends (real API)
+    @Published var friendsRL: [RLFriendDTO] = []
+    @Published var friendsRLTotalCount: Int = 0
+    @Published var friendsRLOnlineCount: Int = 0
+    @Published var isLoadingFriendsRL: Bool = false
 
     // Global leaderboard
     @Published var globalLeaderboard: [GuildMembershipDTO] = []
@@ -381,6 +398,94 @@ class LeftDrawerViewModel: ObservableObject {
         }
     }
     
+    /// Refresh guild members from real API (new DTOs)
+    func refreshGuildMembers(guildId: UUID, rlAppState: RLAppState, search: String? = nil) async {
+        isLoadingGuildMembers = true
+        defer { isLoadingGuildMembers = false }
+        
+        do {
+            let response = try await rlAppState.fetchGuildMembers(guildId: guildId, search: search)
+            await MainActor.run {
+                self.guildMembers = response.members
+                self.guildMembersTotalCount = response.totalCount
+                self.guildMembersOnlineCount = response.onlineCount
+            }
+        } catch is CancellationError {
+            print("📋 refreshGuildMembers: Cancelled")
+        } catch let error as APIError {
+            if case .networkError(let message) = error, message == "cancelled" {
+                print("📋 refreshGuildMembers: Network cancelled")
+                return
+            }
+            print("⚠️ Failed to refresh guild members: \(error)")
+        } catch {
+            print("⚠️ Failed to refresh guild members: \(error)")
+        }
+    }
+    
+    /// Refresh friend requests (incoming + outgoing) from real API
+    func refreshFriendRequests(guildId: UUID? = nil, rlAppState: RLAppState) async {
+        isLoadingFriendRequests = true
+        defer { isLoadingFriendRequests = false }
+        
+        do {
+            let response = try await rlAppState.fetchFriendRequests(guildId: guildId)
+            await MainActor.run {
+                self.pendingFriendRequestsIncoming = response.incoming
+                self.pendingFriendRequestsOutgoing = response.outgoing
+            }
+        } catch is CancellationError {
+            print("📋 refreshFriendRequests: Cancelled")
+        } catch let error as APIError {
+            if case .networkError(let message) = error, message == "cancelled" {
+                print("📋 refreshFriendRequests: Network cancelled")
+                return
+            }
+            print("⚠️ Failed to refresh friend requests: \(error)")
+        } catch {
+            print("⚠️ Failed to refresh friend requests: \(error)")
+        }
+    }
+    
+    /// Refresh accepted friends list from real API
+    func refreshFriends(guildId: UUID? = nil, rlAppState: RLAppState) async {
+        isLoadingFriendsRL = true
+        defer { isLoadingFriendsRL = false }
+        
+        do {
+            let response = try await rlAppState.fetchFriends(guildId: guildId)
+            await MainActor.run {
+                self.friendsRL = response.friends
+                self.friendsRLTotalCount = response.totalCount
+                self.friendsRLOnlineCount = response.onlineCount
+            }
+        } catch is CancellationError {
+            print("📋 refreshFriends: Cancelled")
+        } catch let error as APIError {
+            if case .networkError(let message) = error, message == "cancelled" {
+                print("📋 refreshFriends: Network cancelled")
+                return
+            }
+            print("⚠️ Failed to refresh friends: \(error)")
+        } catch {
+            print("⚠️ Failed to refresh friends: \(error)")
+        }
+    }
+
+    /// Update a guild member in cache and return the updated member
+    @discardableResult
+    func updateGuildMember(
+        membershipId: UUID,
+        transform: (RLGuildMemberDTO) -> RLGuildMemberDTO
+    ) -> RLGuildMemberDTO? {
+        guard let index = guildMembers.firstIndex(where: { $0.membershipId == membershipId }) else {
+            return nil
+        }
+        let updated = transform(guildMembers[index])
+        guildMembers[index] = updated
+        return updated
+    }
+    
     /// Refresh only notifications - use this in NotificationsView
     func refreshNotifications(guildId: UUID, appState: AppState) async {
         do {
@@ -420,6 +525,17 @@ class LeftDrawerViewModel: ObservableObject {
         personalTradingWatchlist = []
         userNotifications = []
         statistics = nil
+        guildMembers = []
+        guildMembersTotalCount = 0
+        guildMembersOnlineCount = 0
+        isLoadingGuildMembers = false
+        pendingFriendRequestsIncoming = []
+        pendingFriendRequestsOutgoing = []
+        isLoadingFriendRequests = false
+        friendsRL = []
+        friendsRLTotalCount = 0
+        friendsRLOnlineCount = 0
+        isLoadingFriendsRL = false
         lastRefresh = nil
         currentGuildId = nil
         
@@ -525,33 +641,31 @@ class LeftDrawerViewModel: ObservableObject {
     
     
     /// Load profile data for the current user
-    func loadCurrentUserProfile(appState: AppState) async -> (
-        extendedProfile: UserProfileExtendedDTO?,
-        markersSummary: UserMarkersSummaryDTO?,
+    func loadCurrentUserProfile(appState: AppState, rlAppState: RLAppState) async -> (
+        profile: RLUserProfileDTO?,
+        statistics: RLUserGlobalStatisticsDTO?,
         userMarkers: [TopMarkerDTO],
-        awards: [UserAwardDTO],
-        awardsSummary: AwardsSummaryDTO?
+        awards: [RLUserAwardDTO],
+        awardsSummary: RLAwardsSummaryDTO?
     ) {
-        guard let userId = appState.currentUser?.id else {
+        guard let userId = rlAppState.currentUser?.id else {
             return (nil, nil, [], [], nil)
         }
         
         do {
-            async let profileTask = appState.fetchUserExtendedProfile(userId: userId)
-            async let summaryTask = appState.fetchUserMarkersSummary(userId: userId)
+            async let fullProfileTask = rlAppState.fetchCurrentUserFullProfile(guildId: rlAppState.currentGuild?.id)
             async let markersTask = appState.fetchUserMarkers(userId: userId)
-            async let awardsTask = appState.fetchUserAwards(userId: userId)
-            async let awardsSummaryTask = appState.fetchUserAwardsSummary(userId: userId)
+            async let awardsTask = rlAppState.fetchCurrentUserAwards(guildId: rlAppState.currentGuild?.id)
+            async let awardsSummaryTask = rlAppState.fetchCurrentUserAwardsSummary(guildId: rlAppState.currentGuild?.id)
             
-            let (profile, summary, markers, awards, awardsSummary) = try await (
-                profileTask,
-                summaryTask,
+            let (fullProfile, markers, awards, awardsSummary) = try await (
+                fullProfileTask,
                 markersTask,
                 awardsTask,
                 awardsSummaryTask
             )
             
-            return (profile, summary, markers, awards, awardsSummary)
+            return (fullProfile.profile, fullProfile.statistics, markers, awards, awardsSummary)
             
         } catch {
             print("⚠️ Failed to load current user profile: \(error)")
@@ -559,30 +673,29 @@ class LeftDrawerViewModel: ObservableObject {
         }
     }
     
-    /// Load profile data for a guild member
-    func loadMemberProfile(membership: GuildMembershipDTO, appState: AppState) async -> (
-        extendedProfile: UserProfileExtendedDTO?,
-        markersSummary: UserMarkersSummaryDTO?,
+    /// Load profile data for a guild member (uses real API where available)
+    func loadMemberProfile(
+        member: RLGuildMemberDTO,
+        appState: AppState,
+        rlAppState: RLAppState,
+        guildId: UUID
+    ) async -> (
+        profile: RLUserProfileDTO?,
+        statistics: RLUserGlobalStatisticsDTO?,
         userMarkers: [TopMarkerDTO],
-        awards: [UserAwardDTO],
-        awardsSummary: AwardsSummaryDTO?
+        awards: [RLUserAwardDTO],
+        awardsSummary: RLAwardsSummaryDTO?
     ) {
         do {
-            async let profileTask = appState.fetchMemberExtendedProfile(membershipId: membership.id)
-            async let summaryTask = appState.fetchUserMarkersSummary(userId: membership.globalMember.id)
-            async let markersTask = appState.fetchUserMarkers(userId: membership.globalMember.id, limit: 10)
-            async let awardsTask = appState.fetchMemberAwards(membershipId: membership.id)
-            async let awardsSummaryTask = appState.fetchUserAwardsSummary(userId: membership.globalMember.id)
+            async let fullProfileTask = rlAppState.fetchUserFullProfile(userId: member.userId, guildId: guildId)
+            async let markersTask = appState.fetchUserMarkers(userId: member.userId, limit: 10)
             
-            let (profile, summary, markers, awards, awardsSummary) = try await (
-                profileTask,
-                summaryTask,
-                markersTask,
-                awardsTask,
-                awardsSummaryTask
-            )
+            let (fullProfile, markers) = try await (fullProfileTask, markersTask)
             
-            return (profile, summary, markers, awards, awardsSummary)
+            let awards = SampleData.memberAwards.map { RLUserAwardDTO.fromLegacy($0, membershipId: member.membershipId, guildId: guildId) }
+            let awardsSummary = RLAwardsSummaryDTO.fromLegacy(SampleData.awardsSummary)
+            
+            return (fullProfile.profile, fullProfile.statistics, markers, awards, awardsSummary)
             
         } catch {
             print("⚠️ Failed to load member profile: \(error)")
@@ -656,6 +769,35 @@ class LeftDrawerViewModel: ObservableObject {
     /// Has any top markers data
     var hasTopMarkersData: Bool {
         !trendingMarkers.isEmpty || !symbolGroupedMarkers.isEmpty || !followingMarkers.isEmpty || !myMarkers.isEmpty
+    }
+}
+
+// MARK: - Guild Member Updates
+
+extension RLGuildMemberDTO {
+    func updating(
+        isFriend: Bool? = nil,
+        friendshipStatus: String? = nil,
+        isBlocked: Bool? = nil,
+        isBlockedBy: Bool? = nil
+    ) -> RLGuildMemberDTO {
+        RLGuildMemberDTO(
+            membershipId: membershipId,
+            role: role,
+            reputation: reputation,
+            contributionScore: contributionScore,
+            dateJoined: dateJoined,
+            userId: userId,
+            username: username,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            isOnline: isOnline,
+            globalReputation: globalReputation,
+            isFriend: isFriend ?? self.isFriend,
+            friendshipStatus: friendshipStatus ?? self.friendshipStatus,
+            isBlocked: isBlocked ?? self.isBlocked,
+            isBlockedBy: isBlockedBy ?? self.isBlockedBy
+        )
     }
 }
 

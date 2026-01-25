@@ -21,6 +21,7 @@ struct UserProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     
     @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var appState: AppState
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -28,11 +29,11 @@ struct UserProfileDetailView: View {
     @Binding var selectedDetent: PresentationDetent
     
     // Profile data loading
-    @State private var extendedProfile: UserProfileExtendedDTO? = nil
-    @State private var markersSummary: UserMarkersSummaryDTO? = nil
+    @State private var extendedProfile: RLUserProfileDTO? = nil
+    @State private var markersSummary: RLUserGlobalStatisticsDTO? = nil
     @State private var userMarkers: [TopMarkerDTO] = []
-    @State private var awards: [UserAwardDTO] = []
-    @State private var awardsSummary: AwardsSummaryDTO? = nil
+    @State private var awards: [RLUserAwardDTO] = []
+    @State private var awardsSummary: RLAwardsSummaryDTO? = nil
     @State private var isLoading = true
 
     var body: some View {
@@ -190,19 +191,14 @@ struct UserProfileDetailView: View {
     }
     
     // MARK: - Load Profile Data
-    // TODO: Need prod functionality
     private func loadProfileData() async {
-        // In production, these would be API calls via LeftDrawerViewModel
-        // For now, use sample data with a small delay to show loading state
-        
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        
+        let data = await leftDrawerViewModel.loadCurrentUserProfile(appState: appState, rlAppState: rlAppState)
         await MainActor.run {
-            extendedProfile = SampleData.currentUserExtendedProfile
-            markersSummary = SampleData.currentUserMarkersSummary
-            userMarkers = SampleData.userPlacedMarkers
-            awards = SampleData.currentUserAwards
-            awardsSummary = SampleData.awardsSummary
+            extendedProfile = data.profile
+            markersSummary = data.statistics
+            userMarkers = data.userMarkers
+            awards = data.awards
+            awardsSummary = data.awardsSummary
             isLoading = false
         }
     }

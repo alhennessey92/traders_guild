@@ -17,11 +17,11 @@ import SwiftUI
 /// Can be used for both current user and guild member profiles
 struct ProfileContentView: View {
     // Profile data
-    let extendedProfile: UserProfileExtendedDTO?
-    let markersSummary: UserMarkersSummaryDTO?
+    let extendedProfile: RLUserProfileDTO?
+    let markersSummary: RLUserGlobalStatisticsDTO?
     let userMarkers: [TopMarkerDTO]
-    let awards: [UserAwardDTO]
-    let awardsSummary: AwardsSummaryDTO?
+    let awards: [RLUserAwardDTO]
+    let awardsSummary: RLAwardsSummaryDTO?
     let stats: [ProfileStatDTO]
     
     // Configuration
@@ -90,7 +90,7 @@ struct ProfileContentView: View {
 // MARK: - ================================================================================================
 
 struct OverviewTabContent: View {
-    let extendedProfile: UserProfileExtendedDTO?
+    let extendedProfile: RLUserProfileDTO?
     let stats: [ProfileStatDTO]
     let isCurrentUser: Bool
     
@@ -102,7 +102,7 @@ struct OverviewTabContent: View {
             }
             
             // Profile info sections
-            if let profile = extendedProfile {
+                if let profile = extendedProfile {
                 // Bio section
                 if let bio = profile.bio, !bio.isEmpty {
                     ProfileInfoCard(title: "About", icon: "text.quote") {
@@ -120,8 +120,8 @@ struct OverviewTabContent: View {
                 tradingInfoSection(profile: profile)
                 
                 // Interests
-                if !profile.interests.isEmpty {
-                    interestsSection(interests: profile.interests)
+                if !profile.tradingInterests.isEmpty {
+                    interestsSection(interests: profile.tradingInterests)
                 }
                 
                 // Preferred pairs
@@ -149,29 +149,25 @@ struct OverviewTabContent: View {
     
     // MARK: - Personal Info Section
     
-    private func personalInfoSection(profile: UserProfileExtendedDTO) -> some View {
+    private func personalInfoSection(profile: RLUserProfileDTO) -> some View {
         ProfileInfoCard(title: "Personal", icon: "person.fill") {
             VStack(spacing: 12) {
                 if let location = profile.location {
                     infoRow(icon: "location.fill", label: "Location", value: location)
                 }
                 
-                if let age = profile.age {
-                    infoRow(icon: "calendar", label: "Age", value: "\(age) years old")
-                }
-                
                 if let timezone = profile.timezone {
                     infoRow(icon: "clock.fill", label: "Timezone", value: timezone)
                 }
                 
-                infoRow(icon: "person.badge.clock", label: "Member since", value: profile.memberSinceFormatted)
+                infoRow(icon: "person.badge.clock", label: "Member since", value: profile.createdAt.memberSinceFormatted)
             }
         }
     }
     
     // MARK: - Trading Info Section
     
-    private func tradingInfoSection(profile: UserProfileExtendedDTO) -> some View {
+    private func tradingInfoSection(profile: RLUserProfileDTO) -> some View {
         ProfileInfoCard(title: "Trading", icon: "chart.line.uptrend.xyaxis") {
             VStack(spacing: 12) {
                 HStack {
@@ -180,13 +176,10 @@ struct OverviewTabContent: View {
                         .foregroundColor(AppColors.greyText)
                     Spacer()
                     HStack(spacing: 6) {
-                        Text(profile.experience.rawValue)
+                        Text(profile.experienceLevelDisplay)
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(profile.experience.color)
-                        Text("(\(profile.experience.yearsRange))")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
+                            .foregroundColor(profile.experienceColor)
                     }
                 }
                 
@@ -199,7 +192,7 @@ struct OverviewTabContent: View {
     
     // MARK: - Interests Section
     
-    private func interestsSection(interests: [TradingInterestDTO]) -> some View {
+    private func interestsSection(interests: [RLTradingInterestItem]) -> some View {
         ProfileInfoCard(title: "Interests", icon: "star.fill") {
             FlowLayout(spacing: 8) {
                 ForEach(interests) { interest in
@@ -249,18 +242,18 @@ struct OverviewTabContent: View {
     
     // MARK: - Social Links Section
     
-    private func socialLinksSection(links: [SocialLinkDTO]) -> some View {
+    private func socialLinksSection(links: [RLSocialLinkItem]) -> some View {
         ProfileInfoCard(title: "Social", icon: "link") {
             VStack(spacing: 10) {
                 ForEach(links) { link in
                     HStack(spacing: 12) {
-                        Image(systemName: link.platform.icon)
+                        Image(systemName: link.icon)
                             .font(.subheadline)
-                            .foregroundColor(link.platform.color)
+                            .foregroundColor(link.color)
                             .frame(width: 24)
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(link.platform.rawValue)
+                            Text(link.displayName)
                                 .font(.caption)
                                 .foregroundColor(AppColors.greyText)
                             Text(link.username)
@@ -309,7 +302,7 @@ struct OverviewTabContent: View {
 // MARK: - ================================================================================================
 
 struct MarkersTabContent: View {
-    let summary: UserMarkersSummaryDTO?
+    let summary: RLUserGlobalStatisticsDTO?
     let markers: [TopMarkerDTO]
     var onMarkerTap: ((TopMarkerDTO) -> Void)? = nil
     
@@ -340,12 +333,12 @@ struct MarkersTabContent: View {
         }
     }
     
-    private func markersSummarySection(summary: UserMarkersSummaryDTO) -> some View {
+    private func markersSummarySection(summary: RLUserGlobalStatisticsDTO) -> some View {
         VStack(spacing: 12) {
             // Top row stats
             HStack(spacing: 12) {
                 SummaryStatBadge(
-                    value: "\(summary.totalMarkers)",
+                    value: "\(summary.totalMarkersPlaced)",
                     label: "Markers",
                     icon: "mappin.and.ellipse",
                     color: .blue
@@ -357,7 +350,7 @@ struct MarkersTabContent: View {
                     color: .green
                 )
                 SummaryStatBadge(
-                    value: "\(summary.totalLikes)",
+                    value: "\(summary.totalLikesReceived)",
                     label: "Likes",
                     icon: "heart.fill",
                     color: .red
@@ -507,23 +500,23 @@ struct ProfileMarkerCard: View {
 // MARK: - ================================================================================================
 
 struct AwardsTabContent: View {
-    let awards: [UserAwardDTO]
-    let summary: AwardsSummaryDTO?
+    let awards: [RLUserAwardDTO]
+    let summary: RLAwardsSummaryDTO?
     
-    @State private var selectedCategory: AwardCategory? = nil
+    @State private var selectedCategory: RLAwardCategory? = nil
     
-    private var filteredAwards: [UserAwardDTO] {
+    private var filteredAwards: [RLUserAwardDTO] {
         if let category = selectedCategory {
-            return awards.filter { $0.category == category }
+            return awards.filter { $0.categoryEnum == category }
         }
         return awards
     }
     
-    private var earnedAwards: [UserAwardDTO] {
+    private var earnedAwards: [RLUserAwardDTO] {
         filteredAwards.filter { $0.isEarned }
     }
     
-    private var inProgressAwards: [UserAwardDTO] {
+    private var inProgressAwards: [RLUserAwardDTO] {
         filteredAwards.filter { !$0.isEarned }
     }
     
@@ -583,7 +576,7 @@ struct AwardsTabContent: View {
     
     // MARK: - Summary Section
     
-    private func awardsSummarySection(summary: AwardsSummaryDTO) -> some View {
+    private func awardsSummarySection(summary: RLAwardsSummaryDTO) -> some View {
         HStack(spacing: 16) {
             // Total awards
             VStack(spacing: 4) {
@@ -623,8 +616,8 @@ struct AwardsTabContent: View {
             // Rarity breakdown mini
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
-                    ForEach([AwardRarity.epic, .rare, .uncommon], id: \.self) { rarity in
-                        if let count = summary.rarityBreakdown[rarity], count > 0 {
+                    ForEach([RLAwardRarity.epic, .rare, .uncommon], id: \.self) { rarity in
+                        if summary.count(for: rarity) > 0 {
                             Circle()
                                 .fill(rarity.color)
                                 .frame(width: 8, height: 8)
@@ -665,9 +658,9 @@ struct AwardsTabContent: View {
                     }
                 }
                 
-                ForEach(AwardCategory.allCases, id: \.self) { category in
+                ForEach(RLAwardCategory.allCases, id: \.self) { category in
                     CategoryFilterChip(
-                        title: category.rawValue,
+                        title: category.displayName,
                         icon: category.icon,
                         isSelected: selectedCategory == category,
                         color: category.color
@@ -685,31 +678,33 @@ struct AwardsTabContent: View {
 // MARK: - Award Card
 
 struct AwardCard: View {
-    let award: UserAwardDTO
+    let award: RLUserAwardDTO
     
     var body: some View {
+        let category = award.categoryEnum
+        let rarity = award.rarityEnum
         VStack(spacing: 8) {
             // Icon with rarity glow
             ZStack {
                 // Glow effect for rare+ awards
-                if award.rarity != .common {
+                if rarity != .common {
                     Circle()
-                        .fill(award.rarity.glowColor)
+                        .fill(rarity.glowColor)
                         .frame(width: 56, height: 56)
                         .blur(radius: 8)
                 }
                 
                 Circle()
-                    .fill(award.category.color.opacity(0.2))
+                    .fill(category.color.opacity(0.2))
                     .frame(width: 48, height: 48)
                     .overlay(
                         Circle()
-                            .stroke(award.rarity.color, lineWidth: 2)
+                            .stroke(rarity.color, lineWidth: 2)
                     )
                 
                 Image(systemName: award.icon)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(award.category.color)
+                    .foregroundColor(category.color)
                 
                 // New badge
                 if award.isNew {
@@ -739,7 +734,7 @@ struct AwardCard: View {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(Color.white.opacity(0.1))
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(award.category.color)
+                                .fill(category.color)
                                 .frame(width: geometry.size.width * progress)
                         }
                     }
@@ -751,9 +746,9 @@ struct AwardCard: View {
                 }
             } else {
                 // Rarity label
-                Text(award.rarity.rawValue)
+                Text(rarity.displayName)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(award.rarity.color)
+                    .foregroundColor(rarity.color)
             }
         }
         .frame(maxWidth: .infinity)
@@ -765,12 +760,121 @@ struct AwardCard: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(
-                            award.isNew ? award.rarity.color.opacity(0.5) : Color.white.opacity(0.08),
+                            award.isNew ? rarity.color.opacity(0.5) : Color.white.opacity(0.08),
                             lineWidth: award.isNew ? 1.5 : 1
                         )
                 )
         )
         .opacity(award.isEarned ? 1.0 : 0.7)
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - Legacy Conversions (Sample Data Support)
+// MARK: - ================================================================================================
+
+extension RLUserProfileDTO {
+    static func fromLegacy(_ legacy: UserProfileExtendedDTO) -> RLUserProfileDTO {
+        RLUserProfileDTO(
+            userId: legacy.userId,
+            bio: legacy.bio,
+            location: legacy.location,
+            timezone: legacy.timezone,
+            experienceLevel: legacy.experience.rawValue.lowercased(),
+            tradingStyle: legacy.tradingStyle,
+            preferredPairs: legacy.preferredPairs,
+            socialLinks: legacy.socialLinks.map {
+                RLSocialLinkItem(
+                    platform: $0.platform.rawValue.lowercased(),
+                    username: $0.username,
+                    url: $0.url
+                )
+            },
+            tradingInterests: legacy.interests.map {
+                RLTradingInterestItem(
+                    name: $0.name,
+                    icon: $0.icon,
+                    isPrimary: $0.isPrimary
+                )
+            },
+            isProfilePublic: true,
+            showOnlineStatus: true,
+            createdAt: legacy.joinedPlatform,
+            updatedAt: legacy.lastActive
+        )
+    }
+}
+
+extension RLUserGlobalStatisticsDTO {
+    static func fromLegacy(_ legacy: UserMarkersSummaryDTO, userId: UUID) -> RLUserGlobalStatisticsDTO {
+        let successfulMarkers = Int(Double(legacy.totalMarkers) * legacy.accuracyRate)
+        let markersByType = legacy.markersByType.reduce(into: [String: Int]()) { result, entry in
+            result[entry.key.rawValue] = entry.value
+        }
+        
+        return RLUserGlobalStatisticsDTO(
+            userId: userId,
+            totalMarkersPlaced: legacy.totalMarkers,
+            successfulMarkers: successfulMarkers,
+            accuracyRate: legacy.accuracyRate,
+            totalLikesReceived: legacy.totalLikes,
+            totalCommentsMade: legacy.totalComments,
+            currentStreakDays: 0,
+            bestStreakDays: 0,
+            totalGuildsJoined: 0,
+            totalAwardsEarned: 0,
+            totalAwardPoints: 0,
+            topSymbols: legacy.topSymbols,
+            markersByType: markersByType,
+            lastCalculatedAt: Date()
+        )
+    }
+}
+
+extension RLUserAwardDTO {
+    static func fromLegacy(_ legacy: UserAwardDTO, membershipId: UUID, guildId: UUID) -> RLUserAwardDTO {
+        RLUserAwardDTO(
+            id: legacy.id,
+            membershipId: membershipId,
+            guildId: guildId,
+            awardTypeId: legacy.awardId,
+            name: legacy.name,
+            description: legacy.description,
+            icon: legacy.icon,
+            category: legacy.category.rawValue.lowercased(),
+            rarity: legacy.rarity.rawValue.lowercased(),
+            pointsValue: legacy.rarity.pointValue,
+            progress: legacy.progress,
+            currentValue: nil,
+            isNew: legacy.isNew,
+            earnedAt: legacy.earnedAt
+        )
+    }
+}
+
+extension RLAwardsSummaryDTO {
+    static func fromLegacy(_ legacy: AwardsSummaryDTO) -> RLAwardsSummaryDTO {
+        let rarityBreakdown = legacy.rarityBreakdown.reduce(into: [String: Int]()) { result, entry in
+            result[entry.key.rawValue.lowercased()] = entry.value
+        }
+        let recentAwards = legacy.recentAwards.map {
+            RLUserAwardDTO.fromLegacy($0, membershipId: UUID(), guildId: UUID())
+        }
+        
+        return RLAwardsSummaryDTO(
+            totalAwards: legacy.totalAwards,
+            totalPoints: legacy.totalPoints,
+            rarityBreakdown: rarityBreakdown,
+            recentAwards: recentAwards
+        )
+    }
+}
+
+private extension Date {
+    var memberSinceFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: self)
     }
 }
 

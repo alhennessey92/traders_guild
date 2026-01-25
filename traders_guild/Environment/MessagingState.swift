@@ -312,11 +312,16 @@ struct MessagingSheet: View {
             
             // Updated: Using ProfileContentView instead of GuildUserProfileContent
             ProfileContentView(
-                extendedProfile: SampleData.memberExtendedProfile,
-                markersSummary: SampleData.memberMarkersSummary,
+                extendedProfile: RLUserProfileDTO.fromLegacy(SampleData.memberExtendedProfile),
+                markersSummary: RLUserGlobalStatisticsDTO.fromLegacy(
+                    SampleData.memberMarkersSummary,
+                    userId: user.globalMember.id
+                ),
                 userMarkers: Array(SampleData.userPlacedMarkers.prefix(5)),
-                awards: SampleData.memberAwards,
-                awardsSummary: SampleData.awardsSummary,
+                awards: SampleData.memberAwards.map {
+                    RLUserAwardDTO.fromLegacy($0, membershipId: user.id, guildId: user.guild.id)
+                },
+                awardsSummary: RLAwardsSummaryDTO.fromLegacy(SampleData.awardsSummary),
                 stats: SampleData.profileStats,
                 isCurrentUser: false,
                 username: user.globalMember.username,
