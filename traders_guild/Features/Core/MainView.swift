@@ -2,11 +2,13 @@
 //  MainView.swift
 //  traders_guild
 //
-//  UPDATED VERSION - Fixes bottom controls overlap with multiple indicator panels
+//  UPDATED VERSION - Integrated RLMessagingManager and RLRightDrawerViewModel
+//  for live backend messaging (chatrooms and DMs).
+//
+//  OLD MessagingManager kept for chart chat and marker comments.
 //
 
 import SwiftUI
-//import SwiftTradingView
 
 // MARK: - Constants
 enum LayoutConstants {
@@ -28,9 +30,11 @@ struct MainView: View {
     @EnvironmentObject var rlAppState: RLAppState
     
     @EnvironmentObject var appState: AppState // TODO: remove
-    @EnvironmentObject var messagingManager: MessagingManager
+    @EnvironmentObject var messagingManager: MessagingManager           // OLD: chart/marker chat
+    @EnvironmentObject var rlMessagingManager: RLMessagingManager       // NEW: chatrooms/DMs
+    
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
-    @StateObject private var rightDrawerViewModel = RightDrawerViewModel()
+    @StateObject private var rightDrawerViewModel = RLRightDrawerViewModel()  // NEW: Uses RLAppState
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     
     // MARK: - Chart State
@@ -122,8 +126,6 @@ struct MainView: View {
             dataManager: dataManager,
             api: MockAPIService()
         ))
-        
-        
     }
     
     // MARK: - Body
@@ -203,7 +205,8 @@ struct MainView: View {
                 }
             }
             .ignoresSafeArea()
-            .globalMessaging()
+            .globalMessaging()          // OLD: Chart/marker chat sheets
+            .rlGlobalMessaging()        // NEW: Chatroom/DM sheets
             
             .observeMarkerNavigation(
                 leftDrawerViewModel: leftDrawerViewModel,
@@ -258,19 +261,22 @@ struct MainView: View {
             .environmentObject(rightDrawerViewModel)
             .environmentObject(notificationNavigationManager)
             .task {
-                // Use rlAppState guild ID for announcements (real API), fallback to old guild.id for other data
-                let rlGuildId = rlAppState.currentGuild?.id ?? guild.id
+                // Use rlAppState guild ID for all data loading
+                guard let rlGuildId = rlAppState.currentGuild?.id else { return }
                 
                 // leftDrawerViewModel uses rlGuildId for announcements via rlAppState
                 await leftDrawerViewModel.preloadData(for: rlGuildId, appState: appState, rlAppState: rlAppState)
-                // rightDrawerViewModel still uses old guild.id (no announcements)
-                await rightDrawerViewModel.preloadData(for: guild.id, appState: appState)
                 
-                notificationNavigationManager.configure(
-                    appState: appState,
-                    messagingManager: messagingManager,
-                    rightDrawerViewModel: rightDrawerViewModel
-                )
+                // NEW: rightDrawerViewModel now uses RLAppState for live messaging data
+                await rightDrawerViewModel.preloadData(for: rlGuildId, appState: rlAppState)
+                
+                // Configure notification navigation (still uses old system for now)
+                // TODO: Update to use RLMessagingManager when ready
+                // notificationNavigationManager.configure(
+                //     appState: appState,
+                //     messagingManager: messagingManager,
+                //     rightDrawerViewModel: rightDrawerViewModel
+                // )
                 
                 // Initialize chart with data
                 await chartViewModel.initialize()
@@ -282,29 +288,16 @@ struct MainView: View {
                     Task {
                         leftDrawerViewModel.clearCache()
                         rightDrawerViewModel.clearCache()
-                        // Uses real rlAppState guild ID for announcements
+                        
+                        // Uses real rlAppState guild ID for announcements and messaging
                         await leftDrawerViewModel.preloadData(for: guildId, appState: appState, rlAppState: rlAppState)
-                        await rightDrawerViewModel.preloadData(for: guildId, appState: appState)
+                        await rightDrawerViewModel.preloadData(for: guildId, appState: rlAppState)
+                        
                         await chartViewModel.initialize()
                         rlAppState.chartDidBecomeReady()
                     }
                 }
             }
-            
-//            .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
-//                if let symbol = notification.userInfo?["symbol"] as? TradingSymbolDTO {
-//                    // Dismiss keyboard first
-//                    dismissKeyboard()
-//
-//                    // Update chart
-//                    chartViewModel.setSymbol(symbol)
-//
-//                    // Close drawer if open
-//                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-//                        showLeftDrawer = false
-//                    }
-//                }
-//            }
         } else {
             VStack(spacing: 20) {
                 ProgressView()
@@ -382,22 +375,37 @@ struct MainView: View {
                         .foregroundColor(AppColors.fadedBackground)
                 }
                 
-                // Right Drawer Button
+                // Right Drawer Button - with unread badge
                 ToolbarItem(placement: .topBarTrailing) {
-                    ToolbarIconButton(
-                        systemName: "message.badge.filled.fill",
-                        backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                        fontType: .subheadline,
-                        symbolRenderingMode: .monochrome,
-                        foregroundStyle: AppColors.whiteText,
-                        padding: 8
-                    ) {
-                        withAnimation(AnimationConstants.standard) {
-                            dismissKeyboard()
-                            selectedDetent = .fraction(0.11)
-                            showRightDrawer.toggle()
-                            showLeftDrawer = false
-                            showOverlay = showRightDrawer
+                    ZStack(alignment: .topTrailing) {
+                        ToolbarIconButton(
+                            systemName: "message.badge.filled.fill",
+                            backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                            fontType: .subheadline,
+                            symbolRenderingMode: .monochrome,
+                            foregroundStyle: AppColors.whiteText,
+                            padding: 8
+                        ) {
+                            withAnimation(AnimationConstants.standard) {
+                                dismissKeyboard()
+                                selectedDetent = .fraction(0.11)
+                                showRightDrawer.toggle()
+                                showLeftDrawer = false
+                                showOverlay = showRightDrawer
+                            }
+                        }
+                        
+                        // Unread badge
+                        if rightDrawerViewModel.totalUnreadCount > 0 {
+                            Text("\(min(rightDrawerViewModel.totalUnreadCount, 99))")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(AppColors.bearCandleRed)
+                                .clipShape(Capsule())
+                                .offset(x: 8, y: -4)
                         }
                     }
                 }
@@ -470,16 +478,6 @@ struct MainView: View {
                 },
                 currentSymbolId: chartViewModel.currentSymbol?.id
             )
-//            LeftDrawerMainView(sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal, currentSymbolId: chartViewModel.currentSymbol?.id) {
-//                dismissKeyboard()
-//                withAnimation(AnimationConstants.standard) {
-//                    showLeftDrawer = false
-//                    leftDragTranslation = 0
-//                }
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-//                    showOverlay = false
-//                }
-//            }
             .frame(width: drawerWidth)
             .frame(maxHeight: .infinity)
             .offset(x: leftDragTranslation)
@@ -501,11 +499,11 @@ struct MainView: View {
         .animation(AnimationConstants.standard, value: showLeftDrawer)
     }
     
-    // FIXED: Using RightDrawerMainView (correct name)
+    // UPDATED: Using RLRightDrawerMainView for live messaging
     private var rightDrawerView: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            RightDrawerMainView(
+            RLRightDrawerMainView(
                 onClose: {
                     dismissKeyboard()
                     withAnimation(AnimationConstants.standard) {
@@ -581,6 +579,594 @@ struct MainView: View {
 
 // MARK: - Drawer Side
 enum DrawerSide { case left, right }
+
+
+
+
+
+// //
+// //  MainView.swift
+// //  traders_guild
+// //
+// //  UPDATED VERSION - Fixes bottom controls overlap with multiple indicator panels
+// //
+
+// import SwiftUI
+// //import SwiftTradingView
+
+// // MARK: - Constants
+// enum LayoutConstants {
+//     static let drawerWidthRatio: CGFloat = 0.9
+//     static let drawerDismissThreshold: CGFloat = 100
+//     static let overlayOpacity: CGFloat = 0.4
+//     static let cornerRadius: CGFloat = 33
+//     static let shadowRadius: CGFloat = 8
+// }
+
+// enum AnimationConstants {
+//     static let standard = Animation.spring(response: 0.6, dampingFraction: 0.8)
+//     static let quick = Animation.spring(response: 0.3, dampingFraction: 0.9)
+// }
+
+// // MARK: - Main View
+// struct MainView: View {
+//     // MARK: - Properties
+//     @EnvironmentObject var rlAppState: RLAppState
+    
+//     @EnvironmentObject var appState: AppState // TODO: remove
+//     @EnvironmentObject var messagingManager: MessagingManager
+//     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
+//     @StateObject private var rightDrawerViewModel = RightDrawerViewModel()
+//     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
+    
+//     // MARK: - Chart State
+//     @StateObject private var chartControlVM = ChartControlViewModel()
+//     @StateObject private var chartDataManager = ChartDataManager()
+//     @StateObject private var chartViewModel: ChartViewModel
+//     @StateObject private var chartGestureState = ChartGestureState()
+    
+//     @State private var fadeIn: Bool = false
+    
+//     // MARK: - Drawer State Management
+//     @State private var showLeftDrawer: Bool = false
+//     @State private var showRightDrawer: Bool = false
+//     @State private var showOverlay: Bool = false
+//     @State private var leftDragTranslation: CGFloat = 0
+//     @State private var rightDragTranslation: CGFloat = 0
+    
+//     // MARK: - Bottom Sheet State
+//     @State private var showBottomSheet: Bool = false
+//     @State private var selectedDetent: PresentationDetent = .fraction(0.11)
+    
+//     // MARK: - Sheet Overlay State
+//     @State private var showSheetOverlay: Bool = false
+//     @State private var dismissRightSheetsSignal: Bool = false
+//     @State private var dismissLeftSheetsSignal: Bool = false
+    
+//     // MARK: - Indicator Panel State
+//     @State private var rsiPanelHeight: CGFloat = 120
+//     @State private var macdPanelHeight: CGFloat = 140
+//     @State private var stochasticPanelHeight: CGFloat = 120
+//     @State private var cciPanelHeight: CGFloat = 120
+//     @State private var williamsRPanelHeight: CGFloat = 120
+//     @State private var atrPanelHeight: CGFloat = 120
+//     @State private var volumePanelHeight: CGFloat = 120
+    
+//     // MARK: - Computed Properties
+//     private var screenSize: CGSize {
+//         UIScreen.main.bounds.size
+//     }
+    
+//     private var drawerWidth: CGFloat {
+//         screenSize.width * LayoutConstants.drawerWidthRatio
+//     }
+    
+//     /// Calculate total height of active indicator panels for bottom padding
+//     private var indicatorPanelsTotalHeight: CGFloat {
+//         let activePanels = chartViewModel.indicatorManager.activeIndicators.activePanelTypes
+//         guard !activePanels.isEmpty else { return 0 }
+        
+//         var totalHeight: CGFloat = 0
+        
+//         for panelType in activePanels {
+//             switch panelType {
+//             case .rsi:
+//                 totalHeight += rsiPanelHeight + 22  // +22 for resize handle
+//             case .macd:
+//                 totalHeight += macdPanelHeight + 22
+//             case .stochastic:
+//                 totalHeight += stochasticPanelHeight + 22
+//             case .cci:
+//                 totalHeight += cciPanelHeight + 22
+//             case .williamsR:
+//                 totalHeight += williamsRPanelHeight + 22
+//             case .atr:
+//                 totalHeight += atrPanelHeight + 22
+//             case .volume:
+//                 totalHeight += volumePanelHeight + 22
+//             }
+//         }
+        
+//         // Add X-axis labels height
+//         totalHeight += 22
+        
+//         return totalHeight
+//     }
+    
+//     /// Bottom padding for controls that need to float above indicator panels
+//     private var bottomControlsPadding: CGFloat {
+//         // Base padding for minimized bottom sheet + indicator panels
+//         return indicatorPanelsTotalHeight + 100
+//     }
+    
+//     // MARK: - Initialization
+//     init() {
+//         let dataManager = ChartDataManager()
+//         _chartDataManager = StateObject(wrappedValue: dataManager)
+//         _chartViewModel = StateObject(wrappedValue: ChartViewModel(
+//             appState: AppState(),
+//             dataManager: dataManager,
+//             api: MockAPIService()
+//         ))
+        
+        
+//     }
+    
+//     // MARK: - Body
+//     var body: some View {
+//         if let user = appState.currentUser,
+//            let guild = appState.currentGuild {
+//             ZStack {
+//                 // MARK: - Main Content Layer
+//                 mainContentStack
+//                     .disabled(showLeftDrawer || showRightDrawer)
+                
+//                 // MARK: - Indicator Panels Overlay
+//                 // Positioned ABOVE main content, BELOW bottom sheet
+//                 if chartViewModel.indicatorManager.shouldShowAnyPanel {
+//                     VStack {
+//                         Spacer()
+                        
+//                         IndicatorPanelContainer(
+//                             indicatorManager: chartViewModel.indicatorManager,
+//                             chartData: chartViewModel.dataManager,
+//                             gestureState: chartGestureState,
+//                             baseCandleWidth: 12,
+//                             candleSpacing: 4,
+//                             timeframe: chartViewModel.currentTimeframe,
+//                             rsiPanelHeight: $rsiPanelHeight,
+//                             macdPanelHeight: $macdPanelHeight,
+//                             stochasticPanelHeight: $stochasticPanelHeight,
+//                             cciPanelHeight: $cciPanelHeight,
+//                             williamsRPanelHeight: $williamsRPanelHeight,
+//                             atrPanelHeight: $atrPanelHeight,
+//                             volumePanelHeight: $volumePanelHeight
+//                         )
+                        
+//                         // DYNAMIC bottom padding - accounts for minimized bottom sheet
+//                         Color.clear
+//                             .frame(height: 100)
+//                     }
+//                     .ignoresSafeArea(edges: .bottom)
+//                 }
+                
+//                 // MARK: - Overlay Layer
+//                 if showOverlay {
+//                     overlayView
+//                         .opacity(showLeftDrawer || showRightDrawer ? 1 : 0)
+//                         .animation(.easeOut(duration: 0.4), value: showLeftDrawer)
+//                         .animation(.easeOut(duration: 0.4), value: showRightDrawer)
+//                         .gesture(
+//                             DragGesture()
+//                                 .onChanged { value in
+//                                     dismissRightSheetsSignal = true
+//                                     if showLeftDrawer && value.translation.width < 0 {
+//                                         leftDragTranslation = value.translation.width
+//                                     } else if showRightDrawer && value.translation.width > 0 {
+//                                         rightDragTranslation = value.translation.width
+//                                     }
+//                                 }
+//                                 .onEnded { value in
+//                                     handleDrawerDragEnd(currentPosition: showLeftDrawer ? leftDragTranslation : rightDragTranslation)
+//                                 }
+//                         )
+//                 }
+                
+//                 // MARK: - Drawer Layers
+//                 leftDrawerView
+//                     .opacity(fadeIn ? 1 : 0)
+//                     .animation(.easeIn(duration: 1.5), value: fadeIn)
+                
+//                 rightDrawerView
+//                     .opacity(fadeIn ? 1 : 0)
+//                     .animation(.easeIn(duration: 1.5), value: fadeIn)
+                
+//                 // MARK: - Sheet Overlay Layer
+//                 if showSheetOverlay {
+//                     sheetOverlayView
+//                         .opacity(showSheetOverlay ? 1 : 0)
+//                         .animation(.linear(duration: 0.05), value: showSheetOverlay)
+//                 }
+//             }
+//             .ignoresSafeArea()
+//             .globalMessaging()
+            
+//             .observeMarkerNavigation(
+//                 leftDrawerViewModel: leftDrawerViewModel,
+//                 chartViewModel: chartViewModel,
+//                 gestureState: chartGestureState,
+//                 onCloseDrawer: {
+//                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+//                         showLeftDrawer = false
+//                         showOverlay = false
+//                     }
+//                 }
+//             )
+            
+//             // MARK: - Bottom Sheet
+//             .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition)) {
+//                 ChartBottomSheet(
+//                     controlViewModel: chartControlVM,
+//                     chartViewModel: chartViewModel,
+//                     selectedDetent: $selectedDetent
+//                 )
+//                 .presentationDetents([.fraction(0.11), .fraction(0.5), .fraction(0.9)],
+//                                       selection: $selectedDetent)
+//                 .presentationDragIndicator(.visible)
+//                 .presentationBackgroundInteraction(.enabled)
+//                 .interactiveDismissDisabled(true)
+//                 .presentationContentInteraction(.resizes)
+//                 .presentationBackground {
+//                     ZStack {
+//                         Color.clear
+//                             .background(.ultraThinMaterial)
+//                         AppColors.drawerBackground.opacity(0.4)
+//                     }
+//                 }
+//             }
+//             .onAppear {
+//                 withAnimation(.easeIn(duration: 1.5)) {
+//                     fadeIn = true
+//                 }
+                
+//                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+//                     withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+//                         showBottomSheet = true
+//                     }
+//                 }
+//                 print(rlAppState.currentUser?.displayUsername ?? "Username")
+//                 print(rlAppState.currentGuild?.name ?? "Guild Name")
+//             }
+//             .sensoryFeedback(.impact(weight: .light), trigger: showLeftDrawer)
+//             .sensoryFeedback(.impact(weight: .light), trigger: showRightDrawer)
+            
+//             .environmentObject(leftDrawerViewModel)
+//             .environmentObject(rightDrawerViewModel)
+//             .environmentObject(notificationNavigationManager)
+//             .task {
+//                 // Use rlAppState guild ID for announcements (real API), fallback to old guild.id for other data
+//                 let rlGuildId = rlAppState.currentGuild?.id ?? guild.id
+                
+//                 // leftDrawerViewModel uses rlGuildId for announcements via rlAppState
+//                 await leftDrawerViewModel.preloadData(for: rlGuildId, appState: appState, rlAppState: rlAppState)
+//                 // rightDrawerViewModel still uses old guild.id (no announcements)
+//                 await rightDrawerViewModel.preloadData(for: guild.id, appState: appState)
+                
+//                 notificationNavigationManager.configure(
+//                     appState: appState,
+//                     messagingManager: messagingManager,
+//                     rightDrawerViewModel: rightDrawerViewModel
+//                 )
+                
+//                 // Initialize chart with data
+//                 await chartViewModel.initialize()
+                
+//                 rlAppState.chartDidBecomeReady()
+//             }
+//             .onChange(of: rlAppState.currentGuild?.id) { oldValue, newValue in
+//                 if let guildId = newValue, oldValue != newValue {
+//                     Task {
+//                         leftDrawerViewModel.clearCache()
+//                         rightDrawerViewModel.clearCache()
+//                         // Uses real rlAppState guild ID for announcements
+//                         await leftDrawerViewModel.preloadData(for: guildId, appState: appState, rlAppState: rlAppState)
+//                         await rightDrawerViewModel.preloadData(for: guildId, appState: appState)
+//                         await chartViewModel.initialize()
+//                         rlAppState.chartDidBecomeReady()
+//                     }
+//                 }
+//             }
+            
+// //            .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
+// //                if let symbol = notification.userInfo?["symbol"] as? TradingSymbolDTO {
+// //                    // Dismiss keyboard first
+// //                    dismissKeyboard()
+// //
+// //                    // Update chart
+// //                    chartViewModel.setSymbol(symbol)
+// //
+// //                    // Close drawer if open
+// //                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+// //                        showLeftDrawer = false
+// //                    }
+// //                }
+// //            }
+//         } else {
+//             VStack(spacing: 20) {
+//                 ProgressView()
+//                     .scaleEffect(1.5)
+//                 Text("Reconnecting...")
+//                     .foregroundColor(.secondary)
+//             }
+//             .frame(maxWidth: .infinity, maxHeight: .infinity)
+//             .onAppear {
+//                 Task {
+//                     if rlAppState.currentUser != nil && rlAppState.currentGuild == nil {
+//                         await rlAppState.openGuildSelector()
+//                     } else if rlAppState.currentUser == nil {
+//                         rlAppState.logout()
+//                     }
+//                 }
+//             }
+//         }
+//     }
+    
+//     // MARK: - View Components
+    
+//     private var mainContentStack: some View {
+//         NavigationStack {
+//             ZStack {
+//                 StaticBackgroundView()
+                
+//                 VStack(spacing: 0) {
+//                     chartView(controlViewModel: chartControlVM)
+//                 }
+//                 .opacity(fadeIn ? 1 : 0)
+//                 .animation(.easeIn(duration: 1.5), value: fadeIn)
+//                 .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
+//                     if let symbol = notification.userInfo?["symbol"] as? TradingSymbolDTO {
+//                         // Dismiss keyboard first
+//                         dismissKeyboard()
+                        
+//                         // Update chart
+//                         chartViewModel.setSymbol(symbol)
+                        
+//                         // Close drawer if open
+//                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+//                             showLeftDrawer = false
+//                         }
+//                     }
+//                 }
+//             }
+//             .toolbar {
+//                 // Left Drawer Button
+//                 ToolbarItem(placement: .topBarLeading) {
+//                     ToolbarIconButton(
+//                         systemName: "shield.pattern.checkered",
+//                         backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+//                         fontType: .headline,
+//                         symbolRenderingMode: .monochrome,
+//                         foregroundStyle: AppColors.whiteText,
+//                         padding: 8
+//                     ) {
+                        
+//                         withAnimation(AnimationConstants.standard) {
+//                             dismissKeyboard()
+//                             selectedDetent = .fraction(0.11)
+//                             showLeftDrawer.toggle()
+//                             showRightDrawer = false
+//                             showOverlay = showLeftDrawer
+//                         }
+//                     }
+//                 }
+                
+//                 // App Title
+//                 ToolbarItem(placement: .principal) {
+//                     Text("TG")
+//                         .font(.largeTitle)
+//                         .fontWeight(.heavy)
+//                         .foregroundColor(AppColors.fadedBackground)
+//                 }
+                
+//                 // Right Drawer Button
+//                 ToolbarItem(placement: .topBarTrailing) {
+//                     ToolbarIconButton(
+//                         systemName: "message.badge.filled.fill",
+//                         backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+//                         fontType: .subheadline,
+//                         symbolRenderingMode: .monochrome,
+//                         foregroundStyle: AppColors.whiteText,
+//                         padding: 8
+//                     ) {
+//                         withAnimation(AnimationConstants.standard) {
+//                             dismissKeyboard()
+//                             selectedDetent = .fraction(0.11)
+//                             showRightDrawer.toggle()
+//                             showLeftDrawer = false
+//                             showOverlay = showRightDrawer
+//                         }
+//                     }
+//                 }
+//             }
+//             .toolbarBackground(.hidden, for: .navigationBar)
+//             .toolbarColorScheme(.dark, for: .navigationBar)
+//             .tint(.white)
+//             .navigationBarTitleDisplayMode(.inline)
+//         }
+//     }
+    
+//     // UPDATED: Pass total indicator panel height for proper bottom controls positioning
+//     private func chartView(controlViewModel: ChartControlViewModel) -> some View {
+//         TradingChartView(
+//             controlViewModel: controlViewModel,
+//             chartViewModel: chartViewModel,
+//             gestureState: chartGestureState,
+//             rsiPanelHeight: $rsiPanelHeight,
+//             indicatorPanelBottomPadding: indicatorPanelsTotalHeight
+//         )
+//     }
+    
+//     private var overlayView: some View {
+//         Color.black.opacity(LayoutConstants.overlayOpacity)
+//             .ignoresSafeArea()
+//             .onTapGesture {
+//                 withAnimation(AnimationConstants.standard) {
+//                     dismissKeyboard()
+//                     showLeftDrawer = false
+//                     showRightDrawer = false
+//                     leftDragTranslation = 0
+//                     rightDragTranslation = 0
+//                     dismissRightSheetsSignal = true
+//                 }
+//                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+//                     showOverlay = false
+//                 }
+//             }
+//     }
+    
+//     private var sheetOverlayView: some View {
+//         Color.black.opacity(LayoutConstants.overlayOpacity * 0.8)
+//             .ignoresSafeArea()
+//             .contentShape(Rectangle())
+//             .onTapGesture {
+//                 dismissRightSheetsSignal = true
+//                 dismissLeftSheetsSignal = true
+//             }
+//             .simultaneousGesture(DragGesture().onChanged { _ in
+//                 dismissRightSheetsSignal = true
+//                 dismissLeftSheetsSignal = true
+//             })
+//     }
+    
+//     // FIXED: Using LeftDrawerMainView (correct name)
+//     private var leftDrawerView: some View {
+//         HStack(spacing: 0) {
+//             LeftDrawerMainView(
+//                 sheetOverlayVisible: $showSheetOverlay,
+//                 dismissSheetsSignal: $dismissLeftSheetsSignal,
+//                 onClose: {
+//                     dismissKeyboard()
+//                     withAnimation(AnimationConstants.standard) {
+//                         showLeftDrawer = false
+//                         leftDragTranslation = 0
+//                     }
+//                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+//                         showOverlay = false
+//                     }
+//                 },
+//                 currentSymbolId: chartViewModel.currentSymbol?.id
+//             )
+// //            LeftDrawerMainView(sheetOverlayVisible: $showSheetOverlay, dismissSheetsSignal: $dismissLeftSheetsSignal, currentSymbolId: chartViewModel.currentSymbol?.id) {
+// //                dismissKeyboard()
+// //                withAnimation(AnimationConstants.standard) {
+// //                    showLeftDrawer = false
+// //                    leftDragTranslation = 0
+// //                }
+// //                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+// //                    showOverlay = false
+// //                }
+// //            }
+//             .frame(width: drawerWidth)
+//             .frame(maxHeight: .infinity)
+//             .offset(x: leftDragTranslation)
+//             .gesture(
+//                 DragGesture()
+//                     .onChanged { value in
+//                         if value.translation.width < 0 {
+//                             leftDragTranslation = value.translation.width
+//                         }
+//                     }
+//                     .onEnded { value in
+//                         handleDrawerDragEnd(currentPosition: leftDragTranslation)
+//                     }
+//             )
+//             Spacer(minLength: 0)
+//         }
+//         .frame(maxHeight: .infinity)
+//         .offset(x: showLeftDrawer ? 0 : -drawerWidth)
+//         .animation(AnimationConstants.standard, value: showLeftDrawer)
+//     }
+    
+//     // FIXED: Using RightDrawerMainView (correct name)
+//     private var rightDrawerView: some View {
+//         HStack(spacing: 0) {
+//             Spacer(minLength: 0)
+//             RightDrawerMainView(
+//                 onClose: {
+//                     dismissKeyboard()
+//                     withAnimation(AnimationConstants.standard) {
+//                         showRightDrawer = false
+//                         rightDragTranslation = 0
+//                     }
+//                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+//                         showOverlay = false
+//                     }
+//                 }
+//             )
+//             .frame(width: drawerWidth)
+//             .frame(maxHeight: .infinity)
+//             .offset(x: rightDragTranslation)
+//             .gesture(
+//                 DragGesture()
+//                     .onChanged { value in
+//                         if value.translation.width > 0 {
+//                             rightDragTranslation = value.translation.width
+//                         }
+//                     }
+//                     .onEnded { value in
+//                         handleDrawerDragEnd(currentPosition: rightDragTranslation)
+//                     }
+//             )
+//         }
+//         .frame(maxHeight: .infinity)
+//         .offset(x: showRightDrawer ? 0 : drawerWidth)
+//         .animation(AnimationConstants.standard, value: showRightDrawer)
+//     }
+    
+//     // MARK: - Helper Functions
+    
+//     private func handleDrawerDragEnd(currentPosition: CGFloat) {
+//         if showLeftDrawer {
+//             if currentPosition < -LayoutConstants.drawerDismissThreshold {
+//                 dismissKeyboard()
+//                 withAnimation(AnimationConstants.standard) {
+//                     showLeftDrawer = false
+//                     leftDragTranslation = 0
+//                 }
+//                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+//                     showOverlay = false
+//                 }
+//             } else {
+//                 withAnimation(AnimationConstants.standard) {
+//                     leftDragTranslation = 0
+//                 }
+//             }
+//         } else if showRightDrawer {
+//             if currentPosition > LayoutConstants.drawerDismissThreshold {
+//                 dismissKeyboard()
+//                 withAnimation(AnimationConstants.standard) {
+//                     showRightDrawer = false
+//                     rightDragTranslation = 0
+//                 }
+//                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+//                     showOverlay = false
+//                 }
+//             } else {
+//                 withAnimation(AnimationConstants.standard) {
+//                     rightDragTranslation = 0
+//                 }
+//             }
+//         }
+//     }
+    
+    
+//     private func dismissKeyboard() {
+//         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+//     }
+// }
+
+// // MARK: - Drawer Side
+// enum DrawerSide { case left, right }
 
 // MARK: - Chart Bottom Sheet (IMPROVED CHAT VERSION)
 // When in chat mode, the tab bar is replaced with chat input + back button

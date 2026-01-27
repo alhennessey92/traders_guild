@@ -135,7 +135,6 @@ struct MessagingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var messagingManager: MessagingManager
     @EnvironmentObject var appState: AppState
-    @EnvironmentObject var rightDrawerViewModel: RightDrawerViewModel
     
     @State private var messageText = ""
     @State private var showUserProfile = false
@@ -186,11 +185,9 @@ struct MessagingSheet: View {
                 switch contentType {
                 case .userDM(let userDM):
                     try await appState.markDMAsRead(dmId: userDM.id)
-                    rightDrawerViewModel.markDMAsRead(dmId: userDM.id)
                     
                 case .chatroom(let chatroom):
                     try await appState.markChatroomAsRead(chatroomId: chatroom.id)
-                    rightDrawerViewModel.markChatroomAsRead(chatroomId: chatroom.id)
                 }
             } catch {
                 print("Failed to mark as read: \(error)")

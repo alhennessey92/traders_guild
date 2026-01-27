@@ -34,7 +34,6 @@ enum UserListTab: String, CaseIterable, UnifiedTabItem {
 struct UserListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    @EnvironmentObject var messagingManager: MessagingManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var rlAppState: RLAppState
     @Environment(\.dismiss) private var dismiss
@@ -244,8 +243,9 @@ struct UserListView: View {
 struct GuildUserDetailView: View {
     let user: GuildMembershipDTO
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var messagingManager: MessagingManager
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var rlMessagingManager: RLMessagingManager
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
 
     var body: some View {
@@ -282,7 +282,8 @@ struct GuildUserDetailView: View {
                 // Reusable action buttons component
                 GuildUserActionButtons(user: user)
                     .environmentObject(appState)
-                    .environmentObject(messagingManager)
+                    .environmentObject(rlAppState)
+                    .environmentObject(rlMessagingManager)
                     .padding(.horizontal, 25)
                     .padding(.top, 20)
                     .background(AppColors.sheetBackground)
@@ -492,7 +493,7 @@ struct FriendRow: View {
 struct GuildUserDetailViewRL: View {
     @State private var member: RLGuildMemberDTO
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var messagingManager: MessagingManager
+    @EnvironmentObject var rlMessagingManager: RLMessagingManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
@@ -548,7 +549,7 @@ struct GuildUserDetailViewRL: View {
                     member = updatedMember
                 }
                     .environmentObject(appState)
-                    .environmentObject(messagingManager)
+                    .environmentObject(rlMessagingManager)
                     .environmentObject(rlAppState)
                     .padding(.horizontal, 25)
                     .padding(.top, 20)
@@ -883,7 +884,8 @@ struct GuildMemberProfileHeaderViewRL: View {
 struct GuildUserActionButtons: View {
     let user: GuildMembershipDTO
     @EnvironmentObject var appState: AppState
-    @EnvironmentObject var messagingManager: MessagingManager
+    @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var rlMessagingManager: RLMessagingManager
     @Environment(\.dismiss) private var dismiss
     
     @State private var showBlockUserConfirmation = false
@@ -935,7 +937,7 @@ struct GuildUserActionButtons: View {
                 action: {
                     dismiss()
                     Task {
-                        await messagingManager.openUserChat(with: user)
+                        await openRLChat()
                     }
                 }
             )
@@ -1021,18 +1023,45 @@ struct GuildUserActionButtons: View {
             }
         }
     }
+
+    private func openRLChat() async {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+        do {
+            let member = try await rlAppState.fetchGuildMember(guildId: guildId, userId: user.globalMember.id)
+            await rlMessagingManager.openDMChat(with: member)
+        } catch {
+            rlAppState.showError(error, title: "Failed to Open Chat", style: .toast)
+        }
+    }
 }
 
 // MARK: - ================================================================================================
 // MARK: - GUILD USER ACTION BUTTONS (REAL API)
 // MARK: - ================================================================================================
 
+
+//
+//  UserListView+RL.swift
+//  traders_guild
+//
+//  Updated Guild User Action Buttons that use RLMessagingManager for chat.
+//  Replace the existing GuildUserActionButtonsRL in UserListView.swift with this version.
+//
+
+
+// MARK: - ================================================================================================
+// MARK: - GUILD USER ACTION BUTTONS (REAL API) - UPDATED FOR RL MESSAGING
+// MARK: - ================================================================================================
+
+/// Updated action buttons that use RLMessagingManager for opening DM chats.
+/// This version directly opens DM threads via the new backend system.
 struct GuildUserActionButtonsRL: View {
     let member: RLGuildMemberDTO
     let onMemberUpdate: (RLGuildMemberDTO) -> Void
-    @EnvironmentObject var appState: AppState
+    
+    @EnvironmentObject var appState: AppState               // TODO: Remove when migration complete
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var messagingManager: MessagingManager
+    @EnvironmentObject var rlMessagingManager: RLMessagingManager   // NEW: For DM chats
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @Environment(\.dismiss) private var dismiss
     
@@ -1040,9 +1069,11 @@ struct GuildUserActionButtonsRL: View {
     @State private var showUnBlockUserConfirmation = false
     @State private var showAddFriendConfirmation = false
     @State private var showRemoveFriendConfirmation = false
+    @State private var isOpeningChat = false
     
     var body: some View {
         HStack(spacing: 8) {
+            // Block/Unblock button
             DrawerActionButton(
                 imageName: "nosign",
                 backgroundColor: member.isBlocked ? AppColors.bearCandleRed.opacity(0.8) : AppColors.bearCandleRed.opacity(0.1),
@@ -1060,6 +1091,7 @@ struct GuildUserActionButtonsRL: View {
             
             Spacer()
             
+            // Friend action button
             DrawerActionButton(
                 imageName: friendActionIcon,
                 backgroundColor: friendActionBackgroundColor,
@@ -1079,6 +1111,7 @@ struct GuildUserActionButtonsRL: View {
                 }
             )
             
+            // Chat button - NOW USES RLMessagingManager
             DrawerActionButton(
                 title: "Chat",
                 imageName: "message.fill",
@@ -1089,10 +1122,12 @@ struct GuildUserActionButtonsRL: View {
                 action: {
                     dismiss()
                     Task {
-                        await openLegacyChatIfAvailable()
+                        await openDMChat()
                     }
                 }
             )
+            .opacity(isOpeningChat ? 0.5 : 1.0)
+            .disabled(isOpeningChat)
         }
         .alert("Block User", isPresented: $showBlockUserConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -1128,6 +1163,8 @@ struct GuildUserActionButtonsRL: View {
         }
     }
 
+    // MARK: - Friend Action Styling
+    
     private var friendActionIcon: String {
         if member.isFriend {
             return "person.crop.circle.badge.checkmark"
@@ -1170,6 +1207,8 @@ struct GuildUserActionButtonsRL: View {
         }
         return AppColors.whiteText.opacity(0.3)
     }
+    
+    // MARK: - Actions
     
     private func blockUser() {
         Task {
@@ -1227,11 +1266,28 @@ struct GuildUserActionButtonsRL: View {
         }
     }
     
-    private func openLegacyChatIfAvailable() async {
-        if let legacyMember = leftDrawerViewModel.members.first(where: { $0.globalMember.id == member.userId }) {
-            await messagingManager.openUserChat(with: legacyMember)
-        } else {
-            rlAppState.showInfo("Chat is not available yet for this user")
-        }
+    // MARK: - NEW: Open DM Chat via RLMessagingManager
+    
+    /// Opens a DM chat with this member using the new RLMessagingManager.
+    /// Creates a DM thread if one doesn't exist.
+    private func openDMChat() async {
+        isOpeningChat = true
+        defer { isOpeningChat = false }
+        
+        // Use the new RLMessagingManager to open/create DM thread
+        await rlMessagingManager.openDMChat(with: member)
     }
 }
+
+// MARK: - ================================================================================================
+// MARK: - USER LIST VIEW ENVIRONMENT UPDATE HELPER
+// MARK: - ================================================================================================
+
+/// Extension to help UserListView inject the RLMessagingManager
+extension View {
+    /// Adds RLMessagingManager environment object for views that need chat functionality
+    func withRLMessaging(_ manager: RLMessagingManager) -> some View {
+        self.environmentObject(manager)
+    }
+}
+

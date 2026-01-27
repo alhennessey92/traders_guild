@@ -29,6 +29,7 @@ enum APIEnvironment {
 enum APIService {
     case auth    // Registration, login, tokens (port 8000)
     case core    // Users, guilds, memberships, etc. (port 8001)
+    case messaging    // Messaging, threads, messages, etc. (port 8002)
     
     var baseURL: String {
         switch APIEnvironment.current {
@@ -37,6 +38,7 @@ enum APIService {
             switch self {
             case .auth: return "http://localhost:8000/api/v1"
             case .core: return "http://localhost:8001/api/v1"
+            case .messaging: return "http://localhost:8002/api/v1/messaging"
             }
             #else
             // ⚠️ UPDATE THIS to your Mac's IP for device testing
@@ -44,12 +46,18 @@ enum APIService {
             switch self {
             case .auth: return "http://\(macIP):8000/api/v1"
             case .core: return "http://\(macIP):8001/api/v1"
+            case .messaging: return "http://\(macIP):8002/api/v1/messaging"
             }
             #endif
             
         case .production:
             // Kong routes all services through one URL
-            return "https://api.tradersguild.com/api/v1"
+            switch self {
+            case .messaging:
+                return "https://api.tradersguild.com/api/v1/messaging"
+            case .auth, .core:
+                return "https://api.tradersguild.com/api/v1"
+            }
         }
     }
 }
@@ -1038,23 +1046,7 @@ class RealAPIService {
         )
     }
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
     
     
 }
@@ -1062,5 +1054,335 @@ class RealAPIService {
 // MARK: - Helper Types
 
 private struct EmptyResponse: Decodable {}
+
+
+
+// New Messaging Endpoints
+
+//
+//  RealAPIService+Messaging.swift
+//  traders_guild
+//
+//  Messaging API methods for RealAPIService.
+//  Add this to your existing RealAPIService.swift file.
+//
+//  Routes match backend: /guilds/{guild_id}/messaging/...
+//
+
+
+
+// MARK: - Messaging API Extension
+extension RealAPIService {
+    
+    // =============================================================================================
+    // MARK: - Combined Messaging Data (Drawer Preload)
+    // =============================================================================================
+    
+    /// Fetch all messaging data for drawer in one request
+    /// GET /guilds/{guild_id}/messaging/drawer-data
+    ///
+    /// Returns chatrooms + categorized DMs (friends, online, offline)
+    func getGuildMessagingData(guildId: UUID) async throws -> RLGuildMessagingDataDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/messaging/drawer-data",
+            service: .messaging,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Fetch unread counts for all messaging types
+    /// GET /guilds/{guild_id}/messaging/unread-counts
+    func getUnreadCounts(guildId: UUID) async throws -> RLUnreadCountsDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/messaging/unread-counts",
+            service: .messaging,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Chatrooms
+    // =============================================================================================
+    
+    /// Fetch all chatrooms for a guild
+    /// GET /guilds/{guild_id}/chatrooms
+    func getGuildChatrooms(guildId: UUID) async throws -> RLGuildChatroomsListDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms",
+            service: .messaging,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Fetch a single chatroom by ID
+    /// GET /guilds/{guild_id}/chatrooms/{chatroom_id}
+    func getChatroom(guildId: UUID, chatroomId: UUID) async throws -> RLGuildChatroomDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)",
+            service: .messaging,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Fetch messages for a chatroom (paginated)
+    /// GET /guilds/{guild_id}/chatrooms/{chatroom_id}/messages
+    ///
+    /// - Parameters:
+    ///   - limit: Number of messages to fetch (default 50)
+    ///   - cursor: Pagination cursor for older messages
+    func getChatroomMessages(
+        guildId: UUID,
+        chatroomId: UUID,
+        limit: Int = 50,
+        cursor: String? = nil
+    ) async throws -> RLChatroomMessagesListDTO {
+        var path = "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages?limit=\(limit)"
+        if let cursor = cursor {
+            path += "&cursor=\(cursor)"
+        }
+        return try await request(
+            path,
+            service: .messaging,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Send a message to a chatroom
+    /// POST /guilds/{guild_id}/chatrooms/{chatroom_id}/messages
+    func sendChatroomMessage(
+        guildId: UUID,
+        chatroomId: UUID,
+        content: String
+    ) async throws -> RLChatroomMessageDTO {
+        let body = RLSendMessageRequest(content: content)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages",
+            service: .messaging,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Edit a chatroom message
+    /// PUT /guilds/{guild_id}/chatrooms/{chatroom_id}/messages/{message_id}
+    func editChatroomMessage(
+        guildId: UUID,
+        chatroomId: UUID,
+        messageId: UUID,
+        content: String
+    ) async throws -> RLChatroomMessageDTO {
+        let body = RLEditMessageRequest(content: content)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)",
+            service: .messaging,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Delete a chatroom message
+    /// DELETE /guilds/{guild_id}/chatrooms/{chatroom_id}/messages/{message_id}
+    func deleteChatroomMessage(
+        guildId: UUID,
+        chatroomId: UUID,
+        messageId: UUID
+    ) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)",
+            service: .messaging,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    /// Mark chatroom as read
+    /// POST /guilds/{guild_id}/chatrooms/{chatroom_id}/read
+    func markChatroomAsRead(guildId: UUID, chatroomId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/read",
+            service: .messaging,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    /// Update chatroom user settings (pin/mute)
+    /// PUT /guilds/{guild_id}/chatrooms/{chatroom_id}/settings
+    func updateChatroomSettings(
+        guildId: UUID,
+        chatroomId: UUID,
+        isPinned: Bool? = nil,
+        isMuted: Bool? = nil
+    ) async throws -> RLChatroomUserSettingsDTO {
+        let body = RLUpdateChatroomSettingsRequest(isPinned: isPinned, isMuted: isMuted)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/settings",
+            service: .messaging,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Create a new chatroom (admin only)
+    /// POST /guilds/{guild_id}/chatrooms
+    func createChatroom(
+        guildId: UUID,
+        name: String,
+        description: String? = nil
+    ) async throws -> RLGuildChatroomDTO {
+        let body = RLCreateChatroomRequest(name: name, description: description)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms",
+            service: .messaging,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Direct Messages
+    // =============================================================================================
+    
+    /// Fetch all DM threads for current user in a guild
+    /// GET /guilds/{guild_id}/dms
+    func getDMThreads(guildId: UUID) async throws -> RLDMThreadsListDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms",
+            service: .messaging,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Fetch or create a DM thread with another user
+    /// POST /guilds/{guild_id}/dms
+    ///
+    /// If a thread already exists, returns that thread.
+    /// If not, creates a new thread.
+    func getOrCreateDMThread(
+        guildId: UUID,
+        participantUserId: UUID
+    ) async throws -> RLDMThreadDTO {
+        let path = "/guilds/\(guildId.uuidString)/dms?participant_user_id=\(participantUserId.uuidString)"
+        return try await request(
+            path,
+            service: .messaging,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    /// Fetch a single DM thread by ID
+    /// GET /guilds/{guild_id}/dms/{thread_id}
+    func getDMThread(guildId: UUID, threadId: UUID) async throws -> RLDMThreadDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)",
+            service: .messaging,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Fetch messages for a DM thread (paginated)
+    /// GET /guilds/{guild_id}/dms/{thread_id}/messages
+    func getDMMessages(
+        guildId: UUID,
+        threadId: UUID,
+        limit: Int = 50,
+        cursor: String? = nil
+    ) async throws -> RLDMMessagesListDTO {
+        var path = "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages?limit=\(limit)"
+        if let cursor = cursor {
+            path += "&cursor=\(cursor)"
+        }
+        return try await request(
+            path,
+            service: .messaging,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Send a DM message
+    /// POST /guilds/{guild_id}/dms/{thread_id}/messages
+    func sendDMMessage(
+        guildId: UUID,
+        threadId: UUID,
+        content: String
+    ) async throws -> RLDMMessageDTO {
+        let body = RLSendMessageRequest(content: content)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages",
+            service: .messaging,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Edit a DM message
+    /// PUT /guilds/{guild_id}/dms/{thread_id}/messages/{message_id}
+    func editDMMessage(
+        guildId: UUID,
+        threadId: UUID,
+        messageId: UUID,
+        content: String
+    ) async throws -> RLDMMessageDTO {
+        let body = RLEditMessageRequest(content: content)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)",
+            service: .messaging,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Delete a DM message
+    /// DELETE /guilds/{guild_id}/dms/{thread_id}/messages/{message_id}
+    func deleteDMMessage(
+        guildId: UUID,
+        threadId: UUID,
+        messageId: UUID
+    ) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)",
+            service: .messaging,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    /// Mark DM thread as read
+    /// POST /guilds/{guild_id}/dms/{thread_id}/read
+    func markDMAsRead(guildId: UUID, threadId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/read",
+            service: .messaging,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    /// Delete entire DM conversation
+    /// DELETE /guilds/{guild_id}/dms/{thread_id}
+    func deleteDMThread(guildId: UUID, threadId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)",
+            service: .messaging,
+            method: "DELETE",
+            auth: true
+        )
+    }
+}
 
 

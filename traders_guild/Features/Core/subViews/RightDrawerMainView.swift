@@ -1,61 +1,89 @@
 //
-//  RightDrawerMainView.swift
+//  RLRightDrawerMainView.swift
 //  traders_guild
 //
-//  UPDATED: Now uses UnifiedComponents for consistent styling
+//  UPDATED: Uses RLAppState and new RL messaging DTOs.
+//  Replaces old RightDrawerMainView that used AppState.
 //
 
 import SwiftUI
 
 /// The main container for the right-side drawer.
-/// Hosts search/filter UI, lists for chatrooms and users, and opens chats via MessagingManager.
-struct RightDrawerMainView: View {
+/// Hosts search/filter UI, lists for chatrooms and users, and opens chats via RLMessagingManager.
+struct RLRightDrawerMainView: View {
     // MARK: - Bindings & State
     let onClose: () -> Void
     
-    @EnvironmentObject var messagingManager: MessagingManager
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var rightDrawerViewModel: RightDrawerViewModel
+    @EnvironmentObject var messagingManager: RLMessagingManager
+    @EnvironmentObject var appState: RLAppState
+    @EnvironmentObject var rightDrawerViewModel: RLRightDrawerViewModel
     
     @State private var dragTranslation: CGFloat = 0
     @State private var searchText: String = ""
     @FocusState private var isSearchFocused: Bool
     
     // MARK: - Computed Filtered Lists
-    private var filteredChatrooms: [GuildChatroomDTO] {
+    private var filteredChatrooms: [RLGuildChatroomDTO] {
         guard !searchText.isEmpty else { return rightDrawerViewModel.guildChatrooms }
         return rightDrawerViewModel.guildChatrooms.filter { chatroom in
             chatroom.name.localizedCaseInsensitiveContains(searchText)
         }
     }
     
-    private var filteredFriends: [DMDTO] {
+    private var filteredFriends: [RLDMThreadDTO] {
         guard !searchText.isEmpty else { return rightDrawerViewModel.guildFriends }
-        return rightDrawerViewModel.guildFriends.filter { dm in
-            dm.participant.globalMember.username.localizedCaseInsensitiveContains(searchText)
+        return rightDrawerViewModel.guildFriends.filter { thread in
+            thread.participant.username.localizedCaseInsensitiveContains(searchText) ||
+            thread.participant.displayName.localizedCaseInsensitiveContains(searchText)
         }
     }
     
-    private var filteredOnlineNonFriends: [DMDTO] {
+    private var filteredOnlineNonFriends: [RLDMThreadDTO] {
         guard !searchText.isEmpty else { return rightDrawerViewModel.guildOnlineNonFriends }
-        return rightDrawerViewModel.guildOnlineNonFriends.filter { dm in
-            dm.participant.globalMember.username.localizedCaseInsensitiveContains(searchText)
+        return rightDrawerViewModel.guildOnlineNonFriends.filter { thread in
+            thread.participant.username.localizedCaseInsensitiveContains(searchText) ||
+            thread.participant.displayName.localizedCaseInsensitiveContains(searchText)
         }
     }
     
-    private var filteredOfflineNonFriends: [DMDTO] {
+    private var filteredOfflineNonFriends: [RLDMThreadDTO] {
         guard !searchText.isEmpty else { return rightDrawerViewModel.guildOfflineNonFriends }
-        return rightDrawerViewModel.guildOfflineNonFriends.filter { dm in
-            dm.participant.globalMember.username.localizedCaseInsensitiveContains(searchText)
+        return rightDrawerViewModel.guildOfflineNonFriends.filter { thread in
+            thread.participant.username.localizedCaseInsensitiveContains(searchText) ||
+            thread.participant.displayName.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var filteredMemberFriends: [RLGuildMemberDTO] {
+        guard !searchText.isEmpty else { return rightDrawerViewModel.memberFriends }
+        return rightDrawerViewModel.memberFriends.filter { member in
+            member.username.localizedCaseInsensitiveContains(searchText) ||
+            member.displayName.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var filteredMemberOnlineNonFriends: [RLGuildMemberDTO] {
+        guard !searchText.isEmpty else { return rightDrawerViewModel.memberOnlineNonFriends }
+        return rightDrawerViewModel.memberOnlineNonFriends.filter { member in
+            member.username.localizedCaseInsensitiveContains(searchText) ||
+            member.displayName.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var filteredMemberOfflineNonFriends: [RLGuildMemberDTO] {
+        guard !searchText.isEmpty else { return rightDrawerViewModel.memberOfflineNonFriends }
+        return rightDrawerViewModel.memberOfflineNonFriends.filter { member in
+            member.username.localizedCaseInsensitiveContains(searchText) ||
+            member.displayName.localizedCaseInsensitiveContains(searchText)
         }
     }
     
     private var hasNoResults: Bool {
         !searchText.isEmpty &&
         filteredChatrooms.isEmpty &&
-        filteredFriends.isEmpty &&
-        filteredOnlineNonFriends.isEmpty &&
-        filteredOfflineNonFriends.isEmpty
+        filteredMemberFriends.isEmpty &&
+        filteredMemberOnlineNonFriends.isEmpty &&
+        filteredMemberOfflineNonFriends.isEmpty
     }
     
     var body: some View {
@@ -64,7 +92,7 @@ struct RightDrawerMainView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header section
                 VStack {
-                    HStack (spacing: 10){
+                    HStack(spacing: 10) {
                         Button(action: {
                             withAnimation(AnimationConstants.standard) { onClose() }
                         }) {
@@ -79,15 +107,27 @@ struct RightDrawerMainView: View {
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
                         Spacer()
+                        
+                        // Unread badge
+                        if rightDrawerViewModel.totalUnreadCount > 0 {
+                            Text("\(rightDrawerViewModel.totalUnreadCount)")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(AppColors.accentColor)
+                                .clipShape(Capsule())
+                        }
                     }
                     
                     // Guild Name and icon
-                    HStack (spacing: 4) {
+                    HStack(spacing: 4) {
                         Image(systemName: "shield.pattern.checkered")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
-                        Text("\(guild.guild.name)")
+                        Text("\(guild.name)")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)
@@ -122,8 +162,13 @@ struct RightDrawerMainView: View {
                 // User lists and chatrooms with disclosure groups
                 ScrollView {
                     VStack(spacing: 12) {
+                        // Loading state
+                        if rightDrawerViewModel.isLoading {
+                            ProgressView()
+                                .padding(.top, 40)
+                        }
                         // No results state
-                        if hasNoResults {
+                        else if hasNoResults {
                             UnifiedNoResultsState(
                                 searchText: searchText,
                                 message: "No results found",
@@ -132,7 +177,7 @@ struct RightDrawerMainView: View {
                         } else {
                             // Chatrooms Section
                             if !filteredChatrooms.isEmpty {
-                                ChatroomDisclosureGroup(
+                                RLChatroomDisclosureGroup(
                                     chatrooms: filteredChatrooms,
                                     onChatroomTap: { chatroom in
                                         messagingManager.openChatroom(chatroom)
@@ -140,44 +185,63 @@ struct RightDrawerMainView: View {
                                 )
                             }
                             
-                            // Friends Section
-                            if !filteredFriends.isEmpty {
-                                DMDisclosureGroup(
+                            // Member sections (always show all guild members)
+                            if !filteredMemberFriends.isEmpty {
+                                RLMemberDisclosureGroup(
                                     title: "Friends",
-                                    count: filteredFriends.count,
+                                    count: filteredMemberFriends.count,
                                     icon: "person.crop.circle",
                                     iconColor: AppColors.friendAccent,
-                                    userDMs: filteredFriends,
-                                    onUserTap: { userDM in
-                                        messagingManager.openUserDM(userDM)
+                                    members: filteredMemberFriends,
+                                    onMemberTap: { member in
+                                        Task {
+                                            if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
+                                                messagingManager.openDMThread(thread)
+                                            } else {
+                                                await messagingManager.openDMChat(with: member)
+                                                await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                                            }
+                                        }
                                     }
                                 )
                             }
-                            
-                            // Online Section
-                            if !filteredOnlineNonFriends.isEmpty {
-                                DMDisclosureGroup(
+
+                            if !filteredMemberOnlineNonFriends.isEmpty {
+                                RLMemberDisclosureGroup(
                                     title: "Online",
-                                    count: filteredOnlineNonFriends.count,
+                                    count: filteredMemberOnlineNonFriends.count,
                                     icon: "circle.fill",
                                     iconColor: Color.green,
-                                    userDMs: filteredOnlineNonFriends,
-                                    onUserTap: { userDM in
-                                        messagingManager.openUserDM(userDM)
+                                    members: filteredMemberOnlineNonFriends,
+                                    onMemberTap: { member in
+                                        Task {
+                                            if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
+                                                messagingManager.openDMThread(thread)
+                                            } else {
+                                                await messagingManager.openDMChat(with: member)
+                                                await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                                            }
+                                        }
                                     }
                                 )
                             }
-                            
-                            // Offline Section
-                            if !filteredOfflineNonFriends.isEmpty {
-                                DMDisclosureGroup(
+
+                            if !filteredMemberOfflineNonFriends.isEmpty {
+                                RLMemberDisclosureGroup(
                                     title: "Offline",
-                                    count: filteredOfflineNonFriends.count,
+                                    count: filteredMemberOfflineNonFriends.count,
                                     icon: "circle.fill",
                                     iconColor: Color.gray,
-                                    userDMs: filteredOfflineNonFriends,
-                                    onUserTap: { userDM in
-                                        messagingManager.openUserDM(userDM)
+                                    members: filteredMemberOfflineNonFriends,
+                                    onMemberTap: { member in
+                                        Task {
+                                            if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
+                                                messagingManager.openDMThread(thread)
+                                            } else {
+                                                await messagingManager.openDMChat(with: member)
+                                                await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                                            }
+                                        }
                                     }
                                 )
                             }
@@ -187,6 +251,9 @@ struct RightDrawerMainView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 20)
                 }
+                .refreshable {
+                    await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                }
                 .scrollDismissesKeyboard(.interactively)
                 .onTapGesture {
                     isSearchFocused = false
@@ -195,13 +262,13 @@ struct RightDrawerMainView: View {
                 .simultaneousGesture(
                     DragGesture()
                         .onChanged { value in
-                            if (value.translation.width > 0) {
+                            if value.translation.width > 0 {
                                 dragTranslation = value.translation.width
                             }
                         }
                         .onEnded { value in
                             let threshold = LayoutConstants.drawerDismissThreshold
-                            if (dragTranslation > threshold) {
+                            if dragTranslation > threshold {
                                 onClose()
                             }
                             dragTranslation = 0
@@ -236,6 +303,10 @@ struct RightDrawerMainView: View {
             )
             .shadow(radius: LayoutConstants.shadowRadius)
             .ignoresSafeArea()
+            .task {
+                // Preload data when drawer appears
+                await rightDrawerViewModel.preloadData(for: guild.id, appState: appState)
+            }
         } else {
             EmptyView()
         }
@@ -249,9 +320,13 @@ struct RightDrawerMainView: View {
 // MARK: - Chatroom Disclosure Group (Using UnifiedDisclosureGroup)
 
 /// Collapsible section listing chatrooms; tapping opens a chatroom sheet.
-struct ChatroomDisclosureGroup: View {
-    let chatrooms: [GuildChatroomDTO]
-    let onChatroomTap: (GuildChatroomDTO) -> Void
+struct RLChatroomDisclosureGroup: View {
+    let chatrooms: [RLGuildChatroomDTO]
+    let onChatroomTap: (RLGuildChatroomDTO) -> Void
+    
+    private var unreadCount: Int {
+        chatrooms.reduce(0) { $0 + $1.unreadCount }
+    }
     
     var body: some View {
         UnifiedDisclosureGroup(
@@ -263,7 +338,7 @@ struct ChatroomDisclosureGroup: View {
         ) {
             VStack(spacing: 6) {
                 ForEach(chatrooms) { chatroom in
-                    ChatroomRowView(chatroom: chatroom, onTap: { onChatroomTap(chatroom) })
+                    RLChatroomRowView(chatroom: chatroom, onTap: { onChatroomTap(chatroom) })
                 }
             }
         }
@@ -272,14 +347,14 @@ struct ChatroomDisclosureGroup: View {
 
 // MARK: - DM Disclosure Group (Using UnifiedDisclosureGroup)
 
-/// Collapsible section listing users; tapping opens a user chat sheet.
-struct DMDisclosureGroup: View {
+/// Collapsible section listing DM threads; tapping opens a chat sheet.
+struct RLDMDisclosureGroup: View {
     let title: String
     let count: Int
     let icon: String
     let iconColor: Color
-    let userDMs: [DMDTO]
-    let onUserTap: (DMDTO) -> Void
+    let threads: [RLDMThreadDTO]
+    let onThreadTap: (RLDMThreadDTO) -> Void
     
     var body: some View {
         UnifiedDisclosureGroup(
@@ -290,12 +365,147 @@ struct DMDisclosureGroup: View {
             isExpandedByDefault: true
         ) {
             VStack(spacing: 6) {
-                ForEach(userDMs) { userDM in
-                    UserDMRowView(userDM: userDM, onTap: { onUserTap(userDM) })
+                ForEach(threads) { thread in
+                    RLUserDMRowView(thread: thread, onTap: { onThreadTap(thread) })
                 }
             }
         }
     }
 }
 
+// MARK: - Member Disclosure Group (Fallback when no threads exist yet)
 
+struct RLMemberDisclosureGroup: View {
+    let title: String
+    let count: Int
+    let icon: String
+    let iconColor: Color
+    let members: [RLGuildMemberDTO]
+    let onMemberTap: (RLGuildMemberDTO) -> Void
+
+    var body: some View {
+        UnifiedDisclosureGroup(
+            title: title,
+            count: count,
+            icon: icon,
+            iconColor: iconColor,
+            isExpandedByDefault: true
+        ) {
+            VStack(spacing: 6) {
+                ForEach(members) { member in
+                    RLMemberRowView(member: member, onTap: { onMemberTap(member) })
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Member Row View (Fallback)
+
+struct RLMemberRowView: View {
+    let member: RLGuildMemberDTO
+    let onTap: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                ZStack(alignment: .bottomTrailing) {
+                    if let avatarUrl = member.avatarUrl, !avatarUrl.isEmpty {
+                        AsyncImage(url: URL(string: avatarUrl)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            avatarPlaceholder
+                        }
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                    } else {
+                        avatarPlaceholder
+                    }
+
+                    Circle()
+                        .fill(member.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                        .frame(width: 10, height: 10)
+                        .overlay(
+                            Circle()
+                                .stroke(AppColors.drawerBackground, lineWidth: 1)
+                        )
+                        .offset(x: 2, y: 2)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 2) {
+                        if member.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.bearCandleRed)
+                        }
+
+                        Text(member.displayName)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(member.isBlocked ? AppColors.greyText : AppColors.whiteText)
+
+                        if member.isFriend {
+                            Image(systemName: "person.crop.circle")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(member.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                                .padding(.leading, 3)
+                        }
+                    }
+
+                    HStack(spacing: 2) {
+                        Text(member.memberRole.displayName)
+                            .font(.caption)
+                            .foregroundColor(member.memberRole.color.opacity(0.9))
+                            .fontWeight(member.memberRole.canModerate ? .bold : .regular)
+                            .lineLimit(1)
+
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.5))
+                            .frame(width: 4, height: 4)
+                            .padding(.top, 1)
+                            .padding(.horizontal, 3)
+
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+
+                        Text("\(member.reputation)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }, perform: {})
+    }
+
+    private var avatarPlaceholder: some View {
+        Circle()
+            .fill(AppColors.accentColor.opacity(0.3))
+            .frame(width: 40, height: 40)
+            .overlay(
+                Text(member.displayName.prefix(2))
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppColors.accentColor)
+            )
+    }
+}

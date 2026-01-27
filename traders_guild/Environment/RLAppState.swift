@@ -1156,3 +1156,397 @@ enum RLAppError: LocalizedError {
 
 
 
+// New Appstate for Messaging
+
+//
+//  RLAppState+Messaging.swift
+//  traders_guild
+//
+//  Messaging methods for RLAppState.
+//  Add this to your existing RLAppState.swift file or keep as extension.
+//
+
+
+// MARK: - Messaging Extension
+extension RLAppState {
+    
+    // =============================================================================================
+    // MARK: - Combined Data (Drawer Preload)
+    // =============================================================================================
+    
+    /// Fetch all messaging data for drawer preload
+    /// Returns chatrooms + categorized DMs in one request
+    func fetchGuildMessagingData(guildId: UUID) async throws -> RLGuildMessagingDataDTO {
+        do {
+            return try await realApi.getGuildMessagingData(guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Messages", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch messaging data for current guild
+    func fetchCurrentGuildMessagingData() async throws -> RLGuildMessagingDataDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        return try await fetchGuildMessagingData(guildId: guild.id)
+    }
+    
+    /// Fetch unread counts
+    func fetchUnreadCounts(guildId: UUID) async throws -> RLUnreadCountsDTO {
+        do {
+            return try await realApi.getUnreadCounts(guildId: guildId)
+        } catch {
+            // Don't show error for unread counts - not critical
+            print("⚠️ Failed to fetch unread counts: \(error)")
+            throw error
+        }
+    }
+    
+    // =============================================================================================
+    // MARK: - Chatrooms
+    // =============================================================================================
+    
+    /// Fetch all chatrooms for a guild
+    func fetchGuildChatrooms(guildId: UUID) async throws -> [RLGuildChatroomDTO] {
+        do {
+            let response = try await realApi.getGuildChatrooms(guildId: guildId)
+            return response.chatrooms
+        } catch {
+            showError(error, title: "Failed to Load Chatrooms", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch chatrooms for current guild
+    func fetchCurrentGuildChatrooms() async throws -> [RLGuildChatroomDTO] {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        return try await fetchGuildChatrooms(guildId: guild.id)
+    }
+    
+    /// Fetch a single chatroom
+    func fetchChatroom(chatroomId: UUID) async throws -> RLGuildChatroomDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.getChatroom(guildId: guild.id, chatroomId: chatroomId)
+        } catch {
+            showError(error, title: "Failed to Load Chatroom", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch chatroom messages (paginated)
+    func fetchChatroomMessages(
+        chatroomId: UUID,
+        limit: Int = 50,
+        cursor: String? = nil
+    ) async throws -> RLChatroomMessagesListDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.getChatroomMessages(
+                guildId: guild.id,
+                chatroomId: chatroomId,
+                limit: limit,
+                cursor: cursor
+            )
+        } catch {
+            showError(error, title: "Failed to Load Messages", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Send a chatroom message
+    func sendChatroomMessage(chatroomId: UUID, content: String) async throws -> RLChatroomMessageDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.sendChatroomMessage(
+                guildId: guild.id,
+                chatroomId: chatroomId,
+                content: content
+            )
+        } catch {
+            showError(error, title: "Failed to Send Message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Edit a chatroom message
+    func editChatroomMessage(
+        chatroomId: UUID,
+        messageId: UUID,
+        content: String
+    ) async throws -> RLChatroomMessageDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            let message = try await realApi.editChatroomMessage(
+                guildId: guild.id,
+                chatroomId: chatroomId,
+                messageId: messageId,
+                content: content
+            )
+            showSuccess("Message updated")
+            return message
+        } catch {
+            showError(error, title: "Failed to Edit Message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Delete a chatroom message
+    func deleteChatroomMessage(chatroomId: UUID, messageId: UUID) async throws {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            _ = try await realApi.deleteChatroomMessage(
+                guildId: guild.id,
+                chatroomId: chatroomId,
+                messageId: messageId
+            )
+            showSuccess("Message deleted")
+        } catch {
+            showError(error, title: "Failed to Delete Message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Mark chatroom as read
+    func markChatroomAsRead(chatroomId: UUID) async throws {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            _ = try await realApi.markChatroomAsRead(guildId: guild.id, chatroomId: chatroomId)
+        } catch {
+            // Don't show error for mark as read - not critical
+            print("⚠️ Failed to mark chatroom as read: \(error)")
+            throw error
+        }
+    }
+    
+    /// Update chatroom settings (pin/mute)
+    func updateChatroomSettings(
+        chatroomId: UUID,
+        isPinned: Bool? = nil,
+        isMuted: Bool? = nil
+    ) async throws -> RLChatroomUserSettingsDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            let settings = try await realApi.updateChatroomSettings(
+                guildId: guild.id,
+                chatroomId: chatroomId,
+                isPinned: isPinned,
+                isMuted: isMuted
+            )
+            if isPinned == true {
+                showSuccess("Chatroom pinned")
+            } else if isPinned == false {
+                showSuccess("Chatroom unpinned")
+            }
+            if isMuted == true {
+                showSuccess("Chatroom muted")
+            } else if isMuted == false {
+                showSuccess("Chatroom unmuted")
+            }
+            return settings
+        } catch {
+            showError(error, title: "Failed to Update Settings", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Create a new chatroom (admin only)
+    func createChatroom(name: String, description: String? = nil) async throws -> RLGuildChatroomDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            let chatroom = try await realApi.createChatroom(
+                guildId: guild.id,
+                name: name,
+                description: description
+            )
+            showSuccess("Chatroom created")
+            return chatroom
+        } catch {
+            showError(error, title: "Failed to Create Chatroom", style: .toast)
+            throw error
+        }
+    }
+    
+    // =============================================================================================
+    // MARK: - Direct Messages
+    // =============================================================================================
+    
+    /// Fetch all DM threads for current guild
+    func fetchDMThreads(guildId: UUID) async throws -> [RLDMThreadDTO] {
+        do {
+            let response = try await realApi.getDMThreads(guildId: guildId)
+            return response.threads
+        } catch {
+            showError(error, title: "Failed to Load Messages", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch DM threads for current guild
+    func fetchCurrentGuildDMThreads() async throws -> [RLDMThreadDTO] {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        return try await fetchDMThreads(guildId: guild.id)
+    }
+    
+    /// Fetch or create a DM thread with another user
+    func fetchOrCreateDMThread(participantUserId: UUID) async throws -> RLDMThreadDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.getOrCreateDMThread(
+                guildId: guild.id,
+                participantUserId: participantUserId
+            )
+        } catch {
+            showError(error, title: "Failed to Open Chat", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch a single DM thread
+    func fetchDMThread(threadId: UUID) async throws -> RLDMThreadDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.getDMThread(guildId: guild.id, threadId: threadId)
+        } catch {
+            showError(error, title: "Failed to Load Chat", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch DM messages (paginated)
+    func fetchDMMessages(
+        threadId: UUID,
+        limit: Int = 50,
+        cursor: String? = nil
+    ) async throws -> RLDMMessagesListDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.getDMMessages(
+                guildId: guild.id,
+                threadId: threadId,
+                limit: limit,
+                cursor: cursor
+            )
+        } catch {
+            showError(error, title: "Failed to Load Messages", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Send a DM message
+    func sendDMMessage(threadId: UUID, content: String) async throws -> RLDMMessageDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.sendDMMessage(
+                guildId: guild.id,
+                threadId: threadId,
+                content: content
+            )
+        } catch {
+            showError(error, title: "Failed to Send Message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Edit a DM message
+    func editDMMessage(
+        threadId: UUID,
+        messageId: UUID,
+        content: String
+    ) async throws -> RLDMMessageDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            let message = try await realApi.editDMMessage(
+                guildId: guild.id,
+                threadId: threadId,
+                messageId: messageId,
+                content: content
+            )
+            showSuccess("Message updated")
+            return message
+        } catch {
+            showError(error, title: "Failed to Edit Message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Delete a DM message
+    func deleteDMMessage(threadId: UUID, messageId: UUID) async throws {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            _ = try await realApi.deleteDMMessage(
+                guildId: guild.id,
+                threadId: threadId,
+                messageId: messageId
+            )
+            showSuccess("Message deleted")
+        } catch {
+            showError(error, title: "Failed to Delete Message", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Mark DM as read
+    func markDMAsRead(threadId: UUID) async throws {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            _ = try await realApi.markDMAsRead(guildId: guild.id, threadId: threadId)
+        } catch {
+            // Don't show error for mark as read - not critical
+            print("⚠️ Failed to mark DM as read: \(error)")
+            throw error
+        }
+    }
+    
+    /// Delete entire DM conversation
+    func deleteDMThread(threadId: UUID) async throws {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            _ = try await realApi.deleteDMThread(guildId: guild.id, threadId: threadId)
+            showSuccess("Conversation deleted")
+        } catch {
+            showError(error, title: "Failed to Delete Conversation", style: .toast)
+            throw error
+        }
+    }
+}
+
+
