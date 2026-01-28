@@ -81,6 +81,9 @@ struct RLRightDrawerMainView: View {
     private var hasNoResults: Bool {
         !searchText.isEmpty &&
         filteredChatrooms.isEmpty &&
+        filteredFriends.isEmpty &&
+        filteredOnlineNonFriends.isEmpty &&
+        filteredOfflineNonFriends.isEmpty &&
         filteredMemberFriends.isEmpty &&
         filteredMemberOnlineNonFriends.isEmpty &&
         filteredMemberOfflineNonFriends.isEmpty
@@ -185,65 +188,106 @@ struct RLRightDrawerMainView: View {
                                 )
                             }
                             
-                            // Member sections (always show all guild members)
-                            if !filteredMemberFriends.isEmpty {
-                                RLMemberDisclosureGroup(
-                                    title: "Friends",
-                                    count: filteredMemberFriends.count,
-                                    icon: "person.crop.circle",
-                                    iconColor: AppColors.friendAccent,
-                                    members: filteredMemberFriends,
-                                    onMemberTap: { member in
-                                        Task {
-                                            if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
-                                                messagingManager.openDMThread(thread)
-                                            } else {
-                                                await messagingManager.openDMChat(with: member)
-                                                await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                            if rightDrawerViewModel.hasAnyDMThreads {
+                                if !filteredFriends.isEmpty {
+                                    RLDMDisclosureGroup(
+                                        title: "Friends",
+                                        count: filteredFriends.count,
+                                        icon: "person.crop.circle",
+                                        iconColor: AppColors.friendAccent,
+                                        threads: filteredFriends,
+                                        onThreadTap: { thread in
+                                            messagingManager.openDMThread(thread)
+                                        }
+                                    )
+                                }
+                                
+                                if !filteredOnlineNonFriends.isEmpty {
+                                    RLDMDisclosureGroup(
+                                        title: "Online",
+                                        count: filteredOnlineNonFriends.count,
+                                        icon: "circle.fill",
+                                        iconColor: Color.green,
+                                        threads: filteredOnlineNonFriends,
+                                        onThreadTap: { thread in
+                                            messagingManager.openDMThread(thread)
+                                        }
+                                    )
+                                }
+                                
+                                if !filteredOfflineNonFriends.isEmpty {
+                                    RLDMDisclosureGroup(
+                                        title: "Offline",
+                                        count: filteredOfflineNonFriends.count,
+                                        icon: "circle.fill",
+                                        iconColor: Color.gray,
+                                        threads: filteredOfflineNonFriends,
+                                        onThreadTap: { thread in
+                                            messagingManager.openDMThread(thread)
+                                        }
+                                    )
+                                }
+                            } else {
+                                // Member fallback when no threads exist yet
+                                if !filteredMemberFriends.isEmpty {
+                                    RLMemberDisclosureGroup(
+                                        title: "Friends",
+                                        count: filteredMemberFriends.count,
+                                        icon: "person.crop.circle",
+                                        iconColor: AppColors.friendAccent,
+                                        members: filteredMemberFriends,
+                                        onMemberTap: { member in
+                                            Task {
+                                                if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
+                                                    messagingManager.openDMThread(thread)
+                                                } else {
+                                                    await messagingManager.openDMChat(with: member)
+                                                    await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                                                }
                                             }
                                         }
-                                    }
-                                )
-                            }
-
-                            if !filteredMemberOnlineNonFriends.isEmpty {
-                                RLMemberDisclosureGroup(
-                                    title: "Online",
-                                    count: filteredMemberOnlineNonFriends.count,
-                                    icon: "circle.fill",
-                                    iconColor: Color.green,
-                                    members: filteredMemberOnlineNonFriends,
-                                    onMemberTap: { member in
-                                        Task {
-                                            if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
-                                                messagingManager.openDMThread(thread)
-                                            } else {
-                                                await messagingManager.openDMChat(with: member)
-                                                await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                                    )
+                                }
+                                
+                                if !filteredMemberOnlineNonFriends.isEmpty {
+                                    RLMemberDisclosureGroup(
+                                        title: "Online",
+                                        count: filteredMemberOnlineNonFriends.count,
+                                        icon: "circle.fill",
+                                        iconColor: Color.green,
+                                        members: filteredMemberOnlineNonFriends,
+                                        onMemberTap: { member in
+                                            Task {
+                                                if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
+                                                    messagingManager.openDMThread(thread)
+                                                } else {
+                                                    await messagingManager.openDMChat(with: member)
+                                                    await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                                                }
                                             }
                                         }
-                                    }
-                                )
-                            }
-
-                            if !filteredMemberOfflineNonFriends.isEmpty {
-                                RLMemberDisclosureGroup(
-                                    title: "Offline",
-                                    count: filteredMemberOfflineNonFriends.count,
-                                    icon: "circle.fill",
-                                    iconColor: Color.gray,
-                                    members: filteredMemberOfflineNonFriends,
-                                    onMemberTap: { member in
-                                        Task {
-                                            if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
-                                                messagingManager.openDMThread(thread)
-                                            } else {
-                                                await messagingManager.openDMChat(with: member)
-                                                await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                                    )
+                                }
+                                
+                                if !filteredMemberOfflineNonFriends.isEmpty {
+                                    RLMemberDisclosureGroup(
+                                        title: "Offline",
+                                        count: filteredMemberOfflineNonFriends.count,
+                                        icon: "circle.fill",
+                                        iconColor: Color.gray,
+                                        members: filteredMemberOfflineNonFriends,
+                                        onMemberTap: { member in
+                                            Task {
+                                                if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
+                                                    messagingManager.openDMThread(thread)
+                                                } else {
+                                                    await messagingManager.openDMChat(with: member)
+                                                    await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
+                                                }
                                             }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }

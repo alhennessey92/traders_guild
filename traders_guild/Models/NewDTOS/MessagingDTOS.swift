@@ -49,6 +49,20 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
     var isRecent: Bool {
         Date().timeIntervalSince(timestamp) < 60
     }
+
+    func withCurrentUser(_ isCurrent: Bool) -> RLChatroomMessageDTO {
+        guard var dict = try? JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(self)
+        ) as? [String: Any] else {
+            return self
+        }
+        dict["isCurrentUserMessage"] = isCurrent
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let updated = try? JSONDecoder().decode(RLChatroomMessageDTO.self, from: data) else {
+            return self
+        }
+        return updated
+    }
 }
 
 // MARK: - Guild Chatroom
@@ -153,6 +167,20 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
     
     var isRecent: Bool {
         Date().timeIntervalSince(timestamp) < 60
+    }
+
+    func withCurrentUser(_ isCurrent: Bool) -> RLDMMessageDTO {
+        guard var dict = try? JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(self)
+        ) as? [String: Any] else {
+            return self
+        }
+        dict["isCurrentUserMessage"] = isCurrent
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let updated = try? JSONDecoder().decode(RLDMMessageDTO.self, from: data) else {
+            return self
+        }
+        return updated
     }
 }
 

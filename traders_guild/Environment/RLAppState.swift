@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 class RLAppState: ObservableObject {
@@ -136,6 +137,7 @@ class RLAppState: ObservableObject {
     // ================================================================================================
     
     let realApi = RealAPIService()
+    private var cancellables = Set<AnyCancellable>()
     
     // ================================================================================================
     // MARK: - Initialization
@@ -151,6 +153,8 @@ class RLAppState: ObservableObject {
         realApi.onTokensRefreshed = { [weak self] accessToken, refreshToken in
             self?.handleTokensRefreshed(accessToken: accessToken, refreshToken: refreshToken)
         }
+        
+        setupRealTimeObservers()
         
         Task {
             await restoreSession()
@@ -1550,3 +1554,54 @@ extension RLAppState {
 }
 
 
+
+
+
+//
+//  RLAppState+RealTime.swift
+//  traders_guild
+//
+//  Integrates WebSocket lifecycle with App State.
+//
+
+extension RLAppState {
+    
+    // MARK: - WebSocket Lifecycle Management
+    
+    /// Called when authentication is successful (Login or Restore Session)
+    func connectRealTimeService() {
+        guard let token = self.accessToken else { return }
+        RealTimeService.shared.connect(token: token)
+        
+        // Optional: Subscribe to user-specific notification channel if backend supports it
+        // let userId = currentUser?.id.uuidString.lowercased() ?? ""
+        // RealTimeService.shared.subscribe(to: ["user:\(userId):notifications"])
+    }
+    
+    /// Called when logging out
+    func disconnectRealTimeService() {
+        RealTimeService.shared.disconnect()
+    }
+    
+    // MARK: - Setup Observers
+    
+    /// Call this in RLAppState.init() to react to token changes
+    func setupRealTimeObservers() {
+        // Observe token changes to manage connection
+        $accessToken
+            .removeDuplicates()
+            .sink { [weak self] token in
+                if let token = token {
+                    print("🔐 [AppState] Token set, connecting WS...")
+                    RealTimeService.shared.connect(token: token)
+                } else {
+                    print("🔐 [AppState] Token cleared, disconnecting WS...")
+                    RealTimeService.shared.disconnect()
+                }
+            }
+            .store(in: &cancellables) // Ensure RLAppState has: private var cancellables = Set<AnyCancellable>()
+    }
+}
+
+// NOTE: You need to add `private var cancellables = Set<AnyCancellable>()` to RLAppState
+// and call `setupRealTimeObservers()` in its init().

@@ -8,6 +8,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 class RLRightDrawerViewModel: ObservableObject {
@@ -26,6 +27,18 @@ class RLRightDrawerViewModel: ObservableObject {
     @Published var lastRefresh: Date?
     
     private var currentGuildId: UUID?
+    private var cancellables = Set<AnyCancellable>()
+    private weak var messagingManager: RLMessagingManager?
+    private weak var appState: RLAppState?
+    private var isRefreshingFromRealtime = false
+    
+    init() {
+        setupRealTimeListeners()
+    }
+
+    func configure(with messagingManager: RLMessagingManager) {
+        self.messagingManager = messagingManager
+    }
     
     // ================================================================================================
     // MARK: - Computed Properties
@@ -132,6 +145,7 @@ class RLRightDrawerViewModel: ObservableObject {
     /// Preload all drawer data using combined endpoint (single request)
     func preloadData(for guildId: UUID, appState: RLAppState) async {
         guard shouldRefresh(for: guildId) else { return }
+        self.appState = appState
         
         isLoading = true
         defer { isLoading = false }
@@ -146,6 +160,7 @@ class RLRightDrawerViewModel: ObservableObject {
             self.guildOfflineNonFriends = data.offlineDms
             self.lastRefresh = Date()
             self.currentGuildId = guildId
+            subscribeToAllChannels()
             
             print("✅ Loaded drawer data: \(data.chatrooms.count) chatrooms, \(data.friendDms.count) friends, \(data.onlineDms.count) online, \(data.offlineDms.count) offline")
             // Fallback if combined endpoint returns empty
@@ -170,6 +185,7 @@ class RLRightDrawerViewModel: ObservableObject {
     /// Preload data using separate endpoints (fallback/legacy)
     func preloadDataSeparate(for guildId: UUID, appState: RLAppState) async {
         guard shouldRefresh(for: guildId) else { return }
+        self.appState = appState
         
         isLoading = true
         defer { isLoading = false }
@@ -189,6 +205,7 @@ class RLRightDrawerViewModel: ObservableObject {
             
             self.lastRefresh = Date()
             self.currentGuildId = guildId
+            subscribeToAllChannels()
             
             if guildMembers.isEmpty {
                 await preloadMembersFallback(for: guildId, appState: appState)
@@ -203,6 +220,7 @@ class RLRightDrawerViewModel: ObservableObject {
     
     /// Manual refresh - forces reload
     func refresh(for guildId: UUID, appState: RLAppState) async {
+        self.appState = appState
         lastRefresh = nil
         await preloadData(for: guildId, appState: appState)
     }
@@ -321,5 +339,167 @@ extension RLGuildChatroomDTO {
             return self
         }
         return updated
+    }
+}
+
+
+
+
+
+
+
+
+
+
+//
+//  RLRightDrawerViewModel+RealTime.swift
+//  traders_guild
+//
+//  Handles real-time updates for the chat list (unread counts, last messages).
+//
+
+
+extension RLRightDrawerViewModel {
+    
+    // MARK: - Setup
+    
+    func setupRealTimeListeners() {
+        RealTimeService.shared.messageSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.handleRealTimeEvent(message)
+            }
+            .store(in: &cancellables) // Ensure ViewModel has cancellables
+    }
+    
+    // MARK: - Subscription (Optional Strategy)
+    
+    /// Subscribe to all known channels to receive unread updates
+    /// Call this after preloadData() finishes
+    func subscribeToAllChannels() {
+        var channelsToSubscribe: [String] = []
+        
+        // Chatrooms
+        channelsToSubscribe.append(contentsOf: guildChatrooms.map { MessagingChannel.chatroom($0.id).name })
+        
+        // DMs (Friends + Others)
+        let allDMs = guildFriends + guildOnlineNonFriends + guildOfflineNonFriends
+        channelsToSubscribe.append(contentsOf: allDMs.map { MessagingChannel.dm($0.id).name })
+        
+        print("📜 [RightDrawer] Subscribing to \(channelsToSubscribe.count) channels for updates")
+        RealTimeService.shared.subscribe(to: channelsToSubscribe, owner: "rightDrawer")
+    }
+    
+    // MARK: - Event Handling
+    
+    private func handleRealTimeEvent(_ wsMessage: WSIncomingMessage) {
+        guard let type = WSMessageType(rawValue: wsMessage.type) else { return }
+        
+        // Handle "New Message" to update unread counts and "Last Message" preview
+        if type == .newMessage {
+            // Check if it's a Chatroom message
+            if let chatroomMsg = wsMessage.payload(as: RLChatroomMessageDTO.self) {
+                updateChatroomList(with: chatroomMsg)
+            } 
+            // Check if it's a DM message
+            else if let dmMsg = wsMessage.payload(as: RLDMMessageDTO.self) {
+                updateDMList(with: dmMsg)
+            }
+        }
+        
+        // Handle "Presence" (Online/Offline status)
+        if type == .presence, let userId = wsMessage.userId, let isOnline = wsMessage.payload(as: Bool.self) {
+             updateUserPresence(userId: UUID(uuidString: userId), isOnline: isOnline)
+        }
+    }
+    
+    private func updateChatroomList(with message: RLChatroomMessageDTO) {
+        if let index = guildChatrooms.firstIndex(where: { $0.id == message.chatroomId }) {
+            if isActiveChatroom(message.chatroomId) {
+#if DEBUG
+                print("🧪 [RightDrawer] Skip unread: active chatroom \(message.chatroomId)")
+#endif
+                return
+            }
+            var chatroom = guildChatrooms[index]
+            
+            // Update unread count (if not currently looking at it - logic usually handled by checking active state)
+            // Ideally, check if this chatroom is NOT the active one in MessagingManager
+            let newCount = chatroom.unreadCount + 1
+            chatroom = chatroom.withUnreadCount(newCount)
+            
+            // TODO: Update 'lastMessage' property on DTO if added later
+            
+            // Move to top or just update
+            guildChatrooms[index] = chatroom
+        }
+    }
+    
+    private func updateDMList(with message: RLDMMessageDTO) {
+        // Helper to update specific array
+        func updateArray(_ array: inout [RLDMThreadDTO]) -> Bool {
+            if let index = array.firstIndex(where: { $0.id == message.dmId }) {
+                if isActiveDM(message.dmId) {
+#if DEBUG
+                    print("🧪 [RightDrawer] Skip unread: active DM \(message.dmId)")
+#endif
+                    return true
+                }
+                var thread = array[index]
+                thread = thread.withUnreadCount(thread.unreadCount + 1)
+                
+                // Move to top
+                array.remove(at: index)
+                array.insert(thread, at: 0)
+                return true
+            }
+            return false
+        }
+        
+        // Try finding thread in all categories
+        if !updateArray(&guildFriends) {
+            if !updateArray(&guildOnlineNonFriends) {
+                if !updateArray(&guildOfflineNonFriends) {
+                    refreshIfMissingThread()
+                }
+            }
+        }
+    }
+    
+    private func updateUserPresence(userId: UUID?, isOnline: Bool) {
+        guard let userId = userId else { return }
+        
+        // Move user between Online/Offline arrays if they are not friends
+        // (If they are friends, just update the status inside guildFriends)
+        
+        // Logic omitted for brevity, but involves finding the user in one array,
+        // updating their `isOnline` status, and moving them to the correct section.
+    }
+
+    private func refreshIfMissingThread() {
+        guard !isRefreshingFromRealtime,
+              let guildId = currentGuildId,
+              let appState = appState else { return }
+        isRefreshingFromRealtime = true
+        Task { @MainActor in
+            defer { isRefreshingFromRealtime = false }
+            await refresh(for: guildId, appState: appState)
+        }
+    }
+
+    private func isActiveChatroom(_ chatroomId: UUID) -> Bool {
+        guard let messagingManager = messagingManager else { return false }
+        if case .chatroom(let chatroom) = messagingManager.activeMessage {
+            return chatroom.id == chatroomId
+        }
+        return false
+    }
+
+    private func isActiveDM(_ threadId: UUID) -> Bool {
+        guard let messagingManager = messagingManager else { return false }
+        if case .dmThread(let thread) = messagingManager.activeMessage {
+            return thread.id == threadId
+        }
+        return false
     }
 }

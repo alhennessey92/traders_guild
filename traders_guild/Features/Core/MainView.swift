@@ -251,6 +251,7 @@ struct MainView: View {
                         showBottomSheet = true
                     }
                 }
+                rightDrawerViewModel.configure(with: rlMessagingManager)
                 print(rlAppState.currentUser?.displayUsername ?? "Username")
                 print(rlAppState.currentGuild?.name ?? "Guild Name")
             }

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Combine
 
 // MARK: - Message Content Types
 enum RLMessageContentType: Equatable {
@@ -26,14 +27,28 @@ enum RLMessageContentType: Equatable {
 class RLMessagingManager: ObservableObject {
     @Published var activeMessage: RLMessageContentType? = nil
     @Published var isLoadingChat: Bool = false
+    @Published var activeTypingUsers = Set<String>()
     
     private var dmCache: [UUID: RLDMThreadDTO] = [:]
     private var chatroomCache: [UUID: RLGuildChatroomDTO] = [:]
     
     private weak var appState: RLAppState?
+    private var cancellables = Set<AnyCancellable>()
+    private var currentSubscribedChannel: String?
+    
+    // Publishers for the UI to react to
+    enum IncomingMessageType {
+        case chatroom(RLChatroomMessageDTO)
+        case dm(RLDMMessageDTO)
+    }
+    
+    let incomingMessageSubject = PassthroughSubject<IncomingMessageType, Never>()
+    let editedMessageSubject = PassthroughSubject<IncomingMessageType, Never>()
+    let deletedMessageSubject = PassthroughSubject<UUID, Never>()
     
     init(appState: RLAppState? = nil) {
         self.appState = appState
+        setupRealTimeListeners()
     }
     
     func configure(with appState: RLAppState) {
@@ -45,6 +60,7 @@ class RLMessagingManager: ObservableObject {
     func openDMThread(_ thread: RLDMThreadDTO) {
         dmCache[thread.id] = thread
         activeMessage = .dmThread(thread)
+        subscribeToActiveChat()
     }
     
     /// Open a DM chat with a guild member (creates thread if needed)
@@ -79,6 +95,7 @@ class RLMessagingManager: ObservableObject {
     func openChatroom(_ chatroom: RLGuildChatroomDTO) {
         chatroomCache[chatroom.id] = chatroom
         activeMessage = .chatroom(chatroom)
+        subscribeToActiveChat()
     }
     
     /// Open a chatroom by ID (fetches if not cached)
@@ -111,6 +128,7 @@ class RLMessagingManager: ObservableObject {
     // MARK: - Close & Clear
     
     func closeMessage() {
+        unsubscribeFromActiveChat()
         activeMessage = nil
     }
     
@@ -338,6 +356,22 @@ struct RLMessagingSheet: View {
             resetMessageState()
             await loadMessages()
         }
+        .onReceive(messagingManager.incomingMessageSubject) { incoming in
+            switch incoming {
+            case .chatroom(let message):
+                guard case .chatroom(let chatroom) = contentType,
+                      message.chatroomId == chatroom.id else { return }
+                if !chatroomMessages.contains(where: { $0.id == message.id }) {
+                    chatroomMessages.append(message)
+                }
+            case .dm(let message):
+                guard case .dmThread(let thread) = contentType,
+                      message.dmId == thread.id else { return }
+                if !dmMessages.contains(where: { $0.id == message.id }) {
+                    dmMessages.append(message)
+                }
+            }
+        }
     }
     
     // MARK: - Headers
@@ -466,13 +500,13 @@ struct RLMessagingSheet: View {
             switch contentType {
             case .chatroom(let chatroom):
                 let response = try await appState.fetchChatroomMessages(chatroomId: chatroom.id)
-                chatroomMessages = response.messages
+                chatroomMessages = normalizeChatroomMessages(response.messages)
                 hasMoreMessages = response.hasMore
                 nextCursor = response.nextCursor
                 
             case .dmThread(let thread):
                 let response = try await appState.fetchDMMessages(threadId: thread.id)
-                dmMessages = response.messages
+                dmMessages = normalizeDMMessages(response.messages)
                 hasMoreMessages = response.hasMore
                 nextCursor = response.nextCursor
             }
@@ -490,19 +524,29 @@ struct RLMessagingSheet: View {
             switch contentType {
             case .chatroom(let chatroom):
                 let response = try await appState.fetchChatroomMessages(chatroomId: chatroom.id, cursor: cursor)
-                chatroomMessages.insert(contentsOf: response.messages, at: 0)
+                let olderMessages = normalizeChatroomMessages(response.messages)
+                chatroomMessages.insert(contentsOf: olderMessages, at: 0)
                 hasMoreMessages = response.hasMore
                 nextCursor = response.nextCursor
                 
             case .dmThread(let thread):
                 let response = try await appState.fetchDMMessages(threadId: thread.id, cursor: cursor)
-                dmMessages.insert(contentsOf: response.messages, at: 0)
+                let olderMessages = normalizeDMMessages(response.messages)
+                dmMessages.insert(contentsOf: olderMessages, at: 0)
                 hasMoreMessages = response.hasMore
                 nextCursor = response.nextCursor
             }
         } catch {
             // Error shown by appState
         }
+    }
+
+    private func normalizeChatroomMessages(_ messages: [RLChatroomMessageDTO]) -> [RLChatroomMessageDTO] {
+        messages.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private func normalizeDMMessages(_ messages: [RLDMMessageDTO]) -> [RLDMMessageDTO] {
+        messages.sorted { $0.timestamp < $1.timestamp }
     }
 
     private func resetMessageState() {
@@ -858,3 +902,205 @@ struct RLDMMessageView: View {
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+//
+//  RLMessagingManager+RealTime.swift
+//  traders_guild
+//
+//  Handles real-time logic for the active messaging session.
+//
+
+
+extension RLMessagingManager {
+    
+    // MARK: - Setup
+    
+    /// Call this when MessagingManager is initialized or configured
+    func setupRealTimeListeners() {
+        RealTimeService.shared.messageSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.handleIncomingMessage(message)
+            }
+            .store(in: &cancellables) // Ensure RLMessagingManager has cancellables
+    }
+    
+    // MARK: - Subscription Management
+    
+    /// Subscribe to the active chat channel
+    func subscribeToActiveChat() {
+        guard let activeMessage = activeMessage else { return }
+        
+        let channel: String
+        switch activeMessage {
+        case .chatroom(let chatroom):
+            channel = MessagingChannel.chatroom(chatroom.id).name
+        case .dmThread(let thread):
+            channel = MessagingChannel.dm(thread.id).name
+        }
+        
+        if let current = currentSubscribedChannel, current != channel {
+            print("📡 [MessagingManager] Unsubscribing from \(current)")
+            RealTimeService.shared.unsubscribe(from: [current], owner: "messagingManager")
+        }
+        
+        print("📡 [MessagingManager] Subscribing to \(channel)")
+        RealTimeService.shared.subscribe(to: [channel], owner: "messagingManager")
+        currentSubscribedChannel = channel
+    }
+    
+    /// Unsubscribe from the active chat channel
+    func unsubscribeFromActiveChat() {
+        guard let activeMessage = activeMessage else { return }
+        
+        let channel: String
+        switch activeMessage {
+        case .chatroom(let chatroom):
+            channel = MessagingChannel.chatroom(chatroom.id).name
+        case .dmThread(let thread):
+            channel = MessagingChannel.dm(thread.id).name
+        }
+        
+        print("📡 [MessagingManager] Unsubscribing from \(channel)")
+        RealTimeService.shared.unsubscribe(from: [channel], owner: "messagingManager")
+        if currentSubscribedChannel == channel {
+            currentSubscribedChannel = nil
+        }
+    }
+    
+    // MARK: - Typing Indicators
+    
+    func sendTypingIndicator(isTyping: Bool) {
+        guard let activeMessage = activeMessage else { return }
+        
+        let channel: String
+        switch activeMessage {
+        case .chatroom(let chatroom):
+            channel = MessagingChannel.chatroom(chatroom.id).name
+        case .dmThread(let thread):
+            channel = MessagingChannel.dm(thread.id).name
+        }
+        
+        RealTimeService.shared.sendTyping(channel: channel, isTyping: isTyping)
+    }
+    
+    // MARK: - Message Handling
+    
+    private func handleIncomingMessage(_ wsMessage: WSIncomingMessage) {
+        guard let type = WSMessageType(rawValue: wsMessage.type) else { return }
+        
+        // Only process messages relevant to the ACTIVE chat
+        guard let currentChannelID = currentChannelID,
+              let msgChannel = wsMessage.channel,
+              msgChannel.contains(currentChannelID) else {
+            // Message is not for the currently open chat window
+            // (e.g., notification for a different chat)
+            return
+        }
+        
+        switch type {
+        case .newMessage:
+            handleNewMessage(wsMessage)
+            
+        case .messageEdited:
+            handleMessageEdited(wsMessage)
+            
+        case .messageDeleted:
+            handleMessageDeleted(wsMessage)
+            
+        case .typing:
+            handleTyping(wsMessage)
+            
+        default:
+            break
+        }
+    }
+    
+    // MARK: - Handlers
+    
+    private func handleNewMessage(_ wsMessage: WSIncomingMessage) {
+        // Determine type based on active context
+        if case .chatroom = activeMessage {
+            if let message = wsMessage.payload(as: RLChatroomMessageDTO.self) {
+                let normalized = normalizeChatroomMessage(message)
+                self.incomingMessageSubject.send(.chatroom(normalized))
+            }
+        } else if case .dmThread = activeMessage {
+            if let message = wsMessage.payload(as: RLDMMessageDTO.self) {
+                let normalized = normalizeDMMessage(message)
+                self.incomingMessageSubject.send(.dm(normalized))
+            }
+        }
+    }
+    
+    private func handleMessageEdited(_ wsMessage: WSIncomingMessage) {
+        // Similar to new message, decode and update list
+        if case .chatroom = activeMessage {
+            if let message = wsMessage.payload(as: RLChatroomMessageDTO.self) {
+                let normalized = normalizeChatroomMessage(message)
+                self.editedMessageSubject.send(.chatroom(normalized))
+            }
+        } else if case .dmThread = activeMessage {
+            if let message = wsMessage.payload(as: RLDMMessageDTO.self) {
+                let normalized = normalizeDMMessage(message)
+                self.editedMessageSubject.send(.dm(normalized))
+            }
+        }
+    }
+    
+    private func handleMessageDeleted(_ wsMessage: WSIncomingMessage) {
+        // Payload usually contains { "message_id": "uuid" }
+        guard let dict = wsMessage.payload as? [String: Any],
+              let idString = dict["message_id"] as? String,
+              let uuid = UUID(uuidString: idString) else { return }
+        
+        self.deletedMessageSubject.send(uuid)
+    }
+    
+    private func handleTyping(_ wsMessage: WSIncomingMessage) {
+        guard let isTyping = wsMessage.isTyping,
+              let userId = wsMessage.userId else { return }
+        
+        // Update typing users list
+        if isTyping {
+            activeTypingUsers.insert(userId)
+        } else {
+            activeTypingUsers.remove(userId)
+        }
+    }
+
+    private func normalizeChatroomMessage(_ message: RLChatroomMessageDTO) -> RLChatroomMessageDTO {
+        guard let currentUserId = appState?.currentUser?.id else { return message }
+        let isCurrent = message.author.userId == currentUserId
+        return message.isCurrentUserMessage == isCurrent ? message : message.withCurrentUser(isCurrent)
+    }
+
+    private func normalizeDMMessage(_ message: RLDMMessageDTO) -> RLDMMessageDTO {
+        guard let currentUserId = appState?.currentUser?.id else { return message }
+        let isCurrent = message.author.userId == currentUserId
+        return message.isCurrentUserMessage == isCurrent ? message : message.withCurrentUser(isCurrent)
+    }
+    
+    // Helper to get ID string of active channel for comparison
+    private var currentChannelID: String? {
+        switch activeMessage {
+        case .chatroom(let c): return c.id.uuidString.lowercased()
+        case .dmThread(let t): return t.id.uuidString.lowercased()
+        case .none: return nil
+        }
+    }
+}
+
+//
