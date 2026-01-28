@@ -9,6 +9,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 class LeftDrawerViewModel: ObservableObject {
@@ -63,6 +64,8 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var lastRefresh: Date?
     
     private var currentGuildId: UUID?
+    private var cancellables = Set<AnyCancellable>()
+    private weak var rlAppStateRef: RLAppState?
     
     // ================================================================================================
     // MARK: - Top Markers State
@@ -92,6 +95,17 @@ class LeftDrawerViewModel: ObservableObject {
     /// Clear pending navigation (call after handling)
     func clearPendingNavigation() {
         pendingMarkerNavigation = nil
+    }
+
+    func configure(with rlAppState: RLAppState) {
+        rlAppStateRef = rlAppState
+        rlAppState.$presenceByUserId
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] presenceMap in
+                self?.applyPresenceUpdates(presenceMap)
+            }
+            .store(in: &cancellables)
+        applyPresenceUpdates(rlAppState.presenceByUserId)
     }
     
     // Load sample data (for development)
@@ -126,6 +140,42 @@ class LeftDrawerViewModel: ObservableObject {
         updatedEvent.isRead = true
         upcomingEvents[index] = updatedEvent
         print("✅ Updated event cache: \(eventId) -> isRead: true")
+    }
+
+    private func applyPresenceUpdates(_ presenceMap: [UUID: Bool]) {
+        if presenceMap.isEmpty {
+            guildMembers = guildMembers.map { $0.withOnlineStatus(false) }
+            guildMembersOnlineCount = 0
+            friendsRL = friendsRL.map { $0.withOnlineStatus(false) }
+            friendsRLOnlineCount = 0
+            return
+        }
+        
+        var didChange = false
+        guildMembers = guildMembers.map { member in
+            guard let isOnline = presenceMap[member.userId], isOnline != member.isOnline else {
+                return member
+            }
+            didChange = true
+            return member.withOnlineStatus(isOnline)
+        }
+        
+        if didChange {
+            guildMembersOnlineCount = guildMembers.filter { $0.isOnline }.count
+        }
+        
+        var friendsChanged = false
+        friendsRL = friendsRL.map { friend in
+            guard let isOnline = presenceMap[friend.userId], isOnline != friend.isOnline else {
+                return friend
+            }
+            friendsChanged = true
+            return friend.withOnlineStatus(isOnline)
+        }
+        
+        if friendsChanged {
+            friendsRLOnlineCount = friendsRL.filter { $0.isOnline }.count
+        }
     }
     
     /// Update event attendance status in cache

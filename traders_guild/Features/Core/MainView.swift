@@ -36,6 +36,7 @@ struct MainView: View {
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
     @StateObject private var rightDrawerViewModel = RLRightDrawerViewModel()  // NEW: Uses RLAppState
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
+    @Environment(\.scenePhase) private var scenePhase
     
     // MARK: - Chart State
     @StateObject private var chartControlVM = ChartControlViewModel()
@@ -251,7 +252,9 @@ struct MainView: View {
                         showBottomSheet = true
                     }
                 }
+                leftDrawerViewModel.configure(with: rlAppState)
                 rightDrawerViewModel.configure(with: rlMessagingManager)
+                rightDrawerViewModel.configurePresence(with: rlAppState)
                 print(rlAppState.currentUser?.displayUsername ?? "Username")
                 print(rlAppState.currentGuild?.name ?? "Guild Name")
             }
@@ -297,6 +300,18 @@ struct MainView: View {
                         await chartViewModel.initialize()
                         rlAppState.chartDidBecomeReady()
                     }
+                }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .active:
+                    if rlAppState.accessToken != nil {
+                        rlAppState.connectRealTimeService()
+                    }
+                case .inactive, .background:
+                    rlAppState.disconnectRealTimeService()
+                @unknown default:
+                    break
                 }
             }
         } else {
@@ -379,35 +394,76 @@ struct MainView: View {
                 // Right Drawer Button - with unread badge
                 ToolbarItem(placement: .topBarTrailing) {
                     ZStack(alignment: .topTrailing) {
-                        ToolbarIconButton(
-                            systemName: "message.badge.filled.fill",
-                            backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                            fontType: .subheadline,
-                            symbolRenderingMode: .monochrome,
-                            foregroundStyle: AppColors.whiteText,
-                            padding: 8
-                        ) {
-                            withAnimation(AnimationConstants.standard) {
-                                dismissKeyboard()
-                                selectedDetent = .fraction(0.11)
-                                showRightDrawer.toggle()
-                                showLeftDrawer = false
-                                showOverlay = showRightDrawer
-                            }
-                        }
-                        
-                        // Unread badge
                         if rightDrawerViewModel.totalUnreadCount > 0 {
-                            Text("\(min(rightDrawerViewModel.totalUnreadCount, 99))")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(AppColors.bearCandleRed)
-                                .clipShape(Capsule())
-                                .offset(x: 8, y: -4)
+
+                            ToolbarIconButton(
+                                // Unread badge
+                                systemName: "message.badge.filled.fill",
+                                backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                                fontType: .subheadline,
+                                symbolRenderingMode: .palette,
+                                foregroundStyles: [AppColors.accentColor, AppColors.whiteText],
+                                padding: 8
+                            ) {
+                                withAnimation(AnimationConstants.standard) {
+                                    dismissKeyboard()
+                                    selectedDetent = .fraction(0.11)
+                                    showRightDrawer.toggle()
+                                    showLeftDrawer = false
+                                    showOverlay = showRightDrawer
+                                }
+                            }
+
+                        }else{
+                            ToolbarIconButton(
+                                // Unread badge
+                                systemName: "message.badge.filled.fill",
+                                backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                                fontType: .subheadline,
+                                symbolRenderingMode: .monochrome,
+                                foregroundStyle: AppColors.whiteText,
+                                padding: 8
+                            ) {
+                                withAnimation(AnimationConstants.standard) {
+                                    dismissKeyboard()
+                                    selectedDetent = .fraction(0.11)
+                                    showRightDrawer.toggle()
+                                    showLeftDrawer = false
+                                    showOverlay = showRightDrawer
+                                }
+                            }
+                            
                         }
+                        // ToolbarIconButton(
+                        //     // Unread badge
+                        //     systemName: "message.badge.filled.fill",
+                        //     backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                        //     fontType: .subheadline,
+                        //     symbolRenderingMode: .monochrome,
+                        //     foregroundStyle: AppColors.whiteText,
+                        //     padding: 8
+                        // ) {
+                        //     withAnimation(AnimationConstants.standard) {
+                        //         dismissKeyboard()
+                        //         selectedDetent = .fraction(0.11)
+                        //         showRightDrawer.toggle()
+                        //         showLeftDrawer = false
+                        //         showOverlay = showRightDrawer
+                        //     }
+                        // }
+                        
+                        // // Unread badge
+                        // if rightDrawerViewModel.totalUnreadCount > 0 {
+                        //     Text("\(min(rightDrawerViewModel.totalUnreadCount, 99))")
+                        //         .font(.caption2)
+                        //         .fontWeight(.bold)
+                        //         .foregroundColor(.white)
+                        //         .padding(.horizontal, 5)
+                        //         .padding(.vertical, 2)
+                        //         .background(AppColors.bearCandleRed)
+                        //         .clipShape(Capsule())
+                        //         .offset(x: 8, y: -4)
+                        // }
                     }
                 }
             }

@@ -730,6 +730,20 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
     var displayUsername: String {
         "@\(username)"
     }
+
+    func withOnlineStatus(_ isOnline: Bool) -> RLGuildMemberDTO {
+        guard var dict = try? JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(self)
+        ) as? [String: Any] else {
+            return self
+        }
+        dict["isOnline"] = isOnline
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let updated = try? JSONDecoder().decode(RLGuildMemberDTO.self, from: data) else {
+            return self
+        }
+        return updated
+    }
     
     /// Friendship status display text
     var friendshipStatusDisplay: String {
@@ -1080,6 +1094,20 @@ struct RLFriendDTO: Codable, Identifiable, Equatable, Hashable {
         else if days < 30 { return "\(days / 7) weeks" }
         else if days < 365 { return "\(days / 30) months" }
         else { return "\(days / 365) years" }
+    }
+
+    func withOnlineStatus(_ isOnline: Bool) -> RLFriendDTO {
+        guard var dict = try? JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(self)
+        ) as? [String: Any] else {
+            return self
+        }
+        dict["isOnline"] = isOnline
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let updated = try? JSONDecoder().decode(RLFriendDTO.self, from: data) else {
+            return self
+        }
+        return updated
     }
 }
 

@@ -138,6 +138,8 @@ class RLAppState: ObservableObject {
     
     let realApi = RealAPIService()
     private var cancellables = Set<AnyCancellable>()
+    @Published var presenceByUserId: [UUID: Bool] = [:]
+    private var currentPresenceChannel: String?
     
     // ================================================================================================
     // MARK: - Initialization
@@ -155,6 +157,7 @@ class RLAppState: ObservableObject {
         }
         
         setupRealTimeObservers()
+        setupPresenceListeners()
         
         Task {
             await restoreSession()
@@ -391,6 +394,8 @@ class RLAppState: ObservableObject {
         userGuilds = []
         showGuildSelectionSheet = false  // ← Make sure sheet is dismissed
         isHandlingAuthFlow = false
+        presenceByUserId.removeAll()
+        currentPresenceChannel = nil
         
         clearAllKeychain()
         resetChartReadyState()
@@ -1564,6 +1569,91 @@ extension RLAppState {
 //  Integrates WebSocket lifecycle with App State.
 //
 
+// extension RLAppState {
+    
+//     // MARK: - WebSocket Lifecycle Management
+    
+//     /// Called when authentication is successful (Login or Restore Session)
+//     func connectRealTimeService() {
+//         guard let token = self.accessToken else { return }
+//         RealTimeService.shared.connect(token: token)
+        
+//         // Optional: Subscribe to user-specific notification channel if backend supports it
+//         // let userId = currentUser?.id.uuidString.lowercased() ?? ""
+//         // RealTimeService.shared.subscribe(to: ["user:\(userId):notifications"])
+//     }
+    
+//     /// Called when logging out
+//     func disconnectRealTimeService() {
+//         RealTimeService.shared.disconnect()
+//     }
+    
+//     // MARK: - Setup Observers
+    
+//     /// Call this in RLAppState.init() to react to token changes
+//     func setupRealTimeObservers() {
+//         // Observe token changes to manage connection
+//         $accessToken
+//             .removeDuplicates()
+//             .sink { [weak self] token in
+//                 if let token = token {
+//                     print("🔐 [AppState] Token set, connecting WS...")
+//                     RealTimeService.shared.connect(token: token)
+//                 } else {
+//                     print("🔐 [AppState] Token cleared, disconnecting WS...")
+//                     RealTimeService.shared.disconnect()
+//                     self?.presenceByUserId.removeAll()
+//                 }
+//             }
+//             .store(in: &cancellables) // Ensure RLAppState has: private var cancellables = Set<AnyCancellable>()
+//     }
+
+//     func setupPresenceListeners() {
+//         RealTimeService.shared.messageSubject
+//             .receive(on: DispatchQueue.main)
+//             .sink { [weak self] message in
+//                 guard let self = self,
+//                       let type = WSMessageType(rawValue: message.type),
+//                       type == .presence,
+//                       let userIdString = message.userId,
+//                       let userId = UUID(uuidString: userIdString),
+//                       let isOnline = message.payload(as: Bool.self) else { return }
+//                 self.presenceByUserId[userId] = isOnline
+//             }
+//             .store(in: &cancellables)
+        
+//         $currentGuild
+//             .map { $0?.id }
+//             .removeDuplicates()
+//             .sink { [weak self] guildId in
+//                 guard let self = self else { return }
+//                 if let existing = self.currentPresenceChannel {
+//                     RealTimeService.shared.unsubscribe(from: [existing], owner: "presence")
+//                     self.currentPresenceChannel = nil
+//                 }
+//                 self.presenceByUserId.removeAll()
+//                 guard let guildId = guildId else { return }
+//                 let channel = MessagingChannel.guildPresence(guildId).name
+//                 self.currentPresenceChannel = channel
+//                 RealTimeService.shared.subscribe(to: [channel], owner: "presence")
+//             }
+//             .store(in: &cancellables)
+//     }
+// }
+
+// NOTE: You need to add `private var cancellables = Set<AnyCancellable>()` to RLAppState
+// and call `setupRealTimeObservers()` in its init().
+
+
+
+//
+//  RLAppState+RealTime.swift
+//  traders_guild
+//
+//  Integrates WebSocket lifecycle with App State.
+//
+
+
 extension RLAppState {
     
     // MARK: - WebSocket Lifecycle Management
@@ -1573,14 +1663,19 @@ extension RLAppState {
         guard let token = self.accessToken else { return }
         RealTimeService.shared.connect(token: token)
         
-        // Optional: Subscribe to user-specific notification channel if backend supports it
+        // Optional: Subscribe to user-specific notification channel
         // let userId = currentUser?.id.uuidString.lowercased() ?? ""
         // RealTimeService.shared.subscribe(to: ["user:\(userId):notifications"])
     }
     
-    /// Called when logging out
+    /// Called when logging out or entering background
     func disconnectRealTimeService() {
         RealTimeService.shared.disconnect()
+        
+        // Clear presence state on disconnect so UI updates to offline
+        DispatchQueue.main.async {
+            self.presenceByUserId.removeAll()
+        }
     }
     
     // MARK: - Setup Observers
@@ -1596,12 +1691,54 @@ extension RLAppState {
                     RealTimeService.shared.connect(token: token)
                 } else {
                     print("🔐 [AppState] Token cleared, disconnecting WS...")
-                    RealTimeService.shared.disconnect()
+                    self?.disconnectRealTimeService()
                 }
             }
             .store(in: &cancellables) // Ensure RLAppState has: private var cancellables = Set<AnyCancellable>()
     }
+    
+    /// Sets up the Single Source of Truth for user presence
+    func setupPresenceListeners() {
+        // 1. Listen for raw presence messages from WebSocket
+        RealTimeService.shared.messageSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                guard let self = self,
+                      let type = WSMessageType(rawValue: message.type),
+                      type == .presence,
+                      let userIdString = message.userId,
+                      let userId = UUID(uuidString: userIdString),
+                      let isOnline = message.payload(as: Bool.self) else { return }
+                
+                // Update the Source of Truth map
+                self.presenceByUserId[userId] = isOnline
+            }
+            .store(in: &cancellables)
+        
+        // 2. Manage subscription to the Guild Presence channel based on selected guild
+        $currentGuild
+            .map { $0?.id }
+            .removeDuplicates()
+            .sink { [weak self] guildId in
+                guard let self = self else { return }
+                
+                // Unsubscribe from old guild presence channel
+                if let existing = self.currentPresenceChannel {
+                    RealTimeService.shared.unsubscribe(from: [existing], owner: "presence")
+                    self.currentPresenceChannel = nil
+                }
+                
+                // Clear map on guild change
+                self.presenceByUserId.removeAll()
+                
+                // Subscribe to new guild presence
+                guard let guildId = guildId else { return }
+                let channel = MessagingChannel.guildPresence(guildId).name
+                self.currentPresenceChannel = channel
+                
+                print("👀 [AppState] Subscribing to presence: \(channel)")
+                RealTimeService.shared.subscribe(to: [channel], owner: "presence")
+            }
+            .store(in: &cancellables)
+    }
 }
-
-// NOTE: You need to add `private var cancellables = Set<AnyCancellable>()` to RLAppState
-// and call `setupRealTimeObservers()` in its init().

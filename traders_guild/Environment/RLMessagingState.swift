@@ -147,7 +147,7 @@ struct RLGlobalMessagingOverlay: ViewModifier {
             .sheet(item: Binding<RLMessageContentItem?>(
                 get: {
                     if let activeMessage = messagingManager.activeMessage {
-                        return RLMessageContentItem(contentType: activeMessage)
+                return RLMessageContentItem(id: activeMessage.id, contentType: activeMessage)
                     }
                     return nil
                 },
@@ -173,7 +173,7 @@ struct RLGlobalMessagingOverlay: ViewModifier {
 
 // MARK: - Helper for Sheet Presentation
 struct RLMessageContentItem: Identifiable {
-    let id = UUID()
+    let id: UUID
     let contentType: RLMessageContentType
 }
 
@@ -199,6 +199,8 @@ struct RLMessagingSheet: View {
     @State private var selectedChatroomUser: RLGuildMemberDTO? = nil
     @State private var showSettings = false
     @State private var hasMarkedAsRead = false
+    @State private var typingWorkItem: DispatchWorkItem? = nil
+    @State private var hasSentTyping: Bool = false
     
     // Message state
     @State private var chatroomMessages: [RLChatroomMessageDTO] = []
@@ -321,7 +323,6 @@ struct RLMessagingSheet: View {
             
             // Messages list
             messagesListView
-            
             Divider()
             
             // Input footer
@@ -356,6 +357,9 @@ struct RLMessagingSheet: View {
             resetMessageState()
             await loadMessages()
         }
+        .onChange(of: messageText) { _, newValue in
+            handleTypingChange(newValue)
+        }
         .onReceive(messagingManager.incomingMessageSubject) { incoming in
             switch incoming {
             case .chatroom(let message):
@@ -372,6 +376,32 @@ struct RLMessagingSheet: View {
                 }
             }
         }
+    }
+
+    private func handleTypingChange(_ text: String) {
+        let isEmpty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if isEmpty {
+            if hasSentTyping {
+                messagingManager.sendTypingIndicator(isTyping: false)
+                hasSentTyping = false
+            }
+            typingWorkItem?.cancel()
+            typingWorkItem = nil
+            return
+        }
+        
+        if !hasSentTyping {
+            messagingManager.sendTypingIndicator(isTyping: true)
+            hasSentTyping = true
+        }
+        
+        typingWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            messagingManager.sendTypingIndicator(isTyping: false)
+            hasSentTyping = false
+        }
+        typingWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
     }
     
     // MARK: - Headers
@@ -394,11 +424,16 @@ struct RLMessagingSheet: View {
     }
     
     private func dmHeader(_ thread: RLDMThreadDTO) -> some View {
-        HStack(spacing: 8) {
+        let isTyping = isTypingForCurrentDM(thread)
+        let isOnline = appState.presenceByUserId[thread.participant.userId] ?? thread.participant.isOnline
+        let statusText = isTyping ? "Typing..." : (isOnline ? "Online" : "Offline")
+        let statusColor = isTyping ? AppColors.accentColor : (isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+        
+        return HStack(spacing: 8) {
             // Avatar - using unified ChatAvatar
             ChatAvatar(
                 initials: thread.participant.initials,
-                isOnline: thread.participant.isOnline,
+                isOnline: isOnline,
                 size: 36
             )
             
@@ -408,11 +443,18 @@ struct RLMessagingSheet: View {
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.whiteText)
                 
-                Text(thread.participant.isOnline ? "Online" : "Offline")
+                Text(statusText)
                     .font(.caption)
-                    .foregroundColor(thread.participant.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                    .foregroundColor(statusColor)
             }
         }
+    }
+
+    private func isTypingForCurrentDM(_ thread: RLDMThreadDTO) -> Bool {
+        let currentUserId = appState.currentUser?.id.uuidString.lowercased()
+        let typingUsers = messagingManager.activeTypingUsers.filter { $0 != currentUserId }
+        let threadUserId = thread.participant.userId.uuidString.lowercased()
+        return typingUsers.contains(threadUserId)
     }
     
     // MARK: - Messages List
@@ -1075,9 +1117,9 @@ extension RLMessagingManager {
         
         // Update typing users list
         if isTyping {
-            activeTypingUsers.insert(userId)
+            activeTypingUsers.insert(userId.lowercased())
         } else {
-            activeTypingUsers.remove(userId)
+            activeTypingUsers.remove(userId.lowercased())
         }
     }
 
