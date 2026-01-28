@@ -249,6 +249,11 @@ struct UserProfileHeaderView: View {
     
     @EnvironmentObject var rlAppState: RLAppState
     
+    private var isOnline: Bool {
+        guard let currentUser = rlAppState.currentUser else { return false }
+        return rlAppState.presenceByUserId[currentUser.id] ?? currentUser.isOnline
+    }
+    
     var body: some View {
         // Top header section with gradient background
         VStack(alignment: .leading, spacing: 20) {
@@ -266,9 +271,8 @@ struct UserProfileHeaderView: View {
                                 .foregroundColor(AppColors.accentColor)
                         )
                     
-                    //always going to be online as is current user
                     Circle()
-                        .fill(AppColors.bullCandleGreen)
+                        .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
                         .frame(width: 12, height: 12)
                         .overlay(
                             Circle()

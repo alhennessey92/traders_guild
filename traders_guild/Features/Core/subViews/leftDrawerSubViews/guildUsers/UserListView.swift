@@ -641,6 +641,11 @@ struct GuildUserDetailViewRL: View {
 
 struct GuildMemberProfileHeaderView: View {
     let user: GuildMembershipDTO
+    @EnvironmentObject var rlAppState: RLAppState
+    
+    private var isOnline: Bool {
+        rlAppState.presenceByUserId[user.globalMember.id] ?? user.isOnline
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -659,7 +664,7 @@ struct GuildMemberProfileHeaderView: View {
                         )
                         .overlay(alignment: .bottomTrailing) {
                             Circle()
-                                .fill(user.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                                .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
                                 .frame(width: 14, height: 14)
                                 .overlay(
                                     Circle()
@@ -759,6 +764,11 @@ struct GuildMemberProfileHeaderView: View {
 
 struct GuildMemberProfileHeaderViewRL: View {
     let member: RLGuildMemberDTO
+    @EnvironmentObject var rlAppState: RLAppState
+    
+    private var isOnline: Bool {
+        rlAppState.presenceByUserId[member.userId] ?? member.isOnline
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -775,7 +785,7 @@ struct GuildMemberProfileHeaderViewRL: View {
                         )
                         .overlay(alignment: .bottomTrailing) {
                             Circle()
-                                .fill(member.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                                .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
                                 .frame(width: 14, height: 14)
                                 .overlay(
                                     Circle()
