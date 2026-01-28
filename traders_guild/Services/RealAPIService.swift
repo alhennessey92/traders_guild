@@ -1203,10 +1203,10 @@ extension RealAPIService {
     }
     
     /// Mark chatroom as read
-    /// POST /guilds/{guild_id}/chatrooms/{chatroom_id}/read
+    /// POST /guilds/{guild_id}/chatrooms/{chatroom_id}/mark-read
     func markChatroomAsRead(guildId: UUID, chatroomId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/read",
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/mark-read",
             service: .messaging,
             method: "POST",
             auth: true
@@ -1363,10 +1363,10 @@ extension RealAPIService {
     }
     
     /// Mark DM thread as read
-    /// POST /guilds/{guild_id}/dms/{thread_id}/read
+    /// POST /guilds/{guild_id}/dms/{thread_id}/mark-read
     func markDMAsRead(guildId: UUID, threadId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/read",
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/mark-read",
             service: .messaging,
             method: "POST",
             auth: true
