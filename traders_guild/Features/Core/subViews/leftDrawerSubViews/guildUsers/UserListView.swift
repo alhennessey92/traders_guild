@@ -445,13 +445,19 @@ struct FriendRow: View {
     let friend: RLFriendDTO
     let onTap: () -> Void
     
+    @EnvironmentObject var rlAppState: RLAppState
+    
+    private var isOnline: Bool {
+        rlAppState.presenceByUserId[friend.userId] ?? friend.isOnline
+    }
+    
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 UnifiedMemberAvatar(
                     username: friend.displayName,
                     avatarURL: friend.avatarUrl,
-                    isOnline: friend.isOnline
+                    isOnline: isOnline
                 )
                 
                 VStack(alignment: .leading, spacing: 4) {

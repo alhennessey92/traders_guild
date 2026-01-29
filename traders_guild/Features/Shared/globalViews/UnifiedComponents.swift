@@ -1348,7 +1348,12 @@ struct UnifiedGuildMemberRow: View {
     let onTap: () -> Void
     var showReputation: Bool = true
     
+    @EnvironmentObject var rlAppState: RLAppState
     @State private var isPressed: Bool = false
+    
+    private var isOnline: Bool {
+        rlAppState.presenceByUserId[user.userId] ?? user.isOnline
+    }
     
     var body: some View {
         Button(action: onTap) {
@@ -1357,7 +1362,7 @@ struct UnifiedGuildMemberRow: View {
                 UnifiedMemberAvatar(
                     username: user.displayName,
                     avatarURL: user.avatarUrl,
-                    isOnline: user.isOnline
+                    isOnline: isOnline
                 )
                 
                 // User info

@@ -528,20 +528,7 @@ class RLAppState: ObservableObject {
     func fetchOpenGuilds() async throws -> [RLGuildDTO] {
         return try await fetchJoinableGuilds()
     }
-//    /// Fetch open guilds for discovery
-//    func fetchOpenGuilds() async throws -> [RLGuildDTO] {
-//        isLoading = true
-//        defer { isLoading = false }
-//        
-//        do {
-//            let guilds = try await realApi.getOpenGuilds()
-//            return guilds
-//        } catch {
-//            showError(error, title: "Failed to Fetch Guilds", style: .toast)
-//            throw error
-//        }
-//    }
-    
+
     /// Join a guild - returns the combined guild with membership
     func joinGuild(guildId: UUID) async throws -> RLGuildWithMembership {
         do {
@@ -655,7 +642,7 @@ class RLAppState: ObservableObject {
         }
     }
     
-    /// Create announcement (admin/mod only)
+    /// Create announcement (ADMIN/MOD only)
     func createAnnouncement(title: String, content: String, preview: String? = nil, isImportant: Bool = false) async throws -> RLGuildAnnouncementWithAuthorDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
@@ -736,7 +723,7 @@ class RLAppState: ObservableObject {
     }
     
     
-    /// Create event (admin/mod only)
+    /// Create event (ADMIN/MOD only)
     /// Constructs full RLGuildEventWithAuthorDTO locally since we know current user is the author
     func createEvent(title: String, content: String, preview: String, eventDate: Date, isImportant: Bool = false) async throws -> RLGuildEventWithAuthorDTO {
         guard let guild = currentGuild else {
@@ -1135,52 +1122,12 @@ class RLAppState: ObservableObject {
         clearGuildFromKeychain()
         clearMembershipFromKeychain()
     }
-}
-
-// ================================================================================================
-// MARK: - App Errors
-// ================================================================================================
-
-enum RLAppError: LocalizedError {
-    case noGuildSelected
-    case notAuthenticated
-    case networkError(String)
-    case unknown(String)
     
-    var errorDescription: String? {
-        switch self {
-        case .noGuildSelected:
-            return "No guild selected"
-        case .notAuthenticated:
-            return "Not authenticated"
-        case .networkError(let msg):
-            return "Network error: \(msg)"
-        case .unknown(let msg):
-            return msg
-        }
-    }
-}
-
-
-
-
-
-// New Appstate for Messaging
-
-//
-//  RLAppState+Messaging.swift
-//  traders_guild
-//
-//  Messaging methods for RLAppState.
-//  Add this to your existing RLAppState.swift file or keep as extension.
-//
-
-
-// MARK: - Messaging Extension
-extension RLAppState {
+    
+    
     
     // =============================================================================================
-    // MARK: - Combined Data (Drawer Preload)
+    // MARK: - Combined Data (Drawer Preload) - MESSAGING
     // =============================================================================================
     
     /// Fetch all messaging data for drawer preload
@@ -1213,8 +1160,12 @@ extension RLAppState {
         }
     }
     
+    
+    
+    
+    
     // =============================================================================================
-    // MARK: - Chatrooms
+    // MARK: - CHATROOM MANAGEMENT
     // =============================================================================================
     
     /// Fetch all chatrooms for a guild
@@ -1396,8 +1347,14 @@ extension RLAppState {
         }
     }
     
+    
+    
+    
+    
+    
+    
     // =============================================================================================
-    // MARK: - Direct Messages
+    // MARK: - DIRECT MESSAGES
     // =============================================================================================
     
     /// Fetch all DM threads for current guild
@@ -1556,105 +1513,17 @@ extension RLAppState {
             throw error
         }
     }
-}
-
-
-
-
-
-//
-//  RLAppState+RealTime.swift
-//  traders_guild
-//
-//  Integrates WebSocket lifecycle with App State.
-//
-
-// extension RLAppState {
     
-//     // MARK: - WebSocket Lifecycle Management
     
-//     /// Called when authentication is successful (Login or Restore Session)
-//     func connectRealTimeService() {
-//         guard let token = self.accessToken else { return }
-//         RealTimeService.shared.connect(token: token)
-        
-//         // Optional: Subscribe to user-specific notification channel if backend supports it
-//         // let userId = currentUser?.id.uuidString.lowercased() ?? ""
-//         // RealTimeService.shared.subscribe(to: ["user:\(userId):notifications"])
-//     }
     
-//     /// Called when logging out
-//     func disconnectRealTimeService() {
-//         RealTimeService.shared.disconnect()
-//     }
     
-//     // MARK: - Setup Observers
     
-//     /// Call this in RLAppState.init() to react to token changes
-//     func setupRealTimeObservers() {
-//         // Observe token changes to manage connection
-//         $accessToken
-//             .removeDuplicates()
-//             .sink { [weak self] token in
-//                 if let token = token {
-//                     print("🔐 [AppState] Token set, connecting WS...")
-//                     RealTimeService.shared.connect(token: token)
-//                 } else {
-//                     print("🔐 [AppState] Token cleared, disconnecting WS...")
-//                     RealTimeService.shared.disconnect()
-//                     self?.presenceByUserId.removeAll()
-//                 }
-//             }
-//             .store(in: &cancellables) // Ensure RLAppState has: private var cancellables = Set<AnyCancellable>()
-//     }
-
-//     func setupPresenceListeners() {
-//         RealTimeService.shared.messageSubject
-//             .receive(on: DispatchQueue.main)
-//             .sink { [weak self] message in
-//                 guard let self = self,
-//                       let type = WSMessageType(rawValue: message.type),
-//                       type == .presence,
-//                       let userIdString = message.userId,
-//                       let userId = UUID(uuidString: userIdString),
-//                       let isOnline = message.payload(as: Bool.self) else { return }
-//                 self.presenceByUserId[userId] = isOnline
-//             }
-//             .store(in: &cancellables)
-        
-//         $currentGuild
-//             .map { $0?.id }
-//             .removeDuplicates()
-//             .sink { [weak self] guildId in
-//                 guard let self = self else { return }
-//                 if let existing = self.currentPresenceChannel {
-//                     RealTimeService.shared.unsubscribe(from: [existing], owner: "presence")
-//                     self.currentPresenceChannel = nil
-//                 }
-//                 self.presenceByUserId.removeAll()
-//                 guard let guildId = guildId else { return }
-//                 let channel = MessagingChannel.guildPresence(guildId).name
-//                 self.currentPresenceChannel = channel
-//                 RealTimeService.shared.subscribe(to: [channel], owner: "presence")
-//             }
-//             .store(in: &cancellables)
-//     }
-// }
-
-// NOTE: You need to add `private var cancellables = Set<AnyCancellable>()` to RLAppState
-// and call `setupRealTimeObservers()` in its init().
-
-
-
-//
-//  RLAppState+RealTime.swift
-//  traders_guild
-//
-//  Integrates WebSocket lifecycle with App State.
-//
-
-
-extension RLAppState {
+    
+    
+    
+    // =============================================================================================
+    // MARK: - WEBSOCKET MANAGEMENT
+    // =============================================================================================
     
     // MARK: - WebSocket Lifecycle Management
     
@@ -1742,3 +1611,28 @@ extension RLAppState {
             .store(in: &cancellables)
     }
 }
+
+// ================================================================================================
+// MARK: - App Errors
+// ================================================================================================
+
+enum RLAppError: LocalizedError {
+    case noGuildSelected
+    case notAuthenticated
+    case networkError(String)
+    case unknown(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .noGuildSelected:
+            return "No guild selected"
+        case .notAuthenticated:
+            return "Not authenticated"
+        case .networkError(let msg):
+            return "Network error: \(msg)"
+        case .unknown(let msg):
+            return msg
+        }
+    }
+}
+

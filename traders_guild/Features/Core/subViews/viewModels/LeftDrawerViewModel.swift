@@ -151,31 +151,17 @@ class LeftDrawerViewModel: ObservableObject {
             return
         }
         
-        var didChange = false
         guildMembers = guildMembers.map { member in
-            guard let isOnline = presenceMap[member.userId], isOnline != member.isOnline else {
-                return member
-            }
-            didChange = true
-            return member.withOnlineStatus(isOnline)
+            let isOnline = presenceMap[member.userId] ?? false
+            return member.isOnline == isOnline ? member : member.withOnlineStatus(isOnline)
         }
+        guildMembersOnlineCount = guildMembers.filter { $0.isOnline }.count
         
-        if didChange {
-            guildMembersOnlineCount = guildMembers.filter { $0.isOnline }.count
-        }
-        
-        var friendsChanged = false
         friendsRL = friendsRL.map { friend in
-            guard let isOnline = presenceMap[friend.userId], isOnline != friend.isOnline else {
-                return friend
-            }
-            friendsChanged = true
-            return friend.withOnlineStatus(isOnline)
+            let isOnline = presenceMap[friend.userId] ?? false
+            return friend.isOnline == isOnline ? friend : friend.withOnlineStatus(isOnline)
         }
-        
-        if friendsChanged {
-            friendsRLOnlineCount = friendsRL.filter { $0.isOnline }.count
-        }
+        friendsRLOnlineCount = friendsRL.filter { $0.isOnline }.count
     }
     
     /// Update event attendance status in cache

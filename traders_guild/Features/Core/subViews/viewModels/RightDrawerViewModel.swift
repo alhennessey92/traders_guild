@@ -340,16 +340,14 @@ class RLRightDrawerViewModel: ObservableObject {
     /// Update the view model lists based on the Source of Truth from AppState
     private func applyPresenceUpdates(_ presenceMap: [UUID: Bool]) {
         // 1. Update fallback list
-        if !presenceMap.isEmpty {
-            guildMembers = guildMembers.map { member in
-                if let isOnline = presenceMap[member.userId] {
-                    return member.withOnlineStatus(isOnline)
-                }
-                return member
-            }
+        if presenceMap.isEmpty {
+            // If map is cleared (disconnect), mark all offline
+            guildMembers = guildMembers.map { $0.withOnlineStatus(false) }
         } else {
-             // If map is cleared (disconnect), mark all offline
-             guildMembers = guildMembers.map { $0.withOnlineStatus(false) }
+            guildMembers = guildMembers.map { member in
+                let isOnline = presenceMap[member.userId] ?? false
+                return member.isOnline == isOnline ? member : member.withOnlineStatus(isOnline)
+            }
         }
         
         // 2. Rebuild the DM sections to move people between online/offline lists
