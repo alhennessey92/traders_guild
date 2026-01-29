@@ -1352,7 +1352,7 @@ struct UnifiedGuildMemberRow: View {
     @State private var isPressed: Bool = false
     
     private var isOnline: Bool {
-        rlAppState.presenceByUserId[user.userId] ?? user.isOnline
+        rlAppState.effectiveOnlineStatus(userId: user.userId, fallback: user.isOnline)
     }
     
     var body: some View {

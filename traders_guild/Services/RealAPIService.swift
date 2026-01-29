@@ -1386,3 +1386,115 @@ extension RealAPIService {
 }
 
 
+ // User Settings Extensions
+extension RealAPIService {
+
+//    // MARK: - Account Management
+//
+//    func updateBasicUserInfo(_ request: RLBasicUserUpdateRequest) async throws -> RLUserDTO {
+//        return try await request(
+//            "/users/me/basic",
+//            service: .core,
+//            method: "PUT",
+//            body: request,
+//            auth: true
+//        )
+//    }
+//
+//    func uploadAvatar(imageData: Data) async throws -> RLAvatarUpdateResponse {
+//        // Multipart form data upload
+//    }
+//
+//    func requestEmailChange(_ request: RLEmailChangeRequest) async throws -> RLDetailResponseDTO {
+//        return try await request(
+//            "/users/me/email/change-request",
+//            service: .core,
+//            method: "POST",
+//            body: request,
+//            auth: true
+//        )
+//    }
+//
+//    func changePassword(_ request: RLPasswordChangeRequest) async throws -> RLDetailResponseDTO {
+//        return try await request(
+//            "/users/me/password",
+//            service: .core,
+//            method: "PUT",
+//            body: request,
+//            auth: true
+//        )
+//    }
+//
+//    func updateDateOfBirth(_ request: RLDOBUpdateRequest) async throws -> RLUserDTO {
+//        return try await request(
+//            "/users/me/dob",
+//            service: .core,
+//            method: "PUT",
+//            body: request,
+//            auth: true
+//        )
+//    }
+//
+//    func deleteAccount(_ request: RLDeleteAccountRequest) async throws {
+//        let _: EmptyResponse = try await request(
+//            "/users/me",
+//            service: .core,
+//            method: "DELETE",
+//            body: request,
+//            auth: true
+//        )
+//    }
+//
+//    // MARK: - Support
+//
+//    func submitSupportTicket(_ request: RLSupportTicketRequest) async throws -> RLDetailResponseDTO {
+//        return try await request(
+//            "/support/tickets",
+//            service: .core,
+//            method: "POST",
+//            body: request,
+//            auth: true
+//        )
+//    }
+
+    // MARK: - Activity Feed
+
+    func getUserActivity(skip: Int = 0, limit: Int = 50) async throws -> RLActivityFeedResponse {
+        return try await request(
+            "/users/me/activity?skip=\(skip)&limit=\(limit)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    func requestDataExport() async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/data-export",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    // MARK: - User Settings
+
+    func getUserSettings() async throws -> RLUserSettingsDTO {
+        return try await request(
+            "/users/me/settings",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    func updateUserSettings(_ updateRequest: RLUserSettingsUpdateRequest) async throws -> RLUserSettingsDTO {
+        return try await request(
+            "/users/me/settings",
+            service: .core,
+            method: "PUT",
+            body: updateRequest,
+            auth: true
+        )
+    }
+}

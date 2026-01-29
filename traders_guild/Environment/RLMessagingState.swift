@@ -425,7 +425,7 @@ struct RLMessagingSheet: View {
     
     private func dmHeader(_ thread: RLDMThreadDTO) -> some View {
         let isTyping = isTypingForCurrentDM(thread)
-        let isOnline = appState.presenceByUserId[thread.participant.userId] ?? thread.participant.isOnline
+        let isOnline = appState.effectiveOnlineStatus(userId: thread.participant.userId, fallback: thread.participant.isOnline)
         let statusText = isTyping ? "Typing..." : (isOnline ? "Online" : "Offline")
         let statusColor = isTyping ? AppColors.accentColor : (isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
         

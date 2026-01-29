@@ -78,6 +78,22 @@ class RLAppState: ObservableObject {
             }
         }
     }
+
+    /// User settings (privacy/data preferences)
+    @Published var userSettings: RLUserSettingsDTO?
+
+    /// Whether presence indicators should be used in the UI
+    var shouldShowPresence: Bool {
+        userSettings?.showOnlineStatus ?? true
+    }
+
+    func effectiveOnlineStatus(userId: UUID, fallback: Bool) -> Bool {
+        guard shouldShowPresence else { return false }
+        if presenceByUserId.isEmpty {
+            return fallback
+        }
+        return presenceByUserId[userId] ?? false
+    }
     
     // ================================================================================================
     // MARK: - Computed Convenience Properties
@@ -175,6 +191,7 @@ class RLAppState: ObservableObject {
         currentUser = nil
         currentGuild = nil
         currentMembership = nil
+        userSettings = nil
         userGuilds = []
         showGuildSelectionSheet = false
         isHandlingAuthFlow = false
@@ -440,6 +457,14 @@ class RLAppState: ObservableObject {
         if let membership = getMembershipFromKeychain() {
             self.currentMembership = membership
             print("🔄 restoreSession: Found membership")
+        }
+
+        if currentUser != nil {
+            do {
+                userSettings = try await realApi.getUserSettings()
+            } catch {
+                print("⚠️ restoreSession: Failed to fetch user settings: \(error)")
+            }
         }
         
         print("🔄 restoreSession: Done - isAuthenticated: \(isAuthenticated), hasGuild: \(currentGuild != nil)")
@@ -888,6 +913,30 @@ class RLAppState: ObservableObject {
             throw error
         }
     }
+
+    /// Fetch current user's settings
+    func fetchUserSettings() async throws -> RLUserSettingsDTO {
+        do {
+            let response = try await realApi.getUserSettings()
+            userSettings = response
+            return response
+        } catch {
+            showError(error, title: "Failed to Load Settings", style: .toast)
+            throw error
+        }
+    }
+
+    /// Update current user's settings
+    func updateUserSettings(_ updateRequest: RLUserSettingsUpdateRequest) async throws -> RLUserSettingsDTO {
+        do {
+            let response = try await realApi.updateUserSettings(updateRequest)
+            userSettings = response
+            return response
+        } catch {
+            showError(error, title: "Failed to Update Settings", style: .toast)
+            throw error
+        }
+    }
     
     /// Fetch current user's global statistics
     func fetchCurrentUserStatistics() async throws -> RLUserGlobalStatisticsDTO {
@@ -955,6 +1004,10 @@ class RLAppState: ObservableObject {
     /// Send a friend request to another member (guild-scoped)
     func sendFriendRequest(toMembershipId: UUID, message: String? = nil) async throws -> RLFriendshipResponseDTO {
         do {
+            if userSettings?.allowFriendRequests == false {
+                showError(title: "Action Not Allowed", message: "Friend requests are disabled in your settings", style: .toast)
+                throw APIError.badRequest("Friend requests are disabled in your settings")
+            }
             let response = try await realApi.sendFriendRequest(toMembershipId: toMembershipId, message: message)
             showSuccess("Friend request sent")
             return response
@@ -1578,6 +1631,7 @@ class RLAppState: ObservableObject {
                       let userIdString = message.userId,
                       let userId = UUID(uuidString: userIdString),
                       let isOnline = message.payload(as: Bool.self) else { return }
+                guard self.shouldShowPresence else { return }
                 
                 // Update the Source of Truth map
                 self.presenceByUserId[userId] = isOnline
@@ -1602,11 +1656,36 @@ class RLAppState: ObservableObject {
                 
                 // Subscribe to new guild presence
                 guard let guildId = guildId else { return }
+                guard self.shouldShowPresence else { return }
                 let channel = MessagingChannel.guildPresence(guildId).name
                 self.currentPresenceChannel = channel
                 
                 print("👀 [AppState] Subscribing to presence: \(channel)")
                 RealTimeService.shared.subscribe(to: [channel], owner: "presence")
+            }
+            .store(in: &cancellables)
+
+        // 3. React to user presence setting changes
+        $userSettings
+            .sink { [weak self] settings in
+                guard let self = self else { return }
+                let shouldShowPresence = settings?.showOnlineStatus ?? true
+
+                if !shouldShowPresence {
+                    if let existing = self.currentPresenceChannel {
+                        RealTimeService.shared.unsubscribe(from: [existing], owner: "presence")
+                        self.currentPresenceChannel = nil
+                    }
+                    self.presenceByUserId.removeAll()
+                    return
+                }
+
+                if self.currentPresenceChannel == nil, let guildId = self.currentGuild?.id {
+                    let channel = MessagingChannel.guildPresence(guildId).name
+                    self.currentPresenceChannel = channel
+                    print("👀 [AppState] Subscribing to presence: \(channel)")
+                    RealTimeService.shared.subscribe(to: [channel], owner: "presence")
+                }
             }
             .store(in: &cancellables)
     }

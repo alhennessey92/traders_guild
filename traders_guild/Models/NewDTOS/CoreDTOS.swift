@@ -1485,6 +1485,85 @@ enum RLAwardRarity: String, Codable, CaseIterable {
 }
 
 
+// ================================================================================================
+// MARK: - Account Management Request DTOs
+// ================================================================================================
+
+struct RLBasicUserUpdateRequest: Codable {
+    var displayName: String?
+    var username: String?
+}
+
+struct RLEmailChangeRequest: Codable {
+    let newEmail: String
+    let currentPassword: String
+}
+
+struct RLPasswordChangeRequest: Codable {
+    let currentPassword: String
+    let newPassword: String
+}
+
+struct RLDOBUpdateRequest: Codable {
+    let dateOfBirth: Date
+}
+
+struct RLDeleteAccountRequest: Codable {
+    let password: String
+    let confirmation: String
+}
+
+// MARK: - User Settings DTOs
+
+struct RLUserSettingsDTO: Codable {
+    let showOnlineStatus: Bool
+    let allowFriendRequests: Bool
+    let activityVisible: Bool
+    let analyticsEnabled: Bool
+    let personalizedContentEnabled: Bool
+}
+
+struct RLUserSettingsUpdateRequest: Codable {
+    let showOnlineStatus: Bool?
+    let allowFriendRequests: Bool?
+    let activityVisible: Bool?
+    let analyticsEnabled: Bool?
+    let personalizedContentEnabled: Bool?
+}
+
+// MARK: - Support Request DTOs
+
+struct RLSupportTicketRequest: Codable {
+    let category: String
+    let subject: String
+    let message: String
+    let includeDeviceInfo: Bool
+    let deviceInfo: [String: String]?
+}
+
+// MARK: - Activity Feed DTOs
+
+struct RLActivityItem: Codable, Identifiable {
+    let id: UUID
+    let type: String
+    let title: String
+    let description: String
+    let timestamp: Date
+    let guildId: UUID?
+    let guildName: String?
+}
+
+struct RLActivityFeedResponse: Codable {
+    let items: [RLActivityItem]
+    let hasMore: Bool
+}
+
+// MARK: - Avatar Response
+
+struct RLAvatarUpdateResponse: Codable {
+    let avatarUrl: String
+}
+
 
 
 

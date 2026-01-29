@@ -251,7 +251,7 @@ struct UserProfileHeaderView: View {
     
     private var isOnline: Bool {
         guard let currentUser = rlAppState.currentUser else { return false }
-        return rlAppState.presenceByUserId[currentUser.id] ?? currentUser.isOnline
+        return rlAppState.effectiveOnlineStatus(userId: currentUser.id, fallback: currentUser.isOnline)
     }
     
     var body: some View {

@@ -448,7 +448,7 @@ struct FriendRow: View {
     @EnvironmentObject var rlAppState: RLAppState
     
     private var isOnline: Bool {
-        rlAppState.presenceByUserId[friend.userId] ?? friend.isOnline
+        rlAppState.effectiveOnlineStatus(userId: friend.userId, fallback: friend.isOnline)
     }
     
     var body: some View {
@@ -650,7 +650,7 @@ struct GuildMemberProfileHeaderView: View {
     @EnvironmentObject var rlAppState: RLAppState
     
     private var isOnline: Bool {
-        rlAppState.presenceByUserId[user.globalMember.id] ?? user.isOnline
+        rlAppState.effectiveOnlineStatus(userId: user.globalMember.id, fallback: user.isOnline)
     }
     
     var body: some View {
@@ -773,7 +773,7 @@ struct GuildMemberProfileHeaderViewRL: View {
     @EnvironmentObject var rlAppState: RLAppState
     
     private var isOnline: Bool {
-        rlAppState.presenceByUserId[member.userId] ?? member.isOnline
+        rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline)
     }
     
     var body: some View {

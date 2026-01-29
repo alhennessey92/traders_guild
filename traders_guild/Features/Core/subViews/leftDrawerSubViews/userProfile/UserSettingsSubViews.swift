@@ -1402,9 +1402,10 @@ struct BlockedUserRow: View {
 // ================================================================================================
 
 struct DataPrivacyView: View {
+    @EnvironmentObject var rlAppState: RLAppState
     let onBack: () -> Void
     
-    @State private var showDownloadDataAlert = false
+    
     @State private var showClearDataAlert = false
     @State private var isDownloading = false
     
@@ -1413,6 +1414,8 @@ struct DataPrivacyView: View {
     @State private var searchableProfile = true
     @State private var dataAnalytics = true
     @State private var personalizedAds = false
+
+    @State private var isSyncingSettings = false
     
     var body: some View {
         ZStack {
@@ -1434,14 +1437,17 @@ struct DataPrivacyView: View {
                             isOn: $activityVisible,
                             iconColor: AppColors.accentColor
                         )
+                        .onChange(of: activityVisible) { _, newValue in
+                            updateUserSettings(activityVisible: newValue)
+                        }
                         
-                        SettingsToggleRow(
-                            icon: "magnifyingglass",
-                            title: "Searchable Profile",
-                            subtitle: "Allow others to find you by username",
-                            isOn: $searchableProfile,
-                            iconColor: .blue
-                        )
+//                        SettingsToggleRow(
+//                            icon: "magnifyingglass",
+//                            title: "Searchable Profile",
+//                            subtitle: "Allow others to find you by username",
+//                            isOn: $searchableProfile,
+//                            iconColor: .blue
+//                        )
                         
                         Divider()
                             .padding(.vertical, 8)
@@ -1456,6 +1462,9 @@ struct DataPrivacyView: View {
                             isOn: $dataAnalytics,
                             iconColor: .purple
                         )
+                        .onChange(of: dataAnalytics) { _, newValue in
+                            updateUserSettings(analyticsEnabled: newValue)
+                        }
                         
                         SettingsToggleRow(
                             icon: "rectangle.on.rectangle.angled",
@@ -1464,6 +1473,9 @@ struct DataPrivacyView: View {
                             isOn: $personalizedAds,
                             iconColor: .orange
                         )
+                        .onChange(of: personalizedAds) { _, newValue in
+                            updateUserSettings(personalizedContentEnabled: newValue)
+                        }
                         
                         Divider()
                             .padding(.vertical, 8)
@@ -1471,14 +1483,14 @@ struct DataPrivacyView: View {
                         // Data Management Section
                         SettingsSectionHeader(title: "Data Management")
                         
-                        SettingsButtonRow(
-                            icon: "arrow.down.doc.fill",
-                            title: "Download Your Data",
-                            subtitle: "Get a copy of all your data",
-                            iconColor: .green
-                        ) {
-                            showDownloadDataAlert = true
-                        }
+//                        SettingsButtonRow(
+//                            icon: "arrow.down.doc.fill",
+//                            title: "Download Your Data",
+//                            subtitle: "Get a copy of all your data",
+//                            iconColor: .green
+//                        ) {
+//                            showDownloadDataAlert = true
+//                        }
                         
                         SettingsButtonRow(
                             icon: "trash.fill",
@@ -1509,18 +1521,15 @@ struct DataPrivacyView: View {
                 }
             }
         }
-        .alert("Download Your Data", isPresented: $showDownloadDataAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Request Download") {
-                isDownloading = true
-                // Simulate download request
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    isDownloading = false
-                }
-            }
-        } message: {
-            Text("We'll prepare a download of all your data including messages, markers, and profile information. You'll receive an email when it's ready.")
+        .task {
+            await loadUserSettingsIfNeeded()
         }
+        .onReceive(rlAppState.$userSettings) { settings in
+            if let settings = settings {
+                syncSettingsFromState(settings)
+            }
+        }
+        
         .alert("Clear Local Data", isPresented: $showClearDataAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear", role: .destructive) {
@@ -1528,6 +1537,43 @@ struct DataPrivacyView: View {
             }
         } message: {
             Text("This will remove all cached data from this device. Your account data will not be affected.")
+        }
+    }
+
+    private func loadUserSettingsIfNeeded() async {
+        if rlAppState.userSettings == nil {
+            try? await rlAppState.fetchUserSettings()
+        }
+    }
+
+    private func syncSettingsFromState(_ settings: RLUserSettingsDTO) {
+        isSyncingSettings = true
+        activityVisible = settings.activityVisible
+        dataAnalytics = settings.analyticsEnabled
+        personalizedAds = settings.personalizedContentEnabled
+        isSyncingSettings = false
+    }
+
+    private func updateUserSettings(
+        activityVisible: Bool? = nil,
+        analyticsEnabled: Bool? = nil,
+        personalizedContentEnabled: Bool? = nil
+    ) {
+        guard !isSyncingSettings else { return }
+        Task {
+            do {
+                let request = RLUserSettingsUpdateRequest(
+                    showOnlineStatus: nil,
+                    allowFriendRequests: nil,
+                    activityVisible: activityVisible,
+                    analyticsEnabled: analyticsEnabled,
+                    personalizedContentEnabled: personalizedContentEnabled
+                )
+                let updated = try await rlAppState.updateUserSettings(request)
+                syncSettingsFromState(updated)
+            } catch {
+                print("Failed to update user settings: \(error)")
+            }
         }
     }
 }
