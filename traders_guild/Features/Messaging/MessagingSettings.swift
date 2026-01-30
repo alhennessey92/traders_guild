@@ -204,26 +204,12 @@ struct DMSettingsView: View {
                     // User Info Section
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(spacing: 12) {
-                            Circle()
-                                .fill(AppColors.accentColor.opacity(0.3))
-                                .frame(width: 60, height: 60)
-                                .overlay(
-                                    Text(String(userDM.participant.globalMember.username.prefix(2)))
-                                        .font(.title3)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(AppColors.accentColor)
-                                )
-                                .overlay(alignment: .bottomTrailing) {
-                                    Circle()
-                                        .fill(userDM.participant.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
-                                        .frame(width: 14, height: 14)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(AppColors.sheetBackground, lineWidth: 2)
-                                        )
-                                        .padding(.trailing, 2)
-                                        .padding(.bottom, 2)
-                                }
+                            UnifiedMemberAvatar(
+                                username: userDM.participant.globalMember.username,
+                                avatarURL: userDM.participant.globalMember.avatarURL,
+                                isOnline: userDM.participant.isOnline,
+                                size: 60
+                            )
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(userDM.participant.globalMember.username)

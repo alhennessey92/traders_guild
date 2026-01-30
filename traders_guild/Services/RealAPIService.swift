@@ -126,6 +126,24 @@ class RealAPIService {
             if let date = formatter.date(from: dateString) {
                 return date
             }
+
+            // Try "yyyy-MM-dd'T'HH:mm:ss" (no timezone)
+            let noTZDateTime = DateFormatter()
+            noTZDateTime.locale = Locale(identifier: "en_US_POSIX")
+            noTZDateTime.timeZone = TimeZone(secondsFromGMT: 0)
+            noTZDateTime.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            if let date = noTZDateTime.date(from: dateString) {
+                return date
+            }
+
+            // Try date-only "yyyy-MM-dd"
+            let dateOnly = DateFormatter()
+            dateOnly.locale = Locale(identifier: "en_US_POSIX")
+            dateOnly.timeZone = TimeZone(secondsFromGMT: 0)
+            dateOnly.dateFormat = "yyyy-MM-dd"
+            if let date = dateOnly.date(from: dateString) {
+                return date
+            }
             
             throw DecodingError.dataCorruptedError(
                 in: container,
@@ -138,6 +156,13 @@ class RealAPIService {
     private lazy var encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let dateString = formatter.string(from: date)
+            try container.encode(dateString)
+        }
         return encoder
     }()
     
@@ -1007,18 +1032,18 @@ class RealAPIService {
     /// GET /users/me/blocked
     ///
     /// - Parameter guildId: Required - blocks are guild-scoped
-    func getBlockedUsers(guildId: UUID? = nil) async throws -> RLBlockedUsersListDTO {
-        var path = "/users/me/blocked"
-        if let guildId = guildId {
-            path += "?guild_id=\(guildId.uuidString)"
-        }
-        return try await request(
-            path,
-            service: .core,
-            method: "GET",
-            auth: true
-        )
-    }
+//    func getBlockedUsers(guildId: UUID? = nil) async throws -> RLBlockedUsersListDTO {
+//        var path = "/users/me/blocked"
+//        if let guildId = guildId {
+//            path += "?guild_id=\(guildId.uuidString)"
+//        }
+//        return try await request(
+//            path,
+//            service: .core,
+//            method: "GET",
+//            auth: true
+//        )
+//    }
     
     /// Block a user
     /// POST /users/me/blocked/{membership_id}
@@ -1026,26 +1051,26 @@ class RealAPIService {
     /// Side effects:
     /// - Removes any existing friendship
     /// - Cancels any pending friend requests
-    func blockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
-        return try await request(
-            "/users/me/blocked/\(membershipId.uuidString)",
-            service: .core,
-            method: "POST",
-            auth: true
-        )
-    }
-    
-    /// Unblock a user
-    /// DELETE /users/me/blocked/{membership_id}
-    func unblockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
-        return try await request(
-            "/users/me/blocked/\(membershipId.uuidString)",
-            service: .core,
-            method: "DELETE",
-            auth: true
-        )
-    }
-    
+//    func blockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
+//        return try await request(
+//            "/users/me/blocked/\(membershipId.uuidString)",
+//            service: .core,
+//            method: "POST",
+//            auth: true
+//        )
+//    }
+//    
+//    /// Unblock a user
+//    /// DELETE /users/me/blocked/{membership_id}
+//    func unblockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
+//        return try await request(
+//            "/users/me/blocked/\(membershipId.uuidString)",
+//            service: .core,
+//            method: "DELETE",
+//            auth: true
+//        )
+//    }
+//    
 
     
     
@@ -1468,17 +1493,275 @@ extension RealAPIService {
         )
     }
 
-    func requestDataExport() async throws -> RLDetailResponseDTO {
+//    func requestDataExport() async throws -> RLDetailResponseDTO {
+//        return try await request(
+//            "/users/me/data-export",
+//            service: .core,
+//            method: "POST",
+//            auth: true
+//        )
+//    }
+
+    // MARK: - User Settings
+
+//    func getUserSettings() async throws -> RLUserSettingsDTO {
+//        return try await request(
+//            "/users/me/settings",
+//            service: .core,
+//            method: "GET",
+//            auth: true
+//        )
+//    }
+
+//    func updateUserSettings(_ updateRequest: RLUserSettingsUpdateRequest) async throws -> RLUserSettingsDTO {
+//        return try await request(
+//            "/users/me/settings",
+//            service: .core,
+//            method: "PUT",
+//            body: updateRequest,
+//            auth: true
+//        )
+//    }
+}
+
+
+
+
+
+
+
+//
+//  RealAPIService+AccountManagement.swift
+//  traders_guild
+//
+//  Extension for account management API endpoints.
+//  Includes profile updates, avatar, email, password, DOB, blocked users, settings, and account deletion.
+//
+//  COMPLETE WITH ALL ENDPOINTS
+//  Created: 30/01/2026
+//
+
+
+
+// MARK: - Account Management Extension
+
+extension RealAPIService {
+    
+    // =============================================================================================
+    // MARK: - Basic User Info
+    // =============================================================================================
+    
+    /// Update basic user info (display name and/or username)
+    /// PUT /users/me/basic
+    func updateBasicUserInfo(_ updateRequest: RLBasicUserUpdateRequest) async throws -> RLUserDTO {
         return try await request(
-            "/users/me/data-export",
+            "/users/me/basic",
+            service: .core,
+            method: "PUT",
+            body: updateRequest,
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Extended Profile
+    // =============================================================================================
+    
+    /// Get current user's extended profile
+    /// GET /users/me/profile/extended
+    func getExtendedProfile() async throws -> RLUserProfileDTO {
+        return try await request(
+            "/users/me/profile/extended",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Update current user's extended profile (bio, location, interests, etc.)
+    /// PUT /users/me/profile
+    func updateUserProfile(_ updateRequest: RLUserProfileUpdateRequest) async throws -> RLUserProfileDTO {
+        return try await request(
+            "/users/me/profile",
+            service: .core,
+            method: "PUT",
+            body: updateRequest,
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Avatar
+    // =============================================================================================
+    
+    /// Upload avatar image
+    /// PUT /users/me/avatar (multipart/form-data)
+    func uploadAvatar(imageData: Data, mimeType: String = "image/jpeg") async throws -> RLAvatarUpdateResponse {
+        // Build multipart form data
+        let boundary = "Boundary-\(UUID().uuidString)"
+        
+        guard let url = URL(string: "\(APIService.core.baseURL)/users/me/avatar") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            throw APIError.unauthorized
+        }
+        
+        // Build body
+        var body = Data()
+        
+        // File field
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        request.httpBody = body
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let detail = extractErrorDetailFromData(data)
+            switch httpResponse.statusCode {
+            case 401: throw APIError.unauthorized
+            case 400, 422: throw APIError.badRequest(detail)
+            default: throw APIError.serverError(httpResponse.statusCode, detail)
+            }
+        }
+        
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(RLAvatarUpdateResponse.self, from: data)
+    }
+    
+    /// Remove avatar (revert to default)
+    /// DELETE /users/me/avatar
+    func removeAvatar() async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/avatar",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    // Helper to extract error detail from response data
+    private func extractErrorDetailFromData(_ data: Data) -> String {
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let detail = json["detail"] as? String {
+            return detail
+        }
+        return "Unknown error"
+    }
+    
+    // =============================================================================================
+    // MARK: - Email Change
+    // =============================================================================================
+    
+    /// Request email change (sends verification to new email)
+    /// POST /users/me/email/change-request
+    func requestEmailChange(_ emailRequest: RLEmailChangeRequest) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/email/change-request",
+            service: .core,
+            method: "POST",
+            body: emailRequest,
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Password Change
+    // =============================================================================================
+    
+    /// Change password
+    /// PUT /users/me/password
+    func changePassword(_ passwordRequest: RLPasswordChangeRequest) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/password",
+            service: .core,
+            method: "PUT",
+            body: passwordRequest,
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Date of Birth
+    // =============================================================================================
+    
+    /// Update date of birth
+    /// PUT /users/me/dob
+    func updateDateOfBirth(_ dobRequest: RLDOBUpdateRequest) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/dob",
+            service: .core,
+            method: "PUT",
+            body: dobRequest,
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Blocked Users
+    // =============================================================================================
+    
+    /// Get list of blocked users
+    /// GET /users/me/blocked
+    func getBlockedUsers(guildId: UUID? = nil) async throws -> RLBlockedUsersListDTO {
+        var path = "/users/me/blocked"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Block a user
+    /// POST /users/me/blocked/{membership_id}
+    func blockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/blocked/\(membershipId.uuidString)",
             service: .core,
             method: "POST",
             auth: true
         )
     }
-
+    
+    /// Unblock a user
+    /// DELETE /users/me/blocked/{membership_id}
+    func unblockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/blocked/\(membershipId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
     // MARK: - User Settings
-
+    // =============================================================================================
+    
+    /// Get current user settings
+    /// GET /users/me/settings
     func getUserSettings() async throws -> RLUserSettingsDTO {
         return try await request(
             "/users/me/settings",
@@ -1487,13 +1770,62 @@ extension RealAPIService {
             auth: true
         )
     }
-
+    
+    /// Update user settings
+    /// PUT /users/me/settings
     func updateUserSettings(_ updateRequest: RLUserSettingsUpdateRequest) async throws -> RLUserSettingsDTO {
         return try await request(
             "/users/me/settings",
             service: .core,
             method: "PUT",
             body: updateRequest,
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Data Export
+    // =============================================================================================
+    
+    /// Request data export (GDPR compliance)
+    /// POST /users/me/data-export
+    func requestDataExport() async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me/data-export",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Account Deletion
+    // =============================================================================================
+    
+    /// Delete account permanently
+    /// DELETE /users/me
+    func deleteAccount(_ deleteRequest: RLDeleteAccountRequest) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/users/me",
+            service: .core,
+            method: "DELETE",
+            body: deleteRequest,
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Support Tickets
+    // =============================================================================================
+    
+    /// Submit a support ticket
+    /// POST /support/tickets
+    func submitSupportTicket(_ ticketRequest: RLSupportTicketRequest) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/support/tickets",
+            service: .core,
+            method: "POST",
+            body: ticketRequest,
             auth: true
         )
     }

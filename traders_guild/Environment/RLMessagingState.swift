@@ -433,6 +433,7 @@ struct RLMessagingSheet: View {
             // Avatar - using unified ChatAvatar
             ChatAvatar(
                 initials: thread.participant.initials,
+                avatarURL: thread.participant.avatarUrl,
                 isOnline: isOnline,
                 size: 36
             )

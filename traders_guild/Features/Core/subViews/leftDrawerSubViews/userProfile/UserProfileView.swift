@@ -260,26 +260,12 @@ struct UserProfileHeaderView: View {
             // User header
             HStack(spacing: 15) {
                 // Avatar with online indicator
-                ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(AppColors.accentColor.opacity(0.3))
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            Text(String(rlAppState.currentUser?.displayName.prefix(2) ?? "Unknown"))
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                        )
-                    
-                    Circle()
-                        .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
-                        .frame(width: 12, height: 12)
-                        .overlay(
-                            Circle()
-                                .stroke(AppColors.drawerBackground, lineWidth: 2)
-                        )
-                    
-                }
+                UnifiedMemberAvatar(
+                    username: rlAppState.currentUser?.displayName ?? "Unknown",
+                    avatarURL: rlAppState.currentUser?.avatarUrl,
+                    isOnline: isOnline,
+                    size: 60
+                )
                 
                 // User info
                 VStack(alignment: .leading, spacing: 3) {

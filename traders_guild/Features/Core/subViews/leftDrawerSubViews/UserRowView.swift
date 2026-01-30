@@ -27,27 +27,12 @@ struct UserRowView: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Avatar with online indicator
-                ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(AppColors.accentColor.opacity(0.3))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text(user.displayName)
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                        )
-                    
-                    
-                    Circle()
-                        .fill(AppColors.bullCandleGreen)
-                        .frame(width: 12, height: 12)
-                        .overlay(
-                            Circle()
-                                .stroke(AppColors.drawerBackground, lineWidth: 2)
-                        )
-                    
-                }
+                UnifiedMemberAvatar(
+                    username: user.displayName,
+                    avatarURL: user.avatarUrl,
+                    isOnline: user.isOnline,
+                    size: 40
+                )
                 
                 // User info
                 VStack(alignment: .leading, spacing: 3) {

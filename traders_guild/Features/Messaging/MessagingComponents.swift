@@ -31,6 +31,7 @@ protocol ChatMessageDisplayable: Identifiable {
     // Author info - provide these for user display
     var authorDisplayName: String { get }
     var authorInitials: String { get }
+    var authorAvatarUrl: String? { get }
     var authorIsOnline: Bool { get }
     var authorRole: MemberRole? { get }
     var authorReputation: Int? { get }
@@ -44,6 +45,7 @@ extension ChatMessageDisplayable {
     var authorReputation: Int? { nil }
     var authorIsFriend: Bool { false }
     var authorIsBlocked: Bool { false }
+    var authorAvatarUrl: String? { nil }
 }
 
 // MARK: - ================================================================================================
@@ -163,6 +165,7 @@ struct ChatMessageBubble<Message: ChatMessageDisplayable>: View {
         Button(action: { onAvatarTap?() }) {
             ChatAvatar(
                 initials: message.authorInitials,
+                avatarURL: message.authorAvatarUrl,
                 isOnline: message.authorIsOnline,
                 size: 32
             )
@@ -337,31 +340,54 @@ struct ChatBubbleShape {
 /// Unified avatar view with online indicator
 struct ChatAvatar: View {
     let initials: String
+    var avatarURL: String? = nil
     let isOnline: Bool
     var size: CGFloat = 32
     var showOnlineIndicator: Bool = true
     
     var body: some View {
-        Circle()
-            .fill(AppColors.accentColor.opacity(0.3))
-            .frame(width: size, height: size)
-            .overlay(
-                Text(initials.uppercased())
-                    .font(size > 40 ? .caption : .caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-            )
-            .overlay(alignment: .bottomTrailing) {
-                if showOnlineIndicator {
-                    Circle()
-                        .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
-                        .frame(width: size * 0.3, height: size * 0.3)
-                        .overlay(
-                            Circle()
-                                .stroke(AppColors.drawerBackground, lineWidth: 1)
-                        )
+        ZStack(alignment: .bottomTrailing) {
+            if let avatarURL, !avatarURL.isEmpty, let url = URL(string: avatarURL) {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Circle()
+                            .fill(AppColors.accentColor.opacity(0.3))
+                            .overlay(
+                                Text(initials.uppercased())
+                                    .font(size > 40 ? .caption : .caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(AppColors.accentColor)
+                            )
+                    }
                 }
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(AppColors.accentColor.opacity(0.3))
+                    .frame(width: size, height: size)
+                    .overlay(
+                        Text(initials.uppercased())
+                            .font(size > 40 ? .caption : .caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                    )
             }
+            
+            if showOnlineIndicator {
+                Circle()
+                    .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                    .frame(width: size * 0.3, height: size * 0.3)
+                    .overlay(
+                        Circle()
+                            .stroke(AppColors.drawerBackground, lineWidth: 1)
+                    )
+            }
+        }
     }
 }
 
@@ -809,6 +835,7 @@ extension View {
 extension ChatroomMessageDTO: ChatMessageDisplayable {
     var authorDisplayName: String { author.globalMember.username }
     var authorInitials: String { String(author.globalMember.username.prefix(2)) }
+    var authorAvatarUrl: String? { author.globalMember.avatarURL }
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: MemberRole? { author.roleInGuild }
     var authorReputation: Int? { author.reputation }
@@ -819,6 +846,7 @@ extension ChatroomMessageDTO: ChatMessageDisplayable {
 extension DMMessageDTO: ChatMessageDisplayable {
     var authorDisplayName: String { author.globalMember.username }
     var authorInitials: String { String(author.globalMember.username.prefix(2)) }
+    var authorAvatarUrl: String? { author.globalMember.avatarURL }
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: MemberRole? { nil }  // DMs don't show role
     var authorReputation: Int? { nil }   // DMs don't show reputation
@@ -829,6 +857,7 @@ extension DMMessageDTO: ChatMessageDisplayable {
 extension ChartChatMessageDTO: ChatMessageDisplayable {
     var authorDisplayName: String { author.globalMember.username }
     var authorInitials: String { String(author.globalMember.username.prefix(2)) }
+    var authorAvatarUrl: String? { author.globalMember.avatarURL }
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: MemberRole? { author.roleInGuild }
     var authorReputation: Int? { author.reputation }
@@ -853,6 +882,7 @@ protocol RLChatMessageDisplayable: Identifiable {
     // Author info
     var authorDisplayName: String { get }
     var authorInitials: String { get }
+    var authorAvatarUrl: String? { get }
     var authorIsOnline: Bool { get }
     var authorRole: RLMemberRole { get }
     var authorReputation: Int { get }
@@ -940,6 +970,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         Button(action: { onAvatarTap?() }) {
             ChatAvatar(
                 initials: message.authorInitials,
+                avatarURL: message.authorAvatarUrl,
                 isOnline: message.authorIsOnline,
                 size: 32
             )
@@ -1088,6 +1119,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
 extension RLChatroomMessageDTO: RLChatMessageDisplayable {
     var authorDisplayName: String { author.displayName }
     var authorInitials: String { author.initials }
+    var authorAvatarUrl: String? { author.avatarUrl }
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: RLMemberRole { author.memberRole }
     var authorReputation: Int { author.reputation }
@@ -1098,6 +1130,7 @@ extension RLChatroomMessageDTO: RLChatMessageDisplayable {
 extension RLDMMessageDTO: RLChatMessageDisplayable {
     var authorDisplayName: String { author.displayName }
     var authorInitials: String { author.initials }
+    var authorAvatarUrl: String? { author.avatarUrl }
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: RLMemberRole { author.memberRole }
     var authorReputation: Int { author.reputation }
@@ -1334,6 +1367,7 @@ struct RLDMSettingsView: View {
     let thread: RLDMThreadDTO
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var rlMessagingManager: RLMessagingManager
+    @EnvironmentObject var rightDrawerViewModel: RLRightDrawerViewModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var showMuteOptions = false
@@ -1356,22 +1390,12 @@ struct RLDMSettingsView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(spacing: 8) {
                             // Avatar
-                            ZStack(alignment: .bottomTrailing) {
-                                Circle()
-                                    .fill(AppColors.accentColor.opacity(0.3))
-                                    .frame(width: 36, height: 36)
-                                    .overlay(
-                                        Text(participant.initials)
-                                            .font(.subheadline)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(AppColors.accentColor)
-                                    )
-                                
-                                Circle()
-                                    .fill(participant.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
-                                    .frame(width: 10, height: 10)
-                                    .overlay(Circle().stroke(AppColors.sheetBackground, lineWidth: 2))
-                            }
+                            UnifiedMemberAvatar(
+                                username: participant.displayName,
+                                avatarURL: participant.avatarUrl,
+                                isOnline: participant.isOnline,
+                                size: 36
+                            )
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
@@ -1546,6 +1570,9 @@ struct RLDMSettingsView: View {
         Task {
             do {
                 _ = try await rlAppState.blockUser(membershipId: participant.membershipId)
+                if let guildId = rlAppState.currentGuild?.id {
+                    await rightDrawerViewModel.refresh(for: guildId, appState: rlAppState)
+                }
                 rlAppState.showSuccess("User blocked")
                 rlMessagingManager.closeMessage()
                 dismiss()
@@ -1559,6 +1586,9 @@ struct RLDMSettingsView: View {
         Task {
             do {
                 _ = try await rlAppState.unblockUser(membershipId: participant.membershipId)
+                if let guildId = rlAppState.currentGuild?.id {
+                    await rightDrawerViewModel.refresh(for: guildId, appState: rlAppState)
+                }
                 rlAppState.showSuccess("User unblocked")
                 dismiss()
             } catch {

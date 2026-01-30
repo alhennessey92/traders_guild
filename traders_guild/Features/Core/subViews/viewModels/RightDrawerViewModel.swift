@@ -135,11 +135,21 @@ class RLRightDrawerViewModel: ObservableObject {
         
         do {
             let data = try await appState.fetchGuildMessagingData(guildId: guildId)
+            var visibleFriends = data.friendDms.filter { !isThreadBlocked($0) }
+            var visibleOnline = data.onlineDms.filter { !isThreadBlocked($0) }
+            var visibleOffline = data.offlineDms.filter { !isThreadBlocked($0) }
+            if visibleFriends.isEmpty && visibleOnline.isEmpty && visibleOffline.isEmpty,
+               !(data.friendDms.isEmpty && data.onlineDms.isEmpty && data.offlineDms.isEmpty) {
+                // Fallback: avoid blank drawer if block flags are missing or stale.
+                visibleFriends = data.friendDms
+                visibleOnline = data.onlineDms
+                visibleOffline = data.offlineDms
+            }
             
             self.guildChatrooms = data.chatrooms
-            self.guildFriends = data.friendDms
-            self.guildOnlineNonFriends = data.onlineDms
-            self.guildOfflineNonFriends = data.offlineDms
+            self.guildFriends = visibleFriends
+            self.guildOnlineNonFriends = visibleOnline
+            self.guildOfflineNonFriends = visibleOffline
             self.lastRefresh = Date()
             self.currentGuildId = guildId
             
@@ -177,10 +187,15 @@ class RLRightDrawerViewModel: ObservableObject {
         do {
             let (chatrooms, threads) = try await (chatroomsTask, threadsTask)
             
+            var visibleThreads = threads.filter { !isThreadBlocked($0) }
+            if visibleThreads.isEmpty && !threads.isEmpty {
+                // Fallback: avoid blank drawer if block flags are missing or stale.
+                visibleThreads = threads
+            }
             self.guildChatrooms = chatrooms
-            self.guildFriends = threads.filter { $0.participant.isFriend }
-            self.guildOnlineNonFriends = threads.filter { !$0.participant.isFriend && $0.participant.isOnline }
-            self.guildOfflineNonFriends = threads.filter { !$0.participant.isFriend && !$0.participant.isOnline }
+            self.guildFriends = visibleThreads.filter { $0.participant.isFriend }
+            self.guildOnlineNonFriends = visibleThreads.filter { !$0.participant.isFriend && $0.participant.isOnline }
+            self.guildOfflineNonFriends = visibleThreads.filter { !$0.participant.isFriend && !$0.participant.isOnline }
             
             self.lastRefresh = Date()
             self.currentGuildId = guildId
@@ -201,6 +216,7 @@ class RLRightDrawerViewModel: ObservableObject {
     func refresh(for guildId: UUID, appState: RLAppState) async {
         self.appState = appState
         lastRefresh = nil
+        guildMembers = []
         await preloadData(for: guildId, appState: appState)
     }
     
@@ -288,6 +304,11 @@ class RLRightDrawerViewModel: ObservableObject {
             if let chatroomMsg = wsMessage.payload(as: RLChatroomMessageDTO.self) {
                 updateChatroomList(with: chatroomMsg)
             } else if let dmMsg = wsMessage.payload(as: RLDMMessageDTO.self) {
+                if let senderId = wsMessage.userId,
+                   let currentUserId = appState?.currentUser?.id.uuidString,
+                   senderId == currentUserId {
+                    return
+                }
                 updateDMList(with: dmMsg)
             }
         }
@@ -309,6 +330,10 @@ class RLRightDrawerViewModel: ObservableObject {
             if let index = array.firstIndex(where: { $0.id == message.dmId }) {
                 if isActiveDM(message.dmId) { return true }
                 var thread = array[index]
+                if isThreadBlocked(thread) { 
+                    array.remove(at: index)
+                    return true
+                }
                 thread = thread.withUnreadCount(thread.unreadCount + 1)
                 array.remove(at: index)
                 array.insert(thread, at: 0)
@@ -370,7 +395,11 @@ class RLRightDrawerViewModel: ObservableObject {
         var newOnline: [RLDMThreadDTO] = []
         var newOffline: [RLDMThreadDTO] = []
         
-        for thread in allThreads {
+        var visibleThreads = allThreads.filter { !isThreadBlocked($0) }
+        if visibleThreads.isEmpty && !allThreads.isEmpty {
+            visibleThreads = allThreads
+        }
+        for thread in visibleThreads {
             // "Hydrate" thread participant with latest status from guildMembers if available
             let updatedThread = updateThreadParticipant(from: thread)
             
@@ -386,6 +415,10 @@ class RLRightDrawerViewModel: ObservableObject {
         guildFriends = newFriends
         guildOnlineNonFriends = newOnline
         guildOfflineNonFriends = newOffline
+    }
+
+    private func isThreadBlocked(_ thread: RLDMThreadDTO) -> Bool {
+        thread.isBlocked || thread.participant.isBlocked || thread.participant.isBlockedBy
     }
     
     private func updateThreadParticipant(from thread: RLDMThreadDTO) -> RLDMThreadDTO {

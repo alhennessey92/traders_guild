@@ -779,28 +779,12 @@ struct GuildMemberProfileHeaderViewRL: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 15) {
-                ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(AppColors.accentColor.opacity(0.3))
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            Text(member.initials)
-                                .font(.body)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                        )
-                        .overlay(alignment: .bottomTrailing) {
-                            Circle()
-                                .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
-                                .frame(width: 14, height: 14)
-                                .overlay(
-                                    Circle()
-                                        .stroke(AppColors.drawerBackground, lineWidth: 2)
-                                )
-                                .padding(.trailing, 2)
-                                .padding(.bottom, 2)
-                        }
-                }
+                UnifiedMemberAvatar(
+                    username: member.displayName,
+                    avatarURL: member.avatarUrl,
+                    isOnline: isOnline,
+                    size: 60
+                )
                 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 2) {
@@ -1079,6 +1063,7 @@ struct GuildUserActionButtonsRL: View {
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var rlMessagingManager: RLMessagingManager   // NEW: For DM chats
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    @EnvironmentObject var rightDrawerViewModel: RLRightDrawerViewModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var showBlockUserConfirmation = false
@@ -1230,6 +1215,13 @@ struct GuildUserActionButtonsRL: View {
         Task {
             do {
                 _ = try await rlAppState.blockUser(membershipId: member.membershipId)
+                if let guildId = rlAppState.currentGuild?.id {
+                    await leftDrawerViewModel.refreshGuildMembers(
+                        guildId: guildId,
+                        rlAppState: rlAppState
+                    )
+                    await rightDrawerViewModel.refresh(for: guildId, appState: rlAppState)
+                }
                 applyMemberUpdate { current in
                     current.updating(isFriend: false, friendshipStatus: nil, isBlocked: true)
                 }
@@ -1242,6 +1234,13 @@ struct GuildUserActionButtonsRL: View {
         Task {
             do {
                 _ = try await rlAppState.unblockUser(membershipId: member.membershipId)
+                if let guildId = rlAppState.currentGuild?.id {
+                    await leftDrawerViewModel.refreshGuildMembers(
+                        guildId: guildId,
+                        rlAppState: rlAppState
+                    )
+                    await rightDrawerViewModel.refresh(for: guildId, appState: rlAppState)
+                }
                 applyMemberUpdate { current in
                     current.updating(isBlocked: false)
                 }

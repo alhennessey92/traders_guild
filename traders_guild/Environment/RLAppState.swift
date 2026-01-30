@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import UIKit
 
 @MainActor
 class RLAppState: ObservableObject {
@@ -901,6 +902,11 @@ class RLAppState: ObservableObject {
             throw error
         }
     }
+
+    /// Backwards-compatible alias for settings subviews
+    func fetchExtendedProfile() async throws -> RLUserProfileDTO {
+        return try await fetchCurrentUserExtendedProfile()
+    }
     
     /// Update current user's extended profile
     func updateCurrentUserProfile(_ updateRequest: RLUserProfileUpdateRequest) async throws -> RLUserProfileDTO {
@@ -912,6 +918,61 @@ class RLAppState: ObservableObject {
             showError(error, title: "Failed to Update Profile", style: .toast)
             throw error
         }
+    }
+
+    /// Backwards-compatible alias for settings subviews
+    func updateUserProfile(_ updateRequest: RLUserProfileUpdateRequest) async throws -> RLUserProfileDTO {
+        return try await updateCurrentUserProfile(updateRequest)
+    }
+
+    /// Update basic user info (display name/username)
+    func updateBasicUserInfo(displayName: String?, username: String?) async throws -> RLUserDTO {
+        do {
+            let request = RLBasicUserUpdateRequest(displayName: displayName, username: username)
+            let updated = try await realApi.updateBasicUserInfo(request)
+            currentUser = updated
+            showSuccess("Profile updated")
+            return updated
+        } catch {
+            showError(error, title: "Failed to Update Profile", style: .toast)
+            throw error
+        }
+    }
+
+    /// Upload avatar image
+    func uploadAvatar(imageData: Data, mimeType: String = "image/jpeg") async throws -> RLAvatarUpdateResponse {
+        do {
+            let response = try await realApi.uploadAvatar(imageData: imageData, mimeType: mimeType)
+            if let updatedUser = try? await realApi.getCurrentUser() {
+                currentUser = updatedUser
+            }
+            showSuccess("Avatar updated")
+            return response
+        } catch {
+            showError(error, title: "Failed to Upload Avatar", style: .toast)
+            throw error
+        }
+    }
+
+    /// Remove avatar (revert to default)
+    func removeAvatar() async throws -> RLDetailResponseDTO {
+        do {
+            let response = try await realApi.removeAvatar()
+            if let updatedUser = try? await realApi.getCurrentUser() {
+                currentUser = updatedUser
+            }
+            showSuccess("Avatar removed")
+            return response
+        } catch {
+            showError(error, title: "Failed to Remove Avatar", style: .toast)
+            throw error
+        }
+    }
+
+    /// Update trading interests using the extended profile endpoint
+    func updateTradingInterests(_ interests: [RLTradingInterestItem]) async throws -> RLUserProfileDTO {
+        let request = RLUserProfileUpdateRequest(tradingInterests: interests)
+        return try await updateUserProfile(request)
     }
 
     /// Fetch current user's settings
@@ -946,6 +1007,124 @@ class RLAppState: ObservableObject {
             showError(error, title: "Failed to Load Statistics", style: .toast)
             throw error
         }
+    }
+
+    // =============================================================================================
+    // MARK: - Account Management (Settings)
+    // =============================================================================================
+
+    /// Request email change (sends verification to new email)
+    func requestEmailChange(newEmail: String, currentPassword: String) async throws -> RLDetailResponseDTO {
+        do {
+            let request = RLEmailChangeRequest(newEmail: newEmail, currentPassword: currentPassword)
+            let response = try await realApi.requestEmailChange(request)
+            showSuccess("Verification email sent")
+            return response
+        } catch {
+            showError(error, title: "Failed to Change Email", style: .toast)
+            throw error
+        }
+    }
+
+    /// Change password
+    func changePassword(currentPassword: String, newPassword: String) async throws -> RLDetailResponseDTO {
+        do {
+            let request = RLPasswordChangeRequest(currentPassword: currentPassword, newPassword: newPassword)
+            let response = try await realApi.changePassword(request)
+            showSuccess("Password updated")
+            return response
+        } catch {
+            showError(error, title: "Failed to Change Password", style: .toast)
+            throw error
+        }
+    }
+
+    /// Update date of birth
+    func updateDateOfBirth(_ date: Date) async throws -> RLDetailResponseDTO {
+        do {
+            let request = RLDOBUpdateRequest(dateOfBirth: date)
+            let response = try await realApi.updateDateOfBirth(request)
+            // Refresh user to keep local state in sync
+            if let updatedUser = try? await realApi.getCurrentUser() {
+                currentUser = updatedUser
+            }
+            showSuccess("Date of birth updated")
+            return response
+        } catch {
+            showError(error, title: "Failed to Update Date of Birth", style: .toast)
+            throw error
+        }
+    }
+
+    /// Fetch blocked users list
+    func fetchBlockedUsers(guildId: UUID? = nil) async throws -> RLBlockedUsersListDTO {
+        do {
+            return try await realApi.getBlockedUsers(guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Blocked Users", style: .toast)
+            throw error
+        }
+    }
+
+    /// Request a data export for the current user
+    func requestDataExportForUser() async throws -> RLDetailResponseDTO {
+        do {
+            let response = try await realApi.requestDataExport()
+            showSuccess("Data export requested")
+            return response
+        } catch {
+            showError(error, title: "Failed to Request Data Export", style: .toast)
+            throw error
+        }
+    }
+
+    /// Submit a support ticket
+    func submitSupportTicket(
+        category: String,
+        subject: String,
+        message: String,
+        includeDeviceInfo: Bool
+    ) async throws -> RLDetailResponseDTO {
+        do {
+            let request = RLSupportTicketRequest(
+                category: category,
+                subject: subject,
+                message: message,
+                includeDeviceInfo: includeDeviceInfo,
+                deviceInfo: includeDeviceInfo ? buildDeviceInfo() : nil
+            )
+            let response = try await realApi.submitSupportTicket(request)
+            showSuccess("Support ticket submitted")
+            return response
+        } catch {
+            showError(error, title: "Failed to Send Support Ticket", style: .toast)
+            throw error
+        }
+    }
+
+    /// Delete account permanently
+    func deleteAccount(password: String, confirmation: String) async throws {
+        do {
+            let request = RLDeleteAccountRequest(password: password, confirmation: confirmation)
+            _ = try await realApi.deleteAccount(request)
+            logout()
+        } catch {
+            showError(error, title: "Failed to Delete Account", style: .alert)
+            throw error
+        }
+    }
+
+    private func buildDeviceInfo() -> [String: String] {
+        let device = UIDevice.current
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+        return [
+            "model": device.model,
+            "systemName": device.systemName,
+            "systemVersion": device.systemVersion,
+            "appVersion": appVersion,
+            "buildNumber": buildNumber
+        ]
     }
     
     

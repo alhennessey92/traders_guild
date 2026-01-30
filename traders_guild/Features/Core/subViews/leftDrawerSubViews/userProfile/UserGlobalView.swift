@@ -98,21 +98,13 @@ struct UserGlobalSheetView: View {
             HStack(spacing: 16) {
                 // Avatar
                 ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppColors.accentColor, AppColors.accentColor.opacity(0.6)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 70, height: 70)
-                        .overlay(
-                            Text(String(rlAppState.currentUser?.displayName.prefix(2) ?? "").uppercased())
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                        )
+                    UnifiedMemberAvatar(
+                        username: rlAppState.currentUser?.displayName ?? "User",
+                        avatarURL: rlAppState.currentUser?.avatarUrl,
+                        isOnline: rlAppState.currentUser?.isOnline ?? false,
+                        size: 70,
+                        showOnlineIndicator: false
+                    )
                     
                     // Verified badge (if applicable)
                     if rlAppState.currentUser?.isVerified == true {
