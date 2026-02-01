@@ -630,7 +630,7 @@ struct SectionDrawerView: View {
         case .userList:
             await leftDrawerViewModel.refreshGuildMembers(guildId: guildId, rlAppState: rlAppState)
         case .notifications:
-            await leftDrawerViewModel.refreshNotifications(guildId: guildId, appState: appState)
+            await leftDrawerViewModel.refreshNotifications(rlAppState: rlAppState)
         case .statistics:
              await leftDrawerViewModel.refreshStatistics(guildId: guildId, rlAppState: rlAppState)
         case .topMarkers:

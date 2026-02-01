@@ -1730,3 +1730,147 @@ extension RealAPIService {
         )
     }
 }
+
+
+// =============================================================================================
+// MARK: - Notifications
+// =============================================================================================
+extension RealAPIService {
+    
+    // =============================================================================
+    // CORRECTED NOTIFICATION METHODS - REPLACE in RealAPIService.swift
+    // =============================================================================
+    //
+    // Your request() method signature is:
+    //
+    //   private func request<T: Decodable>(
+    //       _ endpoint: String,           // positional, no label
+    //       service: APIService = .core,
+    //       method: String = "GET",
+    //       body: Encodable? = nil,
+    //       auth: Bool = false,
+    //       isRetry: Bool = false
+    //   ) async throws -> T
+    //
+    // Issues in the original:
+    //   1. Used named `endpoint:` label — should be positional (no label)
+    //   2. Used `queryItems:` parameter — doesn't exist on request()
+    //   3. Missing `auth: true` on all calls (all notification endpoints require auth)
+    //
+    // Fix: Build query strings manually in the endpoint URL (same pattern
+    // you use elsewhere, e.g. clearReadNotifications already did this).
+    // =============================================================================
+
+
+    // MARK: - Notification Endpoints
+
+    /// Fetch paginated notifications
+    /// GET /api/v1/notifications?page=1&page_size=20&notification_types=dm,chatroom&is_read=false
+    func getNotifications(
+        types: [String]? = nil,
+        isRead: Bool? = nil,
+        page: Int = 1,
+        pageSize: Int = 20
+    ) async throws -> RLNotificationListDTO {
+        // Build query string manually since request() doesn't support queryItems
+        var queryParts: [String] = [
+            "page=\(page)",
+            "page_size=\(pageSize)"
+        ]
+        if let types = types, !types.isEmpty {
+            queryParts.append("notification_types=\(types.joined(separator: ","))")
+        }
+        if let isRead = isRead {
+            queryParts.append("is_read=\(isRead)")
+        }
+        let queryString = queryParts.joined(separator: "&")
+
+        return try await request(
+            "/notifications?\(queryString)",
+            service: .core,
+            auth: true
+        )
+    }
+
+
+    /// Fetch notification badge counts
+    /// GET /api/v1/notifications/stats
+    func getNotificationStats() async throws -> RLNotificationStatsDTO {
+        return try await request(
+            "/notifications/stats",
+            service: .core,
+            auth: true
+        )
+    }
+
+
+    /// Mark specific notifications as read
+    /// POST /api/v1/notifications/mark-read
+    func markNotificationsAsRead(ids: [UUID]) async throws {
+        let body = RLNotificationMarkReadRequest(notificationIds: ids)
+        let _: RLDetailResponseDTO = try await request(
+            "/notifications/mark-read",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+
+    /// Mark all notifications as read
+    /// POST /api/v1/notifications/mark-all-read
+    func markAllNotificationsAsRead() async throws {
+        let _: RLDetailResponseDTO = try await request(
+            "/notifications/mark-all-read",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+
+    /// Record a notification view (analytics)
+    /// POST /api/v1/notifications/{id}/view
+    func recordNotificationView(notificationId: UUID) async throws {
+        let _: RLDetailResponseDTO = try await request(
+            "/notifications/\(notificationId)/view",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+
+    /// Delete specific notifications
+    /// DELETE /api/v1/notifications
+    func deleteNotifications(ids: [UUID], softDelete: Bool = true) async throws {
+        let body = RLNotificationDeleteRequest(notificationIds: ids, softDelete: softDelete)
+        let _: RLDetailResponseDTO = try await request(
+            "/notifications",
+            service: .core,
+            method: "DELETE",
+            body: body,
+            auth: true
+        )
+    }
+
+
+    /// Clear all read notifications
+    /// DELETE /api/v1/notifications/clear-read
+    func clearReadNotifications(softDelete: Bool = true) async throws {
+        let _: RLDetailResponseDTO = try await request(
+            "/notifications/clear-read?soft_delete=\(softDelete)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+}
+
+
+
+
+
+
+

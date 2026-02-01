@@ -275,12 +275,11 @@ struct MainView: View {
                 await rightDrawerViewModel.preloadData(for: rlGuildId, appState: rlAppState)
                 
                 // Configure notification navigation (still uses old system for now)
-                // TODO: Update to use RLMessagingManager when ready
-                // notificationNavigationManager.configure(
-                //     appState: appState,
-                //     messagingManager: messagingManager,
-                //     rightDrawerViewModel: rightDrawerViewModel
-                // )
+                notificationNavigationManager.configure(
+                    rlAppState: rlAppState,
+                    messagingManager: rlMessagingManager,
+                    rightDrawerViewModel: rightDrawerViewModel
+                )
                 
                 // Initialize chart with data
                 await chartViewModel.initialize()

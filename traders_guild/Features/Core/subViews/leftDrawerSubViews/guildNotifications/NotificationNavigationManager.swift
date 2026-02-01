@@ -46,13 +46,12 @@ class NotificationNavigationManager: ObservableObject {
     // ============================================================================
     
     /// Main entry point: Handle navigation for a notification
-    func navigate(to notification: GuildNotificationDTO) async {
-        guard let destination = notification.destination else {
-            print("⚠️ Notification '\(notification.title)' has no valid destination")
+    func navigate(to notification: RLNotificationDTO) async {
+        guard let destination = notification.navigationDestination else {
+            print("⚠️ Notification '\(notification.displayTitle)' has no valid destination")
             rlAppState?.showInfo("This notification cannot be opened")
             return
         }
-        
         await navigate(to: destination)
     }
     

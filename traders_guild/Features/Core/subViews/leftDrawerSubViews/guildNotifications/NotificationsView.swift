@@ -38,6 +38,7 @@ struct NotificationsListView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     
     // Tab state
     @State private var selectedTab: NotificationTab = .all
@@ -84,37 +85,28 @@ struct NotificationsListView: View {
     }
     
     // MARK: - Refresh
-    
     private func refreshNotifications() async {
-        guard let guild = appState.currentGuild else { return }
-        await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
+        await leftDrawerViewModel.refreshNotifications(rlAppState: rlAppState)
     }
     
     // MARK: - Tab Counts
     
     private func getCountForTab(_ tab: NotificationTab) -> Int {
-        switch tab {
-        case .all:
-            return leftDrawerViewModel.userNotifications.count
-        case .guild:
-            return filteredNotifications(for: .guild).count
-        case .personal:
-            return filteredNotifications(for: .personal).count
-        }
+        filteredNotifications(for: tab).count
     }
     
     // MARK: - Filtered Notifications
     
-    private func filteredNotifications(for tab: NotificationTab) -> [GuildNotificationDTO] {
+    private func filteredNotifications(for tab: NotificationTab) -> [RLNotificationDTO] {
         switch tab {
         case .all:
             return leftDrawerViewModel.userNotifications
         case .guild:
-            // Guild tab: symbol-related, announcements, events
-            return leftDrawerViewModel.userNotifications.filter { $0.notificationType == .symbol }
+            // Guild tab: announcements, events, guild invites
+            return leftDrawerViewModel.userNotifications.filter { $0.type?.isGuild == true }
         case .personal:
-            // Personal tab: DMs, mentions, friend-related
-            return leftDrawerViewModel.userNotifications.filter { $0.notificationType == .personal }
+            // Personal tab: DMs, chatroom mentions, friend requests, mentions
+            return leftDrawerViewModel.userNotifications.filter { $0.type?.isPersonal == true }
         }
     }
     
@@ -200,38 +192,29 @@ struct NotificationsListView: View {
 // MARK: - ================================================================================================
 
 struct NotificationCard: View {
-    let notification: GuildNotificationDTO
+    let notification: RLNotificationDTO       // <<< Changed type
     
     @State private var isPressed = false
     @State private var hasRecordedView = false
     @State private var showAsUnread: Bool
     
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState     // <<< Add rlAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
     
-    init(notification: GuildNotificationDTO) {
+    init(notification: RLNotificationDTO) {           // <<< Changed type
         self.notification = notification
         _showAsUnread = State(initialValue: !notification.isRead)
     }
     
-    /// Icon and color based on notification type
+    /// Icon and color now come from the DTO computed properties
     private var notificationIcon: String {
-        switch notification.notificationType {
-        case .personal:
-            return "person.crop.circle.fill"
-        case .symbol:
-            return "chart.line.uptrend.xyaxis"
-        }
+        notification.icon           // Uses the computed property on RLNotificationDTO
     }
     
     private var notificationColor: Color {
-        switch notification.notificationType {
-        case .personal:
-            return AppColors.friendAccent
-        case .symbol:
-            return AppColors.bullCandleGreen
-        }
+        notification.accentColor    // Uses the computed property on RLNotificationDTO
     }
     
     var body: some View {
@@ -250,9 +233,8 @@ struct NotificationCard: View {
                 
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
-                    // Title row with time
                     HStack(alignment: .top) {
-                        Text(notification.title)
+                        Text(notification.displayTitle)          // <<< .title -> .displayTitle
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(AppColors.whiteText)
                             .lineLimit(2)
@@ -265,8 +247,7 @@ struct NotificationCard: View {
                             .foregroundColor(AppColors.whiteText.opacity(0.4))
                     }
                     
-                    // Content preview
-                    Text(notification.content)
+                    Text(notification.displayBody)               // <<< .content -> .displayBody
                         .font(.system(size: 12))
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
                         .lineLimit(2)
@@ -274,7 +255,7 @@ struct NotificationCard: View {
                 }
                 
                 // Chevron for navigable notifications
-                if notification.destination != nil {
+                if notification.isActionable {                   // <<< .destination != nil -> .isActionable
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(AppColors.whiteText.opacity(0.3))
@@ -323,12 +304,17 @@ struct NotificationCard: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 showAsUnread = false
             }
-            leftDrawerViewModel.markNotificationAsRead(notificationId: notification.id)
+            leftDrawerViewModel.markNotificationAsRead(
+                notificationId: notification.id,
+                rlAppState: rlAppState                       // <<< Pass rlAppState
+            )
         }
         
-        // Navigate to destination
-        Task {
-            await notificationNavigationManager.navigate(to: notification)
+        // Navigate using the new destination
+        if let destination = notification.navigationDestination {
+            Task {
+                await notificationNavigationManager.navigate(to: destination)
+            }
         }
     }
     
@@ -338,7 +324,9 @@ struct NotificationCard: View {
         
         Task {
             do {
-                try await appState.recordNotificationView(notificationId: notification.id)
+                try await rlAppState.recordNotificationView(       // <<< Use rlAppState
+                    notificationId: notification.id
+                )
             } catch {
                 print("⚠️ Failed to record notification view: \(error)")
             }
@@ -350,10 +338,169 @@ struct NotificationCard: View {
             withAnimation {
                 showAsUnread = false
             }
-            leftDrawerViewModel.markNotificationAsRead(notificationId: notification.id)
+            leftDrawerViewModel.markNotificationAsRead(
+                notificationId: notification.id,
+                rlAppState: rlAppState
+            )
         }
     }
 }
+// struct NotificationCard: View {
+//     let notification: RLNotificationDTO
+    
+//     @State private var isPressed = false
+//     @State private var hasRecordedView = false
+//     @State private var showAsUnread: Bool
+    
+//     @EnvironmentObject var appState: AppState
+//     @EnvironmentObject var rlAppState: RLAppState 
+//     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+//     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
+    
+//     init(notification: RLNotificationDTO) {
+//         self.notification = notification
+//         _showAsUnread = State(initialValue: !notification.isRead)
+//     }
+    
+//     /// Icon and color based on notification type
+//     private var notificationIcon: String {
+//         switch notification.notificationType {
+//         case .personal:
+//             return "person.crop.circle.fill"
+//         case .symbol:
+//             return "chart.line.uptrend.xyaxis"
+//         }
+//     }
+    
+//     private var notificationColor: Color {
+//         switch notification.notificationType {
+//         case .personal:
+//             return AppColors.friendAccent
+//         case .symbol:
+//             return AppColors.bullCandleGreen
+//         }
+//     }
+    
+//     var body: some View {
+//         Button(action: handleTap) {
+//             HStack(alignment: .top, spacing: 10) {
+//                 // Icon badge
+//                 ZStack {
+//                     Circle()
+//                         .fill(notificationColor.opacity(0.2))
+//                         .frame(width: 36, height: 36)
+                    
+//                     Image(systemName: notificationIcon)
+//                         .font(.system(size: 14, weight: .semibold))
+//                         .foregroundColor(notificationColor)
+//                 }
+                
+//                 // Content
+//                 VStack(alignment: .leading, spacing: 4) {
+//                     // Title row with time
+//                     HStack(alignment: .top) {
+//                         Text(notification.title)
+//                             .font(.system(size: 13, weight: .semibold))
+//                             .foregroundColor(AppColors.whiteText)
+//                             .lineLimit(2)
+//                             .multilineTextAlignment(.leading)
+                        
+//                         Spacer()
+                        
+//                         Text(notification.timeAgoFormatted)
+//                             .font(.system(size: 10))
+//                             .foregroundColor(AppColors.whiteText.opacity(0.4))
+//                     }
+                    
+//                     // Content preview
+//                     Text(notification.content)
+//                         .font(.system(size: 12))
+//                         .foregroundColor(AppColors.whiteText.opacity(0.6))
+//                         .lineLimit(2)
+//                         .multilineTextAlignment(.leading)
+//                 }
+                
+//                 // Chevron for navigable notifications
+//                 if notification.destination != nil {
+//                     Image(systemName: "chevron.right")
+//                         .font(.system(size: 10, weight: .semibold))
+//                         .foregroundColor(AppColors.whiteText.opacity(0.3))
+//                         .padding(.top, 4)
+//                 }
+//             }
+//             .padding(.horizontal, 12)
+//             .padding(.vertical, 10)
+//             .background(
+//                 RoundedRectangle(cornerRadius: 12)
+//                     .fill(Color.white.opacity(isPressed ? 0.08 : 0.04))
+//                     .overlay(
+//                         RoundedRectangle(cornerRadius: 12)
+//                             .strokeBorder(
+//                                 showAsUnread ? AppColors.accentColor.opacity(0.4) : Color.clear,
+//                                 lineWidth: 1
+//                             )
+//                     )
+//             )
+//         }
+//         .buttonStyle(PlainButtonStyle())
+//         .scaleEffect(isPressed ? 0.98 : 1.0)
+//         .animation(.easeInOut(duration: 0.15), value: isPressed)
+//         .disabled(notificationNavigationManager.isNavigating)
+//         .opacity(notificationNavigationManager.isNavigating ? 0.6 : 1.0)
+//         .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
+//             withAnimation(.easeInOut(duration: 0.1)) {
+//                 isPressed = pressing
+//             }
+//         }, perform: {})
+//         .onAppear {
+//             recordNotificationView()
+//         }
+//         .onDisappear {
+//             markAsReadIfNeeded()
+//         }
+//     }
+    
+//     // MARK: - Actions
+    
+//     private func handleTap() {
+//         HapticFeedback.light.trigger()
+        
+//         // Mark as read immediately on tap
+//         if showAsUnread {
+//             withAnimation(.easeInOut(duration: 0.2)) {
+//                 showAsUnread = false
+//             }
+//             leftDrawerViewModel.markNotificationAsRead(notificationId: notification.id)
+//         }
+        
+//         // Navigate to destination
+//         Task {
+//             await notificationNavigationManager.navigate(to: notification)
+//         }
+//     }
+    
+//     private func recordNotificationView() {
+//         guard !hasRecordedView else { return }
+//         hasRecordedView = true
+        
+//         Task {
+//             do {
+//                 try await appState.recordNotificationView(notificationId: notification.id)
+//             } catch {
+//                 print("⚠️ Failed to record notification view: \(error)")
+//             }
+//         }
+//     }
+    
+//     private func markAsReadIfNeeded() {
+//         if showAsUnread {
+//             withAnimation {
+//                 showAsUnread = false
+//             }
+//             leftDrawerViewModel.markNotificationAsRead(notificationId: notification.id)
+//         }
+//     }
+// }
 
 // MARK: - ================================================================================================
 // MARK: - NAVIGATION LOADING OVERLAY
@@ -382,17 +529,5 @@ struct NavigationLoadingOverlay: View {
     }
 }
 
-// MARK: - ================================================================================================
-// MARK: - LEGACY SUPPORT (Rename if needed)
-// MARK: - ================================================================================================
 
-/// Original row view - kept for reference, replaced by NotificationCard
-struct NotificationRowView: View {
-    let notification: GuildNotificationDTO
-    let onTap: () -> Void
-    
-    var body: some View {
-        NotificationCard(notification: notification)
-    }
-}
 

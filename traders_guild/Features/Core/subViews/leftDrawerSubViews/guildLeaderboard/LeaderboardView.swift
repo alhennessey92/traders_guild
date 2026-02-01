@@ -81,7 +81,7 @@ struct LeaderboardListView: View {
     
     private func refreshLeaderboard() async {
         guard let guild = appState.currentGuild else { return }
-        await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
+        //await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
     }
     
     // MARK: - Tab Counts

@@ -15,7 +15,7 @@ import Combine
 class LeftDrawerViewModel: ObservableObject {
     
     
-    @EnvironmentObject var rlAppState: RLAppState
+    private weak var rlAppState: RLAppState?
     
     // ================================================================================================
     // MARK: - Published State
@@ -31,7 +31,8 @@ class LeftDrawerViewModel: ObservableObject {
     
     @Published var members: [GuildMembershipDTO] = []
     @Published var watchlist: GuildWatchlistDTO?
-    @Published var userNotifications: [GuildNotificationDTO] = []
+    @Published var userNotifications: [RLNotificationDTO] = []
+    @Published var notificationStats: RLNotificationStatsDTO?
     @Published var statistics: RLGuildStatisticsResponse?
     
     // New: backend-driven guild members
@@ -66,6 +67,7 @@ class LeftDrawerViewModel: ObservableObject {
     private var currentGuildId: UUID?
     private var cancellables = Set<AnyCancellable>()
     private weak var rlAppStateRef: RLAppState?
+
     
     // ================================================================================================
     // MARK: - Top Markers State
@@ -78,10 +80,21 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var topMarkersLastRefresh: Date?
     @Published var isLoadingTopMarkers: Bool = false
     
+
+
+    // ================================================================================================
+    // MARK: - INIT
+    // ================================================================================================
+    init() {
+        setupNotificationListener()
+    }
+
+
     // ================================================================================================
     // MARK: - Navigation State
     // ================================================================================================
     
+
     /// When set, parent views should navigate to this marker on the chart
     /// After handling navigation, parent should set this back to nil
     @Published var pendingMarkerNavigation: TopMarkerDTO? = nil
@@ -182,16 +195,22 @@ class LeftDrawerViewModel: ObservableObject {
     
     
     /// Mark notification as read in cache
-    func markNotificationAsRead(notificationId: UUID) {
+    func markNotificationAsRead(notificationId: UUID, rlAppState: RLAppState? = nil) {
         guard let index = userNotifications.firstIndex(where: { $0.id == notificationId }) else {
             print("⚠️ Notification not found in cache: \(notificationId)")
             return
         }
         
-        var updatedNotification = userNotifications[index]
-        updatedNotification.isRead = true
-        userNotifications[index] = updatedNotification
+        // Update local cache immediately (optimistic)
+        var updated = userNotifications[index]
+        updated.isRead = true
+        userNotifications[index] = updated
         print("✅ Updated notification cache: \(notificationId) -> isRead: true")
+        
+        // Fire-and-forget API call
+        Task {
+            await rlAppState?.markNotificationsAsRead(ids: [notificationId])
+        }
     }
     
     // ================================================================================================
@@ -294,14 +313,16 @@ class LeftDrawerViewModel: ObservableObject {
             
             // Notifications
             group.addTask {
-                do {
-                    let fetched = try await appState.fetchGuildUserNotifications(guildId: guildId)
-                    await MainActor.run { self.userNotifications = fetched }
-                } catch is CancellationError {
-                    // Silent
-                } catch {
-                    print("⚠️ Failed to fetch notifications: \(error)")
-                }
+                await self.fetchNotifications(rlAppState: rlAppState)
+
+                // do {
+                //     let fetched = try await appState.fetchGuildUserNotifications(guildId: guildId)
+                //     await MainActor.run { self.userNotifications = fetched }
+                // } catch is CancellationError {
+                //     // Silent
+                // } catch {
+                //     print("⚠️ Failed to fetch notifications: \(error)")
+                // }
             }
             
             // Statistics (from rlAppState - like announcements/events)
@@ -326,54 +347,54 @@ class LeftDrawerViewModel: ObservableObject {
     /// Legacy preload - for backwards compatibility during migration
     /// NOTE: Announcements and Events require rlAppState - they will be skipped in legacy mode
     /// TODO: Remove once all callers pass rlAppState
-    func preloadData(for guildId: UUID, appState: AppState) async {
-        // Skip announcements and events fetch in legacy mode (will be empty)
-        guard shouldRefresh(for: guildId) else { return }
+    // func preloadData(for guildId: UUID, appState: AppState) async {
+    //     // Skip announcements and events fetch in legacy mode (will be empty)
+    //     guard shouldRefresh(for: guildId) else { return }
         
-        isLoading = true
-        defer { isLoading = false }
+    //     isLoading = true
+    //     defer { isLoading = false }
         
-        let userId = appState.currentUser?.id
+    //     let userId = appState.currentUser?.id
         
-        // OLD: These all use old appState (events removed - now requires rlAppState)
-        async let membersTask = appState.fetchGuildMembers(guildId: guildId)
-        async let watchlistTask = appState.fetchGuildWatchlist(guildId: guildId)
-        async let tradingWatchlistTask = appState.fetchGuildTradingWatchlist(guildId: guildId)
-        async let userNotificationsTask = appState.fetchGuildUserNotifications(guildId: guildId)
-        //async let statisticsTask = appState.fetchGuildStatistics(guildId: guildId)
+    //     // OLD: These all use old appState (events removed - now requires rlAppState)
+    //     async let membersTask = appState.fetchGuildMembers(guildId: guildId)
+    //     async let watchlistTask = appState.fetchGuildWatchlist(guildId: guildId)
+    //     async let tradingWatchlistTask = appState.fetchGuildTradingWatchlist(guildId: guildId)
+    //     async let userNotificationsTask = rlAppState.fetchNotifications(page: 1, pageSize: 50)
+    //     //async let statisticsTask = appState.fetchGuildStatistics(guildId: guildId)
         
-        async let personalTradingWatchlistTask: [TradingSymbolDTO] = {
-            guard let id = userId else { return [] }
-            return (try? await appState.fetchPersonalTradingWatchlist(userId: id)) ?? []
-        }()
+    //     async let personalTradingWatchlistTask: [TradingSymbolDTO] = {
+    //         guard let id = userId else { return [] }
+    //         return (try? await appState.fetchPersonalTradingWatchlist(userId: id)) ?? []
+    //     }()
         
-        do {
-            let (fetchedMembers, fetchedWatchlist, fetchedTradingWatchlist, fetchedPersonalTradingWatchlist, fetchedUserNotifications) = try await (
-                membersTask,
-                watchlistTask,
-                tradingWatchlistTask,
-                personalTradingWatchlistTask,
-                userNotificationsTask,
-                //statisticsTask
-            )
+    //     do {
+    //         let (fetchedMembers, fetchedWatchlist, fetchedTradingWatchlist, fetchedPersonalTradingWatchlist, fetchedUserNotifications) = try await (
+    //             membersTask,
+    //             watchlistTask,
+    //             tradingWatchlistTask,
+    //             personalTradingWatchlistTask,
+    //             userNotificationsTask,
+    //             //statisticsTask
+    //         )
             
-            // Don't touch announcements or events in legacy mode - they require rlAppState
-            self.members = fetchedMembers
-            self.watchlist = fetchedWatchlist
-            self.guildTradingWatchlist = fetchedTradingWatchlist
-            self.personalTradingWatchlist = fetchedPersonalTradingWatchlist
-            self.userNotifications = fetchedUserNotifications
-            //self.statistics = fetchedStatistics
-            self.lastRefresh = Date()
-            self.currentGuildId = guildId
+    //         // Don't touch announcements or events in legacy mode - they require rlAppState
+    //         self.members = fetchedMembers
+    //         self.watchlist = fetchedWatchlist
+    //         self.guildTradingWatchlist = fetchedTradingWatchlist
+    //         self.personalTradingWatchlist = fetchedPersonalTradingWatchlist
+    //         self.userNotifications = fetchedNotificationsResult.notifications
+    //         //self.statistics = fetchedStatistics
+    //         self.lastRefresh = Date()
+    //         self.currentGuildId = guildId
             
-        } catch is CancellationError {
-            return
-        } catch {
-            print("⚠️ Failed to preload drawer data: \(error)")
-            appState.showError(error, title: "Failed to load data", style: .toast)
-        }
-    }
+    //     } catch is CancellationError {
+    //         return
+    //     } catch {
+    //         print("⚠️ Failed to preload drawer data: \(error)")
+    //         appState.showError(error, title: "Failed to load data", style: .toast)
+    //     }
+    // }
     
     /// Manual refresh - forces reload of ALL data
     /// NOTE: Requires rlAppState for announcements
@@ -383,10 +404,12 @@ class LeftDrawerViewModel: ObservableObject {
     }
     
     /// Legacy refresh - for backwards compatibility (doesn't refresh announcements)
-    func refresh(for guildId: UUID, appState: AppState) async {
-        lastRefresh = nil
-        await preloadData(for: guildId, appState: appState)
-    }
+    // func refresh(for guildId: UUID, appState: AppState) async {
+    //     lastRefresh = nil
+    //     await preloadData(for: guildId, appState: appState)
+    // }
+    
+
     
     // ================================================================================================
     // MARK: - Component-Specific Refresh (Recommended for Production)
@@ -523,17 +546,17 @@ class LeftDrawerViewModel: ObservableObject {
     }
     
     /// Refresh only notifications - use this in NotificationsView
-    func refreshNotifications(guildId: UUID, appState: AppState) async {
-        do {
-            let fetched = try await appState.fetchGuildUserNotifications(guildId: guildId)
-            await MainActor.run {
-                self.userNotifications = fetched
-            }
-        } catch is CancellationError {
-            print("📋 refreshNotifications: Cancelled")
-        } catch {
-            print("⚠️ Failed to refresh notifications: \(error)")
-        }
+    func refreshNotifications(rlAppState: RLAppState) async {
+       do {
+           let result = try await rlAppState.fetchNotifications(page: 1, pageSize: 50)
+           await MainActor.run {
+               self.userNotifications = result.notifications
+           }
+       } catch is CancellationError {
+           print("📋 refreshNotifications: Cancelled")
+       } catch {
+           print("⚠️ Failed to refresh notifications: \(error)")
+       }
     }
     
     /// Refresh only statistics - use this in StatisticsView
@@ -671,6 +694,81 @@ class LeftDrawerViewModel: ObservableObject {
     
 
     
+
+    // ================================================================================================
+    // MARK: - Notification Listener
+    // ================================================================================================
+
+    func fetchNotifications(rlAppState: RLAppState) async {
+        do {
+            let result = try await rlAppState.fetchNotifications(page: 1, pageSize: 50)
+            await MainActor.run {
+                self.userNotifications = result.notifications
+            }
+            // Also fetch stats for badges
+            let stats = try await rlAppState.fetchNotificationStats()
+            await MainActor.run {
+                self.notificationStats = stats
+            }
+        } catch is CancellationError {
+            print("📋 fetchNotifications: Cancelled")
+        } catch {
+            print("⚠️ Failed to fetch notifications: \(error)")
+        }
+    }
+
+
+    
+    func setupNotificationListener() {
+        RealTimeService.shared.messageSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.handleWebSocketNotification(message)
+            }
+            .store(in: &cancellables)
+    }
+
+    private let notificationDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+    
+    private func handleWebSocketNotification(_ message: WSIncomingMessage) {
+        
+        
+        switch message.type {
+        case "notification":
+            // New notification received in real-time
+            guard let payloadData = message.payload,
+                let jsonData = try? JSONSerialization.data(withJSONObject: payloadData),
+                let notification = try? notificationDecoder.decode(RLNotificationDTO.self, from: jsonData)
+            else {
+                print("⚠️ Failed to decode notification payload")
+                return
+            }
+            
+            // Insert at the top of the list
+            if !userNotifications.contains(where: { $0.id == notification.id }) {
+                userNotifications.insert(notification, at: 0)
+                print("🔔 New real-time notification: \(notification.displayTitle)")
+            }
+            
+        case "notification_stats_update":
+            // Badge counts updated
+            guard let payloadData = message.payload,
+                let jsonData = try? JSONSerialization.data(withJSONObject: payloadData),
+                let stats = try? notificationDecoder.decode(RLNotificationStatsDTO.self, from: jsonData)
+            else { return }
+            
+            notificationStats = stats
+            print("📊 Notification stats updated: \(stats.unreadCount) unread")
+            
+        default:
+            break
+        }
+    }
     // ================================================================================================
     // MARK: - Load User Profiles Methods
     // ================================================================================================

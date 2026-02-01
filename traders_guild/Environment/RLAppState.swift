@@ -157,6 +157,8 @@ class RLAppState: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     @Published var presenceByUserId: [UUID: Bool] = [:]
     private var currentPresenceChannel: String?
+
+    @Published var notificationStats: RLNotificationStatsDTO?
     
     // ================================================================================================
     // MARK: - Initialization
@@ -386,6 +388,9 @@ class RLAppState: ObservableObject {
                 showGuildSelectionSheet = true
                 isHandlingAuthFlow = false
             }
+
+            // Fetch notifications
+            subscribeToNotifications()
             
             print("🔐 Login: Final state - currentGuild: \(currentGuild?.name ?? "nil"), showSheet: \(showGuildSelectionSheet)")
             
@@ -400,6 +405,8 @@ class RLAppState: ObservableObject {
     
     /// Logout and clear session
     func logout() {
+        // Unsubscribe from notifications
+        unsubscribeFromNotifications()
         Task {
             await realApi.logout()
         }
@@ -414,6 +421,8 @@ class RLAppState: ObservableObject {
         isHandlingAuthFlow = false
         presenceByUserId.removeAll()
         currentPresenceChannel = nil
+        
+        
         
         clearAllKeychain()
         resetChartReadyState()
@@ -466,7 +475,9 @@ class RLAppState: ObservableObject {
             } catch {
                 print("⚠️ restoreSession: Failed to fetch user settings: \(error)")
             }
+            subscribeToNotifications()
         }
+
         
         print("🔄 restoreSession: Done - isAuthenticated: \(isAuthenticated), hasGuild: \(currentGuild != nil)")
         isSessionRestored = true
@@ -1867,6 +1878,89 @@ class RLAppState: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+    }
+
+
+
+    
+    // =============================================================================================
+    // MARK: - NOTIFICATION MANAGEMENT
+    // =============================================================================================
+
+    /// Fetch paginated notifications
+    func fetchNotifications(
+        types: [String]? = nil,
+        isRead: Bool? = nil,
+        page: Int = 1,
+        pageSize: Int = 20
+    ) async throws -> RLNotificationListDTO {
+        do {
+            return try await realApi.getNotifications(
+                types: types,
+                isRead: isRead,
+                page: page,
+                pageSize: pageSize
+            )
+        } catch {
+            showError(error, title: "Failed to Load Notifications", style: .toast)
+            throw error
+        }
+    }
+
+    /// Fetch notification badge counts
+    func fetchNotificationStats() async throws -> RLNotificationStatsDTO {
+        do {
+            let stats = try await realApi.getNotificationStats()
+            self.notificationStats = stats
+            return stats
+        } catch {
+            showError(error, title: "Failed to Load Notification Stats", style: .toast)
+            throw error
+        }
+    }
+
+    /// Mark specific notifications as read
+    func markNotificationsAsRead(ids: [UUID]) async {
+        do {
+            try await realApi.markNotificationsAsRead(ids: ids)
+        } catch {
+            print("⚠️ Failed to mark notifications as read: \(error)")
+        }
+    }
+
+    /// Mark all notifications as read
+    func markAllNotificationsAsRead() async {
+        do {
+            try await realApi.markAllNotificationsAsRead()
+            // Refresh stats to update badge
+            _ = try? await fetchNotificationStats()
+        } catch {
+            showError(error, title: "Failed to Mark All as Read", style: .toast)
+        }
+    }
+
+    /// Record a notification view (analytics)
+    func recordNotificationView(notificationId: UUID) async throws {
+        try await realApi.recordNotificationView(notificationId: notificationId)
+    }
+
+
+    // MARK: - WebSocket Notification Subscription
+
+    /// Call this when user logs in / connects WebSocket.
+    /// The realtime-service auto-subscribes the user to their notification channel,
+    /// so this is just for subscribing on the iOS side to the existing WS connection.
+    func subscribeToNotifications() {
+        guard let userId = currentUser?.id else { return }
+        let channel = "user:\(userId):notifications"
+        RealTimeService.shared.subscribe(to: [channel], owner: "notifications")
+    }
+
+    /// Unsubscribe when logging out
+    func unsubscribeFromNotifications() {
+        guard let userId = currentUser?.id else { return }
+        let channel = "user:\(userId):notifications"
+        RealTimeService.shared.unsubscribe(from: [channel], owner: "notifications")
     }
 }
 
