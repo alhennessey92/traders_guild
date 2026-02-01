@@ -395,9 +395,52 @@ class RealAPIService {
     }
     #endif
     
-    // ================================================================================================
-    // MARK: - Auth Endpoints (port 8000)
-    // ================================================================================================
+    
+    
+
+    
+    
+    
+
+    
+
+    
+    
+    
+    
+    
+    
+    
+    // NEW Additions for guild members/users
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+
+
+    
+    
+}
+
+// MARK: - Helper Types
+
+private struct EmptyResponse: Decodable {}
+
+
+
+// ================================================================================================
+// MARK: - Auth Endpoints (port 8000)
+// ================================================================================================
+extension RealAPIService {
+    
+    
     
     /// Register new user
     func register(data: RLSignupData) async throws -> RLRegistrationResponseDTO {
@@ -469,10 +512,15 @@ class RealAPIService {
         // Always clear local tokens
         clearTokens()
     }
+}
+
+
+// ================================================================================================
+// MARK: - User Endpoints (port 8001)
+// ================================================================================================
+extension RealAPIService {
     
-    // ================================================================================================
-    // MARK: - User Endpoints (port 8001)
-    // ================================================================================================
+    
     
     /// Get current user profile
     func getCurrentUser() async throws -> RLUserDTO {
@@ -492,9 +540,16 @@ class RealAPIService {
         )
     }
     
-    // ================================================================================================
-    // MARK: - Guild Endpoints (port 8001)
-    // ================================================================================================
+    
+}
+
+
+
+// ================================================================================================
+// MARK: - Guild Endpoints (port 8001)
+// ================================================================================================
+extension RealAPIService {
+    
     
     /// Get user's guild memberships - Backend Implemented
     func getUserGuilds() async throws -> RLGuildListResponseDTO {
@@ -573,9 +628,16 @@ class RealAPIService {
         )
     }
     
-    // ================================================================================================
-    // MARK: - Announcement Endpoints (port 8001)
-    // ================================================================================================
+}
+
+
+
+// ================================================================================================
+// MARK: - Announcement Endpoints (port 8001)
+// ================================================================================================
+extension RealAPIService {
+    
+    
     
     /// Get guild announcements
     func getGuildAnnouncements(guildId: UUID) async throws -> RLGuildAnnouncementsListDTO {
@@ -626,10 +688,16 @@ class RealAPIService {
             auth: true
         )
     }
+}
+
+
+
+// ================================================================================================
+// MARK: - Event Endpoints (port 8001)
+// ================================================================================================
+extension RealAPIService {
     
-    // ================================================================================================
-    // MARK: - Event Endpoints (port 8001)
-    // ================================================================================================
+    
     
     /// Get guild events
     func getGuildEvents(guildId: UUID) async throws -> RLGuildEventsListDTO {
@@ -694,10 +762,15 @@ class RealAPIService {
         )
     }
     
+}
+
+
+
+// ================================================================================================
+// MARK: - Statistics Endpoints (port 8001)
+// ================================================================================================
+extension RealAPIService {
     
-    // ================================================================================================
-    // MARK: - Statistics Endpoints (port 8001)
-    // ================================================================================================
     
     /// Get guild statistics
     func getGuildStatistics(guildId: UUID) async throws -> RLGuildStatisticsResponse {
@@ -710,16 +783,16 @@ class RealAPIService {
         print("📊 getGuildStatistics: API returned statistics")
         return result
     }
+}
+
+
+
+
+// =============================================================================================
+// MARK: - Guild Members
+// =============================================================================================
+extension RealAPIService {
     
-    
-    
-    
-    // NEW Additions for guild members/users
-    
-    
-    // =============================================================================================
-    // MARK: - Guild Members
-    // =============================================================================================
     
     /// Get guild members with full user data and personalized friend/block status
     /// GET /guilds/{guild_id}/members
@@ -758,11 +831,15 @@ class RealAPIService {
             auth: true
         )
     }
+}
+
+
+
+// =============================================================================================
+// MARK: - User Profile
+// =============================================================================================
+extension RealAPIService {
     
-    
-    // =============================================================================================
-    // MARK: - User Profile
-    // =============================================================================================
     
     /// Get current user's full profile with extended info, stats, and awards
     /// GET /users/me/profile
@@ -847,10 +924,15 @@ class RealAPIService {
         )
     }
     
+}
+
+
+
+// =============================================================================================
+// MARK: - Awards
+// =============================================================================================
+extension RealAPIService {
     
-    // =============================================================================================
-    // MARK: - Awards
-    // =============================================================================================
     
     /// Get all awards earned by current user
     /// GET /users/me/awards
@@ -925,10 +1007,15 @@ class RealAPIService {
         )
     }
     
+}
+
+
+
+// =============================================================================================
+// MARK: - Friends
+// =============================================================================================
+extension RealAPIService {
     
-    // =============================================================================================
-    // MARK: - Friends
-    // =============================================================================================
     
     /// Get current user's accepted friends list
     /// GET /users/me/friends
@@ -1022,81 +1109,13 @@ class RealAPIService {
             auth: true
         )
     }
-    
-    
-    // =============================================================================================
-    // MARK: - Blocks
-    // =============================================================================================
-    
-    /// Get list of users blocked by current user
-    /// GET /users/me/blocked
-    ///
-    /// - Parameter guildId: Required - blocks are guild-scoped
-//    func getBlockedUsers(guildId: UUID? = nil) async throws -> RLBlockedUsersListDTO {
-//        var path = "/users/me/blocked"
-//        if let guildId = guildId {
-//            path += "?guild_id=\(guildId.uuidString)"
-//        }
-//        return try await request(
-//            path,
-//            service: .core,
-//            method: "GET",
-//            auth: true
-//        )
-//    }
-    
-    /// Block a user
-    /// POST /users/me/blocked/{membership_id}
-    ///
-    /// Side effects:
-    /// - Removes any existing friendship
-    /// - Cancels any pending friend requests
-//    func blockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
-//        return try await request(
-//            "/users/me/blocked/\(membershipId.uuidString)",
-//            service: .core,
-//            method: "POST",
-//            auth: true
-//        )
-//    }
-//    
-//    /// Unblock a user
-//    /// DELETE /users/me/blocked/{membership_id}
-//    func unblockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
-//        return try await request(
-//            "/users/me/blocked/\(membershipId.uuidString)",
-//            service: .core,
-//            method: "DELETE",
-//            auth: true
-//        )
-//    }
-//    
-
-    
-    
 }
 
-// MARK: - Helper Types
-
-private struct EmptyResponse: Decodable {}
 
 
-
-// New Messaging Endpoints
-
-//
-//  RealAPIService+Messaging.swift
-//  traders_guild
-//
-//  Messaging API methods for RealAPIService.
-//  Add this to your existing RealAPIService.swift file.
-//
-//  Routes match backend: /guilds/{guild_id}/messaging/...
-//
-
-
-
+// =============================================================================================
 // MARK: - Messaging API Extension
+// =============================================================================================
 extension RealAPIService {
     
     // =============================================================================================
@@ -1109,8 +1128,8 @@ extension RealAPIService {
     /// Returns chatrooms + categorized DMs (friends, online, offline)
     func getGuildMessagingData(guildId: UUID) async throws -> RLGuildMessagingDataDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/messaging/drawer-data",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/messaging/drawer-data",
+            service: .core,
             method: "GET",
             auth: true
         )
@@ -1120,8 +1139,8 @@ extension RealAPIService {
     /// GET /guilds/{guild_id}/messaging/unread-counts
     func getUnreadCounts(guildId: UUID) async throws -> RLUnreadCountsDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/messaging/unread-counts",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/messaging/unread-counts",
+            service: .core,
             method: "GET",
             auth: true
         )
@@ -1135,8 +1154,8 @@ extension RealAPIService {
     /// GET /guilds/{guild_id}/chatrooms
     func getGuildChatrooms(guildId: UUID) async throws -> RLGuildChatroomsListDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms",
+            service: .core,
             method: "GET",
             auth: true
         )
@@ -1146,8 +1165,8 @@ extension RealAPIService {
     /// GET /guilds/{guild_id}/chatrooms/{chatroom_id}
     func getChatroom(guildId: UUID, chatroomId: UUID) async throws -> RLGuildChatroomDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)",
+            service: .core,
             method: "GET",
             auth: true
         )
@@ -1165,13 +1184,13 @@ extension RealAPIService {
         limit: Int = 50,
         cursor: String? = nil
     ) async throws -> RLChatroomMessagesListDTO {
-        var path = "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages?limit=\(limit)"
+        var path = "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages?limit=\(limit)"
         if let cursor = cursor {
             path += "&cursor=\(cursor)"
         }
         return try await request(
             path,
-            service: .messaging,
+            service: .core,
             method: "GET",
             auth: true
         )
@@ -1186,8 +1205,8 @@ extension RealAPIService {
     ) async throws -> RLChatroomMessageDTO {
         let body = RLSendMessageRequest(content: content)
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages",
+            service: .core,
             method: "POST",
             body: body,
             auth: true
@@ -1204,8 +1223,8 @@ extension RealAPIService {
     ) async throws -> RLChatroomMessageDTO {
         let body = RLEditMessageRequest(content: content)
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)",
+            service: .core,
             method: "PUT",
             body: body,
             auth: true
@@ -1220,8 +1239,8 @@ extension RealAPIService {
         messageId: UUID
     ) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)",
+            service: .core,
             method: "DELETE",
             auth: true
         )
@@ -1231,8 +1250,8 @@ extension RealAPIService {
     /// POST /guilds/{guild_id}/chatrooms/{chatroom_id}/mark-read
     func markChatroomAsRead(guildId: UUID, chatroomId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/mark-read",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/mark-read",
+            service: .core,
             method: "POST",
             auth: true
         )
@@ -1248,8 +1267,8 @@ extension RealAPIService {
     ) async throws -> RLChatroomUserSettingsDTO {
         let body = RLUpdateChatroomSettingsRequest(isPinned: isPinned, isMuted: isMuted)
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/settings",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/settings",
+            service: .core,
             method: "PUT",
             body: body,
             auth: true
@@ -1265,8 +1284,8 @@ extension RealAPIService {
     ) async throws -> RLGuildChatroomDTO {
         let body = RLCreateChatroomRequest(name: name, description: description)
         return try await request(
-            "/guilds/\(guildId.uuidString)/chatrooms",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms",
+            service: .core,
             method: "POST",
             body: body,
             auth: true
@@ -1281,8 +1300,8 @@ extension RealAPIService {
     /// GET /guilds/{guild_id}/dms
     func getDMThreads(guildId: UUID) async throws -> RLDMThreadsListDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/dms",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/dms",
+            service: .core,
             method: "GET",
             auth: true
         )
@@ -1297,10 +1316,10 @@ extension RealAPIService {
         guildId: UUID,
         participantUserId: UUID
     ) async throws -> RLDMThreadDTO {
-        let path = "/guilds/\(guildId.uuidString)/dms?participant_user_id=\(participantUserId.uuidString)"
+        let path = "/messaging/guilds/\(guildId.uuidString)/dms?participant_user_id=\(participantUserId.uuidString)"
         return try await request(
             path,
-            service: .messaging,
+            service: .core,
             method: "POST",
             auth: true
         )
@@ -1310,8 +1329,8 @@ extension RealAPIService {
     /// GET /guilds/{guild_id}/dms/{thread_id}
     func getDMThread(guildId: UUID, threadId: UUID) async throws -> RLDMThreadDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)",
+            service: .core,
             method: "GET",
             auth: true
         )
@@ -1325,13 +1344,13 @@ extension RealAPIService {
         limit: Int = 50,
         cursor: String? = nil
     ) async throws -> RLDMMessagesListDTO {
-        var path = "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages?limit=\(limit)"
+        var path = "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages?limit=\(limit)"
         if let cursor = cursor {
             path += "&cursor=\(cursor)"
         }
         return try await request(
             path,
-            service: .messaging,
+            service: .core,
             method: "GET",
             auth: true
         )
@@ -1346,8 +1365,8 @@ extension RealAPIService {
     ) async throws -> RLDMMessageDTO {
         let body = RLSendMessageRequest(content: content)
         return try await request(
-            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages",
+            service: .core,
             method: "POST",
             body: body,
             auth: true
@@ -1364,8 +1383,8 @@ extension RealAPIService {
     ) async throws -> RLDMMessageDTO {
         let body = RLEditMessageRequest(content: content)
         return try await request(
-            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)",
+            service: .core,
             method: "PUT",
             body: body,
             auth: true
@@ -1380,8 +1399,8 @@ extension RealAPIService {
         messageId: UUID
     ) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)",
+            service: .core,
             method: "DELETE",
             auth: true
         )
@@ -1391,8 +1410,8 @@ extension RealAPIService {
     /// POST /guilds/{guild_id}/dms/{thread_id}/mark-read
     func markDMAsRead(guildId: UUID, threadId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/mark-read",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/mark-read",
+            service: .core,
             method: "POST",
             auth: true
         )
@@ -1402,8 +1421,8 @@ extension RealAPIService {
     /// DELETE /guilds/{guild_id}/dms/{thread_id}
     func deleteDMThread(guildId: UUID, threadId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)",
-            service: .messaging,
+            "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)",
+            service: .core,
             method: "DELETE",
             auth: true
         )
@@ -1411,140 +1430,9 @@ extension RealAPIService {
 }
 
 
- // User Settings Extensions
-extension RealAPIService {
-
-//    // MARK: - Account Management
-//
-//    func updateBasicUserInfo(_ request: RLBasicUserUpdateRequest) async throws -> RLUserDTO {
-//        return try await request(
-//            "/users/me/basic",
-//            service: .core,
-//            method: "PUT",
-//            body: request,
-//            auth: true
-//        )
-//    }
-//
-//    func uploadAvatar(imageData: Data) async throws -> RLAvatarUpdateResponse {
-//        // Multipart form data upload
-//    }
-//
-//    func requestEmailChange(_ request: RLEmailChangeRequest) async throws -> RLDetailResponseDTO {
-//        return try await request(
-//            "/users/me/email/change-request",
-//            service: .core,
-//            method: "POST",
-//            body: request,
-//            auth: true
-//        )
-//    }
-//
-//    func changePassword(_ request: RLPasswordChangeRequest) async throws -> RLDetailResponseDTO {
-//        return try await request(
-//            "/users/me/password",
-//            service: .core,
-//            method: "PUT",
-//            body: request,
-//            auth: true
-//        )
-//    }
-//
-//    func updateDateOfBirth(_ request: RLDOBUpdateRequest) async throws -> RLUserDTO {
-//        return try await request(
-//            "/users/me/dob",
-//            service: .core,
-//            method: "PUT",
-//            body: request,
-//            auth: true
-//        )
-//    }
-//
-//    func deleteAccount(_ request: RLDeleteAccountRequest) async throws {
-//        let _: EmptyResponse = try await request(
-//            "/users/me",
-//            service: .core,
-//            method: "DELETE",
-//            body: request,
-//            auth: true
-//        )
-//    }
-//
-//    // MARK: - Support
-//
-//    func submitSupportTicket(_ request: RLSupportTicketRequest) async throws -> RLDetailResponseDTO {
-//        return try await request(
-//            "/support/tickets",
-//            service: .core,
-//            method: "POST",
-//            body: request,
-//            auth: true
-//        )
-//    }
-
-    // MARK: - Activity Feed
-
-    func getUserActivity(skip: Int = 0, limit: Int = 50) async throws -> RLActivityFeedResponse {
-        return try await request(
-            "/users/me/activity?skip=\(skip)&limit=\(limit)",
-            service: .core,
-            method: "GET",
-            auth: true
-        )
-    }
-
-//    func requestDataExport() async throws -> RLDetailResponseDTO {
-//        return try await request(
-//            "/users/me/data-export",
-//            service: .core,
-//            method: "POST",
-//            auth: true
-//        )
-//    }
-
-    // MARK: - User Settings
-
-//    func getUserSettings() async throws -> RLUserSettingsDTO {
-//        return try await request(
-//            "/users/me/settings",
-//            service: .core,
-//            method: "GET",
-//            auth: true
-//        )
-//    }
-
-//    func updateUserSettings(_ updateRequest: RLUserSettingsUpdateRequest) async throws -> RLUserSettingsDTO {
-//        return try await request(
-//            "/users/me/settings",
-//            service: .core,
-//            method: "PUT",
-//            body: updateRequest,
-//            auth: true
-//        )
-//    }
-}
-
-
-
-
-
-
-
-//
-//  RealAPIService+AccountManagement.swift
-//  traders_guild
-//
-//  Extension for account management API endpoints.
-//  Includes profile updates, avatar, email, password, DOB, blocked users, settings, and account deletion.
-//
-//  COMPLETE WITH ALL ENDPOINTS
-//  Created: 30/01/2026
-//
-
-
-
-// MARK: - Account Management Extension
-
+// =============================================================================================
+// MARK: - Account Management Extensions
+// =============================================================================================
 extension RealAPIService {
     
     // =============================================================================================
@@ -1559,6 +1447,18 @@ extension RealAPIService {
             service: .core,
             method: "PUT",
             body: updateRequest,
+            auth: true
+        )
+    }
+    
+    
+    // MARK: - Activity Feed
+
+    func getUserActivity(skip: Int = 0, limit: Int = 50) async throws -> RLActivityFeedResponse {
+        return try await request(
+            "/users/me/activity?skip=\(skip)&limit=\(limit)",
+            service: .core,
+            method: "GET",
             auth: true
         )
     }
