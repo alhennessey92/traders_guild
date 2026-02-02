@@ -1808,7 +1808,7 @@ extension RealAPIService {
     /// POST /api/v1/notifications/mark-read
     func markNotificationsAsRead(ids: [UUID]) async throws {
         let body = RLNotificationMarkReadRequest(notificationIds: ids)
-        let _: RLDetailResponseDTO = try await request(
+        let _: EmptyResponse = try await request(
             "/notifications/mark-read",
             service: .core,
             method: "POST",
@@ -1821,7 +1821,7 @@ extension RealAPIService {
     /// Mark all notifications as read
     /// POST /api/v1/notifications/mark-all-read
     func markAllNotificationsAsRead() async throws {
-        let _: RLDetailResponseDTO = try await request(
+        let _: EmptyResponse = try await request(
             "/notifications/mark-all-read",
             service: .core,
             method: "POST",
@@ -1833,7 +1833,7 @@ extension RealAPIService {
     /// Record a notification view (analytics)
     /// POST /api/v1/notifications/{id}/view
     func recordNotificationView(notificationId: UUID) async throws {
-        let _: RLDetailResponseDTO = try await request(
+        let _: EmptyResponse = try await request(
             "/notifications/\(notificationId)/view",
             service: .core,
             method: "POST",
@@ -1846,7 +1846,7 @@ extension RealAPIService {
     /// DELETE /api/v1/notifications
     func deleteNotifications(ids: [UUID], softDelete: Bool = true) async throws {
         let body = RLNotificationDeleteRequest(notificationIds: ids, softDelete: softDelete)
-        let _: RLDetailResponseDTO = try await request(
+        let _: EmptyResponse = try await request(
             "/notifications",
             service: .core,
             method: "DELETE",
@@ -1859,7 +1859,7 @@ extension RealAPIService {
     /// Clear all read notifications
     /// DELETE /api/v1/notifications/clear-read
     func clearReadNotifications(softDelete: Bool = true) async throws {
-        let _: RLDetailResponseDTO = try await request(
+        let _: EmptyResponse = try await request(
             "/notifications/clear-read?soft_delete=\(softDelete)",
             service: .core,
             method: "DELETE",
