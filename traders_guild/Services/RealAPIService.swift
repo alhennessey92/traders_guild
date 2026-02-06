@@ -1873,4 +1873,607 @@ extension RealAPIService {
 
 
 
+//
+//  RealAPIService+Chart.swift
+//  TradersGuild
+//
+//  Chart & Market Data API extension for RealAPIService.
+//  Maps to backend chart_routes.py endpoints.
+//
+//  Base path: /api/v1/chart (via chart-service or core-service)
+//
+//  Route pattern follows messaging extension:
+//    - Symbols: /chart/symbols/...
+//    - Candles: /chart/symbols/{id}/candles
+//    - Personal watchlist: /chart/watchlist/personal
+//    - Guild watchlist: /chart/guilds/{id}/watchlist
+//    - Markers: /chart/guilds/{id}/markers/...
+//    - Chart chats: /chart/chart-chats/...
+//    - Combined: /chart/guilds/{id}/symbols/{id}/chart-data
+//
+
+
+// MARK: - Chart API Extension
+// =============================================================================================
+extension RealAPIService {
+    
+    // =============================================================================================
+    // MARK: - Symbol Search & Listing
+    // =============================================================================================
+    
+    /// Search trading symbols by ticker or name
+    /// GET /chart/symbols/search?query=...&asset_class=...&limit=...
+    func searchSymbols(
+        query: String,
+        assetClass: String? = nil,
+        limit: Int = 20
+    ) async throws -> RLSymbolSearchDTO {
+        var path = "/chart/symbols/search?query=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)&limit=\(limit)"
+        if let assetClass = assetClass {
+            path += "&asset_class=\(assetClass)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Get a single trading symbol with live price
+    /// GET /chart/symbols/{symbol_id}
+    func getSymbol(symbolId: UUID) async throws -> RLTradingSymbolDTO {
+        return try await request(
+            "/chart/symbols/\(symbolId.uuidString)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// List active trading symbols
+    /// GET /chart/symbols?asset_class=...&limit=...
+    func listSymbols(
+        assetClass: String? = nil,
+        limit: Int = 50
+    ) async throws -> [RLTradingSymbolDTO] {
+        var path = "/chart/symbols?limit=\(limit)"
+        if let assetClass = assetClass {
+            path += "&asset_class=\(assetClass)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Candle History
+    // =============================================================================================
+    
+    /// Fetch historical candles for a symbol + timeframe
+    /// GET /chart/symbols/{symbol_id}/candles?timeframe=...&limit=...&end_time=...
+    ///
+    /// Returns paginated candles with cursor-based pagination via end_time.
+    /// Base timeframe (1m) queries directly; aggregated timeframes use TimescaleDB time_bucket.
+    func getCandles(
+        symbolId: UUID,
+        timeframe: String = "1m",
+        limit: Int = 200,
+        endTime: Date? = nil
+    ) async throws -> RLCandleListDTO {
+        var path = "/chart/symbols/\(symbolId.uuidString)/candles?timeframe=\(timeframe)&limit=\(limit)"
+        if let endTime = endTime {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            path += "&end_time=\(formatter.string(from: endTime))"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Personal Watchlist
+    // =============================================================================================
+    
+    /// Get user's personal watchlist with live prices
+    /// GET /chart/watchlist/personal
+    func getPersonalWatchlist() async throws -> RLPersonalWatchlistDTO {
+        return try await request(
+            "/chart/watchlist/personal",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Add symbol to personal watchlist
+    /// POST /chart/watchlist/personal
+    func addToPersonalWatchlist(symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
+        let body = RLWatchlistAddRequest(symbolId: symbolId)
+        return try await request(
+            "/chart/watchlist/personal",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Remove symbol from personal watchlist
+    /// DELETE /chart/watchlist/personal/{symbol_id}
+    func removeFromPersonalWatchlist(symbolId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/chart/watchlist/personal/\(symbolId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    /// Reorder personal watchlist
+    /// PUT /chart/watchlist/personal/reorder
+    func reorderPersonalWatchlist(symbolIds: [UUID]) async throws -> RLDetailResponseDTO {
+        let body = RLWatchlistReorderRequest(symbolIds: symbolIds)
+        return try await request(
+            "/chart/watchlist/personal/reorder",
+            service: .core,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Guild Watchlist
+    // =============================================================================================
+    
+    /// Get guild's shared watchlist with live prices
+    /// GET /chart/guilds/{guild_id}/watchlist
+    func getGuildWatchlist(guildId: UUID) async throws -> RLGuildWatchlistDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/watchlist",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Add symbol to guild watchlist (admin/moderator only)
+    /// POST /chart/guilds/{guild_id}/watchlist
+    func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
+        let body = RLWatchlistAddRequest(symbolId: symbolId)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/watchlist",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Remove symbol from guild watchlist (admin/moderator only)
+    /// DELETE /chart/guilds/{guild_id}/watchlist/{symbol_id}
+    func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/watchlist/\(symbolId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Chart Markers
+    // =============================================================================================
+    
+    /// Get markers for a symbol within a guild
+    /// GET /chart/guilds/{guild_id}/symbols/{symbol_id}/markers?timeframe=...&limit=...&cursor=...
+    func getMarkers(
+        guildId: UUID,
+        symbolId: UUID,
+        timeframe: String = "1m",
+        limit: Int = 50,
+        cursor: String? = nil
+    ) async throws -> RLMarkersListDTO {
+        var path = "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/markers?timeframe=\(timeframe)&limit=\(limit)"
+        if let cursor = cursor {
+            path += "&cursor=\(cursor)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Create a new chart marker
+    /// POST /chart/guilds/{guild_id}/markers
+    func createMarker(
+        guildId: UUID,
+        symbolId: UUID,
+        candleTimestamp: Date,
+        timeframe: String,
+        price: Double,
+        markerType: String,
+        note: String? = nil,
+        horizontalLinePrice: Double? = nil,
+        targetPrice: Double? = nil,
+        alertSeverity: String? = nil,
+        trendlineDirection: String? = nil,
+        selectedIndicator: String? = nil,
+        chartPattern: String? = nil,
+        selectedEmoji: String? = nil,
+        pollQuestion: String? = nil,
+        pollOptions: [String]? = nil
+    ) async throws -> RLChartMarkerDTO {
+        let body = RLCreateMarkerRequest(
+            symbolId: symbolId,
+            guildId: guildId,
+            candleTimestamp: candleTimestamp,
+            timeframe: timeframe,
+            price: price,
+            markerType: markerType,
+            note: note,
+            horizontalLinePrice: horizontalLinePrice,
+            targetPrice: targetPrice,
+            alertSeverity: alertSeverity,
+            trendlineDirection: trendlineDirection,
+            selectedIndicator: selectedIndicator,
+            chartPattern: chartPattern,
+            selectedEmoji: selectedEmoji,
+            pollQuestion: pollQuestion,
+            pollOptions: pollOptions
+        )
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Update a chart marker (owner only)
+    /// PUT /chart/guilds/{guild_id}/markers/{marker_id}
+    func updateMarker(
+        guildId: UUID,
+        markerId: UUID,
+        note: String? = nil,
+        price: Double? = nil,
+        isVisible: Bool? = nil,
+        horizontalLinePrice: Double? = nil,
+        targetPrice: Double? = nil,
+        alertSeverity: String? = nil,
+        trendlineDirection: String? = nil,
+        selectedIndicator: String? = nil,
+        chartPattern: String? = nil,
+        selectedEmoji: String? = nil
+    ) async throws -> RLChartMarkerDTO {
+        let body = RLUpdateMarkerRequest(
+            note: note,
+            price: price,
+            isVisible: isVisible,
+            horizontalLinePrice: horizontalLinePrice,
+            targetPrice: targetPrice,
+            alertSeverity: alertSeverity,
+            trendlineDirection: trendlineDirection,
+            selectedIndicator: selectedIndicator,
+            chartPattern: chartPattern,
+            selectedEmoji: selectedEmoji
+        )
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)",
+            service: .core,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Delete a chart marker
+    /// DELETE /chart/guilds/{guild_id}/markers/{marker_id}
+    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Marker Likes
+    // =============================================================================================
+    
+    /// Toggle like on a marker
+    /// POST /chart/guilds/{guild_id}/markers/{marker_id}/like
+    func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/like",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Marker Comments
+    // =============================================================================================
+    
+    /// Get comments for a marker (paginated)
+    /// GET /chart/markers/{marker_id}/comments?limit=...&cursor=...
+    func getMarkerComments(
+        markerId: UUID,
+        limit: Int = 20,
+        cursor: String? = nil
+    ) async throws -> RLMarkerCommentsListDTO {
+        var path = "/chart/markers/\(markerId.uuidString)/comments?limit=\(limit)"
+        if let cursor = cursor {
+            path += "&cursor=\(cursor)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Add a comment to a marker
+    /// POST /chart/guilds/{guild_id}/markers/{marker_id}/comments
+    func addMarkerComment(
+        guildId: UUID,
+        markerId: UUID,
+        content: String
+    ) async throws -> RLMarkerCommentDTO {
+        let body = RLCreateMarkerCommentRequest(content: content)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Edit a marker comment (owner only)
+    /// PUT /chart/guilds/{guild_id}/markers/{marker_id}/comments/{comment_id}
+    func editMarkerComment(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        content: String
+    ) async throws -> RLMarkerCommentDTO {
+        let body = RLEditMarkerCommentRequest(content: content)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)",
+            service: .core,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Delete a marker comment
+    /// DELETE /chart/guilds/{guild_id}/markers/{marker_id}/comments/{comment_id}
+    func deleteMarkerComment(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID
+    ) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Marker Polls
+    // =============================================================================================
+    
+    /// Vote on a poll marker
+    /// POST /chart/guilds/{guild_id}/markers/{marker_id}/vote
+    func voteOnPoll(
+        guildId: UUID,
+        markerId: UUID,
+        optionId: UUID
+    ) async throws -> RLVotePollDTO {
+        let body = RLVotePollRequest(optionId: optionId)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/vote",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Chart Chats
+    // =============================================================================================
+    
+    /// Get or create a chart chat for a specific symbol + guild
+    /// POST /chart/guilds/{guild_id}/symbols/{symbol_id}/chart-chat
+    func getOrCreateChartChat(
+        guildId: UUID,
+        symbolId: UUID
+    ) async throws -> RLChartChatDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/chart-chat",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    /// Get paginated messages for a chart chat
+    /// GET /chart/chart-chats/{chat_id}/messages?limit=...&cursor=...
+    func getChartChatMessages(
+        chatId: UUID,
+        limit: Int = 50,
+        cursor: String? = nil
+    ) async throws -> RLChartChatMessagesListDTO {
+        var path = "/chart/chart-chats/\(chatId.uuidString)/messages?limit=\(limit)"
+        if let cursor = cursor {
+            path += "&cursor=\(cursor)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    /// Send a message to a chart chat
+    /// POST /chart/chart-chats/{chat_id}/messages
+    func sendChartChatMessage(
+        chatId: UUID,
+        content: String
+    ) async throws -> RLChartChatMessageDTO {
+        let body = RLSendChartChatMessageRequest(content: content)
+        return try await request(
+            "/chart/chart-chats/\(chatId.uuidString)/messages",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Edit a chart chat message (owner only, within 15 min)
+    /// PUT /chart/chart-chats/{chat_id}/messages/{message_id}
+    func editChartChatMessage(
+        chatId: UUID,
+        messageId: UUID,
+        content: String
+    ) async throws -> RLChartChatMessageDTO {
+        let body = RLEditChartChatMessageRequest(content: content)
+        return try await request(
+            "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)",
+            service: .core,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Delete a chart chat message
+    /// DELETE /chart/chart-chats/{chat_id}/messages/{message_id}
+    func deleteChartChatMessage(
+        chatId: UUID,
+        messageId: UUID
+    ) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+    
+    
+    // =============================================================================================
+    // MARK: - Combined Chart Data
+    // =============================================================================================
+    
+    /// Fetch symbol + candles + markers in one request (for initial chart load)
+    /// GET /chart/guilds/{guild_id}/symbols/{symbol_id}/chart-data?timeframe=...&candle_limit=...
+    func getChartData(
+        guildId: UUID,
+        symbolId: UUID,
+        timeframe: String = "1m",
+        candleLimit: Int = 200
+    ) async throws -> RLChartDataDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/chart-data?timeframe=\(timeframe)&candle_limit=\(candleLimit)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Chart Chat Settings
+    // =============================================================================================
+    
+    /// Update mute/pin settings for a chart chat
+    /// PUT /chart/chart-chats/{chat_id}/settings
+    func updateChartChatSettings(
+        chatId: UUID,
+        isMuted: Bool? = nil,
+        isPinned: Bool? = nil
+    ) async throws -> RLChartChatUserSettingsDTO {
+        let body = RLUpdateChartChatSettingsRequest(isMuted: isMuted, isPinned: isPinned)
+        return try await request(
+            "/chart/chart-chats/\(chatId.uuidString)/settings",
+            service: .core,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+    
+    /// Mark chart chat as read (resets unread count)
+    /// POST /chart/chart-chats/{chat_id}/mark-read
+    func markChartChatRead(chatId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/chart/chart-chats/\(chatId.uuidString)/mark-read",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+    
+    // =============================================================================================
+    // MARK: - Content Reporting
+    // =============================================================================================
+    
+    /// Report content (works for all content types: messages, markers, comments)
+    /// POST /chart/report
+    func reportContent(
+        contentType: String,
+        contentId: UUID,
+        guildId: UUID? = nil,
+        reason: String,
+        details: String? = nil
+    ) async throws -> RLContentReportDTO {
+        let body = RLReportContentRequest(
+            contentType: contentType,
+            contentId: contentId,
+            guildId: guildId,
+            reason: reason,
+            details: details
+        )
+        return try await request(
+            "/chart/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+}
+
+
+
+
 
