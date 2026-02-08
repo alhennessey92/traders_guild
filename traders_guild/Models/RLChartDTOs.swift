@@ -16,6 +16,251 @@
 //
 
 import Foundation
+import SwiftUI
+
+// =============================================================================
+// MARK: - Asset Class (UI Helper)
+// =============================================================================
+
+enum RLAssetClass: String, Codable, CaseIterable {
+    case forex = "Forex"
+    case crypto = "Crypto"
+    case stocks = "Stocks"
+    case commodities = "Commodities"
+    case indices = "Indices"
+    case futures = "Futures"
+    
+    var icon: String {
+        switch self {
+        case .forex: return "chart.bar.fill"
+        case .crypto: return "bitcoinsign.circle.fill"
+        case .stocks: return "chart.line.uptrend.xyaxis"
+        case .commodities: return "cube.fill"
+        case .indices: return "chart.bar.doc.horizontal.fill"
+        case .futures: return "calendar.circle.fill"
+        }
+    }
+    
+    var displayName: String { rawValue }
+    
+    static func fromBackendString(_ string: String) -> RLAssetClass? {
+        switch string.lowercased() {
+        case "forex": return .forex
+        case "crypto", "cryptocurrency": return .crypto
+        case "stocks", "stock": return .stocks
+        case "commodities", "commodity": return .commodities
+        case "indices", "index": return .indices
+        case "futures", "future": return .futures
+        default: return nil
+        }
+    }
+}
+
+// =============================================================================
+// MARK: - Marker Type (UI Helper)
+// =============================================================================
+
+enum RLMarkerType: String, Codable, CaseIterable {
+    case note = "Note"
+    case question = "Question"
+    case alert = "Alert"
+    case entry = "Entry"
+    case exit = "Exit"
+    case stopLoss = "Stop Loss"
+    case takeProfit = "Take Profit"
+    case support = "Support"
+    case resistance = "Resistance"
+    case indicator = "Indicator"
+    case trendline = "Trendline"
+    case pattern = "Pattern"
+    case volumeSpike = "Volume Spike"
+    case predictionTarget = "Prediction"
+    case emoji = "Emoji"
+    case poll = "Poll"
+    case personal = "Personal"
+    
+    var icon: String {
+        switch self {
+        case .note: return "pencil.circle"
+        case .question: return "questionmark.circle"
+        case .alert: return "bell.circle"
+        case .entry: return "arrow.up.circle"
+        case .exit: return "arrow.down.circle"
+        case .stopLoss: return "xmark.shield"
+        case .takeProfit: return "checkmark.shield"
+        case .support: return "s.circle"
+        case .resistance: return "r.circle"
+        case .indicator: return "star.circle"
+        case .trendline: return "chart.line.uptrend.xyaxis.circle"
+        case .pattern: return "circle.hexagongrid.circle"
+        case .volumeSpike: return "chart.line.downtrend.xyaxis.circle"
+        case .predictionTarget: return "staroflife.circle"
+        case .emoji: return "face.smiling.inverse"
+        case .poll: return "newspaper.circle"
+        case .personal: return "person.circle"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .note: return .gray
+        case .question: return .blue
+        case .alert: return .yellow
+        case .entry: return .green
+        case .exit: return .orange
+        case .stopLoss: return .red
+        case .takeProfit: return .blue
+        case .support: return .purple
+        case .resistance: return .pink
+        case .indicator: return .teal
+        case .trendline: return .indigo
+        case .pattern: return .cyan
+        case .volumeSpike: return .mint
+        case .predictionTarget: return .orange
+        case .emoji: return .white
+        case .poll: return .blue
+        case .personal: return .cyan
+        }
+    }
+    
+    /// Whether this marker displays a horizontal line
+    var hasHorizontalLine: Bool {
+        switch self {
+        case .entry, .exit, .stopLoss, .takeProfit, .support, .resistance, .predictionTarget:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    /// Price source for horizontal line (UI)
+    var lineSource: LinePriceSource {
+        switch self {
+        case .entry: return .candleOpen
+        case .exit: return .candleClose
+        case .stopLoss: return .candleOpen
+        case .takeProfit: return .candleClose
+        case .support: return .candleLow
+        case .resistance: return .candleHigh
+        case .predictionTarget: return .custom
+        default: return .none
+        }
+    }
+    
+    static func fromBackendString(_ string: String) -> RLMarkerType? {
+        switch string.lowercased() {
+        case "entry": return .entry
+        case "exit": return .exit
+        case "prediction": return .predictionTarget
+        case "analysis": return .note
+        case "alert": return .alert
+        case "support": return .support
+        case "resistance": return .resistance
+        case "trendline": return .trendline
+        case "pattern": return .pattern
+        case "indicator": return .indicator
+        case "emoji": return .emoji
+        case "poll": return .poll
+        case "note": return .note
+        case "question": return .question
+        default: return nil
+        }
+    }
+}
+
+// =============================================================================
+// MARK: - Chart Timeframe (UI Helper)
+// =============================================================================
+
+enum RLChartTimeframe: String, Codable, CaseIterable {
+    case m1 = "1m"
+    case m5 = "5m"
+    case m15 = "15m"
+    case m30 = "30m"
+    case h1 = "1h"
+    case h4 = "4h"
+    case d1 = "1d"
+    case w1 = "1w"
+    case mn = "1M"
+    
+    var displayName: String {
+        switch self {
+        case .m1: return "1 Minute"
+        case .m5: return "5 Minutes"
+        case .m15: return "15 Minutes"
+        case .m30: return "30 Minutes"
+        case .h1: return "1 Hour"
+        case .h4: return "4 Hours"
+        case .d1: return "1 Day"
+        case .w1: return "1 Week"
+        case .mn: return "1 Month"
+        }
+    }
+    
+    var shortName: String {
+        switch self {
+        case .m1: return "1m"
+        case .m5: return "5m"
+        case .m15: return "15m"
+        case .m30: return "30m"
+        case .h1: return "1H"
+        case .h4: return "4H"
+        case .d1: return "1D"
+        case .w1: return "1W"
+        case .mn: return "1M"
+        }
+    }
+    
+    var seconds: TimeInterval {
+        switch self {
+        case .m1: return 60
+        case .m5: return 300
+        case .m15: return 900
+        case .m30: return 1800
+        case .h1: return 3600
+        case .h4: return 14400
+        case .d1: return 86400
+        case .w1: return 604800
+        case .mn: return 2592000
+        }
+    }
+    
+    var initialCandlesCount: Int {
+        switch self {
+        case .m1: return 500
+        case .m5: return 400
+        case .m15: return 300
+        case .m30: return 250
+        case .h1: return 200
+        case .h4: return 150
+        case .d1: return 100
+        case .w1: return 52
+        case .mn: return 24
+        }
+    }
+    
+    var gridLineCount: Int {
+        switch self {
+        case .m1, .m5: return 6
+        case .m15, .m30: return 5
+        case .h1, .h4: return 4
+        case .d1, .w1, .mn: return 3
+        }
+    }
+    
+    var xAxisFormat: String {
+        switch self {
+        case .m1, .m5, .m15, .m30, .h1:
+            return "HH:mm"
+        case .h4:
+            return "MMM d HH:mm"
+        case .d1, .w1:
+            return "MMM d"
+        case .mn:
+            return "MMM yyyy"
+        }
+    }
+}
 
 // =============================================================================
 // MARK: - Trading Symbol
@@ -144,6 +389,30 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
     let canEdit: Bool
     let canDelete: Bool
     
+    init(
+        id: UUID,
+        markerId: UUID,
+        author: RLGuildMemberDTO,
+        content: String,
+        timestamp: Date,
+        timestampFormatted: String,
+        isEdited: Bool,
+        isCurrentUserMessage: Bool,
+        canEdit: Bool,
+        canDelete: Bool
+    ) {
+        self.id = id
+        self.markerId = markerId
+        self.author = author
+        self.content = content
+        self.timestamp = timestamp
+        self.timestampFormatted = timestampFormatted
+        self.isEdited = isEdited
+        self.isCurrentUserMessage = isCurrentUserMessage
+        self.canEdit = canEdit
+        self.canDelete = canDelete
+    }
+    
     // MARK: - Hashable
     
     func hash(into hasher: inout Hasher) {
@@ -162,9 +431,43 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
     // We need to handle both cases
     enum CodingKeys: String, CodingKey {
         case id, markerId, author, content
-        case timestamp = "createdAt"        // validation_alias maps created_at → timestamp
+        case timestamp
+        case createdAt
         case timestampFormatted, isEdited
         case isCurrentUserMessage, canEdit, canDelete
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        markerId = try container.decode(UUID.self, forKey: .markerId)
+        author = try container.decode(RLGuildMemberDTO.self, forKey: .author)
+        content = try container.decode(String.self, forKey: .content)
+        timestampFormatted = try container.decode(String.self, forKey: .timestampFormatted)
+        isEdited = try container.decode(Bool.self, forKey: .isEdited)
+        isCurrentUserMessage = try container.decode(Bool.self, forKey: .isCurrentUserMessage)
+        canEdit = try container.decode(Bool.self, forKey: .canEdit)
+        canDelete = try container.decode(Bool.self, forKey: .canDelete)
+
+        if let timestampValue = try container.decodeIfPresent(Date.self, forKey: .timestamp) {
+            timestamp = timestampValue
+        } else {
+            timestamp = try container.decode(Date.self, forKey: .createdAt)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(markerId, forKey: .markerId)
+        try container.encode(author, forKey: .author)
+        try container.encode(content, forKey: .content)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(timestampFormatted, forKey: .timestampFormatted)
+        try container.encode(isEdited, forKey: .isEdited)
+        try container.encode(isCurrentUserMessage, forKey: .isCurrentUserMessage)
+        try container.encode(canEdit, forKey: .canEdit)
+        try container.encode(canDelete, forKey: .canDelete)
     }
 }
 
@@ -194,8 +497,8 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let isVisible: Bool
     
     // Engagement
-    let likeCount: Int
-    let isLikedByCurrentUser: Bool
+    var likeCount: Int
+    var isLikedByCurrentUser: Bool
     let commentCount: Int
     let comments: [RLMarkerCommentDTO]
     
@@ -278,8 +581,8 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let price: Double
     
     // Engagement
-    let likeCount: Int
-    let isLikedByCurrentUser: Bool
+    var likeCount: Int
+    var isLikedByCurrentUser: Bool
     let commentCount: Int
     
     // Ranking
@@ -427,9 +730,43 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
     // MARK: - CodingKeys
     enum CodingKeys: String, CodingKey {
         case id, chatId, author, content
-        case timestamp = "createdAt"
+        case timestamp
+        case createdAt
         case timestampFormatted, isEdited
         case isCurrentUserMessage, canEdit, canDelete
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        chatId = try container.decode(UUID.self, forKey: .chatId)
+        author = try container.decode(RLGuildMemberDTO.self, forKey: .author)
+        content = try container.decode(String.self, forKey: .content)
+        timestampFormatted = try container.decode(String.self, forKey: .timestampFormatted)
+        isEdited = try container.decode(Bool.self, forKey: .isEdited)
+        isCurrentUserMessage = try container.decode(Bool.self, forKey: .isCurrentUserMessage)
+        canEdit = try container.decode(Bool.self, forKey: .canEdit)
+        canDelete = try container.decode(Bool.self, forKey: .canDelete)
+
+        if let timestampValue = try container.decodeIfPresent(Date.self, forKey: .timestamp) {
+            timestamp = timestampValue
+        } else {
+            timestamp = try container.decode(Date.self, forKey: .createdAt)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(chatId, forKey: .chatId)
+        try container.encode(author, forKey: .author)
+        try container.encode(content, forKey: .content)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(timestampFormatted, forKey: .timestampFormatted)
+        try container.encode(isEdited, forKey: .isEdited)
+        try container.encode(isCurrentUserMessage, forKey: .isCurrentUserMessage)
+        try container.encode(canEdit, forKey: .canEdit)
+        try container.encode(canDelete, forKey: .canDelete)
     }
     
     // MARK: - Convenience

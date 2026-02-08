@@ -251,8 +251,8 @@ struct UnifiedColors {
  // Using the tab gradient:
  .background(UnifiedColors.tabSelectedGradient)
  
- // Using asset class colors:
- func colorForAssetClass(_ assetClass: AssetClass) -> Color {
+// Using asset class colors:
+func colorForAssetClass(_ assetClass: RLAssetClass) -> Color {
      switch assetClass {
      case .forex: return UnifiedColors.assetClassForex
      case .crypto: return UnifiedColors.assetClassCrypto

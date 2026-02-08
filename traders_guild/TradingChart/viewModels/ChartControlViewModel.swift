@@ -17,7 +17,13 @@ class ChartControlViewModel: ObservableObject {
     @Published var isMarkerPlacementMode: Bool = false
     
     /// The type of marker currently being placed (nil when not in placement mode)
-    @Published var currentMarkerType: MarkerType?
+    @Published var currentRLMarkerType: RLMarkerType?
+    
+    /// Backwards-compatible alias for marker type
+    var currentMarkerType: RLMarkerType? {
+        get { currentRLMarkerType }
+        set { currentRLMarkerType = newValue }
+    }
     
     /// Whether auto-scroll is currently enabled
     @Published var isAutoScrolling: Bool = false
@@ -64,15 +70,15 @@ class ChartControlViewModel: ObservableObject {
     
     /// Start marker placement mode with a specific type
     /// - Parameter type: The marker type to place
-    func startMarkerPlacement(type: MarkerType) {
-        currentMarkerType = type
+    func startMarkerPlacement(type: RLMarkerType) {
+        currentRLMarkerType = type
         isMarkerPlacementMode = true
     }
     
     /// Cancel marker placement mode
     func cancelMarkerPlacement() {
         isMarkerPlacementMode = false
-        currentMarkerType = nil
+        currentRLMarkerType = nil
     }
     
     /// Toggle marker placement mode (legacy method for compatibility)

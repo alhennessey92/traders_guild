@@ -2,7 +2,7 @@
 //  MarkerDetailView.swift
 //  traders_guild
 //
-//  CONVERTED: Now uses ChartMarkerDTO and MarkerCommentDTO instead of legacy types
+//  CONVERTED: Now uses ChartMarkerUI and MarkerCommentDTO instead of legacy types
 //
 //  Comprehensive marker detail view with:
 //  - Header: Gradient background, icon, user info, stats
@@ -17,20 +17,20 @@ import Combine
 
 struct MarkerDetailView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     @ObservedObject var markerManager: MarkerManager
     
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     @Binding var selectedDetent: PresentationDetent
     
     @State private var isLiked: Bool = false
     @State private var likeCount: Int = 0
-    @State private var comments: [MarkerCommentDTO] = []
+    @State private var comments: [RLMarkerCommentDTO] = []
     @State private var showComments: Bool = false
     @State private var showDeleteMarkerConfirmation: Bool = false
     @State private var showReportConfirmation: Bool = false
     
-    init(marker: ChartMarkerDTO, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
+    init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
         self.marker = marker
         self.markerManager = markerManager
         self._selectedDetent = selectedDetent
@@ -129,7 +129,9 @@ struct MarkerDetailView: View {
         }
         
         // Update marker manager
-        markerManager.toggleLike(markerId: marker.id)
+        Task {
+            await markerManager.toggleLike(markerId: marker.id)
+        }
     }
     
     private func handleShare() {
@@ -140,25 +142,27 @@ struct MarkerDetailView: View {
     private func handleReport() {
         HapticFeedback.medium.trigger()
         Task {
-            appState.showSuccess("Marker reported. Thank you for your feedback.")
+            rlAppState.showSuccess("Marker reported. Thank you for your feedback.")
         }
     }
     
     private func handleDelete() {
         HapticFeedback.warning.trigger()
-        markerManager.deleteMarker(id: marker.id)
-        appState.showSuccess("Marker deleted")
-        dismiss()
+        Task {
+            await markerManager.deleteMarker(id: marker.id)
+            rlAppState.showSuccess("Marker deleted")
+            dismiss()
+        }
     }
 }
 
-// MARK: - Comments View (Using MarkerCommentDTO)
+// MARK: - Comments View (Using RLMarkerCommentDTO)
 
 struct CommentsView: View {
-    let marker: ChartMarkerDTO
-    @Binding var comments: [MarkerCommentDTO]
+    let marker: ChartMarkerUI
+    @Binding var comments: [RLMarkerCommentDTO]
     @ObservedObject var markerManager: MarkerManager
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     
     @State private var commentText: String = ""
     @State private var isSendingComment: Bool = false
@@ -166,7 +170,7 @@ struct CommentsView: View {
     
     @Binding var selectedDetent: PresentationDetent
     
-    init(marker: ChartMarkerDTO, comments: Binding<[MarkerCommentDTO]>, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
+    init(marker: ChartMarkerUI, comments: Binding<[RLMarkerCommentDTO]>, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
         self.marker = marker
         self._comments = comments
         self.markerManager = markerManager
@@ -199,7 +203,6 @@ struct CommentsView: View {
                                         handleDeleteComment(comment)
                                     } : nil
                                 )
-                                .environmentObject(appState)
                                 .id(comment.id)
                             }
                         }
@@ -267,13 +270,18 @@ struct CommentsView: View {
         isCommentInputFocused = false
         
         // Add comment through marker manager
-        markerManager.addComment(markerId: marker.id, content: trimmed)
+        Task {
+            await markerManager.addComment(markerId: marker.id, content: trimmed)
+            isSendingComment = false
+            commentText = ""
+        }
         
         // Create local DTO for immediate UI update
-        let newComment = MarkerCommentDTO(
+        let newComment = RLMarkerCommentDTO(
             id: UUID(),
             markerId: marker.id,
-            author: appState.currentUser?.guildMembership ?? SampleData.currentUser.guildMembership,
+            // Use marker's author membership (already embedded in marker)
+            author: marker.author,
             content: trimmed,
             timestamp: Date(),
             timestampFormatted: "Just now",
@@ -292,7 +300,7 @@ struct CommentsView: View {
         HapticFeedback.light.trigger()
     }
     
-    private func handleDeleteComment(_ comment: MarkerCommentDTO) {
+    private func handleDeleteComment(_ comment: RLMarkerCommentDTO) {
         HapticFeedback.warning.trigger()
         
         withAnimation(.easeOut(duration: 0.2)) {
@@ -300,12 +308,12 @@ struct CommentsView: View {
         }
         
         markerManager.deleteComment(markerId: marker.id, commentId: comment.id)
-        appState.showSuccess("Comment deleted")
+        rlAppState.showSuccess("Comment deleted")
     }
     
-    private func handleReportComment(_ comment: MarkerCommentDTO) {
+    private func handleReportComment(_ comment: RLMarkerCommentDTO) {
         HapticFeedback.medium.trigger()
-        appState.showInfo("Comment reported for review")
+        rlAppState.showInfo("Comment reported for review")
     }
 }
 
@@ -329,14 +337,14 @@ struct MarkerCommentInputFooter: View {
     }
 }
 
-// MARK: - Marker Comment Row (Using MarkerCommentDTO)
+// MARK: - Marker Comment Row (Using RLMarkerCommentDTO)
 
 struct MarkerCommentRow: View {
-    let comment: MarkerCommentDTO
+    let comment: RLMarkerCommentDTO
     let onReport: () -> Void
     var onDelete: (() -> Void)? = nil
     
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     @State private var showDeleteConfirmation = false
     
     var body: some View {
@@ -349,7 +357,7 @@ struct MarkerCommentRow: View {
                     // Could navigate to user profile
                 }) {
                     ChatAvatar(
-                        initials: comment.authorInitials,
+                        initials: comment.author.initials,
                         isOnline: comment.author.isOnline,
                         size: 32
                     )
@@ -361,7 +369,7 @@ struct MarkerCommentRow: View {
                 // User info row (only for other users)
                 if !comment.isCurrentUserMessage {
                     HStack(spacing: 2) {
-                        Text(comment.authorDisplayName)
+                        Text(comment.author.displayName)
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.whiteText.opacity(0.9))
@@ -371,9 +379,9 @@ struct MarkerCommentRow: View {
                             .frame(width: 3, height: 3)
                             .padding(.horizontal, 3)
                         
-                        Text(comment.author.roleInGuild.displayName)
+                        Text(comment.author.memberRole.displayName)
                             .font(.caption)
-                            .foregroundColor(comment.author.roleInGuild.roleForegroundColor)
+                            .foregroundColor(comment.author.memberRole.color)
                     }
                 }
                 
@@ -402,7 +410,7 @@ struct MarkerCommentRow: View {
                         // Copy
                         Button {
                             UIPasteboard.general.string = comment.content
-                            appState.showSuccess("Copied to clipboard")
+                            rlAppState.showSuccess("Copied to clipboard")
                         } label: {
                             Label("Copy", systemImage: "doc.on.doc")
                         }
@@ -447,10 +455,10 @@ struct MarkerCommentRow: View {
     }
 }
 
-// MARK: - Marker Detail Header (Using ChartMarkerDTO)
+// MARK: - Marker Detail Header (Using ChartMarkerUI)
 
 struct MarkerDetailHeaderView: View {
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     let isLiked: Bool
     let likeCount: Int
     let commentCount: Int
@@ -487,12 +495,12 @@ struct MarkerDetailHeaderView: View {
                             .fill(AppColors.accentColor.opacity(0.3))
                             .frame(width: 18, height: 18)
                             .overlay(
-                                Text(marker.authorInitials.prefix(1))
+                                Text(marker.author.initials.prefix(1))
                                     .font(.system(size: 9, weight: .bold))
                                     .foregroundColor(AppColors.accentColor)
                             )
                         
-                        Text(marker.authorDisplayName)
+                        Text(marker.author.displayName)
                             .font(.subheadline)
                             .foregroundColor(AppColors.whiteText.opacity(0.8))
                         
@@ -573,10 +581,10 @@ struct MarkerDetailHeaderView: View {
     }
 }
 
-// MARK: - Marker Detail Footer (Using ChartMarkerDTO)
+// MARK: - Marker Detail Footer (Using ChartMarkerUI)
 
 struct MarkerDetailFooterView: View {
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     @Binding var isLiked: Bool
     @Binding var likeCount: Int
     let isOwner: Bool
@@ -680,10 +688,10 @@ struct MarkerDetailFooterView: View {
     }
 }
 
-// MARK: - Marker Info Content (Using ChartMarkerDTO)
+// MARK: - Marker Info Content (Using ChartMarkerUI)
 
 struct MarkerInfoContent: View {
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -939,7 +947,7 @@ struct MarkerInfoContent: View {
 // MARK: - Poll Option Row (Using PollOptionDTO)
 
 struct PollOptionRow: View {
-    let option: PollOptionDTO
+    let option: RLPollOptionDTO
     let totalVotes: Int
     let hasVoted: Bool
     
@@ -963,6 +971,13 @@ struct PollOptionRow: View {
                 }
             }.frame(height: 6)
         }.padding(.vertical, 6)
+    }
+}
+
+extension RLPollOptionDTO {
+    func votePercentage(totalVotes: Int) -> Double {
+        guard totalVotes > 0 else { return 0 }
+        return (Double(voteCount) / Double(totalVotes)) * 100
     }
 }
 

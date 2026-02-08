@@ -5,8 +5,6 @@
 //  UPDATED VERSION - Integrated RLMessagingManager and RLRightDrawerViewModel
 //  for live backend messaging (chatrooms and DMs).
 //
-//  OLD MessagingManager kept for chart chat and marker comments.
-//
 
 import SwiftUI
 
@@ -28,9 +26,6 @@ enum AnimationConstants {
 struct MainView: View {
     // MARK: - Properties
     @EnvironmentObject var rlAppState: RLAppState
-    
-    @EnvironmentObject var appState: AppState // TODO: remove
-    @EnvironmentObject var messagingManager: MessagingManager           // OLD: chart/marker chat
     @EnvironmentObject var rlMessagingManager: RLMessagingManager       // NEW: chatrooms/DMs
     
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
@@ -122,17 +117,19 @@ struct MainView: View {
     init() {
         let dataManager = ChartDataManager()
         _chartDataManager = StateObject(wrappedValue: dataManager)
+        // ChartViewModel will be properly initialized in onAppear with rlAppState
+        // For now, create a temporary one - it will be replaced
         _chartViewModel = StateObject(wrappedValue: ChartViewModel(
-            appState: AppState(),
+            appState: RLAppState(),
             dataManager: dataManager,
-            api: MockAPIService()
+            api: RealAPIService()
         ))
     }
     
     // MARK: - Body
     var body: some View {
-        if let user = appState.currentUser,
-           let guild = appState.currentGuild {
+        if let user = rlAppState.currentUser,
+           let guild = rlAppState.currentGuild {
             ZStack {
                 // MARK: - Main Content Layer
                 mainContentStack
@@ -206,7 +203,7 @@ struct MainView: View {
                 }
             }
             .ignoresSafeArea()
-            .globalMessaging()          // OLD: Chart/marker chat sheets
+            .rlGlobalMessaging()          // RL: chatrooms/DMs sheets
             .rlGlobalMessaging()        // NEW: Chatroom/DM sheets
             
             .observeMarkerNavigation(
@@ -228,6 +225,7 @@ struct MainView: View {
                     chartViewModel: chartViewModel,
                     selectedDetent: $selectedDetent
                 )
+                .environmentObject(rlAppState)
                 .presentationDetents([.fraction(0.11), .fraction(0.5), .fraction(0.9)],
                                       selection: $selectedDetent)
                 .presentationDragIndicator(.visible)
@@ -255,6 +253,10 @@ struct MainView: View {
                 leftDrawerViewModel.configure(with: rlAppState)
                 rightDrawerViewModel.configure(with: rlMessagingManager)
                 rightDrawerViewModel.configurePresence(with: rlAppState)
+                
+                // Configure ChartViewModel with proper RLAppState and RealAPIService
+                chartViewModel.configure(appState: rlAppState, api: rlAppState.realApi)
+                
                 print(rlAppState.currentUser?.displayUsername ?? "Username")
                 print(rlAppState.currentGuild?.name ?? "Guild Name")
             }
@@ -268,8 +270,8 @@ struct MainView: View {
                 // Use rlAppState guild ID for all data loading
                 guard let rlGuildId = rlAppState.currentGuild?.id else { return }
                 
-                // leftDrawerViewModel uses rlGuildId for announcements via rlAppState
-                await leftDrawerViewModel.preloadData(for: rlGuildId, appState: appState, rlAppState: rlAppState)
+                // leftDrawerViewModel uses rlGuildId for all data via rlAppState
+                await leftDrawerViewModel.preloadData(for: rlGuildId, rlAppState: rlAppState)
                 
                 // NEW: rightDrawerViewModel now uses RLAppState for live messaging data
                 await rightDrawerViewModel.preloadData(for: rlGuildId, appState: rlAppState)
@@ -292,8 +294,8 @@ struct MainView: View {
                         leftDrawerViewModel.clearCache()
                         rightDrawerViewModel.clearCache()
                         
-                        // Uses real rlAppState guild ID for announcements and messaging
-                        await leftDrawerViewModel.preloadData(for: guildId, appState: appState, rlAppState: rlAppState)
+                        // Uses real rlAppState guild ID for all data
+                        await leftDrawerViewModel.preloadData(for: guildId, rlAppState: rlAppState)
                         await rightDrawerViewModel.preloadData(for: guildId, appState: rlAppState)
                         
                         await chartViewModel.initialize()
@@ -346,7 +348,7 @@ struct MainView: View {
                 .opacity(fadeIn ? 1 : 0)
                 .animation(.easeIn(duration: 1.5), value: fadeIn)
                 .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
-                    if let symbol = notification.userInfo?["symbol"] as? TradingSymbolDTO {
+                    if let symbol = notification.userInfo?["symbol"] as? RLTradingSymbolDTO {
                         // Dismiss keyboard first
                         dismissKeyboard()
                         
@@ -535,7 +537,7 @@ struct MainView: View {
                 currentSymbolId: chartViewModel.currentSymbol?.id
             )
             .frame(width: drawerWidth)
-            .frame(maxHeight: .infinity)
+            .frame(maxHeight: CGFloat.infinity)
             .offset(x: leftDragTranslation)
             .gesture(
                 DragGesture()
@@ -1231,12 +1233,28 @@ struct ChartBottomSheet: View {
     @ObservedObject var controlViewModel: ChartControlViewModel
     @ObservedObject var chartViewModel: ChartViewModel
     @Binding var selectedDetent: PresentationDetent
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     
     // Chat state - managed here since parent handles input
-    @StateObject private var chartChatManager = ChartChatManager()
+    @StateObject private var chartChatManager: ChartChatManager
     @State private var chatMessageText: String = ""
     @FocusState private var isChatInputFocused: Bool
+    
+    init(
+        controlViewModel: ChartControlViewModel,
+        chartViewModel: ChartViewModel,
+        selectedDetent: Binding<PresentationDetent>
+    ) {
+        self.controlViewModel = controlViewModel
+        self.chartViewModel = chartViewModel
+        self._selectedDetent = selectedDetent
+        // Initialize ChartChatManager with RealAPIService
+        // We'll configure it with rlAppState in onAppear
+        _chartChatManager = StateObject(wrappedValue: ChartChatManager(
+            appState: nil,
+            api: RealAPIService()
+        ))
+    }
     
     enum ChartView: String, CaseIterable {
         case symbol = "Symbol"
@@ -1303,12 +1321,12 @@ struct ChartBottomSheet: View {
         }
         .animation(.easeInOut(duration: 0.3), value: selectedView)
         .onAppear {
-            chartChatManager.configure(with: appState)
+            chartChatManager.configure(with: rlAppState)
         }
         .onChange(of: chartViewModel.currentSymbol) { _ in
             loadChatForCurrentSymbol()
         }
-        .onChange(of: appState.currentGuild) { _ in
+        .onChange(of: rlAppState.currentGuild?.id) { _ in
             loadChatForCurrentSymbol()
         }
     }
@@ -1317,7 +1335,7 @@ struct ChartBottomSheet: View {
     
     private func loadChatForCurrentSymbol() {
         guard let symbol = chartViewModel.currentSymbol,
-              let guildId = appState.currentGuild?.id else {
+              let guildId = rlAppState.currentGuild?.id else {
             chartChatManager.closeChat()
             return
         }
@@ -1325,8 +1343,7 @@ struct ChartBottomSheet: View {
         Task {
             await chartChatManager.updateForSymbol(
                 symbol,
-                guildId: guildId,
-                api: MockAPIService()
+                guildId: guildId
             )
         }
     }
@@ -1434,15 +1451,12 @@ struct ChartBottomSheet: View {
         
         Task {
             do {
-                try await chartChatManager.sendMessage(
-                    content: messageToSend,
-                    api: MockAPIService()
-                )
+                try await chartChatManager.sendMessage(content: messageToSend)
                 HapticFeedback.light.trigger()
             } catch {
                 // Restore message on error
                 chatMessageText = messageToSend
-                appState.showError(error, title: "Failed to Send Message")
+                rlAppState.showError(error, title: "Failed to Send Message", style: .toast)
             }
         }
     }
@@ -1451,10 +1465,8 @@ struct ChartBottomSheet: View {
     
     
     // Helper to get current symbol as DTO for icon display
-    private var currentSymbolDTO: TradingSymbolDTO? {
-        guard let currentSymbol = chartViewModel.currentSymbol else { return nil }
-        // TradingSymbol uses .symbol, TradingSymbolDTO uses .ticker
-        return SampleData.allTradingSymbolDTOs.first { $0.ticker == currentSymbol.ticker }
+    private var currentSymbolDTO: RLTradingSymbolDTO? {
+        return chartViewModel.currentSymbol
     }
     
     private var standardTabBar: some View {
@@ -1576,7 +1588,7 @@ struct ChartBottomSheet: View {
             selectedDetent: $selectedDetent,
             messageText: $chatMessageText
         )
-        .environmentObject(appState)
+        .environmentObject(rlAppState)
     }
 }
 

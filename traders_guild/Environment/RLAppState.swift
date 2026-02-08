@@ -1962,6 +1962,143 @@ class RLAppState: ObservableObject {
         let channel = "user:\(userId):notifications"
         RealTimeService.shared.unsubscribe(from: [channel], owner: "notifications")
     }
+    
+    // =============================================================================================
+    // MARK: - Chart Management (REAL API)
+    // =============================================================================================
+    
+    /// Fetch user's personal watchlist
+    func fetchPersonalWatchlist() async throws -> RLPersonalWatchlistDTO {
+        do {
+            return try await realApi.getPersonalWatchlist()
+        } catch {
+            showError(error, title: "Failed to Load Watchlist", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch guild's watchlist
+    func fetchGuildWatchlist(guildId: UUID) async throws -> RLGuildWatchlistDTO {
+        do {
+            return try await realApi.getGuildWatchlist(guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Watchlist", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Add symbol to personal watchlist
+    func addToPersonalWatchlist(symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
+        do {
+            let result = try await realApi.addToPersonalWatchlist(symbolId: symbolId)
+            showSuccess("Added to watchlist")
+            return result
+        } catch {
+            showError(error, title: "Failed to Add Symbol", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Remove symbol from personal watchlist
+    func removeFromPersonalWatchlist(symbolId: UUID) async throws {
+        do {
+            _ = try await realApi.removeFromPersonalWatchlist(symbolId: symbolId)
+            showSuccess("Removed from watchlist")
+        } catch {
+            showError(error, title: "Failed to Remove Symbol", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Reorder personal watchlist
+    func reorderPersonalWatchlist(symbolIds: [UUID]) async throws {
+        do {
+            _ = try await realApi.reorderPersonalWatchlist(symbolIds: symbolIds)
+        } catch {
+            showError(error, title: "Failed to Reorder Watchlist", style: .toast)
+            throw error
+        }
+    }
+
+    /// Request a guild watchlist addition (pending backend support)
+    func requestGuildWatchlistAddition(guildId: UUID, symbolId: UUID) async throws {
+        do {
+            _ = try await realApi.requestGuildWatchlistAddition(guildId: guildId, symbolId: symbolId)
+            showSuccess("Request submitted")
+        } catch {
+            showError(error, title: "Failed to Request Watchlist Add", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch combined chart data (symbol + candles + markers)
+    func fetchChartData(guildId: UUID, symbolId: UUID, timeframe: String, candleLimit: Int = 200) async throws -> RLChartDataDTO {
+        do {
+            return try await realApi.getChartData(
+                guildId: guildId,
+                symbolId: symbolId,
+                timeframe: timeframe,
+                candleLimit: candleLimit
+            )
+        } catch {
+            showError(error, title: "Failed to Load Chart Data", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Get or create a chart chat for a symbol + guild
+    func getOrCreateChartChat(guildId: UUID, symbolId: UUID) async throws -> RLChartChatDTO {
+        do {
+            return try await realApi.getOrCreateChartChat(guildId: guildId, symbolId: symbolId)
+        } catch {
+            showError(error, title: "Failed to Open Chat", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Send a message to a chart chat
+    func sendChartChatMessage(chatId: UUID, content: String) async throws -> RLChartChatMessageDTO {
+        do {
+            return try await realApi.sendChartChatMessage(chatId: chatId, content: content)
+        } catch {
+            showError(error, title: "Failed to Send Message", style: .toast)
+            throw error
+        }
+    }
+
+    // =============================================================================================
+    // MARK: - Reporting & Sharing (Pending backend support)
+    // =============================================================================================
+
+    func reportChatroom(guildId: UUID, chatroomId: UUID, reason: String) async throws {
+        do {
+            _ = try await realApi.reportChatroom(guildId: guildId, chatroomId: chatroomId, reason: reason)
+            showSuccess("Report submitted")
+        } catch {
+            showError(error, title: "Failed to Report Chatroom", style: .toast)
+            throw error
+        }
+    }
+
+    func reportUser(guildId: UUID, membershipId: UUID, reason: String) async throws {
+        do {
+            _ = try await realApi.reportUser(guildId: guildId, membershipId: membershipId, reason: reason)
+            showSuccess("Report submitted")
+        } catch {
+            showError(error, title: "Failed to Report User", style: .toast)
+            throw error
+        }
+    }
+
+    func shareEvent(guildId: UUID, eventId: UUID, friendId: UUID) async throws {
+        do {
+            _ = try await realApi.shareEvent(guildId: guildId, eventId: eventId, friendId: friendId)
+            showSuccess("Event shared")
+        } catch {
+            showError(error, title: "Failed to Share Event", style: .toast)
+            throw error
+        }
+    }
 }
 
 // ================================================================================================

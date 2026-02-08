@@ -714,7 +714,7 @@ struct UnifiedLoadingState: View {
 // MARK: - ================================================================================================
 
 /// Get color for asset class (unified across the app)
-func assetClassColor(_ assetClass: AssetClass) -> Color {
+func assetClassColor(_ assetClass: RLAssetClass) -> Color {
     switch assetClass {
     case .forex: return .blue
     case .crypto: return .orange
@@ -789,7 +789,7 @@ struct UnifiedContentCard<Content: View>: View {
 struct UnifiedAuthorFooter: View {
     let username: String
     var isOnline: Bool = false
-    let role: MemberRole
+    let role: RLMemberRole
     let reputation: Int
     var timeText: String? = nil
     var cornerRadius: CGFloat = 12
@@ -813,9 +813,9 @@ struct UnifiedAuthorFooter: View {
             UnifiedSeparatorDot()
             
             // Role with color
-            Text(role.rawValue)
+            Text(role.displayName)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(role.roleForegroundColor.opacity(0.9))
+                .foregroundColor(role.color.opacity(0.9))
             
             // Separator dot
             UnifiedSeparatorDot()
@@ -854,9 +854,9 @@ struct UnifiedAuthorFooter: View {
     }
 }
 
-/// Author footer with GuildMembershipDTO (for Announcements/Events)
-struct UnifiedAuthorFooterFromMembership: View {
-    let author: GuildMembershipDTO
+/// Author footer with RLGuildMemberDTO (for member-focused views)
+struct UnifiedAuthorFooterFromMember: View {
+    let author: RLGuildMemberDTO
     var timeText: String? = nil
     var cornerRadius: CGFloat = 12
     var showOnlineStatus: Bool = false   // Default to hidden
@@ -873,7 +873,7 @@ struct UnifiedAuthorFooterFromMembership: View {
             }
             
             // Username
-            Text(author.globalMember.username)
+            Text(author.username)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(AppColors.whiteText.opacity(0.9))
             
@@ -895,9 +895,10 @@ struct UnifiedAuthorFooterFromMembership: View {
             UnifiedSeparatorDot()
             
             // Role with color
-            Text(author.roleInGuild.rawValue)
+            let role = author.memberRole
+            Text(role.displayName)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(author.roleInGuild.roleForegroundColor.opacity(0.9))
+                .foregroundColor(role.color.opacity(0.9))
             
             // Separator dot
             UnifiedSeparatorDot()
@@ -906,7 +907,7 @@ struct UnifiedAuthorFooterFromMembership: View {
             HStack(spacing: 2) {
                 Image(systemName: "shield.fill")
                     .font(.system(size: 8))
-                Text("\(author.reputation)")
+            Text("\(author.reputation)")
                     .font(.system(size: 10, weight: .semibold))
             }
             .foregroundColor(AppColors.accentColor.opacity(0.9))
@@ -945,7 +946,7 @@ struct UnifiedAuthorFooterFromMembership: View {
 struct UnifiedAuthorRow: View {
     let username: String
     var isOnline: Bool = false
-    let role: MemberRole
+    let role: RLMemberRole
     let reputation: Int
     
     var body: some View {
@@ -965,10 +966,10 @@ struct UnifiedAuthorRow: View {
             UnifiedSeparatorDot()
             
             // Role with color
-            Text(role.rawValue)
+            Text(role.displayName)
                 .font(.caption)
-                .foregroundColor(role.roleForegroundColor)
-                .fontWeight(role.roleFontWeight)
+                .foregroundColor(role.color)
+                .fontWeight(role.canModerate ? .bold : .regular)
                 .lineLimit(1)
             
             UnifiedSeparatorDot()
@@ -989,9 +990,9 @@ struct UnifiedAuthorRow: View {
     }
 }
 
-/// Inline author row with GuildMembershipDTO (for Announcements/Events)
-struct UnifiedAuthorRowFromMembership: View {
-    let author: GuildMembershipDTO
+/// Inline author row with RLGuildMemberDTO (for member-focused views)
+struct UnifiedAuthorRowFromMember: View {
+    let author: RLGuildMemberDTO
     var showFriendBadge: Bool = true
     var showBlockedBadge: Bool = true
     
@@ -1005,7 +1006,7 @@ struct UnifiedAuthorRowFromMembership: View {
                     .foregroundColor(AppColors.bearCandleRed)
             }
             
-            Text(author.globalMember.username)
+            Text(author.username)
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundColor(AppColors.whiteText)
@@ -1028,10 +1029,11 @@ struct UnifiedAuthorRowFromMembership: View {
             UnifiedSeparatorDot()
             
             // Role with color
-            Text(author.roleInGuild.rawValue)
+            let role = author.memberRole
+            Text(role.displayName)
                 .font(.caption)
-                .foregroundColor(author.roleInGuild.roleForegroundColor)
-                .fontWeight(author.roleInGuild.roleFontWeight)
+                .foregroundColor(role.color)
+                .fontWeight(role.canModerate ? .bold : .regular)
                 .lineLimit(1)
             
             UnifiedSeparatorDot()
@@ -1273,7 +1275,7 @@ struct UnifiedMemberAvatar: View {
 /// Standard member row for user lists
 /// Use for: Guild member lists, friend lists, search results
 struct UnifiedMemberRow: View {
-    let user: GuildMembershipDTO
+    let user: RLGuildMemberDTO
     let onTap: () -> Void
     var showReputation: Bool = true
     
@@ -1284,8 +1286,8 @@ struct UnifiedMemberRow: View {
             HStack(spacing: 12) {
                 // Avatar
                 UnifiedMemberAvatar(
-                    username: user.globalMember.username,
-                    avatarURL: user.globalMember.avatarURL,
+                    username: user.username,
+                    avatarURL: user.avatarUrl,
                     isOnline: user.isOnline
                 )
                 
@@ -1300,7 +1302,7 @@ struct UnifiedMemberRow: View {
                                 .foregroundColor(AppColors.bearCandleRed)
                         }
                         
-                        Text(user.globalMember.username)
+                        Text(user.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.whiteText)
@@ -1315,10 +1317,11 @@ struct UnifiedMemberRow: View {
                     
                     // Role and reputation
                     HStack(spacing: 2) {
-                        Text(user.roleInGuild.rawValue)
+                        let role = user.memberRole
+                        Text(role.displayName)
                             .font(.caption)
-                            .foregroundColor(user.roleInGuild.roleForegroundColor)
-                            .fontWeight(user.roleInGuild.roleFontWeight)
+                            .foregroundColor(role.color)
+                            .fontWeight(role.canModerate ? .bold : .regular)
                             .lineLimit(1)
                         
                         if showReputation {
@@ -1460,7 +1463,7 @@ struct UnifiedGuildMemberRow: View {
 /// Leaderboard row with rank indicator
 /// Use for: Leaderboard lists with ranking
 struct UnifiedLeaderboardRow: View {
-    let user: GuildMembershipDTO
+    let user: RLGuildMemberDTO
     let rank: Int
     let onTap: () -> Void
     
@@ -1490,8 +1493,8 @@ struct UnifiedLeaderboardRow: View {
                 
                 // Avatar
                 UnifiedMemberAvatar(
-                    username: user.globalMember.username,
-                    avatarURL: user.globalMember.avatarURL,
+                    username: user.username,
+                    avatarURL: user.avatarUrl,
                     isOnline: user.isOnline,
                     size: 40
                 )
@@ -1507,7 +1510,7 @@ struct UnifiedLeaderboardRow: View {
                                 .foregroundColor(AppColors.bearCandleRed)
                         }
                         
-                        Text(user.globalMember.username)
+                        Text(user.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.whiteText)
@@ -1521,10 +1524,11 @@ struct UnifiedLeaderboardRow: View {
                     }
                     
                     // Role
-                    Text(user.roleInGuild.rawValue)
-                        .font(.caption)
-                        .foregroundColor(user.roleInGuild.roleForegroundColor)
-                        .fontWeight(user.roleInGuild.roleFontWeight)
+                        let role = user.memberRole
+                        Text(role.displayName)
+                            .font(.caption)
+                            .foregroundColor(role.color)
+                            .fontWeight(role.canModerate ? .bold : .regular)
                         .lineLimit(1)
                 }
                 

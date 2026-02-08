@@ -14,41 +14,6 @@
 import SwiftUI
 
 // MARK: - ================================================================================================
-// MARK: - CHAT MESSAGE PROTOCOL
-// MARK: - ================================================================================================
-
-/// Protocol that all message types conform to for unified rendering
-/// Implement this on your message DTOs to use the unified ChatMessageBubble
-protocol ChatMessageDisplayable: Identifiable {
-    var id: UUID { get }
-    var content: String { get }
-    var timestampFormatted: String { get }
-    var isEdited: Bool { get }
-    var isCurrentUserMessage: Bool { get }
-    var canEdit: Bool { get }
-    var canDelete: Bool { get }
-    
-    // Author info - provide these for user display
-    var authorDisplayName: String { get }
-    var authorInitials: String { get }
-    var authorAvatarUrl: String? { get }
-    var authorIsOnline: Bool { get }
-    var authorRole: MemberRole? { get }
-    var authorReputation: Int? { get }
-    var authorIsFriend: Bool { get }
-    var authorIsBlocked: Bool { get }
-}
-
-// MARK: - Default implementations for simpler message types
-extension ChatMessageDisplayable {
-    var authorRole: MemberRole? { nil }
-    var authorReputation: Int? { nil }
-    var authorIsFriend: Bool { false }
-    var authorIsBlocked: Bool { false }
-    var authorAvatarUrl: String? { nil }
-}
-
-// MARK: - ================================================================================================
 // MARK: - CHAT CONTEXT ENUM
 // MARK: - ================================================================================================
 
@@ -81,230 +46,6 @@ enum ChatContext {
     /// Whether to show read receipts (only for DMs)
     var showsReadReceipts: Bool {
         self == .directMessage
-    }
-}
-
-// MARK: - ================================================================================================
-// MARK: - UNIFIED MESSAGE BUBBLE
-// MARK: - ================================================================================================
-
-/// Unified message bubble view that works with any ChatMessageDisplayable
-/// Use this as the base for all chat message rendering
-struct ChatMessageBubble<Message: ChatMessageDisplayable>: View {
-    let message: Message
-    let context: ChatContext
-    let isRead: Bool  // Only used for DMs
-    let onAvatarTap: (() -> Void)?
-    let onEdit: (() -> Void)?
-    let onDelete: (() -> Void)?
-    let onReport: (() -> Void)?
-    let onCopy: (() -> Void)?
-    
-    @EnvironmentObject var appState: AppState
-    @State private var showDeleteConfirmation = false
-    
-    init(
-        message: Message,
-        context: ChatContext,
-        isRead: Bool = false,
-        onAvatarTap: (() -> Void)? = nil,
-        onEdit: (() -> Void)? = nil,
-        onDelete: (() -> Void)? = nil,
-        onReport: (() -> Void)? = nil,
-        onCopy: (() -> Void)? = nil
-    ) {
-        self.message = message
-        self.context = context
-        self.isRead = isRead
-        self.onAvatarTap = onAvatarTap
-        self.onEdit = onEdit
-        self.onDelete = onDelete
-        self.onReport = onReport
-        self.onCopy = onCopy
-    }
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            if message.isCurrentUserMessage {
-                Spacer()
-            } else if context.showsAvatar {
-                avatarView
-            }
-            
-            VStack(alignment: message.isCurrentUserMessage ? .trailing : .leading, spacing: 4) {
-                // User info header (for group chats, non-current user)
-                if !message.isCurrentUserMessage && context.showsUserInfoHeader {
-                    userInfoHeader
-                }
-                
-                // Message bubble
-                messageBubbleContent
-                    .contextMenu { contextMenuItems }
-                
-                // Timestamp and status row
-                timestampRow
-            }
-            
-            if !message.isCurrentUserMessage {
-                Spacer()
-            }
-        }
-        .alert("Delete Message", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                onDelete?()
-            }
-        } message: {
-            Text("Are you sure you want to delete this message? This cannot be undone.")
-        }
-    }
-    
-    // MARK: - Avatar View
-    @ViewBuilder
-    private var avatarView: some View {
-        Button(action: { onAvatarTap?() }) {
-            ChatAvatar(
-                initials: message.authorInitials,
-                avatarURL: message.authorAvatarUrl,
-                isOnline: message.authorIsOnline,
-                size: 32
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    // MARK: - User Info Header
-    @ViewBuilder
-    private var userInfoHeader: some View {
-        HStack(spacing: 2) {
-            // Blocked indicator
-            if message.authorIsBlocked {
-                Image(systemName: "nosign")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.bearCandleRed)
-            }
-            
-            // Username
-            Text(message.authorDisplayName)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(message.authorIsBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.9))
-            
-            // Friend indicator
-            if message.authorIsFriend {
-                Image(systemName: "person.crop.circle")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(message.authorIsBlocked ? AppColors.greyText : AppColors.friendAccent)
-                    .padding(.leading, 3)
-            }
-            
-            // Role and reputation (for full detail contexts)
-            if context.showsFullUserDetails, let role = message.authorRole {
-                Circle()
-                    .fill(AppColors.whiteText.opacity(0.7))
-                    .frame(width: 3, height: 3)
-                    .padding(.horizontal, 3)
-                
-                Text(role.rawValue)
-                    .font(.caption)
-                    .foregroundColor(role.roleForegroundColor)
-                    .fontWeight(role.roleFontWeight)
-                
-                if let reputation = message.authorReputation {
-                    Circle()
-                        .fill(AppColors.whiteText.opacity(0.7))
-                        .frame(width: 3, height: 3)
-                        .padding(.horizontal, 3)
-                    
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    
-                    Text("\(reputation)")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.accentColor)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Message Bubble Content
-    private var messageBubbleContent: some View {
-        HStack(spacing: 8) {
-            Text(message.content)
-                .font(.subheadline)
-                .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
-            
-            if message.isEdited {
-                Text("(edited)")
-                    .font(.caption2)
-                    .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            message.isCurrentUserMessage ?
-            AppColors.accentDarkColor :
-            Color.gray.opacity(0.2)
-        )
-        .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
-    }
-    
-    // MARK: - Timestamp Row
-    private var timestampRow: some View {
-        HStack(spacing: 4) {
-            Text(message.timestampFormatted)
-                .font(.caption2)
-                .foregroundColor(.secondary)
-            
-            // Read receipt for DMs
-            if context.showsReadReceipts && message.isCurrentUserMessage {
-                Image(systemName: isRead ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(.caption2)
-                    .foregroundColor(isRead ? AppColors.accentColor : .secondary)
-            }
-        }
-    }
-    
-    // MARK: - Context Menu
-    @ViewBuilder
-    private var contextMenuItems: some View {
-        if message.canEdit, let editAction = onEdit {
-            Button {
-                editAction()
-            } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-        }
-        
-        if message.canDelete, let deleteAction = onDelete {
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        
-        Button {
-            UIPasteboard.general.string = message.content
-            onCopy?()
-        } label: {
-            Label("Copy", systemImage: "doc.on.doc")
-        }
-        
-        if !message.isCurrentUserMessage, let reportAction = onReport {
-            Divider()
-            Button(role: .destructive) {
-                reportAction()
-            } label: {
-                Label("Report", systemImage: "exclamationmark.triangle")
-            }
-        }
     }
 }
 
@@ -586,7 +327,7 @@ struct ChatEmptyStateView: View {
 // MARK: - ================================================================================================
 
 /// Unified scrollable messages container with auto-scroll behavior
-struct ChatScrollView<Message: ChatMessageDisplayable, Content: View>: View {
+struct ChatScrollView<Message: RLChatMessageDisplayable, Content: View>: View {
     let messages: [Message]
     @ViewBuilder let content: () -> Content
     
@@ -825,44 +566,6 @@ extension View {
     func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
-}
-
-// MARK: - ================================================================================================
-// MARK: - DTO PROTOCOL CONFORMANCES
-// MARK: - ================================================================================================
-// These extensions make existing DTOs work with the unified ChatMessageBubble component
-
-extension ChatroomMessageDTO: ChatMessageDisplayable {
-    var authorDisplayName: String { author.globalMember.username }
-    var authorInitials: String { String(author.globalMember.username.prefix(2)) }
-    var authorAvatarUrl: String? { author.globalMember.avatarURL }
-    var authorIsOnline: Bool { author.isOnline }
-    var authorRole: MemberRole? { author.roleInGuild }
-    var authorReputation: Int? { author.reputation }
-    var authorIsFriend: Bool { author.isFriend }
-    var authorIsBlocked: Bool { author.isBlocked }
-}
-
-extension DMMessageDTO: ChatMessageDisplayable {
-    var authorDisplayName: String { author.globalMember.username }
-    var authorInitials: String { String(author.globalMember.username.prefix(2)) }
-    var authorAvatarUrl: String? { author.globalMember.avatarURL }
-    var authorIsOnline: Bool { author.isOnline }
-    var authorRole: MemberRole? { nil }  // DMs don't show role
-    var authorReputation: Int? { nil }   // DMs don't show reputation
-    var authorIsFriend: Bool { author.isFriend }
-    var authorIsBlocked: Bool { author.isBlocked }
-}
-
-extension ChartChatMessageDTO: ChatMessageDisplayable {
-    var authorDisplayName: String { author.globalMember.username }
-    var authorInitials: String { String(author.globalMember.username.prefix(2)) }
-    var authorAvatarUrl: String? { author.globalMember.avatarURL }
-    var authorIsOnline: Bool { author.isOnline }
-    var authorRole: MemberRole? { author.roleInGuild }
-    var authorReputation: Int? { author.reputation }
-    var authorIsFriend: Bool { author.isFriend }
-    var authorIsBlocked: Bool { author.isBlocked }
 }
 
 // MARK: - ================================================================================================
@@ -1138,6 +841,17 @@ extension RLDMMessageDTO: RLChatMessageDisplayable {
     var authorIsBlocked: Bool { author.isBlocked }
 }
 
+extension RLChartChatMessageDTO: RLChatMessageDisplayable {
+    var authorDisplayName: String { author.displayName }
+    var authorInitials: String { author.initials }
+    var authorAvatarUrl: String? { author.avatarUrl }
+    var authorIsOnline: Bool { author.isOnline }
+    var authorRole: RLMemberRole { author.memberRole }
+    var authorReputation: Int { author.reputation }
+    var authorIsFriend: Bool { author.isFriend }
+    var authorIsBlocked: Bool { author.isBlocked }
+}
+
 
 
 
@@ -1153,9 +867,8 @@ extension RLDMMessageDTO: RLChatMessageDisplayable {
 //  MessagingComponents+RL.swift
 //  traders_guild
 //
-//  Extension to add ChatMessageDisplayable conformance to new RL messaging DTOs.
-//  This allows RLChatroomMessageDTO and RLDMMessageDTO to work with the unified
-//  ChatMessageBubble component.
+//  Extension to add RLChatMessageDisplayable conformance to new RL messaging DTOs.
+//  This allows RLChatroomMessageDTO and RLDMMessageDTO to work with RLChatMessageBubble.
 //
 
 
@@ -1353,8 +1066,17 @@ struct RLChatroomSettingsView: View {
     }
     
     private func reportChatroom(reason: String) {
-        // TODO: Implement report API
-        rlAppState.showInfo("Report submitted for review")
+        Task {
+            guard let guildId = rlAppState.currentGuild?.id else {
+                rlAppState.showError(title: "No Guild Selected", message: "Please select a guild first.", style: .toast)
+                return
+            }
+            do {
+                try await rlAppState.reportChatroom(guildId: guildId, chatroomId: chatroom.id, reason: reason)
+            } catch {
+                // Error already shown by rlAppState
+            }
+        }
     }
 }
 
@@ -1610,7 +1332,16 @@ struct RLDMSettingsView: View {
     }
     
     private func reportUser(reason: String) {
-        // TODO: Implement report API
-        rlAppState.showInfo("Report submitted for review")
+        Task {
+            do {
+                try await rlAppState.reportUser(
+                    guildId: thread.guildId,
+                    membershipId: participant.membershipId,
+                    reason: reason
+                )
+            } catch {
+                // Error already shown by rlAppState
+            }
+        }
     }
 }

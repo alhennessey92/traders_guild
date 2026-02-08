@@ -205,7 +205,7 @@ struct chartSheetMarkersView: View {
     }
     
     /// Check if marker placement is active for a specific type
-    private func isMarkerPlacementActive(for type: MarkerType) -> Bool {
+    private func isMarkerPlacementActive(for type: RLMarkerType) -> Bool {
         controlViewModel.isMarkerPlacementMode && controlViewModel.currentMarkerType == type
     }
 }
@@ -215,7 +215,7 @@ struct chartSheetMarkersView: View {
 /// A button for selecting a marker type to place
 /// Shows cancel state when this type is currently being placed
 struct MarkerButton: View {
-    let type: MarkerType
+    let type: RLMarkerType
     let isActive: Bool
     @ObservedObject var controlViewModel: ChartControlViewModel
     

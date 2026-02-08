@@ -10,7 +10,7 @@
 //  traders_guild
 //
 //  Marker creation sheet for configuring new markers before placement
-//  Works with ChartMarkerDTO
+//  Works with ChartMarkerUI
 
 import SwiftUI
 
@@ -24,8 +24,8 @@ struct MarkerCreationSheet: View {
     let price: Double
     let username: String
     let chartData: ChartDataManager
-    let candles: [CandleDTO]
-    let markerType: MarkerType
+    let candles: [RLCandleDTO]
+    let markerType: RLMarkerType
     let initialTargetPrice: Double?
     
     @State private var note: String = ""
@@ -485,14 +485,14 @@ struct MarkerCreationSheet: View {
         let symbolId = chartData.currentSymbol?.id ?? UUID()
         
         // Build poll options if this is a poll marker
-        var pollOptionsDTO: [PollOptionDTO]? = nil
+        var pollOptionsList: [String]? = nil
         if markerType == .poll && !pollQuestion.isEmpty {
-            pollOptionsDTO = []
+            pollOptionsList = []
             if !pollOption1.isEmpty {
-                pollOptionsDTO?.append(PollOptionDTO(id: UUID(), text: pollOption1, voteCount: 0, hasVoted: false))
+                pollOptionsList?.append(pollOption1)
             }
             if !pollOption2.isEmpty {
-                pollOptionsDTO?.append(PollOptionDTO(id: UUID(), text: pollOption2, voteCount: 0, hasVoted: false))
+                pollOptionsList?.append(pollOption2)
             }
         }
         
@@ -502,30 +502,32 @@ struct MarkerCreationSheet: View {
             targetPriceValue = initialTargetPrice ?? Double(targetPrice.replacingOccurrences(of: ",", with: ""))
         }
         
-        let success = markerManager.addMarker(
-            symbolId: symbolId,
-            candleIndex: candleIndex,
-            timestamp: timestamp,
-            price: price,
-            type: markerType,
-            note: note.isEmpty ? nil : note,
-            candles: candles,
-            horizontalLinePrice: nil,
-            targetPrice: targetPriceValue,
-            alertSeverity: markerType == .alert ? alertSeverity : nil,
-            trendlineDirection: markerType == .trendline ? trendlineDirection : nil,
-            selectedIndicator: markerType == .indicator ? selectedIndicator : nil,
-            chartPattern: markerType == .pattern ? chartPattern : nil,
-            selectedEmoji: markerType == .emoji ? selectedEmoji : nil,
-            pollQuestion: markerType == .poll ? pollQuestion : nil,
-            pollOptions: pollOptionsDTO
-        )
-        
-        if success {
-            HapticFeedback.success.trigger()
-            dismiss()
-        } else {
-            HapticFeedback.error.trigger()
+        Task {
+            let success = await markerManager.addMarker(
+                symbolId: symbolId,
+                candleIndex: candleIndex,
+                timestamp: timestamp,
+                price: price,
+                type: markerType,
+                note: note.isEmpty ? nil : note,
+                candles: candles,
+                horizontalLinePrice: nil,
+                targetPrice: targetPriceValue,
+                alertSeverity: markerType == .alert ? alertSeverity : nil,
+                trendlineDirection: markerType == .trendline ? trendlineDirection : nil,
+                selectedIndicator: markerType == .indicator ? selectedIndicator : nil,
+                chartPattern: markerType == .pattern ? chartPattern : nil,
+                selectedEmoji: markerType == .emoji ? selectedEmoji : nil,
+                pollQuestion: markerType == .poll ? pollQuestion : nil,
+            pollOptions: pollOptionsList
+            )
+            
+            if success {
+                HapticFeedback.success.trigger()
+                dismiss()
+            } else {
+                HapticFeedback.error.trigger()
+            }
         }
     }
 }
@@ -533,7 +535,7 @@ struct MarkerCreationSheet: View {
 // MARK: - Marker View (Chart Overlay)
 
 struct MarkerView: View {
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     let isSelected: Bool
     let hideUsername: Bool
     let onTap: () -> Void
@@ -576,7 +578,7 @@ struct MarkerView: View {
     }
     
     private var usernameLabel: some View {
-        Text(marker.author.globalMember.username)
+        Text(marker.author.username)
             .font(.system(size: 9, weight: .medium))
             .foregroundColor(.white.opacity(0.8))
             .lineLimit(1)
@@ -694,7 +696,7 @@ struct MarkerSettingsButton: View {
 
 struct MarkerPlacementPriceIndicator: View {
     let price: Double
-    let markerType: MarkerType
+    let markerType: RLMarkerType
     let priceScale: CGFloat
     let verticalOffset: CGFloat
     let chartHeight: CGFloat

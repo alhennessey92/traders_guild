@@ -19,76 +19,81 @@ import SwiftUI
 // MARK: - Chart Chat Manager
 @MainActor
 class ChartChatManager: ObservableObject {
-    @Published var activeChartChat: ChartChatDTO? = nil
+    @Published var activeChartChat: RLChartChatDTO? = nil
     @Published var isLoadingChat: Bool = false
-    @Published var messages: [ChartChatMessageDTO] = []
+    @Published var messages: [RLChartChatMessageDTO] = []
     
-    private var chatCache: [String: ChartChatDTO] = [:]
-    private weak var appState: AppState?
+    private var chatCache: [String: RLChartChatDTO] = [:]
+    private weak var appState: RLAppState?
+    private let api: RealAPIService
     
-    init(appState: AppState? = nil) {
+    init(appState: RLAppState? = nil, api: RealAPIService) {
         self.appState = appState
+        self.api = api
     }
     
-    func configure(with appState: AppState) {
+    func configure(with appState: RLAppState) {
         self.appState = appState
     }
     
     /// Open or create a chart chat for a specific symbol and guild
-    func openChartChat(symbol: TradingSymbolDTO, guildId: UUID, api: MockAPIService) async {
+    func openChartChat(symbol: RLTradingSymbolDTO, guildId: UUID) async {
         let cacheKey = "\(symbol.id)-\(guildId)"
         
         // Check cache first
         if let cachedChat = chatCache[cacheKey] {
             activeChartChat = cachedChat
-            await loadMessages(chatId: cachedChat.id, api: api)
+            await loadMessages(chatId: cachedChat.id)
             return
         }
         
         isLoadingChat = true
         
         do {
-            // Fetch or create chart chat from API
-            let chartChat = try await api.fetchOrCreateChartChat(
-                symbolId: symbol.id,
-                guildId: guildId
+            // Fetch or create chart chat from RealAPIService
+            let chartChat = try await api.getOrCreateChartChat(
+                guildId: guildId,
+                symbolId: symbol.id
             )
             
             chatCache[cacheKey] = chartChat
             activeChartChat = chartChat
             
             // Load messages for this chat
-            await loadMessages(chatId: chartChat.id, api: api)
+            await loadMessages(chatId: chartChat.id)
             
         } catch {
             print("⚠️ Failed to open chart chat: \(error)")
+            appState?.showError(error, title: "Failed to Open Chat", style: .toast)
         }
         
         isLoadingChat = false
     }
     
     /// Load messages for the active chart chat
-    func loadMessages(chatId: UUID, api: MockAPIService) async {
+    func loadMessages(chatId: UUID, cursor: String? = nil) async {
         do {
-            let loadedMessages = try await api.fetchChartChatMessages(chatId: chatId)
-            messages = loadedMessages
+            let messagesListDTO = try await api.getChartChatMessages(
+                chatId: chatId,
+                limit: 50,
+                cursor: cursor
+            )
+            messages = messagesListDTO.messages
         } catch {
             print("⚠️ Failed to load chart chat messages: \(error)")
+            appState?.showError(error, title: "Failed to Load Messages", style: .toast)
             messages = []
         }
     }
     
     /// Send a new message to the active chart chat
-    func sendMessage(content: String, api: MockAPIService) async throws {
+    func sendMessage(content: String) async throws {
         guard let chat = activeChartChat else { return }
-        guard let appState = appState else { return }
-        guard let currentUser = appState.currentUser else { return }
         
-        // Call API to send message
+        // Call RealAPIService to send message
         let newMessage = try await api.sendChartChatMessage(
             chatId: chat.id,
-            content: content,
-            authorId: currentUser.id
+            content: content
         )
         
         // Add to local messages
@@ -96,40 +101,28 @@ class ChartChatManager: ObservableObject {
     }
     
     /// Edit an existing message
-    func editMessage(messageId: UUID, newContent: String, api: MockAPIService) async throws {
+    func editMessage(messageId: UUID, newContent: String) async throws {
         guard let chat = activeChartChat else { return }
         
-        try await api.editChartChatMessage(
+        let updatedMessage = try await api.editChartChatMessage(
+            chatId: chat.id,
             messageId: messageId,
-            newContent: newContent,
-            chatId: chat.id
+            content: newContent
         )
         
         // Update local message
         if let index = messages.firstIndex(where: { $0.id == messageId }) {
-            var updatedMessage = messages[index]
-            messages[index] = ChartChatMessageDTO(
-                id: updatedMessage.id,
-                chartChatId: updatedMessage.chartChatId,
-                author: updatedMessage.author,
-                content: newContent,
-                timestamp: updatedMessage.timestamp,
-                timestampFormatted: updatedMessage.timestampFormatted,
-                isEdited: true,
-                isCurrentUserMessage: updatedMessage.isCurrentUserMessage,
-                canEdit: updatedMessage.canEdit,
-                canDelete: updatedMessage.canDelete
-            )
+            messages[index] = updatedMessage
         }
     }
     
     /// Delete a message
-    func deleteMessage(messageId: UUID, api: MockAPIService) async throws {
+    func deleteMessage(messageId: UUID) async throws {
         guard let chat = activeChartChat else { return }
         
         try await api.deleteChartChatMessage(
-            messageId: messageId,
-            chatId: chat.id
+            chatId: chat.id,
+            messageId: messageId
         )
         
         // Remove from local messages
@@ -150,12 +143,12 @@ class ChartChatManager: ObservableObject {
     }
     
     /// Update chat when symbol or guild changes
-    func updateForSymbol(_ symbol: TradingSymbolDTO?, guildId: UUID?, api: MockAPIService) async {
+    func updateForSymbol(_ symbol: RLTradingSymbolDTO?, guildId: UUID?) async {
         guard let symbol = symbol, let guildId = guildId else {
             closeChat()
             return
         }
         
-        await openChartChat(symbol: symbol, guildId: guildId, api: api)
+        await openChartChat(symbol: symbol, guildId: guildId)
     }
 }

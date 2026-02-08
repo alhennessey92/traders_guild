@@ -16,7 +16,7 @@ class ToastWindowManager: ObservableObject {
     
     private init() {}
     
-    func showToast(_ alert: AppAlert, onDismiss: @escaping () -> Void) {
+    func showToast(_ alert: RLAppAlert, onDismiss: @escaping () -> Void) {
         // Create window if needed
         if toastWindow == nil {
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {

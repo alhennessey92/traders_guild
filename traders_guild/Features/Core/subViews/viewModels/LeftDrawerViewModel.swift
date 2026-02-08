@@ -27,10 +27,6 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var upcomingEvents: [RLGuildEventWithAuthorDTO] = []
     
     
-    // These still use old DTOs (to be migrated later)
-    
-    @Published var members: [GuildMembershipDTO] = []
-    @Published var watchlist: GuildWatchlistDTO?
     @Published var userNotifications: [RLNotificationDTO] = []
     @Published var notificationStats: RLNotificationStatsDTO?
     @Published var statistics: RLGuildStatisticsResponse?
@@ -40,9 +36,6 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var guildMembersTotalCount: Int = 0
     @Published var guildMembersOnlineCount: Int = 0
     @Published var isLoadingGuildMembers: Bool = false
-    
-    // Friends list
-    @Published var friends: [GuildMembershipDTO] = []
     
     // Pending friend requests (real API)
     @Published var pendingFriendRequestsIncoming: [RLFriendRequestIncomingDTO] = []
@@ -55,11 +48,11 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var friendsRLOnlineCount: Int = 0
     @Published var isLoadingFriendsRL: Bool = false
 
-    // Global leaderboard
-    @Published var globalLeaderboard: [GuildMembershipDTO] = []
+    // Global leaderboard (not yet implemented)
+    @Published var globalLeaderboard: [RLGuildMemberDTO] = []
     
-    @Published var guildTradingWatchlist: [TradingSymbolDTO] = []
-    @Published var personalTradingWatchlist: [TradingSymbolDTO] = []
+    @Published var guildTradingWatchlist: [RLTradingSymbolDTO] = []
+    @Published var personalTradingWatchlist: [RLTradingSymbolDTO] = []
     
     @Published var isLoading: Bool = false
     @Published var lastRefresh: Date?
@@ -73,10 +66,10 @@ class LeftDrawerViewModel: ObservableObject {
     // MARK: - Top Markers State
     // ================================================================================================
     
-    @Published var trendingMarkers: [TopMarkerDTO] = []
-    @Published var symbolGroupedMarkers: [String: [TopMarkerDTO]] = [:]
-    @Published var followingMarkers: [TopMarkerDTO] = []
-    @Published var myMarkers: [TopMarkerDTO] = []
+    @Published var trendingMarkers: [RLTopMarkerDTO] = []
+    @Published var symbolGroupedMarkers: [String: [RLTopMarkerDTO]] = [:]
+    @Published var followingMarkers: [RLTopMarkerDTO] = []
+    @Published var myMarkers: [RLTopMarkerDTO] = []
     @Published var topMarkersLastRefresh: Date?
     @Published var isLoadingTopMarkers: Bool = false
     
@@ -97,11 +90,11 @@ class LeftDrawerViewModel: ObservableObject {
 
     /// When set, parent views should navigate to this marker on the chart
     /// After handling navigation, parent should set this back to nil
-    @Published var pendingMarkerNavigation: TopMarkerDTO? = nil
+    @Published var pendingMarkerNavigation: RLTopMarkerDTO? = nil
     
     /// Request navigation to a specific marker
     /// Parent views observe `pendingMarkerNavigation` and handle the actual navigation
-    func requestNavigationToMarker(_ marker: TopMarkerDTO) {
+    func requestNavigationToMarker(_ marker: RLTopMarkerDTO) {
         pendingMarkerNavigation = marker
     }
     
@@ -119,12 +112,6 @@ class LeftDrawerViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         applyPresenceUpdates(rlAppState.presenceByUserId)
-    }
-    
-    // Load sample data (for development)
-    func loadSampleFriendsAndLeaderboard() {
-        friends = SampleData.sampleFriends
-        globalLeaderboard = SampleData.sampleGlobalLeaderboard
     }
     
     // ================================================================================================
@@ -218,8 +205,7 @@ class LeftDrawerViewModel: ObservableObject {
     // ================================================================================================
     
     /// Preload all drawer data in parallel - each fetch is independent (failures don't cascade)
-    /// NOTE: Announcements now use rlAppState, everything else still uses old appState
-    func preloadData(for guildId: UUID, appState: AppState, rlAppState: RLAppState) async {
+    func preloadData(for guildId: UUID, rlAppState: RLAppState) async {
         guard shouldRefresh(for: guildId) else {
             print("📋 preloadData: Skipping refresh (cache still valid)")
             return
@@ -231,7 +217,7 @@ class LeftDrawerViewModel: ObservableObject {
         defer { isLoading = false }
         
         // Capture userId for personal watchlist
-        let userId = appState.currentUser?.id
+        let userId = rlAppState.currentUser?.id
         
         // Run all fetches independently - failures don't cascade
         await withTaskGroup(of: Void.self) { group in
@@ -261,35 +247,29 @@ class LeftDrawerViewModel: ObservableObject {
                 }
             }
             
-            // Members
+            // Guild members (real API)
             group.addTask {
                 do {
-                    let fetched = try await appState.fetchGuildMembers(guildId: guildId)
-                    await MainActor.run { self.members = fetched }
+                    let response = try await rlAppState.fetchGuildMembers(guildId: guildId)
+                    await MainActor.run {
+                        self.guildMembers = response.members
+                        self.guildMembersTotalCount = response.totalCount
+                        self.guildMembersOnlineCount = response.onlineCount
+                    }
                 } catch is CancellationError {
                     // Silent
                 } catch {
-                    print("⚠️ Failed to fetch members: \(error)")
-                }
-            }
-            
-            // Watchlist
-            group.addTask {
-                do {
-                    let fetched = try await appState.fetchGuildWatchlist(guildId: guildId)
-                    await MainActor.run { self.watchlist = fetched }
-                } catch is CancellationError {
-                    // Silent
-                } catch {
-                    print("⚠️ Failed to fetch watchlist: \(error)")
+                    print("⚠️ Failed to fetch guild members: \(error)")
                 }
             }
             
             // Guild Trading Watchlist
             group.addTask {
                 do {
-                    let fetched = try await appState.fetchGuildTradingWatchlist(guildId: guildId)
-                    await MainActor.run { self.guildTradingWatchlist = fetched }
+                    let fetched = try await rlAppState.realApi.getGuildWatchlist(guildId: guildId)
+                    await MainActor.run {
+                        self.guildTradingWatchlist = fetched.symbols.map { $0.symbol }
+                    }
                 } catch is CancellationError {
                     // Silent
                 } catch {
@@ -301,8 +281,10 @@ class LeftDrawerViewModel: ObservableObject {
             if let userId = userId {
                 group.addTask {
                     do {
-                        let fetched = try await appState.fetchPersonalTradingWatchlist(userId: userId)
-                        await MainActor.run { self.personalTradingWatchlist = fetched }
+                        let fetched = try await rlAppState.realApi.getPersonalWatchlist()
+                        await MainActor.run {
+                            self.personalTradingWatchlist = fetched.symbols.map { $0.symbol }
+                        }
                     } catch is CancellationError {
                         // Silent
                     } catch {
@@ -398,9 +380,9 @@ class LeftDrawerViewModel: ObservableObject {
     
     /// Manual refresh - forces reload of ALL data
     /// NOTE: Requires rlAppState for announcements
-    func refresh(for guildId: UUID, appState: AppState, rlAppState: RLAppState) async {
+    func refresh(for guildId: UUID, rlAppState: RLAppState) async {
         lastRefresh = nil
-        await preloadData(for: guildId, appState: appState, rlAppState: rlAppState)
+        await preloadData(for: guildId, rlAppState: rlAppState)
     }
     
     /// Legacy refresh - for backwards compatibility (doesn't refresh announcements)
@@ -440,20 +422,6 @@ class LeftDrawerViewModel: ObservableObject {
             print("📋 refreshEvents: Cancelled")
         } catch {
             print("⚠️ Failed to refresh events: \(error)")
-        }
-    }
-    
-    /// Refresh only members - use this in MembersView
-    func refreshMembers(guildId: UUID, appState: AppState) async {
-        do {
-            let fetched = try await appState.fetchGuildMembers(guildId: guildId)
-            await MainActor.run {
-                self.members = fetched
-            }
-        } catch is CancellationError {
-            print("📋 refreshMembers: Cancelled")
-        } catch {
-            print("⚠️ Failed to refresh members: \(error)")
         }
     }
     
@@ -578,8 +546,6 @@ class LeftDrawerViewModel: ObservableObject {
     func clearCache() {
         announcements = []
         upcomingEvents = []
-        members = []
-        watchlist = nil
         guildTradingWatchlist = []
         personalTradingWatchlist = []
         userNotifications = []
@@ -595,6 +561,7 @@ class LeftDrawerViewModel: ObservableObject {
         friendsRLTotalCount = 0
         friendsRLOnlineCount = 0
         isLoadingFriendsRL = false
+        globalLeaderboard = []
         lastRefresh = nil
         currentGuildId = nil
         
@@ -611,7 +578,7 @@ class LeftDrawerViewModel: ObservableObject {
     // ================================================================================================
     
     /// Load all top markers data from API
-    func loadTopMarkers(for guildId: UUID, appState: AppState) async {
+    func loadTopMarkers(for guildId: UUID, rlAppState: RLAppState) async {
         // Check cache freshness (5 minute cache)
         if let lastRefresh = topMarkersLastRefresh,
            Date().timeIntervalSince(lastRefresh) < 300 {
@@ -622,7 +589,7 @@ class LeftDrawerViewModel: ObservableObject {
         defer { isLoadingTopMarkers = false }
         
         do {
-            let response = try await appState.fetchTopMarkers(guildId: guildId)
+            let response = try await rlAppState.realApi.getTopMarkers(guildId: guildId)
             
             self.trendingMarkers = response.trending
             self.symbolGroupedMarkers = response.bySymbol
@@ -640,15 +607,15 @@ class LeftDrawerViewModel: ObservableObject {
     }
     
     /// Force refresh top markers (bypasses cache)
-    func refreshTopMarkers(for guildId: UUID, appState: AppState) async {
+    func refreshTopMarkers(for guildId: UUID, rlAppState: RLAppState) async {
         topMarkersLastRefresh = nil
-        await loadTopMarkers(for: guildId, appState: appState)
+        await loadTopMarkers(for: guildId, rlAppState: rlAppState)
     }
     
     /// Toggle like on a marker and update local cache
-    func toggleMarkerLike(markerId: UUID, appState: AppState) async {
+    func toggleMarkerLike(markerId: UUID, rlAppState: RLAppState) async {
         do {
-            let result = try await appState.toggleTopMarkerLike(markerId: markerId)
+            let result = try await rlAppState.realApi.toggleMarkerLike(guildId: rlAppState.currentGuild?.id ?? UUID(), markerId: markerId)
             
             // Update in trending
             if let index = trendingMarkers.firstIndex(where: { $0.id == markerId }) {
@@ -775,10 +742,10 @@ class LeftDrawerViewModel: ObservableObject {
     
     
     /// Load profile data for the current user
-    func loadCurrentUserProfile(appState: AppState, rlAppState: RLAppState) async -> (
+    func loadCurrentUserProfile(rlAppState: RLAppState) async -> (
         profile: RLUserProfileDTO?,
         statistics: RLUserGlobalStatisticsDTO?,
-        userMarkers: [TopMarkerDTO],
+        userMarkers: [RLTopMarkerDTO],
         awards: [RLUserAwardDTO],
         awardsSummary: RLAwardsSummaryDTO?
     ) {
@@ -788,13 +755,13 @@ class LeftDrawerViewModel: ObservableObject {
         
         do {
             async let fullProfileTask = rlAppState.fetchCurrentUserFullProfile(guildId: rlAppState.currentGuild?.id)
-            async let markersTask = appState.fetchUserMarkers(userId: userId)
+            // TODO: Fetch user markers from backend API when endpoint is available
+            let markers: [RLTopMarkerDTO] = []
             async let awardsTask = rlAppState.fetchCurrentUserAwards(guildId: rlAppState.currentGuild?.id)
             async let awardsSummaryTask = rlAppState.fetchCurrentUserAwardsSummary(guildId: rlAppState.currentGuild?.id)
             
-            let (fullProfile, markers, awards, awardsSummary) = try await (
+            let (fullProfile, awards, awardsSummary) = try await (
                 fullProfileTask,
-                markersTask,
                 awardsTask,
                 awardsSummaryTask
             )
@@ -810,24 +777,32 @@ class LeftDrawerViewModel: ObservableObject {
     /// Load profile data for a guild member (uses real API where available)
     func loadMemberProfile(
         member: RLGuildMemberDTO,
-        appState: AppState,
         rlAppState: RLAppState,
         guildId: UUID
     ) async -> (
         profile: RLUserProfileDTO?,
         statistics: RLUserGlobalStatisticsDTO?,
-        userMarkers: [TopMarkerDTO],
+        userMarkers: [RLTopMarkerDTO],
         awards: [RLUserAwardDTO],
         awardsSummary: RLAwardsSummaryDTO?
     ) {
         do {
             async let fullProfileTask = rlAppState.fetchUserFullProfile(userId: member.userId, guildId: guildId)
-            async let markersTask = appState.fetchUserMarkers(userId: member.userId, limit: 10)
+            // TODO: Fetch user markers from backend API when endpoint is available
+            // For now, use empty array
+            let markers: [RLTopMarkerDTO] = []
             
-            let (fullProfile, markers) = try await (fullProfileTask, markersTask)
+            let fullProfile = try await fullProfileTask
             
-            let awards = SampleData.memberAwards.map { RLUserAwardDTO.fromLegacy($0, membershipId: member.membershipId, guildId: guildId) }
-            let awardsSummary = RLAwardsSummaryDTO.fromLegacy(SampleData.awardsSummary)
+            // Awards will be loaded from backend API when needed
+            // For now, use empty arrays - these should be fetched from rlAppState
+            let awards: [RLUserAwardDTO] = []
+            let awardsSummary = RLAwardsSummaryDTO(
+                totalAwards: 0,
+                totalPoints: 0,
+                rarityBreakdown: [:],
+                recentAwards: []
+            )
             
             return (fullProfile.profile, fullProfile.statistics, markers, awards, awardsSummary)
             
@@ -849,7 +824,7 @@ class LeftDrawerViewModel: ObservableObject {
         }
         
         // Refresh if cache is empty
-        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil && userNotifications.isEmpty && statistics == nil && guildTradingWatchlist.isEmpty && personalTradingWatchlist.isEmpty {
+        if announcements.isEmpty && upcomingEvents.isEmpty && guildMembers.isEmpty && userNotifications.isEmpty && statistics == nil && guildTradingWatchlist.isEmpty && personalTradingWatchlist.isEmpty {
             return true
         }
         
@@ -870,12 +845,12 @@ class LeftDrawerViewModel: ObservableObject {
     
     /// Online members count
     var onlineMembersCount: Int {
-        members.filter { $0.isOnline }.count
+        guildMembersOnlineCount
     }
     
     /// Has watchlist been loaded
     var hasWatchlist: Bool {
-        watchlist != nil
+        !guildTradingWatchlist.isEmpty || !personalTradingWatchlist.isEmpty
     }
     
     /// Has statistics been loaded

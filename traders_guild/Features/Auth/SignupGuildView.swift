@@ -18,16 +18,13 @@ import SwiftUI
 struct SignupGuildView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
-    @EnvironmentObject var RLAppState: RLAppState
-    
-    
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     
     
     // MARK: - Local State
-    @State private var availableGuilds: [GuildDTO] = []
+    @State private var availableGuilds: [RLGuildDTO] = []
     @State private var isLoadingGuilds: Bool = false
-    @State private var selectedGuild: GuildDTO?
+    @State private var selectedGuild: RLGuildDTO?
 
     var body: some View {
         ZStack {
@@ -164,27 +161,27 @@ struct SignupGuildView: View {
         defer { isLoadingGuilds = false }
         
         do {
-            availableGuilds = try await appState.fetchOpenGuilds()
-            // ✅ Store in appState so signup can reuse them
-            appState.availableOpenGuildsForSelection = availableGuilds
+            availableGuilds = try await rlAppState.fetchOpenGuilds()
         } catch is CancellationError {
             // Silently ignore cancellation
             return
         } catch {
-            // Error already handled by appState
+            // Error already handled by rlAppState
         }
     }
     
-    private func selectGuild(_ guild: GuildDTO) {
+    private func selectGuild(_ guild: RLGuildDTO) {
         selectedGuild = guild
-        //data.selectedGuildId = guild.id TODO: REALAPI
     }
     
     private func handleSignup() async {
         do {
-            try await RLAppState.signUp(data: data)
-            // ✅ Signup complete - AppState has set currentGuild
-            // No need to show guild selection sheet
+            try await rlAppState.signUp(data: data)
+            
+            if let selectedGuild,
+               rlAppState.currentGuild?.id != selectedGuild.id {
+                _ = try await rlAppState.joinGuild(guildId: selectedGuild.id)
+            }
         } catch is CancellationError {
             // Task was cancelled, ignore
             return
@@ -196,7 +193,7 @@ struct SignupGuildView: View {
 
 // MARK: - Guild Selection Row Component
 struct GuildSelectionRow: View {
-    let guild: GuildDTO
+    let guild: RLGuildDTO
     let isSelected: Bool
     let onTap: () -> Void
     
@@ -227,7 +224,7 @@ struct GuildSelectionRow: View {
                         .padding(.leading, 15)
                     
                     HStack(spacing: 3) {
-                        Text("\(guild.owner.name)")
+                        Text("Owner")
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
                             .lineLimit(1)
@@ -238,8 +235,8 @@ struct GuildSelectionRow: View {
                         
                         Text("Admin")
                             .font(.caption)
-                            .foregroundColor(guild.ownerRole.roleForegroundColor)
-                            .fontWeight(guild.ownerRole.roleFontWeight)
+                            .foregroundColor(.red)
+                            .fontWeight(.semibold)
                             .lineLimit(1)
                     }
                     .padding(.leading, 15)

@@ -19,7 +19,7 @@ struct ProfileContentView: View {
     // Profile data
     let extendedProfile: RLUserProfileDTO?
     let markersSummary: RLUserGlobalStatisticsDTO?
-    let userMarkers: [TopMarkerDTO]
+    let userMarkers: [RLTopMarkerDTO]
     let awards: [RLUserAwardDTO]
     let awardsSummary: RLAwardsSummaryDTO?
     let stats: [ProfileStatDTO]
@@ -29,7 +29,7 @@ struct ProfileContentView: View {
     let username: String
     
     // Callbacks
-    var onMarkerTap: ((TopMarkerDTO) -> Void)? = nil
+    var onMarkerTap: ((RLTopMarkerDTO) -> Void)? = nil
     
     @State private var selectedTab: ProfileTab = .overview
     
@@ -303,8 +303,8 @@ struct OverviewTabContent: View {
 
 struct MarkersTabContent: View {
     let summary: RLUserGlobalStatisticsDTO?
-    let markers: [TopMarkerDTO]
-    var onMarkerTap: ((TopMarkerDTO) -> Void)? = nil
+    let markers: [RLTopMarkerDTO]
+    var onMarkerTap: ((RLTopMarkerDTO) -> Void)? = nil
     
     var body: some View {
         VStack(spacing: 16) {
@@ -396,7 +396,7 @@ struct MarkersTabContent: View {
 // MARK: - Profile Marker Card
 
 struct ProfileMarkerCard: View {
-    let marker: TopMarkerDTO
+    let marker: RLTopMarkerDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -411,17 +411,17 @@ struct ProfileMarkerCard: View {
                 VStack(spacing: 4) {
                     ZStack {
                         Circle()
-                            .fill(marker.type.color.opacity(0.2))
+                            .fill(marker.markerTypeEnum.color.opacity(0.2))
                             .frame(width: 36, height: 36)
                         
-                        Image(systemName: marker.type.icon)
+                        Image(systemName: marker.markerTypeEnum.icon)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(marker.type.color)
+                            .foregroundColor(marker.markerTypeEnum.color)
                     }
                     
-                    Text(marker.type.rawValue)
+                    Text(marker.markerTypeEnum.rawValue)
                         .font(.system(size: 8, weight: .medium))
-                        .foregroundColor(marker.type.color)
+                        .foregroundColor(marker.markerTypeEnum.color)
                         .lineLimit(1)
                 }
                 .frame(width: 44)
@@ -766,107 +766,6 @@ struct AwardCard: View {
                 )
         )
         .opacity(award.isEarned ? 1.0 : 0.7)
-    }
-}
-
-// MARK: - ================================================================================================
-// MARK: - Legacy Conversions (Sample Data Support)
-// MARK: - ================================================================================================
-
-extension RLUserProfileDTO {
-    static func fromLegacy(_ legacy: UserProfileExtendedDTO) -> RLUserProfileDTO {
-        RLUserProfileDTO(
-            userId: legacy.userId,
-            bio: legacy.bio,
-            location: legacy.location,
-            timezone: legacy.timezone,
-            experienceLevel: legacy.experience.rawValue.lowercased(),
-            tradingStyle: legacy.tradingStyle,
-            preferredPairs: legacy.preferredPairs,
-            socialLinks: legacy.socialLinks.map {
-                RLSocialLinkItem(
-                    platform: $0.platform.rawValue.lowercased(),
-                    username: $0.username,
-                    url: $0.url
-                )
-            },
-            tradingInterests: legacy.interests.map {
-                RLTradingInterestItem(
-                    name: $0.name,
-                    icon: $0.icon,
-                    isPrimary: $0.isPrimary
-                )
-            },
-            isProfilePublic: true,
-            showOnlineStatus: true,
-            createdAt: legacy.joinedPlatform,
-            updatedAt: legacy.lastActive
-        )
-    }
-}
-
-extension RLUserGlobalStatisticsDTO {
-    static func fromLegacy(_ legacy: UserMarkersSummaryDTO, userId: UUID) -> RLUserGlobalStatisticsDTO {
-        let successfulMarkers = Int(Double(legacy.totalMarkers) * legacy.accuracyRate)
-        let markersByType = legacy.markersByType.reduce(into: [String: Int]()) { result, entry in
-            result[entry.key.rawValue] = entry.value
-        }
-        
-        return RLUserGlobalStatisticsDTO(
-            userId: userId,
-            totalMarkersPlaced: legacy.totalMarkers,
-            successfulMarkers: successfulMarkers,
-            accuracyRate: legacy.accuracyRate,
-            totalLikesReceived: legacy.totalLikes,
-            totalCommentsMade: legacy.totalComments,
-            currentStreakDays: 0,
-            bestStreakDays: 0,
-            totalGuildsJoined: 0,
-            totalAwardsEarned: 0,
-            totalAwardPoints: 0,
-            topSymbols: legacy.topSymbols,
-            markersByType: markersByType,
-            lastCalculatedAt: Date()
-        )
-    }
-}
-
-extension RLUserAwardDTO {
-    static func fromLegacy(_ legacy: UserAwardDTO, membershipId: UUID, guildId: UUID) -> RLUserAwardDTO {
-        RLUserAwardDTO(
-            id: legacy.id,
-            membershipId: membershipId,
-            guildId: guildId,
-            awardTypeId: legacy.awardId,
-            name: legacy.name,
-            description: legacy.description,
-            icon: legacy.icon,
-            category: legacy.category.rawValue.lowercased(),
-            rarity: legacy.rarity.rawValue.lowercased(),
-            pointsValue: legacy.rarity.pointValue,
-            progress: legacy.progress,
-            currentValue: nil,
-            isNew: legacy.isNew,
-            earnedAt: legacy.earnedAt
-        )
-    }
-}
-
-extension RLAwardsSummaryDTO {
-    static func fromLegacy(_ legacy: AwardsSummaryDTO) -> RLAwardsSummaryDTO {
-        let rarityBreakdown = legacy.rarityBreakdown.reduce(into: [String: Int]()) { result, entry in
-            result[entry.key.rawValue.lowercased()] = entry.value
-        }
-        let recentAwards = legacy.recentAwards.map {
-            RLUserAwardDTO.fromLegacy($0, membershipId: UUID(), guildId: UUID())
-        }
-        
-        return RLAwardsSummaryDTO(
-            totalAwards: legacy.totalAwards,
-            totalPoints: legacy.totalPoints,
-            rarityBreakdown: rarityBreakdown,
-            recentAwards: recentAwards
-        )
     }
 }
 

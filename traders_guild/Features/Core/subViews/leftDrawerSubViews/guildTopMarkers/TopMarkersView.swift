@@ -38,7 +38,7 @@ enum TopMarkersTab: String, CaseIterable, UnifiedTabItem {
 
 struct TopMarkersView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     
     // Tab state
     @State private var selectedTab: TopMarkersTab = .trending
@@ -51,7 +51,7 @@ struct TopMarkersView: View {
     @State private var likedMarkerId: UUID? = nil
     
     /// Callback when user wants to navigate to a marker on the chart
-    var onNavigateToMarker: ((TopMarkerDTO) -> Void)? = nil
+    var onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
     
     var body: some View {
         VStack(spacing: 0) {
@@ -96,8 +96,8 @@ struct TopMarkersView: View {
     // MARK: - Refresh
     
     private func refreshMarkers() async {
-        guard let guild = appState.currentGuild else { return }
-        //await leftDrawerViewModel.refresh(for: guild.id, appState: appState)
+        guard let guild = rlAppState.currentGuild else { return }
+        await leftDrawerViewModel.refreshTopMarkers(for: guild.id, rlAppState: rlAppState)
     }
     
     // MARK: - Tab Counts
@@ -115,10 +115,10 @@ struct TopMarkersView: View {
     
     private func loadMarkersIfNeeded() async {
         guard !hasLoaded else { return }
-        guard let guildId = appState.currentGuild?.id else { return }
+        guard let guildId = rlAppState.currentGuild?.id else { return }
         
         isLoading = true
-        await leftDrawerViewModel.loadTopMarkers(for: guildId, appState: appState)
+        await leftDrawerViewModel.loadTopMarkers(for: guildId, rlAppState: rlAppState)
         isLoading = false
         hasLoaded = true
     }
@@ -155,10 +155,12 @@ struct TopMarkersView: View {
     // MARK: - Asset Class Markers Content (grouped by Forex, Crypto, etc.)
     
     /// Pre-computed grouping to avoid recomputation on every render
-    private var markersGroupedByAssetClass: [(assetClass: AssetClass, markers: [TopMarkerDTO])] {
+    private var markersGroupedByAssetClass: [(assetClass: RLAssetClass, markers: [RLTopMarkerDTO])] {
         let allMarkers = leftDrawerViewModel.symbolGroupedMarkers.values.flatMap { $0 }
-        let grouped = Dictionary(grouping: allMarkers, by: { $0.symbolAssetClass })
-        let orderedClasses: [AssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+        let grouped = Dictionary(grouping: allMarkers) { marker -> RLAssetClass in
+            RLAssetClass.fromBackendString(marker.symbolAssetClass) ?? .forex
+        }
+        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
         
         return orderedClasses.compactMap { assetClass in
             guard let markers = grouped[assetClass], !markers.isEmpty else { return nil }
@@ -254,7 +256,7 @@ struct TopMarkersView: View {
     
     // MARK: - Actions
     
-    private func handleLike(marker: TopMarkerDTO) {
+    private func handleLike(marker: RLTopMarkerDTO) {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred()
         
@@ -267,11 +269,11 @@ struct TopMarkersView: View {
         }
         
         Task {
-            await leftDrawerViewModel.toggleMarkerLike(markerId: marker.id, appState: appState)
+            await leftDrawerViewModel.toggleMarkerLike(markerId: marker.id, rlAppState: rlAppState)
         }
     }
     
-    private func handleMarkerTap(marker: TopMarkerDTO) {
+    private func handleMarkerTap(marker: RLTopMarkerDTO) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
@@ -289,7 +291,7 @@ struct TopMarkersView: View {
 // MARK: - ================================================================================================
 
 struct TopMarkerCard: View {
-    let marker: TopMarkerDTO
+    let marker: RLTopMarkerDTO
     var showMyBadge: Bool = false
     @Binding var likedMarkerId: UUID?
     let onLike: () -> Void
@@ -303,10 +305,10 @@ struct TopMarkerCard: View {
     
     /// Shortened marker type name for display
     private var shortTypeName: String {
-        switch marker.type {
+        switch marker.markerTypeEnum {
         case .resistance: return "Resist"
         case .predictionTarget: return "Predict"
-        default: return marker.type.rawValue
+        default: return marker.markerTypeEnum.rawValue
         }
     }
     
@@ -318,14 +320,14 @@ struct TopMarkerCard: View {
                     // Icon with type label underneath - pushed down with top padding
                     VStack(spacing: 1) {
                         UnifiedIconBadge(
-                            icon: marker.type.icon,
-                            color: marker.type.color,
+                            icon: marker.markerTypeEnum.icon,
+                            color: marker.markerTypeEnum.color,
                             size: 26,
                             iconSize: 11
                         )
                         Text(shortTypeName)
                             .font(.system(size: 7, weight: .medium))
-                            .foregroundColor(marker.type.color.opacity(0.9))
+                            .foregroundColor(marker.markerTypeEnum.color.opacity(0.9))
                             .lineLimit(1)
                     }
                     .frame(width: 34)
@@ -388,7 +390,7 @@ struct TopMarkerCard: View {
                 UnifiedAuthorFooter(
                     username: marker.authorUsername,
                     isOnline: marker.authorIsOnline,
-                    role: marker.authorRole,
+                    role: RLMemberRole(from: marker.authorRole),
                     reputation: marker.authorReputation,
                     timeText: marker.createdAtFormatted,
                     showOnlineStatus: false
@@ -405,7 +407,7 @@ struct TopMarkerCard: View {
 // MARK: - Marker Type Icon (kept for backwards compatibility)
 
 struct MarkerTypeIcon: View {
-    let type: MarkerType
+    let type: RLMarkerType
     
     var body: some View {
         UnifiedIconBadge(
@@ -418,11 +420,11 @@ struct MarkerTypeIcon: View {
 // MARK: - Asset Class Marker Group
 
 struct AssetClassMarkerGroup: View {
-    let assetClass: AssetClass
-    let markers: [TopMarkerDTO]
+    let assetClass: RLAssetClass
+    let markers: [RLTopMarkerDTO]
     @Binding var likedMarkerId: UUID?
-    let onLike: (TopMarkerDTO) -> Void
-    let onTap: (TopMarkerDTO) -> Void
+    let onLike: (RLTopMarkerDTO) -> Void
+    let onTap: (RLTopMarkerDTO) -> Void
     
     /// Color for asset class (matches WatchlistView)
     private var assetClassColor: Color {
@@ -463,10 +465,10 @@ struct AssetClassMarkerGroup: View {
 
 struct SymbolMarkerGroup: View {
     let symbolTicker: String
-    let markers: [TopMarkerDTO]
+    let markers: [RLTopMarkerDTO]
     @Binding var likedMarkerId: UUID?
-    let onLike: (TopMarkerDTO) -> Void
-    let onTap: (TopMarkerDTO) -> Void
+    let onLike: (RLTopMarkerDTO) -> Void
+    let onTap: (RLTopMarkerDTO) -> Void
     
     private var brandColor: Color {
         if let colorHex = markers.first?.symbolBrandColor {

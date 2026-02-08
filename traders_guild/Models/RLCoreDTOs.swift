@@ -492,6 +492,7 @@ struct RLGuildAnnouncementWithAuthorDTO: Codable, Identifiable {
     var authorRole: RLMemberRole { authorMembership.memberRole }
     var authorReputation: Int { authorMembership.reputation }
     
+    
     // Time formatting
     var timeAgoFormatted: String {
         let now = Date()
@@ -1539,6 +1540,20 @@ struct RLSupportTicketRequest: Codable {
     let message: String
     let includeDeviceInfo: Bool
     let deviceInfo: [String: String]?
+}
+
+// MARK: - Reporting & Sharing Requests
+
+struct RLChatroomReportRequest: Codable {
+    let reason: String
+}
+
+struct RLUserReportRequest: Codable {
+    let reason: String
+}
+
+struct RLShareEventRequest: Codable {
+    let friendId: UUID
 }
 
 // MARK: - Activity Feed DTOs

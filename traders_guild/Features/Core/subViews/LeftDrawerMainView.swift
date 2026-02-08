@@ -37,7 +37,6 @@ enum BottomSheetContent: Identifiable, Equatable {
     case announcement(RLGuildAnnouncementWithAuthorDTO)  // Uses combined DTO from backend
     case event(RLGuildEventWithAuthorDTO)  // Uses combined DTO from backend
     case profile
-    case guildMember(GuildMembershipDTO)
     case guildMemberRL(RLGuildMemberDTO)
     case createAnnouncement  // <-- ADD THIS LINE
     case createEvent
@@ -47,7 +46,6 @@ enum BottomSheetContent: Identifiable, Equatable {
         case .announcement(let announcement): return "announcement-\(announcement.id)"
         case .event(let event): return "event-\(event.id)"
         case .profile: return "profile"
-        case .guildMember(let user): return "profile-\(user.id)"
         case .guildMemberRL(let user): return "profile-rl-\(user.id)"
         case .createAnnouncement: return "create-announcement"  // <-- ADD THIS
         case .createEvent: return "create-event"
@@ -63,8 +61,6 @@ enum BottomSheetContent: Identifiable, Equatable {
             return e1.id == e2.id
         case (.profile, .profile):
             return true
-        case (.guildMember(let m1), .guildMember(let m2)):
-            return m1.id == m2.id
         case (.guildMemberRL(let m1), .guildMemberRL(let m2)):
             return m1.id == m2.id
         case (.createAnnouncement, .createAnnouncement):  // <-- ADD THIS
@@ -105,7 +101,6 @@ struct LeftDrawerMainView: View {
     var currentSymbolId: UUID? = nil
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -219,8 +214,6 @@ struct LeftDrawerMainView: View {
             return [.fraction(0.6), .large]  // ADD .large
         case .event:
             return [.fraction(0.6), .large]
-        case .guildMember:
-            return [.fraction(0.6), .large]
         case .guildMemberRL:
             return [.fraction(0.6), .large]
         case .createAnnouncement:           // <-- ADD THIS
@@ -242,7 +235,6 @@ struct MainDrawerView: View {
     let presentProfile: () -> Void
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: Remove
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -280,10 +272,9 @@ struct MainDrawerView: View {
     
     
     var body: some View {
-        if let guild = appState.currentGuild,
-           let rlUser = rlAppState.currentUser,
+        if let rlUser = rlAppState.currentUser,
            let rlGuild = rlAppState.currentGuild,
-           let rlMembership = rlAppState.currentMembership{
+           let rlMembership = rlAppState.currentMembership {
             VStack(alignment: .leading, spacing: 0) {
             // Header section
             VStack {
@@ -422,7 +413,7 @@ struct MainDrawerView: View {
             .refreshable {
                 // ✅ Pull to refresh - only refresh announcements on main view
                 // Other data refreshes when navigating to specific sections
-                await leftDrawerViewModel.refreshAnnouncements(guildId: guild.id, rlAppState: rlAppState)
+                await leftDrawerViewModel.refreshAnnouncements(guildId: rlGuild.id, rlAppState: rlAppState)
             }
             .overlay {
                 // ✅ Show loading only on first load
@@ -485,7 +476,6 @@ struct SectionDrawerView: View {
     var currentSymbolId: UUID? = nil
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -556,7 +546,7 @@ struct SectionDrawerView: View {
                     .scrollDismissesKeyboard(.interactively)
                     .refreshable {
                         // ✅ Component-specific refresh based on current section
-                        await refreshCurrentSection(guildId: guild.id, appState: appState, rlAppState: rlAppState)
+                        await refreshCurrentSection(guildId: guild.id, rlAppState: rlAppState)
                     }
                 }
             }
@@ -621,7 +611,7 @@ struct SectionDrawerView: View {
     }
     
     /// Refresh only the data needed for the current section
-    private func refreshCurrentSection(guildId: UUID, appState: AppState, rlAppState: RLAppState) async {
+    private func refreshCurrentSection(guildId: UUID, rlAppState: RLAppState) async {
         switch currentSection {
         case .announcements:
             await leftDrawerViewModel.refreshAnnouncements(guildId: guildId, rlAppState: rlAppState)
@@ -634,7 +624,7 @@ struct SectionDrawerView: View {
         case .statistics:
              await leftDrawerViewModel.refreshStatistics(guildId: guildId, rlAppState: rlAppState)
         case .topMarkers:
-            await leftDrawerViewModel.refreshTopMarkers(for: guildId, appState: appState)
+            await leftDrawerViewModel.refreshTopMarkers(for: guildId, rlAppState: rlAppState)
         default:
             // For sections without specific refresh, do nothing or refresh all
             break
@@ -689,7 +679,6 @@ struct BottomSheetView: View {
     @Binding var selectedDetent: PresentationDetent
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -703,8 +692,6 @@ struct BottomSheetView: View {
             case .profile:  // Changed from 'user' to 'membership'
                 UserProfileDetailView(selectedDetent: $selectedDetent)
                     .environmentObject(leftDrawerViewModel)
-            case .guildMember(let user):
-                GuildUserDetailView(user: user)
             case .guildMemberRL(let member):
                 GuildUserDetailViewRL(member: member)
             case .createAnnouncement:           // <-- ADD THIS

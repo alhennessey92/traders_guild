@@ -21,7 +21,6 @@ struct UserProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -31,7 +30,7 @@ struct UserProfileDetailView: View {
     // Profile data loading
     @State private var extendedProfile: RLUserProfileDTO? = nil
     @State private var markersSummary: RLUserGlobalStatisticsDTO? = nil
-    @State private var userMarkers: [TopMarkerDTO] = []
+    @State private var userMarkers: [RLTopMarkerDTO] = []
     @State private var awards: [RLUserAwardDTO] = []
     @State private var awardsSummary: RLAwardsSummaryDTO? = nil
     @State private var isLoading = true
@@ -192,7 +191,7 @@ struct UserProfileDetailView: View {
     
     // MARK: - Load Profile Data
     private func loadProfileData() async {
-        let data = await leftDrawerViewModel.loadCurrentUserProfile(appState: appState, rlAppState: rlAppState)
+        let data = await leftDrawerViewModel.loadCurrentUserProfile(rlAppState: rlAppState)
         await MainActor.run {
             extendedProfile = data.profile
             markersSummary = data.statistics

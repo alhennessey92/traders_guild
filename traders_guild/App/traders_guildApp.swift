@@ -4,8 +4,7 @@
 //
 //  Created by Al Hennessey on 16/07/2025.
 //
-//  UPDATED: Added RLMessagingManager for new chatroom/DM system
-//  while preserving old MessagingManager for chart/marker chat
+//  UPDATED: Added RLMessagingManager for chatroom/DM system
 //
 
 import SwiftUI
@@ -17,25 +16,16 @@ struct traders_guildApp: App {
     
     // NEW: RL Messaging Manager for chatrooms and DMs (uses RLAppState)
     @StateObject private var rlMessagingManager = RLMessagingManager()
-    
-    // OLD: Keep for chart chat and marker comments (uses AppState)
-    @StateObject private var messagingManager = MessagingManager()
-    @StateObject private var appState = AppState() // TODO: Remove when migration complete
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     
     init() {
         let rlAppState = RLAppState()
-        let appState = AppState() // TODO: Remove
-        let messagingManager = MessagingManager()
         let rlMessagingManager = RLMessagingManager()
         
         // Configure the connections
-        messagingManager.configure(with: appState)           // Old system - chart/marker chat
-        rlMessagingManager.configure(with: rlAppState)       // NEW: RL system - chatrooms/DMs
+        rlMessagingManager.configure(with: rlAppState)       // RL system - chatrooms/DMs
         
         _rlAppState = StateObject(wrappedValue: rlAppState)
-        _appState = StateObject(wrappedValue: appState) // TODO: Remove
-        _messagingManager = StateObject(wrappedValue: messagingManager)
         _rlMessagingManager = StateObject(wrappedValue: rlMessagingManager)
     }
     
@@ -46,16 +36,12 @@ struct traders_guildApp: App {
                 // This allows chart to initialize while transition shows
                 mainContent
                     .environmentObject(rlAppState)
-                    .environmentObject(appState) // TODO: remove
-                    .environmentObject(messagingManager)      // OLD: chart/marker chat
-                    .environmentObject(rlMessagingManager)    // NEW: chatrooms/DMs
+                    .environmentObject(rlMessagingManager)    // chatrooms/DMs
                 
                 // TransitionView overlays on top until chart is ready
                 if rlAppState.showingTransition {
                     TransitionView()
                         .environmentObject(rlAppState)
-                        .environmentObject(appState) // TODO: remove
-                        .environmentObject(messagingManager)
                         .environmentObject(rlMessagingManager)
                         .transition(.opacity)
                         .zIndex(1) // Ensure it's on top
@@ -84,8 +70,6 @@ struct traders_guildApp: App {
             .fullScreenCover(isPresented: $rlAppState.showGuildSelectionSheet) {
                 GuildSelectionFullView()
                     .environmentObject(rlAppState)
-                    .environmentObject(appState) // TODO: remove
-                    .environmentObject(messagingManager)
                     .environmentObject(rlMessagingManager)
             }
         }

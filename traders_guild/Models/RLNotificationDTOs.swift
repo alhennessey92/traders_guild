@@ -15,6 +15,25 @@ import Foundation
 import SwiftUI
 
 
+// MARK: - Notification Destination (App Navigation)
+
+enum NotificationDestination: Equatable {
+    /// Navigate to a user's DM chat
+    case userDM(userId: UUID)
+    
+    /// Navigate to a guild chatroom
+    case chatroom(chatroomId: UUID)
+    
+    /// Navigate to a symbol's chart
+    case symbolChart(symbolId: UUID, ticker: String)
+    
+    /// Navigate to a user's profile
+    case userProfile(userId: UUID)
+    
+    /// Navigate to a guild announcement detail
+    case announcement(announcementId: UUID)
+}
+
 // MARK: - Notification Type Enum
 
 /// Maps to backend NotificationType enum.
@@ -53,7 +72,6 @@ enum RLNotificationDestinationType: String, Codable {
     case announcement = "announcement"
     case event = "event"
 }
-
 
 // MARK: - Notification Destination
 

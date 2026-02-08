@@ -111,10 +111,10 @@ struct EventRowView: View {
                 .padding(.bottom, 12) // More padding before footer
                 
                 // MARK: - Author Footer Bar (Hosted by)
-                RLAuthorFooter(
-                    displayName: event.authorDisplayName,
-                    avatarUrl: event.authorAvatarUrl,
+                UnifiedAuthorFooter(
+                    username: event.authorDisplayName,
                     role: event.authorRole,
+                    reputation: event.authorMembership.reputation,
                     timeText: event.timeUntilEvent,
                     cornerRadius: 14
                 )
@@ -137,6 +137,7 @@ struct EventDetailView: View {
     @State private var showAttendConfirmation = false
     @State private var showUnAttendConfirmation = false
     @State private var showShareConfirmation = false
+    @State private var selectedFriendToShare: UUID? = nil
     
     private let dateFormatter: DateFormatter = {
         let df = DateFormatter()
@@ -177,10 +178,10 @@ struct EventDetailView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    RLAuthorRow(
-                        displayName: displayedEvent.authorDisplayName,
-                        avatarUrl: displayedEvent.authorAvatarUrl,
-                        role: displayedEvent.authorRole
+                    UnifiedAuthorRow(
+                        username: displayedEvent.authorDisplayName,
+                        role: displayedEvent.authorRole,
+                        reputation: displayedEvent.authorMembership.reputation
                     )
                 }
                 
@@ -341,8 +342,22 @@ struct EventDetailView: View {
     }
     
     private func shareEvent() {
-        // TODO: Implement share functionality when backend supports it
-        rlAppState.showInfo("Share feature coming soon!")
+        Task {
+            guard let guildId = rlAppState.currentGuild?.id else {
+                rlAppState.showError(title: "No Guild Selected", message: "Please select a guild first.", style: .toast)
+                return
+            }
+            guard let friendId = selectedFriendToShare else {
+                rlAppState.showError(title: "No Friend Selected", message: "Select a friend to share with.", style: .toast)
+                return
+            }
+            do {
+                try await rlAppState.shareEvent(guildId: guildId, eventId: event.id, friendId: friendId)
+                showShareConfirmation = false
+            } catch {
+                // Error already shown by rlAppState
+            }
+        }
     }
     
     private func recordEventView() {

@@ -192,7 +192,6 @@ struct RLMessagingSheet: View {
     @EnvironmentObject var appState: RLAppState
     @EnvironmentObject var rightDrawerViewModel: RLRightDrawerViewModel
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    @EnvironmentObject var legacyAppState: AppState
     
     @State private var messageText = ""
     @State private var showUserProfile = false
@@ -213,7 +212,7 @@ struct RLMessagingSheet: View {
     // Profile state
     @State private var profileExtendedProfile: RLUserProfileDTO? = nil
     @State private var profileStatistics: RLUserGlobalStatisticsDTO? = nil
-    @State private var profileMarkers: [TopMarkerDTO] = []
+    @State private var profileMarkers: [RLTopMarkerDTO] = []
     @State private var profileAwards: [RLUserAwardDTO] = []
     @State private var profileAwardsSummary: RLAwardsSummaryDTO? = nil
     @State private var isProfileLoading: Bool = false
@@ -677,7 +676,6 @@ struct RLMessagingSheet: View {
         isProfileLoading = true
         let data = await leftDrawerViewModel.loadMemberProfile(
             member: member,
-            appState: legacyAppState,
             rlAppState: appState,
             guildId: guildId
         )

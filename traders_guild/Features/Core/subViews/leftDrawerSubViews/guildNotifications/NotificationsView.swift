@@ -37,7 +37,6 @@ enum NotificationTab: String, CaseIterable, UnifiedTabItem {
 struct NotificationsListView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var rlAppState: RLAppState
     
     // Tab state
@@ -198,7 +197,6 @@ struct NotificationCard: View {
     @State private var hasRecordedView = false
     @State private var showAsUnread: Bool
     
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var rlAppState: RLAppState     // <<< Add rlAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager

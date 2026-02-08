@@ -19,7 +19,7 @@ struct GenericIndicatorPanelView: View {
     let panelType: PanelIndicatorType
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
-    var timeframe: ChartTimeframe = .h1
+    var timeframe: RLChartTimeframe = .h1
     
     @Binding var panelHeight: CGFloat
     let minPanelHeight: CGFloat
@@ -397,7 +397,7 @@ struct GenericIndicatorPanelView: View {
         }
     }
     
-    private func getNiceTimeStep(timeframe: ChartTimeframe, zoomScale: CGFloat) -> Double {
+    private func getNiceTimeStep(timeframe: RLChartTimeframe, zoomScale: CGFloat) -> Double {
         let screenWidth: CGFloat = UIScreen.main.bounds.width
         let visibleCandles = screenWidth / totalCandleWidth
         

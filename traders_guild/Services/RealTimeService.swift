@@ -112,7 +112,7 @@ class RealTimeService: ObservableObject {
         
         connectionStatus = .connecting
         
-        let httpURL = APIService.messaging.baseURL
+        let httpURL = APIService.realtime.baseURL
         let wsURLString = httpURL
             .replacingOccurrences(of: "https://", with: "wss://")
             .replacingOccurrences(of: "http://", with: "ws://")

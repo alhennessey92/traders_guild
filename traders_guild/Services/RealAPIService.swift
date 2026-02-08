@@ -27,37 +27,35 @@ enum APIEnvironment {
 }
 
 enum APIService {
-    case auth    // Registration, login, tokens (port 8000)
-    case core    // Users, guilds, memberships, etc. (port 8001)
-    case messaging    // Messaging, threads, messages, etc. (port 8002)
+    case auth       // Registration, login, tokens (port 8000)
+    case core       // Users, guilds, memberships, messaging REST (port 8001)
+    case chart      // Chart, symbols, candles, markers, watchlists (port 8003)
+    case realtime   // WebSocket connections only (port 8002)
     
     var baseURL: String {
         switch APIEnvironment.current {
         case .development:
             #if targetEnvironment(simulator)
             switch self {
-            case .auth: return "http://localhost:8000/api/v1"
-            case .core: return "http://localhost:8001/api/v1"
-            case .messaging: return "http://localhost:8002/api/v1/messaging"
+            case .auth:     return "http://localhost:8000/api/v1"
+            case .core:     return "http://localhost:8001/api/v1"
+            case .chart:    return "http://localhost:8003/api/v1"
+            case .realtime: return "http://localhost:8002/api/v1"
             }
             #else
             // ⚠️ UPDATE THIS to your Mac's IP for device testing
             let macIP = "192.168.1.182"
             switch self {
-            case .auth: return "http://\(macIP):8000/api/v1"
-            case .core: return "http://\(macIP):8001/api/v1"
-            case .messaging: return "http://\(macIP):8002/api/v1/messaging"
+            case .auth:     return "http://\(macIP):8000/api/v1"
+            case .core:     return "http://\(macIP):8001/api/v1"
+            case .chart:    return "http://\(macIP):8003/api/v1"
+            case .realtime: return "http://\(macIP):8002/api/v1"
             }
             #endif
             
         case .production:
             // Kong routes all services through one URL
-            switch self {
-            case .messaging:
-                return "https://api.tradersguild.com/api/v1/messaging"
-            case .auth, .core:
-                return "https://api.tradersguild.com/api/v1"
-            }
+            return "https://api.tradersguild.com/api/v1"
         }
     }
 }
@@ -737,6 +735,18 @@ extension RealAPIService {
             "/guilds/\(guildId.uuidString)/events/\(eventId.uuidString)/attendees",
             service: .core,
             method: "DELETE",
+            auth: true
+        )
+    }
+    
+    /// Share event with a friend (pending backend support)
+    func shareEvent(guildId: UUID, eventId: UUID, friendId: UUID) async throws -> RLDetailResponseDTO {
+        let body = RLShareEventRequest(friendId: friendId)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/events/\(eventId.uuidString)/share",
+            service: .core,
+            method: "POST",
+            body: body,
             auth: true
         )
     }
@@ -1427,6 +1437,30 @@ extension RealAPIService {
             auth: true
         )
     }
+    
+    // MARK: - Reporting
+    
+    func reportChatroom(guildId: UUID, chatroomId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLChatroomReportRequest(reason: reason)
+        return try await request(
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    func reportUser(guildId: UUID, membershipId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLUserReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(membershipId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
 }
 
 
@@ -1914,7 +1948,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -1925,7 +1959,7 @@ extension RealAPIService {
     func getSymbol(symbolId: UUID) async throws -> RLTradingSymbolDTO {
         return try await request(
             "/chart/symbols/\(symbolId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -1943,7 +1977,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -1973,7 +2007,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -1989,7 +2023,7 @@ extension RealAPIService {
     func getPersonalWatchlist() async throws -> RLPersonalWatchlistDTO {
         return try await request(
             "/chart/watchlist/personal",
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2001,7 +2035,7 @@ extension RealAPIService {
         let body = RLWatchlistAddRequest(symbolId: symbolId)
         return try await request(
             "/chart/watchlist/personal",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2013,7 +2047,7 @@ extension RealAPIService {
     func removeFromPersonalWatchlist(symbolId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/watchlist/personal/\(symbolId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
             auth: true
         )
@@ -2025,7 +2059,7 @@ extension RealAPIService {
         let body = RLWatchlistReorderRequest(symbolIds: symbolIds)
         return try await request(
             "/chart/watchlist/personal/reorder",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2042,7 +2076,7 @@ extension RealAPIService {
     func getGuildWatchlist(guildId: UUID) async throws -> RLGuildWatchlistDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/watchlist",
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2054,7 +2088,7 @@ extension RealAPIService {
         let body = RLWatchlistAddRequest(symbolId: symbolId)
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/watchlist",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2066,8 +2100,20 @@ extension RealAPIService {
     func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/watchlist/\(symbolId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
+            auth: true
+        )
+    }
+    
+    /// Request a guild watchlist addition (pending backend support)
+    func requestGuildWatchlistAddition(guildId: UUID, symbolId: UUID) async throws -> RLDetailResponseDTO {
+        let body = RLWatchlistAddRequest(symbolId: symbolId)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/watchlist/requests",
+            service: .chart,
+            method: "POST",
+            body: body,
             auth: true
         )
     }
@@ -2092,7 +2138,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2138,7 +2184,7 @@ extension RealAPIService {
         )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2175,7 +2221,7 @@ extension RealAPIService {
         )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2187,7 +2233,7 @@ extension RealAPIService {
     func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
             auth: true
         )
@@ -2203,8 +2249,19 @@ extension RealAPIService {
     func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/like",
-            service: .core,
+            service: .chart,
             method: "POST",
+            auth: true
+        )
+    }
+    
+    /// Get top markers (trending, by symbol, following, mine)
+    /// GET /chart/guilds/{guild_id}/top-markers
+    func getTopMarkers(guildId: UUID) async throws -> RLTopMarkersListDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/top-markers",
+            service: .chart,
+            method: "GET",
             auth: true
         )
     }
@@ -2227,7 +2284,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2243,7 +2300,7 @@ extension RealAPIService {
         let body = RLCreateMarkerCommentRequest(content: content)
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2261,7 +2318,7 @@ extension RealAPIService {
         let body = RLEditMarkerCommentRequest(content: content)
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2277,7 +2334,7 @@ extension RealAPIService {
     ) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
             auth: true
         )
@@ -2298,7 +2355,7 @@ extension RealAPIService {
         let body = RLVotePollRequest(optionId: optionId)
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/vote",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2318,7 +2375,7 @@ extension RealAPIService {
     ) async throws -> RLChartChatDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/chart-chat",
-            service: .core,
+            service: .chart,
             method: "POST",
             auth: true
         )
@@ -2337,7 +2394,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2352,7 +2409,7 @@ extension RealAPIService {
         let body = RLSendChartChatMessageRequest(content: content)
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/messages",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2369,7 +2426,7 @@ extension RealAPIService {
         let body = RLEditChartChatMessageRequest(content: content)
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2384,7 +2441,7 @@ extension RealAPIService {
     ) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
             auth: true
         )
@@ -2405,7 +2462,7 @@ extension RealAPIService {
     ) async throws -> RLChartDataDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/chart-data?timeframe=\(timeframe)&candle_limit=\(candleLimit)",
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2425,7 +2482,7 @@ extension RealAPIService {
         let body = RLUpdateChartChatSettingsRequest(isMuted: isMuted, isPinned: isPinned)
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/settings",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2437,7 +2494,7 @@ extension RealAPIService {
     func markChartChatRead(chatId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/mark-read",
-            service: .core,
+            service: .chart,
             method: "POST",
             auth: true
         )
@@ -2465,7 +2522,7 @@ extension RealAPIService {
         )
         return try await request(
             "/chart/report",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true

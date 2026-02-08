@@ -11,11 +11,11 @@ struct PendingMarkerInfo: Identifiable {
     let candleIndex: Int
     let timestamp: Date
     let price: Double
-    let markerType: MarkerType
+    let markerType: RLMarkerType
     let targetPrice: Double?  // NEW: For prediction markers
     
     // Convenience initializer without target price (for non-prediction markers)
-    init(candleIndex: Int, timestamp: Date, price: Double, markerType: MarkerType, targetPrice: Double? = nil) {
+    init(candleIndex: Int, timestamp: Date, price: Double, markerType: RLMarkerType, targetPrice: Double? = nil) {
         self.candleIndex = candleIndex
         self.timestamp = timestamp
         self.price = price
@@ -32,11 +32,11 @@ struct TradingChartView: View {
     
     // MARK: - Chart Context Accessors
 
-    private var currentTimeframe: ChartTimeframe {
+    private var currentTimeframe: RLChartTimeframe {
         chartViewModel.currentTimeframe
     }
 
-    private var currentSymbol: TradingSymbolDTO? {
+    private var currentSymbol: RLTradingSymbolDTO? {
         chartViewModel.currentSymbol
     }
     
@@ -50,7 +50,34 @@ struct TradingChartView: View {
     // MARK: - Overlay Managers
     
     /// Manages all markers on the chart (creation, deletion, filtering)
-    @StateObject private var markerManager: MarkerManager
+    /// Initialized lazily when user/guild data is available
+    @StateObject private var markerManager: MarkerManager = {
+        // Temporary initialization - will be reconfigured when real data is available
+        // This is a workaround since we need StateObject but don't have user/guild data at init time
+        // The markerManager will be properly configured in onAppear or when chart loads
+        let placeholderMember = RLGuildMemberDTO(
+            membershipId: UUID(),
+            role: "member",
+            reputation: 0,
+            contributionScore: 0,
+            dateJoined: Date(),
+            userId: UUID(),
+            username: "unknown",
+            displayName: "Unknown",
+            avatarUrl: nil,
+            isOnline: false,
+            globalReputation: 0,
+            isFriend: false,
+            friendshipStatus: nil,
+            isBlocked: false,
+            isBlockedBy: false
+        )
+        return MarkerManager(
+            userId: placeholderMember.userId,
+            guildId: UUID(),
+            currentUserMember: placeholderMember
+        )
+    }()
     
     /// Manages crosshair functionality for price inspection
     /// Activated by long press, allows precise price/time reading
@@ -316,7 +343,32 @@ struct TradingChartView: View {
         rsiPanelHeight: Binding<CGFloat> = .constant(120),
         indicatorPanelBottomPadding: CGFloat = 0
     ) {
-        _markerManager = StateObject(wrappedValue: MarkerManager(userId: userId, guildId: guildId))
+        // MarkerManager will be properly configured when chart data loads
+        // For now, use temporary UUIDs - real data will be set via loadMarkersFromAPI
+        let tempUserId = UUID()
+        let tempGuildId = UUID()
+        let tempMember = RLGuildMemberDTO(
+            membershipId: UUID(),
+            role: "member",
+            reputation: 0,
+            contributionScore: 0,
+            dateJoined: Date(),
+            userId: tempUserId,
+            username: username,
+            displayName: username,
+            avatarUrl: nil,
+            isOnline: false,
+            globalReputation: 0,
+            isFriend: false,
+            friendshipStatus: nil,
+            isBlocked: false,
+            isBlockedBy: false
+        )
+        _markerManager = StateObject(wrappedValue: MarkerManager(
+            userId: tempUserId,
+            guildId: tempGuildId,
+            currentUserMember: tempMember
+        ))
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
         self.gestureState = gestureState
@@ -347,7 +399,7 @@ struct TradingChartView: View {
     // MARK: - Marker Preview Helpers
     
     /// Get the currently selected or tapped marker
-    private var activeSelectedMarker: ChartMarkerDTO? {
+    private var activeSelectedMarker: ChartMarkerUI? {
         if let selected = markerManager.selectedMarker {
             return selected
         }
@@ -358,7 +410,7 @@ struct TradingChartView: View {
     }
     
     /// Get preview marker data for price line display
-    private var previewMarkerForPriceLine: (candle: CandleDTO, type: MarkerType)? {
+    private var previewMarkerForPriceLine: (candle: RLCandleDTO, type: RLMarkerType)? {
         // When sheet is open (pendingMarkerInfo exists), use that data
         if let pending = pendingMarkerInfo,
            pending.candleIndex >= 0,
@@ -424,7 +476,7 @@ struct TradingChartView: View {
     }
     
     /// Effective marker type for preview (from pending or placement mode)
-    private var effectiveMarkerType: MarkerType? {
+    private var effectiveMarkerType: RLMarkerType? {
         pendingMarkerInfo?.markerType ?? controlViewModel.currentMarkerType
     }
     
@@ -965,7 +1017,7 @@ struct TradingChartView: View {
     }
     
     @ViewBuilder
-    private func previewMarkerContent(candle: CandleDTO, x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
+    private func previewMarkerContent(candle: RLCandleDTO, x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
         ZStack {
             Circle()
                 .fill(Color.clear)
@@ -997,7 +1049,7 @@ struct TradingChartView: View {
     }
     
     @ViewBuilder
-    private func previewMarkerInfoBox(candle: CandleDTO) -> some View {
+    private func previewMarkerInfoBox(candle: RLCandleDTO) -> some View {
         VStack(spacing: 2) {
             Text(candle.timestamp.chartTimeLabel)
                 .font(.caption2)
@@ -1120,7 +1172,9 @@ struct TradingChartView: View {
     
     private func handleLikeExistingMarker() {
         if let marker = markerManager.duplicateMarkerToLike {
-            markerManager.toggleLike(markerId: marker.id)
+            Task {
+                await markerManager.toggleLike(markerId: marker.id)
+            }
         }
         markerManager.duplicateMarkerToLike = nil
         markerManager.showDuplicateAlert = false
@@ -1183,7 +1237,7 @@ struct TradingChartView: View {
         }
     }
     
-    private func handleSymbolChange(oldValue: TradingSymbolDTO?, newValue: TradingSymbolDTO?) {
+    private func handleSymbolChange(oldValue: RLTradingSymbolDTO?, newValue: RLTradingSymbolDTO?) {
         if oldValue == nil && newValue != nil && !chartData.candles.isEmpty {
             if !hasInitializedPosition {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -1208,7 +1262,7 @@ struct TradingChartView: View {
         }
     }
     
-    private func handleTimeframeChange(oldValue: ChartTimeframe, newValue: ChartTimeframe) {
+    private func handleTimeframeChange(oldValue: RLChartTimeframe, newValue: RLChartTimeframe) {
         if oldValue != newValue {
             isChartLoading = true
             markerManager.clearMarkers()
@@ -1628,7 +1682,7 @@ struct TradingChartView: View {
     
     /// Get nice time step in seconds based on timeframe and zoom
     /// UPDATED: Targets 4-6 labels on screen at all zoom levels
-    private func getNiceTimeStep(timeframe: ChartTimeframe, zoomScale: CGFloat) -> Double {
+    private func getNiceTimeStep(timeframe: RLChartTimeframe, zoomScale: CGFloat) -> Double {
         // Calculate approximate visible candles based on screen width and zoom
         let screenWidth: CGFloat = UIScreen.main.bounds.width
         let visibleCandles = screenWidth / totalCandleWidth
@@ -1661,7 +1715,7 @@ struct TradingChartView: View {
     }
     
     /// Round a rough time step to a "nice" interval (e.g., 5min, 15min, 1h, 4h, etc.)
-    private func roundToNiceTimeInterval(_ roughStep: Double, timeframe: ChartTimeframe) -> Double {
+    private func roundToNiceTimeInterval(_ roughStep: Double, timeframe: RLChartTimeframe) -> Double {
         // Define nice intervals in seconds
         let niceIntervals: [Double] = [
             60,        // 1 min
@@ -1696,14 +1750,14 @@ struct TradingChartView: View {
         return niceIntervals.last!
     }
     
-    private func getMinLabelSpacing(for timeframe: ChartTimeframe) -> CGFloat {
+    private func getMinLabelSpacing(for timeframe: RLChartTimeframe) -> CGFloat {
         // Minimal spacing - the adaptive getNiceTimeStep already handles density
         return 30
     }
     
     // MARK: - X-Axis Time Helpers
     
-    private func getNiceTimeInterval(timeframe: ChartTimeframe, zoomScale: CGFloat) -> Int {
+    private func getNiceTimeInterval(timeframe: RLChartTimeframe, zoomScale: CGFloat) -> Int {
         switch timeframe {
         case .m1:
             if zoomScale >= 2.5 { return 1 }
@@ -1763,7 +1817,7 @@ struct TradingChartView: View {
         }
     }
     
-    private func isNiceTimeBoundary(_ timestamp: Date, interval: Int, timeframe: ChartTimeframe) -> Bool {
+    private func isNiceTimeBoundary(_ timestamp: Date, interval: Int, timeframe: RLChartTimeframe) -> Bool {
         let calendar = Calendar.current
         let hour = calendar.component(.hour, from: timestamp)
         let minute = calendar.component(.minute, from: timestamp)
@@ -1876,7 +1930,7 @@ struct TradingChartView: View {
         else { return [1, 4, 7, 10].contains(month) }
     }
     
-    private func isAtMidnight(_ timestamp: Date, timeframe: ChartTimeframe) -> Bool {
+    private func isAtMidnight(_ timestamp: Date, timeframe: RLChartTimeframe) -> Bool {
         let calendar = Calendar.current
         let hour = calendar.component(.hour, from: timestamp)
         let minute = calendar.component(.minute, from: timestamp)
@@ -1902,7 +1956,7 @@ struct TradingChartView: View {
         }
     }
     
-    private func formatDateLabel(_ timestamp: Date, timeframe: ChartTimeframe) -> String {
+    private func formatDateLabel(_ timestamp: Date, timeframe: RLChartTimeframe) -> String {
         let formatter = DateFormatter()
         
         switch timeframe {
@@ -1923,7 +1977,7 @@ struct TradingChartView: View {
         return formatter.string(from: timestamp)
     }
     
-    private func formatTimeLabel(_ timestamp: Date, timeframe: ChartTimeframe) -> String {
+    private func formatTimeLabel(_ timestamp: Date, timeframe: RLChartTimeframe) -> String {
         let formatter = DateFormatter()
         
         switch timeframe {
@@ -2172,7 +2226,7 @@ struct TradingChartView: View {
         context.stroke(gridPath, with: .color(.gray.opacity(0.2)), lineWidth: 0.5)
     }
     
-    private func drawVerticalGridLines(path: inout Path, size: CGSize, totalOffset: CGFloat, timeframe: ChartTimeframe) {
+    private func drawVerticalGridLines(path: inout Path, size: CGSize, totalOffset: CGFloat, timeframe: RLChartTimeframe) {
         let niceInterval = getNiceTimeInterval(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
         
         let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 30)
@@ -2336,33 +2390,8 @@ struct TradingChartView: View {
     private func loadMarkersFromAPI() async {
         guard !chartData.candles.isEmpty else { return }
         
-        let symbol = chartViewModel.currentSymbol?.ticker ?? "EURUSD"
-        let symbolId = chartViewModel.currentSymbol?.id ?? UUID()
-        let guildId = markerManager.guildId
-        let currentUserId = markerManager.userId
-        
-        var markers = SampleData.generateChartMarkerDTOs(
-            forSymbol: symbol,
-            symbolId: symbolId,
-            guildId: guildId,
-            candleCount: chartData.candles.count,
-            currentUserId: currentUserId,
-            count: 8
-        )
-        
-        markers = SampleData.updateMarkerDTOPrices(
-            markers: markers,
-            candles: chartData.candles
-        )
-        
-        markers = MarkerPositionCalculator.assignStablePositions(
-            markers: markers,
-            candles: chartData.candles
-        )
-        
-        await MainActor.run {
-            markerManager.markers = markers
-        }
+        // Use ChartViewModel's loadMarkers which uses RealAPIService
+        await chartViewModel.loadMarkers()
     }
     
     // MARK: - Control Actions Setup
@@ -2437,8 +2466,8 @@ struct ChartBottomControlButton: View {
 // MARK: - Horizontal Line Preview Helper View
 
 struct MarkerHorizontalLinePreview: View {
-    let candle: CandleDTO
-    let markerType: MarkerType
+    let candle: RLCandleDTO
+    let markerType: RLMarkerType
     let coordinateSystem: ChartCoordinateSystem
     let chartWidth: CGFloat
     let chartData: ChartDataManager
@@ -2483,8 +2512,8 @@ struct MarkerHorizontalLinePreview: View {
 // MARK: - Marker Price Lines Overlay
 
 struct MarkerPriceLinesOverlay: View {
-    let selectedMarker: ChartMarkerDTO?
-    let previewMarker: (candle: CandleDTO, type: MarkerType)?
+    let selectedMarker: ChartMarkerUI?
+    let previewMarker: (candle: RLCandleDTO, type: RLMarkerType)?
     let coordinateSystem: ChartCoordinateSystem
     let chartWidth: CGFloat
     let chartHeight: CGFloat
@@ -2505,14 +2534,13 @@ struct MarkerPriceLinesOverlay: View {
               marker.type.hasHorizontalLine,
               let candle = getCandleForMarker(marker) else { return }
         
-        // FIXED: For prediction markers, use horizontalLinePrice (entry price) directly
-        // since getLinePrice may return nil for custom line source types
+        // For prediction markers, prefer stored entry price (custom line source)
         let linePrice: Double?
         if marker.type == .predictionTarget {
             // Use stored entry price for prediction markers
-            linePrice = marker.horizontalLinePrice ?? marker.getLinePrice(candle: candle)
+            linePrice = marker.horizontalLinePrice ?? marker.linePrice(for: candle)
         } else {
-            linePrice = marker.getLinePrice(candle: candle)
+            linePrice = marker.linePrice(for: candle)
         }
         
         // Draw entry/main line if we have a price
@@ -2566,7 +2594,7 @@ struct MarkerPriceLinesOverlay: View {
         )
     }
     
-    private func getCandleForMarker(_ marker: ChartMarkerDTO) -> CandleDTO? {
+    private func getCandleForMarker(_ marker: ChartMarkerUI) -> RLCandleDTO? {
         guard marker.candleIndex >= 0 && marker.candleIndex < chartData.candles.count else {
             return nil
         }

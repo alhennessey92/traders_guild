@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct ErrorToastView: View {
-    let alert: AppAlert
+    let alert: RLAppAlert
     let onDismiss: () -> Void
     
     @State private var opacity: Double = 0

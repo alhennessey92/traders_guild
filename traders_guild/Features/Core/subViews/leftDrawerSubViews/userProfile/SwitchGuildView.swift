@@ -15,7 +15,6 @@ struct SwitchGuildView: View {
     @Binding var selectedDetent: PresentationDetent
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     @State private var isLoading: Bool = false
@@ -141,12 +140,10 @@ struct SwitchGuildView: View {
         .fullScreenCover(isPresented: $showJoinGuild) {
             JoinGuildFlowView()
                 .environmentObject(rlAppState)
-                .environmentObject(appState)
         }
         .fullScreenCover(isPresented: $showCreateGuild) {
             CreateGuildFlowView()
                 .environmentObject(rlAppState)
-                .environmentObject(appState)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
@@ -345,7 +342,6 @@ struct JoinGuildFlowView: View {
     @Environment(\.dismiss) private var dismiss
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
 
     @State private var selectedGuild: RLGuildDTO?
     @State private var showGuildDetail = false
@@ -359,7 +355,6 @@ struct JoinGuildFlowView: View {
                 }
             )
             .environmentObject(rlAppState)
-            .environmentObject(appState)
             .background(
                 LinearGradient(
                     gradient: Gradient(colors: [
@@ -387,7 +382,6 @@ struct JoinGuildFlowView: View {
                         dismiss()
                     })
                     .environmentObject(rlAppState)
-                    .environmentObject(appState)
                     .background(
                         LinearGradient(
                             gradient: Gradient(colors: [
@@ -814,7 +808,6 @@ struct JoinGuildFormView: View {
 struct CreateGuildFlowView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     
     var body: some View {
         NavigationStack {
@@ -822,7 +815,6 @@ struct CreateGuildFlowView: View {
                 dismiss()
             })
             .environmentObject(rlAppState)
-            .environmentObject(appState)
             .background(
                 LinearGradient(
                     gradient: Gradient(colors: [
@@ -968,7 +960,6 @@ struct CreateGuildView: View {
 #Preview {
     SwitchGuildView(onBack: {}, selectedDetent: .constant(.large))
         .environmentObject(RLAppState())
-        .environmentObject(AppState())
 }
 
 

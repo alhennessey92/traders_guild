@@ -37,29 +37,28 @@ enum SymbolSheetTab: String, CaseIterable, UnifiedTabItem {
 
 struct ChartSheetSymbolView: View {
     @ObservedObject var chartViewModel: ChartViewModel
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    @EnvironmentObject var rlAppState: RLAppState
     
     // Watchlist tab state
     @State private var selectedWatchlistTab: SymbolSheetTab = .personal
     @State private var searchText: String = ""
     @State private var isSearching: Bool = false
-    @State private var searchResults: [TradingSymbolDTO] = []
+    @State private var searchResults: [RLTradingSymbolDTO] = []
     
     // Watchlist button loading states
     @State private var isAddingToPersonal: Bool = false
     @State private var isRequestingGuild: Bool = false
     
     // Confirmation dialog state (personal only now)
-    @State private var symbolToRemove: TradingSymbolDTO? = nil
+    @State private var symbolToRemove: RLTradingSymbolDTO? = nil
     @State private var showRemoveConfirmation: Bool = false
     
     // Guild request alert state
     @State private var showGuildRequestAlert: Bool = false
-    @State private var symbolToRequest: TradingSymbolDTO? = nil
+    @State private var symbolToRequest: RLTradingSymbolDTO? = nil
     
     // Helper to get current symbol as DTO
-    private var currentSymbolDTO: TradingSymbolDTO? {
+    private var currentSymbolDTO: RLTradingSymbolDTO? {
         return chartViewModel.currentSymbol
     }
     
@@ -110,12 +109,12 @@ struct ChartSheetSymbolView: View {
         }
     }
     
-    private func requestRemoveSymbol(_ symbol: TradingSymbolDTO) {
+    private func requestRemoveSymbol(_ symbol: RLTradingSymbolDTO) {
         symbolToRemove = symbol
         showRemoveConfirmation = true
     }
     
-    private func confirmRemoveSymbol(_ symbol: TradingSymbolDTO) {
+    private func confirmRemoveSymbol(_ symbol: RLTradingSymbolDTO) {
         togglePersonalWatchlist(symbol: symbol, isCurrentlyIn: true)
         symbolToRemove = nil
     }
@@ -152,7 +151,7 @@ struct ChartSheetSymbolView: View {
                                     .font(.system(size: 9))
                                     .foregroundColor(.white.opacity(0.4))
                                 
-                                Text(symbol.assetClass.rawValue)
+                                Text(symbol.assetClass.capitalized)
                                     .font(.system(size: 11))
                                     .foregroundColor(.white.opacity(0.6))
                             }
@@ -167,9 +166,9 @@ struct ChartSheetSymbolView: View {
                                 .lineLimit(1)
                             
                             HStack(spacing: 2) {
-                                Image(systemName: symbol.isUp ? "arrow.up.right" : "arrow.down.right")
+                                Image(systemName: (symbol.isUp ?? true) ? "arrow.up.right" : "arrow.down.right")
                                     .font(.system(size: 9, weight: .bold))
-                                Text(symbol.changeFormatted)
+                                Text(symbol.changeFormatted ?? "--")
                                     .font(.system(size: 11, weight: .semibold))
                             }
                             .foregroundColor(symbol.changeColor)
@@ -202,10 +201,10 @@ struct ChartSheetSymbolView: View {
     
     // MARK: - Watchlist Buttons
     
-    private func watchlistButtons(for symbol: TradingSymbolDTO) -> some View {
-        // Use leftDrawerViewModel as single source of truth
-        let inPersonal = leftDrawerViewModel.personalTradingWatchlist.contains { $0.id == symbol.id }
-        let inGuild = leftDrawerViewModel.guildTradingWatchlist.contains { $0.id == symbol.id }
+    private func watchlistButtons(for symbol: RLTradingSymbolDTO) -> some View {
+        // Use chartViewModel watchlists as single source of truth
+        let inPersonal = chartViewModel.personalWatchlist.contains { $0.id == symbol.id }
+        let inGuild = chartViewModel.guildWatchlist.contains { $0.id == symbol.id }
         
         return HStack(spacing: 10) {
             // Personal watchlist button - unchanged behavior
@@ -289,9 +288,7 @@ struct ChartSheetSymbolView: View {
     
     // MARK: - Watchlist Toggle Actions
     
-    private func togglePersonalWatchlist(symbol: TradingSymbolDTO, isCurrentlyIn: Bool) {
-        guard let userId = appState.currentUser?.id else { return }
-        
+    private func togglePersonalWatchlist(symbol: RLTradingSymbolDTO, isCurrentlyIn: Bool) {
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
         
@@ -300,21 +297,17 @@ struct ChartSheetSymbolView: View {
         Task {
             do {
                 if isCurrentlyIn {
-                    try await appState.removeFromPersonalWatchlist(userId: userId, symbolId: symbol.id)
-                    await MainActor.run {
-                        leftDrawerViewModel.personalTradingWatchlist.removeAll { $0.id == symbol.id }
-                    }
+                    try await rlAppState.removeFromPersonalWatchlist(symbolId: symbol.id)
+                    // Refresh watchlist from chartViewModel
+                    await chartViewModel.reloadData()
                 } else {
-                    try await appState.addToPersonalWatchlist(userId: userId, symbolId: symbol.id)
-                    await MainActor.run {
-                        if !leftDrawerViewModel.personalTradingWatchlist.contains(where: { $0.id == symbol.id }) {
-                            leftDrawerViewModel.personalTradingWatchlist.append(symbol)
-                        }
-                    }
+                    _ = try await rlAppState.addToPersonalWatchlist(symbolId: symbol.id)
+                    // Refresh watchlist from chartViewModel
+                    await chartViewModel.reloadData()
                 }
             } catch {
                 await MainActor.run {
-                    appState.showError(error, title: "Failed to update watchlist")
+                    rlAppState.showError(error, title: "Failed to update watchlist", style: .toast)
                 }
             }
             
@@ -324,10 +317,7 @@ struct ChartSheetSymbolView: View {
         }
     }
     
-    private func sendGuildWatchlistRequest(symbol: TradingSymbolDTO) {
-        guard let guildId = appState.currentGuild?.id,
-              let userId = appState.currentUser?.id else { return }
-        
+    private func sendGuildWatchlistRequest(symbol: RLTradingSymbolDTO) {
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
         
@@ -335,17 +325,16 @@ struct ChartSheetSymbolView: View {
         
         Task {
             do {
-                try await appState.requestGuildWatchlistAddition(
+                guard let guildId = rlAppState.currentGuild?.id else {
+                    throw RLAppError.noGuildSelected
+                }
+                try await rlAppState.requestGuildWatchlistAddition(
                     guildId: guildId,
-                    userId: userId,
                     symbolId: symbol.id
                 )
-                await MainActor.run {
-                    appState.showSuccess("Request sent to guild admins")
-                }
             } catch {
                 await MainActor.run {
-                    appState.showError(error, title: "Failed to send request")
+                    rlAppState.showError(error, title: "Request Failed", style: .toast)
                 }
             }
             
@@ -401,7 +390,7 @@ struct ChartSheetSymbolView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
-    private func timeframeRow(title: String, timeframes: [ChartTimeframe]) -> some View {
+    private func timeframeRow(title: String, timeframes: [RLChartTimeframe]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption)
@@ -442,8 +431,8 @@ struct ChartSheetSymbolView: View {
                     theme: .blue,
                     countForTab: { tab in
                         switch tab {
-                        case .personal: return leftDrawerViewModel.personalTradingWatchlist.count
-                        case .guild: return leftDrawerViewModel.guildTradingWatchlist.count
+                        case .personal: return chartViewModel.personalWatchlist.count
+                        case .guild: return chartViewModel.guildWatchlist.count
                         case .search: return searchResults.count
                         }
                     },
@@ -483,18 +472,18 @@ struct ChartSheetSymbolView: View {
     private var watchlistContent: some View {
         switch selectedWatchlistTab {
         case .personal:
-            if leftDrawerViewModel.personalTradingWatchlist.isEmpty {
+            if chartViewModel.personalWatchlist.isEmpty {
                 UnifiedEmptyState(
                     icon: "star",
                     title: "No Personal Symbols",
                     subtitle: "Add symbols from the Search tab"
                 )
             } else {
-                symbolListView(symbols: leftDrawerViewModel.personalTradingWatchlist)
+                symbolListView(symbols: chartViewModel.personalWatchlist)
             }
             
         case .guild:
-            if leftDrawerViewModel.guildTradingWatchlist.isEmpty {
+            if chartViewModel.guildWatchlist.isEmpty {
                 UnifiedEmptyState(
                     icon: "person.3",
                     title: "No Guild Symbols",
@@ -512,7 +501,7 @@ struct ChartSheetSymbolView: View {
                     .foregroundColor(.gray)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    symbolListView(symbols: leftDrawerViewModel.guildTradingWatchlist)
+                    symbolListView(symbols: chartViewModel.guildWatchlist)
                 }
             }
             
@@ -520,6 +509,8 @@ struct ChartSheetSymbolView: View {
             if searchText.isEmpty {
                 // Show search hint when not searching
                 searchHintView
+            } else if isSearching {
+                UnifiedLoadingState(message: "Searching symbols...")
             } else if searchResults.isEmpty {
                 UnifiedNoResultsState(searchText: searchText)
             } else {
@@ -550,9 +541,12 @@ struct ChartSheetSymbolView: View {
     }
     
     /// Grouped symbol list view
-    private func symbolListView(symbols: [TradingSymbolDTO]) -> some View {
-        let grouped = Dictionary(grouping: symbols) { $0.assetClass }
-        let orderedClasses: [AssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+    private func symbolListView(symbols: [RLTradingSymbolDTO]) -> some View {
+        // Group by asset class (convert string to enum for grouping)
+        let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
+            RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
+        }
+        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
         
         return VStack(spacing: 10) {
             ForEach(orderedClasses, id: \.self) { assetClass in
@@ -577,19 +571,36 @@ struct ChartSheetSymbolView: View {
     }
     
     private func performSearch(query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespaces).uppercased()
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
             searchResults = []
+            isSearching = false
             return
         }
         
-        searchResults = SampleData.allTradingSymbolDTOs.filter { symbol in
-            symbol.ticker.uppercased().contains(trimmed) ||
-            symbol.displayName.uppercased().contains(trimmed)
+        isSearching = true
+        
+        Task {
+            do {
+                let searchResult = try await rlAppState.realApi.searchSymbols(
+                    query: trimmed,
+                    limit: 50
+                )
+                await MainActor.run {
+                    searchResults = searchResult.results
+                    isSearching = false
+                }
+            } catch {
+                await MainActor.run {
+                    rlAppState.showError(error, title: "Search Failed", style: .toast)
+                    searchResults = []
+                    isSearching = false
+                }
+            }
         }
     }
     
-    private func selectSymbol(_ symbol: TradingSymbolDTO) {
+    private func selectSymbol(_ symbol: RLTradingSymbolDTO) {
         dismissKeyboard()
         
         let impact = UIImpactFeedbackGenerator(style: .medium)
@@ -602,7 +613,7 @@ struct ChartSheetSymbolView: View {
 // MARK: - Symbol Icon View
 
 struct SymbolIconView: View {
-    let symbol: TradingSymbolDTO
+    let symbol: RLTradingSymbolDTO
     var size: CGFloat = 48
     
     var body: some View {
@@ -645,7 +656,7 @@ struct SymbolIconView: View {
 // MARK: - Asset Class Badge
 
 struct AssetClassBadge: View {
-    let assetClass: AssetClass
+    let assetClass: RLAssetClass
     
     var body: some View {
         HStack(spacing: 4) {
@@ -665,7 +676,7 @@ struct AssetClassBadge: View {
 // MARK: - Timeframe Chip
 
 struct TimeframeChip: View {
-    let timeframe: ChartTimeframe
+    let timeframe: RLChartTimeframe
     let isSelected: Bool
     let action: () -> Void
     
@@ -704,10 +715,10 @@ struct TimeframeChip: View {
 // MARK: - Symbol Asset Group (Using UnifiedDisclosureGroup)
 
 struct SymbolAssetGroup: View {
-    let assetClass: AssetClass
-    let symbols: [TradingSymbolDTO]
+    let assetClass: RLAssetClass
+    let symbols: [RLTradingSymbolDTO]
     let currentSymbolId: UUID?
-    let onSelectSymbol: (TradingSymbolDTO) -> Void
+    let onSelectSymbol: (RLTradingSymbolDTO) -> Void
     
     var body: some View {
         UnifiedDisclosureGroup(
@@ -734,7 +745,7 @@ struct SymbolAssetGroup: View {
 // MARK: - Symbol List Row
 
 struct SymbolListRow: View {
-    let symbol: TradingSymbolDTO
+    let symbol: RLTradingSymbolDTO
     let isSelected: Bool
     let action: () -> Void
     
@@ -770,15 +781,15 @@ struct SymbolListRow: View {
                 
                 // Price and Change
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(symbol.priceFormatted)
+                    Text(symbol.priceFormatted ?? "--")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(.white)
                     
                     HStack(spacing: 2) {
-                        Image(systemName: symbol.isUp ? "arrow.up" : "arrow.down")
+                        Image(systemName: (symbol.isUp ?? true) ? "arrow.up" : "arrow.down")
                             .font(.system(size: 9, weight: .bold))
-                        Text(symbol.changeFormatted)
+                        Text(symbol.changeFormatted ?? "--")
                             .font(.caption)
                             .fontWeight(.medium)
                     }
