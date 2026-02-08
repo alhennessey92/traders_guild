@@ -94,6 +94,9 @@ class MarkerManager: ObservableObject {
     ) async {
         // Configure MarkerManager with API for persistence
         configure(api: api, symbolId: symbolId, timeframe: timeframe)
+
+        // Update guild context so marker create/delete/like use the correct guild
+        self.currentGuildId = guildId
         
         do {
             // Fetch markers from RealAPIService

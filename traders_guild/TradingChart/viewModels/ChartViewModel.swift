@@ -140,7 +140,10 @@ class ChartViewModel: ObservableObject {
             if currentSymbol?.id != chartData.symbol.id {
                 currentSymbol = chartData.symbol
             }
-            
+
+            // Sync symbol to dataManager so MarkerCreationSheet can access it
+            dataManager.currentSymbol = chartData.symbol
+
             // Update candles
             dataManager.updateWithMarketData(chartData.candles)
             

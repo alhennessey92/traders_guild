@@ -481,8 +481,10 @@ struct MarkerCreationSheet: View {
     // MARK: - Add Marker Action
     
     private func addMarker() {
-        // Get the symbol ID from current symbol or use a default
-        let symbolId = chartData.currentSymbol?.id ?? UUID()
+        // Get the symbol ID from current chart context
+        guard let symbolId = chartData.currentSymbol?.id else {
+            return
+        }
         
         // Build poll options if this is a poll marker
         var pollOptionsList: [String]? = nil
