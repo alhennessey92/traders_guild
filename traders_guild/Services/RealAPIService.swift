@@ -282,6 +282,13 @@ class RealAPIService {
             }
         }
         
+        // Handle 204 No Content or empty body for EmptyResponse
+        if data.isEmpty || httpResponse.statusCode == 204 {
+            if let empty = EmptyResponse() as? T {
+                return empty
+            }
+        }
+
         // Decode response
         do {
             return try decoder.decode(T.self, from: data)
@@ -652,7 +659,7 @@ extension RealAPIService {
     /// Get single announcement
     func getAnnouncement(announcementId: UUID) async throws -> RLGuildAnnouncementWithAuthorDTO {
         return try await request(
-            "/announcements/\(announcementId.uuidString)",
+            "/guilds/announcements/\(announcementId.uuidString)",
             service: .core,
             auth: true
         )
@@ -1437,7 +1444,7 @@ extension RealAPIService {
             auth: true
         )
     }
-    
+
     // MARK: - Reporting
     
     func reportChatroom(guildId: UUID, chatroomId: UUID, reason: String) async throws -> RLDetailResponseDTO {
@@ -1451,6 +1458,7 @@ extension RealAPIService {
         )
     }
     
+    // Report user to admin - NEW
     func reportUser(guildId: UUID, membershipId: UUID, reason: String) async throws -> RLDetailResponseDTO {
         let body = RLUserReportRequest(reason: reason)
         return try await request(
@@ -1753,10 +1761,10 @@ extension RealAPIService {
     // =============================================================================================
     
     /// Submit a support ticket
-    /// POST /support/tickets
+    /// POST /users/support/tickets
     func submitSupportTicket(_ ticketRequest: RLSupportTicketRequest) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/support/tickets",
+            "/users/support/tickets",
             service: .core,
             method: "POST",
             body: ticketRequest,
@@ -2106,9 +2114,10 @@ extension RealAPIService {
         )
     }
     
-    /// Request a guild watchlist addition (pending backend support)
-    func requestGuildWatchlistAddition(guildId: UUID, symbolId: UUID) async throws -> RLDetailResponseDTO {
-        let body = RLWatchlistAddRequest(symbolId: symbolId)
+    /// Request a guild watchlist addition
+    /// POST /chart/guilds/{guild_id}/watchlist/requests
+    func requestGuildWatchlistAddition(guildId: UUID, symbolId: UUID, reason: String? = nil) async throws -> RLGuildWatchlistRequestResponseDTO {
+        let body = RLGuildWatchlistAddRequestDTO(symbolId: symbolId, reason: reason)
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/watchlist/requests",
             service: .chart,
@@ -2491,8 +2500,8 @@ extension RealAPIService {
     
     /// Mark chart chat as read (resets unread count)
     /// POST /chart/chart-chats/{chat_id}/mark-read
-    func markChartChatRead(chatId: UUID) async throws -> RLDetailResponseDTO {
-        return try await request(
+    func markChartChatRead(chatId: UUID) async throws {
+        let _: EmptyResponse = try await request(
             "/chart/chart-chats/\(chatId.uuidString)/mark-read",
             service: .chart,
             method: "POST",

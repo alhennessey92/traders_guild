@@ -15,6 +15,7 @@
 //  - MarkerSettingsView
 
 import SwiftUI
+import Combine
 
 // MARK: - Marker Manager
 
@@ -36,12 +37,17 @@ class MarkerManager: ObservableObject {
     
     /// API service for backend persistence
     private weak var api: RealAPIService?
-    
+
     /// Current symbol ID for API calls
     private var currentSymbolId: UUID?
-    
+
     /// Current timeframe for API calls
     private var currentTimeframe: RLChartTimeframe?
+
+    /// Real-time marker channel subscription
+    private var currentMarkerChannel: String?
+    private var cancellables = Set<AnyCancellable>()
+    private weak var dataManager: ChartDataManager?
     
     var guildId: UUID { currentGuildId }
     var userId: UUID { currentUserId }
@@ -131,6 +137,9 @@ class MarkerManager: ObservableObject {
             await MainActor.run {
                 self.markers = positionedMarkers
             }
+
+            // Subscribe to real-time marker events for this guild
+            subscribeToMarkerChannel(guildId: guildId)
         } catch {
             print("Failed to load markers: \(error)")
         }
@@ -152,9 +161,156 @@ class MarkerManager: ObservableObject {
     }
     
     
+    // MARK: - Real-Time Subscriptions
+
+    func configureRealTime(dataManager: ChartDataManager) {
+        self.dataManager = dataManager
+        cancellables.removeAll()
+        RealTimeService.shared.messageSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.handleRealTimeMessage(message)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func subscribeToMarkerChannel(guildId: UUID) {
+        unsubscribeFromMarkerChannel()
+        let channel = "guild:\(guildId.uuidString.lowercased()):markers"
+        currentMarkerChannel = channel
+        RealTimeService.shared.subscribe(to: [channel], owner: "markers")
+    }
+
+    private func unsubscribeFromMarkerChannel() {
+        if let channel = currentMarkerChannel {
+            RealTimeService.shared.unsubscribe(from: [channel], owner: "markers")
+            currentMarkerChannel = nil
+        }
+    }
+
+    private func handleRealTimeMessage(_ message: WSIncomingMessage) {
+        guard let channel = message.channel, channel == currentMarkerChannel else { return }
+
+        switch message.type {
+        case "marker_created":
+            handleMarkerCreated(message)
+        case "marker_updated":
+            handleMarkerUpdated(message)
+        case "marker_deleted":
+            handleMarkerDeleted(message)
+        case "marker_liked":
+            handleMarkerLiked(message)
+        case "marker_commented":
+            handleMarkerCommented(message)
+        default:
+            break
+        }
+    }
+
+    private func handleMarkerCreated(_ message: WSIncomingMessage) {
+        guard let markerDTO = message.payload(as: RLChartMarkerDTO.self) else { return }
+
+        // Filter to current symbol and timeframe
+        guard markerDTO.symbolId == currentSymbolId,
+              let currentTf = currentTimeframe,
+              markerDTO.timeframe == currentTf.toBackendString() else { return }
+
+        // Dedup — ignore if already present
+        guard !markers.contains(where: { $0.id == markerDTO.id }) else { return }
+
+        guard let candles = dataManager?.candles,
+              let candleIndex = findCandleIndex(timestamp: markerDTO.candleTimestamp, in: candles) else { return }
+
+        var marker = ChartMarkerUI(marker: markerDTO, candleIndex: candleIndex)
+
+        let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
+            marker: marker,
+            existingMarkers: markers,
+            candles: candles
+        )
+        marker.positionedBelow = positioning.isBelow
+        marker.proximityTier = positioning.tier
+        marker.stackIndex = positioning.stackIndex
+
+        markers.append(marker)
+    }
+
+    private func handleMarkerUpdated(_ message: WSIncomingMessage) {
+        guard let markerDTO = message.payload(as: RLChartMarkerDTO.self) else { return }
+        guard let index = markers.firstIndex(where: { $0.id == markerDTO.id }) else { return }
+
+        // Preserve positioning — only update the DTO
+        markers[index] = markers[index].withMarker(markerDTO)
+    }
+
+    private func handleMarkerDeleted(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: MarkerDeletedPayload.self),
+              let markerId = UUID(uuidString: payload.markerId) else { return }
+
+        markers.removeAll { $0.id == markerId }
+        if selectedMarker?.id == markerId {
+            selectedMarker = nil
+        }
+
+        recalculateAllPositions()
+    }
+
+    private func handleMarkerLiked(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: MarkerLikedPayload.self),
+              let markerId = UUID(uuidString: payload.markerId) else { return }
+        guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
+
+        // Only update like count — isLiked is relative to the sender, not us
+        markers[index] = markers[index].withMarker(
+            markers[index].marker.updating(likeCount: payload.likeCount)
+        )
+    }
+
+    private func handleMarkerCommented(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: MarkerCommentedPayload.self),
+              let markerId = UUID(uuidString: payload.markerId) else { return }
+        guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
+
+        // Don't add duplicate comments
+        let existingCommentIds = Set(markers[index].comments.map { $0.id })
+        guard !existingCommentIds.contains(payload.comment.id) else { return }
+
+        let updatedComments = markers[index].comments + [payload.comment]
+        markers[index] = markers[index].withMarker(
+            markers[index].marker.updating(
+                comments: updatedComments,
+                commentCount: payload.commentCount
+            )
+        )
+    }
+
+    // MARK: - Position Recalculation
+
+    private func recalculateAllPositions() {
+        guard let candles = dataManager?.candles else { return }
+        markers = MarkerPositionCalculator.assignStablePositions(
+            markers: markers,
+            candles: candles
+        )
+    }
+
+    func recalculateCandleIndices(candles: [RLCandleDTO]) {
+        // Remove markers whose candles no longer exist in the visible window
+        markers.removeAll { marker in
+            findCandleIndex(timestamp: marker.candleTimestamp, in: candles) == nil
+        }
+        // Update indices for remaining markers
+        for i in 0..<markers.count {
+            if let newIndex = findCandleIndex(timestamp: markers[i].candleTimestamp, in: candles) {
+                markers[i].candleIndex = newIndex
+            }
+        }
+    }
+
     func clearMarkers() {
         markers.removeAll()
         selectedMarker = nil
+        unsubscribeFromMarkerChannel()
     }
     
     // MARK: - Duplicate Type Check

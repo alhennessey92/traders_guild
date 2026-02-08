@@ -1207,6 +1207,7 @@ struct TradingChartView: View {
     private func handleOnAppear() {
         setupControlActions()
         chartViewModel.markerManager = markerManager
+        markerManager.configureRealTime(dataManager: chartData)
         isChartLoading = chartViewModel.currentSymbol == nil || chartData.candles.isEmpty
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {

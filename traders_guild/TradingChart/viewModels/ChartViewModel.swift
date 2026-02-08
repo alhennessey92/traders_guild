@@ -19,8 +19,9 @@ class ChartViewModel: ObservableObject {
     private var api: RealAPIService
     private var cancellables = Set<AnyCancellable>()
     
-    /// Current WebSocket channel subscription for real-time ticks
+    /// Current WebSocket channel subscriptions for real-time market data
     private var currentTickChannel: String?
+    private var currentCandleChannel: String?
     
     /// Configure with proper app state and API service
     /// Called from MainView.onAppear when EnvironmentObjects are available
@@ -283,59 +284,117 @@ class ChartViewModel: ObservableObject {
     
     /// Handle incoming WebSocket messages for chart data
     private func handleRealTimeMessage(_ message: WSIncomingMessage) {
-        // Handle tick messages
+        // Only handle messages on our subscribed market channels
+        guard let channel = message.channel,
+              channel == currentTickChannel || channel == currentCandleChannel else {
+            return
+        }
+
+        // Handle tick messages (type: "tick")
         if message.type == "tick" {
-            guard let tickData = message.payload(as: ChartTickPayload.self) else { return }
+            guard let tickData = message.payload(as: MarketTickPayload.self) else { return }
             dataManager.processRealTick(
                 price: tickData.price,
                 volume: tickData.volume ?? 0,
-                timestamp: tickData.timestamp
+                timestamp: nil
             )
-            // Recalculate indicators when price updates
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
         }
-        // Handle new candle messages
-        else if message.type == "candle" {
-            guard let candle = message.payload(as: RLCandleDTO.self) else { return }
+        // Handle completed candle messages (type: "candle_complete")
+        else if message.type == "candle_complete" {
+            guard let candlePayload = message.payload(as: MarketCandlePayload.self) else { return }
+            let candle = RLCandleDTO(
+                timestamp: candlePayload.candle.timestamp,
+                timestampFormatted: nil,
+                open: candlePayload.candle.open,
+                high: candlePayload.candle.high,
+                low: candlePayload.candle.low,
+                close: candlePayload.candle.close,
+                volume: candlePayload.candle.volume,
+                volumeFormatted: nil
+            )
+            let firstTimestampBefore = dataManager.candles.first?.timestamp
             dataManager.processRealCandle(candle)
-            // Recalculate indicators when new candle arrives
+            let firstTimestampAfter = dataManager.candles.first?.timestamp
+
+            // If front candles were trimmed, recalculate marker indices from timestamps
+            if let before = firstTimestampBefore, let after = firstTimestampAfter, before != after {
+                markerManager?.recalculateCandleIndices(candles: dataManager.candles)
+            }
+
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
         }
     }
     
-    /// Subscribe to real-time price ticks for a symbol/timeframe
+    /// Subscribe to real-time market data for a symbol/timeframe
     private func subscribeToRealTimeTicks(guildId: UUID, symbolId: UUID, timeframe: RLChartTimeframe) {
-        // Unsubscribe from previous channel
-        if let oldChannel = currentTickChannel {
-            RealTimeService.shared.unsubscribe(from: [oldChannel], owner: "chart")
-        }
-        
-        // Subscribe to new channel: chart:{guildId}:{symbolId}:{timeframe}:ticks
+        // Unsubscribe from previous channels
+        unsubscribeFromRealTimeTicks()
+
+        let symbolIdStr = symbolId.uuidString.lowercased()
         let timeframeString = timeframe.toBackendString()
-        let channel = "chart:\(guildId.uuidString):\(symbolId.uuidString):\(timeframeString):ticks"
-        currentTickChannel = channel
-        
-        RealTimeService.shared.subscribe(to: [channel], owner: "chart")
-        print("📡 [Chart] Subscribed to real-time ticks: \(channel)")
+
+        // Subscribe to tick channel: market:ticks:{symbol_id}
+        let tickChannel = "market:ticks:\(symbolIdStr)"
+        currentTickChannel = tickChannel
+
+        // Subscribe to candle channel: market:candles:{symbol_id}:{timeframe}
+        let candleChannel = "market:candles:\(symbolIdStr):\(timeframeString)"
+        currentCandleChannel = candleChannel
+
+        RealTimeService.shared.subscribe(to: [tickChannel, candleChannel], owner: "chart")
+        print("📡 [Chart] Subscribed to market data: \(tickChannel), \(candleChannel)")
     }
-    
-    /// Unsubscribe from real-time ticks (called when chart is closed or symbol changes)
+
+    /// Unsubscribe from real-time market data (called when chart is closed or symbol changes)
     private func unsubscribeFromRealTimeTicks() {
+        var channels: [String] = []
         if let channel = currentTickChannel {
-            RealTimeService.shared.unsubscribe(from: [channel], owner: "chart")
+            channels.append(channel)
             currentTickChannel = nil
-            print("📡 [Chart] Unsubscribed from real-time ticks")
+        }
+        if let channel = currentCandleChannel {
+            channels.append(channel)
+            currentCandleChannel = nil
+        }
+        if !channels.isEmpty {
+            RealTimeService.shared.unsubscribe(from: channels, owner: "chart")
+            print("📡 [Chart] Unsubscribed from market data")
         }
     }
 }
 
-// MARK: - Chart Tick Payload
+// MARK: - Market Data Payloads
 
-/// Payload structure for real-time price tick messages
-struct ChartTickPayload: Codable {
+/// Payload for real-time tick messages from market-ingestion-service
+/// Backend publishes: {symbol_id, ticker, price, bid, ask, volume, timestamp}
+struct MarketTickPayload: Codable {
+    let symbolId: String
+    let ticker: String
     let price: Double
+    let bid: Double?
+    let ask: Double?
     let volume: Double?
+    let timestamp: String?
+}
+
+/// Payload for completed candle messages from market-ingestion-service
+/// Backend publishes: {symbol_id, ticker, timeframe, candle: {timestamp, open, high, low, close, volume}}
+struct MarketCandlePayload: Codable {
+    let symbolId: String
+    let ticker: String
+    let timeframe: String
+    let candle: MarketCandleData
+}
+
+/// Individual candle data within MarketCandlePayload
+struct MarketCandleData: Codable {
     let timestamp: Date
+    let open: Double
+    let high: Double
+    let low: Double
+    let close: Double
+    let volume: Double
 }
 
 

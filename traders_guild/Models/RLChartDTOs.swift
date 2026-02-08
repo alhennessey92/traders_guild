@@ -330,7 +330,7 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
 /// Backend: CandleResponse
 struct RLCandleDTO: Codable, Equatable {
     let timestamp: Date
-    let timestampFormatted: String
+    let timestampFormatted: String?
     let open: Double
     let high: Double
     let low: Double
@@ -664,6 +664,31 @@ struct RLMarkerNavigationDTO: Codable {
 
 
 // =============================================================================
+// MARK: - Marker Real-Time Event Payloads
+// =============================================================================
+
+/// Payload for marker_deleted WebSocket event
+struct MarkerDeletedPayload: Codable {
+    let markerId: String
+    let guildId: String
+}
+
+/// Payload for marker_liked WebSocket event
+struct MarkerLikedPayload: Codable {
+    let markerId: String
+    let likeCount: Int
+    let isLiked: Bool
+}
+
+/// Payload for marker_commented WebSocket event
+struct MarkerCommentedPayload: Codable {
+    let markerId: String
+    let comment: RLMarkerCommentDTO
+    let commentCount: Int
+}
+
+
+// =============================================================================
 // MARK: - Watchlist
 // =============================================================================
 
@@ -854,6 +879,37 @@ struct RLWatchlistAddRequest: Codable {
     enum CodingKeys: String, CodingKey {
         case symbolId = "symbol_id"
     }
+}
+
+/// Request to add a symbol to guild watchlist (member request)
+/// Backend: GuildWatchlistAddRequestRequest
+struct RLGuildWatchlistAddRequestDTO: Codable {
+    let symbolId: UUID
+    let reason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case symbolId = "symbol_id"
+        case reason
+    }
+}
+
+/// Guild watchlist addition request response
+/// Backend: GuildWatchlistRequestResponse
+struct RLGuildWatchlistRequestResponseDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let symbolId: UUID
+    let symbolTicker: String
+    let symbolDisplayName: String
+    let requester: RLGuildMemberDTO
+    let reason: String?
+    let status: String
+    let createdAt: Date
+    let createdAtFormatted: String
+    let reviewedById: UUID?
+    let reviewedByUsername: String?
+    let reviewedAt: Date?
+    let reviewNote: String?
 }
 
 /// Reorder watchlist
