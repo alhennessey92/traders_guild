@@ -343,12 +343,42 @@ struct WSIncomingMessage: Codable {
     /// Parse payload as specific type
     func payload<T: Decodable>(as type: T.Type) -> T? {
         guard let payload = payload else { return nil }
-        
+
         do {
             let data = try JSONEncoder().encode(payload)
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            decoder.dateDecodingStrategy = .iso8601
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateString = try container.decode(String.self)
+
+                // Try ISO8601 with fractional seconds (Python's default datetime format)
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+
+                // Try ISO8601 without fractional seconds
+                formatter.formatOptions = [.withInternetDateTime]
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+
+                // Try datetime without timezone
+                let noTZFormatter = DateFormatter()
+                noTZFormatter.locale = Locale(identifier: "en_US_POSIX")
+                noTZFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+                noTZFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+                if let date = noTZFormatter.date(from: dateString) {
+                    return date
+                }
+
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Cannot decode date: \(dateString)"
+                )
+            }
             return try decoder.decode(T.self, from: data)
         } catch {
             print("Failed to decode payload: \(error)")

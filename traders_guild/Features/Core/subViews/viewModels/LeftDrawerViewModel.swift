@@ -755,17 +755,26 @@ class LeftDrawerViewModel: ObservableObject {
         
         do {
             async let fullProfileTask = rlAppState.fetchCurrentUserFullProfile(guildId: rlAppState.currentGuild?.id)
-            // TODO: Fetch user markers from backend API when endpoint is available
-            let markers: [RLTopMarkerDTO] = []
             async let awardsTask = rlAppState.fetchCurrentUserAwards(guildId: rlAppState.currentGuild?.id)
             async let awardsSummaryTask = rlAppState.fetchCurrentUserAwardsSummary(guildId: rlAppState.currentGuild?.id)
-            
+
+            // Fetch user's markers from top-markers endpoint
+            var markers: [RLTopMarkerDTO] = []
+            if let guildId = rlAppState.currentGuild?.id {
+                do {
+                    let topMarkers = try await rlAppState.realApi.getTopMarkers(guildId: guildId)
+                    markers = topMarkers.mine
+                } catch {
+                    print("⚠️ Failed to load user markers: \(error)")
+                }
+            }
+
             let (fullProfile, awards, awardsSummary) = try await (
                 fullProfileTask,
                 awardsTask,
                 awardsSummaryTask
             )
-            
+
             return (fullProfile.profile, fullProfile.statistics, markers, awards, awardsSummary)
             
         } catch {
@@ -788,10 +797,16 @@ class LeftDrawerViewModel: ObservableObject {
     ) {
         do {
             async let fullProfileTask = rlAppState.fetchUserFullProfile(userId: member.userId, guildId: guildId)
-            // TODO: Fetch user markers from backend API when endpoint is available
-            // For now, use empty array
-            let markers: [RLTopMarkerDTO] = []
-            
+
+            // Fetch member's markers from top-markers endpoint
+            var markers: [RLTopMarkerDTO] = []
+            do {
+                let topMarkers = try await rlAppState.realApi.getTopMarkers(guildId: guildId)
+                markers = topMarkers.mine.filter { $0.authorId == member.userId }
+            } catch {
+                print("⚠️ Failed to load member markers: \(error)")
+            }
+
             let fullProfile = try await fullProfileTask
             
             // Awards will be loaded from backend API when needed

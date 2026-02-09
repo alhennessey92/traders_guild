@@ -26,7 +26,7 @@ class ChartChatManager: ObservableObject {
 
     private var chatCache: [String: RLChartChatDTO] = [:]
     private weak var appState: RLAppState?
-    private let api: RealAPIService
+    private var api: RealAPIService
     private var currentChatChannel: String?
     private var cancellables = Set<AnyCancellable>()
 
@@ -38,6 +38,7 @@ class ChartChatManager: ObservableObject {
 
     func configure(with appState: RLAppState) {
         self.appState = appState
+        self.api = appState.realApi
     }
 
     // MARK: - Real-time WebSocket

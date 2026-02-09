@@ -44,9 +44,9 @@ class RLRightDrawerViewModel: ObservableObject {
     func configurePresence(with rlAppState: RLAppState) {
         self.appState = rlAppState
         
-        // Observe the Source of Truth
+        // Observe the Source of Truth (debounced to avoid excessive UI rebuilds)
         rlAppState.$presenceByUserId
-            .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
             .sink { [weak self] presenceMap in
                 self?.applyPresenceUpdates(presenceMap)
             }

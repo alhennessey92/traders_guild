@@ -1329,6 +1329,11 @@ struct ChartBottomSheet: View {
         .onChange(of: rlAppState.currentGuild?.id) { _ in
             loadChatForCurrentSymbol()
         }
+        .onChange(of: selectedView) { newView in
+            if newView == .chat {
+                loadChatForCurrentSymbol()
+            }
+        }
     }
     
     // MARK: - Helper Methods
