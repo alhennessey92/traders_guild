@@ -115,6 +115,18 @@ struct MarkerDetailView: View {
                 .navigationTitle("Comments")
                 .navigationBarTitleDisplayMode(.inline)
             }
+            .onReceive(markerManager.$markers) { updatedMarkers in
+                guard let updated = updatedMarkers.first(where: { $0.id == marker.id }) else { return }
+                if updated.comments != comments {
+                    comments = updated.comments
+                }
+                if updated.likeCount != likeCount {
+                    likeCount = updated.likeCount
+                }
+                if updated.isLikedByCurrentUser != isLiked {
+                    isLiked = updated.isLikedByCurrentUser
+                }
+            }
         }
     }
     
@@ -269,35 +281,13 @@ struct CommentsView: View {
         isSendingComment = true
         isCommentInputFocused = false
         
-        // Add comment through marker manager
+        commentText = ""
+
+        // Add comment through marker manager (optimistic update happens there)
         Task {
             await markerManager.addComment(markerId: marker.id, content: trimmed)
             isSendingComment = false
-            commentText = ""
         }
-        
-        // Create local DTO for immediate UI update
-        let newComment = RLMarkerCommentDTO(
-            id: UUID(),
-            markerId: marker.id,
-            // Use marker's author membership (already embedded in marker)
-            author: marker.author,
-            content: trimmed,
-            timestamp: Date(),
-            timestampFormatted: "Just now",
-            isEdited: false,
-            isCurrentUserMessage: true,
-            canEdit: true,
-            canDelete: true
-        )
-        
-        withAnimation(.easeOut(duration: 0.2)) {
-            comments.append(newComment)
-        }
-        commentText = ""
-        isSendingComment = false
-        
-        HapticFeedback.light.trigger()
     }
     
     private func handleDeleteComment(_ comment: RLMarkerCommentDTO) {

@@ -703,35 +703,31 @@ class LeftDrawerViewModel: ObservableObject {
     }()
     
     private func handleWebSocketNotification(_ message: WSIncomingMessage) {
-        
-        
+
+
         switch message.type {
         case "notification":
             // New notification received in real-time
-            guard let payloadData = message.payload,
-                let jsonData = try? JSONSerialization.data(withJSONObject: payloadData),
-                let notification = try? notificationDecoder.decode(RLNotificationDTO.self, from: jsonData)
-            else {
+            // Use message.payload(as:) which uses the flexible custom date decoder
+            // instead of JSONSerialization which crashes on AnyCodable payloads
+            guard let notification = message.payload(as: RLNotificationDTO.self) else {
                 print("⚠️ Failed to decode notification payload")
                 return
             }
-            
+
             // Insert at the top of the list
             if !userNotifications.contains(where: { $0.id == notification.id }) {
                 userNotifications.insert(notification, at: 0)
                 print("🔔 New real-time notification: \(notification.displayTitle)")
             }
-            
+
         case "notification_stats_update":
             // Badge counts updated
-            guard let payloadData = message.payload,
-                let jsonData = try? JSONSerialization.data(withJSONObject: payloadData),
-                let stats = try? notificationDecoder.decode(RLNotificationStatsDTO.self, from: jsonData)
-            else { return }
-            
+            guard let stats = message.payload(as: RLNotificationStatsDTO.self) else { return }
+
             notificationStats = stats
             print("📊 Notification stats updated: \(stats.unreadCount) unread")
-            
+
         default:
             break
         }
@@ -798,11 +794,11 @@ class LeftDrawerViewModel: ObservableObject {
         do {
             async let fullProfileTask = rlAppState.fetchUserFullProfile(userId: member.userId, guildId: guildId)
 
-            // Fetch member's markers from top-markers endpoint
+            // Fetch member's markers from user-specific markers endpoint
             var markers: [RLTopMarkerDTO] = []
             do {
-                let topMarkers = try await rlAppState.realApi.getTopMarkers(guildId: guildId)
-                markers = topMarkers.mine.filter { $0.authorId == member.userId }
+                let topMarkers = try await rlAppState.realApi.getUserMarkers(guildId: guildId, userId: member.userId)
+                markers = topMarkers.mine
             } catch {
                 print("⚠️ Failed to load member markers: \(error)")
             }

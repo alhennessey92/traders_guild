@@ -214,8 +214,11 @@ class RLAppState: ObservableObject {
     /// Called automatically by RealAPIService after successful token refresh
     private func handleTokensRefreshed(accessToken: String, refreshToken: String) {
         print("🔐 Tokens refreshed - updating keychain")
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
+        DispatchQueue.main.async {
+            self.accessToken = accessToken
+            self.refreshToken = refreshToken
+            RealTimeService.shared.connect(token: accessToken)
+        }
     }
     
     // ================================================================================================
@@ -435,23 +438,42 @@ class RLAppState: ObservableObject {
         print("🔄 restoreSession: Starting...")
         
         // Restore tokens
-        if let token = getTokenFromKeychain() {
-            self.accessToken = token
+        let storedAccessToken = getTokenFromKeychain()
+        let storedRefreshToken = getRefreshTokenFromKeychain()
+
+        if storedAccessToken != nil {
             print("🔄 restoreSession: Found access token")
         }
-        
-        if let refreshToken = getRefreshTokenFromKeychain() {
-            self.refreshToken = refreshToken
+        if storedRefreshToken != nil {
             print("🔄 restoreSession: Found refresh token")
         }
-        
-        // Set tokens on realApi if we have both
-        if let access = accessToken, let refresh = refreshToken {
+
+        var resolvedAccessToken = storedAccessToken
+        var resolvedRefreshToken = storedRefreshToken
+
+        // Set tokens on realApi and try to refresh before publishing accessToken
+        if let access = storedAccessToken, let refresh = storedRefreshToken {
             realApi.setTokens(access: access, refresh: refresh)
             print("🔄 restoreSession: Tokens set on API service")
-        } else if let access = accessToken {
+            do {
+                let refreshed = try await realApi.refreshAccessToken()
+                resolvedAccessToken = refreshed.accessToken
+                resolvedRefreshToken = refreshed.refreshToken
+                print("🔄 restoreSession: Tokens refreshed")
+            } catch {
+                print("⚠️ restoreSession: Token refresh failed: \(error)")
+            }
+        } else if let access = storedAccessToken {
             // Fallback - at least set access token
             realApi.setAccessToken(access)
+        }
+
+        // Publish tokens after refresh attempt so WS connects with valid token
+        if let access = resolvedAccessToken {
+            self.accessToken = access
+        }
+        if let refresh = resolvedRefreshToken {
+            self.refreshToken = refresh
         }
         
         if let user = getUserFromKeychain() {

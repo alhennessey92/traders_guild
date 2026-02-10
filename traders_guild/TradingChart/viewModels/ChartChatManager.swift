@@ -58,14 +58,24 @@ class ChartChatManager: ObservableObject {
 
         switch message.type {
         case "new_message":
-            if let newMessage = message.payload(as: RLChartChatMessageDTO.self) {
+            if var newMessage = message.payload(as: RLChartChatMessageDTO.self) {
                 if !messages.contains(where: { $0.id == newMessage.id }) {
+                    // Recompute isCurrentUserMessage for the receiving user
+                    if let currentUserId = appState?.currentUser?.id {
+                        let isMine = newMessage.author.userId == currentUserId
+                        newMessage = newMessage.withCurrentUser(isMine)
+                    }
                     messages.append(newMessage)
                 }
             }
         case "message_edited":
-            if let edited = message.payload(as: RLChartChatMessageDTO.self),
+            if var edited = message.payload(as: RLChartChatMessageDTO.self),
                let index = messages.firstIndex(where: { $0.id == edited.id }) {
+                // Recompute isCurrentUserMessage for the receiving user
+                if let currentUserId = appState?.currentUser?.id {
+                    let isMine = edited.author.userId == currentUserId
+                    edited = edited.withCurrentUser(isMine)
+                }
                 messages[index] = edited
             }
         case "message_deleted":

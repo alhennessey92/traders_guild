@@ -385,9 +385,16 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
     let timestamp: Date
     let timestampFormatted: String
     let isEdited: Bool
-    let isCurrentUserMessage: Bool
+    var isCurrentUserMessage: Bool
     let canEdit: Bool
     let canDelete: Bool
+
+    /// Returns a copy with isCurrentUserMessage recomputed for the local user
+    func withCurrentUser(_ isCurrent: Bool) -> RLMarkerCommentDTO {
+        var copy = self
+        copy.isCurrentUserMessage = isCurrent
+        return copy
+    }
     
     init(
         id: UUID,
@@ -736,9 +743,16 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let timestamp: Date
     let timestampFormatted: String
     let isEdited: Bool
-    let isCurrentUserMessage: Bool
+    var isCurrentUserMessage: Bool
     let canEdit: Bool
     let canDelete: Bool
+
+    /// Returns a copy with isCurrentUserMessage recomputed for the local user
+    func withCurrentUser(_ isCurrent: Bool) -> RLChartChatMessageDTO {
+        var copy = self
+        copy.isCurrentUserMessage = isCurrent
+        return copy
+    }
     
     // MARK: - Hashable
     

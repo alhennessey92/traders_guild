@@ -278,7 +278,12 @@ class MarkerManager: ObservableObject {
         let existingCommentIds = Set(markers[index].comments.map { $0.id })
         guard !existingCommentIds.contains(payload.comment.id) else { return }
 
-        let updatedComments = markers[index].comments + [payload.comment]
+        // Recompute isCurrentUserMessage for the receiving user
+        var comment = payload.comment
+        let isMine = comment.author.userId == currentUserId
+        comment = comment.withCurrentUser(isMine)
+
+        let updatedComments = markers[index].comments + [comment]
         markers[index] = markers[index].withMarker(
             markers[index].marker.updating(
                 comments: updatedComments,

@@ -2274,6 +2274,17 @@ extension RealAPIService {
             auth: true
         )
     }
+
+    /// Get markers placed by a specific user in a guild (for viewing other users' profiles)
+    /// GET /chart/guilds/{guild_id}/users/{user_id}/markers
+    func getUserMarkers(guildId: UUID, userId: UUID) async throws -> RLTopMarkersListDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/users/\(userId.uuidString)/markers",
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
     
     
     // =============================================================================================
