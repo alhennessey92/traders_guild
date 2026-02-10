@@ -840,7 +840,7 @@ extension RealAPIService {
     /// Get a specific guild member's info with relationship data
     /// GET /guilds/{guild_id}/members/{user_id}
     func getGuildMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberDTO {
-        
+
         return try await request(
             "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)",
             service: .core,
@@ -850,6 +850,161 @@ extension RealAPIService {
     }
 }
 
+
+// =============================================================================================
+// MARK: - Guild Admin Panel
+// =============================================================================================
+extension RealAPIService {
+
+    // MARK: Guild Settings
+
+    /// Update guild settings (name, description, is_open)
+    /// PATCH /guilds/{guild_id}
+    func updateGuild(guildId: UUID, name: String?, description: String?, isOpen: Bool?) async throws -> RLGuildDTO {
+        let body = RLUpdateGuildRequestDTO(name: name, description: description, isOpen: isOpen)
+        return try await request(
+            "/guilds/\(guildId.uuidString)",
+            service: .core,
+            method: "PATCH",
+            body: body,
+            auth: true
+        )
+    }
+
+    // MARK: Invite Members
+
+    /// Search users by username/display_name for inviting
+    /// GET /guilds/{guild_id}/invites/search?search=
+    func searchUsersForInvite(guildId: UUID, search: String) async throws -> RLUserSearchResultsDTO {
+        let encoded = search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites/search?search=\(encoded)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Create a guild invite
+    /// POST /guilds/{guild_id}/invites
+    func createGuildInvite(guildId: UUID, username: String) async throws -> RLGuildInvitationDTO {
+        struct Body: Codable { let username: String }
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites",
+            service: .core,
+            method: "POST",
+            body: Body(username: username),
+            auth: true
+        )
+    }
+
+    /// List pending guild invitations
+    /// GET /guilds/{guild_id}/invites
+    func getGuildInvites(guildId: UUID) async throws -> RLGuildInvitationsListDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Cancel a pending guild invite
+    /// DELETE /guilds/{guild_id}/invites/{invite_id}
+    func cancelGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites/\(inviteId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    /// Accept a guild invite
+    /// POST /guilds/{guild_id}/invites/{invite_id}/accept
+    func acceptGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLGuildWithMembership {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites/\(inviteId.uuidString)/accept",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    /// Decline a guild invite
+    /// POST /guilds/{guild_id}/invites/{invite_id}/decline
+    func declineGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites/\(inviteId.uuidString)/decline",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    // MARK: Ban & Kick
+
+    /// Ban a member from the guild
+    /// POST /guilds/{guild_id}/members/{user_id}/ban
+    func banMember(guildId: UUID, userId: UUID, reason: String?) async throws -> RLGuildBanDTO {
+        let body = RLGuildBanRequestDTO(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/ban",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// List banned users
+    /// GET /guilds/{guild_id}/bans
+    func getGuildBans(guildId: UUID) async throws -> RLGuildBansListDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/bans",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Unban a member
+    /// DELETE /guilds/{guild_id}/bans/{ban_id}
+    func unbanMember(guildId: UUID, banId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/bans/\(banId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    /// Kick a member (remove without ban)
+    /// POST /guilds/{guild_id}/members/{user_id}/kick
+    func kickMember(guildId: UUID, userId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/kick",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    // MARK: Manage Roles
+
+    /// Change a member's role
+    /// PATCH /guilds/{guild_id}/members/{user_id}/role
+    func changeMemberRole(guildId: UUID, userId: UUID, role: String) async throws -> RLGuildMemberRoleResponseDTO {
+        let body = RLGuildRoleChangeRequestDTO(role: role)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/role",
+            service: .core,
+            method: "PATCH",
+            body: body,
+            auth: true
+        )
+    }
+}
 
 
 // =============================================================================================

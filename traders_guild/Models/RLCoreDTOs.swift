@@ -199,6 +199,24 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
     var isActive: Bool {
         status == "active"
     }
+
+    /// Create a copy with updated guild settings fields
+    func withUpdatedSettings(name: String? = nil, description: String? = nil, isOpen: Bool? = nil) -> RLGuildDTO {
+        RLGuildDTO(
+            id: id,
+            name: name ?? self.name,
+            description: description ?? self.description,
+            imageUrl: imageUrl,
+            ownerId: ownerId,
+            isOpen: isOpen ?? self.isOpen,
+            reputation: reputation,
+            memberCount: memberCount,
+            membersOnline: membersOnline,
+            status: status,
+            dateCreated: dateCreated,
+            updatedAt: Date()
+        )
+    }
 }
 
 
@@ -247,6 +265,20 @@ struct RLGuildMembershipDTO: Codable, Identifiable, Equatable {
         } else {
             return "Member for \(days / 365) years"
         }
+    }
+
+    /// Create a copy with an updated role
+    func withRole(_ newRole: String) -> RLGuildMembershipDTO {
+        RLGuildMembershipDTO(
+            id: id,
+            userId: userId,
+            guildId: guildId,
+            role: newRole,
+            reputation: reputation,
+            contributionScore: contributionScore,
+            status: status,
+            dateJoined: dateJoined
+        )
     }
 }
 
@@ -744,6 +776,26 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
             return self
         }
         return updated
+    }
+
+    func withRole(_ newRole: String) -> RLGuildMemberDTO {
+        RLGuildMemberDTO(
+            membershipId: membershipId,
+            role: newRole,
+            reputation: reputation,
+            contributionScore: contributionScore,
+            dateJoined: dateJoined,
+            userId: userId,
+            username: username,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            isOnline: isOnline,
+            globalReputation: globalReputation,
+            isFriend: isFriend,
+            friendshipStatus: friendshipStatus,
+            isBlocked: isBlocked,
+            isBlockedBy: isBlockedBy
+        )
     }
     
     /// Friendship status display text
@@ -1399,6 +1451,88 @@ enum RLMemberRole: String, Codable, CaseIterable {
 }
 
 
+// ================================================================================================
+// MARK: - Admin Panel DTOs
+// ================================================================================================
+
+/// Request DTO for updating guild settings
+struct RLUpdateGuildRequestDTO: Codable {
+    let name: String?
+    let description: String?
+    let isOpen: Bool?
+}
+
+/// Guild invitation response DTO
+struct RLGuildInvitationDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let invitedUserId: UUID
+    let invitedByUserId: UUID
+    let invitedUsername: String
+    let invitedDisplayName: String
+    let invitedAvatarUrl: String?
+    let invitedByDisplayName: String
+    let status: String
+    let createdAt: Date
+}
+
+/// List of guild invitations
+struct RLGuildInvitationsListDTO: Codable {
+    let invitations: [RLGuildInvitationDTO]
+}
+
+/// User search result for invite
+struct RLUserSearchResultDTO: Codable, Identifiable {
+    let userId: UUID
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+    let isMember: Bool
+    let hasPendingInvite: Bool
+
+    var id: UUID { userId }
+}
+
+/// List of user search results
+struct RLUserSearchResultsDTO: Codable {
+    let users: [RLUserSearchResultDTO]
+}
+
+/// Request DTO for banning a member
+struct RLGuildBanRequestDTO: Codable {
+    let reason: String?
+}
+
+/// Guild ban response DTO
+struct RLGuildBanDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let bannedUserId: UUID
+    let bannedUsername: String
+    let bannedDisplayName: String
+    let bannedAvatarUrl: String?
+    let bannedByDisplayName: String
+    let reason: String?
+    let bannedAt: Date
+}
+
+/// List of guild bans
+struct RLGuildBansListDTO: Codable {
+    let bans: [RLGuildBanDTO]
+}
+
+/// Request DTO for changing a member's role
+struct RLGuildRoleChangeRequestDTO: Codable {
+    let role: String
+}
+
+/// Response DTO after changing a member's role
+struct RLGuildMemberRoleResponseDTO: Codable {
+    let userId: UUID
+    let membershipId: UUID
+    let oldRole: String
+    let newRole: String
+}
 
 
 

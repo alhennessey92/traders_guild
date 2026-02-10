@@ -38,20 +38,28 @@ enum BottomSheetContent: Identifiable, Equatable {
     case event(RLGuildEventWithAuthorDTO)  // Uses combined DTO from backend
     case profile
     case guildMemberRL(RLGuildMemberDTO)
-    case createAnnouncement  // <-- ADD THIS LINE
+    case createAnnouncement
     case createEvent
-    
+    case guildSettings
+    case inviteMembers
+    case manageBans
+    case manageRoles
+
     var id: String {
         switch self {
         case .announcement(let announcement): return "announcement-\(announcement.id)"
         case .event(let event): return "event-\(event.id)"
         case .profile: return "profile"
         case .guildMemberRL(let user): return "profile-rl-\(user.id)"
-        case .createAnnouncement: return "create-announcement"  // <-- ADD THIS
+        case .createAnnouncement: return "create-announcement"
         case .createEvent: return "create-event"
+        case .guildSettings: return "guild-settings"
+        case .inviteMembers: return "invite-members"
+        case .manageBans: return "manage-bans"
+        case .manageRoles: return "manage-roles"
         }
     }
-    
+
     // Equatable conformance for RLGuildAnnouncementWithAuthorDTO
     static func == (lhs: BottomSheetContent, rhs: BottomSheetContent) -> Bool {
         switch (lhs, rhs) {
@@ -63,9 +71,17 @@ enum BottomSheetContent: Identifiable, Equatable {
             return true
         case (.guildMemberRL(let m1), .guildMemberRL(let m2)):
             return m1.id == m2.id
-        case (.createAnnouncement, .createAnnouncement):  // <-- ADD THIS
+        case (.createAnnouncement, .createAnnouncement):
             return true
-        case (.createEvent, .createEvent):                // <-- ADD THIS
+        case (.createEvent, .createEvent):
+            return true
+        case (.guildSettings, .guildSettings):
+            return true
+        case (.inviteMembers, .inviteMembers):
+            return true
+        case (.manageBans, .manageBans):
+            return true
+        case (.manageRoles, .manageRoles):
             return true
         default:
             return false
@@ -216,9 +232,17 @@ struct LeftDrawerMainView: View {
             return [.fraction(0.6), .large]
         case .guildMemberRL:
             return [.fraction(0.6), .large]
-        case .createAnnouncement:           // <-- ADD THIS
+        case .createAnnouncement:
             return [.large]
-        case .createEvent:                  // <-- ADD THIS
+        case .createEvent:
+            return [.large]
+        case .guildSettings:
+            return [.large]
+        case .inviteMembers:
+            return [.large]
+        case .manageBans:
+            return [.large]
+        case .manageRoles:
             return [.large]
         }
     }
@@ -694,12 +718,18 @@ struct BottomSheetView: View {
                     .environmentObject(leftDrawerViewModel)
             case .guildMemberRL(let member):
                 GuildUserDetailViewRL(member: member)
-            case .createAnnouncement:           // <-- ADD THIS
+            case .createAnnouncement:
                 CreateAnnouncementView()
-            case .createEvent:                  // <-- ADD THIS
+            case .createEvent:
                 CreateEventView()
-            
-                
+            case .guildSettings:
+                GuildSettingsView()
+            case .inviteMembers:
+                InviteMembersView()
+            case .manageBans:
+                ManageBansView()
+            case .manageRoles:
+                ManageRolesView()
             }
 
         }

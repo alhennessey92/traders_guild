@@ -10,7 +10,7 @@
 //  traders_guild
 //
 //  Admin Panel for Left Drawer - Moderator/Admin Only Features
-//  Includes: Create Announcements, Create Events, Future: Ban/Invite Members
+//  Includes: Create Announcements, Create Events, Guild Settings, Invite Members, Manage Bans, Manage Roles
 //
 
 import SwiftUI
@@ -93,43 +93,71 @@ struct AdminPanelListView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             
-            // Member Management Section (Coming Soon)
+            // Guild Settings Section - Admin/Owner only
+            if rlAppState.canAdmin {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Guild Settings")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        .padding(.horizontal, 16)
+
+                    AdminActionButton(
+                        icon: "gearshape.fill",
+                        title: "Guild Settings",
+                        subtitle: "Update name, description & visibility",
+                        iconColor: .gray
+                    ) {
+                        bottomSheetContent = .guildSettings
+                    }
+                }
+
+                Divider()
+                    .background(AppColors.whiteText.opacity(0.2))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+
+            // Member Management Section
             VStack(alignment: .leading, spacing: 8) {
                 Text("Member Management")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.whiteText.opacity(0.7))
                     .padding(.horizontal, 16)
-                
-                // Invite Members (Coming Soon)
+
+                // Invite Members
                 AdminActionButton(
                     icon: "person.badge.plus",
                     title: "Invite Members",
-                    subtitle: "Coming soon",
-                    iconColor: .blue,
-                    isDisabled: true
-                ) { }
-                
-                // Ban Members (Coming Soon) - Admin only
+                    subtitle: "Search and invite users to your guild",
+                    iconColor: .blue
+                ) {
+                    bottomSheetContent = .inviteMembers
+                }
+
+                // Manage Bans - Admin only
                 if rlAppState.canAdmin {
                     AdminActionButton(
                         icon: "person.badge.minus",
                         title: "Manage Bans",
-                        subtitle: "Coming soon",
-                        iconColor: .red,
-                        isDisabled: true
-                    ) { }
+                        subtitle: "View and manage banned members",
+                        iconColor: .red
+                    ) {
+                        bottomSheetContent = .manageBans
+                    }
                 }
-                
-                // Promote/Demote Members (Coming Soon) - Admin only
+
+                // Manage Roles - Admin only
                 if rlAppState.canAdmin {
                     AdminActionButton(
                         icon: "person.badge.shield.checkmark",
                         title: "Manage Roles",
-                        subtitle: "Coming soon",
-                        iconColor: .orange,
-                        isDisabled: true
-                    ) { }
+                        subtitle: "Change member roles, kick or ban",
+                        iconColor: .orange
+                    ) {
+                        bottomSheetContent = .manageRoles
+                    }
                 }
             }
             

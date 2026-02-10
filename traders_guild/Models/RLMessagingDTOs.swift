@@ -328,6 +328,27 @@ enum WSMessageType: String, Codable {
     case unsubscribed = "unsubscribed"
     case pong = "pong"
     case error = "error"
+    // Guild events
+    case guildUpdated = "guild_updated"
+    case memberRoleChanged = "member_role_changed"
+}
+
+// MARK: - Guild Event Payloads
+
+/// Payload for guild_updated WebSocket event
+struct WSGuildUpdatedPayload: Codable {
+    let guildId: String
+    let name: String?
+    let description: String?
+    let isOpen: Bool?
+}
+
+/// Payload for member_role_changed WebSocket event
+struct WSMemberRoleChangedPayload: Codable {
+    let guildId: String
+    let userId: String
+    let oldRole: String
+    let newRole: String
 }
 
 /// Incoming WebSocket message wrapper

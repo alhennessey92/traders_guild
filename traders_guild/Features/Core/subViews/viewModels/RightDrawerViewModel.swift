@@ -43,7 +43,7 @@ class RLRightDrawerViewModel: ObservableObject {
     /// Connects to RLAppState to observe the centralized presence map
     func configurePresence(with rlAppState: RLAppState) {
         self.appState = rlAppState
-        
+
         // Observe the Source of Truth (debounced to avoid excessive UI rebuilds)
         rlAppState.$presenceByUserId
             .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
@@ -51,9 +51,28 @@ class RLRightDrawerViewModel: ObservableObject {
                 self?.applyPresenceUpdates(presenceMap)
             }
             .store(in: &cancellables)
-            
+
         // Apply initial state
         applyPresenceUpdates(rlAppState.presenceByUserId)
+
+        // Listen for member role changes to update member list in real-time
+        NotificationCenter.default.publisher(for: .guildMemberRoleChanged)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let userInfo = notification.userInfo,
+                      let guildId = userInfo["guildId"] as? UUID,
+                      let userId = userInfo["userId"] as? UUID,
+                      let newRole = userInfo["newRole"] as? String,
+                      guildId == self.currentGuildId else { return }
+
+                // Update the member's role in the local list
+                if let index = self.guildMembers.firstIndex(where: { $0.userId == userId }) {
+                    self.guildMembers[index] = self.guildMembers[index].withRole(newRole)
+                    print("🏰 [RightDrawer] Updated member role: \(userId) → \(newRole)")
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // ================================================================================================

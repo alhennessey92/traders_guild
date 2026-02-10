@@ -177,6 +177,7 @@ class RLAppState: ObservableObject {
         
         setupRealTimeObservers()
         setupPresenceListeners()
+        setupGuildEventListeners()
         
         Task {
             await restoreSession()
@@ -900,12 +901,174 @@ class RLAppState: ObservableObject {
         }
     }
     
-    
-    
+
+
+
+    // ================================================================================================
+    // MARK: - Guild Admin Panel (REAL API)
+    // ================================================================================================
+
+    // MARK: Guild Settings
+
+    /// Update guild settings (name, description, is_open)
+    func updateGuild(name: String?, description: String?, isOpen: Bool?) async throws -> RLGuildDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let updated = try await realApi.updateGuild(guildId: guild.id, name: name, description: description, isOpen: isOpen)
+            // Update local state
+            self.currentGuild = updated
+            showSuccess("Guild settings updated!")
+            return updated
+        } catch {
+            showError(error, title: "Failed to Update Guild", style: .toast)
+            throw error
+        }
+    }
+
+    // MARK: Invite Members
+
+    /// Search users for inviting to guild
+    func searchUsersForInvite(search: String) async throws -> [RLUserSearchResultDTO] {
+        guard let guild = currentGuild else { return [] }
+        do {
+            let result = try await realApi.searchUsersForInvite(guildId: guild.id, search: search)
+            return result.users
+        } catch {
+            showError(error, title: "Search Failed", style: .toast)
+            throw error
+        }
+    }
+
+    /// Send a guild invite to a user
+    func sendGuildInvite(username: String) async throws -> RLGuildInvitationDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let invitation = try await realApi.createGuildInvite(guildId: guild.id, username: username)
+            showSuccess("Invite sent!")
+            return invitation
+        } catch {
+            showError(error, title: "Failed to Send Invite", style: .toast)
+            throw error
+        }
+    }
+
+    /// Fetch pending guild invitations
+    func fetchGuildInvites() async throws -> [RLGuildInvitationDTO] {
+        guard let guild = currentGuild else { return [] }
+        do {
+            let result = try await realApi.getGuildInvites(guildId: guild.id)
+            return result.invitations
+        } catch {
+            showError(error, title: "Failed to Load Invites", style: .toast)
+            throw error
+        }
+    }
+
+    /// Cancel a pending guild invite
+    func cancelGuildInvite(inviteId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.cancelGuildInvite(guildId: guild.id, inviteId: inviteId)
+            showSuccess("Invite cancelled")
+        } catch {
+            showError(error, title: "Failed to Cancel Invite", style: .toast)
+            throw error
+        }
+    }
+
+    /// Accept a guild invite
+    func acceptGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLGuildWithMembership {
+        do {
+            let result = try await realApi.acceptGuildInvite(guildId: guildId, inviteId: inviteId)
+            showSuccess("Joined guild!")
+            return result
+        } catch {
+            showError(error, title: "Failed to Accept Invite", style: .toast)
+            throw error
+        }
+    }
+
+    /// Decline a guild invite
+    func declineGuildInvite(guildId: UUID, inviteId: UUID) async throws {
+        do {
+            _ = try await realApi.declineGuildInvite(guildId: guildId, inviteId: inviteId)
+        } catch {
+            showError(error, title: "Failed to Decline Invite", style: .toast)
+            throw error
+        }
+    }
+
+    // MARK: Ban & Kick
+
+    /// Ban a member from the guild
+    func banMember(userId: UUID, reason: String?) async throws -> RLGuildBanDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let ban = try await realApi.banMember(guildId: guild.id, userId: userId, reason: reason)
+            showSuccess("Member banned")
+            return ban
+        } catch {
+            showError(error, title: "Failed to Ban Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Unban a member
+    func unbanMember(banId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.unbanMember(guildId: guild.id, banId: banId)
+            showSuccess("Member unbanned")
+        } catch {
+            showError(error, title: "Failed to Unban Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Fetch banned users for the guild
+    func fetchGuildBans() async throws -> [RLGuildBanDTO] {
+        guard let guild = currentGuild else { return [] }
+        do {
+            let result = try await realApi.getGuildBans(guildId: guild.id)
+            return result.bans
+        } catch {
+            showError(error, title: "Failed to Load Bans", style: .toast)
+            throw error
+        }
+    }
+
+    /// Kick a member from the guild
+    func kickMember(userId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.kickMember(guildId: guild.id, userId: userId)
+            showSuccess("Member kicked")
+        } catch {
+            showError(error, title: "Failed to Kick Member", style: .toast)
+            throw error
+        }
+    }
+
+    // MARK: Manage Roles
+
+    /// Change a member's role
+    func changeMemberRole(userId: UUID, role: String) async throws -> RLGuildMemberRoleResponseDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let result = try await realApi.changeMemberRole(guildId: guild.id, userId: userId, role: role)
+            showSuccess("Role updated to \(role)")
+            return result
+        } catch {
+            showError(error, title: "Failed to Change Role", style: .toast)
+            throw error
+        }
+    }
+
+
     // ================================================================================================
     // MARK: - User Profile Management (REAL API)
     // ================================================================================================
-    
+
     /// Fetch current user's full profile (profile + stats + awards summary)
     func fetchCurrentUserFullProfile(guildId: UUID? = nil) async throws -> RLUserFullProfileDTO {
         do {
@@ -1902,9 +2065,71 @@ class RLAppState: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // =============================================================================================
+    // MARK: - GUILD EVENT LISTENERS (Real-Time Sync)
+    // =============================================================================================
 
+    /// Listen for guild_updated and member_role_changed WebSocket events
+    /// to keep all clients in sync when an admin makes changes.
+    func setupGuildEventListeners() {
+        RealTimeService.shared.messageSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                guard let self = self else { return }
+                guard let type = WSMessageType(rawValue: message.type) else { return }
 
-    
+                switch type {
+                case .guildUpdated:
+                    self.handleGuildUpdatedEvent(message)
+                case .memberRoleChanged:
+                    self.handleMemberRoleChangedEvent(message)
+                default:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleGuildUpdatedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSGuildUpdatedPayload.self) else { return }
+        guard let guildId = UUID(uuidString: payload.guildId) else { return }
+
+        // Update currentGuild if it matches
+        if let current = currentGuild, current.id == guildId {
+            currentGuild = current.withUpdatedSettings(
+                name: payload.name,
+                description: payload.description,
+                isOpen: payload.isOpen
+            )
+            print("🏰 [AppState] Guild settings updated via WebSocket: \(payload.name ?? "nil")")
+        }
+    }
+
+    private func handleMemberRoleChangedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSMemberRoleChangedPayload.self) else { return }
+        guard let userId = UUID(uuidString: payload.userId),
+              let guildId = UUID(uuidString: payload.guildId) else { return }
+
+        // If the role change affects the current user's own membership, update it
+        if userId == currentUser?.id, let membership = currentMembership, membership.guildId == guildId {
+            currentMembership = membership.withRole(payload.newRole)
+            print("🏰 [AppState] Own role updated via WebSocket: \(payload.oldRole) → \(payload.newRole)")
+        }
+
+        // Post a notification so any open member lists/profiles can refresh
+        NotificationCenter.default.post(
+            name: .guildMemberRoleChanged,
+            object: nil,
+            userInfo: [
+                "guildId": guildId,
+                "userId": userId,
+                "oldRole": payload.oldRole,
+                "newRole": payload.newRole
+            ]
+        )
+        print("🏰 [AppState] Member role changed via WebSocket: user=\(payload.userId) \(payload.oldRole)→\(payload.newRole)")
+    }
+
     // =============================================================================================
     // MARK: - NOTIFICATION MANAGEMENT
     // =============================================================================================
@@ -2145,5 +2370,13 @@ enum RLAppError: LocalizedError {
             return msg
         }
     }
+}
+
+// MARK: - Notification Names for Guild Events
+
+extension Notification.Name {
+    /// Posted when a member's role changes via WebSocket.
+    /// userInfo: ["guildId": UUID, "userId": UUID, "oldRole": String, "newRole": String]
+    static let guildMemberRoleChanged = Notification.Name("guildMemberRoleChanged")
 }
 
