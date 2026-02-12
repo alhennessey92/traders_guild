@@ -1079,16 +1079,8 @@ struct RLChartChatUserSettingsDTO: Codable {
     let isPinned: Bool
 }
 
-/// Content report response
-/// Backend: ContentReportResponse
-struct RLContentReportDTO: Codable, Identifiable {
-    let id: UUID
-    let contentType: String
-    let contentId: UUID
-    let reason: String
-    let status: String
-    let createdAt: Date
-}
+/// Content report response — see RLCoreDTOs.swift for full RLContentReportDTO
+/// (Moved to RLCoreDTOs.swift with additional fields for reports dashboard)
 
 
 // =============================================================================

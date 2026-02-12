@@ -70,6 +70,8 @@ class RLRightDrawerViewModel: ObservableObject {
                 if let index = self.guildMembers.firstIndex(where: { $0.userId == userId }) {
                     self.guildMembers[index] = self.guildMembers[index].withRole(newRole)
                     print("🏰 [RightDrawer] Updated member role: \(userId) → \(newRole)")
+                    // Rebuild DM sections so participant data (roles) propagate to the displayed thread lists
+                    self.rebuildDMSections()
                 }
             }
             .store(in: &cancellables)

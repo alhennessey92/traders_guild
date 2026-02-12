@@ -15,6 +15,8 @@ extension RLGuildMemberDTO {
             reputation: membership.reputation,
             contributionScore: membership.contributionScore,
             dateJoined: membership.dateJoined,
+            mutedUntil: nil,
+            suspendedUntil: nil,
             userId: user.id,
             username: user.username,
             displayName: user.displayName,

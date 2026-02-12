@@ -10,7 +10,7 @@
 //  traders_guild
 //
 //  Admin Panel for Left Drawer - Moderator/Admin Only Features
-//  Includes: Create Announcements, Create Events, Guild Settings, Invite Members, Manage Bans, Manage Roles
+//  Includes: Create Announcements, Create Events, Guild Settings, Reports, Invite Members, Manage Members, Manage Roles
 //
 
 import SwiftUI
@@ -118,6 +118,29 @@ struct AdminPanelListView: View {
                     .padding(.top, 8)
             }
 
+            // Reports Section - Moderator+ visible
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Reports")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText.opacity(0.7))
+                    .padding(.horizontal, 16)
+
+                AdminActionButton(
+                    icon: "flag.fill",
+                    title: "Manage Reports",
+                    subtitle: rlAppState.canAdmin ? "Review & resolve reports" : "View reported content",
+                    iconColor: .red
+                ) {
+                    bottomSheetContent = .manageReports
+                }
+            }
+
+            Divider()
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
             // Member Management Section
             VStack(alignment: .leading, spacing: 8) {
                 Text("Member Management")
@@ -136,16 +159,14 @@ struct AdminPanelListView: View {
                     bottomSheetContent = .inviteMembers
                 }
 
-                // Manage Bans - Admin only
-                if rlAppState.canAdmin {
-                    AdminActionButton(
-                        icon: "person.badge.minus",
-                        title: "Manage Bans",
-                        subtitle: "View and manage banned members",
-                        iconColor: .red
-                    ) {
-                        bottomSheetContent = .manageBans
-                    }
+                // Manage Members - Moderator+ (actions gated by role inside)
+                AdminActionButton(
+                    icon: "person.2.fill",
+                    title: "Manage Members",
+                    subtitle: rlAppState.canAdmin ? "Mute, suspend, kick & ban members" : "Mute & suspend members",
+                    iconColor: .purple
+                ) {
+                    bottomSheetContent = .manageMembers
                 }
 
                 // Manage Roles - Admin only

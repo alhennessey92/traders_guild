@@ -112,6 +112,22 @@ class LeftDrawerViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         applyPresenceUpdates(rlAppState.presenceByUserId)
+
+        // Listen for member role changes to update guild members list in real-time
+        NotificationCenter.default.publisher(for: .guildMemberRoleChanged)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let userInfo = notification.userInfo,
+                      let userId = userInfo["userId"] as? UUID,
+                      let newRole = userInfo["newRole"] as? String else { return }
+
+                if let index = self.guildMembers.firstIndex(where: { $0.userId == userId }) {
+                    self.guildMembers[index] = self.guildMembers[index].withRole(newRole)
+                    print("🏰 [LeftDrawer] Updated member role: \(userId) → \(newRole)")
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // ================================================================================================
@@ -907,6 +923,8 @@ extension RLGuildMemberDTO {
             reputation: reputation,
             contributionScore: contributionScore,
             dateJoined: dateJoined,
+            mutedUntil: mutedUntil,
+            suspendedUntil: suspendedUntil,
             userId: userId,
             username: username,
             displayName: displayName,

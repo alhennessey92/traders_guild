@@ -331,6 +331,8 @@ enum WSMessageType: String, Codable {
     // Guild events
     case guildUpdated = "guild_updated"
     case memberRoleChanged = "member_role_changed"
+    case memberMuted = "member_muted"
+    case memberSuspended = "member_suspended"
 }
 
 // MARK: - Guild Event Payloads
@@ -349,6 +351,22 @@ struct WSMemberRoleChangedPayload: Codable {
     let userId: String
     let oldRole: String
     let newRole: String
+}
+
+/// Payload for member_muted WebSocket event
+struct WSMemberMutedPayload: Codable {
+    let guildId: String
+    let userId: String
+    let mutedUntil: String?
+    let action: String  // "muted" or "unmuted"
+}
+
+/// Payload for member_suspended WebSocket event
+struct WSMemberSuspendedPayload: Codable {
+    let guildId: String
+    let userId: String
+    let suspendedUntil: String?
+    let action: String  // "suspended" or "unsuspended"
 }
 
 /// Incoming WebSocket message wrapper

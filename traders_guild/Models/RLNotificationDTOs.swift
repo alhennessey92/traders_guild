@@ -51,13 +51,15 @@ enum RLNotificationType: String, Codable, CaseIterable {
     case memberUnbanned = "member_unbanned"
     case roleChanged = "role_changed"
     case memberKicked = "member_kicked"
+    case memberMuted = "member_muted"
+    case memberSuspended = "member_suspended"
 
     /// Group for tab filtering
     var isPersonal: Bool {
         switch self {
         case .dm, .chatroom, .friendRequest, .friendAccept, .mention:
             return true
-        case .announcement, .event, .guildInvite, .memberBanned, .memberUnbanned, .roleChanged, .memberKicked:
+        case .announcement, .event, .guildInvite, .memberBanned, .memberUnbanned, .roleChanged, .memberKicked, .memberMuted, .memberSuspended:
             return false
         }
     }
@@ -186,6 +188,8 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         case .memberUnbanned: return "checkmark.circle.fill"
         case .roleChanged:    return "arrow.up.arrow.down"
         case .memberKicked:   return "person.badge.minus"
+        case .memberMuted:    return "speaker.slash.fill"
+        case .memberSuspended: return "pause.circle.fill"
         case .none:           return "bell.fill"
         }
     }
@@ -202,6 +206,8 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         case .memberBanned, .memberKicked:      return .red
         case .memberUnbanned:                   return .green
         case .roleChanged:                      return .orange
+        case .memberMuted:                      return .orange
+        case .memberSuspended:                  return .red
         case .none:                             return .gray
         }
     }

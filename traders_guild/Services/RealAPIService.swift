@@ -990,6 +990,56 @@ extension RealAPIService {
         )
     }
 
+    // MARK: Mute / Suspend
+
+    /// Mute a member
+    /// POST /guilds/{guild_id}/members/{user_id}/mute
+    func muteMember(guildId: UUID, userId: UUID, durationMinutes: Int, reason: String?) async throws -> RLGuildMemberActionResponseDTO {
+        let body = RLGuildMuteRequestDTO(durationMinutes: durationMinutes, reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/mute",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Unmute a member
+    /// DELETE /guilds/{guild_id}/members/{user_id}/mute
+    func unmuteMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberActionResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/mute",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    /// Suspend a member
+    /// POST /guilds/{guild_id}/members/{user_id}/suspend
+    func suspendMember(guildId: UUID, userId: UUID, durationMinutes: Int, reason: String?) async throws -> RLGuildMemberActionResponseDTO {
+        let body = RLGuildSuspendRequestDTO(durationMinutes: durationMinutes, reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/suspend",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Unsuspend a member
+    /// DELETE /guilds/{guild_id}/members/{user_id}/suspend
+    func unsuspendMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberActionResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/suspend",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
     // MARK: Manage Roles
 
     /// Change a member's role
@@ -998,6 +1048,32 @@ extension RealAPIService {
         let body = RLGuildRoleChangeRequestDTO(role: role)
         return try await request(
             "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/role",
+            service: .core,
+            method: "PATCH",
+            body: body,
+            auth: true
+        )
+    }
+
+    // MARK: Content Reports
+
+    /// List guild reports
+    /// GET /guilds/{guild_id}/reports
+    func getGuildReports(guildId: UUID, status: String? = nil, contentType: String? = nil) async throws -> RLContentReportsListDTO {
+        var path = "/guilds/\(guildId.uuidString)/reports"
+        var params: [String] = []
+        if let status = status { params.append("status=\(status)") }
+        if let contentType = contentType { params.append("content_type=\(contentType)") }
+        if !params.isEmpty { path += "?" + params.joined(separator: "&") }
+        return try await request(path, service: .core, method: "GET", auth: true)
+    }
+
+    /// Resolve or dismiss a report
+    /// PATCH /guilds/{guild_id}/reports/{report_id}
+    func resolveReport(guildId: UUID, reportId: UUID, action: String, note: String?) async throws -> RLContentReportDTO {
+        let body = RLResolveReportRequestDTO(action: action, resolutionNote: note)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/reports/\(reportId.uuidString)",
             service: .core,
             method: "PATCH",
             body: body,

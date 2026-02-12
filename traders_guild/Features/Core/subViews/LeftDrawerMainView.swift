@@ -42,8 +42,9 @@ enum BottomSheetContent: Identifiable, Equatable {
     case createEvent
     case guildSettings
     case inviteMembers
-    case manageBans
+    case manageMembers
     case manageRoles
+    case manageReports
 
     var id: String {
         switch self {
@@ -55,8 +56,9 @@ enum BottomSheetContent: Identifiable, Equatable {
         case .createEvent: return "create-event"
         case .guildSettings: return "guild-settings"
         case .inviteMembers: return "invite-members"
-        case .manageBans: return "manage-bans"
+        case .manageMembers: return "manage-members"
         case .manageRoles: return "manage-roles"
+        case .manageReports: return "manage-reports"
         }
     }
 
@@ -79,9 +81,11 @@ enum BottomSheetContent: Identifiable, Equatable {
             return true
         case (.inviteMembers, .inviteMembers):
             return true
-        case (.manageBans, .manageBans):
+        case (.manageMembers, .manageMembers):
             return true
         case (.manageRoles, .manageRoles):
+            return true
+        case (.manageReports, .manageReports):
             return true
         default:
             return false
@@ -240,9 +244,11 @@ struct LeftDrawerMainView: View {
             return [.large]
         case .inviteMembers:
             return [.large]
-        case .manageBans:
+        case .manageMembers:
             return [.large]
         case .manageRoles:
+            return [.large]
+        case .manageReports:
             return [.large]
         }
     }
@@ -276,9 +282,10 @@ struct MainDrawerView: View {
             ("chart.bar.fill", "Statistics", .statistics)
         ]
         
-        // Add Admin Panel for moderators and admins
+        // Add Admin/Mod Panel for moderators and admins
         if rlAppState.canModerate {
-            items.append(("shield.checkered", "Admin Panel", .adminPanel))
+            let panelTitle = rlAppState.canAdmin ? "Admin Panel" : "Mod Panel"
+            items.append(("shield.checkered", panelTitle, .adminPanel))
         }
         
         return items
@@ -602,7 +609,7 @@ struct SectionDrawerView: View {
         case .events: return "Events"
         case .userList: return "Members"
         case .statistics: return "Statistics"
-        case .adminPanel: return "Admin Panel"
+        case .adminPanel: return rlAppState.canAdmin ? "Admin Panel" : "Mod Panel"
         
         }
     }
@@ -726,10 +733,12 @@ struct BottomSheetView: View {
                 GuildSettingsView()
             case .inviteMembers:
                 InviteMembersView()
-            case .manageBans:
-                ManageBansView()
+            case .manageMembers:
+                ManageMembersView()
             case .manageRoles:
                 ManageRolesView()
+            case .manageReports:
+                ManageReportsView()
             }
 
         }

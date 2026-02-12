@@ -1049,6 +1049,56 @@ class RLAppState: ObservableObject {
         }
     }
 
+    // MARK: Mute / Suspend
+
+    /// Mute a member
+    func muteMember(userId: UUID, durationMinutes: Int, reason: String?) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.muteMember(guildId: guild.id, userId: userId, durationMinutes: durationMinutes, reason: reason)
+            showSuccess("Member muted")
+        } catch {
+            showError(error, title: "Failed to Mute Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Unmute a member
+    func unmuteMember(userId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.unmuteMember(guildId: guild.id, userId: userId)
+            showSuccess("Member unmuted")
+        } catch {
+            showError(error, title: "Failed to Unmute Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Suspend a member
+    func suspendMember(userId: UUID, durationMinutes: Int, reason: String?) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.suspendMember(guildId: guild.id, userId: userId, durationMinutes: durationMinutes, reason: reason)
+            showSuccess("Member suspended")
+        } catch {
+            showError(error, title: "Failed to Suspend Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Unsuspend a member
+    func unsuspendMember(userId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.unsuspendMember(guildId: guild.id, userId: userId)
+            showSuccess("Member unsuspended")
+        } catch {
+            showError(error, title: "Failed to Unsuspend Member", style: .toast)
+            throw error
+        }
+    }
+
     // MARK: Manage Roles
 
     /// Change a member's role
@@ -1060,6 +1110,37 @@ class RLAppState: ObservableObject {
             return result
         } catch {
             showError(error, title: "Failed to Change Role", style: .toast)
+            throw error
+        }
+    }
+
+
+    // MARK: Content Reports
+
+    /// Fetch guild reports
+    func fetchGuildReports(status: String? = nil, contentType: String? = nil) async throws -> RLContentReportsListDTO {
+        guard let guild = currentGuild else {
+            return RLContentReportsListDTO(reports: [], totalCount: 0, pendingCount: 0)
+        }
+        do {
+            return try await realApi.getGuildReports(guildId: guild.id, status: status, contentType: contentType)
+        } catch {
+            showError(error, title: "Failed to Load Reports", style: .toast)
+            throw error
+        }
+    }
+
+    /// Resolve or dismiss a report
+    func resolveReport(reportId: UUID, action: String, note: String?) async throws -> RLContentReportDTO {
+        guard let guild = currentGuild else {
+            throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"])
+        }
+        do {
+            let result = try await realApi.resolveReport(guildId: guild.id, reportId: reportId, action: action, note: note)
+            showSuccess("Report \(action)")
+            return result
+        } catch {
+            showError(error, title: "Failed to Resolve Report", style: .toast)
             throw error
         }
     }
@@ -2083,6 +2164,10 @@ class RLAppState: ObservableObject {
                     self.handleGuildUpdatedEvent(message)
                 case .memberRoleChanged:
                     self.handleMemberRoleChangedEvent(message)
+                case .memberMuted:
+                    self.handleMemberMutedEvent(message)
+                case .memberSuspended:
+                    self.handleMemberSuspendedEvent(message)
                 default:
                     break
                 }
@@ -2128,6 +2213,44 @@ class RLAppState: ObservableObject {
             ]
         )
         print("🏰 [AppState] Member role changed via WebSocket: user=\(payload.userId) \(payload.oldRole)→\(payload.newRole)")
+    }
+
+    private func handleMemberMutedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSMemberMutedPayload.self) else { return }
+        guard let userId = UUID(uuidString: payload.userId),
+              let guildId = UUID(uuidString: payload.guildId) else { return }
+
+        // Post notification so member lists can update
+        NotificationCenter.default.post(
+            name: .guildMemberMuteChanged,
+            object: nil,
+            userInfo: [
+                "guildId": guildId,
+                "userId": userId,
+                "mutedUntil": payload.mutedUntil as Any,
+                "action": payload.action
+            ]
+        )
+        print("🔇 [AppState] Member mute event via WebSocket: user=\(payload.userId) action=\(payload.action)")
+    }
+
+    private func handleMemberSuspendedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSMemberSuspendedPayload.self) else { return }
+        guard let userId = UUID(uuidString: payload.userId),
+              let guildId = UUID(uuidString: payload.guildId) else { return }
+
+        // Post notification so member lists can update
+        NotificationCenter.default.post(
+            name: .guildMemberSuspendChanged,
+            object: nil,
+            userInfo: [
+                "guildId": guildId,
+                "userId": userId,
+                "suspendedUntil": payload.suspendedUntil as Any,
+                "action": payload.action
+            ]
+        )
+        print("⏸️ [AppState] Member suspend event via WebSocket: user=\(payload.userId) action=\(payload.action)")
     }
 
     // =============================================================================================
@@ -2378,5 +2501,13 @@ extension Notification.Name {
     /// Posted when a member's role changes via WebSocket.
     /// userInfo: ["guildId": UUID, "userId": UUID, "oldRole": String, "newRole": String]
     static let guildMemberRoleChanged = Notification.Name("guildMemberRoleChanged")
+
+    /// Posted when a member's mute status changes via WebSocket.
+    /// userInfo: ["guildId": UUID, "userId": UUID, "mutedUntil": String?, "action": String]
+    static let guildMemberMuteChanged = Notification.Name("guildMemberMuteChanged")
+
+    /// Posted when a member's suspend status changes via WebSocket.
+    /// userInfo: ["guildId": UUID, "userId": UUID, "suspendedUntil": String?, "action": String]
+    static let guildMemberSuspendChanged = Notification.Name("guildMemberSuspendChanged")
 }
 

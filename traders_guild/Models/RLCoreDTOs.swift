@@ -717,7 +717,11 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
     let reputation: Int
     let contributionScore: Int          // backend: contribution_score
     let dateJoined: Date                // backend: date_joined
-    
+
+    // Moderation data
+    let mutedUntil: Date?               // backend: muted_until
+    let suspendedUntil: Date?           // backend: suspended_until
+
     // User data (embedded - no lookup!)
     let userId: UUID                    // backend: user_id
     let username: String
@@ -725,19 +729,29 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
     let avatarUrl: String?              // backend: avatar_url
     let isOnline: Bool                  // backend: is_online
     let globalReputation: Int           // backend: global_reputation
-    
+
     // Relationship to current user (personalized per request)
     let isFriend: Bool                  // backend: is_friend
     let friendshipStatus: String?       // backend: friendship_status (none, pending_sent, pending_received, accepted)
     let isBlocked: Bool                 // backend: is_blocked
     let isBlockedBy: Bool               // backend: is_blocked_by
-    
+
     var id: UUID { membershipId }
-    
+
     // MARK: - Computed Properties
-    
+
     var memberRole: RLMemberRole {
         RLMemberRole(from: role)
+    }
+
+    var isMuted: Bool {
+        guard let mutedUntil = mutedUntil else { return false }
+        return mutedUntil > Date()
+    }
+
+    var isSuspended: Bool {
+        guard let suspendedUntil = suspendedUntil else { return false }
+        return suspendedUntil > Date()
     }
     
     var initials: String {
@@ -785,6 +799,8 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
             reputation: reputation,
             contributionScore: contributionScore,
             dateJoined: dateJoined,
+            mutedUntil: mutedUntil,
+            suspendedUntil: suspendedUntil,
             userId: userId,
             username: username,
             displayName: displayName,
@@ -1407,46 +1423,54 @@ enum RLMemberRole: String, Codable, CaseIterable {
     case member = "member"
     case moderator = "moderator"
     case admin = "admin"
-    
+    case owner = "owner"
+
     /// Initialize from backend string (case-insensitive)
     init(from string: String) {
         switch string.lowercased() {
-        case "admin", "owner": self = .admin
+        case "owner": self = .owner
+        case "admin": self = .admin
         case "moderator", "mod": self = .moderator
         default: self = .member
         }
     }
-    
+
     var displayName: String {
         rawValue.capitalized
     }
-    
+
     var color: Color {
         switch self {
         case .member: return .gray
         case .moderator: return .orange
         case .admin: return .red
+        case .owner: return .yellow
         }
     }
-    
+
     var icon: String {
         switch self {
+        case .owner: return "crown.fill"
         case .admin: return "star.fill"
         case .moderator: return "shield.fill"
         case .member: return "person.fill"
         }
     }
-    
+
     var canModerate: Bool {
-        self == .moderator || self == .admin
+        self == .moderator || self == .admin || self == .owner
     }
-    
+
     var canAdmin: Bool {
-        self == .admin
+        self == .admin || self == .owner
     }
-    
+
+    var isOwner: Bool {
+        self == .owner
+    }
+
     var canManageMembers: Bool {
-        self == .admin
+        self == .admin || self == .owner
     }
 }
 
@@ -1532,6 +1556,117 @@ struct RLGuildMemberRoleResponseDTO: Codable {
     let membershipId: UUID
     let oldRole: String
     let newRole: String
+}
+
+/// Request DTO for muting a member
+struct RLGuildMuteRequestDTO: Codable {
+    let durationMinutes: Int
+    let reason: String?
+}
+
+/// Request DTO for suspending a member
+struct RLGuildSuspendRequestDTO: Codable {
+    let durationMinutes: Int
+    let reason: String?
+}
+
+/// Response DTO after performing a moderation action (mute/unmute/suspend/unsuspend)
+struct RLGuildMemberActionResponseDTO: Codable {
+    let userId: UUID
+    let membershipId: UUID
+    let action: String  // "muted", "unmuted", "suspended", "unsuspended"
+    let until: Date?
+    let reason: String?
+}
+
+
+// ================================================================================================
+// MARK: - Content Reports DTOs
+// ================================================================================================
+
+/// Request to report content
+struct RLContentReportRequestDTO: Codable {
+    let reason: String
+    let details: String?
+}
+
+/// Single content report response
+struct RLContentReportDTO: Codable, Identifiable {
+    let id: UUID
+    let reporterId: UUID
+    let reporterUsername: String?
+    let reporterDisplayName: String?
+    let contentType: String
+    let contentId: UUID
+    let guildId: UUID?
+    let reason: String
+    let details: String?
+    let status: String
+    let reviewedBy: UUID?
+    let reviewerDisplayName: String?
+    let reviewedAt: Date?
+    let resolutionNote: String?
+    let createdAt: Date
+
+    var isPending: Bool { status == "pending" }
+    var isResolved: Bool { status == "resolved" }
+    var isDismissed: Bool { status == "dismissed" }
+
+    var contentTypeDisplay: String {
+        switch contentType {
+        case "user": return "User"
+        case "chatroom_message": return "Chat Message"
+        case "dm_message": return "DM Message"
+        case "chart_chat_message": return "Chart Chat"
+        case "marker_comment": return "Marker Comment"
+        case "chart_marker": return "Marker"
+        default: return contentType.capitalized
+        }
+    }
+
+    var contentTypeIcon: String {
+        switch contentType {
+        case "user": return "person.fill"
+        case "chatroom_message", "dm_message", "chart_chat_message": return "bubble.left.fill"
+        case "marker_comment": return "text.bubble.fill"
+        case "chart_marker": return "mappin.circle.fill"
+        default: return "doc.fill"
+        }
+    }
+
+    var reasonDisplay: String {
+        switch reason {
+        case "spam": return "Spam"
+        case "harassment": return "Harassment"
+        case "hate_speech": return "Hate Speech"
+        case "inappropriate": return "Inappropriate"
+        case "misinformation": return "Misinformation"
+        case "other": return "Other"
+        default: return reason.capitalized
+        }
+    }
+
+    var statusColor: Color {
+        switch status {
+        case "pending": return .orange
+        case "resolved": return .green
+        case "dismissed": return .gray
+        default: return .secondary
+        }
+    }
+}
+
+/// List of content reports
+struct RLContentReportsListDTO: Codable {
+    let reports: [RLContentReportDTO]
+    let totalCount: Int
+    let pendingCount: Int
+}
+
+/// Request to resolve or dismiss a report
+struct RLResolveReportRequestDTO: Codable {
+    let action: String  // "resolved" or "dismissed"
+    let resolutionNote: String?
 }
 
 
