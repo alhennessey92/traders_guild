@@ -438,7 +438,7 @@ struct RLMessagingSheet: View {
             )
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(thread.participant.displayName)
+                Text(thread.participant.username)
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.whiteText)
@@ -897,18 +897,29 @@ struct RLChatroomMessageView: View {
     }
     
     private func reportMessage() async {
-        // TODO: Implement report API call
-        appState.showInfo("Report submitted for review")
+        guard let guildId = appState.currentGuild?.id else { return }
+        HapticFeedback.medium.trigger()
+        do {
+            _ = try await appState.realApi.reportChatroomMessage(
+                guildId: guildId,
+                chatroomId: message.chatroomId,
+                messageId: message.id,
+                reason: "inappropriate"
+            )
+            appState.showSuccess("Message reported. Thank you for your feedback.")
+        } catch {
+            appState.showError(error, title: "Failed to Report", style: .toast)
+        }
     }
 }
 
 // MARK: - DM Message View (Using RLChatMessageBubble)
 struct RLDMMessageView: View {
     let message: RLDMMessageDTO
-    
+
     @EnvironmentObject var appState: RLAppState
     @State private var showEditSheet = false
-    
+
     var body: some View {
         RLChatMessageBubble(
             message: message,
@@ -916,6 +927,7 @@ struct RLDMMessageView: View {
             isRead: message.isRead,
             onEdit: message.canEdit ? { showEditSheet = true } : nil,
             onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
+            onReport: !message.isCurrentUserMessage ? { Task { await reportMessage() } } : nil,
             onCopy: { appState.showSuccess("Copied to clipboard") }
         )
         .sheet(isPresented: $showEditSheet) {
@@ -929,7 +941,7 @@ struct RLDMMessageView: View {
             }
         }
     }
-    
+
     private func deleteMessage() async {
         do {
             try await appState.deleteDMMessage(
@@ -939,6 +951,22 @@ struct RLDMMessageView: View {
             appState.showSuccess("Message deleted")
         } catch {
             appState.showError(error, title: "Failed to Delete Message")
+        }
+    }
+
+    private func reportMessage() async {
+        guard let guildId = appState.currentGuild?.id else { return }
+        HapticFeedback.medium.trigger()
+        do {
+            _ = try await appState.realApi.reportDMMessage(
+                guildId: guildId,
+                threadId: message.dmId,
+                messageId: message.id,
+                reason: "inappropriate"
+            )
+            appState.showSuccess("Message reported. Thank you for your feedback.")
+        } catch {
+            appState.showError(error, title: "Failed to Report", style: .toast)
         }
     }
 }

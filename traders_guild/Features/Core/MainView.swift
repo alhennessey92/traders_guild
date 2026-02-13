@@ -1239,6 +1239,8 @@ struct ChartBottomSheet: View {
     @StateObject private var chartChatManager: ChartChatManager
     @State private var chatMessageText: String = ""
     @FocusState private var isChatInputFocused: Bool
+    @State private var showChartChatPhotoPicker = false
+    @State private var showChartChatDocPicker = false
     
     init(
         controlViewModel: ChartControlViewModel,
@@ -1378,20 +1380,28 @@ struct ChartBottomSheet: View {
                 }
                 .padding(.horizontal, 4)
                 
-                // Chat input (matching MarkerDetailView/MessagingState style)
+                // Chat input (matching ChatInputFooter style)
                 HStack(spacing: 12) {
-                    // Plus button
-                    Button(action: {
-                        isChatInputFocused = false
-                        // Handle attachments
-                    }) {
+                    // Plus/attachment button — shows menu
+                    Menu {
+                        Button {
+                            showChartChatPhotoPicker = true
+                        } label: {
+                            Label("Photo", systemImage: "photo.fill")
+                        }
+                        Button {
+                            showChartChatDocPicker = true
+                        } label: {
+                            Label("File", systemImage: "doc.fill")
+                        }
+                    } label: {
                         Image(systemName: "plus")
                             .font(.title3)
                             .foregroundColor(.secondary)
                             .frame(width: 32, height: 32)
                     }
                     .compositingGroup()
-                    
+
                     // Text field
                     TextField("Message #\(chartChatManager.activeChartChat?.symbolTicker.lowercased() ?? "chat")...", text: $chatMessageText)
                         .font(.subheadline)
@@ -1400,7 +1410,7 @@ struct ChartBottomSheet: View {
                         .onSubmit {
                             sendChatMessage()
                         }
-                    
+
                     HStack(spacing: 8) {
                         // Mic button
                         Button(action: {
@@ -1413,7 +1423,7 @@ struct ChartBottomSheet: View {
                                 .frame(width: 32, height: 32)
                         }
                         .compositingGroup()
-                        
+
                         // Send button
                         Button(action: {
                             sendChatMessage()
@@ -1441,8 +1451,28 @@ struct ChartBottomSheet: View {
             .background(AppColors.sheetBackground)
         }
         .frame(height: 70)
+        .fullScreenCover(isPresented: $showChartChatPhotoPicker) {
+            PhotoPickerView(
+                onImageSelected: { data, filename, mimeType in
+                    showChartChatPhotoPicker = false
+                    // TODO: Upload attachment and send with message
+                },
+                onCancel: { showChartChatPhotoPicker = false }
+            )
+            .ignoresSafeArea()
+        }
+        .fullScreenCover(isPresented: $showChartChatDocPicker) {
+            DocumentPickerView(
+                onDocumentSelected: { data, filename, mimeType in
+                    showChartChatDocPicker = false
+                    // TODO: Upload attachment and send with message
+                },
+                onCancel: { showChartChatDocPicker = false }
+            )
+            .ignoresSafeArea()
+        }
     }
-    
+
     // MARK: - Chat Message Sending
     
     private func sendChatMessage() {

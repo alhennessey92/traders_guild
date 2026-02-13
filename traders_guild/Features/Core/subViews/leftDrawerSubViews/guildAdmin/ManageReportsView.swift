@@ -23,7 +23,9 @@ enum ReportStatusFilter: String, CaseIterable {
 
 enum ContentTypeFilter: String, CaseIterable {
     case all = "All"
-    case messages = "Messages"
+    case messages = "Chat Messages"
+    case dmMessages = "DMs"
+    case chartChat = "Chart Chat"
     case markers = "Markers"
     case users = "Users"
 
@@ -31,6 +33,8 @@ enum ContentTypeFilter: String, CaseIterable {
         switch self {
         case .all: return nil
         case .messages: return "chatroom_message"
+        case .dmMessages: return "dm_message"
+        case .chartChat: return "chart_chat_message"
         case .markers: return "chart_marker"
         case .users: return "user"
         }
@@ -40,6 +44,8 @@ enum ContentTypeFilter: String, CaseIterable {
         switch self {
         case .all: return "square.grid.2x2.fill"
         case .messages: return "bubble.left.fill"
+        case .dmMessages: return "envelope.fill"
+        case .chartChat: return "chart.line.uptrend.xyaxis"
         case .markers: return "mappin.circle.fill"
         case .users: return "person.fill"
         }

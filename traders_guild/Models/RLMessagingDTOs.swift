@@ -30,6 +30,9 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let isCurrentUserMessage: Bool
     let canEdit: Bool
     let canDelete: Bool
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
     
     // MARK: - Hashable
     
@@ -149,6 +152,9 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let canEdit: Bool
     let canDelete: Bool
     let isRead: Bool
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
     
     // MARK: - Hashable
     
@@ -287,6 +293,16 @@ struct RLUnreadCountsDTO: Codable, Equatable {
 /// Backend: SendMessageRequest
 struct RLSendMessageRequest: Codable {
     let content: String
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
+
+    init(content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) {
+        self.content = content
+        self.attachmentUrl = attachmentUrl
+        self.attachmentType = attachmentType
+        self.attachmentName = attachmentName
+    }
 }
 
 /// Edit message request

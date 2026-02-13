@@ -388,6 +388,9 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
     var isCurrentUserMessage: Bool
     let canEdit: Bool
     let canDelete: Bool
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
 
     /// Returns a copy with isCurrentUserMessage recomputed for the local user
     func withCurrentUser(_ isCurrent: Bool) -> RLMarkerCommentDTO {
@@ -406,7 +409,10 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         isEdited: Bool,
         isCurrentUserMessage: Bool,
         canEdit: Bool,
-        canDelete: Bool
+        canDelete: Bool,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) {
         self.id = id
         self.markerId = markerId
@@ -418,20 +424,23 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         self.isCurrentUserMessage = isCurrentUserMessage
         self.canEdit = canEdit
         self.canDelete = canDelete
+        self.attachmentUrl = attachmentUrl
+        self.attachmentType = attachmentType
+        self.attachmentName = attachmentName
     }
-    
+
     // MARK: - Hashable
-    
+
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-    
+
     static func == (lhs: RLMarkerCommentDTO, rhs: RLMarkerCommentDTO) -> Bool {
         lhs.id == rhs.id &&
         lhs.content == rhs.content &&
         lhs.isEdited == rhs.isEdited
     }
-    
+
     // MARK: - CodingKeys
     // Backend sends "created_at" aliased to "timestamp" via validation_alias
     // With .convertFromSnakeCase, "created_at" becomes "createdAt"
@@ -442,6 +451,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         case createdAt
         case timestampFormatted, isEdited
         case isCurrentUserMessage, canEdit, canDelete
+        case attachmentUrl, attachmentType, attachmentName
     }
 
     init(from decoder: Decoder) throws {
@@ -455,6 +465,9 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         isCurrentUserMessage = try container.decode(Bool.self, forKey: .isCurrentUserMessage)
         canEdit = try container.decode(Bool.self, forKey: .canEdit)
         canDelete = try container.decode(Bool.self, forKey: .canDelete)
+        attachmentUrl = try container.decodeIfPresent(String.self, forKey: .attachmentUrl)
+        attachmentType = try container.decodeIfPresent(String.self, forKey: .attachmentType)
+        attachmentName = try container.decodeIfPresent(String.self, forKey: .attachmentName)
 
         if let timestampValue = try container.decodeIfPresent(Date.self, forKey: .timestamp) {
             timestamp = timestampValue
@@ -475,6 +488,9 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         try container.encode(isCurrentUserMessage, forKey: .isCurrentUserMessage)
         try container.encode(canEdit, forKey: .canEdit)
         try container.encode(canDelete, forKey: .canDelete)
+        try container.encodeIfPresent(attachmentUrl, forKey: .attachmentUrl)
+        try container.encodeIfPresent(attachmentType, forKey: .attachmentType)
+        try container.encodeIfPresent(attachmentName, forKey: .attachmentName)
     }
 }
 
@@ -746,6 +762,9 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
     var isCurrentUserMessage: Bool
     let canEdit: Bool
     let canDelete: Bool
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
 
     /// Returns a copy with isCurrentUserMessage recomputed for the local user
     func withCurrentUser(_ isCurrent: Bool) -> RLChartChatMessageDTO {
@@ -773,6 +792,7 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
         case createdAt
         case timestampFormatted, isEdited
         case isCurrentUserMessage, canEdit, canDelete
+        case attachmentUrl, attachmentType, attachmentName
     }
 
     init(from decoder: Decoder) throws {
@@ -786,6 +806,9 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
         isCurrentUserMessage = try container.decode(Bool.self, forKey: .isCurrentUserMessage)
         canEdit = try container.decode(Bool.self, forKey: .canEdit)
         canDelete = try container.decode(Bool.self, forKey: .canDelete)
+        attachmentUrl = try container.decodeIfPresent(String.self, forKey: .attachmentUrl)
+        attachmentType = try container.decodeIfPresent(String.self, forKey: .attachmentType)
+        attachmentName = try container.decodeIfPresent(String.self, forKey: .attachmentName)
 
         if let timestampValue = try container.decodeIfPresent(Date.self, forKey: .timestamp) {
             timestamp = timestampValue
@@ -806,6 +829,9 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
         try container.encode(isCurrentUserMessage, forKey: .isCurrentUserMessage)
         try container.encode(canEdit, forKey: .canEdit)
         try container.encode(canDelete, forKey: .canDelete)
+        try container.encodeIfPresent(attachmentUrl, forKey: .attachmentUrl)
+        try container.encodeIfPresent(attachmentType, forKey: .attachmentType)
+        try container.encodeIfPresent(attachmentName, forKey: .attachmentName)
     }
     
     // MARK: - Convenience
@@ -1008,6 +1034,16 @@ struct RLUpdateMarkerRequest: Codable {
 /// Backend: CreateMarkerCommentRequest
 struct RLCreateMarkerCommentRequest: Codable {
     let content: String
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
+
+    init(content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) {
+        self.content = content
+        self.attachmentUrl = attachmentUrl
+        self.attachmentType = attachmentType
+        self.attachmentName = attachmentName
+    }
 }
 
 /// Edit marker comment
@@ -1030,6 +1066,16 @@ struct RLVotePollRequest: Codable {
 /// Backend: SendChartChatMessageRequest
 struct RLSendChartChatMessageRequest: Codable {
     let content: String
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
+
+    init(content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) {
+        self.content = content
+        self.attachmentUrl = attachmentUrl
+        self.attachmentType = attachmentType
+        self.attachmentName = attachmentName
+    }
 }
 
 /// Edit chart chat message

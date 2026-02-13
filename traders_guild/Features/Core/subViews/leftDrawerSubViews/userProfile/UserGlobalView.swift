@@ -99,7 +99,7 @@ struct UserGlobalSheetView: View {
                 // Avatar
                 ZStack(alignment: .bottomTrailing) {
                     UnifiedMemberAvatar(
-                        username: rlAppState.currentUser?.displayName ?? "User",
+                        username: rlAppState.currentUser?.username ?? "User",
                         avatarURL: rlAppState.currentUser?.avatarUrl,
                         isOnline: rlAppState.currentUser?.isOnline ?? false,
                         size: 70,
@@ -706,7 +706,7 @@ struct GlobalFriendCard: View {
             }
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(friend.displayName)
+                Text(friend.username)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(AppColors.whiteText)

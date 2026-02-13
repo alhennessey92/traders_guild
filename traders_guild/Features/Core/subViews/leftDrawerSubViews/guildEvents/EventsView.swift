@@ -112,7 +112,7 @@ struct EventRowView: View {
                 
                 // MARK: - Author Footer Bar (Hosted by)
                 UnifiedAuthorFooter(
-                    username: event.authorDisplayName,
+                    username: event.authorUsername,
                     role: event.authorRole,
                     reputation: event.authorMembership.reputation,
                     timeText: event.timeUntilEvent,
@@ -179,7 +179,7 @@ struct EventDetailView: View {
                         .foregroundColor(.secondary)
                     
                     UnifiedAuthorRow(
-                        username: displayedEvent.authorDisplayName,
+                        username: displayedEvent.authorUsername,
                         role: displayedEvent.authorRole,
                         reputation: displayedEvent.authorMembership.reputation
                     )

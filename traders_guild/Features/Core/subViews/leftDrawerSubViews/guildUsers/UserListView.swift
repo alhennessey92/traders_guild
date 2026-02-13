@@ -380,13 +380,13 @@ struct FriendRow: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 UnifiedMemberAvatar(
-                    username: friend.displayName,
+                    username: friend.username,
                     avatarURL: friend.avatarUrl,
                     isOnline: isOnline
                 )
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(friend.displayName)
+                    Text(friend.username)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
@@ -579,7 +579,7 @@ struct GuildMemberProfileHeaderViewRL: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 15) {
                 UnifiedMemberAvatar(
-                    username: member.displayName,
+                    username: member.username,
                     avatarURL: member.avatarUrl,
                     isOnline: isOnline,
                     size: 60
@@ -594,7 +594,7 @@ struct GuildMemberProfileHeaderViewRL: View {
                                 .foregroundColor(AppColors.bearCandleRed)
                         }
                         
-                        Text(member.displayName)
+                        Text(member.username)
                             .font(.title3)
                             .fontWeight(.medium)
                             .foregroundColor(member.isBlocked ? AppColors.greyText : AppColors.whiteText)

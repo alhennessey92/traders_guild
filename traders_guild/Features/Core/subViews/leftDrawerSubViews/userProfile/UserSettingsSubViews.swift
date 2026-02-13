@@ -384,7 +384,7 @@ struct AvatarSelectionView: View {
                                         .resizable()
                                         .scaledToFill()
                                 } else {
-                                    Text(String(rlAppState.currentUser?.displayName.prefix(2) ?? "").uppercased())
+                                    Text(String(rlAppState.currentUser?.username.prefix(2) ?? "").uppercased())
                                         .font(.title)
                                         .fontWeight(.bold)
                                         .foregroundColor(AppColors.accentColor)
@@ -393,7 +393,7 @@ struct AvatarSelectionView: View {
                             .frame(width: 100, height: 100)
                             .clipShape(Circle())
                         } else {
-                            Text(String(rlAppState.currentUser?.displayName.prefix(2) ?? "").uppercased())
+                            Text(String(rlAppState.currentUser?.username.prefix(2) ?? "").uppercased())
                                 .font(.title)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accentColor)
@@ -1425,7 +1425,7 @@ struct BlockedUsersView: View {
             }
         } message: {
             if let user = userToUnblock {
-                Text("Are you sure you want to unblock \(user.displayName)? They'll be able to send you messages and see your activity again.")
+                Text("Are you sure you want to unblock \(user.username)? They'll be able to send you messages and see your activity again.")
             }
         }
     }
@@ -1480,15 +1480,15 @@ struct BlockedUserRow: View {
     var body: some View {
         HStack(spacing: 12) {
             UnifiedMemberAvatar(
-                username: user.displayName,
+                username: user.username,
                 avatarURL: user.avatarUrl,
                 isOnline: false,
                 size: 44,
                 showOnlineIndicator: false
             )
-            
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(user.displayName)
+                Text(user.username)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(AppColors.whiteText)

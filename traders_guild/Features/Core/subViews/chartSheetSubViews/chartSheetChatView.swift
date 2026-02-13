@@ -198,8 +198,18 @@ struct ImprovedChartSheetChatView: View {
     }
     
     private func reportMessage(_ message: RLChartChatMessageDTO) async {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
         HapticFeedback.medium.trigger()
-        rlAppState.showInfo("Message reported for review")
+        do {
+            _ = try await rlAppState.realApi.reportChartChatMessage(
+                guildId: guildId,
+                messageId: message.id,
+                reason: "inappropriate"
+            )
+            rlAppState.showSuccess("Message reported. Thank you for your feedback.")
+        } catch {
+            rlAppState.showError(error, title: "Failed to Report", style: .toast)
+        }
     }
 }
 

@@ -15,19 +15,32 @@ import SwiftUI
 
 /// Tab enum conforming to UnifiedTabItem for use with UnifiedTabBar
 enum TopMarkersTab: String, CaseIterable, UnifiedTabItem {
-    case trending = "Trending"
-    case symbol = "Symbol"
-    case following = "Following"
+    case today = "Today"
+    case bySymbol = "Symbol"
+    case byAssetClass = "Asset Class"
+    case friends = "Friends"
     case mine = "Mine"
-    
+
     var title: String { rawValue }
-    
+
     var icon: String {
         switch self {
-        case .trending: return "flame.fill"
-        case .symbol: return "chart.line.uptrend.xyaxis"
-        case .following: return "person.2.fill"
+        case .today: return "flame.fill"
+        case .bySymbol: return "chart.line.uptrend.xyaxis"
+        case .byAssetClass: return "square.grid.2x2.fill"
+        case .friends: return "person.2.fill"
         case .mine: return "person.fill"
+        }
+    }
+
+    /// Time window in hours for each tab's data fetch
+    var timeWindowHours: Int {
+        switch self {
+        case .today: return 24
+        case .bySymbol: return 168
+        case .byAssetClass: return 168
+        case .friends: return 168
+        case .mine: return 720
         }
     }
 }
@@ -41,7 +54,7 @@ struct TopMarkersView: View {
     @EnvironmentObject var rlAppState: RLAppState
     
     // Tab state
-    @State private var selectedTab: TopMarkersTab = .trending
+    @State private var selectedTab: TopMarkersTab = .today
     
     // Loading state
     @State private var isLoading: Bool = false
@@ -71,12 +84,14 @@ struct TopMarkersView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 12) {
                     switch selectedTab {
-                    case .trending:
-                        trendingMarkersContent
-                    case .symbol:
+                    case .today:
+                        todayMarkersContent
+                    case .bySymbol:
+                        bySymbolMarkersContent
+                    case .byAssetClass:
                         assetClassMarkersContent
-                    case .following:
-                        followingMarkersContent
+                    case .friends:
+                        friendsMarkersContent
                     case .mine:
                         myMarkersContent
                     }
@@ -97,16 +112,17 @@ struct TopMarkersView: View {
     
     private func refreshMarkers() async {
         guard let guild = rlAppState.currentGuild else { return }
-        await leftDrawerViewModel.refreshTopMarkers(for: guild.id, rlAppState: rlAppState)
+        await leftDrawerViewModel.refreshTopMarkers(for: guild.id, rlAppState: rlAppState, timeWindowHours: selectedTab.timeWindowHours)
     }
     
     // MARK: - Tab Counts
     
     private func getCountForTab(_ tab: TopMarkersTab) -> Int {
         switch tab {
-        case .trending: return leftDrawerViewModel.trendingMarkers.count
-        case .symbol: return leftDrawerViewModel.symbolGroupedMarkers.reduce(0) { $0 + $1.value.count }
-        case .following: return leftDrawerViewModel.followingMarkers.count
+        case .today: return leftDrawerViewModel.trendingMarkers.count
+        case .bySymbol: return leftDrawerViewModel.symbolGroupedMarkers.reduce(0) { $0 + $1.value.count }
+        case .byAssetClass: return leftDrawerViewModel.symbolGroupedMarkers.values.flatMap { $0 }.count
+        case .friends: return leftDrawerViewModel.followingMarkers.count
         case .mine: return leftDrawerViewModel.myMarkers.count
         }
     }
@@ -118,21 +134,21 @@ struct TopMarkersView: View {
         guard let guildId = rlAppState.currentGuild?.id else { return }
         
         isLoading = true
-        await leftDrawerViewModel.loadTopMarkers(for: guildId, rlAppState: rlAppState)
+        await leftDrawerViewModel.loadTopMarkers(for: guildId, rlAppState: rlAppState, timeWindowHours: selectedTab.timeWindowHours)
         isLoading = false
         hasLoaded = true
     }
     
-    // MARK: - Trending Markers Content
-    
-    private var trendingMarkersContent: some View {
+    // MARK: - Today's Markers Content (24h window)
+
+    private var todayMarkersContent: some View {
         Group {
             if isLoading {
-                UnifiedLoadingState(message: "Loading top markers...")
+                UnifiedLoadingState(message: "Loading today's markers...")
             } else if leftDrawerViewModel.trendingMarkers.isEmpty {
                 UnifiedEmptyState(
                     icon: "flame",
-                    title: "No Trending Markers",
+                    title: "No Markers Today",
                     subtitle: "Be the first to place a marker today!"
                 )
                 .padding(.top, 40)
@@ -152,8 +168,39 @@ struct TopMarkersView: View {
         }
     }
     
-    // MARK: - Asset Class Markers Content (grouped by Forex, Crypto, etc.)
-    
+    // MARK: - By Symbol Markers Content (weekly, grouped by symbol)
+
+    private var bySymbolMarkersContent: some View {
+        Group {
+            if isLoading {
+                UnifiedLoadingState(message: "Loading markers...")
+            } else if leftDrawerViewModel.symbolGroupedMarkers.isEmpty {
+                UnifiedEmptyState(
+                    icon: "chart.line.uptrend.xyaxis",
+                    title: "No Markers by Symbol",
+                    subtitle: "Markers will be grouped by symbol"
+                )
+                .padding(.top, 40)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(Array(leftDrawerViewModel.symbolGroupedMarkers.keys.sorted()), id: \.self) { symbolTicker in
+                        if let markers = leftDrawerViewModel.symbolGroupedMarkers[symbolTicker] {
+                            SymbolMarkerGroup(
+                                symbolTicker: symbolTicker,
+                                markers: markers,
+                                likedMarkerId: $likedMarkerId,
+                                onLike: { marker in handleLike(marker: marker) },
+                                onTap: { marker in handleMarkerTap(marker: marker) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Asset Class Markers Content (weekly, grouped by Forex, Crypto, etc.)
+
     /// Pre-computed grouping to avoid recomputation on every render
     private var markersGroupedByAssetClass: [(assetClass: RLAssetClass, markers: [RLTopMarkerDTO])] {
         let allMarkers = leftDrawerViewModel.symbolGroupedMarkers.values.flatMap { $0 }
@@ -196,16 +243,16 @@ struct TopMarkersView: View {
         }
     }
     
-    // MARK: - Following Markers Content
-    
-    private var followingMarkersContent: some View {
+    // MARK: - Friends Markers Content (weekly)
+
+    private var friendsMarkersContent: some View {
         Group {
             if isLoading {
                 UnifiedLoadingState(message: "Loading markers...")
             } else if leftDrawerViewModel.followingMarkers.isEmpty {
                 UnifiedEmptyState(
                     icon: "person.2",
-                    title: "No Markers from Following",
+                    title: "No Markers from Friends",
                     subtitle: "Follow traders to see their markers here"
                 )
                 .padding(.top, 40)

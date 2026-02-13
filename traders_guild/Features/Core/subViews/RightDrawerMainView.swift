@@ -489,7 +489,7 @@ struct RLMemberRowView: View {
                                 .foregroundColor(AppColors.bearCandleRed)
                         }
 
-                        Text(member.displayName)
+                        Text(member.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(member.isBlocked ? AppColors.greyText : AppColors.whiteText)
@@ -546,7 +546,7 @@ struct RLMemberRowView: View {
             .fill(AppColors.accentColor.opacity(0.3))
             .frame(width: 40, height: 40)
             .overlay(
-                Text(member.displayName.prefix(2))
+                Text(member.username.prefix(2))
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.accentColor)

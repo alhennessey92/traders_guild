@@ -1449,9 +1449,17 @@ extension RealAPIService {
     func sendChatroomMessage(
         guildId: UUID,
         chatroomId: UUID,
-        content: String
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) async throws -> RLChatroomMessageDTO {
-        let body = RLSendMessageRequest(content: content)
+        let body = RLSendMessageRequest(
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
+        )
         return try await request(
             "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages",
             service: .core,
@@ -1609,9 +1617,17 @@ extension RealAPIService {
     func sendDMMessage(
         guildId: UUID,
         threadId: UUID,
-        content: String
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) async throws -> RLDMMessageDTO {
-        let body = RLSendMessageRequest(content: content)
+        let body = RLSendMessageRequest(
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
+        )
         return try await request(
             "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages",
             service: .core,
@@ -1694,6 +1710,56 @@ extension RealAPIService {
         let body = RLUserReportRequest(reason: reason)
         return try await request(
             "/guilds/\(guildId.uuidString)/members/\(membershipId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    // MARK: - Content Reporting
+
+    /// Report a chatroom message
+    func reportChatroomMessage(guildId: UUID, chatroomId: UUID, messageId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Report a DM message
+    func reportDMMessage(guildId: UUID, threadId: UUID, messageId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Report a chart chat message
+    func reportChartChatMessage(guildId: UUID, messageId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chart-chats/messages/\(messageId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Report a chart marker
+    func reportMarker(guildId: UUID, markerId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/report",
             service: .core,
             method: "POST",
             body: body,
@@ -1820,6 +1886,114 @@ extension RealAPIService {
         return try decoder.decode(RLAvatarUpdateResponse.self, from: data)
     }
     
+    // MARK: - Message Attachment Upload
+
+    /// Upload response from attachment endpoints
+    struct RLAttachmentUploadResponse: Codable {
+        let attachmentUrl: String
+        let attachmentType: String
+        let attachmentName: String
+    }
+
+    /// Generic attachment upload helper (multipart/form-data)
+    private func uploadAttachment(
+        endpoint: String,
+        service: APIService,
+        fileData: Data,
+        filename: String,
+        mimeType: String
+    ) async throws -> RLAttachmentUploadResponse {
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        guard let url = URL(string: "\(service.baseURL)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            throw APIError.unauthorized
+        }
+
+        // Build multipart body
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let detail = extractErrorDetailFromData(data)
+            switch httpResponse.statusCode {
+            case 401: throw APIError.unauthorized
+            case 400, 422: throw APIError.badRequest(detail)
+            default: throw APIError.serverError(httpResponse.statusCode, detail)
+            }
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(RLAttachmentUploadResponse.self, from: data)
+    }
+
+    /// Upload attachment for a chatroom message
+    func uploadChatroomAttachment(guildId: UUID, chatroomId: UUID, fileData: Data, filename: String, mimeType: String) async throws -> RLAttachmentUploadResponse {
+        try await uploadAttachment(
+            endpoint: "/messaging/guilds/\(guildId)/chatrooms/\(chatroomId)/upload",
+            service: .core,
+            fileData: fileData,
+            filename: filename,
+            mimeType: mimeType
+        )
+    }
+
+    /// Upload attachment for a DM message
+    func uploadDMAttachment(guildId: UUID, threadId: UUID, fileData: Data, filename: String, mimeType: String) async throws -> RLAttachmentUploadResponse {
+        try await uploadAttachment(
+            endpoint: "/messaging/guilds/\(guildId)/dms/\(threadId)/upload",
+            service: .core,
+            fileData: fileData,
+            filename: filename,
+            mimeType: mimeType
+        )
+    }
+
+    /// Upload attachment for a chart chat message
+    func uploadChartChatAttachment(guildId: UUID, chatId: UUID, fileData: Data, filename: String, mimeType: String) async throws -> RLAttachmentUploadResponse {
+        try await uploadAttachment(
+            endpoint: "/chart/guilds/\(guildId)/chart-chats/\(chatId)/upload",
+            service: .chart,
+            fileData: fileData,
+            filename: filename,
+            mimeType: mimeType
+        )
+    }
+
+    /// Upload attachment for a marker comment
+    func uploadMarkerCommentAttachment(guildId: UUID, markerId: UUID, fileData: Data, filename: String, mimeType: String) async throws -> RLAttachmentUploadResponse {
+        try await uploadAttachment(
+            endpoint: "/chart/guilds/\(guildId)/markers/\(markerId)/comments/upload",
+            service: .chart,
+            fileData: fileData,
+            filename: filename,
+            mimeType: mimeType
+        )
+    }
+
     /// Remove avatar (revert to default)
     /// DELETE /users/me/avatar
     func removeAvatar() async throws -> RLDetailResponseDTO {
@@ -2497,9 +2671,9 @@ extension RealAPIService {
     
     /// Get top markers (trending, by symbol, following, mine)
     /// GET /chart/guilds/{guild_id}/top-markers
-    func getTopMarkers(guildId: UUID) async throws -> RLTopMarkersListDTO {
+    func getTopMarkers(guildId: UUID, timeWindowHours: Int = 48) async throws -> RLTopMarkersListDTO {
         return try await request(
-            "/chart/guilds/\(guildId.uuidString)/top-markers",
+            "/chart/guilds/\(guildId.uuidString)/top-markers?time_window_hours=\(timeWindowHours)",
             service: .chart,
             method: "GET",
             auth: true
@@ -2546,9 +2720,17 @@ extension RealAPIService {
     func addMarkerComment(
         guildId: UUID,
         markerId: UUID,
-        content: String
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) async throws -> RLMarkerCommentDTO {
-        let body = RLCreateMarkerCommentRequest(content: content)
+        let body = RLCreateMarkerCommentRequest(
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
+        )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments",
             service: .chart,
@@ -2655,9 +2837,17 @@ extension RealAPIService {
     /// POST /chart/chart-chats/{chat_id}/messages
     func sendChartChatMessage(
         chatId: UUID,
-        content: String
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) async throws -> RLChartChatMessageDTO {
-        let body = RLSendChartChatMessageRequest(content: content)
+        let body = RLSendChartChatMessageRequest(
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
+        )
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/messages",
             service: .chart,

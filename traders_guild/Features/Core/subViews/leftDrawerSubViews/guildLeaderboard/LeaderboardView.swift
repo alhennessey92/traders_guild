@@ -127,7 +127,7 @@ struct LeaderboardListView: View {
                 LazyVStack(spacing: 8) {
                     ForEach(Array(sortedGuildMembers.enumerated()), id: \.element.id) { index, member in
                         LeaderboardMemberRow(
-                            displayName: member.displayName,
+                            displayName: member.username,
                             username: member.username,
                             avatarUrl: member.avatarUrl,
                             isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline),
@@ -169,7 +169,7 @@ struct LeaderboardListView: View {
                 LazyVStack(spacing: 8) {
                     ForEach(Array(sortedFriends.enumerated()), id: \.element.id) { index, friend in
                         LeaderboardMemberRow(
-                            displayName: friend.displayName,
+                            displayName: friend.username,
                             username: friend.username,
                             avatarUrl: friend.avatarUrl,
                             isOnline: rlAppState.effectiveOnlineStatus(userId: friend.userId, fallback: friend.isOnline),
@@ -211,7 +211,7 @@ struct LeaderboardListView: View {
                 LazyVStack(spacing: 8) {
                     ForEach(Array(sortedGlobalMembers.enumerated()), id: \.element.id) { index, member in
                         LeaderboardMemberRow(
-                            displayName: member.displayName,
+                            displayName: member.username,
                             username: member.username,
                             avatarUrl: member.avatarUrl,
                             isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline),

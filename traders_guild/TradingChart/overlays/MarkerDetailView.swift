@@ -154,7 +154,17 @@ struct MarkerDetailView: View {
     private func handleReport() {
         HapticFeedback.medium.trigger()
         Task {
-            rlAppState.showSuccess("Marker reported. Thank you for your feedback.")
+            guard let guildId = rlAppState.currentGuild?.id else { return }
+            do {
+                _ = try await rlAppState.realApi.reportMarker(
+                    guildId: guildId,
+                    markerId: marker.id,
+                    reason: "inappropriate"
+                )
+                rlAppState.showSuccess("Marker reported. Thank you for your feedback.")
+            } catch {
+                rlAppState.showError(error, title: "Failed to Report", style: .toast)
+            }
         }
     }
     
@@ -303,7 +313,19 @@ struct CommentsView: View {
     
     private func handleReportComment(_ comment: RLMarkerCommentDTO) {
         HapticFeedback.medium.trigger()
-        rlAppState.showInfo("Comment reported for review")
+        Task {
+            guard let guildId = rlAppState.currentGuild?.id else { return }
+            do {
+                _ = try await rlAppState.realApi.reportChartChatMessage(
+                    guildId: guildId,
+                    messageId: comment.id,
+                    reason: "inappropriate"
+                )
+                rlAppState.showSuccess("Comment reported. Thank you for your feedback.")
+            } catch {
+                rlAppState.showError(error, title: "Failed to Report", style: .toast)
+            }
+        }
     }
 }
 
@@ -359,19 +381,17 @@ struct MarkerCommentRow: View {
                 // User info row (only for other users)
                 if !comment.isCurrentUserMessage {
                     HStack(spacing: 2) {
-                        Text(comment.author.displayName)
+                        Text(comment.author.username)
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.whiteText.opacity(0.9))
-                        
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 3, height: 3)
-                            .padding(.horizontal, 3)
-                        
-                        Text(comment.author.memberRole.displayName)
-                            .font(.caption)
-                            .foregroundColor(comment.author.memberRole.color)
+
+                        UnifiedSeparatorDot(size: 3, opacity: 0.7)
+
+                        UnifiedRoleBadge(
+                            member: comment.author,
+                            showReputation: true
+                        )
                     }
                 }
                 
@@ -490,14 +510,19 @@ struct MarkerDetailHeaderView: View {
                                     .foregroundColor(AppColors.accentColor)
                             )
                         
-                        Text(marker.author.displayName)
+                        Text(marker.author.username)
                             .font(.subheadline)
                             .foregroundColor(AppColors.whiteText.opacity(0.8))
-                        
-                        Circle()
-                            .fill(AppColors.greyText.opacity(0.5))
-                            .frame(width: 3, height: 3)
-                        
+
+                        UnifiedSeparatorDot(size: 3, opacity: 0.5)
+
+                        UnifiedRoleBadge(
+                            member: marker.author,
+                            showReputation: true
+                        )
+
+                        UnifiedSeparatorDot(size: 3, opacity: 0.5)
+
                         Text(marker.createdAtFormatted)
                             .font(.caption)
                             .foregroundColor(AppColors.greyText)

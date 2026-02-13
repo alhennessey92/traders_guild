@@ -194,7 +194,7 @@ struct InviteMembersView: View {
 
             // Info
             VStack(alignment: .leading, spacing: 2) {
-                Text(user.displayName)
+                Text(user.username)
                     .font(.subheadline)
                     .fontWeight(.medium)
                 Text("@\(user.username)")

@@ -284,7 +284,7 @@ struct MainDrawerView: View {
         
         // Add Admin/Mod Panel for moderators and admins
         if rlAppState.canModerate {
-            let panelTitle = rlAppState.canAdmin ? "Admin Panel" : "Mod Panel"
+            let panelTitle = rlAppState.isGuildOwner ? "Owner Panel" : (rlAppState.canAdmin ? "Admin Panel" : "Mod Panel")
             items.append(("shield.checkered", panelTitle, .adminPanel))
         }
         

@@ -1260,7 +1260,7 @@ struct ChartMarkerSystem {
         if !hideUsername {
             let labelY = isBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
             context.draw(
-                Text(marker.author.displayName)
+                Text(marker.author.username)
                     .font(.system(size: 8, weight: .medium))
                     .foregroundColor(.white.opacity(0.85)),
                 at: CGPoint(x: position.x, y: labelY)

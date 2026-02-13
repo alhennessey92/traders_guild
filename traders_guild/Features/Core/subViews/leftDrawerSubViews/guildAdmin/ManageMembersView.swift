@@ -111,13 +111,13 @@ struct ManageMembersView: View {
         .confirmationDialog("Mute Member", isPresented: $showMuteSheet, presenting: selectedMember) { member in
             muteConfirmationButtons(for: member)
         } message: { member in
-            Text("Select mute duration for \(member.displayName)")
+            Text("Select mute duration for \(member.username)")
         }
         // Suspend confirmation
         .confirmationDialog("Suspend Member", isPresented: $showSuspendSheet, presenting: selectedMember) { member in
             suspendConfirmationButtons(for: member)
         } message: { member in
-            Text("Select suspension duration for \(member.displayName). They will not be able to interact at all.")
+            Text("Select suspension duration for \(member.username). They will not be able to interact at all.")
         }
         // Kick alert
         .alert("Kick Member", isPresented: $showKickAlert, presenting: selectedMember) { member in
@@ -126,7 +126,7 @@ struct ManageMembersView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: { member in
-            Text("Are you sure you want to kick \(member.displayName)? They will be removed from the guild but can rejoin later.")
+            Text("Are you sure you want to kick \(member.username)? They will be removed from the guild but can rejoin later.")
         }
         // Ban alert
         .alert("Ban Member", isPresented: $showBanAlert, presenting: selectedMember) { member in
@@ -138,7 +138,7 @@ struct ManageMembersView: View {
                 actionReason = ""
             }
         } message: { member in
-            Text("Are you sure you want to ban \(member.displayName)? They will be removed and unable to rejoin until unbanned.")
+            Text("Are you sure you want to ban \(member.username)? They will be removed and unable to rejoin until unbanned.")
         }
     }
 
@@ -357,7 +357,7 @@ struct ManageMembersView: View {
             // Info
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(member.displayName)
+                    Text(member.username)
                         .font(.subheadline)
                         .fontWeight(.medium)
                     if isCurrentUser {
@@ -438,7 +438,7 @@ struct ManageMembersView: View {
             memberAvatar(avatarUrl: member.avatarUrl)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(member.displayName)
+                Text(member.username)
                     .font(.subheadline)
                     .fontWeight(.medium)
                 Text("@\(member.username)")
@@ -481,7 +481,7 @@ struct ManageMembersView: View {
             memberAvatar(avatarUrl: member.avatarUrl)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(member.displayName)
+                Text(member.username)
                     .font(.subheadline)
                     .fontWeight(.medium)
                 Text("@\(member.username)")

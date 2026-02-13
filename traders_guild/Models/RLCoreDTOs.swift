@@ -1821,6 +1821,16 @@ struct RLUserReportRequest: Codable {
     let reason: String
 }
 
+struct RLContentReportRequest: Codable {
+    let reason: String
+    let details: String?
+
+    init(reason: String, details: String? = nil) {
+        self.reason = reason
+        self.details = details
+    }
+}
+
 struct RLShareEventRequest: Codable {
     let friendId: UUID
 }

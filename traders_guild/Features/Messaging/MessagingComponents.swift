@@ -142,29 +142,53 @@ struct ChatInputFooter: View {
     let placeholder: String
     let isSending: Bool
     let onSend: () -> Void
-    var onAttachment: (() -> Void)? = nil
-    var onVoice: (() -> Void)? = nil
-    
+
+    /// Callback when user selects a file/photo attachment: (fileData, filename, mimeType)
+    var onAttachmentSelected: ((Data, String, String) -> Void)? = nil
+
     /// Optional: For sheet contexts where we need to expand to full height
     var selectedDetent: Binding<PresentationDetent>? = nil
     @FocusState private var isInputFocused: Bool
-    
+
+    /// Speech recognition service — self-contained dictation
+    @StateObject private var speechService = SpeechRecognitionService()
+
+    /// Attachment picker state
+    @State private var showPhotoPicker = false
+    @State private var showDocumentPicker = false
+
     var body: some View {
         VStack(spacing: 0) {
+            // Recording indicator bar
+            if speechService.isRecording {
+                recordingIndicator
+            }
+
             Divider()
                 .background(Color.gray.opacity(0.3))
-            
+
             HStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    // Plus/attachment button
-                    Button(action: { onAttachment?() }) {
+                    // Plus/attachment button — shows menu
+                    Menu {
+                        Button {
+                            showPhotoPicker = true
+                        } label: {
+                            Label("Photo", systemImage: "photo.fill")
+                        }
+                        Button {
+                            showDocumentPicker = true
+                        } label: {
+                            Label("File", systemImage: "doc.fill")
+                        }
+                    } label: {
                         Image(systemName: "plus")
                             .font(.title3)
                             .foregroundColor(.secondary)
                             .frame(width: 32, height: 32)
                     }
                     .compositingGroup()
-                    
+
                     // Text field
                     TextField(placeholder, text: $messageText)
                         .font(.subheadline)
@@ -176,17 +200,21 @@ struct ChatInputFooter: View {
                                 onSend()
                             }
                         }
-                    
+
                     HStack(spacing: 8) {
-                        // Mic button
-                        Button(action: { onVoice?() }) {
-                            Image(systemName: "mic.fill")
+                        // Mic button — toggles dictation
+                        Button(action: {
+                            HapticFeedback.light.trigger()
+                            speechService.toggleRecording()
+                        }) {
+                            Image(systemName: speechService.isRecording ? "mic.circle.fill" : "mic.fill")
                                 .font(.title3)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(speechService.isRecording ? .red : .secondary)
                                 .frame(width: 32, height: 32)
+                                .symbolEffect(.pulse, isActive: speechService.isRecording)
                         }
                         .compositingGroup()
-                        
+
                         // Send button
                         if isSending {
                             ProgressView()
@@ -219,11 +247,91 @@ struct ChatInputFooter: View {
             }
         }
         .compositingGroup()
+        .onChange(of: speechService.transcribedText) { _, newValue in
+            // Append transcribed text to message input
+            if !newValue.isEmpty {
+                if messageText.isEmpty {
+                    messageText = newValue
+                } else {
+                    // If user had existing text, append with a space
+                    let trimmedExisting = messageText.trimmingCharacters(in: .whitespaces)
+                    messageText = trimmedExisting + " " + newValue
+                }
+            }
+        }
+        .onChange(of: speechService.isRecording) { _, isRecording in
+            if !isRecording && !speechService.transcribedText.isEmpty {
+                // Recording stopped — final text is already in messageText via transcribedText observer
+                speechService.transcribedText = ""
+            }
+        }
+        .onDisappear {
+            speechService.cleanup()
+        }
+        .fullScreenCover(isPresented: $showPhotoPicker) {
+            PhotoPickerView(
+                onImageSelected: { data, filename, mimeType in
+                    showPhotoPicker = false
+                    onAttachmentSelected?(data, filename, mimeType)
+                },
+                onCancel: { showPhotoPicker = false }
+            )
+            .ignoresSafeArea()
+        }
+        .fullScreenCover(isPresented: $showDocumentPicker) {
+            DocumentPickerView(
+                onDocumentSelected: { data, filename, mimeType in
+                    showDocumentPicker = false
+                    onAttachmentSelected?(data, filename, mimeType)
+                },
+                onCancel: { showDocumentPicker = false }
+            )
+            .ignoresSafeArea()
+        }
     }
-    
+
+    // MARK: - Recording Indicator
+
+    private var recordingIndicator: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
+                .opacity(speechService.isRecording ? 1.0 : 0.3)
+                .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: speechService.isRecording)
+
+            Text("Listening...")
+                .font(.caption)
+                .foregroundColor(.red)
+
+            Spacer()
+
+            if let errorMessage = speechService.errorMessage {
+                Text(errorMessage)
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+                    .lineLimit(1)
+            }
+
+            Button(action: {
+                speechService.stopRecording()
+            }) {
+                Text("Stop")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(Color.red.opacity(0.1))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.2), value: speechService.isRecording)
+    }
+
     private var sendButton: some View {
         let isEmpty = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        
+
         return Button(action: onSend) {
             Image(systemName: "chevron.forward.2")
                 .font(.title3)
@@ -581,9 +689,9 @@ protocol RLChatMessageDisplayable: Identifiable {
     var isCurrentUserMessage: Bool { get }
     var canEdit: Bool { get }
     var canDelete: Bool { get }
-    
+
     // Author info
-    var authorDisplayName: String { get }
+    var authorUsername: String { get }
     var authorInitials: String { get }
     var authorAvatarUrl: String? { get }
     var authorIsOnline: Bool { get }
@@ -591,6 +699,11 @@ protocol RLChatMessageDisplayable: Identifiable {
     var authorReputation: Int { get }
     var authorIsFriend: Bool { get }
     var authorIsBlocked: Bool { get }
+
+    // Attachment info
+    var attachmentUrl: String? { get }
+    var attachmentType: String? { get }
+    var attachmentName: String? { get }
 }
 
 // MARK: - ================================================================================================
@@ -694,7 +807,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             }
             
             // Username - always grey/white, NOT role colored
-            Text(message.authorDisplayName)
+            Text(message.authorUsername)
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(message.authorIsBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.9))
@@ -741,15 +854,23 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     
     // MARK: - Message Bubble Content
     private var messageBubbleContent: some View {
-        HStack(spacing: 8) {
-            Text(message.content)
-                .font(.subheadline)
-                .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
-            
-            if message.isEdited {
-                Text("(edited)")
-                    .font(.caption2)
-                    .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            // Attachment preview (if present)
+            if let attachmentUrl = message.attachmentUrl, !attachmentUrl.isEmpty {
+                attachmentView(url: attachmentUrl, type: message.attachmentType, name: message.attachmentName)
+            }
+
+            // Text content + edited indicator
+            HStack(spacing: 8) {
+                Text(message.content)
+                    .font(.subheadline)
+                    .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
+
+                if message.isEdited {
+                    Text("(edited)")
+                        .font(.caption2)
+                        .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -760,6 +881,70 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             Color.gray.opacity(0.2)
         )
         .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
+    }
+
+    // MARK: - Attachment View
+    @ViewBuilder
+    private func attachmentView(url: String, type: String?, name: String?) -> some View {
+        let isImage = type?.hasPrefix("image/") == true
+
+        if isImage, let imageUrl = URL(string: url) {
+            // Image attachment — show inline preview
+            AsyncImage(url: imageUrl) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 220, maxHeight: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                case .failure:
+                    fileAttachmentRow(name: name, type: type)
+                case .empty:
+                    ProgressView()
+                        .frame(width: 120, height: 80)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        } else {
+            // Non-image attachment — show file row
+            fileAttachmentRow(name: name, type: type)
+        }
+    }
+
+    private func fileAttachmentRow(name: String?, type: String?) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: fileIcon(for: type))
+                .font(.title3)
+                .foregroundColor(message.isCurrentUserMessage ? .white : AppColors.accentColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name ?? "Attachment")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
+                    .lineLimit(1)
+
+                Text(type ?? "File")
+                    .font(.caption2)
+                    .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+            }
+        }
+        .padding(8)
+        .background(
+            (message.isCurrentUserMessage ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func fileIcon(for mimeType: String?) -> String {
+        guard let type = mimeType else { return "doc.fill" }
+        if type.hasPrefix("image/") { return "photo.fill" }
+        if type == "application/pdf" { return "doc.text.fill" }
+        if type == "text/plain" { return "doc.plaintext.fill" }
+        if type == "application/zip" { return "doc.zipper" }
+        return "doc.fill"
     }
     
     // MARK: - Timestamp Row
@@ -820,7 +1005,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
 // MARK: - ================================================================================================
 
 extension RLChatroomMessageDTO: RLChatMessageDisplayable {
-    var authorDisplayName: String { author.displayName }
+    var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }
     var authorIsOnline: Bool { author.isOnline }
@@ -831,7 +1016,7 @@ extension RLChatroomMessageDTO: RLChatMessageDisplayable {
 }
 
 extension RLDMMessageDTO: RLChatMessageDisplayable {
-    var authorDisplayName: String { author.displayName }
+    var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }
     var authorIsOnline: Bool { author.isOnline }
@@ -842,7 +1027,7 @@ extension RLDMMessageDTO: RLChatMessageDisplayable {
 }
 
 extension RLChartChatMessageDTO: RLChatMessageDisplayable {
-    var authorDisplayName: String { author.displayName }
+    var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }
     var authorIsOnline: Bool { author.isOnline }
@@ -1113,12 +1298,12 @@ struct RLDMSettingsView: View {
                         HStack(spacing: 8) {
                             // Avatar
                             UnifiedMemberAvatar(
-                                username: participant.displayName,
+                                username: participant.username,
                                 avatarURL: participant.avatarUrl,
                                 isOnline: participant.isOnline,
                                 size: 36
                             )
-                            
+
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     if thread.isBlocked {
@@ -1126,8 +1311,8 @@ struct RLDMSettingsView: View {
                                             .font(.caption)
                                             .foregroundColor(AppColors.bearCandleRed)
                                     }
-                                    
-                                    Text(participant.displayName)
+
+                                    Text(participant.username)
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(thread.isBlocked ? AppColors.greyText : AppColors.whiteText)

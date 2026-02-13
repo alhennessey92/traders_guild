@@ -260,15 +260,15 @@ struct UserProfileHeaderView: View {
             HStack(spacing: 15) {
                 // Avatar with online indicator
                 UnifiedMemberAvatar(
-                    username: rlAppState.currentUser?.displayName ?? "Unknown",
+                    username: rlAppState.currentUser?.username ?? "Unknown",
                     avatarURL: rlAppState.currentUser?.avatarUrl,
                     isOnline: isOnline,
                     size: 60
                 )
-                
+
                 // User info
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(rlAppState.currentUser?.displayName ?? "Unknown")
+                    Text(rlAppState.currentUser?.username ?? "Unknown")
                         .font(.title3)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)

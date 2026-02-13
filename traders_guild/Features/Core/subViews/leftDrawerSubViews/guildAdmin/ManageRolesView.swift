@@ -119,7 +119,7 @@ struct ManageRolesView: View {
         .confirmationDialog("Change Role", isPresented: $showRolePicker, presenting: selectedMember) { member in
             rolePickerButtons(for: member)
         } message: { member in
-            Text("Select a new role for \(member.displayName)")
+            Text("Select a new role for \(member.username)")
         }
         .alert("Ban Member", isPresented: $showBanAlert, presenting: selectedMember) { member in
             TextField("Reason (optional)", text: $banReason)
@@ -130,7 +130,7 @@ struct ManageRolesView: View {
                 banReason = ""
             }
         } message: { member in
-            Text("Are you sure you want to ban \(member.displayName)? They will be removed from the guild and unable to rejoin until unbanned.")
+            Text("Are you sure you want to ban \(member.username)? They will be removed from the guild and unable to rejoin until unbanned.")
         }
         .alert("Kick Member", isPresented: $showKickAlert, presenting: selectedMember) { member in
             Button("Kick", role: .destructive) {
@@ -138,7 +138,7 @@ struct ManageRolesView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: { member in
-            Text("Are you sure you want to kick \(member.displayName)? They will be removed from the guild but can rejoin later.")
+            Text("Are you sure you want to kick \(member.username)? They will be removed from the guild but can rejoin later.")
         }
     }
 
@@ -194,7 +194,7 @@ struct ManageRolesView: View {
             // Info
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(member.displayName)
+                    Text(member.username)
                         .font(.subheadline)
                         .fontWeight(.medium)
                     if isCurrentUser {

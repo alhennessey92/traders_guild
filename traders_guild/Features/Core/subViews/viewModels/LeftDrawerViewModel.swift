@@ -594,38 +594,38 @@ class LeftDrawerViewModel: ObservableObject {
     // ================================================================================================
     
     /// Load all top markers data from API
-    func loadTopMarkers(for guildId: UUID, rlAppState: RLAppState) async {
+    func loadTopMarkers(for guildId: UUID, rlAppState: RLAppState, timeWindowHours: Int = 48) async {
         // Check cache freshness (5 minute cache)
         if let lastRefresh = topMarkersLastRefresh,
            Date().timeIntervalSince(lastRefresh) < 300 {
             return
         }
-        
+
         isLoadingTopMarkers = true
         defer { isLoadingTopMarkers = false }
-        
+
         do {
-            let response = try await rlAppState.realApi.getTopMarkers(guildId: guildId)
-            
+            let response = try await rlAppState.realApi.getTopMarkers(guildId: guildId, timeWindowHours: timeWindowHours)
+
             self.trendingMarkers = response.trending
             self.symbolGroupedMarkers = response.bySymbol
             self.followingMarkers = response.following
             self.myMarkers = response.mine
             self.topMarkersLastRefresh = Date()
-            
+
             print("✅ Loaded top markers - Trending: \(response.trending.count), Symbols: \(response.bySymbol.count), Following: \(response.following.count), Mine: \(response.mine.count)")
-            
+
         } catch is CancellationError {
             return
         } catch {
             print("⚠️ Failed to load top markers: \(error)")
         }
     }
-    
+
     /// Force refresh top markers (bypasses cache)
-    func refreshTopMarkers(for guildId: UUID, rlAppState: RLAppState) async {
+    func refreshTopMarkers(for guildId: UUID, rlAppState: RLAppState, timeWindowHours: Int = 48) async {
         topMarkersLastRefresh = nil
-        await loadTopMarkers(for: guildId, rlAppState: rlAppState)
+        await loadTopMarkers(for: guildId, rlAppState: rlAppState, timeWindowHours: timeWindowHours)
     }
     
     /// Toggle like on a marker and update local cache
@@ -770,12 +770,13 @@ class LeftDrawerViewModel: ObservableObject {
             async let awardsTask = rlAppState.fetchCurrentUserAwards(guildId: rlAppState.currentGuild?.id)
             async let awardsSummaryTask = rlAppState.fetchCurrentUserAwardsSummary(guildId: rlAppState.currentGuild?.id)
 
-            // Fetch user's markers from top-markers endpoint
+            // Fetch user's markers from user-specific markers endpoint (no time window filter)
             var markers: [RLTopMarkerDTO] = []
-            if let guildId = rlAppState.currentGuild?.id {
+            if let guildId = rlAppState.currentGuild?.id,
+               let userId = rlAppState.currentUser?.id {
                 do {
-                    let topMarkers = try await rlAppState.realApi.getTopMarkers(guildId: guildId)
-                    markers = topMarkers.mine
+                    let userMarkers = try await rlAppState.realApi.getUserMarkers(guildId: guildId, userId: userId)
+                    markers = userMarkers.mine
                 } catch {
                     print("⚠️ Failed to load user markers: \(error)")
                 }

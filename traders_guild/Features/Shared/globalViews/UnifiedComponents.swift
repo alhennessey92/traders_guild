@@ -402,32 +402,32 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
     }
 }
 
-/// Unified tab bar container
+/// Unified tab bar container — horizontally scrollable so tab text never wraps
 struct UnifiedTabBar<Tab: UnifiedTabItem>: View where Tab.AllCases: RandomAccessCollection {
     @Binding var selectedTab: Tab
     var size: UnifiedTabSize = .standard
     var theme: UnifiedTabTheme = .blue
     var countForTab: ((Tab) -> Int)? = nil
     var spacing: CGFloat = 6
-    
+
     var body: some View {
-        HStack(spacing: spacing) {
-            ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, tab in
-                UnifiedTabButton(
-                    tab: tab,
-                    isSelected: selectedTab == tab,
-                    size: size,
-                    theme: theme,
-                    index: index,
-                    count: countForTab?(tab)
-                ) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedTab = tab
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: spacing) {
+                ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, tab in
+                    UnifiedTabButton(
+                        tab: tab,
+                        isSelected: selectedTab == tab,
+                        size: size,
+                        theme: theme,
+                        index: index,
+                        count: countForTab?(tab)
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedTab = tab
+                        }
                     }
                 }
             }
-            
-            Spacer()
         }
     }
 }
@@ -1073,6 +1073,75 @@ struct UnifiedSeparatorDot: View {
 }
 
 // MARK: - ================================================================================================
+// MARK: - UNIFIED ROLE BADGE
+// MARK: - ================================================================================================
+
+/// Compact role + reputation badge for use in any user display context
+/// Shows: "Admin . shield 142" in a compact horizontal layout
+/// Handles Owner distinction: if isOwner is true, shows "Owner" instead of the role name
+struct UnifiedRoleBadge: View {
+    let roleName: String
+    let roleColor: Color
+    let reputation: Int
+    var isOwner: Bool = false
+    var showReputation: Bool = true
+    var fontSize: Font = .caption
+    var iconSize: Font = .caption2
+
+    var body: some View {
+        HStack(spacing: 2) {
+            if isOwner {
+                Text("Owner")
+                    .font(fontSize)
+                    .foregroundColor(AppColors.accentColor)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+            } else {
+                Text(roleName)
+                    .font(fontSize)
+                    .foregroundColor(roleColor)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+            }
+
+            if showReputation {
+                UnifiedSeparatorDot(size: 4, opacity: 0.7)
+
+                Image(systemName: "shield.pattern.checkered")
+                    .font(iconSize)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppColors.accentColor)
+
+                Text("\(reputation)")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.accentColor)
+            }
+        }
+    }
+
+    init(roleName: String, roleColor: Color, reputation: Int, isOwner: Bool = false, showReputation: Bool = true, fontSize: Font = .caption, iconSize: Font = .caption2) {
+        self.roleName = roleName
+        self.roleColor = roleColor
+        self.reputation = reputation
+        self.isOwner = isOwner
+        self.showReputation = showReputation
+        self.fontSize = fontSize
+        self.iconSize = iconSize
+    }
+
+    init(member: RLGuildMemberDTO, isOwner: Bool = false, showReputation: Bool = true, fontSize: Font = .caption, iconSize: Font = .caption2) {
+        self.roleName = member.memberRole.displayName
+        self.roleColor = member.memberRole.color
+        self.reputation = member.reputation
+        self.isOwner = isOwner
+        self.showReputation = showReputation
+        self.fontSize = fontSize
+        self.iconSize = iconSize
+    }
+}
+
+// MARK: - ================================================================================================
 // MARK: - UNIFIED STATS ROW
 // MARK: - ================================================================================================
 
@@ -1383,7 +1452,7 @@ struct UnifiedGuildMemberRow: View {
             HStack(spacing: 12) {
                 // Avatar
                 UnifiedMemberAvatar(
-                    username: user.displayName,
+                    username: user.username,
                     avatarURL: user.avatarUrl,
                     isOnline: isOnline
                 )
@@ -1413,27 +1482,7 @@ struct UnifiedGuildMemberRow: View {
                     }
                     
                     // Role and reputation
-                    HStack(spacing: 2) {
-                        Text(user.memberRole.displayName)
-                            .font(.caption)
-                            .foregroundColor(user.memberRole.color)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                        
-                        if showReputation {
-                            UnifiedSeparatorDot(size: 4, opacity: 0.7)
-                            
-                            Image(systemName: "shield.pattern.checkered")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                            
-                            Text("\(user.reputation)")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.accentColor)
-                        }
-                    }
+                    UnifiedRoleBadge(member: user, showReputation: showReputation)
                 }
                 
                 Spacer()

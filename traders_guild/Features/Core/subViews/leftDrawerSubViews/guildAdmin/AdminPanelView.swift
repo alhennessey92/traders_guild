@@ -46,10 +46,17 @@ struct AdminPanelListView: View {
                     Text("Your Role:")
                         .font(.caption)
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
-                    Text(membership.memberRole.displayName)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(membership.memberRole.color)
+                    if rlAppState.isGuildOwner {
+                        Text("Owner")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                    } else {
+                        Text(membership.memberRole.displayName)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(membership.memberRole.color)
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, 16)

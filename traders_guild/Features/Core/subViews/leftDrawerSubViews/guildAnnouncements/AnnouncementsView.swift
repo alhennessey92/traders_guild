@@ -109,7 +109,7 @@ struct AnnouncementRowView: View {
                 
                 // MARK: - Author Footer Bar (uses view model's fallback properties)
                 UnifiedAuthorFooter(
-                    username: announcement.authorDisplayName,
+                    username: announcement.authorUsername,
                     role: announcement.authorRole,
                     reputation: announcement.authorReputation,
                     timeText: announcement.timeAgoFormatted,
@@ -172,7 +172,7 @@ struct AnnouncementDetailView: View {
                         .foregroundColor(.secondary)
                     
                     UnifiedAuthorRow(
-                        username: announcement.authorDisplayName,
+                        username: announcement.authorUsername,
                         role: announcement.authorRole,
                         reputation: announcement.authorReputation
                     )
