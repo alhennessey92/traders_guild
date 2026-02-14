@@ -524,43 +524,52 @@ class MarkerManager: ObservableObject {
         }
     }
     
-    func updateMarker(id: UUID, note: String) async {
+    /// Update a marker with any combination of fields (all optional). Only provided fields are sent to the backend.
+    func updateMarker(
+        id: UUID,
+        note: String? = nil,
+        price: Double? = nil,
+        isVisible: Bool? = nil,
+        horizontalLinePrice: Double? = nil,
+        targetPrice: Double? = nil,
+        alertSeverity: String? = nil,
+        trendlineDirection: String? = nil,
+        selectedIndicator: String? = nil,
+        chartPattern: String? = nil,
+        selectedEmoji: String? = nil
+    ) async {
         guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
-        
-        // Optimistic update
-        let originalMarker = markers[index]
-        let oldNote = originalMarker.note
-        let optimisticMarker = originalMarker.withMarker(originalMarker.marker.updating(note: note))
-        markers[index] = optimisticMarker
-        
-        // Persist to backend
         guard let api = api else { return }
-        
+
+        let originalMarker = markers[index]
+        if let note = note {
+            markers[index] = originalMarker.withMarker(originalMarker.marker.updating(note: note))
+        }
+
         do {
             let updatedMarker = try await api.updateMarker(
                 guildId: currentGuildId,
                 markerId: id,
                 note: note,
-                price: nil,
-                isVisible: nil,
-                horizontalLinePrice: nil,
-                targetPrice: nil,
-                alertSeverity: nil,
-                trendlineDirection: nil,
-                selectedIndicator: nil,
-                chartPattern: nil,
-                selectedEmoji: nil
+                price: price,
+                isVisible: isVisible,
+                horizontalLinePrice: horizontalLinePrice,
+                targetPrice: targetPrice,
+                alertSeverity: alertSeverity,
+                trendlineDirection: trendlineDirection,
+                selectedIndicator: selectedIndicator,
+                chartPattern: chartPattern,
+                selectedEmoji: selectedEmoji
             )
-            
-            // Update with real marker from backend (preserve positioning)
             var updated = ChartMarkerUI(marker: updatedMarker, candleIndex: markers[index].candleIndex)
             updated.positionedBelow = markers[index].positionedBelow
             updated.proximityTier = markers[index].proximityTier
             updated.stackIndex = markers[index].stackIndex
             markers[index] = updated
         } catch {
-            // Revert optimistic update on error
-            markers[index] = originalMarker.withMarker(originalMarker.marker.updating(note: oldNote))
+            if note != nil {
+                markers[index] = originalMarker.withMarker(originalMarker.marker.updating(note: originalMarker.note))
+            }
             print("Failed to update marker: \(error)")
         }
     }
@@ -1201,7 +1210,7 @@ struct ChartMarkerSystem {
                 width: (scaledRadius + 4) * 2,
                 height: (scaledRadius + 4) * 2
             )
-            context.fill(Path(ellipseIn: glowRect), with: .color(marker.type.color.opacity(0.3)))
+            context.fill(Path(ellipseIn: glowRect), with: .color(marker.displayColor.opacity(0.3)))
         }
         
         // Shadow
@@ -1222,19 +1231,24 @@ struct ChartMarkerSystem {
         )
         
         // Fill
-        context.fill(Path(ellipseIn: circleRect), with: .color(marker.type.color.opacity(0.3)))
+        context.fill(Path(ellipseIn: circleRect), with: .color(marker.displayColor.opacity(0.3)))
         
         // Border
         let strokeWidth: CGFloat = isSelected ? 3 : 2
-        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.type.color), lineWidth: strokeWidth)
+        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.displayColor), lineWidth: strokeWidth)
         
-        // Icon character
-        let iconChar = getIconCharacter(for: marker.type)
+        // Icon: emoji uses selectedEmoji; poll/personal/other use character (Canvas draw(Image,in:) not always available)
         let fontSize: CGFloat = 14 * scale
+        let iconChar: String
+        if marker.type == .emoji {
+            iconChar = marker.selectedEmoji ?? "🎯"
+        } else {
+            iconChar = getIconCharacter(for: marker.type)
+        }
         context.draw(
             Text(iconChar)
                 .font(.system(size: fontSize, weight: .bold))
-                .foregroundColor(marker.type.color),
+                .foregroundColor(marker.displayColor),
             at: position
         )
         
@@ -1285,7 +1299,7 @@ struct ChartMarkerSystem {
         case .volumeSpike: return "⚡"
         case .predictionTarget: return "⊛"
         case .emoji: return "☺"
-        case .poll: return "✓"
+        case .poll: return "☰"
         case .personal: return "●"
         }
     }

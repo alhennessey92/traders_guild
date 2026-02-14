@@ -197,6 +197,10 @@ struct TradingChartView: View {
     
 
     
+    /// Placement options written by MarkerCreationSheet for preview (alert severity color, selected emoji)
+    @State private var placementAlertSeverity: MarkerAlertSeverity? = nil
+    @State private var placementSelectedEmoji: String? = nil
+
     /// Track if chart has been initialized with proper position
     @State private var hasInitializedPosition = false
     
@@ -209,8 +213,8 @@ struct TradingChartView: View {
     /// Haptic feedback generator for marker interactions
     private let markerHaptic = UIImpactFeedbackGenerator(style: .medium)
     
-    /// Marker detail sheet presentation detent (controls sheet size)
-    @State private var markerDetailDetent: PresentationDetent = .fraction(0.6)
+    /// Marker detail sheet presentation detent (controls sheet size); starts small so sheet opens compact
+    @State private var markerDetailDetent: PresentationDetent = .fraction(0.35)
     
     // MARK: - Chart Configuration
     
@@ -458,23 +462,20 @@ struct TradingChartView: View {
     }
     
     /// Effective candle index for marker preview (from pending or placement mode)
-    /// FIXED: Always calculates center dynamically when entering placement mode
-    /// Only uses stored previewCandleIndex after user has dragged the marker
+    /// Prediction markers are pinned to the most recent candle.
     private var effectiveCandleIndex: Int {
         if let pending = pendingMarkerInfo {
             return pending.candleIndex
         }
-        // If in placement mode, check if user has dragged (previewCandleIndex >= 0)
-        // If not dragged yet (-1), always calculate center fresh
         if isMarkerPlacementMode {
-            if previewCandleIndex < 0 {
-                // User hasn't dragged yet - calculate center
-                return calculateCenterCandleIndex()
-            } else {
-                // User has dragged - use their position, but validate it
-                let validIndex = max(0, min(chartData.candles.count - 1, previewCandleIndex))
-                return validIndex
+            // Prediction: always use latest candle (entry pinned to most recent)
+            if controlViewModel.currentMarkerType == .predictionTarget {
+                return max(0, chartData.candles.count - 1)
             }
+            if previewCandleIndex < 0 {
+                return calculateCenterCandleIndex()
+            }
+            return max(0, min(chartData.candles.count - 1, previewCandleIndex))
         }
         return max(0, previewCandleIndex)
     }
@@ -515,7 +516,9 @@ struct TradingChartView: View {
                 chartData: chartData,
                 candles: chartData.candles,
                 markerType: info.markerType,
-                initialTargetPrice: info.targetPrice
+                initialTargetPrice: info.targetPrice,
+                placementAlertSeverity: $placementAlertSeverity,
+                placementSelectedEmoji: $placementSelectedEmoji
             )
             .presentationDetents([.fraction(0.5), .large])
             .presentationDragIndicator(.visible)
@@ -527,7 +530,8 @@ struct TradingChartView: View {
                 markerManager: markerManager,
                 selectedDetent: $markerDetailDetent
             )
-            .presentationDetents([.fraction(0.5), .large])
+            .presentationDetents([.fraction(0.35), .fraction(0.5), .large], selection: $markerDetailDetent)
+            .presentationDragIndicator(.visible)
             .presentationBackground {
                 ZStack {
                     Color.clear
@@ -537,6 +541,11 @@ struct TradingChartView: View {
             }
             .presentationCornerRadius(33)
             .presentationBackgroundInteraction(.enabled(upThrough: .large))
+        }
+        .onChange(of: markerManager.selectedMarker) { _, new in
+            if new != nil {
+                markerDetailDetent = .fraction(0.35)
+            }
         }
         .onAppear(perform: handleOnAppear)
         .onChange(of: controlViewModel.isMarkerPlacementMode) { oldValue, newValue in
@@ -577,6 +586,8 @@ struct TradingChartView: View {
             chartInfoBox(geometry: geometry)
             chartControlsBox(geometry: geometry)
             markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+            draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+            draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
             targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
             
             CrosshairView(
@@ -681,6 +692,46 @@ struct TradingChartView: View {
         )
     }
     
+    @ViewBuilder
+    private func draggableMarkerLineOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
+        if let marker = activeSelectedMarker,
+           (marker.type == .entry || marker.type == .exit || marker.type == .takeProfit || marker.type == .stopLoss),
+           marker.type.hasHorizontalLine,
+           let candle = chartData.candles.indices.contains(marker.candleIndex) ? chartData.candles[marker.candleIndex] : nil,
+           let linePrice = marker.horizontalLinePrice ?? marker.linePrice(for: candle) {
+            DraggableMarkerLineOverlay(
+                marker: marker,
+                currentPrice: linePrice,
+                markerManager: markerManager,
+                coordinateSystem: coordinateSystem,
+                chartWidth: geometry.size.width,
+                chartHeight: geometry.size.height,
+                chartData: chartData
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func draggablePredictionLinesOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
+        if let marker = activeSelectedMarker,
+           marker.type == .predictionTarget,
+           marker.candleIndex >= 0,
+           marker.candleIndex < chartData.candles.count {
+            let candle = chartData.candles[marker.candleIndex]
+            let entryPrice = marker.horizontalLinePrice ?? marker.linePrice(for: candle) ?? marker.price
+            DraggablePredictionLinesOverlay(
+                marker: marker,
+                entryPrice: entryPrice,
+                targetPrice: marker.targetPrice,
+                markerManager: markerManager,
+                coordinateSystem: coordinateSystem,
+                chartWidth: geometry.size.width,
+                chartHeight: geometry.size.height,
+                chartData: chartData
+            )
+        }
+    }
+
     // MARK: - Marker Price Lines Overlay
     
     @ViewBuilder
@@ -1020,6 +1071,11 @@ struct TradingChartView: View {
         }
     }
     
+    private var effectivePreviewColor: Color {
+        if effectiveMarkerType == .alert, let severity = placementAlertSeverity { return severity.color }
+        return effectiveMarkerType?.color ?? .blue
+    }
+
     @ViewBuilder
     private func previewMarkerContent(candle: RLCandleDTO, x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
         ZStack {
@@ -1033,16 +1089,23 @@ struct TradingChartView: View {
                 .frame(width: 40, height: 40)
                 .overlay(
                     Circle()
-                        .stroke(effectiveMarkerType?.color ?? .blue, lineWidth: 3)
+                        .stroke(effectivePreviewColor, lineWidth: 3)
                 )
             
             Circle()
-                .fill(effectiveMarkerType?.color ?? .blue)
+                .fill(effectivePreviewColor)
                 .frame(width: 24, height: 24)
                 .overlay(
-                    Image(systemName: effectiveMarkerType?.icon ?? "mappin")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
+                    Group {
+                        if effectiveMarkerType == .emoji {
+                            Text(placementSelectedEmoji ?? "🎯")
+                                .font(.system(size: 14))
+                        } else {
+                            Image(systemName: effectiveMarkerType?.icon ?? "mappin")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
                 )
             
             previewMarkerInfoBox(candle: candle)
@@ -1095,23 +1158,23 @@ struct TradingChartView: View {
     // MARK: - Button Action Handlers
     
     private func handleConfirmTargetPress(coordinateSystem: ChartCoordinateSystem) {
-        // FIXED: Check pendingMarkerInfo instead of isShowingSheet
         guard pendingMarkerInfo == nil else { return }
         
-        guard let timestamp = coordinateSystem.timestamp(forCandleIndex: previewCandleIndex),
-              previewCandleIndex >= 0,
-              previewCandleIndex < chartData.candles.count,
+        let candleIdx = effectiveCandleIndex
+        guard let timestamp = coordinateSystem.timestamp(forCandleIndex: candleIdx),
+              candleIdx >= 0,
+              candleIdx < chartData.candles.count,
               let markerType = controlViewModel.currentMarkerType,
               let targetPrice = predictionTargetPrice else {
             return
         }
         
-        let candle = chartData.candles[previewCandleIndex]
+        let candle = chartData.candles[candleIdx]
         markerManager.selectedMarker = nil
         
         // FIXED: Setting pendingMarkerInfo automatically presents the sheet via sheet(item:)
         pendingMarkerInfo = PendingMarkerInfo(
-            candleIndex: previewCandleIndex,
+            candleIndex: candleIdx,
             timestamp: timestamp,
             price: candle.close,
             markerType: markerType,
@@ -1123,24 +1186,24 @@ struct TradingChartView: View {
     }
     
     private func handlePlaceMarkerPress(coordinateSystem: ChartCoordinateSystem) {
-        // FIXED: Check pendingMarkerInfo instead of isShowingSheet
         guard pendingMarkerInfo == nil else { return }
         
-        guard let timestamp = coordinateSystem.timestamp(forCandleIndex: previewCandleIndex),
-              previewCandleIndex >= 0,
-              previewCandleIndex < chartData.candles.count,
+        let candleIdx = effectiveCandleIndex
+        guard let timestamp = coordinateSystem.timestamp(forCandleIndex: candleIdx),
+              candleIdx >= 0,
+              candleIdx < chartData.candles.count,
               let markerType = controlViewModel.currentMarkerType else {
             return
         }
         
-        if let existingMarker = markerManager.existingMarkerOfType(markerType, atCandleIndex: previewCandleIndex) {
+        if let existingMarker = markerManager.existingMarkerOfType(markerType, atCandleIndex: candleIdx) {
             controlViewModel.cancelMarkerPlacement()
             markerManager.duplicateMarkerToLike = existingMarker
             markerManager.showDuplicateAlert = true
             return
         }
         
-        let candle = chartData.candles[previewCandleIndex]
+        let candle = chartData.candles[candleIdx]
         
         if markerType == .predictionTarget {
             let entryPrice = candle.close
@@ -1153,7 +1216,7 @@ struct TradingChartView: View {
             
             // FIXED: Setting pendingMarkerInfo automatically presents the sheet via sheet(item:)
             pendingMarkerInfo = PendingMarkerInfo(
-                candleIndex: previewCandleIndex,
+                candleIndex: candleIdx,
                 timestamp: timestamp,
                 price: candle.close,
                 markerType: markerType
@@ -1202,6 +1265,8 @@ struct TradingChartView: View {
                 self.isAwaitingTargetSelection = false
                 self.predictionTargetPrice = nil
                 self.isDraggingTarget = false
+                self.placementAlertSeverity = nil
+                self.placementSelectedEmoji = nil
             }
         }
     }
@@ -1362,6 +1427,33 @@ struct TradingChartView: View {
     
     // MARK: - Tap Gesture for Markers
     
+    /// Find the candle index closest to the given timestamp (for centering chart on selected marker).
+    private static func findCandleIndexForTimestamp(_ timestamp: Date, in candles: [RLCandleDTO]) -> Int? {
+        guard !candles.isEmpty else { return nil }
+        var left = 0
+        var right = candles.count - 1
+        var closestIndex: Int?
+        var minDiff = TimeInterval.infinity
+        while left <= right {
+            let mid = (left + right) / 2
+            let candle = candles[mid]
+            let diff = abs(candle.timestamp.timeIntervalSince(timestamp))
+            if diff < minDiff {
+                minDiff = diff
+                closestIndex = mid
+            }
+            if candle.timestamp < timestamp {
+                left = mid + 1
+            } else if candle.timestamp > timestamp {
+                right = mid - 1
+            } else {
+                return mid
+            }
+        }
+        if minDiff < 86400 { return closestIndex }
+        return nil
+    }
+    
     private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
         // FIXED: Use a longer minimum distance and check start/end proximity
         // to prevent accidental marker selection while panning
@@ -1402,6 +1494,14 @@ struct TradingChartView: View {
                         tappedMarkerId = nil
                     }
                     markerManager.selectedMarker = marker
+                    let chartWidth = geometry.size.width
+                    let candles = chartData.candles
+                    let timestamp = marker.candleTimestamp
+                    let width = totalCandleWidth
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        let index = Self.findCandleIndexForTimestamp(timestamp, in: candles) ?? max(0, candles.count - 50)
+                        gestureState.centerOnCandle(at: index, chartWidth: chartWidth, candleWidth: width)
+                    }
                 }
             }
     }
@@ -1621,67 +1721,56 @@ struct TradingChartView: View {
         let totalOffset = gestureState.panOffset.width
         let timeframe = chartViewModel.currentTimeframe
         
-        guard chartData.candles.count >= 2 else { return }
+        guard !chartData.candles.isEmpty else { return }
         
-        // Get the time range we need to cover
-        let firstCandle = chartData.candles.first!
-        let lastCandle = chartData.candles.last!
+        // Use same visible range as candlestick drawing so labels align exactly with candles.
+        // No uniform timePerCandle — each label is drawn at a real candle's x using that candle's timestamp,
+        // so ingestion gaps don't break alignment.
+        let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth) - 1)
+        let visibleEndIndex = Swift.min(
+            chartData.candles.count,
+            Swift.max(visibleStartIndex, visibleStartIndex + Int(size.width / totalCandleWidth) + 3)
+        )
+        guard visibleStartIndex < visibleEndIndex else { return }
         
-        // Calculate nice time step based on timeframe and zoom
-        let niceTimeStep = getNiceTimeStep(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
-        
-        // Calculate the time span per candle from actual data
-        let timePerCandle = chartData.candles[1].timestamp.timeIntervalSince(chartData.candles[0].timestamp)
-        guard timePerCandle > 0 else { return }
-        
-        // Find the first "nice" time boundary before our data starts
-        let calendar = Calendar.current
-        let startTime = firstCandle.timestamp.timeIntervalSince1970
-        let alignedStart = floor(startTime / niceTimeStep) * niceTimeStep
-        
-        // Draw labels at regular time intervals
-        var currentTime = alignedStart
-        let endTime = lastCandle.timestamp.timeIntervalSince1970 + timePerCandle * 10
-        
-        var lastDrawnX: CGFloat = -200  // Track last x to avoid overlap
+        let niceInterval = getNiceTimeInterval(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
+        var lastDrawnX: CGFloat = -200
         let minSpacing: CGFloat = getMinLabelSpacing(for: timeframe)
+        let lastCandleIndex = chartData.candles.count - 1
         
-        while currentTime <= endTime {
-            // Convert time to candle index
-            let candleIndex = (currentTime - startTime) / timePerCandle
+        for i in visibleStartIndex..<visibleEndIndex {
+            let candle = chartData.candles[i]
+            let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
             
-            // Convert candle index to screen x position
-            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+            let inVisibleArea = x >= -50 && x <= size.width + 50
+            let isFirstVisible = (i == visibleStartIndex)
+            let isLastCandle = (i == lastCandleIndex)
+            let hasSpacing = (x - lastDrawnX) >= minSpacing
+            let isNiceBoundary = isNiceTimeBoundary(candle.timestamp, interval: niceInterval, timeframe: timeframe)
             
-            // Only draw if in visible area and not too close to last label
-            if x >= -50 && x <= size.width + 50 && (x - lastDrawnX) >= minSpacing {
-                let date = Date(timeIntervalSince1970: currentTime)
-                let components = calendar.dateComponents([.hour, .minute], from: date)
-                let hour = components.hour ?? 0
-                let minute = components.minute ?? 0
-                let isMidnight = hour == 0 && minute == 0
-                
-                if isMidnight {
-                    let text = formatDateLabel(date, timeframe: timeframe)
-                    context.draw(
-                        Text(text)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white),
-                        at: CGPoint(x: x, y: 10)
-                    )
-                } else {
-                    let text = formatTimeLabel(date, timeframe: timeframe)
-                    context.draw(
-                        Text(text)
-                            .font(.system(size: 11))
-                            .foregroundColor(.gray),
-                        at: CGPoint(x: x, y: 10)
-                    )
-                }
-                lastDrawnX = x
+            // Always label first visible and last candle (exact edges). Otherwise label at nice boundaries with spacing.
+            let shouldLabel = inVisibleArea && (isFirstVisible || isLastCandle || (isNiceBoundary && hasSpacing))
+            guard shouldLabel else { continue }
+            
+            let isMidnight = isAtMidnight(candle.timestamp, timeframe: timeframe)
+            if isMidnight {
+                let text = formatDateLabel(candle.timestamp, timeframe: timeframe)
+                context.draw(
+                    Text(text)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white),
+                    at: CGPoint(x: x, y: 10)
+                )
+            } else {
+                let text = formatTimeLabel(candle.timestamp, timeframe: timeframe)
+                context.draw(
+                    Text(text)
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray),
+                    at: CGPoint(x: x, y: 10)
+                )
             }
-            
-            currentTime += niceTimeStep
+            lastDrawnX = x
         }
     }
     
@@ -2514,6 +2603,135 @@ struct MarkerHorizontalLinePreview: View {
     }
 }
 
+// MARK: - Draggable Marker Line Overlay (Entry / Exit / TP / SL)
+
+struct DraggableMarkerLineOverlay: View {
+    let marker: ChartMarkerUI
+    let currentPrice: Double
+    @ObservedObject var markerManager: MarkerManager
+    let coordinateSystem: ChartCoordinateSystem
+    let chartWidth: CGFloat
+    let chartHeight: CGFloat
+    let chartData: ChartDataManager
+
+    @State private var dragPrice: Double? = nil
+    @State private var isDragging = false
+    @State private var dragStartY: CGFloat = 0
+    @State private var dragStartPrice: Double = 0
+
+    private var effectivePrice: Double { dragPrice ?? currentPrice }
+    private var lineY: CGFloat { coordinateSystem.yPosition(forPrice: effectivePrice) }
+
+    var body: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .frame(width: chartWidth, height: chartHeight)
+            .overlay(
+                Color.clear
+                    .contentShape(Rectangle())
+                    .frame(width: chartWidth, height: 44)
+                    .position(x: chartWidth / 2, y: lineY)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                if !isDragging {
+                                    isDragging = true
+                                    dragStartY = coordinateSystem.yPosition(forPrice: currentPrice)
+                                    dragStartPrice = currentPrice
+                                }
+                                let newY = dragStartY + value.translation.height
+                                let newPrice = coordinateSystem.price(atYPosition: newY)
+                                let clamped = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                                dragPrice = clamped
+                            }
+                            .onEnded { value in
+                                let newY = dragStartY + value.translation.height
+                                let newPrice = coordinateSystem.price(atYPosition: newY)
+                                let clamped = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                                Task {
+                                    await markerManager.updateMarker(
+                                        id: marker.id,
+                                        horizontalLinePrice: clamped
+                                    )
+                                }
+                                dragPrice = nil
+                                isDragging = false
+                            }
+                    )
+            )
+    }
+}
+
+// MARK: - Draggable Prediction Lines (Entry + Target)
+
+struct DraggablePredictionLinesOverlay: View {
+    let marker: ChartMarkerUI
+    let entryPrice: Double
+    let targetPrice: Double?
+    @ObservedObject var markerManager: MarkerManager
+    let coordinateSystem: ChartCoordinateSystem
+    let chartWidth: CGFloat
+    let chartHeight: CGFloat
+    let chartData: ChartDataManager
+
+    @State private var dragEntryPrice: Double? = nil
+    @State private var dragTargetPrice: Double? = nil
+    @State private var entryDragStartY: CGFloat = 0
+    @State private var targetDragStartY: CGFloat = 0
+
+    private var effectiveEntryPrice: Double { dragEntryPrice ?? entryPrice }
+    private var effectiveTargetPrice: Double? { targetPrice.map { dragTargetPrice ?? $0 } ?? dragTargetPrice }
+
+    var body: some View {
+        ZStack {
+            if let target = effectiveTargetPrice {
+                draggableStrip(price: target, isTarget: true)
+            }
+            draggableStrip(price: effectiveEntryPrice, isTarget: false)
+        }
+        .frame(width: chartWidth, height: chartHeight)
+    }
+
+    private func draggableStrip(price: Double, isTarget: Bool) -> some View {
+        let y = coordinateSystem.yPosition(forPrice: price)
+        return Color.clear
+            .contentShape(Rectangle())
+            .frame(width: chartWidth, height: 44)
+            .position(x: chartWidth / 2, y: y)
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if isTarget {
+                            if dragTargetPrice == nil { targetDragStartY = y }
+                            let newY = targetDragStartY + value.translation.height
+                            let newPrice = coordinateSystem.price(atYPosition: newY)
+                            dragTargetPrice = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                        } else {
+                            if dragEntryPrice == nil { entryDragStartY = y }
+                            let newY = entryDragStartY + value.translation.height
+                            let newPrice = coordinateSystem.price(atYPosition: newY)
+                            dragEntryPrice = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                        }
+                    }
+                    .onEnded { value in
+                        if isTarget {
+                            let newY = targetDragStartY + value.translation.height
+                            let newPrice = coordinateSystem.price(atYPosition: newY)
+                            let clamped = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                            Task { await markerManager.updateMarker(id: marker.id, targetPrice: clamped) }
+                            dragTargetPrice = nil
+                        } else {
+                            let newY = entryDragStartY + value.translation.height
+                            let newPrice = coordinateSystem.price(atYPosition: newY)
+                            let clamped = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                            Task { await markerManager.updateMarker(id: marker.id, horizontalLinePrice: clamped) }
+                            dragEntryPrice = nil
+                        }
+                    }
+            )
+    }
+}
+
 // MARK: - Marker Price Lines Overlay
 
 struct MarkerPriceLinesOverlay: View {
@@ -2539,14 +2757,8 @@ struct MarkerPriceLinesOverlay: View {
               marker.type.hasHorizontalLine,
               let candle = getCandleForMarker(marker) else { return }
         
-        // For prediction markers, prefer stored entry price (custom line source)
-        let linePrice: Double?
-        if marker.type == .predictionTarget {
-            // Use stored entry price for prediction markers
-            linePrice = marker.horizontalLinePrice ?? marker.linePrice(for: candle)
-        } else {
-            linePrice = marker.linePrice(for: candle)
-        }
+        // Use stored horizontal line price when set (e.g. after user drag); else derive from candle
+        let linePrice: Double? = marker.horizontalLinePrice ?? marker.linePrice(for: candle)
         
         // Draw entry/main line if we have a price
         if let price = linePrice {
@@ -2556,7 +2768,7 @@ struct MarkerPriceLinesOverlay: View {
                 context: context,
                 size: size,
                 price: price,
-                color: marker.type.color,
+                color: marker.displayColor,
                 isDashed: false,
                 label: label
             )

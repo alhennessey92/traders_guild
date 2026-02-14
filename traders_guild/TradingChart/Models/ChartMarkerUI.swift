@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 struct ChartMarkerUI: Identifiable, Hashable {
     var marker: RLChartMarkerDTO
@@ -55,6 +56,12 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var userPollVote: UUID? { marker.userPollVote }
     var totalPollVotes: Int {
         pollOptions?.reduce(0) { $0 + $1.voteCount } ?? 0
+    }
+
+    /// Effective color for rendering: for Alert type uses severity (Mild=blue, Moderate=orange, etc.), otherwise type color.
+    var displayColor: Color {
+        if type == .alert, let severity = alertSeverity { return severity.color }
+        return type.color
     }
     
     init(marker: RLChartMarkerDTO, candleIndex: Int) {

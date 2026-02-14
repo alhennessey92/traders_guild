@@ -126,7 +126,7 @@ class ChartViewModel: ObservableObject {
     }
     
     /// Load chart data (symbol + candles + markers) from backend
-    private func loadChartData(symbolId: UUID, guildId: UUID, timeframe: RLChartTimeframe) async {
+    private func loadChartData(symbolId: UUID, guildId: UUID, timeframe: RLChartTimeframe, skipSubscribe: Bool = false) async {
         do {
             let timeframeString = timeframe.toBackendString()
             let chartData = try await api.getChartData(
@@ -135,7 +135,7 @@ class ChartViewModel: ObservableObject {
                 timeframe: timeframeString,
                 candleLimit: timeframe.initialCandlesCount
             )
-            
+
             // Update current symbol if it changed
             if currentSymbol?.id != chartData.symbol.id {
                 currentSymbol = chartData.symbol
@@ -146,10 +146,13 @@ class ChartViewModel: ObservableObject {
 
             // Update candles
             dataManager.updateWithMarketData(chartData.candles)
-            
+
             // Subscribe to real-time price ticks for this symbol/timeframe
-            subscribeToRealTimeTicks(guildId: guildId, symbolId: symbolId, timeframe: timeframe)
-            
+            // (skipped when caller already subscribed to avoid double-subscribe)
+            if !skipSubscribe {
+                subscribeToRealTimeTicks(guildId: guildId, symbolId: symbolId, timeframe: timeframe)
+            }
+
             // Update markers (if markerManager is set)
             if let markerManager = markerManager {
                 await markerManager.loadMarkersFromAPI(
@@ -161,7 +164,7 @@ class ChartViewModel: ObservableObject {
                     candles: dataManager.candles
                 )
             }
-            
+
         } catch {
             errorMessage = "Failed to load chart data: \(error.localizedDescription)"
             appState.showError(error, title: "Failed to Load Chart", style: .toast)
@@ -195,45 +198,71 @@ class ChartViewModel: ObservableObject {
     
     /// Handle symbol change - regenerate chart data with new symbol
     private func handleSymbolChange() {
-        // Unsubscribe from old symbol's ticks
-        unsubscribeFromRealTimeTicks()
-        
         guard let symbol = currentSymbol,
               let guildId = appState.currentGuild?.id else {
             // No guild selected - show error
+            unsubscribeFromRealTimeTicks()
             errorMessage = "No guild selected"
             appState.showError(title: "No Guild", message: "Please select a guild to view charts", style: .toast)
             dataManager.updateWithMarketData([])
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
             return
         }
-        
+
+        // Capture old channels before subscribing to new ones
+        let oldTickChannel = currentTickChannel
+        let oldCandleChannel = currentCandleChannel
+
+        // Subscribe to NEW channels FIRST to avoid missing messages during load
+        subscribeToRealTimeTicks(guildId: guildId, symbolId: symbol.id, timeframe: currentTimeframe)
+
         // Load real chart data from backend
         Task {
-            await loadChartData(symbolId: symbol.id, guildId: guildId, timeframe: currentTimeframe)
+            await loadChartData(symbolId: symbol.id, guildId: guildId, timeframe: currentTimeframe, skipSubscribe: true)
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
+
+            // Unsubscribe from OLD channels after data is loaded
+            var oldChannels: [String] = []
+            if let ch = oldTickChannel, ch != currentTickChannel { oldChannels.append(ch) }
+            if let ch = oldCandleChannel, ch != currentCandleChannel { oldChannels.append(ch) }
+            if !oldChannels.isEmpty {
+                RealTimeService.shared.unsubscribe(from: oldChannels, owner: "chart")
+            }
         }
     }
     
     /// Handle timeframe change - regenerate chart data with new timeframe
     private func handleTimeframeChange() {
-        // Unsubscribe from old timeframe's ticks
-        unsubscribeFromRealTimeTicks()
-        
         guard let symbol = currentSymbol,
               let guildId = appState.currentGuild?.id else {
             // No symbol/guild - show error
+            unsubscribeFromRealTimeTicks()
             errorMessage = "No symbol or guild selected"
             appState.showError(title: "No Chart Data", message: "Please select a symbol and guild", style: .toast)
             dataManager.updateWithMarketData([])
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
             return
         }
-        
-        // Load real chart data with new timeframe
+
+        // Capture old channels before subscribing to new ones
+        let oldTickChannel = currentTickChannel
+        let oldCandleChannel = currentCandleChannel
+
+        // Subscribe to NEW channels FIRST to avoid missing messages during load
+        subscribeToRealTimeTicks(guildId: guildId, symbolId: symbol.id, timeframe: currentTimeframe)
+
         Task {
-            await loadChartData(symbolId: symbol.id, guildId: guildId, timeframe: currentTimeframe)
+            // Load data (skip subscribe since we already did it above)
+            await loadChartData(symbolId: symbol.id, guildId: guildId, timeframe: currentTimeframe, skipSubscribe: true)
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
+
+            // Unsubscribe from OLD channels after data is loaded
+            var oldChannels: [String] = []
+            if let ch = oldTickChannel, ch != currentTickChannel { oldChannels.append(ch) }
+            if let ch = oldCandleChannel, ch != currentCandleChannel { oldChannels.append(ch) }
+            if !oldChannels.isEmpty {
+                RealTimeService.shared.unsubscribe(from: oldChannels, owner: "chart")
+            }
         }
     }
     
@@ -306,6 +335,9 @@ class ChartViewModel: ObservableObject {
         // Handle completed candle messages (type: "candle_complete")
         else if message.type == "candle_complete" {
             guard let candlePayload = message.payload(as: MarketCandlePayload.self) else { return }
+
+            // Reject candles from wrong timeframe (can happen during switchover overlap)
+            guard candlePayload.timeframe == currentTimeframe.toBackendString() else { return }
             let candle = RLCandleDTO(
                 timestamp: candlePayload.candle.timestamp,
                 timestampFormatted: nil,

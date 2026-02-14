@@ -36,7 +36,10 @@ struct PhotoPickerView: UIViewControllerRepresentable {
         }
 
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            picker.dismiss(animated: true)
+            // Do NOT call picker.dismiss() here — SwiftUI manages dismissal
+            // via the fullScreenCover binding. Calling dismiss on the UIKit
+            // controller conflicts with SwiftUI and can cascade-dismiss the
+            // parent sheet.
 
             guard let provider = results.first?.itemProvider,
                   provider.canLoadObject(ofClass: UIImage.self) else {

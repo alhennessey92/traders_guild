@@ -151,6 +151,8 @@ enum RLMarkerType: String, Codable, CaseIterable {
         switch string.lowercased() {
         case "entry": return .entry
         case "exit": return .exit
+        case "stop_loss": return .stopLoss
+        case "take_profit": return .takeProfit
         case "prediction": return .predictionTarget
         case "analysis": return .note
         case "alert": return .alert
@@ -163,6 +165,8 @@ enum RLMarkerType: String, Codable, CaseIterable {
         case "poll": return .poll
         case "note": return .note
         case "question": return .question
+        case "volume_spike": return .volumeSpike
+        case "personal": return .personal
         default: return nil
         }
     }

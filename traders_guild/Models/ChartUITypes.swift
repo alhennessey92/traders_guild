@@ -35,11 +35,12 @@ enum MarkerAlertSeverity: String, Codable, CaseIterable {
     case severe = "Severe"
     case critical = "Critical"
     
+    /// Alert marker color by severity: Mild=blue, Moderate=orange, Severe=yellow, Critical=red
     var color: Color {
         switch self {
-        case .mild: return .green
-        case .moderate: return .yellow
-        case .severe: return .orange
+        case .mild: return .blue
+        case .moderate: return .orange
+        case .severe: return .yellow
         case .critical: return .red
         }
     }

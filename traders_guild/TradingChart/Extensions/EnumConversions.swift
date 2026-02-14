@@ -34,14 +34,14 @@ extension RLMarkerType {
         switch self {
         // Core markers
         case .note: return "analysis"
-        case .question: return "analysis"
+        case .question: return "question"
         case .alert: return "alert"
         case .entry: return "entry"
         case .exit: return "exit"
         
-        // Trading markers (map to entry/exit)
-        case .stopLoss: return "entry"  // Backend doesn't have stopLoss, use entry
-        case .takeProfit: return "exit"  // Backend doesn't have takeProfit, use exit
+        // Trading markers (distinct types so they round-trip correctly)
+        case .stopLoss: return "stop_loss"
+        case .takeProfit: return "take_profit"
         
         // Analysis markers
         case .support: return "support"
@@ -49,7 +49,7 @@ extension RLMarkerType {
         case .indicator: return "indicator"
         case .trendline: return "trendline"
         case .pattern: return "pattern"
-        case .volumeSpike: return "analysis"  // Backend doesn't have volumeSpike, use analysis
+        case .volumeSpike: return "volume_spike"
         
         // Prediction markers
         case .predictionTarget: return "prediction"
@@ -57,7 +57,7 @@ extension RLMarkerType {
         // Social markers
         case .emoji: return "emoji"
         case .poll: return "poll"
-        case .personal: return "analysis"  // Backend doesn't have personal, use analysis
+        case .personal: return "personal"
         }
     }
     

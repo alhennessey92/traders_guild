@@ -1732,7 +1732,7 @@ class RLAppState: ObservableObject {
     }
     
     /// Send a chatroom message
-    func sendChatroomMessage(chatroomId: UUID, content: String) async throws -> RLChatroomMessageDTO {
+    func sendChatroomMessage(chatroomId: UUID, content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) async throws -> RLChatroomMessageDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
@@ -1740,7 +1740,10 @@ class RLAppState: ObservableObject {
             return try await realApi.sendChatroomMessage(
                 guildId: guild.id,
                 chatroomId: chatroomId,
-                content: content
+                content: content,
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
             )
         } catch {
             showError(error, title: "Failed to Send Message", style: .toast)
@@ -1937,7 +1940,7 @@ class RLAppState: ObservableObject {
     }
     
     /// Send a DM message
-    func sendDMMessage(threadId: UUID, content: String) async throws -> RLDMMessageDTO {
+    func sendDMMessage(threadId: UUID, content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) async throws -> RLDMMessageDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
@@ -1945,7 +1948,10 @@ class RLAppState: ObservableObject {
             return try await realApi.sendDMMessage(
                 guildId: guild.id,
                 threadId: threadId,
-                content: content
+                content: content,
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
             )
         } catch {
             showError(error, title: "Failed to Send Message", style: .toast)
@@ -2510,4 +2516,3 @@ extension Notification.Name {
     /// userInfo: ["guildId": UUID, "userId": UUID, "suspendedUntil": String?, "action": String]
     static let guildMemberSuspendChanged = Notification.Name("guildMemberSuspendChanged")
 }
-

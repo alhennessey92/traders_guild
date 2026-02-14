@@ -955,6 +955,11 @@ struct UnifiedAuthorRow: View {
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundColor(AppColors.whiteText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .minimumScaleFactor(0.6)
+                .frame(minWidth: 40)
+                .layoutPriority(1)
             
             // Online indicator
             if isOnline {

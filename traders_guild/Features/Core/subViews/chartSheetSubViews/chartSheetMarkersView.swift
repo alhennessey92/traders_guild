@@ -46,8 +46,24 @@ struct chartSheetMarkersView: View {
                 
                 VStack(spacing: 8) {
                     
-                    // MARK: - Core Markers Section
-                    Text("Core Markers")
+                    // MARK: - Prediction Trade (reputation-affecting, no heading)
+                    HStack(alignment: .top, spacing: 12) {
+                        Text("Reputation-affecting trade prediction. You must set SL and TP; marker is placed at the most recent candle as entry.")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        MarkerButton(
+                            type: .predictionTarget,
+                            isActive: isMarkerPlacementActive(for: .predictionTarget),
+                            controlViewModel: controlViewModel
+                        )
+                        .frame(width: 90)
+                    }
+                    .padding(.top, 4)
+                    .padding(.bottom, 4)
+                    
+                    // MARK: - Trade Ideas
+                    Text("Trade Ideas")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -56,31 +72,22 @@ struct chartSheetMarkersView: View {
                     
                     HStack(spacing: 10) {
                         MarkerButton(
-                            type: .note,
-                            isActive: isMarkerPlacementActive(for: .note),
-                            controlViewModel: controlViewModel
-                        )
-                        
-                        MarkerButton(
-                            type: .question,
-                            isActive: isMarkerPlacementActive(for: .question),
-                            controlViewModel: controlViewModel
-                        )
-                        
-                        MarkerButton(
-                            type: .alert,
-                            isActive: isMarkerPlacementActive(for: .alert),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    
-                    HStack(spacing: 10) {
-                        MarkerButton(
                             type: .entry,
                             isActive: isMarkerPlacementActive(for: .entry),
                             controlViewModel: controlViewModel
                         )
-                        
+                        MarkerButton(
+                            type: .takeProfit,
+                            isActive: isMarkerPlacementActive(for: .takeProfit),
+                            controlViewModel: controlViewModel
+                        )
+                    }
+                    HStack(spacing: 10) {
+                        MarkerButton(
+                            type: .stopLoss,
+                            isActive: isMarkerPlacementActive(for: .stopLoss),
+                            controlViewModel: controlViewModel
+                        )
                         MarkerButton(
                             type: .exit,
                             isActive: isMarkerPlacementActive(for: .exit),
@@ -88,8 +95,8 @@ struct chartSheetMarkersView: View {
                         )
                     }
                     
-                    // MARK: - Analysis Markers Section
-                    Text("Analysis Markers")
+                    // MARK: - Analysis
+                    Text("Analysis")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -102,42 +109,60 @@ struct chartSheetMarkersView: View {
                             isActive: isMarkerPlacementActive(for: .support),
                             controlViewModel: controlViewModel
                         )
-                        
                         MarkerButton(
                             type: .resistance,
                             isActive: isMarkerPlacementActive(for: .resistance),
                             controlViewModel: controlViewModel
                         )
-                        
-                        MarkerButton(
-                            type: .indicator,
-                            isActive: isMarkerPlacementActive(for: .indicator),
-                            controlViewModel: controlViewModel
-                        )
                     }
-                    
                     HStack(spacing: 10) {
                         MarkerButton(
                             type: .trendline,
                             isActive: isMarkerPlacementActive(for: .trendline),
                             controlViewModel: controlViewModel
                         )
-                        
                         MarkerButton(
                             type: .pattern,
                             isActive: isMarkerPlacementActive(for: .pattern),
                             controlViewModel: controlViewModel
                         )
-                        
+                    }
+                    
+                    // MARK: - Signals & Observations
+                    Text("Signals & Observations")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 12)
+                        .padding(.bottom, 4)
+                    
+                    HStack(spacing: 10) {
+                        MarkerButton(
+                            type: .indicator,
+                            isActive: isMarkerPlacementActive(for: .indicator),
+                            controlViewModel: controlViewModel
+                        )
                         MarkerButton(
                             type: .volumeSpike,
                             isActive: isMarkerPlacementActive(for: .volumeSpike),
                             controlViewModel: controlViewModel
                         )
                     }
+                    HStack(spacing: 10) {
+                        MarkerButton(
+                            type: .alert,
+                            isActive: isMarkerPlacementActive(for: .alert),
+                            controlViewModel: controlViewModel
+                        )
+                        MarkerButton(
+                            type: .question,
+                            isActive: isMarkerPlacementActive(for: .question),
+                            controlViewModel: controlViewModel
+                        )
+                    }
                     
-                    // MARK: - Prediction Markers Section
-                    Text("Prediction Markers")
+                    // MARK: - Notes & Social
+                    Text("Notes & Social")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -146,36 +171,22 @@ struct chartSheetMarkersView: View {
                     
                     HStack(spacing: 10) {
                         MarkerButton(
-                            type: .predictionTarget,
-                            isActive: isMarkerPlacementActive(for: .predictionTarget),
+                            type: .note,
+                            isActive: isMarkerPlacementActive(for: .note),
                             controlViewModel: controlViewModel
                         )
-                        
-//                        Spacer()
-//                        Spacer()
+                        MarkerButton(
+                            type: .poll,
+                            isActive: isMarkerPlacementActive(for: .poll),
+                            controlViewModel: controlViewModel
+                        )
                     }
-                    
-                    // MARK: - Social Markers Section
-                    Text("Social Markers")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 12)
-                        .padding(.bottom, 4)
-                    
                     HStack(spacing: 10) {
                         MarkerButton(
                             type: .emoji,
                             isActive: isMarkerPlacementActive(for: .emoji),
                             controlViewModel: controlViewModel
                         )
-                        
-                        MarkerButton(
-                            type: .poll,
-                            isActive: isMarkerPlacementActive(for: .poll),
-                            controlViewModel: controlViewModel
-                        )
-                        
                         MarkerButton(
                             type: .personal,
                             isActive: isMarkerPlacementActive(for: .personal),

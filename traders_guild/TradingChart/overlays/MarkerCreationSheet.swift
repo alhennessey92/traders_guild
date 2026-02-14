@@ -27,6 +27,8 @@ struct MarkerCreationSheet: View {
     let candles: [RLCandleDTO]
     let markerType: RLMarkerType
     let initialTargetPrice: Double?
+    @Binding var placementAlertSeverity: MarkerAlertSeverity?
+    @Binding var placementSelectedEmoji: String?
     
     @State private var note: String = ""
     
@@ -39,6 +41,7 @@ struct MarkerCreationSheet: View {
     @State private var pollQuestion: String = ""
     @State private var pollOption1: String = ""
     @State private var pollOption2: String = ""
+    @State private var questionText: String = ""
     @State private var targetPrice: String = ""
     
     var body: some View {
@@ -83,22 +86,40 @@ struct MarkerCreationSheet: View {
             if let initialTarget = initialTargetPrice {
                 targetPrice = chartData.formatPrice(initialTarget)
             }
+            if markerType == .alert { placementAlertSeverity = alertSeverity }
+            if markerType == .emoji { placementSelectedEmoji = selectedEmoji }
+        }
+        .onChange(of: alertSeverity) { _, new in
+            if markerType == .alert { placementAlertSeverity = new }
+        }
+        .onChange(of: selectedEmoji) { _, new in
+            if markerType == .emoji { placementSelectedEmoji = new }
         }
     }
     
     // MARK: - Header
     
+    private var headerColor: Color {
+        if markerType == .alert { return alertSeverity.color }
+        return markerType.color
+    }
+
     private var headerView: some View {
         HStack(spacing: 15) {
-            // Marker Icon
+            // Marker Icon (emoji type shows chosen emoji; alert uses severity color)
             ZStack {
                 Circle()
-                    .fill(markerType.color.opacity(0.3))
+                    .fill(headerColor.opacity(0.3))
                     .frame(width: 50, height: 50)
                 
-                Image(systemName: markerType.icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(markerType.color)
+                if markerType == .emoji {
+                    Text(selectedEmoji)
+                        .font(.system(size: 28))
+                } else {
+                    Image(systemName: markerType.icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(headerColor)
+                }
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -209,9 +230,115 @@ struct MarkerCreationSheet: View {
             emojiPicker
         case .poll:
             pollOptionsSection
+        case .question:
+            questionSection
+        case .predictionTarget:
+            predictionTradeDetailsSection
         default:
             EmptyView()
         }
+    }
+
+    private var predictionTradeDetailsSection: some View {
+        let entryVal = price
+        let targetVal: Double? = initialTargetPrice ?? Double(targetPrice.replacingOccurrences(of: ",", with: ""))
+        let isLong = (targetVal ?? entryVal) > entryVal
+        let rrRatio: String? = targetVal.map { t in
+            let diff = abs(t - entryVal)
+            guard diff > 0 else { return "—" }
+            let risk = entryVal * 0.01
+            let reward = abs(t - entryVal)
+            return String(format: "1:%.1f", reward / max(risk, 1e-9))
+        }
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Trade details")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Entry")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                    Spacer()
+                    Text(chartData.formatPrice(entryVal))
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.whiteText)
+                }
+                if let t = targetVal {
+                    HStack {
+                        Text("Target")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer()
+                        Text(chartData.formatPrice(t))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                    }
+                    HStack {
+                        Text("Direction")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer()
+                        Text(isLong ? "Long" : "Short")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                    }
+                    if let rr = rrRatio {
+                        HStack {
+                            Text("R:R")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                            Spacer()
+                            Text(rr)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(AppColors.whiteText)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(AppColors.whiteText.opacity(0.05))
+            .cornerRadius(8)
+        }
+        .padding(16)
+        .background(AppColors.whiteText.opacity(0.05))
+        .cornerRadius(12)
+    }
+
+    private var questionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "questionmark.circle")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentColor)
+                Text("Question (required)")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+            TextField("Enter your question...", text: $questionText, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(2...4)
+                .padding(12)
+                .background(AppColors.whiteText.opacity(0.05))
+                .cornerRadius(8)
+                .foregroundColor(AppColors.whiteText)
+        }
+        .padding(16)
+        .background(AppColors.whiteText.opacity(0.05))
+        .cornerRadius(12)
     }
     
     private var alertSeverityPicker: some View {
@@ -445,6 +572,29 @@ struct MarkerCreationSheet: View {
         .cornerRadius(12)
     }
     
+    private var buttonBackgroundColor: Color {
+        if markerType == .emoji { return Color.gray.opacity(0.5) }
+        return markerType.color
+    }
+    private var buttonForegroundColor: Color {
+        if markerType == .emoji { return .white }
+        return canPlaceMarker ? .white : .white.opacity(0.6)
+    }
+
+    /// Poll requires question and 2 options; Question type requires question text.
+    private var canPlaceMarker: Bool {
+        switch markerType {
+        case .poll:
+            return !pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !pollOption1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !pollOption2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .question:
+            return !questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        default:
+            return true
+        }
+    }
+
     // MARK: - Action Buttons
     
     private var actionButtons: some View {
@@ -460,19 +610,20 @@ struct MarkerCreationSheet: View {
                     .cornerRadius(12)
             }
             
-            // Add Marker Button
+            // Add Marker Button (disabled for Poll/Question until valid; emoji uses non-white background)
             Button(action: addMarker) {
                 HStack {
                     Image(systemName: "plus.circle.fill")
                     Text("Add Marker")
                 }
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(buttonForegroundColor)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(markerType.color)
+                .background(canPlaceMarker ? buttonBackgroundColor : buttonBackgroundColor.opacity(0.5))
                 .cornerRadius(12)
             }
+            .disabled(!canPlaceMarker)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -504,6 +655,13 @@ struct MarkerCreationSheet: View {
             targetPriceValue = initialTargetPrice ?? Double(targetPrice.replacingOccurrences(of: ",", with: ""))
         }
         
+        let effectiveNote: String?
+        if markerType == .question {
+            effectiveNote = questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? (note.isEmpty ? nil : note) : questionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            effectiveNote = note.isEmpty ? nil : note
+        }
+
         Task {
             let success = await markerManager.addMarker(
                 symbolId: symbolId,
@@ -511,7 +669,7 @@ struct MarkerCreationSheet: View {
                 timestamp: timestamp,
                 price: price,
                 type: markerType,
-                note: note.isEmpty ? nil : note,
+                note: effectiveNote,
                 candles: candles,
                 horizontalLinePrice: nil,
                 targetPrice: targetPriceValue,
@@ -521,7 +679,7 @@ struct MarkerCreationSheet: View {
                 chartPattern: markerType == .pattern ? chartPattern : nil,
                 selectedEmoji: markerType == .emoji ? selectedEmoji : nil,
                 pollQuestion: markerType == .poll ? pollQuestion : nil,
-            pollOptions: pollOptionsList
+                pollOptions: pollOptionsList
             )
             
             if success {

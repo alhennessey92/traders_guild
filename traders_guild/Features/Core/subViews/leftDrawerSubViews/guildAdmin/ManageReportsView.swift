@@ -71,7 +71,6 @@ struct ManageReportsView: View {
 
     // Resolution
     @State private var selectedReport: RLContentReportDTO? = nil
-    @State private var showResolveSheet: Bool = false
     @State private var resolutionNote: String = ""
     @State private var isProcessing: Bool = false
 
@@ -126,10 +125,8 @@ struct ManageReportsView: View {
         .onChange(of: selectedContentType) { _ in
             loadReports()
         }
-        .sheet(isPresented: $showResolveSheet) {
-            if let report = selectedReport {
-                resolveSheet(for: report)
-            }
+        .sheet(item: $selectedReport) { report in
+            resolveSheet(for: report)
         }
     }
 
@@ -302,11 +299,8 @@ struct ManageReportsView: View {
     @ViewBuilder
     private func reportCard(report: RLContentReportDTO) -> some View {
         Button(action: {
-            if report.isPending && canAdmin {
-                selectedReport = report
-                resolutionNote = ""
-                showResolveSheet = true
-            }
+            resolutionNote = ""
+            selectedReport = report
         }) {
             HStack(alignment: .top, spacing: 12) {
                 // Status indicator + Content type icon
@@ -392,150 +386,272 @@ struct ManageReportsView: View {
                         .foregroundColor(.secondary.opacity(0.6))
                 }
 
-                // Chevron for actionable reports
-                if report.isPending && canAdmin {
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary.opacity(0.5))
-                        .padding(.top, 4)
-                }
+                // Chevron for all reports
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary.opacity(0.5))
+                    .padding(.top, 4)
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
-        .disabled(!report.isPending || !canAdmin)
     }
 
-    // MARK: - Resolve Sheet
+    // MARK: - Report Detail Sheet
 
     @ViewBuilder
     private func resolveSheet(for report: RLContentReportDTO) -> some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Report summary
-                VStack(alignment: .leading, spacing: 12) {
-                    // Content type & reason
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+
+                    // ── Status Banner ──
                     HStack(spacing: 8) {
-                        Image(systemName: report.contentTypeIcon)
-                            .font(.title3)
-                            .foregroundColor(.secondary)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(report.contentTypeDisplay)
-                                .font(.headline)
-                            Text("Reason: \(report.reasonDisplay)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-
+                        Circle()
+                            .fill(report.statusColor)
+                            .frame(width: 10, height: 10)
+                        Text(report.status.uppercased())
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(report.statusColor)
                         Spacer()
+                        Text(report.reasonDisplay)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(reasonColor(for: report.reason)))
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(report.statusColor.opacity(0.1))
+                    )
+
+                    // ── Reported Content Info ──
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Reported Content", systemImage: report.contentTypeIcon)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+
+                        // Content type and ID for admin reference
+                        VStack(alignment: .leading, spacing: 6) {
+                            infoRow(label: "Type", value: report.contentTypeDisplay)
+                            infoRow(label: "Content ID", value: report.contentId.uuidString.prefix(8).uppercased() + "...")
+                        }
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemGray6))
+                    )
+
+                    // ── Reporter Details ──
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Report Details", systemImage: "flag.fill")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            if let reporterName = report.reporterDisplayName ?? report.reporterUsername {
+                                infoRow(label: "Reported by", value: reporterName)
+                            }
+                            infoRow(label: "Reason", value: report.reasonDisplay)
+
+                            if let details = report.details, !details.isEmpty {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Additional Details")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text(details)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                        .padding(10)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(AppColors.whiteText.opacity(0.05))
+                                        )
+                                }
+                            }
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Reported \(report.createdAt, style: .relative) ago")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemGray6))
+                    )
+
+                    // ── Resolution Info (for already resolved/dismissed reports) ──
+                    if report.isResolved || report.isDismissed {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label(
+                                report.isResolved ? "Resolved" : "Dismissed",
+                                systemImage: report.isResolved ? "checkmark.seal.fill" : "xmark.seal.fill"
+                            )
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(report.statusColor)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                if let reviewer = report.reviewerDisplayName {
+                                    infoRow(label: "Reviewed by", value: reviewer)
+                                }
+                                if let reviewedAt = report.reviewedAt {
+                                    HStack(spacing: 4) {
+                                        Text("When")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 80, alignment: .leading)
+                                        Text(reviewedAt, style: .relative)
+                                            .font(.caption)
+                                            .foregroundColor(.primary)
+                                        Text("ago")
+                                            .font(.caption)
+                                            .foregroundColor(.primary)
+                                    }
+                                }
+                                if let note = report.resolutionNote, !note.isEmpty {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Resolution Note")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text(note)
+                                            .font(.subheadline)
+                                            .foregroundColor(.primary)
+                                            .padding(10)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .fill(AppColors.whiteText.opacity(0.05))
+                                            )
+                                    }
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(report.statusColor.opacity(0.08))
+                        )
                     }
 
-                    // Reporter
-                    if let reporterName = report.reporterDisplayName ?? report.reporterUsername {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.fill")
+                    // ── Admin Actions (only for pending reports + admin/owner) ──
+                    if report.isPending && canAdmin {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Take Action", systemImage: "gavel.fill")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+
+                            // Resolution note
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Resolution Note (Optional)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                TextField("Add a note about your decision...", text: $resolutionNote, axis: .vertical)
+                                    .textFieldStyle(.roundedBorder)
+                                    .lineLimit(3...5)
+                            }
+
+                            // Action buttons
+                            HStack(spacing: 12) {
+                                // Resolve button
+                                Button(action: { resolveReport(report, action: "resolved") }) {
+                                    HStack(spacing: 6) {
+                                        if isProcessing {
+                                            ProgressView()
+                                                .scaleEffect(0.7)
+                                                .tint(.white)
+                                        }
+                                        Image(systemName: "checkmark.circle.fill")
+                                        Text("Resolve")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.green)
+                                .disabled(isProcessing)
+
+                                // Dismiss button
+                                Button(action: { resolveReport(report, action: "dismissed") }) {
+                                    HStack(spacing: 6) {
+                                        if isProcessing {
+                                            ProgressView()
+                                                .scaleEffect(0.7)
+                                        }
+                                        Image(systemName: "xmark.circle.fill")
+                                        Text("Dismiss")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.gray)
+                                .disabled(isProcessing)
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6))
+                        )
+                    } else if report.isPending && !canAdmin {
+                        // Moderator viewing pending report — info only
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(.blue)
+                            Text("Only admins and owners can resolve or dismiss reports.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text("Reported by \(reporterName)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
                         }
-                    }
-
-                    // Details
-                    if let details = report.details, !details.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Details")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text(details)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    // Timestamp
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("Reported \(report.createdAt, style: .relative) ago")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.blue.opacity(0.08))
+                        )
                     }
                 }
                 .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
-                )
-
-                // Resolution note
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Resolution Note (Optional)")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-
-                    TextField("Add a note about your decision...", text: $resolutionNote, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(3...5)
-                }
-
-                Spacer()
-
-                // Action buttons
-                VStack(spacing: 12) {
-                    // Resolve button
-                    Button(action: { resolveReport(report, action: "resolved") }) {
-                        HStack {
-                            if isProcessing {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .tint(.white)
-                            }
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Resolve Report")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.green)
-                    .disabled(isProcessing)
-
-                    // Dismiss button
-                    Button(action: { resolveReport(report, action: "dismissed") }) {
-                        HStack {
-                            if isProcessing {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            }
-                            Image(systemName: "xmark.circle.fill")
-                            Text("Dismiss Report")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.gray)
-                    .disabled(isProcessing)
-                }
             }
-            .padding()
-            .navigationTitle("Review Report")
+            .navigationTitle("Report Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showResolveSheet = false
+                    Button("Close") {
+                        selectedReport = nil
                     }
                 }
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    // MARK: - Info Row Helper
+
+    private func infoRow(label: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .leading)
+            Text(value)
+                .font(.caption)
+                .foregroundColor(.primary)
+        }
     }
 
     // MARK: - Helpers
@@ -580,9 +696,8 @@ struct ManageReportsView: View {
                     action: action,
                     note: resolutionNote.isEmpty ? nil : resolutionNote.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
-                showResolveSheet = false
-                resolutionNote = ""
                 selectedReport = nil
+                resolutionNote = ""
                 loadReports()
             } catch {
                 // Error shown by appState

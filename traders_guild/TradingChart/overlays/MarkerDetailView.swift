@@ -477,19 +477,19 @@ struct MarkerDetailHeaderView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Main header row
             HStack(spacing: 15) {
-                // Marker type icon with colored background
+                // Marker type icon with colored background (Alert uses severity color)
                 ZStack {
                     Circle()
-                        .fill(marker.type.color.opacity(0.2))
+                        .fill(marker.displayColor.opacity(0.2))
                         .frame(width: 56, height: 56)
                     
                     Circle()
-                        .stroke(marker.type.color.opacity(0.4), lineWidth: 2)
+                        .stroke(marker.displayColor.opacity(0.4), lineWidth: 2)
                         .frame(width: 56, height: 56)
                     
                     Image(systemName: marker.type.icon)
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(marker.type.color)
+                        .foregroundColor(marker.displayColor)
                 }
                 
                 // Marker info
@@ -499,34 +499,20 @@ struct MarkerDetailHeaderView: View {
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
                     
-                    // User info row - now using embedded author DTO
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(AppColors.accentColor.opacity(0.3))
-                            .frame(width: 18, height: 18)
-                            .overlay(
-                                Text(marker.author.initials.prefix(1))
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundColor(AppColors.accentColor)
-                            )
-                        
-                        Text(marker.author.username)
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.whiteText.opacity(0.8))
-
-                        UnifiedSeparatorDot(size: 3, opacity: 0.5)
-
-                        UnifiedRoleBadge(
-                            member: marker.author,
-                            showReputation: true
-                        )
-
-                        UnifiedSeparatorDot(size: 3, opacity: 0.5)
-
-                        Text(marker.createdAtFormatted)
+                    // User info row – same style as Announcements (UnifiedAuthorRow)
+                    HStack(spacing: 3) {
+                        Text("Posted by")
                             .font(.caption)
                             .foregroundColor(AppColors.greyText)
+                        UnifiedAuthorRow(
+                            username: marker.author.username,
+                            role: marker.author.memberRole,
+                            reputation: marker.author.reputation
+                        )
                     }
+                    Text(marker.createdAtFormatted)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
                 }
                 
                 Spacer(minLength: 50)
@@ -571,10 +557,10 @@ struct MarkerDetailHeaderView: View {
                 Text(String(format: "%.5f", marker.price))
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundColor(marker.type.color)
+                    .foregroundColor(marker.displayColor)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(marker.type.color.opacity(0.15))
+                    .background(marker.displayColor.opacity(0.15))
                     .clipShape(Capsule())
             }
             
@@ -586,7 +572,7 @@ struct MarkerDetailHeaderView: View {
         .background(
             LinearGradient(
                 colors: [
-                    marker.type.color.opacity(0.15),
+                    marker.displayColor.opacity(0.15),
                     AppColors.sheetBackground
                 ],
                 startPoint: .top,
@@ -717,7 +703,7 @@ struct MarkerInfoContent: View {
                         icon: "chart.line.uptrend.xyaxis",
                         label: "Price Level",
                         value: String(format: "%.5f", marker.price),
-                        valueColor: marker.type.color
+                        valueColor: marker.displayColor
                     )
                     
                     Divider()
@@ -737,7 +723,7 @@ struct MarkerInfoContent: View {
                             icon: "minus",
                             label: "Line Price",
                             value: String(format: "%.5f", linePrice),
-                            valueColor: marker.type.color
+                            valueColor: marker.displayColor
                         )
                     }
                 }
@@ -841,7 +827,7 @@ struct MarkerInfoContent: View {
         infoCard {
             HStack {
                 Image(systemName: marker.type == .support ? "arrow.down.to.line" : "arrow.up.to.line")
-                    .font(.title3).foregroundColor(marker.type.color)
+                    .font(.title3).foregroundColor(marker.displayColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(marker.type == .support ? "Support Level" : "Resistance Level")
                         .font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
@@ -873,7 +859,7 @@ struct MarkerInfoContent: View {
         if let pattern = marker.chartPattern {
             infoCard {
                 HStack {
-                    Image(systemName: "chart.bar.doc.horizontal").font(.title3).foregroundColor(marker.type.color)
+                    Image(systemName: "chart.bar.doc.horizontal").font(.title3).foregroundColor(marker.displayColor)
                     Text(pattern.rawValue).font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
                     Spacer()
                 }
@@ -886,7 +872,7 @@ struct MarkerInfoContent: View {
         if let indicator = marker.selectedIndicator {
             infoCard {
                 HStack {
-                    Image(systemName: "waveform.path.ecg").font(.title3).foregroundColor(marker.type.color)
+                    Image(systemName: "waveform.path.ecg").font(.title3).foregroundColor(marker.displayColor)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Indicator Signal").font(.caption).foregroundColor(AppColors.greyText)
                         Text(indicator).font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)

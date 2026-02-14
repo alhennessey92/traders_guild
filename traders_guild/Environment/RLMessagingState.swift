@@ -780,36 +780,76 @@ struct RLChatroomFooterView: View {
     let chatroom: RLGuildChatroomDTO
     @Binding var messageText: String
     let onMessageSent: (RLChatroomMessageDTO) -> Void
-    
+
     @EnvironmentObject var appState: RLAppState
     @State private var isSending: Bool = false
-    
+
     var body: some View {
         ChatInputFooter(
             messageText: $messageText,
             placeholder: "Message #\(chatroom.name.lowercased().replacingOccurrences(of: " ", with: "-"))...",
             isSending: isSending,
-            onSend: { Task { await sendMessage() } }
+            onSend: { Task { await sendMessage() } },
+            onAttachmentSelected: { data, filename, mimeType in
+                Task { await sendAttachment(data: data, filename: filename, mimeType: mimeType) }
+            }
         )
     }
-    
+
     private func sendMessage() async {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard chatroom.canSendMessages else {
             appState.showError(title: "Cannot Send", message: "You don't have permission to send messages here", style: .toast)
             return
         }
-        
+
         let textToSend = messageText
         messageText = ""
         isSending = true
         defer { isSending = false }
-        
+
         do {
             let message = try await appState.sendChatroomMessage(chatroomId: chatroom.id, content: textToSend)
             onMessageSent(message)
         } catch {
             messageText = textToSend
+        }
+    }
+
+    private func sendAttachment(data: Data, filename: String, mimeType: String) async {
+        guard let guild = appState.currentGuild else { return }
+        guard chatroom.canSendMessages else {
+            appState.showError(title: "Cannot Send", message: "You don't have permission to send messages here", style: .toast)
+            return
+        }
+
+        isSending = true
+        defer { isSending = false }
+
+        do {
+            // 1) Upload the file
+            let upload = try await appState.realApi.uploadChatroomAttachment(
+                guildId: guild.id,
+                chatroomId: chatroom.id,
+                fileData: data,
+                filename: filename,
+                mimeType: mimeType
+            )
+            // 2) Send message with attachment
+            let content = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? filename
+                : messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+            messageText = ""
+            let message = try await appState.sendChatroomMessage(
+                chatroomId: chatroom.id,
+                content: content,
+                attachmentUrl: upload.attachmentUrl,
+                attachmentType: upload.attachmentType,
+                attachmentName: upload.attachmentName
+            )
+            onMessageSent(message)
+        } catch {
+            appState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
     }
 }
@@ -819,37 +859,76 @@ struct RLDMFooterView: View {
     let thread: RLDMThreadDTO
     @Binding var messageText: String
     let onMessageSent: (RLDMMessageDTO) -> Void
-    
+
     @EnvironmentObject var appState: RLAppState
     @State private var isSending: Bool = false
-    
+
     var body: some View {
         ChatInputFooter(
             messageText: $messageText,
             placeholder: "Message \(thread.participant.username.lowercased())...",
             isSending: isSending,
-            onSend: { Task { await sendMessage() } }
+            onSend: { Task { await sendMessage() } },
+            onAttachmentSelected: { data, filename, mimeType in
+                Task { await sendAttachment(data: data, filename: filename, mimeType: mimeType) }
+            }
         )
     }
-    
+
     private func sendMessage() async {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
+
         if thread.isBlocked {
             appState.showError(title: "Cannot Send", message: "You have blocked this user", style: .toast)
             return
         }
-        
+
         let textToSend = messageText
         messageText = ""
         isSending = true
         defer { isSending = false }
-        
+
         do {
             let message = try await appState.sendDMMessage(threadId: thread.id, content: textToSend)
             onMessageSent(message)
         } catch {
             messageText = textToSend
+        }
+    }
+
+    private func sendAttachment(data: Data, filename: String, mimeType: String) async {
+        guard let guild = appState.currentGuild else { return }
+
+        if thread.isBlocked {
+            appState.showError(title: "Cannot Send", message: "You have blocked this user", style: .toast)
+            return
+        }
+
+        isSending = true
+        defer { isSending = false }
+
+        do {
+            let upload = try await appState.realApi.uploadDMAttachment(
+                guildId: guild.id,
+                threadId: thread.id,
+                fileData: data,
+                filename: filename,
+                mimeType: mimeType
+            )
+            let content = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? filename
+                : messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+            messageText = ""
+            let message = try await appState.sendDMMessage(
+                threadId: thread.id,
+                content: content,
+                attachmentUrl: upload.attachmentUrl,
+                attachmentType: upload.attachmentType,
+                attachmentName: upload.attachmentName
+            )
+            onMessageSent(message)
+        } catch {
+            appState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
     }
 }
