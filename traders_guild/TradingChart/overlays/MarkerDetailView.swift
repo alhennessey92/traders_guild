@@ -28,7 +28,7 @@ struct MarkerDetailView: View {
     @State private var comments: [RLMarkerCommentDTO] = []
     @State private var showComments: Bool = false
     @State private var showDeleteMarkerConfirmation: Bool = false
-    @State private var showReportConfirmation: Bool = false
+    @State private var showReportReasonSheet: Bool = false
     
     init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
         self.marker = marker
@@ -70,7 +70,7 @@ struct MarkerDetailView: View {
                         showComments: $showComments,
                         onLike: handleLike,
                         onShare: handleShare,
-                        onReport: { showReportConfirmation = true },
+                        onReport: { showReportReasonSheet = true },
                         onDelete: { showDeleteMarkerConfirmation = true }
                     )
                 }
@@ -97,13 +97,16 @@ struct MarkerDetailView: View {
             } message: {
                 Text("Are you sure you want to delete this marker? This action cannot be undone.")
             }
-            .alert("Report Marker", isPresented: $showReportConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Report", role: .destructive) {
-                    handleReport()
-                }
-            } message: {
-                Text("Report this marker as inappropriate or misleading?")
+            .sheet(isPresented: $showReportReasonSheet) {
+                ReportReasonSheet(
+                    title: "Why are you reporting this marker?",
+                    includeScam: false,
+                    onReasonSelected: { reason in
+                        handleReport(reason: reason)
+                        showReportReasonSheet = false
+                    },
+                    onCancel: { showReportReasonSheet = false }
+                )
             }
             .navigationDestination(isPresented: $showComments) {
                 CommentsView(
@@ -151,7 +154,7 @@ struct MarkerDetailView: View {
         print("Share marker: \(marker.id)")
     }
     
-    private func handleReport() {
+    private func handleReport(reason: String) {
         HapticFeedback.medium.trigger()
         Task {
             guard let guildId = rlAppState.currentGuild?.id else { return }
@@ -159,9 +162,9 @@ struct MarkerDetailView: View {
                 _ = try await rlAppState.realApi.reportMarker(
                     guildId: guildId,
                     markerId: marker.id,
-                    reason: "inappropriate"
+                    reason: reason
                 )
-                rlAppState.showSuccess("Marker reported. Thank you for your feedback.")
+                rlAppState.showSuccess("Report submitted")
             } catch {
                 rlAppState.showError(error, title: "Failed to Report", style: .toast)
             }
@@ -189,6 +192,8 @@ struct CommentsView: View {
     @State private var commentText: String = ""
     @State private var isSendingComment: Bool = false
     @FocusState private var isCommentInputFocused: Bool
+    @State private var showReportCommentReasonSheet: Bool = false
+    @State private var commentToReport: RLMarkerCommentDTO? = nil
     
     @Binding var selectedDetent: PresentationDetent
     
@@ -219,7 +224,8 @@ struct CommentsView: View {
                                 MarkerCommentRow(
                                     comment: comment,
                                     onReport: {
-                                        handleReportComment(comment)
+                                        commentToReport = comment
+                                        showReportCommentReasonSheet = true
                                     },
                                     onDelete: comment.canDelete ? {
                                         handleDeleteComment(comment)
@@ -278,6 +284,23 @@ struct CommentsView: View {
         .background(AppColors.sheetBackground)
         .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+        .sheet(isPresented: $showReportCommentReasonSheet) {
+            if let comment = commentToReport {
+                ReportReasonSheet(
+                    title: "Why are you reporting this comment?",
+                    includeScam: false,
+                    onReasonSelected: { reason in
+                        handleReportComment(comment, reason: reason)
+                        showReportCommentReasonSheet = false
+                        commentToReport = nil
+                    },
+                    onCancel: {
+                        showReportCommentReasonSheet = false
+                        commentToReport = nil
+                    }
+                )
+            }
+        }
     }
     
     // MARK: - Actions
@@ -311,17 +334,18 @@ struct CommentsView: View {
         rlAppState.showSuccess("Comment deleted")
     }
     
-    private func handleReportComment(_ comment: RLMarkerCommentDTO) {
+    private func handleReportComment(_ comment: RLMarkerCommentDTO, reason: String) {
         HapticFeedback.medium.trigger()
         Task {
             guard let guildId = rlAppState.currentGuild?.id else { return }
             do {
-                _ = try await rlAppState.realApi.reportChartChatMessage(
+                _ = try await rlAppState.realApi.reportMarkerComment(
                     guildId: guildId,
-                    messageId: comment.id,
-                    reason: "inappropriate"
+                    markerId: marker.id,
+                    commentId: comment.id,
+                    reason: reason
                 )
-                rlAppState.showSuccess("Comment reported. Thank you for your feedback.")
+                rlAppState.showSuccess("Report submitted")
             } catch {
                 rlAppState.showError(error, title: "Failed to Report", style: .toast)
             }

@@ -256,6 +256,9 @@ class RLAppState: ObservableObject {
             style: style
         )
         currentAlert = alert
+        if style == .toast {
+            ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+        }
     }
     
     func showError(title: String, message: String, severity: RLAlertSeverity = .error, style: RLAlertDisplayStyle = .alert) {
@@ -266,6 +269,9 @@ class RLAppState: ObservableObject {
             style: style
         )
         currentAlert = alert
+        if style == .toast {
+            ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+        }
     }
     
     func showSuccess(_ message: String, title: String = "Success") {
@@ -276,6 +282,7 @@ class RLAppState: ObservableObject {
             style: .toast
         )
         currentAlert = alert
+        ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
     func showInfo(_ message: String, title: String = "Info") {
@@ -286,6 +293,7 @@ class RLAppState: ObservableObject {
             style: .toast
         )
         currentAlert = alert
+        ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
     func showWarning(_ message: String, title: String = "Warning") {
@@ -2456,9 +2464,9 @@ class RLAppState: ObservableObject {
         }
     }
 
-    func reportUser(guildId: UUID, membershipId: UUID, reason: String) async throws {
+    func reportUser(guildId: UUID, userId: UUID, reason: String) async throws {
         do {
-            _ = try await realApi.reportUser(guildId: guildId, membershipId: membershipId, reason: reason)
+            _ = try await realApi.reportUser(guildId: guildId, userId: userId, reason: reason)
             showSuccess("Report submitted")
         } catch {
             showError(error, title: "Failed to Report User", style: .toast)

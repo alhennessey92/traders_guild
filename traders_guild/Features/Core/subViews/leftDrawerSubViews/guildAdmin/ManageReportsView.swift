@@ -29,6 +29,18 @@ enum ContentTypeFilter: String, CaseIterable {
     case markers = "Markers"
     case users = "Users"
 
+    /// Compact label for tab bar to avoid wrapping
+    var tabLabel: String {
+        switch self {
+        case .all: return "All"
+        case .messages: return "Chat"
+        case .dmMessages: return "DMs"
+        case .chartChat: return "Chart"
+        case .markers: return "Markers"
+        case .users: return "Users"
+        }
+    }
+
     var apiValue: String? {
         switch self {
         case .all: return nil
@@ -57,8 +69,10 @@ enum ContentTypeFilter: String, CaseIterable {
 // MARK: - ================================================================================================
 
 struct ManageReportsView: View {
+    @Binding var bottomSheetContent: BottomSheetContent?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
 
     @State private var reports: [RLContentReportDTO] = []
     @State private var isLoading: Bool = true
@@ -73,6 +87,7 @@ struct ManageReportsView: View {
     @State private var selectedReport: RLContentReportDTO? = nil
     @State private var resolutionNote: String = ""
     @State private var isProcessing: Bool = false
+    @State private var memberActionUserId: UUID? = nil  // for loading state on Suspend/Kick/Ban
 
     private var canAdmin: Bool {
         rlAppState.canAdmin
@@ -204,36 +219,38 @@ struct ManageReportsView: View {
         .padding(.horizontal)
     }
 
-    // MARK: - Content Type Filter Bar
+    // MARK: - Content Type Filter Bar (scrollable, compact labels)
 
     private var contentTypeFilterBar: some View {
-        HStack(spacing: 6) {
-            ForEach(ContentTypeFilter.allCases, id: \.self) { filter in
-                Button(action: { selectedContentType = filter }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: filter.icon)
-                            .font(.system(size: 10))
-                        Text(filter.rawValue)
-                            .font(.caption2)
-                            .fontWeight(.medium)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(ContentTypeFilter.allCases, id: \.self) { filter in
+                    Button(action: { selectedContentType = filter }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: filter.icon)
+                                .font(.system(size: 10))
+                            Text(filter.tabLabel)
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(selectedContentType == filter ? .white : .secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(selectedContentType == filter ? Color.accentColor.opacity(0.8) : AppColors.whiteText.opacity(0.08))
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(selectedContentType == filter ? Color.clear : AppColors.whiteText.opacity(0.15), lineWidth: 0.5)
+                        )
                     }
-                    .foregroundColor(selectedContentType == filter ? .white : .secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(selectedContentType == filter ? Color.accentColor.opacity(0.8) : AppColors.whiteText.opacity(0.08))
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(selectedContentType == filter ? Color.clear : AppColors.whiteText.opacity(0.15), lineWidth: 0.5)
-                    )
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
             }
-            Spacer()
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
+        .padding(.vertical, 4)
     }
 
     // MARK: - Content
@@ -352,7 +369,13 @@ struct ManageReportsView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    // Details (if any)
+                    // Content snippet or reporter details (if any)
+                    if let snippet = report.contentSnippet, !snippet.isEmpty {
+                        Text(snippet)
+                            .font(.caption2)
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .lineLimit(2)
+                    }
                     if let details = report.details, !details.isEmpty {
                         Text(details)
                             .font(.caption2)
@@ -437,10 +460,25 @@ struct ManageReportsView: View {
                             .font(.subheadline)
                             .fontWeight(.semibold)
 
-                        // Content type and ID for admin reference
                         VStack(alignment: .leading, spacing: 6) {
                             infoRow(label: "Type", value: report.contentTypeDisplay)
                             infoRow(label: "Content ID", value: report.contentId.uuidString.prefix(8).uppercased() + "...")
+                            if let snippet = report.contentSnippet, !snippet.isEmpty {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Preview")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text(snippet)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                        .padding(10)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(AppColors.whiteText.opacity(0.05))
+                                        )
+                                }
+                            }
                         }
                     }
                     .padding()
@@ -448,6 +486,41 @@ struct ManageReportsView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color(.systemGray6))
                     )
+
+                    // ── Reported User (offending user) ──
+                    if let reportedUserId = report.reportedUserId {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Reported User", systemImage: "person.fill")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            if let member = leftDrawerViewModel.guildMembers.first(where: { $0.userId == reportedUserId }) {
+                                HStack {
+                                    Text("@\(member.username)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Button("View profile") {
+                                        selectedReport = nil
+                                        bottomSheetContent = .guildMemberRL(member)
+                                    }
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                }
+                                .padding(10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(AppColors.whiteText.opacity(0.05))
+                                )
+                            } else {
+                                infoRow(label: "User ID", value: reportedUserId.uuidString.prefix(8).uppercased() + "...")
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6))
+                        )
+                    }
 
                     // ── Reporter Details ──
                     VStack(alignment: .leading, spacing: 10) {
@@ -548,10 +621,63 @@ struct ManageReportsView: View {
                         )
                     }
 
+                    // ── Take action on reported user (pending + admin + has reported user) ──
+                    if report.isPending && canAdmin, let reportedUserId = report.reportedUserId {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Take Action on User", systemImage: "person.crop.circle.badge.exclamationmark")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            let busy = memberActionUserId == reportedUserId
+                            HStack(spacing: 8) {
+                                Button(action: { suspendReportedUser(report: report, userId: reportedUserId) }) {
+                                    HStack(spacing: 4) {
+                                        if busy { ProgressView().scaleEffect(0.7).tint(.white) }
+                                        Image(systemName: "pause.circle.fill")
+                                        Text("Suspend")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.orange)
+                                .disabled(isProcessing || busy)
+                                Button(action: { kickReportedUser(report: report, userId: reportedUserId) }) {
+                                    HStack(spacing: 4) {
+                                        if busy { ProgressView().scaleEffect(0.7).tint(.white) }
+                                        Image(systemName: "person.fill.xmark")
+                                        Text("Kick")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.orange)
+                                .disabled(isProcessing || busy)
+                                Button(action: { banReportedUser(report: report, userId: reportedUserId) }) {
+                                    HStack(spacing: 4) {
+                                        if busy { ProgressView().scaleEffect(0.7).tint(.white) }
+                                        Image(systemName: "nosign")
+                                        Text("Ban")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.red)
+                                .disabled(isProcessing || busy)
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6))
+                        )
+                    }
+
                     // ── Admin Actions (only for pending reports + admin/owner) ──
                     if report.isPending && canAdmin {
                         VStack(alignment: .leading, spacing: 12) {
-                            Label("Take Action", systemImage: "gavel.fill")
+                            Label("Resolve Report", systemImage: "gavel.fill")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
 
@@ -703,6 +829,58 @@ struct ManageReportsView: View {
                 // Error shown by appState
             }
             isProcessing = false
+        }
+    }
+
+    private func suspendReportedUser(report: RLContentReportDTO, userId: UUID) {
+        memberActionUserId = userId
+        Task {
+            do {
+                try await rlAppState.suspendMember(userId: userId, durationMinutes: 60, reason: "Report #\(report.id.uuidString.prefix(8))")
+                await resolveReportAfterMemberAction(report: report, actionNote: "User suspended (1 hour)")
+            } catch {
+                // Error shown by appState
+            }
+            memberActionUserId = nil
+        }
+    }
+
+    private func kickReportedUser(report: RLContentReportDTO, userId: UUID) {
+        memberActionUserId = userId
+        Task {
+            do {
+                try await rlAppState.kickMember(userId: userId)
+                await resolveReportAfterMemberAction(report: report, actionNote: "User kicked")
+            } catch {
+                // Error shown by appState
+            }
+            memberActionUserId = nil
+        }
+    }
+
+    private func banReportedUser(report: RLContentReportDTO, userId: UUID) {
+        memberActionUserId = userId
+        Task {
+            do {
+                _ = try await rlAppState.banMember(userId: userId, reason: resolutionNote.isEmpty ? "Report" : resolutionNote)
+                await resolveReportAfterMemberAction(report: report, actionNote: "User banned")
+            } catch {
+                // Error shown by appState
+            }
+            memberActionUserId = nil
+        }
+    }
+
+    private func resolveReportAfterMemberAction(report: RLContentReportDTO, actionNote: String) async {
+        do {
+            let _ = try await rlAppState.resolveReport(reportId: report.id, action: "resolved", note: actionNote)
+            await MainActor.run {
+                selectedReport = nil
+                resolutionNote = ""
+                loadReports()
+            }
+        } catch {
+            // Optional: report stays pending
         }
     }
 }

@@ -940,6 +940,7 @@ struct RLChatroomMessageView: View {
     
     @EnvironmentObject var appState: RLAppState
     @State private var showEditSheet = false
+    @State private var showReportReasonSheet = false
     
     var body: some View {
         RLChatMessageBubble(
@@ -948,7 +949,7 @@ struct RLChatroomMessageView: View {
             onAvatarTap: onAvatarTap,
             onEdit: message.canEdit ? { showEditSheet = true } : nil,
             onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
-            onReport: !message.isCurrentUserMessage ? { Task { await reportMessage() } } : nil,
+            onReport: !message.isCurrentUserMessage ? { showReportReasonSheet = true } : nil,
             onCopy: { appState.showSuccess("Copied to clipboard") }
         )
         .sheet(isPresented: $showEditSheet) {
@@ -960,6 +961,19 @@ struct RLChatroomMessageView: View {
                 )
                 appState.showSuccess("Message updated")
             }
+        }
+        .sheet(isPresented: $showReportReasonSheet) {
+            ReportReasonSheet(
+                title: "Why are you reporting this message?",
+                includeScam: false,
+                onReasonSelected: { reason in
+                    Task {
+                        await reportMessage(reason: reason)
+                        await MainActor.run { showReportReasonSheet = false }
+                    }
+                },
+                onCancel: { showReportReasonSheet = false }
+            )
         }
     }
     
@@ -975,7 +989,7 @@ struct RLChatroomMessageView: View {
         }
     }
     
-    private func reportMessage() async {
+    private func reportMessage(reason: String) async {
         guard let guildId = appState.currentGuild?.id else { return }
         HapticFeedback.medium.trigger()
         do {
@@ -983,9 +997,9 @@ struct RLChatroomMessageView: View {
                 guildId: guildId,
                 chatroomId: message.chatroomId,
                 messageId: message.id,
-                reason: "inappropriate"
+                reason: reason
             )
-            appState.showSuccess("Message reported. Thank you for your feedback.")
+            appState.showSuccess("Report submitted")
         } catch {
             appState.showError(error, title: "Failed to Report", style: .toast)
         }
@@ -998,6 +1012,7 @@ struct RLDMMessageView: View {
 
     @EnvironmentObject var appState: RLAppState
     @State private var showEditSheet = false
+    @State private var showReportReasonSheet = false
 
     var body: some View {
         RLChatMessageBubble(
@@ -1006,7 +1021,7 @@ struct RLDMMessageView: View {
             isRead: message.isRead,
             onEdit: message.canEdit ? { showEditSheet = true } : nil,
             onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
-            onReport: !message.isCurrentUserMessage ? { Task { await reportMessage() } } : nil,
+            onReport: !message.isCurrentUserMessage ? { showReportReasonSheet = true } : nil,
             onCopy: { appState.showSuccess("Copied to clipboard") }
         )
         .sheet(isPresented: $showEditSheet) {
@@ -1018,6 +1033,19 @@ struct RLDMMessageView: View {
                 )
                 appState.showSuccess("Message updated")
             }
+        }
+        .sheet(isPresented: $showReportReasonSheet) {
+            ReportReasonSheet(
+                title: "Why are you reporting this message?",
+                includeScam: false,
+                onReasonSelected: { reason in
+                    Task {
+                        await reportMessage(reason: reason)
+                        await MainActor.run { showReportReasonSheet = false }
+                    }
+                },
+                onCancel: { showReportReasonSheet = false }
+            )
         }
     }
 
@@ -1033,7 +1061,7 @@ struct RLDMMessageView: View {
         }
     }
 
-    private func reportMessage() async {
+    private func reportMessage(reason: String) async {
         guard let guildId = appState.currentGuild?.id else { return }
         HapticFeedback.medium.trigger()
         do {
@@ -1041,9 +1069,9 @@ struct RLDMMessageView: View {
                 guildId: guildId,
                 threadId: message.dmId,
                 messageId: message.id,
-                reason: "inappropriate"
+                reason: reason
             )
-            appState.showSuccess("Message reported. Thank you for your feedback.")
+            appState.showSuccess("Report submitted")
         } catch {
             appState.showError(error, title: "Failed to Report", style: .toast)
         }

@@ -1705,11 +1705,11 @@ extension RealAPIService {
         )
     }
     
-    // Report user to admin - NEW
-    func reportUser(guildId: UUID, membershipId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+    // Report user to admin (user_id = the reported user's id)
+    func reportUser(guildId: UUID, userId: UUID, reason: String) async throws -> RLDetailResponseDTO {
         let body = RLUserReportRequest(reason: reason)
         return try await request(
-            "/guilds/\(guildId.uuidString)/members/\(membershipId.uuidString)/report",
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/report",
             service: .core,
             method: "POST",
             body: body,
@@ -1760,6 +1760,18 @@ extension RealAPIService {
         let body = RLContentReportRequest(reason: reason)
         return try await request(
             "/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Report a marker comment
+    func reportMarkerComment(guildId: UUID, markerId: UUID, commentId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)/report",
             service: .core,
             method: "POST",
             body: body,

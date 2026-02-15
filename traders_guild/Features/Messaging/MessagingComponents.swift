@@ -1457,15 +1457,16 @@ struct RLDMSettingsView: View {
         } message: {
             Text("Are you sure you want to delete this conversation? This cannot be undone.")
         }
-        .alert("Report User", isPresented: $showReportOptions) {
-            Button("Spam") { reportUser(reason: "spam") }
-            Button("Harassment") { reportUser(reason: "harassment") }
-            Button("Inappropriate Content") { reportUser(reason: "inappropriate") }
-            Button("Scam or Fraud") { reportUser(reason: "scam") }
-            Button("Other") { reportUser(reason: "other") }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Why are you reporting this user?")
+        .sheet(isPresented: $showReportOptions) {
+            ReportReasonSheet(
+                title: "Why are you reporting this user?",
+                includeScam: true,
+                onReasonSelected: { reason in
+                    reportUser(reason: reason)
+                    showReportOptions = false
+                },
+                onCancel: { showReportOptions = false }
+            )
         }
     }
     
@@ -1521,7 +1522,7 @@ struct RLDMSettingsView: View {
             do {
                 try await rlAppState.reportUser(
                     guildId: thread.guildId,
-                    membershipId: participant.membershipId,
+                    userId: participant.userId,
                     reason: reason
                 )
             } catch {

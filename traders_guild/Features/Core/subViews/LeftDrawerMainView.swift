@@ -193,7 +193,7 @@ struct LeftDrawerMainView: View {
             .ignoresSafeArea()
             // Present detail sheets with a clear background and consistent detents (matches right drawer)
             .sheet(item: $bottomSheetContent) { content in
-                BottomSheetView(content: content, selectedDetent: $selectedDetent)  // PASS BINDING
+                BottomSheetView(content: content, selectedDetent: $selectedDetent, bottomSheetContent: $bottomSheetContent)
                     
                     .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
     //                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
@@ -708,6 +708,7 @@ struct DrawerMenuButton: View {
 struct BottomSheetView: View {
     let content: BottomSheetContent
     @Binding var selectedDetent: PresentationDetent
+    @Binding var bottomSheetContent: BottomSheetContent?
     
     @EnvironmentObject var rlAppState: RLAppState
     
@@ -738,7 +739,7 @@ struct BottomSheetView: View {
             case .manageRoles:
                 ManageRolesView()
             case .manageReports:
-                ManageReportsView()
+                ManageReportsView(bottomSheetContent: $bottomSheetContent)
             }
 
         }

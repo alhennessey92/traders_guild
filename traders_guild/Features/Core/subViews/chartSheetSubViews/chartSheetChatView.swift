@@ -24,6 +24,8 @@ struct ImprovedChartSheetChatView: View {
     
     @State private var showEditSheet = false
     @State private var messageToEdit: RLChartChatMessageDTO? = nil
+    @State private var showReportReasonSheet = false
+    @State private var messageToReport: RLChartChatMessageDTO? = nil
     
     var body: some View {
         ZStack {
@@ -78,6 +80,27 @@ struct ImprovedChartSheetChatView: View {
                 UnifiedEditMessageSheet(originalContent: message.content) { newContent in
                     await editMessage(message, newContent: newContent)
                 }
+            }
+        }
+        .sheet(isPresented: $showReportReasonSheet) {
+            if let message = messageToReport {
+                ReportReasonSheet(
+                    title: "Why are you reporting this message?",
+                    includeScam: false,
+                    onReasonSelected: { reason in
+                        Task {
+                            await reportMessage(message, reason: reason)
+                            await MainActor.run {
+                                showReportReasonSheet = false
+                                messageToReport = nil
+                            }
+                        }
+                    },
+                    onCancel: {
+                        showReportReasonSheet = false
+                        messageToReport = nil
+                    }
+                )
             }
         }
     }
@@ -144,7 +167,8 @@ struct ImprovedChartSheetChatView: View {
                                 showEditSheet = true
                             },
                             onReport: {
-                                Task { await reportMessage(message) }
+                                messageToReport = message
+                                showReportReasonSheet = true
                             }
                         )
                         .environmentObject(rlAppState)
@@ -197,16 +221,16 @@ struct ImprovedChartSheetChatView: View {
         }
     }
     
-    private func reportMessage(_ message: RLChartChatMessageDTO) async {
+    private func reportMessage(_ message: RLChartChatMessageDTO, reason: String) async {
         guard let guildId = rlAppState.currentGuild?.id else { return }
         HapticFeedback.medium.trigger()
         do {
             _ = try await rlAppState.realApi.reportChartChatMessage(
                 guildId: guildId,
                 messageId: message.id,
-                reason: "inappropriate"
+                reason: reason
             )
-            rlAppState.showSuccess("Message reported. Thank you for your feedback.")
+            rlAppState.showSuccess("Report submitted")
         } catch {
             rlAppState.showError(error, title: "Failed to Report", style: .toast)
         }

@@ -1607,6 +1607,8 @@ struct RLContentReportDTO: Codable, Identifiable {
     let reviewedAt: Date?
     let resolutionNote: String?
     let createdAt: Date
+    let reportedUserId: UUID?
+    let contentSnippet: String?
 
     var isPending: Bool { status == "pending" }
     var isResolved: Bool { status == "resolved" }

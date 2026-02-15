@@ -711,6 +711,11 @@ struct GuildUserActionButtonsRL: View {
     @State private var showAddFriendConfirmation = false
     @State private var showRemoveFriendConfirmation = false
     @State private var isOpeningChat = false
+    @State private var showReportReasonSheet = false
+    
+    private var isCurrentUser: Bool {
+        member.userId == rlAppState.currentUser?.id
+    }
     
     var body: some View {
         HStack(spacing: 8) {
@@ -769,6 +774,29 @@ struct GuildUserActionButtonsRL: View {
             )
             .opacity(isOpeningChat ? 0.5 : 1.0)
             .disabled(isOpeningChat)
+            
+            // Report user (not shown for current user)
+            if !isCurrentUser {
+                DrawerActionButton(
+                    imageName: "flag",
+                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
+                    foregroundColor: AppColors.whiteText.opacity(0.8),
+                    strokeColor: AppColors.whiteText.opacity(0.3),
+                    strokeWidth: 0.5,
+                    action: { showReportReasonSheet = true }
+                )
+            }
+        }
+        .sheet(isPresented: $showReportReasonSheet) {
+            ReportReasonSheet(
+                title: "Why are you reporting this user?",
+                includeScam: true,
+                onReasonSelected: { reason in
+                    reportUser(reason: reason)
+                    showReportReasonSheet = false
+                },
+                onCancel: { showReportReasonSheet = false }
+            )
         }
         .alert("Block User", isPresented: $showBlockUserConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -909,6 +937,21 @@ struct GuildUserActionButtonsRL: View {
                     current.updating(isFriend: false, friendshipStatus: nil)
                 }
             } catch { }
+        }
+    }
+    
+    private func reportUser(reason: String) {
+        Task {
+            do {
+                guard let guildId = rlAppState.currentGuild?.id else { return }
+                try await rlAppState.reportUser(
+                    guildId: guildId,
+                    userId: member.userId,
+                    reason: reason
+                )
+            } catch {
+                // Error shown by rlAppState
+            }
         }
     }
     
