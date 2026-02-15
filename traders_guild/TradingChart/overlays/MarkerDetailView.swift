@@ -516,30 +516,44 @@ struct MarkerDetailHeaderView: View {
                         .foregroundColor(marker.displayColor)
                 }
                 
-                // Marker info
+                // Marker info — username on its own line, role · reputation on next line
                 VStack(alignment: .leading, spacing: 4) {
                     Text(marker.type.rawValue)
                         .font(.title3)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
-                    
-                    // User info row – same style as Announcements (UnifiedAuthorRow)
-                    HStack(spacing: 3) {
-                        Text("Posted by")
+
+                    // Username
+                    Text(marker.author.username)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.whiteText)
+
+                    // Role · Reputation
+                    HStack(spacing: 4) {
+                        Text(marker.author.memberRole.displayName)
                             .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                        UnifiedAuthorRow(
-                            username: marker.author.username,
-                            role: marker.author.memberRole,
-                            reputation: marker.author.reputation
-                        )
+                            .foregroundColor(marker.author.memberRole.color)
+                            .fontWeight(marker.author.memberRole.canModerate ? .bold : .regular)
+
+                        UnifiedSeparatorDot()
+
+                        Image(systemName: "shield.pattern.checkered")
+                            .font(.system(size: 9))
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("\(marker.author.reputation)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
                     }
+
                     Text(marker.createdAtFormatted)
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                 }
-                
-                Spacer(minLength: 50)
+
+                Spacer(minLength: 8)
             }
             
             // Note (if present)
@@ -725,27 +739,30 @@ struct MarkerInfoContent: View {
                 VStack(spacing: 12) {
                     infoRow(
                         icon: "chart.line.uptrend.xyaxis",
-                        label: "Price Level",
-                        value: String(format: "%.5f", marker.price),
-                        valueColor: marker.displayColor
+                        label: marker.type == .predictionTarget ? "Entry Price" : "Price Level",
+                        value: String(format: "%.5f", marker.type == .predictionTarget ? (marker.horizontalLinePrice ?? marker.price) : marker.price),
+                        valueColor: marker.type == .predictionTarget ? .green : marker.displayColor
                     )
-                    
+
                     Divider()
                         .background(AppColors.whiteText.opacity(0.1))
-                    
+
                     infoRow(
                         icon: "clock",
                         label: "Created",
                         value: marker.createdAt.formatted(date: .abbreviated, time: .shortened)
                     )
-                    
-                    if marker.type.hasHorizontalLine, let linePrice = marker.horizontalLinePrice {
+
+                    // Show line price for non-prediction markers
+                    if marker.type != .predictionTarget,
+                       marker.type.hasHorizontalLine,
+                       let linePrice = marker.horizontalLinePrice {
                         Divider()
                             .background(AppColors.whiteText.opacity(0.1))
-                        
+
                         infoRow(
                             icon: "minus",
-                            label: "Line Price",
+                            label: marker.type.lineLabel.isEmpty ? "Line Price" : marker.type.lineLabel,
                             value: String(format: "%.5f", linePrice),
                             valueColor: marker.displayColor
                         )
@@ -786,46 +803,82 @@ struct MarkerInfoContent: View {
     
     @ViewBuilder
     private var predictionSection: some View {
-        if let targetPrice = marker.targetPrice {
-            let entryPrice = marker.horizontalLinePrice ?? marker.price
-            let percentChange = ((targetPrice - entryPrice) / entryPrice) * 100
-            let isLong = targetPrice > entryPrice
-            
-            infoCard {
-                VStack(spacing: 16) {
-                    HStack {
-                        Image(systemName: isLong ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
-                        
-                        Text(isLong ? "Long Prediction" : "Short Prediction")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-                        
-                        Spacer()
-                        
-                        Text(String(format: "%+.2f%%", percentChange))
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+        let entryPrice = marker.horizontalLinePrice ?? marker.price
+        let tpPrice = marker.targetPrice
+        let slPrice = marker.stopLossPrice
+        let isLong = (tpPrice ?? entryPrice) > entryPrice
+
+        // Direction + percentage header
+        infoCard {
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: isLong ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+
+                    Text(isLong ? "Long" : "Short")
+                        .font(.headline)
+                        .foregroundColor(AppColors.whiteText)
+
+                    Spacer()
+
+                    // R:R badge
+                    if let tp = tpPrice, let sl = slPrice {
+                        let reward = abs(tp - entryPrice)
+                        let risk = abs(sl - entryPrice)
+                        if risk > 0 {
+                            Text(String(format: "R:R %.2f", reward / risk))
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(AppColors.whiteText)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(AppColors.whiteText.opacity(0.1))
+                                .cornerRadius(8)
+                        }
                     }
-                    
-                    Divider().background(AppColors.whiteText.opacity(0.1))
-                    
-                    HStack(spacing: 20) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Entry").font(.caption).foregroundColor(AppColors.greyText)
-                            Text(String(format: "%.5f", entryPrice))
-                                .font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
-                        }
-                        Image(systemName: "arrow.right").font(.caption).foregroundColor(AppColors.greyText)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Target").font(.caption).foregroundColor(AppColors.greyText)
-                            Text(String(format: "%.5f", targetPrice))
-                                .font(.subheadline).fontWeight(.semibold)
-                                .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
-                        }
+                }
+
+                Divider().background(AppColors.whiteText.opacity(0.1))
+
+                // Price rows
+                VStack(spacing: 10) {
+                    // Entry
+                    HStack {
+                        Circle().fill(Color.green).frame(width: 8, height: 8)
+                        Text("Entry").font(.subheadline).foregroundColor(AppColors.greyText)
                         Spacer()
+                        Text(String(format: "%.5f", entryPrice))
+                            .font(.subheadline).fontWeight(.semibold).foregroundColor(.green)
+                    }
+
+                    // Take Profit
+                    if let tp = tpPrice {
+                        let profitPct = abs(tp - entryPrice) / entryPrice * 100
+                        HStack {
+                            Circle().fill(Color.blue).frame(width: 8, height: 8)
+                            Text("Take Profit").font(.subheadline).foregroundColor(AppColors.greyText)
+                            Spacer()
+                            Text(String(format: "+%.2f%%", profitPct))
+                                .font(.caption).foregroundColor(.blue)
+                                .padding(.trailing, 4)
+                            Text(String(format: "%.5f", tp))
+                                .font(.subheadline).fontWeight(.semibold).foregroundColor(.blue)
+                        }
+                    }
+
+                    // Stop Loss
+                    if let sl = slPrice {
+                        let lossPct = abs(sl - entryPrice) / entryPrice * 100
+                        HStack {
+                            Circle().fill(Color.red).frame(width: 8, height: 8)
+                            Text("Stop Loss").font(.subheadline).foregroundColor(AppColors.greyText)
+                            Spacer()
+                            Text(String(format: "-%.2f%%", lossPct))
+                                .font(.caption).foregroundColor(.red)
+                                .padding(.trailing, 4)
+                            Text(String(format: "%.5f", sl))
+                                .font(.subheadline).fontWeight(.semibold).foregroundColor(.red)
+                        }
                     }
                 }
             }

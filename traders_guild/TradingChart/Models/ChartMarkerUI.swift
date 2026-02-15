@@ -40,6 +40,7 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var canDelete: Bool { marker.canDelete }
     var horizontalLinePrice: Double? { marker.horizontalLinePrice }
     var targetPrice: Double? { marker.targetPrice }
+    var stopLossPrice: Double? { marker.stopLossPrice }
     var alertSeverity: MarkerAlertSeverity? {
         marker.alertSeverity.flatMap { MarkerAlertSeverity.fromBackendString($0) }
     }

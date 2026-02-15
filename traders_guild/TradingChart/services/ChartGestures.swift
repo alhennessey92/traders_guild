@@ -288,12 +288,38 @@ class ChartGestureState: ObservableObject {
     
     // MARK: - Navigation
     
-    /// Center chart on specific candle index
+    /// Center chart on specific candle index (horizontal only)
     func centerOnCandle(at index: Int, chartWidth: CGFloat, candleWidth: CGFloat) {
         stopMomentum()
         let targetX = CGFloat(index) * candleWidth
         let centerOffset = chartWidth / 2
         panOffset.width = centerOffset - targetX - (candleWidth / 2)
+    }
+
+    /// Center chart on a specific candle and price level (horizontal + vertical)
+    func centerOnMarker(
+        at index: Int,
+        chartWidth: CGFloat,
+        candleWidth: CGFloat,
+        price: Double,
+        chartHeight: CGFloat,
+        priceRange: (min: Double, max: Double)
+    ) {
+        stopMomentum()
+
+        // Horizontal: same as centerOnCandle
+        let targetX = CGFloat(index) * candleWidth
+        let centerOffset = chartWidth / 2
+        panOffset.width = centerOffset - targetX - (candleWidth / 2)
+
+        // Vertical: calculate offset to center this price on screen
+        // Y formula: y = chartHeight - (normalizedPrice * scaledHeight) - verticalPanOffset
+        // To place price at chartHeight/2: verticalPanOffset = chartHeight/2 - normalizedPrice * scaledHeight
+        let range = priceRange.max - priceRange.min
+        guard range > 0 else { return }
+        let normalizedPrice = CGFloat((price - priceRange.min) / range)
+        let scaledHeight = chartHeight * priceScale
+        verticalPanOffset = chartHeight / 2 - normalizedPrice * scaledHeight
     }
     
     /// Zoom to fit a specific number of candles

@@ -352,6 +352,7 @@ class MarkerManager: ObservableObject {
         candles: [RLCandleDTO],
         horizontalLinePrice: Double? = nil,
         targetPrice: Double? = nil,
+        stopLossPrice: Double? = nil,
         alertSeverity: MarkerAlertSeverity? = nil,
         trendlineDirection: TrendlineDirection? = nil,
         selectedIndicator: String? = nil,
@@ -428,6 +429,7 @@ class MarkerManager: ObservableObject {
             canDelete: true,
             horizontalLinePrice: linePrice,
             targetPrice: targetPrice,
+            stopLossPrice: stopLossPrice,
             alertSeverity: alertSeverity?.toBackendString(),
             trendlineDirection: trendlineDirection?.rawValue,
             selectedIndicator: selectedIndicator,
@@ -473,6 +475,7 @@ class MarkerManager: ObservableObject {
                 note: note,
                 horizontalLinePrice: linePrice,
                 targetPrice: targetPrice,
+                stopLossPrice: stopLossPrice,
                 alertSeverity: alertSeverity?.toBackendString(),
                 trendlineDirection: trendlineDirection?.rawValue,
                 selectedIndicator: selectedIndicator,
@@ -1102,8 +1105,14 @@ struct ChartMarkerSystem {
         totalOffset: CGFloat,
         markerManager: MarkerManager? = nil,
         selectedMarkerId: UUID? = nil,
-        chartData: ChartDataManager? = nil
+        chartData: ChartDataManager? = nil,
+        dimmed: Bool = false
     ) {
+        var markerContext = context
+        if dimmed {
+            markerContext.opacity = 0.25
+        }
+
         let scaledHeight = chartSize.height * priceScale
         let allVisibleMarkers = markers.filter { $0.isVisible }
         let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
@@ -1140,15 +1149,15 @@ struct ChartMarkerSystem {
             let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
             let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
             
-            drawStackedConnectionLines(context: context, markers: aboveMarkers, anchorY: candleHighY, centerX: centerX, isBelow: false)
-            drawStackedConnectionLines(context: context, markers: belowMarkers, anchorY: candleLowY, centerX: centerX, isBelow: true)
-            
+            drawStackedConnectionLines(context: markerContext, markers: aboveMarkers, anchorY: candleHighY, centerX: centerX, isBelow: false)
+            drawStackedConnectionLines(context: markerContext, markers: belowMarkers, anchorY: candleLowY, centerX: centerX, isBelow: true)
+
             for (marker, position) in markerPositions {
                 let isSelected = selectedMarkerId == marker.id
                 let scale: CGFloat = isSelected ? 1.3 : 1.0
-                
+
                 drawSingleMarker(
-                    context: context,
+                    context: markerContext,
                     marker: marker,
                     position: position,
                     isBelow: marker.positionedBelow,
@@ -1182,7 +1191,7 @@ struct ChartMarkerSystem {
             
             context.stroke(
                 linePath,
-                with: .color(Color.gray.opacity(0.6)),
+                with: .color(Color.gray.opacity(0.4)),
                 style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
             )
             
@@ -1230,15 +1239,19 @@ struct ChartMarkerSystem {
             height: scaledRadius * 2
         )
         
-        // Fill
-        context.fill(Path(ellipseIn: circleRect), with: .color(marker.displayColor.opacity(0.3)))
-        
-        // Border
-        let strokeWidth: CGFloat = isSelected ? 3 : 2
-        context.stroke(Path(ellipseIn: circleRect), with: .color(marker.displayColor), lineWidth: strokeWidth)
+        // Fill — dark translucent material (simulates .ultraThinMaterial on dark background)
+        let materialFill = Color(red: 25/255, green: 25/255, blue: 33/255).opacity(0.5)
+        context.fill(Path(ellipseIn: circleRect), with: .color(materialFill))
+
+        // Border — dim border in icon color for all markers, brighter when selected
+        if isSelected {
+            context.stroke(Path(ellipseIn: circleRect), with: .color(marker.displayColor.opacity(0.6)), lineWidth: 2)
+        } else {
+            context.stroke(Path(ellipseIn: circleRect), with: .color(marker.displayColor.opacity(0.25)), lineWidth: 1)
+        }
         
         // Icon: emoji uses selectedEmoji; poll/personal/other use character (Canvas draw(Image,in:) not always available)
-        let fontSize: CGFloat = 14 * scale
+        let fontSize: CGFloat = 18 * scale
         let iconChar: String
         if marker.type == .emoji {
             iconChar = marker.selectedEmoji ?? "🎯"

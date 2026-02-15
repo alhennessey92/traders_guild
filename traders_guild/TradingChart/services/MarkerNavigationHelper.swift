@@ -147,13 +147,30 @@ class MarkerNavigationHelper {
             print("🎯 Scroll params: candleWidthScale=\(capturedGestureState.candleWidthScale), totalCandleWidth=\(totalCandleWidth)")
             print("🎯 Current panOffset before: \(capturedGestureState.panOffset.width)")
             
-            // Use the gestureState's built-in method
-            capturedGestureState.centerOnCandle(
-                at: targetCandleIndex,
-                chartWidth: width,
-                candleWidth: totalCandleWidth
-            )
-            
+            // Center on candle with smooth animation
+            let candle = targetCandleIndex < candles.count ? candles[targetCandleIndex] : nil
+            let priceRange = capturedChartViewModel.dataManager.priceRange
+            let chartHeight = UIScreen.main.bounds.height * 0.6 // Approximate chart height
+
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                if let candle = candle, priceRange.max > priceRange.min {
+                    capturedGestureState.centerOnMarker(
+                        at: targetCandleIndex,
+                        chartWidth: width,
+                        candleWidth: totalCandleWidth,
+                        price: candle.close,
+                        chartHeight: chartHeight,
+                        priceRange: priceRange
+                    )
+                } else {
+                    capturedGestureState.centerOnCandle(
+                        at: targetCandleIndex,
+                        chartWidth: width,
+                        candleWidth: totalCandleWidth
+                    )
+                }
+            }
+
             print("🎯 Current panOffset after: \(capturedGestureState.panOffset.width)")
             print("🎯 === MARKER NAVIGATION COMPLETE ===")
             
@@ -243,13 +260,15 @@ class MarkerNavigationHelper {
         print("🎯 Scroll params: candleWidthScale=\(gestureState.candleWidthScale), totalCandleWidth=\(totalCandleWidth)")
         print("🎯 Current panOffset before: \(gestureState.panOffset.width)")
         
-        // Use the gestureState's built-in method
-        gestureState.centerOnCandle(
-            at: index,
-            chartWidth: chartWidth,
-            candleWidth: totalCandleWidth
-        )
-        
+        // Use the gestureState's built-in method with animation
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            gestureState.centerOnCandle(
+                at: index,
+                chartWidth: chartWidth,
+                candleWidth: totalCandleWidth
+            )
+        }
+
         print("🎯 Current panOffset after: \(gestureState.panOffset.width)")
     }
 }

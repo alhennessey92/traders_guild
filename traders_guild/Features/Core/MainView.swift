@@ -256,7 +256,7 @@ struct MainView: View {
                 
                 // Configure ChartViewModel with proper RLAppState and RealAPIService
                 chartViewModel.configure(appState: rlAppState, api: rlAppState.realApi)
-                
+
                 print(rlAppState.currentUser?.displayUsername ?? "Username")
                 print(rlAppState.currentGuild?.name ?? "Guild Name")
             }
@@ -300,6 +300,13 @@ struct MainView: View {
                         
                         await chartViewModel.initialize()
                         rlAppState.chartDidBecomeReady()
+                    }
+                }
+            }
+            .onChange(of: chartControlVM.isMarkerPlacementMode) { _, isPlacing in
+                if isPlacing {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        selectedDetent = .fraction(0.11)
                     }
                 }
             }

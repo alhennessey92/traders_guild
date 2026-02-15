@@ -18,6 +18,19 @@ enum LinePriceSource: String, Codable {
     case custom
 }
 
+extension LinePriceSource {
+    /// Extract the relevant price from a candle based on this line source
+    func priceFromCandle(_ candle: RLCandleDTO) -> Double {
+        switch self {
+        case .candleOpen: return candle.open
+        case .candleClose: return candle.close
+        case .candleHigh: return candle.high
+        case .candleLow: return candle.low
+        case .custom, .none: return candle.close
+        }
+    }
+}
+
 // MARK: - Marker Categories
 
 enum MarkerCategory: String, CaseIterable {

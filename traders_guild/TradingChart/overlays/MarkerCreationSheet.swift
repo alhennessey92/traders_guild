@@ -27,6 +27,8 @@ struct MarkerCreationSheet: View {
     let candles: [RLCandleDTO]
     let markerType: RLMarkerType
     let initialTargetPrice: Double?
+    let initialHorizontalLinePrice: Double?
+    let initialStopLossPrice: Double?
     @Binding var placementAlertSeverity: MarkerAlertSeverity?
     @Binding var placementSelectedEmoji: String?
     
@@ -193,13 +195,24 @@ struct MarkerCreationSheet: View {
                 
                 if markerType == .predictionTarget, let target = initialTargetPrice {
                     HStack {
-                        Text("Target")
+                        Text("Take Profit")
                             .font(.subheadline)
                             .foregroundColor(AppColors.greyText)
                         Spacer()
                         Text(chartData.formatPrice(target))
                             .font(.subheadline)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.blue)
+                    }
+                }
+                if markerType == .predictionTarget, let sl = initialStopLossPrice {
+                    HStack {
+                        Text("Stop Loss")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer()
+                        Text(chartData.formatPrice(sl))
+                            .font(.subheadline)
+                            .foregroundColor(.red)
                     }
                 }
             }
@@ -242,14 +255,20 @@ struct MarkerCreationSheet: View {
     private var predictionTradeDetailsSection: some View {
         let entryVal = price
         let targetVal: Double? = initialTargetPrice ?? Double(targetPrice.replacingOccurrences(of: ",", with: ""))
+        let slVal: Double? = initialStopLossPrice
         let isLong = (targetVal ?? entryVal) > entryVal
-        let rrRatio: String? = targetVal.map { t in
-            let diff = abs(t - entryVal)
-            guard diff > 0 else { return "—" }
-            let risk = entryVal * 0.01
+        let rrRatio: String? = {
+            guard let t = targetVal else { return nil }
             let reward = abs(t - entryVal)
-            return String(format: "1:%.1f", reward / max(risk, 1e-9))
-        }
+            let risk: Double
+            if let sl = slVal {
+                risk = abs(sl - entryVal)
+            } else {
+                risk = entryVal * 0.01
+            }
+            guard risk > 0 else { return "—" }
+            return String(format: "%.2f", reward / risk)
+        }()
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "chart.line.uptrend.xyaxis")
@@ -260,6 +279,9 @@ struct MarkerCreationSheet: View {
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.whiteText)
                 Spacer()
+                Text(isLong ? "LONG" : "SHORT")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(isLong ? .green : .red)
             }
             VStack(spacing: 8) {
                 HStack {
@@ -270,40 +292,42 @@ struct MarkerCreationSheet: View {
                     Text(chartData.formatPrice(entryVal))
                         .font(.caption)
                         .fontWeight(.medium)
-                        .foregroundColor(AppColors.whiteText)
+                        .foregroundColor(.green)
                 }
                 if let t = targetVal {
                     HStack {
-                        Text("Target")
+                        Text("Take Profit")
                             .font(.caption)
                             .foregroundColor(AppColors.greyText)
                         Spacer()
                         Text(chartData.formatPrice(t))
                             .font(.caption)
                             .fontWeight(.medium)
-                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                            .foregroundColor(.blue)
                     }
+                }
+                if let sl = slVal {
                     HStack {
-                        Text("Direction")
+                        Text("Stop Loss")
                             .font(.caption)
                             .foregroundColor(AppColors.greyText)
                         Spacer()
-                        Text(isLong ? "Long" : "Short")
+                        Text(chartData.formatPrice(sl))
                             .font(.caption)
                             .fontWeight(.medium)
-                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                            .foregroundColor(.red)
                     }
-                    if let rr = rrRatio {
-                        HStack {
-                            Text("R:R")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                            Spacer()
-                            Text(rr)
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundColor(AppColors.whiteText)
-                        }
+                }
+                if let rr = rrRatio {
+                    HStack {
+                        Text("R:R")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer()
+                        Text(rr)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(AppColors.whiteText)
                     }
                 }
             }
@@ -671,8 +695,9 @@ struct MarkerCreationSheet: View {
                 type: markerType,
                 note: effectiveNote,
                 candles: candles,
-                horizontalLinePrice: nil,
+                horizontalLinePrice: initialHorizontalLinePrice,
                 targetPrice: targetPriceValue,
+                stopLossPrice: initialStopLossPrice,
                 alertSeverity: markerType == .alert ? alertSeverity : nil,
                 trendlineDirection: markerType == .trendline ? trendlineDirection : nil,
                 selectedIndicator: markerType == .indicator ? selectedIndicator : nil,

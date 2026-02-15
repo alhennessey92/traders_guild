@@ -133,6 +133,20 @@ enum RLMarkerType: String, Codable, CaseIterable {
         }
     }
     
+    /// Short label for display on chart lines
+    var lineLabel: String {
+        switch self {
+        case .entry: return "Entry"
+        case .exit: return "Exit"
+        case .stopLoss: return "SL"
+        case .takeProfit: return "TP"
+        case .support: return "Support"
+        case .resistance: return "Resist"
+        case .predictionTarget: return "Entry"
+        default: return ""
+        }
+    }
+
     /// Price source for horizontal line (UI)
     var lineSource: LinePriceSource {
         switch self {
@@ -537,6 +551,7 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     // Type-specific (exploded from JSONB metadata)
     let horizontalLinePrice: Double?
     let targetPrice: Double?
+    let stopLossPrice: Double?
     let alertSeverity: String?                  // low, medium, high, critical
     let trendlineDirection: String?             // up, down, sideways
     let selectedIndicator: String?
@@ -980,6 +995,7 @@ struct RLCreateMarkerRequest: Codable {
     // Type-specific
     let horizontalLinePrice: Double?
     let targetPrice: Double?
+    let stopLossPrice: Double?
     let alertSeverity: String?
     let trendlineDirection: String?
     let selectedIndicator: String?
@@ -987,7 +1003,7 @@ struct RLCreateMarkerRequest: Codable {
     let selectedEmoji: String?
     let pollQuestion: String?
     let pollOptions: [String]?
-    
+
     enum CodingKeys: String, CodingKey {
         case symbolId = "symbol_id"
         case guildId = "guild_id"
@@ -997,6 +1013,7 @@ struct RLCreateMarkerRequest: Codable {
         case note
         case horizontalLinePrice = "horizontal_line_price"
         case targetPrice = "target_price"
+        case stopLossPrice = "stop_loss_price"
         case alertSeverity = "alert_severity"
         case trendlineDirection = "trendline_direction"
         case selectedIndicator = "selected_indicator"
