@@ -79,25 +79,26 @@ enum RLMarkerType: String, Codable, CaseIterable {
     case poll = "Poll"
     case personal = "Personal"
     
+    /// SF Symbol name only (no .circle) — chart draws its own circle; add custom symbols here for new marker types
     var icon: String {
-        switch self {
-        case .note: return "pencil.circle"
-        case .question: return "questionmark.circle"
-        case .alert: return "bell.circle"
-        case .entry: return "arrow.up.circle"
-        case .exit: return "arrow.down.circle"
-        case .stopLoss: return "xmark.shield"
-        case .takeProfit: return "checkmark.shield"
-        case .support: return "s.circle"
-        case .resistance: return "r.circle"
-        case .indicator: return "star.circle"
-        case .trendline: return "chart.line.uptrend.xyaxis.circle"
-        case .pattern: return "circle.hexagongrid.circle"
-        case .volumeSpike: return "chart.line.downtrend.xyaxis.circle"
-        case .predictionTarget: return "staroflife.circle"
+        switch self {   
+        case .note: return "pencil"
+        case .question: return "questionmark"
+        case .alert: return "exclamationmark.triangle"
+        case .entry: return "arrow.right.circle.dotted"
+        case .exit: return "arrow.left.circle.dotted"
+        case .stopLoss: return "xmark"
+        case .takeProfit: return "checkmark"
+        case .support: return "arrow.down.to.line"
+        case .resistance: return "arrow.up.to.line"
+        case .indicator: return "star"
+        case .trendline: return "chart.line.uptrend.xyaxis"
+        case .pattern: return "circle.hexagongrid.fill"
+        case .volumeSpike: return "chart.line.downtrend.xyaxis"
+        case .predictionTarget: return "target"
         case .emoji: return "face.smiling.inverse"
-        case .poll: return "newspaper.circle"
-        case .personal: return "person.circle"
+        case .poll: return "newspaper.fill"
+        case .personal: return "person.fill"
         }
     }
     
@@ -107,7 +108,7 @@ enum RLMarkerType: String, Codable, CaseIterable {
         case .question: return .blue
         case .alert: return .yellow
         case .entry: return .green
-        case .exit: return .orange
+        case .exit: return AppColors.bearCandleRed
         case .stopLoss: return .red
         case .takeProfit: return .blue
         case .support: return .purple
@@ -116,7 +117,7 @@ enum RLMarkerType: String, Codable, CaseIterable {
         case .trendline: return .indigo
         case .pattern: return .cyan
         case .volumeSpike: return .mint
-        case .predictionTarget: return .orange
+        case .predictionTarget: return .white
         case .emoji: return .white
         case .poll: return .blue
         case .personal: return .cyan

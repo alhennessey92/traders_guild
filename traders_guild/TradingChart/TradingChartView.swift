@@ -905,7 +905,8 @@ struct TradingChartView: View {
                 .gesture(yAxisDragGesture)
                 .simultaneousGesture(yAxisPinchGesture)
         }
-        .allowsHitTesting(true)
+        // Disable Y-axis gestures during marker placement so buttons aren't blocked
+        .allowsHitTesting(!isMarkerPlacementMode)
         .onDisappear {
             isDraggingOnYAxis = false
             isPinchingOnYAxis = false
@@ -1046,6 +1047,13 @@ struct TradingChartView: View {
     @ViewBuilder
     private func instructionBanner(coordinateSystem: ChartCoordinateSystem) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
+            // Header label
+            Text("Marker Actions")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.gray)
+                .textCase(.uppercase)
+                .tracking(0.5)
+
             // Buttons row — right-aligned
             HStack(spacing: 8) {
                 cancelPlacementButton
@@ -1063,7 +1071,20 @@ struct TradingChartView: View {
                 predictionInfoBox(state: state)
             }
         }
-        .padding(.trailing, 70)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 20/255, green: 20/255, blue: 28/255).opacity(0.95),
+                    Color(red: 20/255, green: 20/255, blue: 28/255).opacity(0.7)
+                ],
+                startPoint: .trailing,
+                endPoint: .leading
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        )
+        .padding(.trailing, 8)
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .allowsHitTesting(true)
@@ -2869,8 +2890,8 @@ struct PlacementLineDragOverlay: View {
                                 haptic.impactOccurred()
                             }
                             let newY = dragStartY + value.translation.height
-                            let newPrice = coordinateSystem.price(atYPosition: newY)
-                            linePrice = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            linePrice = newPrice
                         }
                         .onEnded { _ in
                             isDragging = false
@@ -3048,21 +3069,34 @@ struct PredictionPlacementOverlay: View {
                             haptic.impactOccurred()
                         }
                         let newY = dragStartY + value.translation.height
-                        var newPrice = coordinateSystem.price(atYPosition: newY)
+                        let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
 
-                        // Clamp to visible price range
-                        let minPrice = chartData.priceRange.min
-                        let maxPrice = chartData.priceRange.max
-                        newPrice = max(minPrice, min(maxPrice, newPrice))
+                        // Auto-swap: when dragged line crosses entry, flip the other line
+                        // to the opposite side to form a proper trade
+                        if var p = placement {
+                            let entry = p.entryPrice
+                            let wasLong = p.takeProfitPrice > entry
 
-                        // Update the dragged line price — no constraint on direction
-                        // TP and SL can freely cross entry to flip direction (long ↔ short)
-                        // Direction is auto-detected by PredictionPlacementState.isLong
-                        switch lineType {
-                        case .takeProfit:
-                            placement?.takeProfitPrice = newPrice
-                        case .stopLoss:
-                            placement?.stopLossPrice = newPrice
+                            switch lineType {
+                            case .takeProfit:
+                                p.takeProfitPrice = newPrice
+                                let nowLong = newPrice > entry
+                                // If direction flipped, mirror SL to opposite side
+                                if wasLong != nowLong {
+                                    let slOffset = abs(p.stopLossPrice - entry)
+                                    p.stopLossPrice = nowLong ? entry - slOffset : entry + slOffset
+                                }
+                            case .stopLoss:
+                                p.stopLossPrice = newPrice
+                                let nowLong = p.takeProfitPrice > entry
+                                let slCrossedToTPSide = (newPrice > entry) == nowLong
+                                // If SL crossed to same side as TP, flip TP to other side
+                                if slCrossedToTPSide {
+                                    let tpOffset = abs(p.takeProfitPrice - entry)
+                                    p.takeProfitPrice = newPrice > entry ? entry - tpOffset : entry + tpOffset
+                                }
+                            }
+                            placement = p
                         }
                     }
                     .onEnded { _ in
@@ -3155,18 +3189,16 @@ struct DraggableMarkerLineOverlay: View {
                                     dragStartPrice = currentPrice
                                 }
                                 let newY = dragStartY + value.translation.height
-                                let newPrice = coordinateSystem.price(atYPosition: newY)
-                                let clamped = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
-                                dragPrice = clamped
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                dragPrice = newPrice
                             }
                             .onEnded { value in
                                 let newY = dragStartY + value.translation.height
-                                let newPrice = coordinateSystem.price(atYPosition: newY)
-                                let clamped = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
                                 Task {
                                     await markerManager.updateMarker(
                                         id: marker.id,
-                                        horizontalLinePrice: clamped
+                                        horizontalLinePrice: newPrice
                                     )
                                 }
                                 dragPrice = nil
@@ -3219,27 +3251,25 @@ struct DraggablePredictionLinesOverlay: View {
                         if isTarget {
                             if dragTargetPrice == nil { targetDragStartY = y }
                             let newY = targetDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.price(atYPosition: newY)
-                            dragTargetPrice = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            dragTargetPrice = newPrice
                         } else {
                             if dragEntryPrice == nil { entryDragStartY = y }
                             let newY = entryDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.price(atYPosition: newY)
-                            dragEntryPrice = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            dragEntryPrice = newPrice
                         }
                     }
                     .onEnded { value in
                         if isTarget {
                             let newY = targetDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.price(atYPosition: newY)
-                            let clamped = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
-                            Task { await markerManager.updateMarker(id: marker.id, targetPrice: clamped) }
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            Task { await markerManager.updateMarker(id: marker.id, targetPrice: newPrice) }
                             dragTargetPrice = nil
                         } else {
                             let newY = entryDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.price(atYPosition: newY)
-                            let clamped = min(chartData.priceRange.max, max(chartData.priceRange.min, newPrice))
-                            Task { await markerManager.updateMarker(id: marker.id, horizontalLinePrice: clamped) }
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            Task { await markerManager.updateMarker(id: marker.id, horizontalLinePrice: newPrice) }
                             dragEntryPrice = nil
                         }
                     }
@@ -3437,13 +3467,18 @@ struct MarkerPriceLinesOverlay: View {
         }
 
         // Non-prediction: single static line
+        // Use dragged price from pending info if available, otherwise default to candle price
         let linePrice: Double
-        switch preview.type.lineSource {
-        case .candleOpen: linePrice = preview.candle.open
-        case .candleClose: linePrice = preview.candle.close
-        case .candleHigh: linePrice = preview.candle.high
-        case .candleLow: linePrice = preview.candle.low
-        case .custom, .none: linePrice = preview.candle.close
+        if let pending = pendingInfo, let draggedPrice = pending.horizontalLinePrice {
+            linePrice = draggedPrice
+        } else {
+            switch preview.type.lineSource {
+            case .candleOpen: linePrice = preview.candle.open
+            case .candleClose: linePrice = preview.candle.close
+            case .candleHigh: linePrice = preview.candle.high
+            case .candleLow: linePrice = preview.candle.low
+            case .custom, .none: linePrice = preview.candle.close
+            }
         }
 
         drawPriceLine(
@@ -3638,14 +3673,10 @@ struct PredictionTargetLineOverlay: View {
                             // FIXED: Calculate new Y based on drag translation from START position
                             // This prevents the feedback loop where changing price changes Y
                             let newY = dragStartY + value.translation.height
-                            
-                            // Convert to price
-                            let newPrice = coordinateSystem.price(atYPosition: newY)
-                            
-                            // Clamp to visible price range
-                            let minPrice = chartData.priceRange.min
-                            let maxPrice = chartData.priceRange.max
-                            self.targetPrice = max(minPrice, min(maxPrice, newPrice))
+
+                            // Convert to price (unclamped so lines can go beyond visible range)
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            self.targetPrice = newPrice
                         }
                         .onEnded { _ in
                             isDragging = false

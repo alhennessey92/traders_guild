@@ -1231,39 +1231,84 @@ struct ChartMarkerSystem {
         )
         context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.35)))
         
-        // Main circle
+        // Custom circle (we draw the circle ourselves; icon is symbol-only e.g. pencil, r, s)
         let circleRect = CGRect(
             x: position.x - scaledRadius,
             y: position.y - scaledRadius,
             width: scaledRadius * 2,
             height: scaledRadius * 2
         )
+        let circlePath = Path(ellipseIn: circleRect)
         
-        // Fill — dark translucent material (simulates .ultraThinMaterial on dark background)
-        let materialFill = Color(red: 25/255, green: 25/255, blue: 33/255).opacity(0.5)
-        context.fill(Path(ellipseIn: circleRect), with: .color(materialFill))
-
-        // Border — dim border in icon color for all markers, brighter when selected
-        if isSelected {
-            context.stroke(Path(ellipseIn: circleRect), with: .color(marker.displayColor.opacity(0.6)), lineWidth: 2)
-        } else {
-            context.stroke(Path(ellipseIn: circleRect), with: .color(marker.displayColor.opacity(0.25)), lineWidth: 1)
-        }
+        // Tint circle — marker color at low opacity (visible inner circle)
+        let circleTintOpacity: CGFloat = 0.12
+        context.fill(circlePath, with: .color(marker.displayColor.opacity(circleTintOpacity)))
         
-        // Icon: emoji uses selectedEmoji; poll/personal/other use character (Canvas draw(Image,in:) not always available)
-        let fontSize: CGFloat = 18 * scale
-        let iconChar: String
-        if marker.type == .emoji {
-            iconChar = marker.selectedEmoji ?? "🎯"
-        } else {
-            iconChar = getIconCharacter(for: marker.type)
-        }
-        context.draw(
-            Text(iconChar)
-                .font(.system(size: fontSize, weight: .bold))
-                .foregroundColor(marker.displayColor),
-            at: position
+        // Dark translucent material on top (slightly reduced so tint shows through)
+        let materialFill = Color(red: 25/255, green: 25/255, blue: 33/255).opacity(0.4)
+        context.fill(circlePath, with: .color(materialFill))
+        
+        // Inner circle stroke — makes the circle boundary read clearly
+        let innerRadius = scaledRadius * 0.82
+        let innerCircleRect = CGRect(
+            x: position.x - innerRadius,
+            y: position.y - innerRadius,
+            width: innerRadius * 2,
+            height: innerRadius * 2
         )
+        if marker.type == .predictionTarget {
+            // TODO: Change Color to a dynamic color changeable in assets and maybe color is representative of direction
+            context.stroke(Path(ellipseIn: innerCircleRect), with: .color(.blue.opacity(0.35)), lineWidth: 2)
+        }
+        else{
+            context.stroke(Path(ellipseIn: innerCircleRect), with: .color(marker.displayColor.opacity(0.15)), lineWidth: 2)
+        }
+        
+
+        // Outer border — dim border in icon color for all markers, brighter when selected
+        if isSelected {
+            context.stroke(circlePath, with: .color(marker.displayColor.opacity(0.6)), lineWidth: 2)
+        } else {
+            context.stroke(circlePath, with: .color(.white.opacity(0.25)), lineWidth: 1)
+        }
+        
+        // Icon: symbol-only (e.g. pencil, r, s) — kept smaller so circle is visible
+        let fontSize: CGFloat = 12 * scale
+        if marker.type == .emoji {
+            let iconChar = marker.selectedEmoji ?? "🎯"
+            context.draw(
+                Text(iconChar)
+                    .font(.system(size: fontSize, weight: .bold))
+                    .foregroundColor(marker.displayColor),
+                at: position
+            )
+        } else {
+            let iconSize = scaledRadius * 0.88
+            let iconRect = CGRect(
+                x: position.x - iconSize / 2,
+                y: position.y - iconSize / 2,
+                width: iconSize,
+                height: iconSize
+            )
+            // resolve() only accepts plain Image; use single color (palette not supported in Canvas)
+            let iconImage = Image(systemName: marker.type.icon)
+            var resolvedIcon = context.resolve(iconImage)
+            resolvedIcon.shading = .color(marker.displayColor)
+            context.draw(resolvedIcon, in: iconRect)
+        }
+//        let fontSize: CGFloat = 18 * scale
+//        let iconChar: String
+//        if marker.type == .emoji {
+//            iconChar = marker.selectedEmoji ?? "🎯"
+//        } else {
+//            iconChar = Image(systemName: marker.type.icon).foregroundColor(marker.displayColor) //getIconCharacter(for: marker.type)
+//        }
+//        context.draw(
+//            Text(iconChar)
+//                .font(.system(size: fontSize, weight: .bold))
+//                .foregroundColor(marker.displayColor),
+//            at: position
+//        )
         
         // Like count badge
         if marker.likeCount > 0 {
