@@ -31,28 +31,31 @@ enum APIService {
     case core       // Users, guilds, memberships, messaging REST (port 8001)
     case chart      // Chart, symbols, candles, markers, watchlists (port 8003)
     case realtime   // WebSocket connections only (port 8002)
-    
+    case reputation // Reputation system (port 8005)
+
     var baseURL: String {
         switch APIEnvironment.current {
         case .development:
             #if targetEnvironment(simulator)
             switch self {
-            case .auth:     return "http://localhost:8000/api/v1"
-            case .core:     return "http://localhost:8001/api/v1"
-            case .chart:    return "http://localhost:8003/api/v1"
-            case .realtime: return "http://localhost:8002/api/v1"
+            case .auth:       return "http://localhost:8000/api/v1"
+            case .core:       return "http://localhost:8001/api/v1"
+            case .chart:      return "http://localhost:8003/api/v1"
+            case .realtime:   return "http://localhost:8002/api/v1"
+            case .reputation: return "http://localhost:8005/api/v1"
             }
             #else
             // ⚠️ UPDATE THIS to your Mac's IP for device testing
             let macIP = "192.168.1.182"
             switch self {
-            case .auth:     return "http://\(macIP):8000/api/v1"
-            case .core:     return "http://\(macIP):8001/api/v1"
-            case .chart:    return "http://\(macIP):8003/api/v1"
-            case .realtime: return "http://\(macIP):8002/api/v1"
+            case .auth:       return "http://\(macIP):8000/api/v1"
+            case .core:       return "http://\(macIP):8001/api/v1"
+            case .chart:      return "http://\(macIP):8003/api/v1"
+            case .realtime:   return "http://\(macIP):8002/api/v1"
+            case .reputation: return "http://\(macIP):8005/api/v1"
             }
             #endif
-            
+
         case .production:
             // Kong routes all services through one URL
             return "https://api.tradersguild.com/api/v1"
@@ -2980,6 +2983,91 @@ extension RealAPIService {
             service: .chart,
             method: "POST",
             body: body,
+            auth: true
+        )
+    }
+}
+
+
+// ================================================================================================
+// MARK: - Reputation API Extension
+// ================================================================================================
+
+extension RealAPIService {
+
+    // MARK: - Tier Definitions
+
+    /// Get all reputation tier definitions for client display
+    func getReputationTiers() async throws -> [RLReputationTierDTO] {
+        return try await request(
+            "/reputation/tiers",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // MARK: - Guild Reputation Profile
+
+    /// Get current user's reputation profile within a specific guild
+    func getMyGuildReputation(guildId: UUID) async throws -> RLReputationProfileDTO {
+        return try await request(
+            "/reputation/me/guild/\(guildId.uuidString)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get another user's reputation profile within a specific guild
+    func getUserGuildReputation(userId: UUID, guildId: UUID) async throws -> RLReputationProfileDTO {
+        return try await request(
+            "/reputation/users/\(userId.uuidString)/guild/\(guildId.uuidString)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // MARK: - Global Reputation
+
+    /// Get current user's global cross-guild reputation
+    func getMyGlobalReputation() async throws -> RLGlobalReputationDTO {
+        return try await request(
+            "/reputation/me/global",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get another user's global cross-guild reputation
+    func getUserGlobalReputation(userId: UUID) async throws -> RLGlobalReputationDTO {
+        return try await request(
+            "/reputation/users/\(userId.uuidString)/global",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // MARK: - Leaderboard
+
+    /// Get guild reputation leaderboard
+    func getGuildReputationLeaderboard(guildId: UUID, limit: Int = 50) async throws -> RLReputationLeaderboardDTO {
+        return try await request(
+            "/reputation/guilds/\(guildId.uuidString)/leaderboard?limit=\(limit)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // MARK: - History
+
+    /// Get paginated reputation event history for current user
+    func getReputationHistory(guildId: UUID? = nil, page: Int = 1, pageSize: Int = 20) async throws -> RLReputationHistoryDTO {
+        var path = "/reputation/me/history?page=\(page)&page_size=\(pageSize)"
+        if let guildId = guildId {
+            path += "&guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .reputation,
             auth: true
         )
     }

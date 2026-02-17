@@ -2523,4 +2523,8 @@ extension Notification.Name {
     /// Posted when a member's suspend status changes via WebSocket.
     /// userInfo: ["guildId": UUID, "userId": UUID, "suspendedUntil": String?, "action": String]
     static let guildMemberSuspendChanged = Notification.Name("guildMemberSuspendChanged")
+
+    /// Posted when a user's reputation changes via WebSocket.
+    /// userInfo: ["guildId": String, "newGuildReputation": Int, "newGlobalReputation": Int, "tierLevel": Int, "tierChanged": Bool, "pointsAwarded": Int]
+    static let reputationDidUpdate = Notification.Name("reputationDidUpdate")
 }

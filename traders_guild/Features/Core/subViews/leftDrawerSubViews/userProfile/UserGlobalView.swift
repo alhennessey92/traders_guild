@@ -23,6 +23,10 @@ struct UserGlobalSheetView: View {
     @State private var userGuilds: [GlobalGuildItem] = GlobalGuildItem.samples
     @State private var friends: [GlobalFriendItem] = GlobalFriendItem.samples
     @State private var recentActivity: [GlobalActivityItem] = GlobalActivityItem.samples
+
+    // Live reputation data
+    @State private var globalRepData: RLGlobalReputationDTO?
+    @State private var showReputationDetail = false
     
     enum GlobalTab: String, CaseIterable {
         case overview = "Overview"
@@ -234,39 +238,101 @@ struct UserGlobalSheetView: View {
             .padding(.horizontal, 25)
             .padding(.top, 16)
             
-            // Reputation breakdown
+            // Reputation breakdown — tappable to open full detail
             VStack(alignment: .leading, spacing: 12) {
-                Text("Reputation Breakdown")
-                    .font(.headline)
-                    .foregroundColor(AppColors.whiteText)
+                Button {
+                    showReputationDetail = true
+                } label: {
+                    HStack {
+                        Text("Reputation Breakdown")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                    }
                     .padding(.horizontal, 25)
-                
+                }
+
                 VStack(spacing: 10) {
-                    ReputationBreakdownRow(
-                        title: "Trading Analysis",
-                        value: globalStats.reputationFromTrading,
-                        total: rlAppState.currentUser?.globalReputation ?? 0,
-                        color: AppColors.accentColor
-                    )
-                    
-                    ReputationBreakdownRow(
-                        title: "Community Help",
-                        value: globalStats.reputationFromCommunity,
-                        total: rlAppState.currentUser?.globalReputation ?? 0,
-                        color: .blue
-                    )
-                    
-                    ReputationBreakdownRow(
-                        title: "Predictions",
-                        value: globalStats.reputationFromPredictions,
-                        total: rlAppState.currentUser?.globalReputation ?? 0,
-                        color: .green
-                    )
+                    if let rep = globalRepData {
+                        // Live data from reputation API
+                        ReputationBreakdownRow(
+                            title: "Predictions",
+                            value: rep.guildContributions.reduce(0) { $0 + $1.reputation },
+                            total: max(1, rep.globalReputation),
+                            color: .green
+                        )
+
+                        // Tier badge
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(rep.tier.color.opacity(0.3))
+                                .frame(width: 20, height: 20)
+                                .overlay(
+                                    Text("\(rep.tier.tierLevel)")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(rep.tier.color)
+                                )
+                            Text("Tier \(rep.tier.tierLevel)")
+                                .font(.caption)
+                                .foregroundColor(rep.tier.color)
+                            Spacer()
+                            if rep.weeklyDelta != 0 {
+                                Text("\(rep.weeklyDelta >= 0 ? "+" : "")\(rep.weeklyDelta) this week")
+                                    .font(.caption)
+                                    .foregroundColor(rep.weeklyDelta >= 0 ? .green : .red)
+                            }
+                        }
+                        .padding(.top, 4)
+                    } else {
+                        // Fallback to sample data while loading
+                        ReputationBreakdownRow(
+                            title: "Trading Analysis",
+                            value: globalStats.reputationFromTrading,
+                            total: rlAppState.currentUser?.globalReputation ?? 0,
+                            color: AppColors.accentColor
+                        )
+                        ReputationBreakdownRow(
+                            title: "Community Help",
+                            value: globalStats.reputationFromCommunity,
+                            total: rlAppState.currentUser?.globalReputation ?? 0,
+                            color: .blue
+                        )
+                        ReputationBreakdownRow(
+                            title: "Predictions",
+                            value: globalStats.reputationFromPredictions,
+                            total: rlAppState.currentUser?.globalReputation ?? 0,
+                            color: .green
+                        )
+                    }
                 }
                 .padding()
                 .background(Color.white.opacity(0.03))
                 .cornerRadius(12)
                 .padding(.horizontal, 25)
+                .onTapGesture {
+                    showReputationDetail = true
+                }
+            }
+            .sheet(isPresented: $showReputationDetail) {
+                NavigationStack {
+                    ReputationDetailView()
+                        .environmentObject(rlAppState)
+                        .navigationTitle("Reputation")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Done") { showReputationDetail = false }
+                                    .foregroundColor(AppColors.accentColor)
+                            }
+                        }
+                }
+            }
+            .task {
+                await loadReputationData()
             }
             
             // Account info
@@ -493,6 +559,16 @@ struct UserGlobalSheetView: View {
                 }
                 .padding(.horizontal, 25)
             }
+        }
+    }
+
+    // MARK: - Data Loading
+
+    private func loadReputationData() async {
+        do {
+            globalRepData = try await rlAppState.realApi.getMyGlobalReputation()
+        } catch {
+            print("Failed to load reputation data: \(error)")
         }
     }
 }

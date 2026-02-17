@@ -744,10 +744,54 @@ class LeftDrawerViewModel: ObservableObject {
             notificationStats = stats
             print("📊 Notification stats updated: \(stats.unreadCount) unread")
 
+        case "reputation_update":
+            // Real-time reputation change
+            guard let update = message.payload(as: RLReputationUpdatePayload.self) else {
+                print("⚠️ Failed to decode reputation update payload")
+                return
+            }
+            handleReputationUpdate(update)
+
         default:
             break
         }
     }
+
+    private func handleReputationUpdate(_ update: RLReputationUpdatePayload) {
+        print("⭐ Reputation update: \(update.eventType) \(update.pointsFormatted) pts → guild:\(update.newGuildReputation) global:\(update.newGlobalReputation)")
+
+        // Update in-memory state so UI reflects immediately
+        if let membership = rlAppState?.currentMembership,
+           update.guildId == membership.guildId.uuidString {
+            // Create updated membership with new reputation
+            let updated = RLGuildMembershipDTO(
+                id: membership.id,
+                userId: membership.userId,
+                guildId: membership.guildId,
+                role: membership.role,
+                reputation: update.newGuildReputation,
+                contributionScore: membership.contributionScore,
+                status: membership.status,
+                dateJoined: membership.dateJoined
+            )
+            rlAppState?.currentMembership = updated
+        }
+
+        // Notify observers for any reputation-dependent views
+        NotificationCenter.default.post(
+            name: .reputationDidUpdate,
+            object: nil,
+            userInfo: [
+                "guildId": update.guildId,
+                "newGuildReputation": update.newGuildReputation,
+                "newGlobalReputation": update.newGlobalReputation,
+                "tierLevel": update.tierLevel,
+                "tierChanged": update.tierChanged,
+                "pointsAwarded": update.pointsAwarded,
+            ]
+        )
+    }
+
     // ================================================================================================
     // MARK: - Load User Profiles Methods
     // ================================================================================================
