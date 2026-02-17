@@ -690,12 +690,19 @@ struct RLMessagingSheet: View {
     }
 
     private func buildProfileStats(for member: RLGuildMemberDTO) -> [ProfileStatDTO] {
-        [
+        var stats = [
             ProfileStatDTO(
                 label: "Guild Reputation",
                 value: "\(member.reputation)",
                 icon: "shield.checkered",
                 color: AppColors.accentColor,
+                trend: nil
+            ),
+            ProfileStatDTO(
+                label: "Accuracy",
+                value: member.accuracyFormatted ?? "--",
+                icon: "target",
+                color: .green,
                 trend: nil
             ),
             ProfileStatDTO(
@@ -709,7 +716,7 @@ struct RLMessagingSheet: View {
                 label: "Days in Guild",
                 value: "\(member.daysInGuild)",
                 icon: "calendar",
-                color: .green,
+                color: .cyan,
                 trend: nil
             ),
             ProfileStatDTO(
@@ -718,8 +725,9 @@ struct RLMessagingSheet: View {
                 icon: "chart.bar.fill",
                 color: .orange,
                 trend: nil
-            )
+            ),
         ]
+        return stats
     }
     
     // MARK: - Settings View

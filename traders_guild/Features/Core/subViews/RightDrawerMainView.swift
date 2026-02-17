@@ -503,29 +503,12 @@ struct RLMemberRowView: View {
                         }
                     }
 
-                    HStack(spacing: 2) {
-                        Text(member.memberRole.displayName)
-                            .font(.caption)
-                            .foregroundColor(member.memberRole.color.opacity(0.9))
-                            .fontWeight(member.memberRole.canModerate ? .bold : .regular)
-                            .lineLimit(1)
-
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.5))
-                            .frame(width: 4, height: 4)
-                            .padding(.top, 1)
-                            .padding(.horizontal, 3)
-
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-
-                        Text("\(member.reputation)")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
-                    }
+                    UnifiedRoleBadge(
+                        member: member,
+                        showReputation: true,
+                        fontSize: .caption,
+                        iconSize: .caption2
+                    )
                 }
 
                 Spacer()

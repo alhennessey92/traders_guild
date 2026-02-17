@@ -530,23 +530,11 @@ struct MarkerDetailHeaderView: View {
                         .foregroundColor(AppColors.whiteText)
 
                     // Role · Reputation
-                    HStack(spacing: 4) {
-                        Text(marker.author.memberRole.displayName)
-                            .font(.caption)
-                            .foregroundColor(marker.author.memberRole.color)
-                            .fontWeight(marker.author.memberRole.canModerate ? .bold : .regular)
-
-                        UnifiedSeparatorDot()
-
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.system(size: 9))
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text("\(marker.author.reputation)")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
-                    }
+                    // Role · Reputation · Accuracy
+                    UnifiedRoleBadge(
+                        member: marker.author,
+                        showReputation: true
+                    )
 
                     Text(marker.createdAtFormatted)
                         .font(.caption2)

@@ -697,6 +697,7 @@ protocol RLChatMessageDisplayable: Identifiable {
     var authorIsOnline: Bool { get }
     var authorRole: RLMemberRole { get }
     var authorReputation: Int { get }
+    var authorAccuracy: Double? { get }
     var authorIsFriend: Bool { get }
     var authorIsBlocked: Bool { get }
 
@@ -821,33 +822,17 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                     .padding(.leading, 3)
             }
             
-            // Role and reputation (for full detail contexts like guild chatrooms)
+            // Role · reputation · accuracy (unified with rest of app: announcements, markers, etc.)
             if context.showsFullUserDetails {
-                Circle()
-                    .fill(AppColors.whiteText.opacity(0.7))
-                    .frame(width: 3, height: 3)
-                    .padding(.horizontal, 3)
-                
-                // Role text gets role color
-                Text(message.authorRole.displayName)
-                    .font(.caption)
-                    .foregroundColor(message.authorRole.color.opacity(0.9))
-                    .fontWeight(message.authorRole.canModerate ? .bold : .regular)
-                
-                Circle()
-                    .fill(AppColors.whiteText.opacity(0.7))
-                    .frame(width: 3, height: 3)
-                    .padding(.horizontal, 3)
-                
-                Image(systemName: "shield.pattern.checkered")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-                
-                Text("\(message.authorReputation)")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.accentColor)
+                UnifiedRoleBadge(
+                    roleName: message.authorRole.displayName,
+                    roleColor: message.authorRole.color,
+                    reputation: message.authorReputation,
+                    accuracy: message.authorAccuracy.map { "\(Int($0 * 100))%" },
+                    showReputation: true,
+                    fontSize: .caption,
+                    iconSize: .caption2
+                )
             }
         }
     }
@@ -1011,6 +996,7 @@ extension RLChatroomMessageDTO: RLChatMessageDisplayable {
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: RLMemberRole { author.memberRole }
     var authorReputation: Int { author.reputation }
+    var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
 }
@@ -1022,6 +1008,7 @@ extension RLDMMessageDTO: RLChatMessageDisplayable {
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: RLMemberRole { author.memberRole }
     var authorReputation: Int { author.reputation }
+    var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
 }
@@ -1033,6 +1020,7 @@ extension RLChartChatMessageDTO: RLChatMessageDisplayable {
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: RLMemberRole { author.memberRole }
     var authorReputation: Int { author.reputation }
+    var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
 }
@@ -1328,22 +1316,12 @@ struct RLDMSettingsView: View {
                                     .font(.caption2)
                                     .foregroundColor(AppColors.greyText)
                                 
-                                HStack(spacing: 4) {
-                                    Text(participant.memberRole.displayName)
-                                        .font(.caption2)
-                                        .foregroundColor(participant.memberRole.color)
-                                    
-                                    Text("·")
-                                        .foregroundColor(AppColors.greyText)
-                                    
-                                    Image(systemName: "shield.pattern.checkered")
-                                        .font(.caption2)
-                                        .foregroundColor(AppColors.accentColor)
-                                    
-                                    Text("\(participant.reputation)")
-                                        .font(.caption2)
-                                        .foregroundColor(AppColors.accentColor)
-                                }
+                                UnifiedRoleBadge(
+                                    member: participant,
+                                    showReputation: true,
+                                    fontSize: .caption2,
+                                    iconSize: .caption2
+                                )
                             }
                             
                             Spacer()

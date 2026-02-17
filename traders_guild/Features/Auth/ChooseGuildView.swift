@@ -220,33 +220,20 @@ struct GuildSelectionRowFull: View {
                     
                     Divider()
                     
-                    // User's role and reputation in this guild
-                    HStack(spacing: 2) {
+                    // User's role · reputation · accuracy in this guild
+                    HStack(spacing: 4) {
                         Text("You are a ")
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
-                       
-                        Text(item.role.displayName)
-                            .font(.caption)
-                            .foregroundColor(item.role.color)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                        
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 3, height: 3)
-                            .padding(.top, 1)
-                            .padding(.leading, 3)
-                            .padding(.trailing, 3)
-                        
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text("\(item.membership.reputation)")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
+                        UnifiedRoleBadge(
+                            roleName: item.role.displayName,
+                            roleColor: item.role.color,
+                            reputation: item.membership.reputation,
+                            accuracy: item.membership.accuracyFormatted,
+                            showReputation: true,
+                            fontSize: .caption,
+                            iconSize: .caption2
+                        )
                     }
                     .padding(.leading, 15)
                 }

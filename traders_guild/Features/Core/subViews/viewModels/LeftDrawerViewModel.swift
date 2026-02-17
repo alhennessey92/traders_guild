@@ -50,7 +50,11 @@ class LeftDrawerViewModel: ObservableObject {
 
     // Global leaderboard (not yet implemented)
     @Published var globalLeaderboard: [RLGuildMemberDTO] = []
-    
+
+    // Accuracy leaderboard
+    @Published var accuracyLeaderboard: [RLAccuracyLeaderboardMemberDTO] = []
+    @Published var isLoadingAccuracyLeaderboard: Bool = false
+
     @Published var guildTradingWatchlist: [RLTradingSymbolDTO] = []
     @Published var personalTradingWatchlist: [RLTradingSymbolDTO] = []
     
@@ -515,6 +519,23 @@ class LeftDrawerViewModel: ObservableObject {
         }
     }
 
+    /// Refresh the accuracy leaderboard for the current guild
+    func refreshAccuracyLeaderboard(guildId: UUID, rlAppState: RLAppState) async {
+        isLoadingAccuracyLeaderboard = true
+        defer { isLoadingAccuracyLeaderboard = false }
+
+        do {
+            let response = try await rlAppState.realApi.getGuildAccuracyLeaderboard(guildId: guildId)
+            await MainActor.run {
+                self.accuracyLeaderboard = response.members
+            }
+        } catch is CancellationError {
+            print("📋 refreshAccuracyLeaderboard: Cancelled")
+        } catch {
+            print("⚠️ Failed to refresh accuracy leaderboard: \(error)")
+        }
+    }
+
     /// Update a guild member in cache and return the updated member
     @discardableResult
     func updateGuildMember(
@@ -752,6 +773,14 @@ class LeftDrawerViewModel: ObservableObject {
             }
             handleReputationUpdate(update)
 
+        case "accuracy_update":
+            // Real-time trading accuracy change (prediction win/loss)
+            guard let update = message.payload(as: RLAccuracyUpdatePayload.self) else {
+                print("⚠️ Failed to decode accuracy update payload")
+                return
+            }
+            handleAccuracyUpdate(update)
+
         default:
             break
         }
@@ -772,7 +801,8 @@ class LeftDrawerViewModel: ObservableObject {
                 reputation: update.newGuildReputation,
                 contributionScore: membership.contributionScore,
                 status: membership.status,
-                dateJoined: membership.dateJoined
+                dateJoined: membership.dateJoined,
+                accuracyRate: membership.accuracyRate
             )
             rlAppState?.currentMembership = updated
         }
@@ -788,6 +818,42 @@ class LeftDrawerViewModel: ObservableObject {
                 "tierLevel": update.tierLevel,
                 "tierChanged": update.tierChanged,
                 "pointsAwarded": update.pointsAwarded,
+            ]
+        )
+    }
+
+    private func handleAccuracyUpdate(_ update: RLAccuracyUpdatePayload) {
+        print("🎯 Accuracy update: \(update.eventType) \(update.resultDisplay) → accuracy:\(update.accuracyFormatted) streak:\(update.winStreak)")
+
+        // Update current user's membership in app state so user bar (username · role · reputation · accuracy) updates without refetch
+        if let membership = rlAppState?.currentMembership,
+           update.guildId == membership.guildId.uuidString,
+           update.userId == rlAppState?.currentUser?.id.uuidString {
+            let updated = RLGuildMembershipDTO(
+                id: membership.id,
+                userId: membership.userId,
+                guildId: membership.guildId,
+                role: membership.role,
+                reputation: membership.reputation,
+                contributionScore: membership.contributionScore,
+                status: membership.status,
+                dateJoined: membership.dateJoined,
+                accuracyRate: update.newAccuracyRate
+            )
+            rlAppState?.currentMembership = updated
+        }
+
+        // Notify observers for any accuracy-dependent views
+        NotificationCenter.default.post(
+            name: .accuracyDidUpdate,
+            object: nil,
+            userInfo: [
+                "guildId": update.guildId,
+                "newAccuracyRate": update.newAccuracyRate,
+                "totalPredictions": update.totalPredictions,
+                "successfulPredictions": update.successfulPredictions,
+                "winStreak": update.winStreak,
+                "isWin": update.isWin,
             ]
         )
     }
@@ -968,6 +1034,7 @@ extension RLGuildMemberDTO {
             reputation: reputation,
             contributionScore: contributionScore,
             dateJoined: dateJoined,
+            accuracyRate: accuracyRate,
             mutedUntil: mutedUntil,
             suspendedUntil: suspendedUntil,
             userId: userId,

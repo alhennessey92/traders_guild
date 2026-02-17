@@ -115,6 +115,7 @@ struct EventRowView: View {
                     username: event.authorUsername,
                     role: event.authorRole,
                     reputation: event.authorMembership.reputation,
+                    accuracy: event.authorMembership.accuracyFormatted,
                     timeText: event.timeUntilEvent,
                     cornerRadius: 14
                 )
@@ -181,7 +182,8 @@ struct EventDetailView: View {
                     UnifiedAuthorRow(
                         username: displayedEvent.authorUsername,
                         role: displayedEvent.authorRole,
-                        reputation: displayedEvent.authorMembership.reputation
+                        reputation: displayedEvent.authorMembership.reputation,
+                        accuracy: displayedEvent.authorMembership.accuracyFormatted
                     )
                 }
                 

@@ -235,8 +235,15 @@ struct RLGuildMembershipDTO: Codable, Identifiable, Equatable {
     let contributionScore: Int       // backend: contribution_score
     let status: String
     let dateJoined: Date             // backend: date_joined
+    let accuracyRate: Double?        // backend: accuracy_rate (trading accuracy 0.0–1.0)
     
     // MARK: - Computed Properties
+    
+    /// Accuracy as percentage string (e.g. "72%"), or nil if no accuracy data
+    var accuracyFormatted: String? {
+        guard let rate = accuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
+    }
     
     var memberRole: RLMemberRole {
         RLMemberRole(from: role)
@@ -277,7 +284,8 @@ struct RLGuildMembershipDTO: Codable, Identifiable, Equatable {
             reputation: reputation,
             contributionScore: contributionScore,
             status: status,
-            dateJoined: dateJoined
+            dateJoined: dateJoined,
+            accuracyRate: accuracyRate
         )
     }
 }
@@ -289,6 +297,7 @@ struct RLGuildSimpleMembershipResponse: Codable {
     let guildId: UUID                        // backend: guild_id
     let role: String                         // backend: role
     let reputation: Int                      // backend: reputation
+    let accuracyRate: Double?                // backend: accuracy_rate
     
     // Optional user display info (backend may include these)
     let userDisplayName: String?             // backend: user_display_name
@@ -307,6 +316,12 @@ struct RLGuildSimpleMembershipResponse: Codable {
     
     var username: String {
         userUsername ?? "unknown"
+    }
+    
+    /// Accuracy as percentage string (e.g. "72%"), or nil if no accuracy data
+    var accuracyFormatted: String? {
+        guard let rate = accuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
     }
 }
 
@@ -523,6 +538,7 @@ struct RLGuildAnnouncementWithAuthorDTO: Codable, Identifiable {
     var authorAvatarUrl: String? { authorMembership.userAvatarUrl }
     var authorRole: RLMemberRole { authorMembership.memberRole }
     var authorReputation: Int { authorMembership.reputation }
+    var authorAccuracy: String? { authorMembership.accuracyFormatted }
     
     
     // Time formatting
@@ -717,6 +733,7 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
     let reputation: Int
     let contributionScore: Int          // backend: contribution_score
     let dateJoined: Date                // backend: date_joined
+    let accuracyRate: Double?           // backend: accuracy_rate (trading accuracy 0.0-1.0)
 
     // Moderation data
     let mutedUntil: Date?               // backend: muted_until
@@ -739,6 +756,12 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
     var id: UUID { membershipId }
 
     // MARK: - Computed Properties
+
+    /// Accuracy as percentage string (e.g. "72%"), or nil if no accuracy data
+    var accuracyFormatted: String? {
+        guard let rate = accuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
+    }
 
     var memberRole: RLMemberRole {
         RLMemberRole(from: role)
@@ -799,6 +822,7 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
             reputation: reputation,
             contributionScore: contributionScore,
             dateJoined: dateJoined,
+            accuracyRate: accuracyRate,
             mutedUntil: mutedUntil,
             suspendedUntil: suspendedUntil,
             userId: userId,

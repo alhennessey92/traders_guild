@@ -2,8 +2,10 @@
 // ReputationDetailView.swift
 //
 // Full reputation detail view accessible from the user's profile.
-// Shows tier progress, breakdown, guild contributions, modifiers,
-// recent history feed, and leaderboard preview.
+// Shows guild reputation (contribution-based) and trading accuracy (prediction
+// performance) as two separate tabs, plus a history feed.
+//
+// Tabs: Reputation | Accuracy | History
 // =============================================================================
 
 import SwiftUI
@@ -11,30 +13,32 @@ import SwiftUI
 struct ReputationDetailView: View {
     @EnvironmentObject var rlAppState: RLAppState
 
-    // Data
+    // Reputation Data
     @State private var guildProfile: RLReputationProfileDTO?
-    @State private var globalReputation: RLGlobalReputationDTO?
     @State private var leaderboard: RLReputationLeaderboardDTO?
     @State private var historyEvents: [RLReputationEventDTO] = []
     @State private var historyHasMore = false
     @State private var historyPage = 1
     @State private var tiers: [RLReputationTierDTO] = []
 
+    // Accuracy Data
+    @State private var accuracyProfile: RLAccuracyProfileDTO?
+
     // UI State
-    @State private var selectedTab: RepTab = .guild
+    @State private var selectedTab: RepTab = .reputation
     @State private var isLoading = true
     @State private var errorMessage: String?
 
     enum RepTab: String, CaseIterable {
-        case guild = "Guild"
-        case global = "Global"
+        case reputation = "Reputation"
+        case accuracy = "Accuracy"
         case history = "History"
 
         var icon: String {
             switch self {
-            case .guild:   return "person.3.fill"
-            case .global:  return "globe"
-            case .history: return "clock.fill"
+            case .reputation: return "shield.fill"
+            case .accuracy:   return "target"
+            case .history:    return "clock.fill"
             }
         }
     }
@@ -56,10 +60,10 @@ struct ReputationDetailView: View {
                         .padding(.top, 40)
                 } else {
                     switch selectedTab {
-                    case .guild:
-                        guildTab
-                    case .global:
-                        globalTab
+                    case .reputation:
+                        reputationTab
+                    case .accuracy:
+                        accuracyTab
                     case .history:
                         historyTab
                     }
@@ -73,6 +77,9 @@ struct ReputationDetailView: View {
             await loadData()
         }
         .onReceive(NotificationCenter.default.publisher(for: .reputationDidUpdate)) { _ in
+            Task { await loadData() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .accuracyDidUpdate)) { _ in
             Task { await loadData() }
         }
     }
@@ -111,9 +118,9 @@ struct ReputationDetailView: View {
         )
     }
 
-    // MARK: - Guild Tab
+    // MARK: - Reputation Tab (Contribution-Based)
 
-    private var guildTab: some View {
+    private var reputationTab: some View {
         VStack(spacing: 16) {
             if let profile = guildProfile {
                 // Tier Header
@@ -127,14 +134,11 @@ struct ReputationDetailView: View {
                 // Progress to next tier
                 tierProgressBar(currentRep: profile.reputation, currentTier: profile.tier)
 
-                // Breakdown
+                // Breakdown (contribution-based only — no predictions)
                 breakdownSection(profile.breakdown)
 
                 // Daily Limits
-                dailyLimitsSection(
-                    predictionsToday: profile.predictionsToday,
-                    socialCapRemaining: profile.dailySocialCapRemaining
-                )
+                dailyLimitsSection(socialCapRemaining: profile.dailySocialCapRemaining)
 
                 // Recent Events
                 if !profile.recentEvents.isEmpty {
@@ -153,32 +157,38 @@ struct ReputationDetailView: View {
         }
     }
 
-    // MARK: - Global Tab
+    // MARK: - Accuracy Tab (Prediction Performance)
 
-    private var globalTab: some View {
+    private var accuracyTab: some View {
         VStack(spacing: 16) {
-            if let global = globalReputation {
-                // Tier Header
-                tierHeader(
-                    reputation: global.globalReputation,
-                    tier: global.tier,
-                    weeklyDelta: global.weeklyDelta,
-                    rank: nil
-                )
+            if let accuracy = accuracyProfile {
+                // Large Accuracy Gauge
+                accuracyGauge(accuracy)
 
-                // Progress to next tier
-                tierProgressBar(currentRep: global.globalReputation, currentTier: global.tier)
+                // Win/Loss Stats
+                accuracyStatsGrid(accuracy)
 
-                // Guild Contributions
-                if !global.guildContributions.isEmpty {
-                    guildContributionsSection(global.guildContributions)
+                // Streaks
+                streaksSection(accuracy)
+
+                // 30-Day Rolling
+                if accuracy.rollingAccuracy30d != nil {
+                    rollingAccuracySection(accuracy)
                 }
-
-                // Modifiers
-                modifiersSection(global.modifiers, streakDays: global.consecutiveActiveDays)
             } else {
-                ProgressView()
-                    .tint(AppColors.accentColor)
+                VStack(spacing: 8) {
+                    Image(systemName: "target")
+                        .font(.largeTitle)
+                        .foregroundColor(AppColors.greyText)
+                    Text("No trading data yet")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                    Text("Place predictions to start tracking your accuracy")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 40)
             }
         }
     }
@@ -209,6 +219,248 @@ struct ReputationDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Accuracy Gauge
+
+    private func accuracyGauge(_ accuracy: RLAccuracyProfileDTO) -> some View {
+        VStack(spacing: 12) {
+            // Circular accuracy display
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.1), lineWidth: 8)
+                    .frame(width: 100, height: 100)
+                Circle()
+                    .trim(from: 0, to: accuracy.accuracyRate)
+                    .stroke(
+                        accuracyColor(accuracy.accuracyRate),
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .frame(width: 100, height: 100)
+                    .rotationEffect(.degrees(-90))
+
+                VStack(spacing: 2) {
+                    Text(accuracy.accuracyFormatted)
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(AppColors.whiteText)
+                    Text("Accuracy")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+            }
+
+            // Record
+            Text(accuracy.recordFormatted)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.greyText)
+
+            // Total predictions + rank
+            HStack(spacing: 16) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.caption2)
+                    Text("\(accuracy.totalPredictions) predictions")
+                        .font(.caption)
+                }
+                .foregroundColor(AppColors.greyText)
+
+                if let rank = accuracy.rankInGuild {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trophy")
+                            .font(.caption2)
+                        Text("Rank #\(rank)")
+                            .font(.caption)
+                    }
+                    .foregroundColor(AppColors.greyText)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(accuracyColor(accuracy.accuracyRate).opacity(0.3), lineWidth: 1)
+                )
+        )
+    }
+
+    // MARK: - Accuracy Stats Grid
+
+    private func accuracyStatsGrid(_ accuracy: RLAccuracyProfileDTO) -> some View {
+        VStack(spacing: 12) {
+            sectionHeader("Performance")
+
+            HStack(spacing: 12) {
+                accuracyStatCard(
+                    icon: "checkmark.circle.fill",
+                    title: "Wins",
+                    value: "\(accuracy.successfulPredictions)",
+                    color: .green
+                )
+                accuracyStatCard(
+                    icon: "xmark.circle.fill",
+                    title: "Losses",
+                    value: "\(accuracy.totalPredictions - accuracy.successfulPredictions)",
+                    color: .red
+                )
+            }
+
+            HStack(spacing: 12) {
+                accuracyStatCard(
+                    icon: "arrow.left.arrow.right",
+                    title: "Avg R:R",
+                    value: accuracy.rrRatioFormatted ?? "--",
+                    color: .orange
+                )
+                accuracyStatCard(
+                    icon: "number",
+                    title: "Total",
+                    value: "\(accuracy.totalPredictions)",
+                    color: .blue
+                )
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    private func accuracyStatCard(icon: String, title: String, value: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(color)
+            Text(value)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(AppColors.whiteText)
+            Text(title)
+                .font(.caption2)
+                .foregroundColor(AppColors.greyText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    // MARK: - Streaks Section
+
+    private func streaksSection(_ accuracy: RLAccuracyProfileDTO) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Streaks")
+
+            HStack(spacing: 12) {
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        Text("\(accuracy.winStreak)")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.whiteText)
+                    }
+                    Text("Win Streak")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.right")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                        Text("\(accuracy.lossStreak)")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.whiteText)
+                    }
+                    Text("Loss Streak")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trophy.fill")
+                            .font(.caption)
+                            .foregroundColor(.yellow)
+                        Text("\(accuracy.bestWinStreak)")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.whiteText)
+                    }
+                    Text("Best Streak")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    // MARK: - Rolling Accuracy Section
+
+    private func rollingAccuracySection(_ accuracy: RLAccuracyProfileDTO) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("30-Day Rolling")
+
+            HStack(spacing: 12) {
+                VStack(spacing: 4) {
+                    Text(accuracy.rollingAccuracyFormatted ?? "--")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.whiteText)
+                    Text("Accuracy")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 4) {
+                    Text("\(accuracy.rollingWins30d)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.green)
+                    Text("Wins")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 4) {
+                    Text("\(accuracy.rollingTotal30d - accuracy.rollingWins30d)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.red)
+                    Text("Losses")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.04))
+        )
     }
 
     // MARK: - Tier Header
@@ -337,18 +589,12 @@ struct ReputationDetailView: View {
         }
     }
 
-    // MARK: - Breakdown Section
+    // MARK: - Breakdown Section (Contribution-Based Only)
 
     private func breakdownSection(_ breakdown: RLReputationBreakdownDTO) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Reputation Breakdown")
 
-            ReputationBreakdownRow(
-                title: "Predictions",
-                value: breakdown.predictionRep,
-                total: max(1, breakdown.total),
-                color: .green
-            )
             ReputationBreakdownRow(
                 title: "Social",
                 value: breakdown.socialRep,
@@ -379,40 +625,22 @@ struct ReputationDetailView: View {
 
     // MARK: - Daily Limits
 
-    private func dailyLimitsSection(predictionsToday: Int, socialCapRemaining: Double) -> some View {
-        HStack(spacing: 12) {
-            VStack(spacing: 4) {
-                Text("\(predictionsToday)")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.whiteText)
-                Text("Predictions Today")
-                    .font(.caption2)
-                    .foregroundColor(AppColors.greyText)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.04))
-            )
-
-            VStack(spacing: 4) {
-                Text("\(Int(socialCapRemaining))")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.whiteText)
-                Text("Social Cap Left")
-                    .font(.caption2)
-                    .foregroundColor(AppColors.greyText)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.04))
-            )
+    private func dailyLimitsSection(socialCapRemaining: Double) -> some View {
+        VStack(spacing: 4) {
+            Text("\(Int(socialCapRemaining))")
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(AppColors.whiteText)
+            Text("Social Cap Remaining")
+                .font(.caption2)
+                .foregroundColor(AppColors.greyText)
         }
+        .frame(maxWidth: .infinity)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.04))
+        )
     }
 
     // MARK: - Recent Events
@@ -515,112 +743,6 @@ struct ReputationDetailView: View {
         )
     }
 
-    // MARK: - Guild Contributions (Global Tab)
-
-    private func guildContributionsSection(_ contributions: [RLGuildContributionDTO]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Guild Contributions")
-
-            ForEach(contributions, id: \.guildId) { guild in
-                HStack(spacing: 12) {
-                    // Weight badge
-                    Text(guild.weightPercentFormatted)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                        .frame(width: 36)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(guild.guildName)
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.whiteText)
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-
-                    Text("\(guild.reputation)")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText)
-                }
-                .padding(.vertical, 4)
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.04))
-        )
-    }
-
-    // MARK: - Modifiers (Global Tab)
-
-    private func modifiersSection(_ modifiers: RLGlobalModifiersDTO, streakDays: Int) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Active Modifiers")
-
-            HStack(spacing: 12) {
-                modifierCard(
-                    icon: "checkmark.shield.fill",
-                    title: "Clean Record",
-                    value: modifiers.cleanRecordBonus ? "Active" : "Inactive",
-                    detail: modifiers.cleanRecordBonus ? "x\(String(format: "%.2f", modifiers.cleanRecordMultiplier))" : "--",
-                    color: modifiers.cleanRecordBonus ? .green : .gray
-                )
-                modifierCard(
-                    icon: "bolt.fill",
-                    title: "Streak",
-                    value: "\(streakDays) days",
-                    detail: "x\(String(format: "%.2f", modifiers.activityMultiplier))",
-                    color: streakDays > 0 ? .cyan : .gray
-                )
-            }
-
-            HStack {
-                Text("Total Modifier")
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.greyText)
-                Spacer()
-                Text("x\(String(format: "%.2f", modifiers.totalModifier))")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-            }
-            .padding(.top, 4)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.04))
-        )
-    }
-
-    private func modifierCard(icon: String, title: String, value: String, detail: String, color: Color) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundColor(color)
-            Text(title)
-                .font(.caption)
-                .foregroundColor(AppColors.greyText)
-            Text(value)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(AppColors.whiteText)
-            Text(detail)
-                .font(.caption2)
-                .foregroundColor(color)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.04))
-        )
-    }
-
     // MARK: - Helpers
 
     private func sectionHeader(_ title: String) -> some View {
@@ -628,6 +750,14 @@ struct ReputationDetailView: View {
             .font(.subheadline)
             .fontWeight(.semibold)
             .foregroundColor(AppColors.whiteText)
+    }
+
+    /// Color based on accuracy percentage
+    private func accuracyColor(_ rate: Double) -> Color {
+        if rate >= 0.7 { return .green }
+        if rate >= 0.5 { return .yellow }
+        if rate >= 0.3 { return .orange }
+        return .red
     }
 
     // MARK: - Data Loading
@@ -644,6 +774,7 @@ struct ReputationDetailView: View {
                 async let profileTask = rlAppState.realApi.getMyGuildReputation(guildId: guildId)
                 async let leaderboardTask = rlAppState.realApi.getGuildReputationLeaderboard(guildId: guildId, limit: 10)
                 async let historyTask = rlAppState.realApi.getReputationHistory(guildId: guildId, page: 1, pageSize: 20)
+                async let accuracyTask = rlAppState.realApi.getMyGuildAccuracy(guildId: guildId)
 
                 let (fetchedTiers, profile, lb, history) = try await (tiersTask, profileTask, leaderboardTask, historyTask)
                 tiers = fetchedTiers
@@ -652,12 +783,12 @@ struct ReputationDetailView: View {
                 historyEvents = history.events
                 historyHasMore = history.hasMore
                 historyPage = 1
+
+                // Accuracy can fail independently (e.g. no predictions yet)
+                accuracyProfile = try? await accuracyTask
             } else {
                 tiers = try await tiersTask
             }
-
-            // Always load global
-            globalReputation = try await rlAppState.realApi.getMyGlobalReputation()
 
         } catch {
             errorMessage = "Failed to load reputation data"

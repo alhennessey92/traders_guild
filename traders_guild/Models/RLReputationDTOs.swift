@@ -1,21 +1,25 @@
 // =============================================================================
-// REPUTATION DTOs
+// REPUTATION & ACCURACY DTOs
 // =============================================================================
 //
 // Backend schemas: shared/schemas/reputation.py
 //
 // Backend -> iOS mapping:
-//   ReputationTierResponse          -> RLReputationTierDTO
-//   ReputationEventResponse         -> RLReputationEventDTO
-//   ReputationBreakdownResponse     -> RLReputationBreakdownDTO
-//   ReputationProfileResponse       -> RLReputationProfileDTO
-//   GlobalReputationResponse        -> RLGlobalReputationDTO
-//   GuildContributionResponse       -> RLGuildContributionDTO
-//   GlobalModifiersResponse         -> RLGlobalModifiersDTO
-//   LeaderboardMemberResponse       -> RLLeaderboardMemberDTO
-//   GuildReputationLeaderboardResponse -> RLReputationLeaderboardDTO
-//   ReputationHistoryResponse       -> RLReputationHistoryDTO
-//   ReputationUpdatePayload         -> RLReputationUpdatePayload (WebSocket)
+//   ReputationTierResponse              -> RLReputationTierDTO
+//   ReputationEventResponse             -> RLReputationEventDTO
+//   ReputationBreakdownResponse         -> RLReputationBreakdownDTO
+//   ReputationProfileResponse           -> RLReputationProfileDTO
+//   GlobalReputationResponse            -> RLGlobalReputationDTO
+//   GuildContributionResponse           -> RLGuildContributionDTO
+//   GlobalModifiersResponse             -> RLGlobalModifiersDTO
+//   LeaderboardMemberResponse           -> RLLeaderboardMemberDTO
+//   GuildReputationLeaderboardResponse  -> RLReputationLeaderboardDTO
+//   ReputationHistoryResponse           -> RLReputationHistoryDTO
+//   ReputationUpdatePayload             -> RLReputationUpdatePayload (WebSocket)
+//   AccuracyProfileResponse             -> RLAccuracyProfileDTO
+//   AccuracyLeaderboardMemberResponse   -> RLAccuracyLeaderboardMemberDTO
+//   AccuracyLeaderboardResponse         -> RLAccuracyLeaderboardDTO
+//   AccuracyUpdatePayload               -> RLAccuracyUpdatePayload (WebSocket)
 // =============================================================================
 
 import Foundation
@@ -137,8 +141,8 @@ struct RLReputationEventDTO: Codable, Identifiable, Equatable {
 // MARK: - Reputation Breakdown
 
 /// Breakdown of reputation by source category. Maps to backend ReputationBreakdownResponse.
+/// Reputation is contribution-based ONLY — no prediction performance.
 struct RLReputationBreakdownDTO: Codable, Equatable {
-    let predictionRep: Int
     let socialRep: Int
     let activityRep: Int
     let penaltyRep: Int
@@ -228,8 +232,15 @@ struct RLLeaderboardMemberDTO: Codable, Identifiable, Equatable {
     let reputation: Int
     let tier: RLReputationTierDTO
     let rank: Int
+    let accuracyRate: Double?
 
     var id: UUID { userId }
+
+    /// Accuracy formatted as percentage string (e.g. "72%")
+    var accuracyFormatted: String? {
+        guard let rate = accuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
+    }
 
     static func == (lhs: RLLeaderboardMemberDTO, rhs: RLLeaderboardMemberDTO) -> Bool {
         lhs.userId == rhs.userId && lhs.rank == rhs.rank
@@ -287,5 +298,131 @@ struct RLReputationUpdatePayload: Codable, Equatable {
 
     var pointsFormatted: String {
         pointsAwarded >= 0 ? "+\(pointsAwarded)" : "\(pointsAwarded)"
+    }
+}
+
+
+// MARK: - Accuracy Profile
+
+/// User's trading accuracy profile within a guild. Maps to backend AccuracyProfileResponse.
+struct RLAccuracyProfileDTO: Codable, Equatable {
+    let userId: UUID
+    let guildId: UUID?
+    let accuracyRate: Double
+    let totalPredictions: Int
+    let successfulPredictions: Int
+    let avgRrRatio: Double?
+    let winStreak: Int
+    let lossStreak: Int
+    let bestWinStreak: Int
+    let rollingAccuracy30d: Double?
+    let rollingWins30d: Int
+    let rollingTotal30d: Int
+    let rankInGuild: Int?
+
+    // MARK: - Computed
+
+    /// Accuracy as percentage string (e.g. "72%")
+    var accuracyFormatted: String {
+        "\(Int(accuracyRate * 100))%"
+    }
+
+    /// Accuracy as decimal percentage string (e.g. "72.5%")
+    var accuracyDetailedFormatted: String {
+        String(format: "%.1f%%", accuracyRate * 100)
+    }
+
+    /// Average R:R ratio formatted (e.g. "2.3:1")
+    var rrRatioFormatted: String? {
+        guard let rr = avgRrRatio else { return nil }
+        return String(format: "%.1f:1", rr)
+    }
+
+    /// Rolling 30d accuracy as percentage string
+    var rollingAccuracyFormatted: String? {
+        guard let rolling = rollingAccuracy30d else { return nil }
+        return "\(Int(rolling * 100))%"
+    }
+
+    /// Win/loss record string (e.g. "150W / 50L")
+    var recordFormatted: String {
+        let losses = totalPredictions - successfulPredictions
+        return "\(successfulPredictions)W / \(losses)L"
+    }
+
+    static func == (lhs: RLAccuracyProfileDTO, rhs: RLAccuracyProfileDTO) -> Bool {
+        lhs.userId == rhs.userId && lhs.guildId == rhs.guildId && lhs.accuracyRate == rhs.accuracyRate
+    }
+}
+
+
+// MARK: - Accuracy Leaderboard
+
+/// Single member in an accuracy leaderboard.
+struct RLAccuracyLeaderboardMemberDTO: Codable, Identifiable, Equatable {
+    let userId: UUID
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+    let accuracyRate: Double
+    let totalPredictions: Int
+    let successfulPredictions: Int
+    let avgRrRatio: Double?
+    let rank: Int
+
+    var id: UUID { userId }
+
+    /// Accuracy as percentage string (e.g. "72%")
+    var accuracyFormatted: String {
+        "\(Int(accuracyRate * 100))%"
+    }
+
+    /// Average R:R ratio formatted (e.g. "2.3:1")
+    var rrRatioFormatted: String? {
+        guard let rr = avgRrRatio else { return nil }
+        return String(format: "%.1f:1", rr)
+    }
+
+    static func == (lhs: RLAccuracyLeaderboardMemberDTO, rhs: RLAccuracyLeaderboardMemberDTO) -> Bool {
+        lhs.userId == rhs.userId && lhs.rank == rhs.rank
+    }
+}
+
+/// Guild accuracy leaderboard response.
+struct RLAccuracyLeaderboardDTO: Codable {
+    let members: [RLAccuracyLeaderboardMemberDTO]
+    let totalMembers: Int
+    let minPredictionsThreshold: Int
+}
+
+
+// MARK: - Accuracy WebSocket Payload
+
+/// Published via WebSocket when a user's trading accuracy changes.
+/// Sent on user:{user_id}:notifications channel with type "accuracy_update".
+struct RLAccuracyUpdatePayload: Codable, Equatable {
+    let userId: String
+    let guildId: String
+    let eventType: String
+    let isWin: Bool
+    let newAccuracyRate: Double
+    let totalPredictions: Int
+    let successfulPredictions: Int
+    let winStreak: Int
+    let avgRrRatio: Double?
+
+    /// Accuracy as percentage string (e.g. "72%")
+    var accuracyFormatted: String {
+        "\(Int(newAccuracyRate * 100))%"
+    }
+
+    /// Result display string
+    var resultDisplay: String {
+        isWin ? "Win" : "Loss"
+    }
+
+    /// Result color for display
+    var resultColor: Color {
+        isWin ? .green : .red
     }
 }

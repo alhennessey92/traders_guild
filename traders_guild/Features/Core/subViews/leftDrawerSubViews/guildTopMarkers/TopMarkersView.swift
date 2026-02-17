@@ -439,6 +439,7 @@ struct TopMarkerCard: View {
                     isOnline: marker.authorIsOnline,
                     role: RLMemberRole(from: marker.authorRole),
                     reputation: marker.authorReputation,
+                    accuracy: marker.authorAccuracyFormatted,
                     timeText: marker.createdAtFormatted,
                     showOnlineStatus: false
                 )

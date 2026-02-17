@@ -821,6 +821,7 @@ class RLAppState: ObservableObject {
                 guildId: guild.id,
                 role: membership.role,
                 reputation: membership.reputation,
+                accuracyRate: nil,
                 userDisplayName: user.displayName,
                 userUsername: user.username,
                 userAvatarUrl: user.avatarUrl
@@ -2527,4 +2528,8 @@ extension Notification.Name {
     /// Posted when a user's reputation changes via WebSocket.
     /// userInfo: ["guildId": String, "newGuildReputation": Int, "newGlobalReputation": Int, "tierLevel": Int, "tierChanged": Bool, "pointsAwarded": Int]
     static let reputationDidUpdate = Notification.Name("reputationDidUpdate")
+
+    /// Posted when a user's trading accuracy changes via WebSocket (prediction win/loss).
+    /// userInfo: ["guildId": String, "newAccuracyRate": Double, "totalPredictions": Int, "successfulPredictions": Int, "winStreak": Int, "isWin": Bool]
+    static let accuracyDidUpdate = Notification.Name("accuracyDidUpdate")
 }

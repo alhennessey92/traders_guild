@@ -791,6 +791,7 @@ struct UnifiedAuthorFooter: View {
     var isOnline: Bool = false
     let role: RLMemberRole
     let reputation: Int
+    var accuracy: String? = nil
     var timeText: String? = nil
     var cornerRadius: CGFloat = 12
     var showOnlineStatus: Bool = false  // Default to hidden
@@ -828,6 +829,19 @@ struct UnifiedAuthorFooter: View {
                     .font(.system(size: 10, weight: .semibold))
             }
             .foregroundColor(AppColors.accentColor.opacity(0.9))
+            
+            // Accuracy
+            if let accuracy = accuracy {
+                UnifiedSeparatorDot()
+                
+                HStack(spacing: 2) {
+                    Image(systemName: "target")
+                        .font(.system(size: 8))
+                    Text(accuracy)
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundColor(.green.opacity(0.9))
+            }
             
             Spacer()
             
@@ -948,6 +962,7 @@ struct UnifiedAuthorRow: View {
     var isOnline: Bool = false
     let role: RLMemberRole
     let reputation: Int
+    var accuracy: String? = nil
     
     var body: some View {
         HStack(spacing: 4) {
@@ -989,6 +1004,18 @@ struct UnifiedAuthorRow: View {
                 .font(.caption2)
                 .fontWeight(.semibold)
                 .foregroundColor(AppColors.accentColor)
+            
+            if let accuracy = accuracy {
+                UnifiedSeparatorDot()
+                Image(systemName: "target")
+                    .font(.system(size: 9))
+                    .fontWeight(.bold)
+                    .foregroundColor(.green)
+                Text(accuracy)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+            }
             
             Spacer()
         }
@@ -1054,6 +1081,18 @@ struct UnifiedAuthorRowFromMember: View {
                 .fontWeight(.semibold)
                 .foregroundColor(AppColors.accentColor)
             
+            if let accuracy = author.accuracyFormatted {
+                UnifiedSeparatorDot()
+                Image(systemName: "target")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.green)
+                Text(accuracy)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+            }
+            
             Spacer()
         }
     }
@@ -1088,6 +1127,7 @@ struct UnifiedRoleBadge: View {
     let roleName: String
     let roleColor: Color
     let reputation: Int
+    var accuracy: String? = nil
     var isOwner: Bool = false
     var showReputation: Bool = true
     var fontSize: Font = .caption
@@ -1121,14 +1161,29 @@ struct UnifiedRoleBadge: View {
                     .font(.caption2)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.accentColor)
+                
+                if let accuracy = accuracy {
+                    UnifiedSeparatorDot(size: 3, opacity: 0.5)
+                    
+                    Image(systemName: "target")
+                        .font(iconSize)
+                        .fontWeight(.bold)
+                        .foregroundColor(.green)
+                    
+                    Text(accuracy)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.green)
+                }
             }
         }
     }
 
-    init(roleName: String, roleColor: Color, reputation: Int, isOwner: Bool = false, showReputation: Bool = true, fontSize: Font = .caption, iconSize: Font = .caption2) {
+    init(roleName: String, roleColor: Color, reputation: Int, accuracy: String? = nil, isOwner: Bool = false, showReputation: Bool = true, fontSize: Font = .caption, iconSize: Font = .caption2) {
         self.roleName = roleName
         self.roleColor = roleColor
         self.reputation = reputation
+        self.accuracy = accuracy
         self.isOwner = isOwner
         self.showReputation = showReputation
         self.fontSize = fontSize
@@ -1139,6 +1194,7 @@ struct UnifiedRoleBadge: View {
         self.roleName = member.memberRole.displayName
         self.roleColor = member.memberRole.color
         self.reputation = member.reputation
+        self.accuracy = member.accuracyFormatted
         self.isOwner = isOwner
         self.showReputation = showReputation
         self.fontSize = fontSize
@@ -1389,29 +1445,8 @@ struct UnifiedMemberRow: View {
                         }
                     }
                     
-                    // Role and reputation
-                    HStack(spacing: 2) {
-                        let role = user.memberRole
-                        Text(role.displayName)
-                            .font(.caption)
-                            .foregroundColor(role.color)
-                            .fontWeight(role.canModerate ? .bold : .regular)
-                            .lineLimit(1)
-                        
-                        if showReputation {
-                            UnifiedSeparatorDot(size: 4, opacity: 0.7)
-                            
-                            Image(systemName: "shield.pattern.checkered")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                            
-                            Text("\(user.reputation)")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.accentColor)
-                        }
-                    }
+                    // Role · reputation · accuracy (unified)
+                    UnifiedRoleBadge(member: user, showReputation: showReputation)
                 }
                 
                 Spacer()

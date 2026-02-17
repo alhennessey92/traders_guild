@@ -112,6 +112,7 @@ struct AnnouncementRowView: View {
                     username: announcement.authorUsername,
                     role: announcement.authorRole,
                     reputation: announcement.authorReputation,
+                    accuracy: announcement.authorAccuracy,
                     timeText: announcement.timeAgoFormatted,
                     cornerRadius: 14
                 )
@@ -174,7 +175,8 @@ struct AnnouncementDetailView: View {
                     UnifiedAuthorRow(
                         username: announcement.authorUsername,
                         role: announcement.authorRole,
-                        reputation: announcement.authorReputation
+                        reputation: announcement.authorReputation,
+                        accuracy: announcement.authorAccuracy
                     )
                 }
                 

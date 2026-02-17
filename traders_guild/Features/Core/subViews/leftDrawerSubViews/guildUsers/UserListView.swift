@@ -608,11 +608,12 @@ struct GuildMemberProfileHeaderViewRL: View {
                         }
                     }
                     
-                    Text(member.memberRole.displayName)
-                        .font(.caption)
-                        .foregroundColor(member.memberRole.color)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
+                    UnifiedRoleBadge(
+                        member: member,
+                        showReputation: true,
+                        fontSize: .caption,
+                        iconSize: .caption2
+                    )
                 }
                 
                 Spacer(minLength: 60)
@@ -630,22 +631,6 @@ struct GuildMemberProfileHeaderViewRL: View {
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.greyText)
-                }
-                
-                HStack(alignment: .center, spacing: 1) {
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("\(member.reputation)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Guild Reputation")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.greyText)
-                        .padding(.leading, 6)
                 }
             }
             .padding(.horizontal, 25)

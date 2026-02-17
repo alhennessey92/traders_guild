@@ -3071,6 +3071,46 @@ extension RealAPIService {
             auth: true
         )
     }
+
+    // =========================================================================
+    // MARK: - Trading Accuracy
+    // =========================================================================
+
+    /// Get my accuracy profile within a specific guild.
+    func getMyGuildAccuracy(guildId: UUID) async throws -> RLAccuracyProfileDTO {
+        return try await request(
+            "/reputation/me/accuracy/guild/\(guildId.uuidString)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get another user's accuracy profile within a specific guild.
+    func getUserGuildAccuracy(userId: UUID, guildId: UUID) async throws -> RLAccuracyProfileDTO {
+        return try await request(
+            "/reputation/users/\(userId.uuidString)/accuracy/guild/\(guildId.uuidString)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get my global accuracy profile (weighted across all guilds).
+    func getMyGlobalAccuracy() async throws -> RLAccuracyProfileDTO {
+        return try await request(
+            "/reputation/me/accuracy/global",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get the accuracy leaderboard for a guild.
+    func getGuildAccuracyLeaderboard(guildId: UUID, minPredictions: Int = 10, limit: Int = 50) async throws -> RLAccuracyLeaderboardDTO {
+        return try await request(
+            "/reputation/guilds/\(guildId.uuidString)/accuracy-leaderboard?min_predictions=\(minPredictions)&limit=\(limit)",
+            service: .reputation,
+            auth: true
+        )
+    }
 }
 
 

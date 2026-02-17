@@ -610,6 +610,7 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let authorAvatarUrl: String?
     let authorIsOnline: Bool
     let authorReputation: Int
+    let authorAccuracyRate: Double?
     let authorRole: String
     
     // Marker
@@ -634,6 +635,13 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     // Permissions
     let isCurrentUserMarker: Bool
     
+    // MARK: - Computed Properties
+    
+    var authorAccuracyFormatted: String? {
+        guard let rate = authorAccuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
+    }
+
     // MARK: - Hashable
     
     func hash(into hasher: inout Hasher) {

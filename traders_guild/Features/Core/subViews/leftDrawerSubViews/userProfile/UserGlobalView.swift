@@ -24,8 +24,9 @@ struct UserGlobalSheetView: View {
     @State private var friends: [GlobalFriendItem] = GlobalFriendItem.samples
     @State private var recentActivity: [GlobalActivityItem] = GlobalActivityItem.samples
 
-    // Live reputation data
+    // Live reputation + accuracy data
     @State private var globalRepData: RLGlobalReputationDTO?
+    @State private var globalAccuracyData: RLAccuracyProfileDTO?
     @State private var showReputationDetail = false
     
     enum GlobalTab: String, CaseIterable {
@@ -257,14 +258,7 @@ struct UserGlobalSheetView: View {
 
                 VStack(spacing: 10) {
                     if let rep = globalRepData {
-                        // Live data from reputation API
-                        ReputationBreakdownRow(
-                            title: "Predictions",
-                            value: rep.guildContributions.reduce(0) { $0 + $1.reputation },
-                            total: max(1, rep.globalReputation),
-                            color: .green
-                        )
-
+                        // Live data — contribution-based reputation (no predictions)
                         // Tier badge
                         HStack(spacing: 8) {
                             Circle()
@@ -280,32 +274,39 @@ struct UserGlobalSheetView: View {
                                 .font(.caption)
                                 .foregroundColor(rep.tier.color)
                             Spacer()
+                            Text("\(rep.globalReputation) rep")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.whiteText)
                             if rep.weeklyDelta != 0 {
-                                Text("\(rep.weeklyDelta >= 0 ? "+" : "")\(rep.weeklyDelta) this week")
+                                Text("\(rep.weeklyDelta >= 0 ? "+" : "")\(rep.weeklyDelta)")
                                     .font(.caption)
                                     .foregroundColor(rep.weeklyDelta >= 0 ? .green : .red)
                             }
                         }
-                        .padding(.top, 4)
+
+                        // Guild contributions to global rep
+                        ForEach(rep.guildContributions, id: \.guildId) { guild in
+                            ReputationBreakdownRow(
+                                title: guild.guildName,
+                                value: guild.reputation,
+                                total: max(1, rep.globalReputation),
+                                color: AppColors.accentColor
+                            )
+                        }
                     } else {
-                        // Fallback to sample data while loading
+                        // Fallback while loading
                         ReputationBreakdownRow(
-                            title: "Trading Analysis",
-                            value: globalStats.reputationFromTrading,
-                            total: rlAppState.currentUser?.globalReputation ?? 0,
-                            color: AppColors.accentColor
-                        )
-                        ReputationBreakdownRow(
-                            title: "Community Help",
+                            title: "Social & Community",
                             value: globalStats.reputationFromCommunity,
                             total: rlAppState.currentUser?.globalReputation ?? 0,
                             color: .blue
                         )
                         ReputationBreakdownRow(
-                            title: "Predictions",
-                            value: globalStats.reputationFromPredictions,
+                            title: "Activity & Streaks",
+                            value: globalStats.reputationFromTrading,
                             total: rlAppState.currentUser?.globalReputation ?? 0,
-                            color: .green
+                            color: .cyan
                         )
                     }
                 }
@@ -317,11 +318,77 @@ struct UserGlobalSheetView: View {
                     showReputationDetail = true
                 }
             }
+
+            // Trading Accuracy section
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Trading Accuracy")
+                    .font(.headline)
+                    .foregroundColor(AppColors.whiteText)
+                    .padding(.horizontal, 25)
+
+                if let accuracy = globalAccuracyData {
+                    HStack(spacing: 16) {
+                        // Accuracy percentage
+                        VStack(spacing: 4) {
+                            Text(accuracy.accuracyFormatted)
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(accuracy.accuracyRate >= 0.5 ? .green : .red)
+                            Text("Accuracy")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        // Total predictions
+                        VStack(spacing: 4) {
+                            Text("\(accuracy.totalPredictions)")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppColors.whiteText)
+                            Text("Predictions")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        // Avg R:R
+                        VStack(spacing: 4) {
+                            Text(accuracy.rrRatioFormatted ?? "--")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.orange)
+                            Text("Avg R:R")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.03))
+                    .cornerRadius(12)
+                    .padding(.horizontal, 25)
+                } else {
+                    HStack {
+                        Image(systemName: "target")
+                            .foregroundColor(AppColors.greyText)
+                        Text("No trading data yet")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.white.opacity(0.03))
+                    .cornerRadius(12)
+                    .padding(.horizontal, 25)
+                }
+            }
+
             .sheet(isPresented: $showReputationDetail) {
                 NavigationStack {
                     ReputationDetailView()
                         .environmentObject(rlAppState)
-                        .navigationTitle("Reputation")
+                        .navigationTitle("Reputation & Accuracy")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
@@ -570,6 +637,8 @@ struct UserGlobalSheetView: View {
         } catch {
             print("Failed to load reputation data: \(error)")
         }
+        // Accuracy can fail independently (e.g. user has no predictions)
+        globalAccuracyData = try? await rlAppState.realApi.getMyGlobalAccuracy()
     }
 }
 

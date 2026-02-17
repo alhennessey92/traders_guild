@@ -3,7 +3,7 @@
 //  traders_guild
 //
 //  Leaderboard View for Left Drawer
-//  Shows reputation rankings across Guild, Friends, and Global
+//  Shows reputation rankings across Guild, Accuracy, Friends, and Global
 //  Uses UnifiedComponents for consistent styling
 //
 
@@ -16,16 +16,18 @@ import SwiftUI
 /// Tab enum for leaderboard sections
 enum LeaderboardTab: String, CaseIterable, UnifiedTabItem {
     case guild = "Guild"
+    case accuracy = "Accuracy"
     case friends = "Friends"
     case global = "Global"
-    
+
     var title: String { rawValue }
-    
+
     var icon: String {
         switch self {
-        case .guild: return "person.3.fill"
-        case .friends: return "person.2.fill"
-        case .global: return "globe"
+        case .guild:    return "person.3.fill"
+        case .accuracy: return "target"
+        case .friends:  return "person.2.fill"
+        case .global:   return "globe"
         }
     }
 }
@@ -38,10 +40,10 @@ struct LeaderboardListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var rlAppState: RLAppState
-    
+
     // Tab state
     @State private var selectedTab: LeaderboardTab = .guild
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Tab selector - OUTSIDE ScrollView (truly fixed)
@@ -55,13 +57,15 @@ struct LeaderboardListView: View {
             .padding(.horizontal, 12)
             .padding(.top, 4)
             .padding(.bottom, 12)
-            
+
             // Scrollable content with pull to refresh
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 10) {
                     switch selectedTab {
                     case .guild:
                         guildLeaderboardContent
+                    case .accuracy:
+                        accuracyLeaderboardContent
                     case .friends:
                         friendsLeaderboardContent
                     case .global:
@@ -75,42 +79,50 @@ struct LeaderboardListView: View {
                 await refreshLeaderboard()
             }
         }
+        .task {
+            // Load accuracy leaderboard on first appear
+            if leftDrawerViewModel.accuracyLeaderboard.isEmpty, let guildId = rlAppState.currentGuild?.id {
+                await leftDrawerViewModel.refreshAccuracyLeaderboard(guildId: guildId, rlAppState: rlAppState)
+            }
+        }
     }
-    
+
     // MARK: - Refresh
-    
+
     private func refreshLeaderboard() async {
         guard let guild = rlAppState.currentGuild else { return }
         await leftDrawerViewModel.refreshGuildMembers(guildId: guild.id, rlAppState: rlAppState)
         await leftDrawerViewModel.refreshFriends(guildId: guild.id, rlAppState: rlAppState)
+        await leftDrawerViewModel.refreshAccuracyLeaderboard(guildId: guild.id, rlAppState: rlAppState)
     }
-    
+
     // MARK: - Tab Counts
-    
+
     private func getCountForTab(_ tab: LeaderboardTab) -> Int {
         switch tab {
-        case .guild: return leftDrawerViewModel.guildMembers.count
-        case .friends: return leftDrawerViewModel.friendsRL.count
-        case .global: return leftDrawerViewModel.globalLeaderboard.count
+        case .guild:    return leftDrawerViewModel.guildMembers.count
+        case .accuracy: return leftDrawerViewModel.accuracyLeaderboard.count
+        case .friends:  return leftDrawerViewModel.friendsRL.count
+        case .global:   return leftDrawerViewModel.globalLeaderboard.count
         }
     }
-    
+
     // MARK: - Sorted Members (by reputation)
-    
+
     private var sortedGuildMembers: [RLGuildMemberDTO] {
         leftDrawerViewModel.guildMembers.sorted { $0.reputation > $1.reputation }
     }
-    
+
     private var sortedFriends: [RLFriendDTO] {
         leftDrawerViewModel.friendsRL.sorted { $0.globalReputation > $1.globalReputation }
     }
-    
+
     private var sortedGlobalMembers: [RLGuildMemberDTO] {
         leftDrawerViewModel.globalLeaderboard.sorted { $0.reputation > $1.reputation }
     }
-    
+
     // MARK: - Guild Leaderboard Content
-    
+
     private var guildLeaderboardContent: some View {
         Group {
             if leftDrawerViewModel.isLoadingGuildMembers && leftDrawerViewModel.guildMembers.isEmpty {
@@ -150,9 +162,45 @@ struct LeaderboardListView: View {
             }
         }
     }
-    
+
+    // MARK: - Accuracy Leaderboard Content
+
+    private var accuracyLeaderboardContent: some View {
+        Group {
+            if leftDrawerViewModel.isLoadingAccuracyLeaderboard && leftDrawerViewModel.accuracyLeaderboard.isEmpty {
+                UnifiedLoadingState(message: "Loading accuracy rankings...")
+                    .padding(.top, 40)
+            } else if leftDrawerViewModel.accuracyLeaderboard.isEmpty {
+                UnifiedEmptyState(
+                    icon: "target",
+                    title: "No accuracy data",
+                    subtitle: "Members need at least 10 predictions to appear"
+                )
+                .padding(.top, 40)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(leftDrawerViewModel.accuracyLeaderboard) { member in
+                        AccuracyLeaderboardRow(
+                            member: member,
+                            isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: false),
+                            onTap: {
+                                if let guildMember = leftDrawerViewModel.guildMembers.first(where: { $0.userId == member.userId }) {
+                                    if member.userId == rlAppState.currentUser?.id {
+                                        bottomSheetContent = .profile
+                                    } else {
+                                        bottomSheetContent = .guildMemberRL(guildMember)
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Friends Leaderboard Content
-    
+
     private var friendsLeaderboardContent: some View {
         Group {
             if leftDrawerViewModel.isLoadingFriendsRL && leftDrawerViewModel.friendsRL.isEmpty {
@@ -192,9 +240,9 @@ struct LeaderboardListView: View {
             }
         }
     }
-    
+
     // MARK: - Global Leaderboard Content
-    
+
     private var globalLeaderboardContent: some View {
         Group {
             if leftDrawerViewModel.isLoading && leftDrawerViewModel.globalLeaderboard.isEmpty {
@@ -241,6 +289,114 @@ private extension LeaderboardListView {
     }
 }
 
+// MARK: - ================================================================================================
+// MARK: - ACCURACY LEADERBOARD ROW
+// MARK: - ================================================================================================
+
+private struct AccuracyLeaderboardRow: View {
+    let member: RLAccuracyLeaderboardMemberDTO
+    let isOnline: Bool
+    let onTap: () -> Void
+
+    @State private var isPressed: Bool = false
+
+    private var rankColor: Color {
+        switch member.rank {
+        case 1: return Color.yellow
+        case 2: return Color.gray.opacity(0.8)
+        case 3: return Color.orange.opacity(0.8)
+        default: return AppColors.whiteText.opacity(0.5)
+        }
+    }
+
+    private var isTopRank: Bool { member.rank <= 3 }
+
+    /// Color based on accuracy percentage
+    private var accuracyColor: Color {
+        if member.accuracyRate >= 0.7 { return .green }
+        if member.accuracyRate >= 0.5 { return .yellow }
+        if member.accuracyRate >= 0.3 { return .orange }
+        return .red
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                // Rank
+                Text("\(member.rank)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(rankColor)
+                    .frame(width: 24)
+
+                // Avatar
+                UnifiedMemberAvatar(
+                    username: member.displayName,
+                    avatarURL: member.avatarUrl,
+                    isOnline: isOnline,
+                    size: 40
+                )
+
+                // Name + stats
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(member.username)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.whiteText)
+
+                    HStack(spacing: 6) {
+                        Text("\(member.totalPredictions) trades")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+
+                        if let rr = member.rrRatioFormatted {
+                            Text("R:R \(rr)")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Accuracy percentage
+                HStack(spacing: 2) {
+                    Image(systemName: "target")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                    Text(member.accuracyFormatted)
+                        .font(.system(size: 13, weight: .bold))
+                }
+                .foregroundColor(accuracyColor)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(
+                                isTopRank ? rankColor.opacity(0.3) : Color.clear,
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isPressed)
+        .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }, perform: {})
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - REPUTATION LEADERBOARD ROW
+// MARK: - ================================================================================================
+
 private struct LeaderboardMemberRow: View {
     let displayName: String
     let username: String
@@ -253,9 +409,9 @@ private struct LeaderboardMemberRow: View {
     let reputation: Int
     let rank: Int
     let onTap: () -> Void
-    
+
     @State private var isPressed: Bool = false
-    
+
     private var rankColor: Color {
         switch rank {
         case 1: return Color.yellow
@@ -264,9 +420,9 @@ private struct LeaderboardMemberRow: View {
         default: return AppColors.whiteText.opacity(0.5)
         }
     }
-    
+
     private var isTopRank: Bool { rank <= 3 }
-    
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 10) {
@@ -274,14 +430,14 @@ private struct LeaderboardMemberRow: View {
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundColor(rankColor)
                     .frame(width: 24)
-                
+
                 UnifiedMemberAvatar(
                     username: displayName,
                     avatarURL: avatarUrl,
                     isOnline: isOnline,
                     size: 40
                 )
-                
+
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 4) {
                         if isBlocked {
@@ -290,12 +446,12 @@ private struct LeaderboardMemberRow: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.bearCandleRed)
                         }
-                        
+
                         Text(username)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(isBlocked ? AppColors.greyText : AppColors.whiteText)
-                        
+
                         if isFriend {
                             Image(systemName: "person.crop.circle")
                                 .font(.caption2)
@@ -303,16 +459,16 @@ private struct LeaderboardMemberRow: View {
                                 .foregroundColor(isBlocked ? AppColors.greyText : AppColors.friendAccent)
                         }
                     }
-                    
+
                     Text(roleText)
                         .font(.caption)
                         .foregroundColor(roleColor)
                         .fontWeight(.semibold)
                         .lineLimit(1)
                 }
-                
+
                 Spacer()
-                
+
                 HStack(spacing: 2) {
                     Image(systemName: "shield.pattern.checkered")
                         .font(.caption2)

@@ -85,32 +85,13 @@ struct RLUserDMRowView: View {
                         }
                     }
                     
-                    // Role and reputation
-                    HStack(spacing: 2) {
-                        let role = participant.memberRole
-                        
-                        Text(role.displayName)
-                            .font(.caption)
-                            .foregroundColor(role.color.opacity(0.9))
-                            .fontWeight(role.canModerate ? .bold : .regular)
-                            .lineLimit(1)
-                        
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.5))
-                            .frame(width: 4, height: 4)
-                            .padding(.top, 1)
-                            .padding(.horizontal, 3)
-                        
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        
-                        Text("\(participant.reputation)")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
-                    }
+                    // Role · reputation · accuracy (unified with rest of app)
+                    UnifiedRoleBadge(
+                        member: participant,
+                        showReputation: true,
+                        fontSize: .caption,
+                        iconSize: .caption2
+                    )
                     
                     // Last message preview
                     if let lastMessage = thread.lastMessage {

@@ -314,6 +314,25 @@ struct UserProfileHeaderView: View {
                     .foregroundColor(AppColors.greyText)
                     .padding(.leading, 4)
             }
+            
+            // User guild accuracy
+            if let accuracy = rlAppState.currentMembership?.accuracyFormatted {
+                HStack(alignment: .center, spacing: 2) {
+                    Image(systemName: "target")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.green)
+                    Text(accuracy)
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.green)
+                    Text("Guild Accuracy")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                        .padding(.leading, 4)
+                }
+            }
         }
         .padding(.horizontal, 25)
         
