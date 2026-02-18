@@ -191,6 +191,7 @@ struct UserProfileDetailView: View {
     
     // MARK: - Load Profile Data
     private func loadProfileData() async {
+        await rlAppState.refreshCurrentGuildReputation()
         let data = await leftDrawerViewModel.loadCurrentUserProfile(rlAppState: rlAppState)
         await MainActor.run {
             extendedProfile = data.profile
@@ -202,20 +203,17 @@ struct UserProfileDetailView: View {
         }
     }
     
-    // MARK: - Build Stats
-    
-    // TODO: Need prod functionality
+    // MARK: - Build Stats (real data from currentMembership and currentUser; no placeholder trends)
     private func buildStats() -> [ProfileStatDTO] {
         guard let user = rlAppState.currentUser else { return [] }
         guard let membership = rlAppState.currentMembership else { return [] }
-        
-        return [
+        var items: [ProfileStatDTO] = [
             ProfileStatDTO(
                 label: "Guild Reputation",
                 value: "\(membership.reputation)",
                 icon: "shield.checkered",
                 color: AppColors.accentColor,
-                trend: .up("+32 this week")
+                trend: nil
             ),
             ProfileStatDTO(
                 label: "Global Reputation",
@@ -236,109 +234,81 @@ struct UserProfileDetailView: View {
                 value: "\(membership.contributionScore)%",
                 icon: "chart.bar.fill",
                 color: .orange,
-                trend: .up("+5%")
+                trend: nil
             )
         ]
+        if let accuracy = membership.accuracyFormatted {
+            items.insert(
+                ProfileStatDTO(
+                    label: "Guild Accuracy",
+                    value: accuracy,
+                    icon: "target",
+                    color: .green,
+                    trend: nil
+                ),
+                at: 2
+            )
+        }
+        return items
     }
 }
 
 
-// MARK: - User Profile Header Component
+// MARK: - User Profile Header Component (unified: username · role · reputation · accuracy)
 struct UserProfileHeaderView: View {
-    
     @EnvironmentObject var rlAppState: RLAppState
-    
+
     private var isOnline: Bool {
         guard let currentUser = rlAppState.currentUser else { return false }
         return rlAppState.effectiveOnlineStatus(userId: currentUser.id, fallback: currentUser.isOnline)
     }
-    
+
     var body: some View {
-        // Top header section with gradient background
-        VStack(alignment: .leading, spacing: 20) {
-            // User header
+        VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 15) {
-                // Avatar with online indicator
                 UnifiedMemberAvatar(
                     username: rlAppState.currentUser?.username ?? "Unknown",
                     avatarURL: rlAppState.currentUser?.avatarUrl,
                     isOnline: isOnline,
                     size: 60
                 )
-
-                // User info
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(rlAppState.currentUser?.username ?? "Unknown")
                         .font(.title3)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
-                    
-                    Text(rlAppState.currentMembership?.role ?? "Unknown")
-                        .font(.caption)
-                        .foregroundColor(rlAppState.currentMembership?.memberRole.color)
-                        .fontWeight(.bold) // TODO: add bold
-                        .lineLimit(1)
+                    if let membership = rlAppState.currentMembership {
+                        UnifiedRoleBadge(
+                            roleName: membership.memberRole.displayName,
+                            roleColor: membership.memberRole.color,
+                            reputation: membership.reputation,
+                            accuracy: membership.accuracyFormatted,
+                            showReputation: true,
+                            fontSize: .subheadline,
+                            iconSize: .caption
+                        )
+                    }
                 }
-                
-                Spacer(minLength: 60) // Leave space for dismiss button
+                Spacer(minLength: 60)
             }
             .padding(.horizontal, 25)
             .padding(.top, 25)
-        
-        VStack(alignment: .leading, spacing: 6) {
-            // member since
-            HStack(spacing: 6) {
-                Image(systemName: "calendar")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.greyText)
-                Text("\(rlAppState.currentMembership?.memberSince ?? "Member Since - Unknown")")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.greyText)
-            }
-            
-            // User guild reputation
-            HStack(alignment: .center, spacing: 2) {
-                Image(systemName: "shield.pattern.checkered")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-                Text("\(rlAppState.currentMembership?.reputation ?? 0)")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-                Text("Guild Reputation")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.greyText)
-                    .padding(.leading, 4)
-            }
-            
-            // User guild accuracy
-            if let accuracy = rlAppState.currentMembership?.accuracyFormatted {
-                HStack(alignment: .center, spacing: 2) {
-                    Image(systemName: "target")
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
                         .font(.caption)
                         .fontWeight(.bold)
-                        .foregroundColor(.green)
-                    Text(accuracy)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.green)
-                    Text("Guild Accuracy")
+                        .foregroundColor(AppColors.greyText)
+                    Text(rlAppState.currentMembership?.memberSince ?? "Member Since – Unknown")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.greyText)
-                        .padding(.leading, 4)
                 }
             }
-        }
-        .padding(.horizontal, 25)
-        
-        
-        Divider()
-            
+            .padding(.horizontal, 25)
+
+            Divider()
         }
         .background(
             LinearGradient(
@@ -350,7 +320,6 @@ struct UserProfileHeaderView: View {
                 endPoint: .bottom
             )
         )
-        
     }
 }
 

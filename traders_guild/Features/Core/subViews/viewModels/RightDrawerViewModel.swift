@@ -44,9 +44,9 @@ class RLRightDrawerViewModel: ObservableObject {
     func configurePresence(with rlAppState: RLAppState) {
         self.appState = rlAppState
 
-        // Observe the Source of Truth (debounced to avoid excessive UI rebuilds)
+        // Observe the Source of Truth (no debounce so right drawer stays in sync with left drawer and online count)
         rlAppState.$presenceByUserId
-            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] presenceMap in
                 self?.applyPresenceUpdates(presenceMap)
             }

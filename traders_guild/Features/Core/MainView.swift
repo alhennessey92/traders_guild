@@ -316,6 +316,7 @@ struct MainView: View {
                     if rlAppState.accessToken != nil {
                         rlAppState.connectRealTimeService()
                     }
+                    Task { await rlAppState.refreshCurrentGuildReputation() }
                 case .inactive, .background:
                     rlAppState.disconnectRealTimeService()
                 @unknown default:

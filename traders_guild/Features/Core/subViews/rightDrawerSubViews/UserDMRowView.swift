@@ -21,10 +21,16 @@ struct RLUserDMRowView: View {
     let thread: RLDMThreadDTO
     let onTap: () -> Void
     
+    @EnvironmentObject var rlAppState: RLAppState
     @State private var isPressed = false
     
     private var participant: RLGuildMemberDTO {
         thread.participant
+    }
+    
+    /// Use same source of truth as left drawer so DM list and user list stay in sync.
+    private var isOnline: Bool {
+        rlAppState.effectiveOnlineStatus(userId: participant.userId, fallback: participant.isOnline)
     }
     
     var body: some View {
@@ -47,9 +53,9 @@ struct RLUserDMRowView: View {
                         avatarPlaceholder
                     }
                     
-                    // Online indicator
+                    // Online indicator (from RLAppState.presenceByUserId to match left drawer)
                     Circle()
-                        .fill(participant.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                        .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
                         .frame(width: 10, height: 10)
                         .overlay(
                             Circle()

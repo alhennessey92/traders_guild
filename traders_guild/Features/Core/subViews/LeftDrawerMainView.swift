@@ -268,6 +268,31 @@ struct MainDrawerView: View {
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
+    /// Member count: from loaded guild members when available, else guild DTO.
+    private var memberCount: Int {
+        if leftDrawerViewModel.guildMembersTotalCount > 0 { return leftDrawerViewModel.guildMembersTotalCount }
+        return rlAppState.currentGuild?.memberCount ?? 0
+    }
+    
+    /// Online count: from loaded guild members when available, else guild DTO.
+    private var onlineCount: Int {
+        if !leftDrawerViewModel.guildMembers.isEmpty { return leftDrawerViewModel.guildMembersOnlineCount }
+        return rlAppState.currentGuild?.membersOnline ?? 0
+    }
+    
+    /// Guild reputation: sum of member reputations when members loaded, else guild DTO.
+    private var guildReputation: Int {
+        if !leftDrawerViewModel.guildMembers.isEmpty {
+            return leftDrawerViewModel.guildMembers.reduce(0) { $0 + $1.reputation }
+        }
+        return rlAppState.currentGuild?.reputation ?? 0
+    }
+    
+    /// Guild accuracy: from statistics when loaded, else placeholder.
+    private var guildAccuracyDisplay: String {
+        leftDrawerViewModel.statistics?.averageAccuracyDisplay ?? "--"
+    }
+    
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
     var menuItems: [(icon: String, title: String, state: DrawerNavigationState)] {
@@ -345,7 +370,7 @@ struct MainDrawerView: View {
                 }
                 
                 HStack(spacing: 2) {
-                    Text("\(rlGuild.memberCount)")
+                    Text("\(memberCount)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -358,7 +383,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("\(rlGuild.membersOnline)")
+                    Text("\(onlineCount)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -380,7 +405,7 @@ struct MainDrawerView: View {
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("\(rlGuild.reputation)")
+                    Text("\(guildReputation)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -393,7 +418,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("99%") // TODO: Get Guild Accuracy
+                    Text(guildAccuracyDisplay)
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)

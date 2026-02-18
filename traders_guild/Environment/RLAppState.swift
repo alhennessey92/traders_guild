@@ -552,6 +552,30 @@ class RLAppState: ObservableObject {
         if showGuildSelectionSheet {
             showGuildSelectionSheet = false
         }
+        
+        // Refresh current user's guild reputation from reputation-service so UI never shows stale 0
+        Task { await refreshCurrentGuildReputation() }
+    }
+    
+    /// Refreshes current user's guild reputation and accuracy from reputation-service and updates currentMembership.
+    /// Call after selecting a guild, when app becomes active, and when opening profile so UI never shows stale 0 or missing accuracy.
+    func refreshCurrentGuildReputation() async {
+        guard let guild = currentGuild, let membership = currentMembership else { return }
+        var newReputation: Int? = nil
+        var newAccuracyRate: Double? = nil
+        do {
+            let profile = try await realApi.getMyGuildReputation(guildId: guild.id)
+            newReputation = profile.reputation
+        } catch { /* non-fatal */ }
+        do {
+            let accuracyProfile = try await realApi.getMyGuildAccuracy(guildId: guild.id)
+            newAccuracyRate = accuracyProfile.accuracyRate
+        } catch { /* non-fatal */ }
+        let rep = newReputation ?? membership.reputation
+        let acc = newAccuracyRate ?? membership.accuracyRate
+        if rep != membership.reputation || acc != membership.accuracyRate {
+            currentMembership = membership.withReputation(rep, accuracyRate: acc)
+        }
     }
     
     /// Open guild selection sheet (for switching guilds)

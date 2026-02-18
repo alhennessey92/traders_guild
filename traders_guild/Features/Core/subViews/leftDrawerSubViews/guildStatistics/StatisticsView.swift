@@ -9,6 +9,16 @@ import SwiftUI
 /// Statistics overview cards for the guild.
 struct StatisticsView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+
+    /// Guild reputation: sum of all members' reputation when members are loaded.
+    private var guildReputationDisplay: String {
+        if leftDrawerViewModel.guildMembers.isEmpty {
+            return "--"
+        }
+        let total = leftDrawerViewModel.guildMembers.reduce(0) { $0 + $1.reputation }
+        return "\(total)"
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             // ✅ Loading state
@@ -32,6 +42,7 @@ struct StatisticsView: View {
                             .foregroundColor(AppColors.whiteText)
                             .padding(.bottom, 4)
                         
+                        StatRow(label: "Guild Reputation", value: guildReputationDisplay)
                         StatRow(label: "Total Predictions", value: statistics.totalPredictionsDisplay)
                         StatRow(label: "Correct Predictions", value: statistics.correctPredictionsDisplay)
                         StatRow(label: "Average Accuracy", value: statistics.averageAccuracyDisplay)

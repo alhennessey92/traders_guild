@@ -288,6 +288,21 @@ struct RLGuildMembershipDTO: Codable, Identifiable, Equatable {
             accuracyRate: accuracyRate
         )
     }
+
+    /// Create a copy with updated reputation (and optionally accuracy) from reputation-service.
+    func withReputation(_ newReputation: Int, accuracyRate newAccuracyRate: Double? = nil) -> RLGuildMembershipDTO {
+        RLGuildMembershipDTO(
+            id: id,
+            userId: userId,
+            guildId: guildId,
+            role: role,
+            reputation: newReputation,
+            contributionScore: contributionScore,
+            status: status,
+            dateJoined: dateJoined,
+            accuracyRate: newAccuracyRate ?? accuracyRate
+        )
+    }
 }
 
 /// Guild Simple Membership Response (for embedding in other responses)
