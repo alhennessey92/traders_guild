@@ -466,6 +466,7 @@ struct GuildUserDetailViewRL: View {
                         stats: buildStats(),
                         isCurrentUser: false,
                         username: member.username,
+                        tabs: [.overview, .markers, .awards],
                         onMarkerTap: { marker in
                             leftDrawerViewModel.requestNavigationToMarker(marker)
                             dismiss()
@@ -973,4 +974,3 @@ extension View {
         self.environmentObject(manager)
     }
 }
-

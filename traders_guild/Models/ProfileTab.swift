@@ -12,6 +12,7 @@ enum ProfileTab: String, CaseIterable, UnifiedTabItem {
     case overview = "Overview"
     case markers = "Markers"
     case awards = "Awards"
+    case activity = "Activity"
     
     var title: String { rawValue }
     
@@ -20,6 +21,7 @@ enum ProfileTab: String, CaseIterable, UnifiedTabItem {
         case .overview: return "person.text.rectangle"
         case .markers: return "mappin.and.ellipse"
         case .awards: return "trophy.fill"
+        case .activity: return "clock.fill"
         }
     }
 }

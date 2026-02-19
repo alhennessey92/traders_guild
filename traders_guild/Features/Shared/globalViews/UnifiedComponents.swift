@@ -405,15 +405,17 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
 /// Unified tab bar container — horizontally scrollable so tab text never wraps
 struct UnifiedTabBar<Tab: UnifiedTabItem>: View where Tab.AllCases: RandomAccessCollection {
     @Binding var selectedTab: Tab
+    var tabs: [Tab]? = nil
     var size: UnifiedTabSize = .standard
     var theme: UnifiedTabTheme = .blue
     var countForTab: ((Tab) -> Int)? = nil
     var spacing: CGFloat = 6
 
     var body: some View {
+        let resolvedTabs = tabs ?? Array(Tab.allCases)
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: spacing) {
-                ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, tab in
+                ForEach(Array(resolvedTabs.enumerated()), id: \.element) { index, tab in
                     UnifiedTabButton(
                         tab: tab,
                         isSelected: selectedTab == tab,

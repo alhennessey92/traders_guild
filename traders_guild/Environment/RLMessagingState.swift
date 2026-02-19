@@ -648,6 +648,7 @@ struct RLMessagingSheet: View {
                             stats: buildProfileStats(for: member),
                             isCurrentUser: false,
                             username: member.username,
+                            tabs: [.overview, .markers, .awards],
                             onMarkerTap: { marker in
                                 leftDrawerViewModel.requestNavigationToMarker(marker)
                                 dismiss()

@@ -588,10 +588,34 @@ extension RealAPIService {
     
     /// Get guilds user is not a member of (for discovery/joining)
     /// Backend endpoint: GET /guilds/not-member
-    func getJoinableGuilds() async throws -> [RLGuildDTO] {
+    func getJoinableGuilds(
+        search: String? = nil,
+        isOpen: Bool? = nil,
+        language: String? = nil,
+        location: String? = nil,
+        sort: String? = nil,
+        skip: Int = 0,
+        limit: Int = 50
+    ) async throws -> [RLGuildDTO] {
         print("🏰 getJoinableGuilds: Fetching guilds user can join")
+        var queryParts: [String] = ["skip=\(skip)", "limit=\(limit)"]
+        if let search = search, !search.isEmpty {
+            queryParts.append("search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)")
+        }
+        if let isOpen = isOpen {
+            queryParts.append("is_open=\(isOpen ? "true" : "false")")
+        }
+        if let language = language, !language.isEmpty {
+            queryParts.append("language=\(language.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? language)")
+        }
+        if let location = location, !location.isEmpty {
+            queryParts.append("location=\(location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location)")
+        }
+        if let sort = sort, !sort.isEmpty {
+            queryParts.append("sort=\(sort)")
+        }
         let result: [RLGuildDTO] = try await request(
-            "/guilds/not-member",
+            "/guilds/not-member?\(queryParts.joined(separator: "&"))",
             service: .core,
             auth: true
         )
@@ -610,11 +634,21 @@ extension RealAPIService {
     }
     
     /// Create a new guild - returns both guild and membership
-    func createGuild(name: String, description: String?, isOpen: Bool) async throws -> RLCreateGuildResponseDTO {
+    func createGuild(
+        name: String,
+        description: String?,
+        isOpen: Bool,
+        language: String? = nil,
+        location: String? = nil,
+        joinQuestions: [RLGuildJoinQuestionInputDTO] = []
+    ) async throws -> RLCreateGuildResponseDTO {
         let requestBody = RLCreateGuildRequestDTO(
             name: name,
             description: description,
-            isOpen: isOpen
+            isOpen: isOpen,
+            language: language,
+            location: location,
+            joinQuestions: joinQuestions
         )
         
         return try await request(
@@ -632,6 +666,72 @@ extension RealAPIService {
             "/guilds/\(guildId.uuidString)/leave",
             service: .core,
             method: "POST",
+            auth: true
+        )
+    }
+
+    func getGuildJoinQuestions(guildId: UUID) async throws -> RLGuildJoinQuestionsListDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/join-questions",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    func updateGuildJoinQuestions(guildId: UUID, questions: [RLGuildJoinQuestionInputDTO]) async throws -> RLGuildJoinQuestionsListDTO {
+        let body = RLGuildJoinQuestionsUpdateRequestDTO(questions: questions)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/join-questions",
+            service: .core,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+
+    func createGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {
+        let body = RLGuildJoinRequestCreateRequestDTO(note: note, answers: answers)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/join-requests",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    func getGuildJoinRequests(guildId: UUID, status: String? = "pending") async throws -> RLGuildJoinRequestsListDTO {
+        var path = "/guilds/\(guildId.uuidString)/join-requests"
+        if let status = status, !status.isEmpty {
+            path += "?status=\(status)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    func approveGuildJoinRequest(guildId: UUID, requestId: UUID, reviewNote: String?) async throws -> RLGuildJoinRequestDTO {
+        let body = RLGuildJoinRequestDecisionRequestDTO(reviewNote: reviewNote)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/join-requests/\(requestId.uuidString)/approve",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    func declineGuildJoinRequest(guildId: UUID, requestId: UUID, reviewNote: String?) async throws -> RLGuildJoinRequestDTO {
+        let body = RLGuildJoinRequestDecisionRequestDTO(reviewNote: reviewNote)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/join-requests/\(requestId.uuidString)/decline",
+            service: .core,
+            method: "POST",
+            body: body,
             auth: true
         )
     }
@@ -1808,9 +1908,13 @@ extension RealAPIService {
     
     // MARK: - Activity Feed
 
-    func getUserActivity(skip: Int = 0, limit: Int = 50) async throws -> RLActivityFeedResponse {
+    func getUserActivity(skip: Int = 0, limit: Int = 50, guildId: UUID? = nil) async throws -> RLActivityFeedResponse {
+        var path = "/users/me/activity?skip=\(skip)&limit=\(limit)"
+        if let guildId = guildId {
+            path += "&guild_id=\(guildId.uuidString)"
+        }
         return try await request(
-            "/users/me/activity?skip=\(skip)&limit=\(limit)",
+            path,
             service: .core,
             method: "GET",
             auth: true
@@ -3112,8 +3216,6 @@ extension RealAPIService {
         )
     }
 }
-
-
 
 
 

@@ -602,12 +602,24 @@ class RLAppState: ObservableObject {
     }
     
     /// Fetch guilds user can join (not already a member of)
-    func fetchJoinableGuilds() async throws -> [RLGuildDTO] {
+    func fetchJoinableGuilds(
+        search: String? = nil,
+        isOpen: Bool? = nil,
+        language: String? = nil,
+        location: String? = nil,
+        sort: String? = nil
+    ) async throws -> [RLGuildDTO] {
         isLoading = true
         defer { isLoading = false }
         
         do {
-            let guilds = try await realApi.getJoinableGuilds()
+            let guilds = try await realApi.getJoinableGuilds(
+                search: search,
+                isOpen: isOpen,
+                language: language,
+                location: location,
+                sort: sort
+            )
             print("🏰 fetchJoinableGuilds: Found \(guilds.count) joinable guilds")
             return guilds
         } catch {
@@ -636,13 +648,49 @@ class RLAppState: ObservableObject {
             showSuccess("Joined \(guildWithMembership.guild.name) successfully!")
             return guildWithMembership
         } catch {
+            if case APIError.badRequest(let detail) = error, detail == "approval_required" {
+                showError(
+                    title: "Approval Required",
+                    message: "This guild is private. Submit a join request instead.",
+                    severity: .warning,
+                    style: .toast
+                )
+                throw error
+            }
+            if case APIError.serverError(let statusCode, let detail) = error, statusCode == 403 {
+                if detail == "approval_required" {
+                    showError(
+                        title: "Approval Required",
+                        message: "This guild is private. Submit a join request instead.",
+                        severity: .warning,
+                        style: .toast
+                    )
+                    throw error
+                }
+                if detail.hasPrefix("kicked_cooldown_active_until:") {
+                    showError(
+                        title: "Rejoin Cooldown Active",
+                        message: "You were recently removed from this guild and can rejoin after the cooldown, unless invited by an owner/admin.",
+                        severity: .warning,
+                        style: .toast
+                    )
+                    throw error
+                }
+            }
             showError(error, title: "Failed to Join Guild", style: .toast)
             throw error
         }
     }
     
     /// Create a new guild - returns the combined guild with membership
-    func createGuild(name: String, description: String?, isOpen: Bool) async throws -> RLGuildWithMembership {
+    func createGuild(
+        name: String,
+        description: String?,
+        isOpen: Bool,
+        language: String? = nil,
+        location: String? = nil,
+        joinQuestions: [RLGuildJoinQuestionInputDTO] = []
+    ) async throws -> RLGuildWithMembership {
         isLoading = true
         defer { isLoading = false }
         
@@ -650,7 +698,10 @@ class RLAppState: ObservableObject {
             let response = try await realApi.createGuild(
                 name: name,
                 description: description,
-                isOpen: isOpen
+                isOpen: isOpen,
+                language: language,
+                location: location,
+                joinQuestions: joinQuestions
             )
             let guildWithMembership = response.asGuildWithMembership
             
@@ -663,6 +714,15 @@ class RLAppState: ObservableObject {
             showSuccess("Created \(guildWithMembership.guild.name) successfully!")
             return guildWithMembership
         } catch {
+            if case APIError.badRequest(let detail) = error, detail == "guild_create_limit_reached" {
+                showError(
+                    title: "Guild Limit Reached",
+                    message: "You can own up to 5 active guilds.",
+                    severity: .warning,
+                    style: .toast
+                )
+                throw error
+            }
             showError(error, title: "Failed to Create Guild", style: .toast)
             throw error
         }
@@ -692,6 +752,67 @@ class RLAppState: ObservableObject {
             }
         } catch {
             showError(error, title: "Failed to Leave Guild", style: .toast)
+            throw error
+        }
+    }
+
+    func getGuildJoinQuestions(guildId: UUID) async throws -> [RLGuildJoinQuestionDTO] {
+        do {
+            let response = try await realApi.getGuildJoinQuestions(guildId: guildId)
+            return response.questions
+        } catch {
+            showError(error, title: "Failed to Load Questions", style: .toast)
+            throw error
+        }
+    }
+
+    func submitGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {
+        do {
+            let result = try await realApi.createGuildJoinRequest(guildId: guildId, note: note, answers: answers)
+            showSuccess("Join request submitted")
+            return result
+        } catch {
+            showError(error, title: "Failed to Submit Request", style: .toast)
+            throw error
+        }
+    }
+
+    func getGuildJoinRequests(guildId: UUID, status: String? = "pending") async throws -> [RLGuildJoinRequestDTO] {
+        do {
+            let response = try await realApi.getGuildJoinRequests(guildId: guildId, status: status)
+            return response.requests
+        } catch {
+            showError(error, title: "Failed to Load Join Requests", style: .toast)
+            throw error
+        }
+    }
+
+    func approveGuildJoinRequest(guildId: UUID, requestId: UUID, reviewNote: String? = nil) async throws -> RLGuildJoinRequestDTO {
+        do {
+            let response = try await realApi.approveGuildJoinRequest(
+                guildId: guildId,
+                requestId: requestId,
+                reviewNote: reviewNote
+            )
+            showSuccess("Join request approved")
+            return response
+        } catch {
+            showError(error, title: "Failed to Approve Request", style: .toast)
+            throw error
+        }
+    }
+
+    func declineGuildJoinRequest(guildId: UUID, requestId: UUID, reviewNote: String? = nil) async throws -> RLGuildJoinRequestDTO {
+        do {
+            let response = try await realApi.declineGuildJoinRequest(
+                guildId: guildId,
+                requestId: requestId,
+                reviewNote: reviewNote
+            )
+            showSuccess("Join request declined")
+            return response
+        } catch {
+            showError(error, title: "Failed to Decline Request", style: .toast)
             throw error
         }
     }
@@ -1314,6 +1435,16 @@ class RLAppState: ObservableObject {
         do {
             return try await realApi.getCurrentUserStatistics()
         } catch {
+            if Task.isCancelled || error is CancellationError {
+                throw error
+            }
+            if let urlError = error as? URLError, urlError.code == .cancelled {
+                throw error
+            }
+            if case let APIError.networkError(message) = error,
+               message.lowercased().contains("cancelled") {
+                throw error
+            }
             showError(error, title: "Failed to Load Statistics", style: .toast)
             throw error
         }

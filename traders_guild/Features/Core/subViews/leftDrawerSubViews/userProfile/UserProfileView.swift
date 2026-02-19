@@ -33,6 +33,13 @@ struct UserProfileDetailView: View {
     @State private var userMarkers: [RLTopMarkerDTO] = []
     @State private var awards: [RLUserAwardDTO] = []
     @State private var awardsSummary: RLAwardsSummaryDTO? = nil
+    @State private var guildActivity: [RLActivityItem] = []
+    @State private var guildActivityLoadError: String?
+    @State private var isGuildActivityLoading = false
+    @State private var guildReputationProfile: RLReputationProfileDTO?
+    @State private var guildAccuracyProfile: RLAccuracyProfileDTO?
+    @State private var showGuildReputationBreakdown = false
+    @State private var showGuildAccuracyBreakdown = false
     @State private var isLoading = true
 
     var body: some View {
@@ -86,6 +93,34 @@ struct UserProfileDetailView: View {
         .task {
             await loadProfileData()
         }
+        .sheet(isPresented: $showGuildReputationBreakdown) {
+            NavigationStack {
+                GuildReputationBreakdownSheetView()
+                    .environmentObject(rlAppState)
+                    .navigationTitle("Guild Reputation Breakdown")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { showGuildReputationBreakdown = false }
+                                .foregroundColor(AppColors.accentColor)
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showGuildAccuracyBreakdown) {
+            NavigationStack {
+                GuildAccuracyBreakdownSheetView()
+                    .environmentObject(rlAppState)
+                    .navigationTitle("Guild Accuracy Breakdown")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { showGuildAccuracyBreakdown = false }
+                                .foregroundColor(AppColors.accentColor)
+                        }
+                    }
+            }
+        }
     }
     
     // MARK: - Profile View
@@ -118,6 +153,14 @@ struct UserProfileDetailView: View {
                     stats: buildStats(),
                     isCurrentUser: true,
                     username: rlAppState.currentUser?.username ?? "", // TODO: check for change
+                    tabs: [.overview, .markers, .awards, .activity],
+                    activityItems: guildActivity,
+                    isActivityLoading: isGuildActivityLoading,
+                    activityLoadError: guildActivityLoadError,
+                    guildReputationProfile: guildReputationProfile,
+                    guildAccuracyProfile: guildAccuracyProfile,
+                    onOpenGuildReputationBreakdown: { showGuildReputationBreakdown = true },
+                    onOpenGuildAccuracyBreakdown: { showGuildAccuracyBreakdown = true },
                     onMarkerTap: { marker in
                         // Navigate to marker on chart
                         leftDrawerViewModel.requestNavigationToMarker(marker)
@@ -192,15 +235,63 @@ struct UserProfileDetailView: View {
     // MARK: - Load Profile Data
     private func loadProfileData() async {
         await rlAppState.refreshCurrentGuildReputation()
-        let data = await leftDrawerViewModel.loadCurrentUserProfile(rlAppState: rlAppState)
+        isGuildActivityLoading = true
+        guildActivityLoadError = nil
+
+        async let profileDataTask = leftDrawerViewModel.loadCurrentUserProfile(rlAppState: rlAppState)
+
+        var loadedGuildReputation: RLReputationProfileDTO?
+        var loadedGuildAccuracy: RLAccuracyProfileDTO?
+        var loadedGuildActivity: [RLActivityItem] = []
+        var loadedGuildActivityError: String?
+
+        if let guildId = rlAppState.currentGuild?.id {
+            async let guildReputationTask = rlAppState.realApi.getMyGuildReputation(guildId: guildId)
+            async let guildAccuracyTask = rlAppState.realApi.getMyGuildAccuracy(guildId: guildId)
+            async let guildActivityTask = rlAppState.realApi.getUserActivity(skip: 0, limit: 100, guildId: guildId)
+
+            loadedGuildReputation = try? await guildReputationTask
+            loadedGuildAccuracy = try? await guildAccuracyTask
+            do {
+                let activity = try await guildActivityTask
+                loadedGuildActivity = activity.items
+            } catch {
+                if !isCancellationError(error) {
+                    loadedGuildActivityError = error.localizedDescription
+                }
+            }
+        } else {
+            loadedGuildActivityError = "No guild selected"
+        }
+
+        let profileData = await profileDataTask
         await MainActor.run {
-            extendedProfile = data.profile
-            markersSummary = data.statistics
-            userMarkers = data.userMarkers
-            awards = data.awards
-            awardsSummary = data.awardsSummary
+            extendedProfile = profileData.profile
+            markersSummary = profileData.statistics
+            userMarkers = profileData.userMarkers
+            awards = profileData.awards
+            awardsSummary = profileData.awardsSummary
+            guildReputationProfile = loadedGuildReputation
+            guildAccuracyProfile = loadedGuildAccuracy
+            guildActivity = loadedGuildActivity
+            guildActivityLoadError = loadedGuildActivityError
+            isGuildActivityLoading = false
             isLoading = false
         }
+    }
+
+    private func isCancellationError(_ error: Error) -> Bool {
+        if Task.isCancelled || error is CancellationError {
+            return true
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return true
+        }
+        if case let APIError.networkError(message) = error,
+           message.lowercased().contains("cancelled") {
+            return true
+        }
+        return false
     }
     
     // MARK: - Build Stats (real data from currentMembership and currentUser; no placeholder trends)
@@ -385,4 +476,3 @@ struct UserProfileFooterView: View {
     }
     
 }
-

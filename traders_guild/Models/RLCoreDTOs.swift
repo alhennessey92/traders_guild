@@ -168,6 +168,11 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
     let reputation: Int
     let memberCount: Int             // backend: member_count
     let membersOnline: Int           // backend: members_online
+    let ownerDisplayName: String?    // backend: owner_display_name
+    let ownerUsername: String?       // backend: owner_username
+    let ownerAvatarUrl: String?      // backend: owner_avatar_url
+    let language: String?            // backend: language
+    let location: String?            // backend: location
     let status: String
     let dateCreated: Date            // backend: date_created
     let updatedAt: Date              // backend: updated_at
@@ -212,6 +217,11 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
             reputation: reputation,
             memberCount: memberCount,
             membersOnline: membersOnline,
+            ownerDisplayName: ownerDisplayName,
+            ownerUsername: ownerUsername,
+            ownerAvatarUrl: ownerAvatarUrl,
+            language: language,
+            location: location,
             status: status,
             dateCreated: dateCreated,
             updatedAt: Date()
@@ -443,11 +453,81 @@ struct RLGuildStatisticsResponse: Codable {
 // MARK: - Guild Request DTOs
 // ================================================================================================
 
+struct RLGuildJoinQuestionInputDTO: Codable, Identifiable {
+    let prompt: String
+    let isRequired: Bool
+    let displayOrder: Int
+
+    var id: String { "\(displayOrder)-\(prompt)" }
+}
+
 /// Request to create a new guild
 struct RLCreateGuildRequestDTO: Codable {
     let name: String
     let description: String?
     let isOpen: Bool                 // backend: is_open
+    let language: String?
+    let location: String?
+    let joinQuestions: [RLGuildJoinQuestionInputDTO]
+}
+
+struct RLGuildJoinQuestionDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let prompt: String
+    let isRequired: Bool
+    let displayOrder: Int
+    let isActive: Bool
+}
+
+struct RLGuildJoinQuestionsListDTO: Codable {
+    let questions: [RLGuildJoinQuestionDTO]
+}
+
+struct RLGuildJoinQuestionsUpdateRequestDTO: Codable {
+    let questions: [RLGuildJoinQuestionInputDTO]
+}
+
+struct RLGuildJoinRequestAnswerInputDTO: Codable {
+    let questionId: UUID
+    let answerText: String
+}
+
+struct RLGuildJoinRequestCreateRequestDTO: Codable {
+    let note: String?
+    let answers: [RLGuildJoinRequestAnswerInputDTO]
+}
+
+struct RLGuildJoinRequestDecisionRequestDTO: Codable {
+    let reviewNote: String?
+}
+
+struct RLGuildJoinRequestAnswerDTO: Codable, Identifiable {
+    let id: UUID
+    let questionId: UUID
+    let questionPrompt: String
+    let answerText: String
+}
+
+struct RLGuildJoinRequestDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let requesterUserId: UUID
+    let requesterUsername: String
+    let requesterDisplayName: String
+    let requesterAvatarUrl: String?
+    let status: String
+    let note: String?
+    let reviewNote: String?
+    let reviewedByUserId: UUID?
+    let reviewedByDisplayName: String?
+    let createdAt: Date
+    let reviewedAt: Date?
+    let answers: [RLGuildJoinRequestAnswerDTO]
+}
+
+struct RLGuildJoinRequestsListDTO: Codable {
+    let requests: [RLGuildJoinRequestDTO]
 }
 
 
@@ -1036,6 +1116,41 @@ struct RLUserGlobalStatisticsDTO: Codable, Equatable {
     let topSymbols: [String]            // backend: top_symbols
     let markersByType: [String: Int]    // backend: markers_by_type
     let lastCalculatedAt: Date          // backend: last_calculated_at
+
+    enum CodingKeys: String, CodingKey {
+        case userId
+        case totalMarkersPlaced
+        case successfulMarkers
+        case accuracyRate
+        case totalLikesReceived
+        case totalCommentsMade
+        case currentStreakDays
+        case bestStreakDays
+        case totalGuildsJoined
+        case totalAwardsEarned
+        case totalAwardPoints
+        case topSymbols
+        case markersByType
+        case lastCalculatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(UUID.self, forKey: .userId)
+        totalMarkersPlaced = try container.decodeIfPresent(Int.self, forKey: .totalMarkersPlaced) ?? 0
+        successfulMarkers = try container.decodeIfPresent(Int.self, forKey: .successfulMarkers) ?? 0
+        accuracyRate = try container.decodeIfPresent(Double.self, forKey: .accuracyRate) ?? 0
+        totalLikesReceived = try container.decodeIfPresent(Int.self, forKey: .totalLikesReceived) ?? 0
+        totalCommentsMade = try container.decodeIfPresent(Int.self, forKey: .totalCommentsMade) ?? 0
+        currentStreakDays = try container.decodeIfPresent(Int.self, forKey: .currentStreakDays) ?? 0
+        bestStreakDays = try container.decodeIfPresent(Int.self, forKey: .bestStreakDays) ?? 0
+        totalGuildsJoined = try container.decodeIfPresent(Int.self, forKey: .totalGuildsJoined) ?? 0
+        totalAwardsEarned = try container.decodeIfPresent(Int.self, forKey: .totalAwardsEarned) ?? 0
+        totalAwardPoints = try container.decodeIfPresent(Int.self, forKey: .totalAwardPoints) ?? 0
+        topSymbols = try container.decodeIfPresent([String].self, forKey: .topSymbols) ?? []
+        markersByType = try container.decodeIfPresent([String: Int].self, forKey: .markersByType) ?? [:]
+        lastCalculatedAt = try container.decodeIfPresent(Date.self, forKey: .lastCalculatedAt) ?? Date.distantPast
+    }
     
     var accuracyFormatted: String {
         String(format: "%.1f%%", accuracyRate * 100)
@@ -1886,6 +2001,11 @@ struct RLActivityItem: Codable, Identifiable {
     let timestamp: Date
     let guildId: UUID?
     let guildName: String?
+    let guildRepDelta: Int?
+    let globalRepDelta: Int?
+    let metricDelta: Int?
+    let metricLabel: String?
+    let sourceType: String?
 }
 
 struct RLActivityFeedResponse: Codable {
@@ -1974,4 +2094,3 @@ enum RLSignupStep: Hashable {
     case guild
     
 }
-

@@ -197,6 +197,37 @@ struct RLGlobalModifiersDTO: Codable, Equatable {
     let activityMultiplier: Double
     let totalModifier: Double
 
+    init(
+        cleanRecordBonus: Bool,
+        cleanRecordMultiplier: Double,
+        consecutiveActiveDays: Int,
+        activityMultiplier: Double,
+        totalModifier: Double
+    ) {
+        self.cleanRecordBonus = cleanRecordBonus
+        self.cleanRecordMultiplier = cleanRecordMultiplier
+        self.consecutiveActiveDays = consecutiveActiveDays
+        self.activityMultiplier = activityMultiplier
+        self.totalModifier = totalModifier
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case cleanRecordBonus
+        case cleanRecordMultiplier
+        case consecutiveActiveDays
+        case activityMultiplier
+        case totalModifier
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cleanRecordBonus = try container.decodeIfPresent(Bool.self, forKey: .cleanRecordBonus) ?? false
+        cleanRecordMultiplier = try container.decodeIfPresent(Double.self, forKey: .cleanRecordMultiplier) ?? 1.0
+        consecutiveActiveDays = try container.decodeIfPresent(Int.self, forKey: .consecutiveActiveDays) ?? 0
+        activityMultiplier = try container.decodeIfPresent(Double.self, forKey: .activityMultiplier) ?? 1.0
+        totalModifier = try container.decodeIfPresent(Double.self, forKey: .totalModifier) ?? 1.0
+    }
+
     var totalModifierFormatted: String {
         String(format: "%.0f%%", (totalModifier - 1.0) * 100)
     }
@@ -214,6 +245,40 @@ struct RLGlobalReputationDTO: Codable, Equatable {
     let modifiers: RLGlobalModifiersDTO
     let consecutiveActiveDays: Int
     let weeklyDelta: Int
+
+    enum CodingKeys: String, CodingKey {
+        case userId
+        case globalReputation
+        case tier
+        case guildContributions
+        case modifiers
+        case consecutiveActiveDays
+        case weeklyDelta
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(UUID.self, forKey: .userId)
+        globalReputation = try container.decodeIfPresent(Int.self, forKey: .globalReputation) ?? 0
+        tier = try container.decodeIfPresent(RLReputationTierDTO.self, forKey: .tier) ?? RLReputationTierDTO(
+            tierName: nil,
+            tierLevel: 0,
+            minReputation: 0,
+            icon: "circle.fill",
+            colorHex: "#8E8E93",
+            influenceBonus: 1.0
+        )
+        guildContributions = try container.decodeIfPresent([RLGuildContributionDTO].self, forKey: .guildContributions) ?? []
+        modifiers = try container.decodeIfPresent(RLGlobalModifiersDTO.self, forKey: .modifiers) ?? RLGlobalModifiersDTO(
+            cleanRecordBonus: false,
+            cleanRecordMultiplier: 1.0,
+            consecutiveActiveDays: 0,
+            activityMultiplier: 1.0,
+            totalModifier: 1.0
+        )
+        consecutiveActiveDays = try container.decodeIfPresent(Int.self, forKey: .consecutiveActiveDays) ?? 0
+        weeklyDelta = try container.decodeIfPresent(Int.self, forKey: .weeklyDelta) ?? 0
+    }
 
     static func == (lhs: RLGlobalReputationDTO, rhs: RLGlobalReputationDTO) -> Bool {
         lhs.userId == rhs.userId && lhs.globalReputation == rhs.globalReputation
@@ -319,6 +384,57 @@ struct RLAccuracyProfileDTO: Codable, Equatable {
     let rollingWins30d: Int
     let rollingTotal30d: Int
     let rankInGuild: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case userId
+        case guildId
+        case accuracyRate
+        case totalPredictions
+        case successfulPredictions
+        case avgRrRatio
+        case winStreak
+        case lossStreak
+        case bestWinStreak
+        // convertFromSnakeCase maps *_30d -> *30D
+        case rollingAccuracy30D
+        case rollingWins30D
+        case rollingTotal30D
+        case rankInGuild
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(UUID.self, forKey: .userId)
+        guildId = try container.decodeIfPresent(UUID.self, forKey: .guildId)
+        accuracyRate = try container.decodeIfPresent(Double.self, forKey: .accuracyRate) ?? 0
+        totalPredictions = try container.decodeIfPresent(Int.self, forKey: .totalPredictions) ?? 0
+        successfulPredictions = try container.decodeIfPresent(Int.self, forKey: .successfulPredictions) ?? 0
+        avgRrRatio = try container.decodeIfPresent(Double.self, forKey: .avgRrRatio)
+        winStreak = try container.decodeIfPresent(Int.self, forKey: .winStreak) ?? 0
+        lossStreak = try container.decodeIfPresent(Int.self, forKey: .lossStreak) ?? 0
+        bestWinStreak = try container.decodeIfPresent(Int.self, forKey: .bestWinStreak) ?? 0
+        rollingAccuracy30d = try container.decodeIfPresent(Double.self, forKey: .rollingAccuracy30D)
+        rollingWins30d = try container.decodeIfPresent(Int.self, forKey: .rollingWins30D) ?? 0
+        rollingTotal30d = try container.decodeIfPresent(Int.self, forKey: .rollingTotal30D) ?? 0
+        rankInGuild = try container.decodeIfPresent(Int.self, forKey: .rankInGuild)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userId, forKey: .userId)
+        try container.encodeIfPresent(guildId, forKey: .guildId)
+        try container.encode(accuracyRate, forKey: .accuracyRate)
+        try container.encode(totalPredictions, forKey: .totalPredictions)
+        try container.encode(successfulPredictions, forKey: .successfulPredictions)
+        try container.encodeIfPresent(avgRrRatio, forKey: .avgRrRatio)
+        try container.encode(winStreak, forKey: .winStreak)
+        try container.encode(lossStreak, forKey: .lossStreak)
+        try container.encode(bestWinStreak, forKey: .bestWinStreak)
+        try container.encodeIfPresent(rollingAccuracy30d, forKey: .rollingAccuracy30D)
+        try container.encode(rollingWins30d, forKey: .rollingWins30D)
+        try container.encode(rollingTotal30d, forKey: .rollingTotal30D)
+        try container.encodeIfPresent(rankInGuild, forKey: .rankInGuild)
+    }
 
     // MARK: - Computed
 
