@@ -34,6 +34,23 @@ struct SignupEmailView: View {
             StaticAuthBackgroundView()
             ScrollView(showsIndicators: false) {
                 VStack {
+                    Text("Step 1 of 6")
+                        .font(AppFonts.smallNotice())
+                        .foregroundColor(AppColors.greyText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 4)
+
+                    HStack(spacing: 6) {
+                        Capsule().fill(AppColors.whiteText).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                    }
+                    .padding(.horizontal, 20)
+
                     Text("Create your account")
                         .font(.largeTitle.bold())
                         .foregroundColor(AppColors.whiteText)

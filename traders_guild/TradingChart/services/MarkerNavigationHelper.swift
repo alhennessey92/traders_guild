@@ -241,6 +241,12 @@ class MarkerNavigationHelper {
             print("🔍 Found in combinedWatchlist")
             return symbol
         }
+
+        // Check global symbols fallback
+        if let symbol = viewModel.globalSymbols.first(where: { $0.ticker == ticker }) {
+            print("🔍 Found in globalSymbols")
+            return symbol
+        }
         
         print("🔍 Symbol not found anywhere: \(ticker)")
         return nil

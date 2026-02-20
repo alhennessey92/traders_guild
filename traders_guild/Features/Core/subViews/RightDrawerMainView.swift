@@ -451,6 +451,11 @@ struct RLMemberRowView: View {
     let onTap: () -> Void
 
     @State private var isPressed = false
+    @EnvironmentObject var appState: RLAppState
+
+    private var isEffectivelyOnline: Bool {
+        appState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline)
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -471,7 +476,7 @@ struct RLMemberRowView: View {
                     }
 
                     Circle()
-                        .fill(member.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                        .fill(isEffectivelyOnline ? AppColors.bullCandleGreen : AppColors.greyText)
                         .frame(width: 10, height: 10)
                         .overlay(
                             Circle()

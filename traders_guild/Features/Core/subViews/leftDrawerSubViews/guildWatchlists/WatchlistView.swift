@@ -116,13 +116,28 @@ struct WatchlistView: View {
         } message: { symbol in
             Text("This will remove \(symbol.ticker) from your personal watchlist.")
         }
+        .onReceive(NotificationCenter.default.publisher(for: .guildWatchlistUpdated)) { _ in
+            Task {
+                await refreshWatchlist()
+            }
+        }
     }
     
     // MARK: - Refresh
     
     private func refreshWatchlist() async {
-        guard let guild = rlAppState.currentGuild else { return }
-        // Refresh handled by leftDrawerViewModel
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+        do {
+            async let guildTask = rlAppState.fetchGuildWatchlist(guildId: guildId)
+            async let personalTask = rlAppState.fetchPersonalWatchlist()
+            let (guildResponse, personalResponse) = try await (guildTask, personalTask)
+            await MainActor.run {
+                leftDrawerViewModel.guildTradingWatchlist = guildResponse.symbols.map { $0.symbol }
+                leftDrawerViewModel.personalTradingWatchlist = personalResponse.symbols.map { $0.symbol }
+            }
+        } catch {
+            // Errors are surfaced through RLAppState toasts.
+        }
     }
     
     // MARK: - Tab Counts
@@ -709,6 +724,4 @@ struct WatchlistSymbolIcon: View {
         )
     }
 }
-
-
 

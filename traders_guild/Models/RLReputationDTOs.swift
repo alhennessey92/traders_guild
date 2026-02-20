@@ -384,7 +384,7 @@ struct RLAccuracyProfileDTO: Codable, Equatable {
     let rollingWins30d: Int
     let rollingTotal30d: Int
     let rankInGuild: Int?
-
+                                 
     enum CodingKeys: String, CodingKey {
         case userId
         case guildId

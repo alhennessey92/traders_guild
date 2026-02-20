@@ -164,13 +164,18 @@ class LeftDrawerViewModel: ObservableObject {
 
     private func applyPresenceUpdates(_ presenceMap: [UUID: Bool]) {
         if presenceMap.isEmpty {
+            let status = RealTimeService.shared.connectionStatus
+            let isTransient = status == .connected || status == .connecting
+            if isTransient {
+                return
+            }
             guildMembers = guildMembers.map { $0.withOnlineStatus(false) }
             guildMembersOnlineCount = 0
             friendsRL = friendsRL.map { $0.withOnlineStatus(false) }
             friendsRLOnlineCount = 0
             return
         }
-        
+
         guildMembers = guildMembers.map { member in
             let isOnline = presenceMap[member.userId] ?? false
             return member.isOnline == isOnline ? member : member.withOnlineStatus(isOnline)
@@ -275,6 +280,7 @@ class LeftDrawerViewModel: ObservableObject {
                         self.guildMembers = response.members
                         self.guildMembersTotalCount = response.totalCount
                         self.guildMembersOnlineCount = response.onlineCount
+                        self.applyPresenceUpdates(rlAppState.presenceByUserId)
                     }
                 } catch is CancellationError {
                     // Silent
@@ -456,6 +462,7 @@ class LeftDrawerViewModel: ObservableObject {
                 self.guildMembers = response.members
                 self.guildMembersTotalCount = response.totalCount
                 self.guildMembersOnlineCount = response.onlineCount
+                self.applyPresenceUpdates(rlAppState.presenceByUserId)
             }
         } catch is CancellationError {
             print("📋 refreshGuildMembers: Cancelled")
@@ -505,6 +512,7 @@ class LeftDrawerViewModel: ObservableObject {
                 self.friendsRL = response.friends
                 self.friendsRLTotalCount = response.totalCount
                 self.friendsRLOnlineCount = response.onlineCount
+                self.applyPresenceUpdates(rlAppState.presenceByUserId)
             }
         } catch is CancellationError {
             print("📋 refreshFriends: Cancelled")
@@ -1050,7 +1058,6 @@ extension RLGuildMemberDTO {
         )
     }
 }
-
 
 
 

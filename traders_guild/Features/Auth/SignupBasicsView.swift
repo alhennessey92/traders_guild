@@ -12,32 +12,39 @@ private struct SignupBasicFeature: Identifiable {
     let title: String
     let icon: String
     let detail: String
+    let tintColor: Color
 }
 
 struct SignupBasicsView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
 
+    @State private var visibleCards: Set<UUID> = []
+
     private let featureCards: [SignupBasicFeature] = [
         SignupBasicFeature(
             title: "Guild Communities",
             icon: "shield.pattern.checkered",
-            detail: "Guilds are your home base. Each one has focused chatrooms, events, announcements, and moderation controls so discussions stay relevant and useful."
+            detail: "Guilds are your home base. Each one has focused chatrooms, events, announcements, and moderation controls so discussions stay relevant and useful.",
+            tintColor: AppColors.accentColor
         ),
         SignupBasicFeature(
             title: "Chart Markers",
             icon: "star.bubble",
-            detail: "Place directional ideas directly on the chart with entry, TP, and SL context. Members can react, discuss outcomes, and learn from real setups."
+            detail: "Place directional ideas directly on the chart with entry, TP, and SL context. Members can react, discuss outcomes, and learn from real setups.",
+            tintColor: Color(red: 0.4, green: 0.7, blue: 0.9)
         ),
         SignupBasicFeature(
             title: "Reputation and Accuracy",
             icon: "chart.bar.doc.horizontal",
-            detail: "Your contribution to guild activity and your marker outcomes build long-term standing. Reputation and accuracy help highlight consistent traders."
+            detail: "Your contribution to guild activity and your marker outcomes build long-term standing. Reputation and accuracy help highlight consistent traders.",
+            tintColor: Color(red: 0.5, green: 0.8, blue: 0.5)
         ),
         SignupBasicFeature(
             title: "Safety First",
             icon: "checkmark.shield",
-            detail: "Reporting, moderation, and role permissions help keep communities respectful, reduce spam, and protect high-signal conversation quality."
+            detail: "Reporting, moderation, and role permissions help keep communities respectful, reduce spam, and protect high-signal conversation quality.",
+            tintColor: Color(red: 0.7, green: 0.6, blue: 0.9)
         ),
     ]
 
@@ -48,6 +55,10 @@ struct SignupBasicsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
                     VStack(alignment: .leading, spacing: 10) {
+                        Text("Step 3 of 6")
+                            .font(AppFonts.smallNotice())
+                            .foregroundColor(AppColors.greyText)
+
                         Text("How Traders Guild Works")
                             .font(.title.bold())
                             .foregroundColor(AppColors.whiteText)
@@ -70,13 +81,38 @@ struct SignupBasicsView: View {
                     }
                     .padding(.horizontal, 20)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("You will choose interests next, then choose your first guild.")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("What's Next")
                             .font(.headline)
                             .foregroundColor(AppColors.whiteText)
+
+                        HStack(spacing: 12) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "4.circle.fill")
+                                    .foregroundColor(AppColors.accentColor)
+                                    .font(.subheadline)
+                                Text("Choose Interests")
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.greyText)
+                            }
+
+                            Image(systemName: "arrow.right")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText.opacity(0.6))
+
+                            HStack(spacing: 6) {
+                                Image(systemName: "5.circle.fill")
+                                    .foregroundColor(AppColors.accentColor)
+                                    .font(.subheadline)
+                                Text("Join a Guild")
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.greyText)
+                            }
+                        }
+
                         Text("Profile details stay optional and editable later in settings.")
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText.opacity(0.7))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
@@ -91,11 +127,25 @@ struct SignupBasicsView: View {
                     .padding(.horizontal, 20)
 
                     VStack(spacing: 12) {
-                        ForEach(featureCards) { card in
+                        ForEach(Array(featureCards.enumerated()), id: \.element.id) { index, card in
                             SignupBasicFeatureCard(feature: card)
+                                .opacity(visibleCards.contains(card.id) ? 1 : 0)
+                                .offset(y: visibleCards.contains(card.id) ? 0 : 12)
+                                .animation(
+                                    .spring(response: 0.4, dampingFraction: 0.8)
+                                        .delay(Double(index) * 0.1),
+                                    value: visibleCards.contains(card.id)
+                                )
                         }
                     }
                     .padding(.horizontal, 20)
+                    .onAppear {
+                        for (index, card) in featureCards.enumerated() {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15 + Double(index) * 0.1) {
+                                visibleCards.insert(card.id)
+                            }
+                        }
+                    }
 
                     Spacer(minLength: 110)
                 }
@@ -309,11 +359,16 @@ private struct SignupBasicFeatureCard: View {
     let feature: SignupBasicFeature
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: feature.icon)
-                .font(.title3)
-                .foregroundColor(AppColors.accentColor)
-                .frame(width: 24, height: 24)
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(feature.tintColor.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                Image(systemName: feature.icon)
+                    .font(.title3)
+                    .foregroundColor(feature.tintColor)
+            }
+            .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(feature.title)

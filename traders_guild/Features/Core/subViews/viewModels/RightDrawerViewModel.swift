@@ -103,9 +103,13 @@ class RLRightDrawerViewModel: ObservableObject {
 
     var memberFriends: [RLGuildMemberDTO] { guildMembers.filter { $0.isFriend } }
 
-    var memberOnlineNonFriends: [RLGuildMemberDTO] { guildMembers.filter { !$0.isFriend && $0.isOnline } }
+    var memberOnlineNonFriends: [RLGuildMemberDTO] {
+        guildMembers.filter { !$0.isFriend && effectiveOnlineStatus(for: $0) }
+    }
 
-    var memberOfflineNonFriends: [RLGuildMemberDTO] { guildMembers.filter { !$0.isFriend && !$0.isOnline } }
+    var memberOfflineNonFriends: [RLGuildMemberDTO] {
+        guildMembers.filter { !$0.isFriend && !effectiveOnlineStatus(for: $0) }
+    }
     
     // ================================================================================================
     // MARK: - Cache Update Methods
@@ -387,13 +391,19 @@ class RLRightDrawerViewModel: ObservableObject {
     private func applyPresenceUpdates(_ presenceMap: [UUID: Bool]) {
         // 1. Update fallback list
         if presenceMap.isEmpty {
-            // If map is cleared (disconnect), mark all offline
-            guildMembers = guildMembers.map { $0.withOnlineStatus(false) }
-        } else {
-            guildMembers = guildMembers.map { member in
-                let isOnline = presenceMap[member.userId] ?? false
-                return member.isOnline == isOnline ? member : member.withOnlineStatus(isOnline)
+            let status = RealTimeService.shared.connectionStatus
+            let isTransient = status == .connected || status == .connecting
+            if isTransient {
+                return
             }
+            guildMembers = guildMembers.map { $0.withOnlineStatus(false) }
+            rebuildDMSections()
+            return
+        }
+
+        guildMembers = guildMembers.map { member in
+            let isOnline = presenceMap[member.userId] ?? false
+            return member.isOnline == isOnline ? member : member.withOnlineStatus(isOnline)
         }
         
         // 2. Rebuild the DM sections to move people between online/offline lists
@@ -423,13 +433,18 @@ class RLRightDrawerViewModel: ObservableObject {
         for thread in visibleThreads {
             // "Hydrate" thread participant with latest status from guildMembers if available
             let updatedThread = updateThreadParticipant(from: thread)
+            let effectiveOnline = appState?.effectiveOnlineStatus(
+                userId: updatedThread.participant.userId,
+                fallback: updatedThread.participant.isOnline
+            ) ?? updatedThread.participant.isOnline
+            let threadWithPresence = updatedThread.withParticipantOnlineStatus(effectiveOnline)
             
-            if friendUserIds.contains(updatedThread.participant.userId) {
-                newFriends.append(updatedThread)
-            } else if updatedThread.participant.isOnline {
-                newOnline.append(updatedThread)
+            if friendUserIds.contains(threadWithPresence.participant.userId) {
+                newFriends.append(threadWithPresence)
+            } else if threadWithPresence.participant.isOnline {
+                newOnline.append(threadWithPresence)
             } else {
-                newOffline.append(updatedThread)
+                newOffline.append(threadWithPresence)
             }
         }
         
@@ -463,6 +478,10 @@ class RLRightDrawerViewModel: ObservableObject {
         return updated
     }
 
+    private func effectiveOnlineStatus(for member: RLGuildMemberDTO) -> Bool {
+        appState?.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline) ?? member.isOnline
+    }
+
     private func isActiveChatroom(_ chatroomId: UUID) -> Bool {
         guard let messagingManager = messagingManager else { return false }
         if case .chatroom(let chatroom) = messagingManager.activeMessage {
@@ -487,6 +506,20 @@ extension RLDMThreadDTO {
         dict["unreadCount"] = count
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let updated = try? JSONDecoder().decode(RLDMThreadDTO.self, from: data) else { return self }
+        return updated
+    }
+
+    func withParticipantOnlineStatus(_ isOnline: Bool) -> RLDMThreadDTO {
+        guard var dict = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self)) as? [String: Any],
+              var participant = dict["participant"] as? [String: Any] else {
+            return self
+        }
+        participant["isOnline"] = isOnline
+        dict["participant"] = participant
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let updated = try? JSONDecoder().decode(RLDMThreadDTO.self, from: data) else {
+            return self
+        }
         return updated
     }
 }

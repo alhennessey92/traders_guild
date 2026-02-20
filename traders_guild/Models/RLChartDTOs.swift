@@ -315,6 +315,11 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
     let low24h: Double?
     let volume24h: Double?
     let volumeFormatted: String?
+
+    // Optional membership flags (present on /chart/symbols/global responses)
+    let inPersonalWatchlist: Bool?
+    let inGuildWatchlist: Bool?
+    let isRequestedForGuild: Bool?
     
     // MARK: - Hashable
     
@@ -917,6 +922,14 @@ struct RLSymbolSearchDTO: Codable {
     let query: String
 }
 
+/// Global symbols listing with watchlist membership flags
+/// Backend: GlobalSymbolsListResponse
+struct RLGlobalSymbolsListDTO: Codable {
+    let symbols: [RLTradingSymbolDTO]
+    let totalCount: Int
+    let nextCursor: String?
+}
+
 
 // =============================================================================
 // MARK: - Combined Chart Data (Initial Load)
@@ -978,6 +991,25 @@ struct RLGuildWatchlistRequestResponseDTO: Codable, Identifiable {
     let reviewedByUsername: String?
     let reviewedAt: Date?
     let reviewNote: String?
+}
+
+/// List of guild watchlist requests
+/// Backend: GuildWatchlistRequestsListResponse
+struct RLGuildWatchlistRequestsListResponseDTO: Codable {
+    let requests: [RLGuildWatchlistRequestResponseDTO]
+    let totalCount: Int
+}
+
+/// Request body for reviewing a guild watchlist request
+/// Backend: GuildWatchlistReviewRequest
+struct RLGuildWatchlistReviewRequestDTO: Codable {
+    let action: String  // approved | rejected
+    let reviewNote: String?
+
+    enum CodingKeys: String, CodingKey {
+        case action
+        case reviewNote = "review_note"
+    }
 }
 
 /// Reorder watchlist
@@ -1238,7 +1270,10 @@ extension RLTradingSymbolDTO {
         high24h: 98200.00,
         low24h: 95800.00,
         volume24h: 28500000000,
-        volumeFormatted: "28.5B"
+        volumeFormatted: "28.5B",
+        inPersonalWatchlist: nil,
+        inGuildWatchlist: nil,
+        isRequestedForGuild: nil
     )
     
     static let sampleEURUSD = RLTradingSymbolDTO(
@@ -1263,7 +1298,10 @@ extension RLTradingSymbolDTO {
         high24h: 1.08650,
         low24h: 1.08200,
         volume24h: nil,
-        volumeFormatted: nil
+        volumeFormatted: nil,
+        inPersonalWatchlist: nil,
+        inGuildWatchlist: nil,
+        isRequestedForGuild: nil
     )
 }
 #endif

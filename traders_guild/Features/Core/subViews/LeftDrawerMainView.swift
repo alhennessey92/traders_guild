@@ -45,6 +45,7 @@ enum BottomSheetContent: Identifiable, Equatable {
     case manageMembers
     case manageRoles
     case manageReports
+    case manageGuildWatchlist
 
     var id: String {
         switch self {
@@ -59,6 +60,7 @@ enum BottomSheetContent: Identifiable, Equatable {
         case .manageMembers: return "manage-members"
         case .manageRoles: return "manage-roles"
         case .manageReports: return "manage-reports"
+        case .manageGuildWatchlist: return "manage-guild-watchlist"
         }
     }
 
@@ -86,6 +88,8 @@ enum BottomSheetContent: Identifiable, Equatable {
         case (.manageRoles, .manageRoles):
             return true
         case (.manageReports, .manageReports):
+            return true
+        case (.manageGuildWatchlist, .manageGuildWatchlist):
             return true
         default:
             return false
@@ -250,6 +254,8 @@ struct LeftDrawerMainView: View {
             return [.large]
         case .manageReports:
             return [.large]
+        case .manageGuildWatchlist:
+            return [.large]
         }
     }
 }
@@ -276,7 +282,13 @@ struct MainDrawerView: View {
     
     /// Online count: from loaded guild members when available, else guild DTO.
     private var onlineCount: Int {
-        if !leftDrawerViewModel.guildMembers.isEmpty { return leftDrawerViewModel.guildMembersOnlineCount }
+        if !leftDrawerViewModel.guildMembers.isEmpty {
+            return leftDrawerViewModel.guildMembers.reduce(into: 0) { total, member in
+                if rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline) {
+                    total += 1
+                }
+            }
+        }
         return rlAppState.currentGuild?.membersOnline ?? 0
     }
     
@@ -765,6 +777,8 @@ struct BottomSheetView: View {
                 ManageRolesView()
             case .manageReports:
                 ManageReportsView(bottomSheetContent: $bottomSheetContent)
+            case .manageGuildWatchlist:
+                ManageGuildWatchlistView()
             }
 
         }
@@ -804,7 +818,5 @@ extension View {
         )
     }
 }
-
-
 
 

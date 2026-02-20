@@ -655,7 +655,7 @@ extension RealAPIService {
         location: String? = nil,
         sort: String? = nil,
         skip: Int = 0,
-        limit: Int = 50
+        limit: Int = 100
     ) async throws -> [RLGuildDTO] {
         print("🏰 getJoinableGuilds: Fetching guilds user can join")
         var queryParts: [String] = ["skip=\(skip)", "limit=\(limit)"]
@@ -2584,6 +2584,35 @@ extension RealAPIService {
             auth: true
         )
     }
+
+    /// List global active symbols with membership flags for the current guild.
+    /// GET /chart/symbols/global?guild_id=...&limit=...&cursor=...&asset_class=...
+    func getGlobalSymbols(
+        guildId: UUID,
+        limit: Int = 100,
+        cursor: String? = nil,
+        assetClass: String? = nil
+    ) async throws -> RLGlobalSymbolsListDTO {
+        var queryParts: [String] = [
+            "guild_id=\(guildId.uuidString)",
+            "limit=\(limit)"
+        ]
+        if let cursor = cursor, !cursor.isEmpty {
+            let encodedCursor = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cursor
+            queryParts.append("cursor=\(encodedCursor)")
+        }
+        if let assetClass = assetClass, !assetClass.isEmpty {
+            queryParts.append("asset_class=\(assetClass)")
+        }
+
+        let path = "/chart/symbols/global?\(queryParts.joined(separator: "&"))"
+        return try await request(
+            path,
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
     
     
     // =============================================================================================
@@ -2684,7 +2713,7 @@ extension RealAPIService {
         )
     }
     
-    /// Add symbol to guild watchlist (admin/moderator only)
+    /// Add symbol to guild watchlist (admin/owner only)
     /// POST /chart/guilds/{guild_id}/watchlist
     func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
         let body = RLWatchlistAddRequest(symbolId: symbolId)
@@ -2697,7 +2726,7 @@ extension RealAPIService {
         )
     }
     
-    /// Remove symbol from guild watchlist (admin/moderator only)
+    /// Remove symbol from guild watchlist (admin/owner only)
     /// DELETE /chart/guilds/{guild_id}/watchlist/{symbol_id}
     func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
@@ -2716,6 +2745,39 @@ extension RealAPIService {
             "/chart/guilds/\(guildId.uuidString)/watchlist/requests",
             service: .chart,
             method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// List guild watchlist requests
+    /// GET /chart/guilds/{guild_id}/watchlist/requests?status={status}
+    func getGuildWatchlistRequests(
+        guildId: UUID,
+        status: String = "pending"
+    ) async throws -> RLGuildWatchlistRequestsListResponseDTO {
+        let path = "/chart/guilds/\(guildId.uuidString)/watchlist/requests?status=\(status)"
+        return try await request(
+            path,
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Review a guild watchlist request (approve/reject)
+    /// PATCH /chart/guilds/{guild_id}/watchlist/requests/{request_id}
+    func reviewGuildWatchlistRequest(
+        guildId: UUID,
+        requestId: UUID,
+        action: String,
+        reviewNote: String? = nil
+    ) async throws -> RLGuildWatchlistRequestResponseDTO {
+        let body = RLGuildWatchlistReviewRequestDTO(action: action, reviewNote: reviewNote)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/watchlist/requests/\(requestId.uuidString)",
+            service: .chart,
+            method: "PATCH",
             body: body,
             auth: true
         )

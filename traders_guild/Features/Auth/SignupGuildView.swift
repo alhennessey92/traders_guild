@@ -32,12 +32,30 @@ struct SignupGuildView: View {
             StaticAuthBackgroundView()
 
             VStack(spacing: 0) {
+                Text("Step 5 of 6")
+                    .font(AppFonts.smallNotice())
+                    .foregroundColor(AppColors.greyText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
+
+                HStack(spacing: 6) {
+                    Capsule().fill(AppColors.whiteText).frame(height: 5)
+                    Capsule().fill(AppColors.whiteText).frame(height: 5)
+                    Capsule().fill(AppColors.whiteText).frame(height: 5)
+                    Capsule().fill(AppColors.whiteText).frame(height: 5)
+                    Capsule().fill(AppColors.whiteText).frame(height: 5)
+                    Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+
                 Text("Choose Your First Guild")
                     .font(.title.bold())
                     .foregroundColor(AppColors.whiteText)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 20)
+                    .padding(.top, 8)
                     .padding(.horizontal, 20)
 
                 Text(subtitleText)
@@ -397,88 +415,116 @@ struct SignupProfileSetupView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
-                    Text("Finish Setting Up Your Profile")
-                        .font(.title.bold())
-                        .foregroundColor(AppColors.whiteText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-
-                    Text("Add a few basics to personalize your experience. You can skip this and edit later in Settings.")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.greyText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-
+                    // Step indicator
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Avatar")
-                            .font(.subheadline.bold())
-                            .foregroundColor(AppColors.whiteText)
-                            .padding(.horizontal, 20)
+                        Text("Step 6 of 6")
+                            .font(AppFonts.smallNotice())
+                            .foregroundColor(AppColors.greyText)
 
-                        HStack(spacing: 12) {
-                            Group {
-                                if let selectedAvatarImage {
-                                    Image(uiImage: selectedAvatarImage)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } else if let avatar = rlAppState.currentUser?.avatarUrl, let url = URL(string: avatar) {
-                                    AsyncImage(url: url) { image in
-                                        image.resizable().aspectRatio(contentMode: .fill)
-                                    } placeholder: {
-                                        ProgressView()
+                        Text("Final Touches")
+                            .font(.title.bold())
+                            .foregroundColor(AppColors.whiteText)
+
+                        Text("Almost done! Add a few basics to personalize your experience. Everything here is optional and editable later.")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+
+                    HStack(spacing: 6) {
+                        ForEach(0..<6, id: \.self) { _ in
+                            Capsule().fill(AppColors.whiteText).frame(height: 5)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+
+                    // Profile Photo section
+                    profileSetupSection(title: "Profile Photo") {
+                        VStack(spacing: 12) {
+                            ZStack(alignment: .bottomTrailing) {
+                                Group {
+                                    if let selectedAvatarImage {
+                                        Image(uiImage: selectedAvatarImage)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    } else if let avatar = rlAppState.currentUser?.avatarUrl, let url = URL(string: avatar) {
+                                        AsyncImage(url: url) { image in
+                                            image.resizable().aspectRatio(contentMode: .fill)
+                                        } placeholder: {
+                                            ProgressView()
+                                        }
+                                    } else {
+                                        Image(systemName: "person.crop.circle")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .padding(16)
+                                            .foregroundColor(AppColors.greyText)
                                     }
-                                } else {
-                                    Image(systemName: "person.crop.circle")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .padding(10)
-                                        .foregroundColor(AppColors.greyText)
                                 }
+                                .frame(width: 96, height: 96)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(AppColors.whiteText.opacity(0.3), lineWidth: 1))
+
+                                Button {
+                                    showingImagePicker = true
+                                } label: {
+                                    ZStack {
+                                        Circle()
+                                            .fill(AppColors.whiteText)
+                                            .frame(width: 30, height: 30)
+                                        Image(systemName: "camera.fill")
+                                            .font(.caption)
+                                            .foregroundColor(AppColors.gradientBackgroundDark)
+                                    }
+                                }
+                                .offset(x: 2, y: 2)
                             }
-                            .frame(width: 72, height: 72)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(AppColors.whiteText.opacity(0.3), lineWidth: 1))
 
                             Button {
                                 showingImagePicker = true
                             } label: {
                                 Text(selectedAvatarImage == nil ? "Choose Avatar" : "Change Avatar")
                                     .font(.subheadline)
-                                    .foregroundColor(AppColors.gradientBackgroundDark)
-                                    .padding(.vertical, 10)
-                                    .padding(.horizontal, 14)
-                                    .background(AppColors.whiteText)
-                                    .clipShape(Capsule())
+                                    .foregroundColor(AppColors.accentColor)
                             }
                         }
-                        .padding(.horizontal, 20)
+                        .frame(maxWidth: .infinity)
                     }
 
-                    StandardTextFieldView(title: "Location (optional)", text: $location)
-                    StandardTextFieldView(title: "Trading Style (optional)", text: $tradingStyle)
+                    // About You section
+                    profileSetupSection(title: "About You") {
+                        VStack(spacing: 12) {
+                            StandardTextFieldView(title: "Location (optional)", text: $location)
+                            StandardTextFieldView(title: "Trading Style (optional)", text: $tradingStyle)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Bio (optional)")
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
-                            .padding(.horizontal, 24)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Bio (optional)")
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.greyText)
+                                    .padding(.horizontal, 4)
 
-                        TextEditor(text: $bio)
-                            .frame(minHeight: 100)
-                            .padding(8)
-                            .background(AppColors.unhighlightedTextBoxBackground.opacity(0.75))
-                            .foregroundColor(AppColors.whiteText)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .padding(.horizontal, 20)
+                                TextEditor(text: $bio)
+                                    .frame(minHeight: 100)
+                                    .padding(8)
+                                    .font(.body)
+                                    .foregroundColor(AppColors.whiteText)
+                                    .scrollContentBackground(.hidden)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                        }
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Trading Interests")
-                            .font(.subheadline.bold())
-                            .foregroundColor(AppColors.whiteText)
-                            .padding(.horizontal, 20)
-
+                    // Trading Interests section
+                    profileSetupSection(title: "Trading Interests") {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                             ForEach(suggestedInterests) { interest in
                                 Button {
@@ -505,20 +551,17 @@ struct SignupProfileSetupView: View {
                                 }
                             }
                         }
-                        .padding(.horizontal, 20)
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Social Links (optional)")
-                            .font(.subheadline.bold())
-                            .foregroundColor(AppColors.whiteText)
-                            .padding(.horizontal, 20)
-
-                        StandardTextFieldView(title: "X / Twitter username", text: $twitterHandle)
-                        StandardTextFieldView(title: "Discord username", text: $discordHandle)
-                        StandardTextFieldView(title: "Telegram username", text: $telegramHandle)
-                        StandardTextFieldView(title: "TradingView username", text: $tradingViewHandle)
-                        StandardTextFieldView(title: "YouTube channel", text: $youtubeHandle)
+                    // Social Connections section
+                    profileSetupSection(title: "Social Connections") {
+                        VStack(spacing: 10) {
+                            profileSocialField(icon: "at", title: "X / Twitter username", text: $twitterHandle)
+                            profileSocialField(icon: "bubble.left.fill", title: "Discord username", text: $discordHandle)
+                            profileSocialField(icon: "paperplane.fill", title: "Telegram username", text: $telegramHandle)
+                            profileSocialField(icon: "chart.xyaxis.line", title: "TradingView username", text: $tradingViewHandle)
+                            profileSocialField(icon: "play.rectangle.fill", title: "YouTube channel", text: $youtubeHandle)
+                        }
                     }
 
                     Spacer(minLength: 120)
@@ -589,6 +632,51 @@ struct SignupProfileSetupView: View {
                 selectedInterests = Set(data.selectedInterests)
             }
         }
+    }
+
+    private func profileSetupSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(AppColors.whiteText)
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 20)
+    }
+
+    private func profileSocialField(icon: String, title: String, text: Binding<String>) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundColor(AppColors.accentColor)
+                .frame(width: 24)
+
+            TextField(title, text: text)
+                .font(.body)
+                .foregroundColor(AppColors.whiteText)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                )
+        )
     }
 
     private func saveAndContinue() async {

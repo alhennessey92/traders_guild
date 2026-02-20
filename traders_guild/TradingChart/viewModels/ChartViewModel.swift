@@ -45,6 +45,7 @@ class ChartViewModel: ObservableObject {
     
     @Published var personalWatchlist: [RLTradingSymbolDTO] = []
     @Published var guildWatchlist: [RLTradingSymbolDTO] = []
+    @Published var globalSymbols: [RLTradingSymbolDTO] = []
     
     
     // MARK: Indicator manager
@@ -68,6 +69,16 @@ class ChartViewModel: ObservableObject {
     
     var combinedWatchlist: [RLTradingSymbolDTO] {
         let combined = personalWatchlist + guildWatchlist
+        var seen = Set<UUID>()
+        return combined.filter { symbol in
+            guard !seen.contains(symbol.id) else { return false }
+            seen.insert(symbol.id)
+            return true
+        }
+    }
+
+    var allAvailableSymbols: [RLTradingSymbolDTO] {
+        let combined = combinedWatchlist + globalSymbols
         var seen = Set<UUID>()
         return combined.filter { symbol in
             guard !seen.contains(symbol.id) else { return false }
@@ -99,12 +110,21 @@ class ChartViewModel: ObservableObject {
             if let guildId = appState.currentGuild?.id {
                 let guildWatchlistDTO = try await api.getGuildWatchlist(guildId: guildId)
                 guildWatchlist = guildWatchlistDTO.symbols.map { $0.symbol }
+                let globalSymbolsDTO = try await api.getGlobalSymbols(guildId: guildId, limit: 100)
+                globalSymbols = globalSymbolsDTO.symbols
+            } else {
+                globalSymbols = []
             }
-            
-            // Set initial symbol from combined watchlist
+
+            // Set initial symbol from watchlists, then global fallback.
+            let available = allAvailableSymbols
+            if let current = currentSymbol, !available.contains(where: { $0.id == current.id }) {
+                currentSymbol = nil
+            }
             if currentSymbol == nil {
-                currentSymbol = combinedWatchlist.first
+                currentSymbol = combinedWatchlist.first ?? globalSymbols.first
             }
+            availableSymbols = available
             
             // Load chart data for the selected symbol
             if let symbol = currentSymbol, let guildId = appState.currentGuild?.id {
@@ -112,7 +132,11 @@ class ChartViewModel: ObservableObject {
             } else {
                 // No symbols available - show error
                 errorMessage = "No symbols available in watchlist"
-                appState.showError(title: "No Chart Data", message: "Please add symbols to your watchlist", style: .toast)
+                appState.showError(
+                    title: "No Chart Data",
+                    message: "No active symbols are available for this guild yet.",
+                    style: .toast
+                )
             }
             
         } catch {
@@ -431,6 +455,5 @@ struct MarketCandleData: Codable {
     let close: Double
     let volume: Double
 }
-
 
 

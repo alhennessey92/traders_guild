@@ -2708,6 +2708,29 @@ class RLAppState: ObservableObject {
             throw error
         }
     }
+
+    /// Add symbol to guild watchlist (admin/owner)
+    func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
+        do {
+            let result = try await realApi.addToGuildWatchlist(guildId: guildId, symbolId: symbolId)
+            showSuccess("Added to guild watchlist")
+            return result
+        } catch {
+            showError(error, title: "Failed to Add Symbol", style: .toast)
+            throw error
+        }
+    }
+
+    /// Remove symbol from guild watchlist (admin/owner)
+    func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
+        do {
+            _ = try await realApi.removeFromGuildWatchlist(guildId: guildId, symbolId: symbolId)
+            showSuccess("Removed from guild watchlist")
+        } catch {
+            showError(error, title: "Failed to Remove Symbol", style: .toast)
+            throw error
+        }
+    }
     
     /// Add symbol to personal watchlist
     func addToPersonalWatchlist(symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
@@ -2742,13 +2765,50 @@ class RLAppState: ObservableObject {
         }
     }
 
-    /// Request a guild watchlist addition (pending backend support)
+    /// Request a guild watchlist addition
     func requestGuildWatchlistAddition(guildId: UUID, symbolId: UUID) async throws {
         do {
             _ = try await realApi.requestGuildWatchlistAddition(guildId: guildId, symbolId: symbolId)
             showSuccess("Request submitted")
         } catch {
             showError(error, title: "Failed to Request Watchlist Add", style: .toast)
+            throw error
+        }
+    }
+
+    /// Fetch guild watchlist requests
+    func fetchGuildWatchlistRequests(status: String = "pending") async throws -> RLGuildWatchlistRequestsListResponseDTO {
+        guard let guildId = currentGuild?.id else {
+            return RLGuildWatchlistRequestsListResponseDTO(requests: [], totalCount: 0)
+        }
+        do {
+            return try await realApi.getGuildWatchlistRequests(guildId: guildId, status: status)
+        } catch {
+            showError(error, title: "Failed to Load Requests", style: .toast)
+            throw error
+        }
+    }
+
+    /// Approve or reject a guild watchlist request
+    func reviewGuildWatchlistRequest(
+        requestId: UUID,
+        action: String,
+        reviewNote: String? = nil
+    ) async throws -> RLGuildWatchlistRequestResponseDTO {
+        guard let guildId = currentGuild?.id else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            let response = try await realApi.reviewGuildWatchlistRequest(
+                guildId: guildId,
+                requestId: requestId,
+                action: action,
+                reviewNote: reviewNote
+            )
+            showSuccess(action == "approved" ? "Request approved" : "Request rejected")
+            return response
+        } catch {
+            showError(error, title: "Failed to Review Request", style: .toast)
             throw error
         }
     }

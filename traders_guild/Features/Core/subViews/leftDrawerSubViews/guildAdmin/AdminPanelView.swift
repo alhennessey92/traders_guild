@@ -117,6 +117,15 @@ struct AdminPanelListView: View {
                     ) {
                         bottomSheetContent = .guildSettings
                     }
+
+                    AdminActionButton(
+                        icon: "list.bullet.rectangle",
+                        title: "Guild Watchlist",
+                        subtitle: "Review requests and manage symbols",
+                        iconColor: .blue
+                    ) {
+                        bottomSheetContent = .manageGuildWatchlist
+                    }
                 }
 
                 Divider()

@@ -369,6 +369,20 @@ struct MainView: View {
                         }
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .guildWatchlistUpdated)) { _ in
+                    guard let guildId = rlAppState.currentGuild?.id else { return }
+                    Task {
+                        do {
+                            let guildWatchlist = try await rlAppState.fetchGuildWatchlist(guildId: guildId)
+                            await MainActor.run {
+                                leftDrawerViewModel.guildTradingWatchlist = guildWatchlist.symbols.map { $0.symbol }
+                            }
+                        } catch {
+                            // Errors are surfaced via RLAppState.
+                        }
+                        await chartViewModel.reloadData()
+                    }
+                }
             }
             .toolbar {
                 // Left Drawer Button
