@@ -34,31 +34,39 @@ enum APIService {
     case reputation // Reputation system (port 8005)
 
     var baseURL: String {
-        switch APIEnvironment.current {
-        case .development:
-            #if targetEnvironment(simulator)
-            switch self {
-            case .auth:       return "http://localhost:8000/api/v1"
-            case .core:       return "http://localhost:8001/api/v1"
-            case .chart:      return "http://localhost:8003/api/v1"
-            case .realtime:   return "http://localhost:8002/api/v1"
-            case .reputation: return "http://localhost:8005/api/v1"
+        switch AppConfig.apiRoutingMode {
+        case .apiGateway:
+            switch APIEnvironment.current {
+            case .development:
+                return AppConfig.developmentGatewayBaseURL
+            case .production:
+                return AppConfig.productionGatewayBaseURL
             }
-            #else
-            // ⚠️ UPDATE THIS to your Mac's IP for device testing
-            let macIP = "192.168.1.182"
-            switch self {
-            case .auth:       return "http://\(macIP):8000/api/v1"
-            case .core:       return "http://\(macIP):8001/api/v1"
-            case .chart:      return "http://\(macIP):8003/api/v1"
-            case .realtime:   return "http://\(macIP):8002/api/v1"
-            case .reputation: return "http://\(macIP):8005/api/v1"
+        case .directServices:
+            switch APIEnvironment.current {
+            case .development:
+                #if targetEnvironment(simulator)
+                switch self {
+                case .auth:       return "http://localhost:8000/api/v1"
+                case .core:       return "http://localhost:8001/api/v1"
+                case .chart:      return "http://localhost:8003/api/v1"
+                case .realtime:   return "http://localhost:8002/api/v1"
+                case .reputation: return "http://localhost:8005/api/v1"
+                }
+                #else
+                // ⚠️ UPDATE THIS to your Mac's IP for device testing
+                let macIP = "192.168.1.182"
+                switch self {
+                case .auth:       return "http://\(macIP):8000/api/v1"
+                case .core:       return "http://\(macIP):8001/api/v1"
+                case .chart:      return "http://\(macIP):8003/api/v1"
+                case .realtime:   return "http://\(macIP):8002/api/v1"
+                case .reputation: return "http://\(macIP):8005/api/v1"
+                }
+                #endif
+            case .production:
+                return AppConfig.productionGatewayBaseURL
             }
-            #endif
-
-        case .production:
-            // Kong routes all services through one URL
-            return "https://api.tradersguild.com/api/v1"
         }
     }
 }
@@ -467,9 +475,9 @@ extension RealAPIService {
         return response
     }
     
-    /// Login with email and password
-    func login(email: String, password: String) async throws -> RLLoginResponseDTO {
-        let requestBody = RLLoginRequestDTO(email: email, password: password)
+    /// Login with identifier (email or username) and password
+    func login(identifier: String, password: String) async throws -> RLLoginResponseDTO {
+        let requestBody = RLLoginRequestDTO(identifier: identifier, password: password)
         
         let response: RLLoginResponseDTO = try await request(
             "/auth/login",
@@ -482,6 +490,38 @@ extension RealAPIService {
         setTokens(access: response.tokens.accessToken, refresh: response.tokens.refreshToken)
         
         return response
+    }
+
+    /// Request password reset email
+    func requestPasswordReset(identifier: String) async throws -> RLPasswordForgotResponseDTO {
+        let requestBody = RLPasswordForgotRequestDTO(identifier: identifier)
+        return try await request(
+            "/auth/password/forgot",
+            service: .auth,
+            method: "POST",
+            body: requestBody
+        )
+    }
+
+    /// Verify reset token validity
+    func verifyPasswordResetToken(_ token: String) async throws -> RLPasswordResetVerifyResponseDTO {
+        let encoded = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
+        return try await request(
+            "/auth/password/reset/verify?token=\(encoded)",
+            service: .auth,
+            method: "GET"
+        )
+    }
+
+    /// Reset password with token
+    func resetPassword(token: String, newPassword: String) async throws -> RLPasswordResetResponseDTO {
+        let requestBody = RLPasswordResetRequestDTO(token: token, newPassword: newPassword)
+        return try await request(
+            "/auth/password/reset",
+            service: .auth,
+            method: "POST",
+            body: requestBody
+        )
     }
     
     /// Refresh access token (manual call - usually automatic refresh handles this)
@@ -576,15 +616,35 @@ extension RealAPIService {
             auth: true
         )
     }
-    
-    /// Get open guilds (for discovery) - Backend Implemented (Not tested)
-//    func getOpenGuilds() async throws -> [RLGuildDTO] {
-//        return try await request(
-//            "/guilds?is_open=true",
-//            service: .core,
-//            auth: true
-//        )
-//    }
+
+    /// Get public/open guilds without authentication (signup discovery).
+    func getPublicOpenGuilds(
+        search: String? = nil,
+        language: String? = nil,
+        location: String? = nil,
+        sort: String? = nil,
+        skip: Int = 0,
+        limit: Int = 50
+    ) async throws -> [RLGuildDTO] {
+        var queryParts: [String] = ["skip=\(skip)", "limit=\(limit)"]
+        if let search = search, !search.isEmpty {
+            queryParts.append("search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)")
+        }
+        if let language = language, !language.isEmpty {
+            queryParts.append("language=\(language.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? language)")
+        }
+        if let location = location, !location.isEmpty {
+            queryParts.append("location=\(location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location)")
+        }
+        if let sort = sort, !sort.isEmpty {
+            queryParts.append("sort=\(sort)")
+        }
+        return try await request(
+            "/guilds/public/open?\(queryParts.joined(separator: "&"))",
+            service: .core,
+            auth: false
+        )
+    }
     
     /// Get guilds user is not a member of (for discovery/joining)
     /// Backend endpoint: GET /guilds/not-member
@@ -627,6 +687,16 @@ extension RealAPIService {
     func joinGuild(guildId: UUID) async throws -> RLJoinGuildResponseDTO {
         return try await request(
             "/guilds/\(guildId.uuidString)/join",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    /// Assign user to system-managed onboarding guild fallback.
+    func assignOnboardingGuild() async throws -> RLJoinGuildResponseDTO {
+        return try await request(
+            "/guilds/onboarding/assign",
             service: .core,
             method: "POST",
             auth: true
@@ -3216,6 +3286,3 @@ extension RealAPIService {
         )
     }
 }
-
-
-

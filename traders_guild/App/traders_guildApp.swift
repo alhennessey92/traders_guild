@@ -72,20 +72,38 @@ struct traders_guildApp: App {
                     .environmentObject(rlAppState)
                     .environmentObject(rlMessagingManager)
             }
+            .onOpenURL { url in
+                guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+                let path = components.path.lowercased()
+                let host = (components.host ?? "").lowercased()
+                let fullRoute = "\(host)\(path)"
+                let matchesResetPath = fullRoute.contains("reset-password") || fullRoute.contains("password/reset")
+                guard matchesResetPath else { return }
+
+                if let token = components.queryItems?.first(where: { $0.name.lowercased() == "token" })?.value,
+                   !token.isEmpty {
+                    rlAppState.setPendingPasswordResetToken(token)
+                }
+            }
         }
     }
     
     @ViewBuilder
     private var mainContent: some View {
         let _ = print("📱 mainContent: isAuthenticated=\(rlAppState.isAuthenticated), currentGuild=\(rlAppState.currentGuild?.name ?? "nil"), showSheet=\(rlAppState.showGuildSelectionSheet)")
-        
-        if rlAppState.isAuthenticated && rlAppState.currentGuild != nil {
+
+        // Keep login/signup and authenticated-onboarding in the same branch so
+        // ContentView identity is stable while auth state flips during signup.
+        if !rlAppState.isAuthenticated || rlAppState.isOnboardingFlowActive {
+            let _ = print("📱 → Showing ContentView (\(rlAppState.isOnboardingFlowActive ? "onboarding active" : "login"))")
+            ContentView()
+        } else if rlAppState.currentGuild != nil {
             // Fully authenticated with guild selected
             let _ = print("📱 → Showing MainView")
             MainView()
                 .preferredColorScheme(.dark)
                 
-        } else if rlAppState.isAuthenticated {
+        } else {
             // Authenticated but no guild selected - show loading/waiting view
             let _ = print("📱 → Showing Loading View")
             VStack(spacing: 20) {
@@ -121,10 +139,6 @@ struct traders_guildApp: App {
                     await rlAppState.openGuildSelector()
                 }
             }
-        } else {
-            // Not authenticated - show login/signup
-            let _ = print("📱 → Showing ContentView (login)")
-            ContentView()
         }
     }
 }
@@ -263,5 +277,3 @@ struct traders_guildApp: App {
 //         }
 //     }
 // }
-
-

@@ -139,8 +139,16 @@ class RLAppState: ObservableObject {
     @Published var hasCompletedInitialLoad: Bool = false
     @Published var isChartReady: Bool = false
     @Published var isSessionRestored: Bool = false
+    private var transitionMinimumDismissAt: Date?
+    private var isFinalizingOnboarding: Bool = false
     
     @Published var showGuildSelectionSheet: Bool = false
+
+    /// Keeps auth/signup onboarding in ContentView even after auth tokens are issued.
+    @Published var isOnboardingFlowActive: Bool = false
+
+    /// Password reset token captured from deep-link.
+    @Published var pendingPasswordResetToken: String?
     
     /// Flag to prevent race conditions during login/signup flow
     /// When true, external triggers (like onAppear) should NOT call openGuildSelector
@@ -199,6 +207,8 @@ class RLAppState: ObservableObject {
         userGuilds = []
         showGuildSelectionSheet = false
         isHandlingAuthFlow = false
+        isOnboardingFlowActive = false
+        pendingPasswordResetToken = nil
         
         clearAllKeychain()
         resetChartReadyState()
@@ -229,6 +239,7 @@ class RLAppState: ObservableObject {
     func finishTransition() {
         showingTransition = false
         hasCompletedInitialLoad = true
+        transitionMinimumDismissAt = nil
     }
     
     func chartDidBecomeReady() {
@@ -237,11 +248,22 @@ class RLAppState: ObservableObject {
     
     func resetChartReadyState() {
         isChartReady = false
+        transitionMinimumDismissAt = nil
     }
     
-    func showTransitionForChartLoad() {
+    func showTransitionForChartLoad(minimumDuration: TimeInterval = 0) {
         isChartReady = false
         showingTransition = true
+        transitionMinimumDismissAt = minimumDuration > 0 ? Date().addingTimeInterval(minimumDuration) : nil
+    }
+
+    func transitionMinimumRemaining() -> TimeInterval {
+        guard let transitionMinimumDismissAt else { return 0 }
+        return max(0, transitionMinimumDismissAt.timeIntervalSinceNow)
+    }
+
+    func hasSatisfiedTransitionMinimum() -> Bool {
+        transitionMinimumRemaining() <= 0
     }
     
     // ================================================================================================
@@ -315,7 +337,7 @@ class RLAppState: ObservableObject {
     // ================================================================================================
     
     /// Sign up new user
-    func signUp(data: RLSignupData) async throws {
+    func signUp(data: RLSignupData, beginOnboarding: Bool = false) async throws {
         isLoading = true
         errorMessage = nil
         isCompletingSignup = true
@@ -339,9 +361,14 @@ class RLAppState: ObservableObject {
             self.currentUser = response.user
             self.currentGuild = response.defaultGuild
             self.currentMembership = response.defaultGuildMembership
+            self.isSessionRestored = true
             
             showSuccess("Welcome to Traders Guild, \(response.user.username)!")
-            showTransitionForChartLoad()
+            if beginOnboarding {
+                isOnboardingFlowActive = true
+            } else {
+                showTransitionForChartLoad()
+            }
             
         } catch {
             showError(error, title: "Signup Failed", style: .alert)
@@ -349,8 +376,8 @@ class RLAppState: ObservableObject {
         }
     }
     
-    /// Login with email and password
-    func login(email: String, password: String) async throws {
+    /// Login with identifier (email or username) and password
+    func login(identifier: String, password: String) async throws {
         isLoading = true
         errorMessage = nil
         isHandlingAuthFlow = true  // ← Prevent race conditions
@@ -362,7 +389,7 @@ class RLAppState: ObservableObject {
         
         do {
             // Call real API
-            let response = try await realApi.login(email: email, password: password)
+            let response = try await realApi.login(identifier: identifier, password: password)
             
             // Store tokens
             self.accessToken = response.tokens.accessToken
@@ -370,6 +397,10 @@ class RLAppState: ObservableObject {
             
             // Set user (this triggers isAuthenticated = true)
             self.currentUser = response.user
+            // Always require explicit guild selection post-login.
+            self.currentGuild = nil
+            self.currentMembership = nil
+            self.isSessionRestored = true
             
             print("🔐 Login: User set, currentGuild before fetch: \(currentGuild?.name ?? "nil")")
             
@@ -387,16 +418,8 @@ class RLAppState: ObservableObject {
                 showGuildSelectionSheet = true
                 isHandlingAuthFlow = false
                 showWarning("Please join a guild to continue")
-            } else if userGuilds.count == 1 {
-                print("🔐 Login: Single guild - auto-selecting")
-                // Auto-select single guild
-                selectGuild(at: 0)
-                isHandlingAuthFlow = false
-                showTransitionForChartLoad()
             } else {
-                print("🔐 Login: Multiple guilds (\(userGuilds.count)) - showing selection sheet")
-                print("🔐 Login: showGuildSelectionSheet = true")
-                // Multiple guilds - show picker
+                print("🔐 Login: Guild selection required (\(userGuilds.count) guilds)")
                 showGuildSelectionSheet = true
                 isHandlingAuthFlow = false
             }
@@ -406,6 +429,7 @@ class RLAppState: ObservableObject {
             
             print("🔐 Login: Final state - currentGuild: \(currentGuild?.name ?? "nil"), showSheet: \(showGuildSelectionSheet)")
             
+            isOnboardingFlowActive = false
             showSuccess("Welcome back, \(response.user.username)!")
             
         } catch {
@@ -413,6 +437,11 @@ class RLAppState: ObservableObject {
             showError(error, title: "Login Failed", style: .alert)
             throw error
         }
+    }
+
+    /// Backward-compatible login wrapper for older call sites.
+    func login(email: String, password: String) async throws {
+        try await login(identifier: email, password: password)
     }
     
     /// Logout and clear session
@@ -431,6 +460,8 @@ class RLAppState: ObservableObject {
         userGuilds = []
         showGuildSelectionSheet = false  // ← Make sure sheet is dismissed
         isHandlingAuthFlow = false
+        isOnboardingFlowActive = false
+        pendingPasswordResetToken = nil
         presenceByUserId.removeAll()
         currentPresenceChannel = nil
         
@@ -441,10 +472,75 @@ class RLAppState: ObservableObject {
         
         showInfo("You've been logged out")
     }
+
+    func completeOnboardingAndEnterApp() {
+        guard !isFinalizingOnboarding else { return }
+        isFinalizingOnboarding = true
+
+        Task {
+            defer { isFinalizingOnboarding = false }
+
+            if currentUser == nil, accessToken != nil {
+                if let hydratedUser = try? await realApi.getCurrentUser() {
+                    currentUser = hydratedUser
+                }
+            }
+
+            guard isAuthenticated else {
+                showError(
+                    title: "Signup session not ready",
+                    message: "We could not finalize your account session. Please sign in and continue.",
+                    severity: .warning,
+                    style: .alert
+                )
+                return
+            }
+
+            if currentGuild == nil {
+                if userGuilds.isEmpty {
+                    try? await fetchUserGuilds()
+                }
+
+                if currentGuild == nil, let firstGuild = userGuilds.first {
+                    selectGuild(firstGuild, showTransition: false)
+                }
+
+                if currentGuild == nil {
+                    if let fallbackGuild = try? await assignOnboardingGuild(showTransition: false) {
+                        selectGuild(fallbackGuild, showTransition: false)
+                    }
+                }
+            }
+
+            guard currentGuild != nil else {
+                showError(
+                    title: "Guild selection required",
+                    message: "Please select a guild to continue.",
+                    severity: .warning,
+                    style: .alert
+                )
+                showGuildSelectionSheet = true
+                return
+            }
+
+            isOnboardingFlowActive = false
+            showTransitionForChartLoad(minimumDuration: 2.5)
+        }
+    }
+
+    func setPendingPasswordResetToken(_ token: String?) {
+        pendingPasswordResetToken = token
+    }
     
     /// Restore session from keychain
     func restoreSession() async {
         print("🔄 restoreSession: Starting...")
+
+        // Do not let background restoration clobber an active auth/signup flow.
+        if isAuthenticated || isHandlingAuthFlow || isOnboardingFlowActive {
+            isSessionRestored = true
+            return
+        }
         
         // Restore tokens
         let storedAccessToken = getTokenFromKeychain()
@@ -475,6 +571,13 @@ class RLAppState: ObservableObject {
         } else if let access = storedAccessToken {
             // Fallback - at least set access token
             realApi.setAccessToken(access)
+        }
+
+        // If auth/signup completed while we were restoring, keep live in-memory state.
+        if isAuthenticated || isHandlingAuthFlow || isOnboardingFlowActive || currentUser != nil {
+            print("🔄 restoreSession: Skipping apply - live auth state already established")
+            isSessionRestored = true
+            return
         }
 
         // Publish tokens after refresh attempt so WS connects with valid token
@@ -540,9 +643,13 @@ class RLAppState: ObservableObject {
     
     /// Select a guild directly (primary method)
     /// - Parameter showTransition: Whether to show loading transition (false for manual guild switching)
-    func selectGuild(_ guildWithMembership: RLGuildWithMembership, showTransition: Bool = false) {
+    func selectGuild(
+        _ guildWithMembership: RLGuildWithMembership,
+        showTransition: Bool = false,
+        minimumTransitionDuration: TimeInterval = 0
+    ) {
         if showTransition {
-            showTransitionForChartLoad()
+            showTransitionForChartLoad(minimumDuration: minimumTransitionDuration)
         }
         
         self.currentGuild = guildWithMembership.guild
@@ -633,8 +740,33 @@ class RLAppState: ObservableObject {
         return try await fetchJoinableGuilds()
     }
 
+    /// Fetch open guilds available before authentication (signup discovery).
+    func fetchPublicOpenGuilds(
+        search: String? = nil,
+        language: String? = nil,
+        location: String? = nil,
+        sort: String? = nil
+    ) async throws -> [RLGuildDTO] {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let guilds = try await realApi.getPublicOpenGuilds(
+                search: search,
+                language: language,
+                location: location,
+                sort: sort
+            )
+            print("🏰 fetchPublicOpenGuilds: Found \(guilds.count) open guilds")
+            return guilds
+        } catch {
+            showError(error, title: "Failed to Fetch Open Guilds", style: .toast)
+            throw error
+        }
+    }
+
     /// Join a guild - returns the combined guild with membership
-    func joinGuild(guildId: UUID) async throws -> RLGuildWithMembership {
+    func joinGuild(guildId: UUID, showTransition: Bool = true) async throws -> RLGuildWithMembership {
         do {
             let response = try await realApi.joinGuild(guildId: guildId)
             let guildWithMembership = response.asGuildWithMembership
@@ -642,8 +774,8 @@ class RLAppState: ObservableObject {
             // Add to local guild list
             userGuilds.append(guildWithMembership)
             
-            // Select the newly joined guild (show transition)
-            selectGuild(guildWithMembership, showTransition: true)
+            // Select the newly joined guild.
+            selectGuild(guildWithMembership, showTransition: showTransition)
             
             showSuccess("Joined \(guildWithMembership.guild.name) successfully!")
             return guildWithMembership
@@ -678,6 +810,26 @@ class RLAppState: ObservableObject {
                 }
             }
             showError(error, title: "Failed to Join Guild", style: .toast)
+            throw error
+        }
+    }
+
+    /// Assign user to an onboarding fallback guild (no-open-guild signup path).
+    func assignOnboardingGuild(showTransition: Bool = false) async throws -> RLGuildWithMembership {
+        do {
+            let response = try await realApi.assignOnboardingGuild()
+            let guildWithMembership = response.asGuildWithMembership
+
+            if let existingIndex = userGuilds.firstIndex(where: { $0.guild.id == guildWithMembership.guild.id }) {
+                userGuilds[existingIndex] = guildWithMembership
+            } else {
+                userGuilds.append(guildWithMembership)
+            }
+
+            selectGuild(guildWithMembership, showTransition: showTransition)
+            return guildWithMembership
+        } catch {
+            showError(error, title: "Failed to Assign Onboarding Guild", style: .toast)
             throw error
         }
     }
@@ -1453,6 +1605,36 @@ class RLAppState: ObservableObject {
     // =============================================================================================
     // MARK: - Account Management (Settings)
     // =============================================================================================
+
+    /// Request password reset email (email or username identifier).
+    func requestPasswordReset(identifier: String) async throws -> RLPasswordForgotResponseDTO {
+        do {
+            return try await realApi.requestPasswordReset(identifier: identifier)
+        } catch {
+            showError(error, title: "Password Reset Failed", style: .alert)
+            throw error
+        }
+    }
+
+    /// Verify reset token before showing reset form.
+    func verifyPasswordResetToken(_ token: String) async throws -> RLPasswordResetVerifyResponseDTO {
+        do {
+            return try await realApi.verifyPasswordResetToken(token)
+        } catch {
+            showError(error, title: "Invalid Reset Link", style: .alert)
+            throw error
+        }
+    }
+
+    /// Reset password with one-time token.
+    func resetPassword(token: String, newPassword: String) async throws -> RLPasswordResetResponseDTO {
+        do {
+            return try await realApi.resetPassword(token: token, newPassword: newPassword)
+        } catch {
+            showError(error, title: "Reset Password Failed", style: .alert)
+            throw error
+        }
+    }
 
     /// Request email change (sends verification to new email)
     func requestEmailChange(newEmail: String, currentPassword: String) async throws -> RLDetailResponseDTO {

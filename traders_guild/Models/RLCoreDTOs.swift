@@ -28,13 +28,35 @@ struct RLRegisterRequestDTO: Codable {
 
 /// Matches backend LoginRequest schema
 struct RLLoginRequestDTO: Codable {
-    let email: String
+    let identifier: String
     let password: String
+
+    init(identifier: String, password: String) {
+        self.identifier = identifier
+        self.password = password
+    }
+
+    // Backward-compatible convenience for old call sites.
+    init(email: String, password: String) {
+        self.identifier = email
+        self.password = password
+    }
 }
 
 /// Matches backend RefreshTokenRequest schema
 struct RLRefreshTokenRequestDTO: Codable {
     let refreshToken: String         // backend: refresh_token
+}
+
+/// Matches backend PasswordForgotRequest schema
+struct RLPasswordForgotRequestDTO: Codable {
+    let identifier: String
+}
+
+/// Matches backend PasswordResetRequest schema
+struct RLPasswordResetRequestDTO: Codable {
+    let token: String
+    let newPassword: String          // backend: new_password
 }
 
 
@@ -52,8 +74,8 @@ struct RLLoginResponseDTO: Codable {
 struct RLRegistrationResponseDTO: Codable {
     let user: RLUserDTO
     let tokens: RLTokenDTO
-    let defaultGuild: RLGuildDTO                       // backend: default_guild
-    let defaultGuildMembership: RLGuildMembershipDTO   // backend: default_guild_membership
+    let defaultGuild: RLGuildDTO?                      // backend: default_guild
+    let defaultGuildMembership: RLGuildMembershipDTO?  // backend: default_guild_membership
 }
 
 
@@ -67,6 +89,22 @@ struct RLTokenDTO: Codable, Equatable {
     let refreshToken: String         // backend: refresh_token
     let tokenType: String            // backend: token_type
     let expiresIn: Int               // backend: expires_in (seconds)
+}
+
+/// Matches backend PasswordForgotResponse schema
+struct RLPasswordForgotResponseDTO: Codable {
+    let detail: String
+}
+
+/// Matches backend PasswordResetVerifyResponse schema
+struct RLPasswordResetVerifyResponseDTO: Codable {
+    let valid: Bool
+    let detail: String
+}
+
+/// Matches backend PasswordResetResponse schema
+struct RLPasswordResetResponseDTO: Codable {
+    let detail: String
 }
 
 
@@ -2075,6 +2113,7 @@ struct RLSignupData {
     var username: String = ""
     var password: String = ""
     var name: String = ""            // Maps to displayName when creating RegisterRequestDTO
+    var selectedInterests: [String] = []
     
     /// Convert to API request format
     func toRequest() -> RLRegisterRequestDTO {
@@ -2087,10 +2126,62 @@ struct RLSignupData {
     }
 }
 
+enum RLAuthValidator {
+    private static let emailRegex = #"^[A-Z0-9a-z._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,64}$"#
+    private static let usernameRegex = #"^[A-Za-z0-9_.-]{3,50}$"#
+
+    static func trimmed(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func isValidDisplayName(_ value: String) -> Bool {
+        let trimmedValue = trimmed(value)
+        return !trimmedValue.isEmpty && trimmedValue.count <= 100
+    }
+
+    static func isValidEmail(_ email: String) -> Bool {
+        let normalized = trimmed(email)
+        guard !normalized.isEmpty else { return false }
+        return normalized.range(of: emailRegex, options: .regularExpression) != nil
+    }
+
+    static func isValidUsername(_ username: String) -> Bool {
+        let normalized = trimmed(username)
+        guard !normalized.isEmpty else { return false }
+        return normalized.range(of: usernameRegex, options: .regularExpression) != nil
+    }
+
+    static func isLikelyEmailIdentifier(_ identifier: String) -> Bool {
+        trimmed(identifier).contains("@")
+    }
+
+    static func isValidIdentifier(_ identifier: String) -> Bool {
+        if isLikelyEmailIdentifier(identifier) {
+            return isValidEmail(identifier)
+        }
+        return isValidUsername(identifier)
+    }
+
+    static func isValidPassword(_ password: String) -> Bool {
+        let bytes = password.utf8.count
+        guard bytes >= 8 && bytes <= 72 else { return false }
+        guard password.rangeOfCharacter(from: .uppercaseLetters) != nil else { return false }
+        guard password.rangeOfCharacter(from: .lowercaseLetters) != nil else { return false }
+        guard password.rangeOfCharacter(from: .decimalDigits) != nil else { return false }
+        return true
+    }
+
+    static func doPasswordsMatch(_ first: String, _ second: String) -> Bool {
+        !first.isEmpty && first == second
+    }
+}
+
 enum RLSignupStep: Hashable {
     case accountInfo
     case username
     case basics
+    case interests
     case guild
+    case profile
     
 }

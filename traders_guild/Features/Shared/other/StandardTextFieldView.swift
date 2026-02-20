@@ -21,46 +21,59 @@ struct StandardTextFieldView: View {
     // Track focus
     @FocusState private var isFocused: Bool
     
+    private var normalizedTitle: String {
+        title.lowercased()
+    }
+
+    private var isEmailField: Bool {
+        normalizedTitle.contains("email")
+    }
+
+    private var isUsernameField: Bool {
+        normalizedTitle.contains("username")
+    }
+
+    private var isDisplayNameField: Bool {
+        normalizedTitle.contains("display name") || normalizedTitle == "name"
+    }
+
+    private var isTokenField: Bool {
+        normalizedTitle.contains("token")
+    }
+
     var body: some View {
-        ZStack (alignment: .leading){
-            if text.isEmpty {
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.greyText)   // placeholder color
-                    .padding(.leading, 12)
-            }
-            
-            // TextField vs SecureField
+        Group {
             if isSecure {
-                SecureField("", text: $text)
-                    .font(.body)
-                    .textInputAutocapitalization(.never) // email, username safe
-                    .autocorrectionDisabled()
-                    .foregroundColor(AppColors.whiteText)
-                    .accentColor(AppColors.whiteText)
-                    .focused($isFocused)
-                    .padding(.leading, 12)
-                    
-            } else {
-                TextField("", text: $text)
-                    .font(.body)
+                SecureField(title, text: $text)
+                    .textContentType(.password)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .foregroundColor(AppColors.whiteText)
-                    .accentColor(AppColors.whiteText)
-                    .focused($isFocused)
-                    .padding(.leading, 12)
-                    
+            } else {
+                TextField(title, text: $text)
+                    .textInputAutocapitalization(isDisplayNameField ? .words : .never)
+                    .textContentType(isEmailField ? .emailAddress : (isUsernameField ? .username : (isTokenField ? .oneTimeCode : nil)))
+                    .keyboardType(isEmailField ? .emailAddress : .default)
+                    .autocorrectionDisabled()
             }
         }
-        .padding()
+        .font(.body)
+        .foregroundColor(AppColors.whiteText)
+        .accentColor(AppColors.whiteText)
+        .focused($isFocused)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.unhighlightedTextBoxBackground)
-                .opacity(isFocused ? 1.0 : 0.6)
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                )
         )
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
-        
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isFocused = true
+        }
         .padding(.horizontal)
     }
 }
