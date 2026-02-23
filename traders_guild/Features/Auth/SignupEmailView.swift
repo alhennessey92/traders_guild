@@ -5,6 +5,13 @@
 
 import SwiftUI
 
+private struct SignupPasswordRequirement: Identifiable {
+    let title: String
+    let isMet: Bool
+
+    var id: String { title }
+}
+
 struct SignupEmailView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
@@ -27,6 +34,50 @@ struct SignupEmailView: View {
         RLAuthValidator.isValidEmail(normalizedEmail) &&
         RLAuthValidator.isValidPassword(password) &&
         RLAuthValidator.doPasswordsMatch(password, confirmPassword)
+    }
+
+    private var isValidLength: Bool {
+        let bytes = password.utf8.count
+        return bytes >= 8 && bytes <= 72
+    }
+
+    private var hasUppercase: Bool {
+        password.rangeOfCharacter(from: .uppercaseLetters) != nil
+    }
+
+    private var hasLowercase: Bool {
+        password.rangeOfCharacter(from: .lowercaseLetters) != nil
+    }
+
+    private var hasNumber: Bool {
+        password.rangeOfCharacter(from: .decimalDigits) != nil
+    }
+
+    private var passwordsMatch: Bool {
+        RLAuthValidator.doPasswordsMatch(password, confirmPassword)
+    }
+
+    private var passwordRequirements: [SignupPasswordRequirement] {
+        [
+            SignupPasswordRequirement(title: "8-72 characters", isMet: isValidLength),
+            SignupPasswordRequirement(title: "At least one uppercase letter", isMet: hasUppercase),
+            SignupPasswordRequirement(title: "At least one lowercase letter", isMet: hasLowercase),
+            SignupPasswordRequirement(title: "At least one number", isMet: hasNumber),
+        ]
+    }
+
+    private var passwordValidationState: StandardTextFieldValidationState {
+        if password.isEmpty { return .neutral }
+        return RLAuthValidator.isValidPassword(password) ? .valid : .invalid
+    }
+
+    private var confirmPasswordValidationState: StandardTextFieldValidationState {
+        if confirmPassword.isEmpty { return .neutral }
+        return passwordsMatch ? .valid : .invalid
+    }
+
+    private var passwordMatchColor: Color {
+        passwordsMatch ? AppColors.bullCandleGreen : AppColors.bearCandleRed
     }
 
     var body: some View {
@@ -65,20 +116,63 @@ struct SignupEmailView: View {
                     StandardTextFieldView(title: "Email", text: $email)
                         .padding(.bottom, 10)
 
-                    Text("Password: 8-72 chars, with uppercase, lowercase, and a number.")
+                    Text("Password requirements")
                         .font(AppFonts.smallNotice())
                         .foregroundColor(AppColors.greyText)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 10)
                         .padding(.bottom, 5)
+                        .padding(.horizontal, 24)
 
-                    StandardTextFieldView(title: "Password", text: $password, isSecure: true)
+                    StandardTextFieldView(
+                        title: "Password",
+                        text: $password,
+                        isSecure: true,
+                        validationState: passwordValidationState
+                    )
                         .padding(.bottom, 10)
 
-                    StandardTextFieldView(title: "Confirm Password", text: $confirmPassword, isSecure: true)
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(passwordRequirements) { requirement in
+                            HStack(spacing: 7) {
+                                Image(systemName: requirement.isMet ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(requirement.isMet ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+
+                                Text(requirement.title)
+                                    .font(.caption)
+                                    .foregroundColor(requirement.isMet ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 12)
+
+                    StandardTextFieldView(
+                        title: "Confirm Password",
+                        text: $confirmPassword,
+                        isSecure: true,
+                        validationState: confirmPasswordValidationState
+                    )
+                    .padding(.bottom, 4)
+
+                    if !confirmPassword.isEmpty {
+                        HStack(spacing: 7) {
+                            Image(systemName: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .font(.caption)
+                                .foregroundColor(passwordMatchColor)
+
+                            Text(passwordsMatch ? "Passwords match" : "Passwords do not match")
+                                .font(.caption)
+                                .foregroundColor(passwordMatchColor)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
                         .padding(.bottom, 10)
+                    }
 
                     VStack(spacing: 0) {
                         Divider()

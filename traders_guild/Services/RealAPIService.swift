@@ -236,6 +236,9 @@ class RealAPIService {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
+            if let urlError = error as? URLError, urlError.code == .cancelled {
+                throw CancellationError()
+            }
             throw APIError.networkError(error.localizedDescription)
         }
         

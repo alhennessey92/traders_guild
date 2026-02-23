@@ -269,8 +269,28 @@ class RLAppState: ObservableObject {
     // ================================================================================================
     // MARK: - Error Management
     // ================================================================================================
+
+    private func isCancellationLikeError(_ error: Error) -> Bool {
+        if Task.isCancelled || error is CancellationError {
+            return true
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return true
+        }
+        if case let APIError.networkError(message) = error {
+            let lower = message.lowercased()
+            if lower.contains("cancelled") || lower.contains("canceled") {
+                return true
+            }
+        }
+        return false
+    }
     
     func showError(_ error: Error, title: String = "Error", style: RLAlertDisplayStyle = .alert) {
+        if isCancellationLikeError(error) {
+            return
+        }
+
         let alert = RLAppAlert(
             title: title,
             message: error.localizedDescription,

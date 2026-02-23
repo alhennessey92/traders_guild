@@ -13,11 +13,18 @@
 //
 import SwiftUI
 
+enum StandardTextFieldValidationState {
+    case neutral
+    case valid
+    case invalid
+}
+
 /// Generic full-width button for login/signup
 struct StandardTextFieldView: View {
     let title: String                 // Placeholder / label
     @Binding var text: String         // Two-way binding
     var isSecure: Bool = false        // Password field?
+    var validationState: StandardTextFieldValidationState = .neutral
     // Track focus
     @FocusState private var isFocused: Bool
     
@@ -41,6 +48,17 @@ struct StandardTextFieldView: View {
         normalizedTitle.contains("token")
     }
 
+    private var strokeColor: Color {
+        switch validationState {
+        case .neutral:
+            return isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.whiteText.opacity(0.15)
+        case .valid:
+            return AppColors.bullCandleGreen.opacity(isFocused ? 0.95 : 0.75)
+        case .invalid:
+            return AppColors.bearCandleRed.opacity(isFocused ? 0.95 : 0.75)
+        }
+    }
+    
     var body: some View {
         Group {
             if isSecure {
@@ -67,7 +85,7 @@ struct StandardTextFieldView: View {
                 .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                        .stroke(strokeColor, lineWidth: 1)
                 )
         )
         .contentShape(Rectangle())
