@@ -2,7 +2,7 @@
 //  MarkerDetailView.swift
 //  traders_guild
 //
-//  CONVERTED: Now uses ChartMarkerDTO and MarkerCommentDTO instead of legacy types
+//  CONVERTED: Now uses ChartMarkerUI and MarkerCommentDTO instead of legacy types
 //
 //  Comprehensive marker detail view with:
 //  - Header: Gradient background, icon, user info, stats
@@ -17,20 +17,20 @@ import Combine
 
 struct MarkerDetailView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     @ObservedObject var markerManager: MarkerManager
     
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     @Binding var selectedDetent: PresentationDetent
     
     @State private var isLiked: Bool = false
     @State private var likeCount: Int = 0
-    @State private var comments: [MarkerCommentDTO] = []
+    @State private var comments: [RLMarkerCommentDTO] = []
     @State private var showComments: Bool = false
     @State private var showDeleteMarkerConfirmation: Bool = false
-    @State private var showReportConfirmation: Bool = false
+    @State private var showReportReasonSheet: Bool = false
     
-    init(marker: ChartMarkerDTO, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
+    init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
         self.marker = marker
         self.markerManager = markerManager
         self._selectedDetent = selectedDetent
@@ -70,7 +70,7 @@ struct MarkerDetailView: View {
                         showComments: $showComments,
                         onLike: handleLike,
                         onShare: handleShare,
-                        onReport: { showReportConfirmation = true },
+                        onReport: { showReportReasonSheet = true },
                         onDelete: { showDeleteMarkerConfirmation = true }
                     )
                 }
@@ -97,13 +97,16 @@ struct MarkerDetailView: View {
             } message: {
                 Text("Are you sure you want to delete this marker? This action cannot be undone.")
             }
-            .alert("Report Marker", isPresented: $showReportConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Report", role: .destructive) {
-                    handleReport()
-                }
-            } message: {
-                Text("Report this marker as inappropriate or misleading?")
+            .sheet(isPresented: $showReportReasonSheet) {
+                ReportReasonSheet(
+                    title: "Why are you reporting this marker?",
+                    includeScam: false,
+                    onReasonSelected: { reason in
+                        handleReport(reason: reason)
+                        showReportReasonSheet = false
+                    },
+                    onCancel: { showReportReasonSheet = false }
+                )
             }
             .navigationDestination(isPresented: $showComments) {
                 CommentsView(
@@ -114,6 +117,18 @@ struct MarkerDetailView: View {
                 )
                 .navigationTitle("Comments")
                 .navigationBarTitleDisplayMode(.inline)
+            }
+            .onReceive(markerManager.$markers) { updatedMarkers in
+                guard let updated = updatedMarkers.first(where: { $0.id == marker.id }) else { return }
+                if updated.comments != comments {
+                    comments = updated.comments
+                }
+                if updated.likeCount != likeCount {
+                    likeCount = updated.likeCount
+                }
+                if updated.isLikedByCurrentUser != isLiked {
+                    isLiked = updated.isLikedByCurrentUser
+                }
             }
         }
     }
@@ -129,7 +144,9 @@ struct MarkerDetailView: View {
         }
         
         // Update marker manager
-        markerManager.toggleLike(markerId: marker.id)
+        Task {
+            await markerManager.toggleLike(markerId: marker.id)
+        }
     }
     
     private func handleShare() {
@@ -137,36 +154,50 @@ struct MarkerDetailView: View {
         print("Share marker: \(marker.id)")
     }
     
-    private func handleReport() {
+    private func handleReport(reason: String) {
         HapticFeedback.medium.trigger()
         Task {
-            appState.showSuccess("Marker reported. Thank you for your feedback.")
+            guard let guildId = rlAppState.currentGuild?.id else { return }
+            do {
+                _ = try await rlAppState.realApi.reportMarker(
+                    guildId: guildId,
+                    markerId: marker.id,
+                    reason: reason
+                )
+                rlAppState.showSuccess("Report submitted")
+            } catch {
+                rlAppState.showError(error, title: "Failed to Report", style: .toast)
+            }
         }
     }
     
     private func handleDelete() {
         HapticFeedback.warning.trigger()
-        markerManager.deleteMarker(id: marker.id)
-        appState.showSuccess("Marker deleted")
-        dismiss()
+        Task {
+            await markerManager.deleteMarker(id: marker.id)
+            rlAppState.showSuccess("Marker deleted")
+            dismiss()
+        }
     }
 }
 
-// MARK: - Comments View (Using MarkerCommentDTO)
+// MARK: - Comments View (Using RLMarkerCommentDTO)
 
 struct CommentsView: View {
-    let marker: ChartMarkerDTO
-    @Binding var comments: [MarkerCommentDTO]
+    let marker: ChartMarkerUI
+    @Binding var comments: [RLMarkerCommentDTO]
     @ObservedObject var markerManager: MarkerManager
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     
     @State private var commentText: String = ""
     @State private var isSendingComment: Bool = false
     @FocusState private var isCommentInputFocused: Bool
+    @State private var showReportCommentReasonSheet: Bool = false
+    @State private var commentToReport: RLMarkerCommentDTO? = nil
     
     @Binding var selectedDetent: PresentationDetent
     
-    init(marker: ChartMarkerDTO, comments: Binding<[MarkerCommentDTO]>, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
+    init(marker: ChartMarkerUI, comments: Binding<[RLMarkerCommentDTO]>, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
         self.marker = marker
         self._comments = comments
         self.markerManager = markerManager
@@ -193,13 +224,13 @@ struct CommentsView: View {
                                 MarkerCommentRow(
                                     comment: comment,
                                     onReport: {
-                                        handleReportComment(comment)
+                                        commentToReport = comment
+                                        showReportCommentReasonSheet = true
                                     },
                                     onDelete: comment.canDelete ? {
                                         handleDeleteComment(comment)
                                     } : nil
                                 )
-                                .environmentObject(appState)
                                 .id(comment.id)
                             }
                         }
@@ -253,6 +284,23 @@ struct CommentsView: View {
         .background(AppColors.sheetBackground)
         .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+        .sheet(isPresented: $showReportCommentReasonSheet) {
+            if let comment = commentToReport {
+                ReportReasonSheet(
+                    title: "Why are you reporting this comment?",
+                    includeScam: false,
+                    onReasonSelected: { reason in
+                        handleReportComment(comment, reason: reason)
+                        showReportCommentReasonSheet = false
+                        commentToReport = nil
+                    },
+                    onCancel: {
+                        showReportCommentReasonSheet = false
+                        commentToReport = nil
+                    }
+                )
+            }
+        }
     }
     
     // MARK: - Actions
@@ -266,33 +314,16 @@ struct CommentsView: View {
         isSendingComment = true
         isCommentInputFocused = false
         
-        // Add comment through marker manager
-        markerManager.addComment(markerId: marker.id, content: trimmed)
-        
-        // Create local DTO for immediate UI update
-        let newComment = MarkerCommentDTO(
-            id: UUID(),
-            markerId: marker.id,
-            author: appState.currentUser?.guildMembership ?? SampleData.currentUser.guildMembership,
-            content: trimmed,
-            timestamp: Date(),
-            timestampFormatted: "Just now",
-            isEdited: false,
-            isCurrentUserMessage: true,
-            canEdit: true,
-            canDelete: true
-        )
-        
-        withAnimation(.easeOut(duration: 0.2)) {
-            comments.append(newComment)
-        }
         commentText = ""
-        isSendingComment = false
-        
-        HapticFeedback.light.trigger()
+
+        // Add comment through marker manager (optimistic update happens there)
+        Task {
+            await markerManager.addComment(markerId: marker.id, content: trimmed)
+            isSendingComment = false
+        }
     }
     
-    private func handleDeleteComment(_ comment: MarkerCommentDTO) {
+    private func handleDeleteComment(_ comment: RLMarkerCommentDTO) {
         HapticFeedback.warning.trigger()
         
         withAnimation(.easeOut(duration: 0.2)) {
@@ -300,12 +331,25 @@ struct CommentsView: View {
         }
         
         markerManager.deleteComment(markerId: marker.id, commentId: comment.id)
-        appState.showSuccess("Comment deleted")
+        rlAppState.showSuccess("Comment deleted")
     }
     
-    private func handleReportComment(_ comment: MarkerCommentDTO) {
+    private func handleReportComment(_ comment: RLMarkerCommentDTO, reason: String) {
         HapticFeedback.medium.trigger()
-        appState.showInfo("Comment reported for review")
+        Task {
+            guard let guildId = rlAppState.currentGuild?.id else { return }
+            do {
+                _ = try await rlAppState.realApi.reportMarkerComment(
+                    guildId: guildId,
+                    markerId: marker.id,
+                    commentId: comment.id,
+                    reason: reason
+                )
+                rlAppState.showSuccess("Report submitted")
+            } catch {
+                rlAppState.showError(error, title: "Failed to Report", style: .toast)
+            }
+        }
     }
 }
 
@@ -329,14 +373,14 @@ struct MarkerCommentInputFooter: View {
     }
 }
 
-// MARK: - Marker Comment Row (Using MarkerCommentDTO)
+// MARK: - Marker Comment Row (Using RLMarkerCommentDTO)
 
 struct MarkerCommentRow: View {
-    let comment: MarkerCommentDTO
+    let comment: RLMarkerCommentDTO
     let onReport: () -> Void
     var onDelete: (() -> Void)? = nil
     
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     @State private var showDeleteConfirmation = false
     
     var body: some View {
@@ -349,7 +393,7 @@ struct MarkerCommentRow: View {
                     // Could navigate to user profile
                 }) {
                     ChatAvatar(
-                        initials: comment.authorInitials,
+                        initials: comment.author.initials,
                         isOnline: comment.author.isOnline,
                         size: 32
                     )
@@ -361,19 +405,17 @@ struct MarkerCommentRow: View {
                 // User info row (only for other users)
                 if !comment.isCurrentUserMessage {
                     HStack(spacing: 2) {
-                        Text(comment.authorDisplayName)
+                        Text(comment.author.username)
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.whiteText.opacity(0.9))
-                        
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 3, height: 3)
-                            .padding(.horizontal, 3)
-                        
-                        Text(comment.author.roleInGuild.displayName)
-                            .font(.caption)
-                            .foregroundColor(comment.author.roleInGuild.roleForegroundColor)
+
+                        UnifiedSeparatorDot(size: 3, opacity: 0.7)
+
+                        UnifiedRoleBadge(
+                            member: comment.author,
+                            showReputation: true
+                        )
                     }
                 }
                 
@@ -402,7 +444,7 @@ struct MarkerCommentRow: View {
                         // Copy
                         Button {
                             UIPasteboard.general.string = comment.content
-                            appState.showSuccess("Copied to clipboard")
+                            rlAppState.showSuccess("Copied to clipboard")
                         } label: {
                             Label("Copy", systemImage: "doc.on.doc")
                         }
@@ -447,10 +489,10 @@ struct MarkerCommentRow: View {
     }
 }
 
-// MARK: - Marker Detail Header (Using ChartMarkerDTO)
+// MARK: - Marker Detail Header (Using ChartMarkerUI)
 
 struct MarkerDetailHeaderView: View {
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     let isLiked: Bool
     let likeCount: Int
     let commentCount: Int
@@ -459,54 +501,47 @@ struct MarkerDetailHeaderView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Main header row
             HStack(spacing: 15) {
-                // Marker type icon with colored background
+                // Marker type icon with colored background (Alert uses severity color)
                 ZStack {
                     Circle()
-                        .fill(marker.type.color.opacity(0.2))
+                        .fill(marker.displayColor.opacity(0.2))
                         .frame(width: 56, height: 56)
                     
                     Circle()
-                        .stroke(marker.type.color.opacity(0.4), lineWidth: 2)
+                        .stroke(marker.displayColor.opacity(0.4), lineWidth: 2)
                         .frame(width: 56, height: 56)
                     
                     Image(systemName: marker.type.icon)
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(marker.type.color)
+                        .foregroundColor(marker.displayColor)
                 }
                 
-                // Marker info
+                // Marker info — username on its own line, role · reputation on next line
                 VStack(alignment: .leading, spacing: 4) {
                     Text(marker.type.rawValue)
                         .font(.title3)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
-                    
-                    // User info row - now using embedded author DTO
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(AppColors.accentColor.opacity(0.3))
-                            .frame(width: 18, height: 18)
-                            .overlay(
-                                Text(marker.authorInitials.prefix(1))
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundColor(AppColors.accentColor)
-                            )
-                        
-                        Text(marker.authorDisplayName)
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.whiteText.opacity(0.8))
-                        
-                        Circle()
-                            .fill(AppColors.greyText.opacity(0.5))
-                            .frame(width: 3, height: 3)
-                        
-                        Text(marker.createdAtFormatted)
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                    }
+
+                    // Username
+                    Text(marker.author.username)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.whiteText)
+
+                    // Role · Reputation
+                    // Role · Reputation · Accuracy
+                    UnifiedRoleBadge(
+                        member: marker.author,
+                        showReputation: true
+                    )
+
+                    Text(marker.createdAtFormatted)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
                 }
-                
-                Spacer(minLength: 50)
+
+                Spacer(minLength: 8)
             }
             
             // Note (if present)
@@ -548,10 +583,10 @@ struct MarkerDetailHeaderView: View {
                 Text(String(format: "%.5f", marker.price))
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundColor(marker.type.color)
+                    .foregroundColor(marker.displayColor)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(marker.type.color.opacity(0.15))
+                    .background(marker.displayColor.opacity(0.15))
                     .clipShape(Capsule())
             }
             
@@ -563,7 +598,7 @@ struct MarkerDetailHeaderView: View {
         .background(
             LinearGradient(
                 colors: [
-                    marker.type.color.opacity(0.15),
+                    marker.displayColor.opacity(0.15),
                     AppColors.sheetBackground
                 ],
                 startPoint: .top,
@@ -573,10 +608,10 @@ struct MarkerDetailHeaderView: View {
     }
 }
 
-// MARK: - Marker Detail Footer (Using ChartMarkerDTO)
+// MARK: - Marker Detail Footer (Using ChartMarkerUI)
 
 struct MarkerDetailFooterView: View {
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     @Binding var isLiked: Bool
     @Binding var likeCount: Int
     let isOwner: Bool
@@ -680,10 +715,10 @@ struct MarkerDetailFooterView: View {
     }
 }
 
-// MARK: - Marker Info Content (Using ChartMarkerDTO)
+// MARK: - Marker Info Content (Using ChartMarkerUI)
 
 struct MarkerInfoContent: View {
-    let marker: ChartMarkerDTO
+    let marker: ChartMarkerUI
     
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -692,29 +727,32 @@ struct MarkerInfoContent: View {
                 VStack(spacing: 12) {
                     infoRow(
                         icon: "chart.line.uptrend.xyaxis",
-                        label: "Price Level",
-                        value: String(format: "%.5f", marker.price),
-                        valueColor: marker.type.color
+                        label: marker.type == .predictionTarget ? "Entry Price" : "Price Level",
+                        value: String(format: "%.5f", marker.type == .predictionTarget ? (marker.horizontalLinePrice ?? marker.price) : marker.price),
+                        valueColor: marker.type == .predictionTarget ? .green : marker.displayColor
                     )
-                    
+
                     Divider()
                         .background(AppColors.whiteText.opacity(0.1))
-                    
+
                     infoRow(
                         icon: "clock",
                         label: "Created",
                         value: marker.createdAt.formatted(date: .abbreviated, time: .shortened)
                     )
-                    
-                    if marker.type.hasHorizontalLine, let linePrice = marker.horizontalLinePrice {
+
+                    // Show line price for non-prediction markers
+                    if marker.type != .predictionTarget,
+                       marker.type.hasHorizontalLine,
+                       let linePrice = marker.horizontalLinePrice {
                         Divider()
                             .background(AppColors.whiteText.opacity(0.1))
-                        
+
                         infoRow(
                             icon: "minus",
-                            label: "Line Price",
+                            label: marker.type.lineLabel.isEmpty ? "Line Price" : marker.type.lineLabel,
                             value: String(format: "%.5f", linePrice),
-                            valueColor: marker.type.color
+                            valueColor: marker.displayColor
                         )
                     }
                 }
@@ -753,46 +791,82 @@ struct MarkerInfoContent: View {
     
     @ViewBuilder
     private var predictionSection: some View {
-        if let targetPrice = marker.targetPrice {
-            let entryPrice = marker.horizontalLinePrice ?? marker.price
-            let percentChange = ((targetPrice - entryPrice) / entryPrice) * 100
-            let isLong = targetPrice > entryPrice
-            
-            infoCard {
-                VStack(spacing: 16) {
-                    HStack {
-                        Image(systemName: isLong ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
-                        
-                        Text(isLong ? "Long Prediction" : "Short Prediction")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-                        
-                        Spacer()
-                        
-                        Text(String(format: "%+.2f%%", percentChange))
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+        let entryPrice = marker.horizontalLinePrice ?? marker.price
+        let tpPrice = marker.targetPrice
+        let slPrice = marker.stopLossPrice
+        let isLong = (tpPrice ?? entryPrice) > entryPrice
+
+        // Direction + percentage header
+        infoCard {
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: isLong ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+
+                    Text(isLong ? "Long" : "Short")
+                        .font(.headline)
+                        .foregroundColor(AppColors.whiteText)
+
+                    Spacer()
+
+                    // R:R badge
+                    if let tp = tpPrice, let sl = slPrice {
+                        let reward = abs(tp - entryPrice)
+                        let risk = abs(sl - entryPrice)
+                        if risk > 0 {
+                            Text(String(format: "R:R %.2f", reward / risk))
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(AppColors.whiteText)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(AppColors.whiteText.opacity(0.1))
+                                .cornerRadius(8)
+                        }
                     }
-                    
-                    Divider().background(AppColors.whiteText.opacity(0.1))
-                    
-                    HStack(spacing: 20) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Entry").font(.caption).foregroundColor(AppColors.greyText)
-                            Text(String(format: "%.5f", entryPrice))
-                                .font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
-                        }
-                        Image(systemName: "arrow.right").font(.caption).foregroundColor(AppColors.greyText)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Target").font(.caption).foregroundColor(AppColors.greyText)
-                            Text(String(format: "%.5f", targetPrice))
-                                .font(.subheadline).fontWeight(.semibold)
-                                .foregroundColor(isLong ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
-                        }
+                }
+
+                Divider().background(AppColors.whiteText.opacity(0.1))
+
+                // Price rows
+                VStack(spacing: 10) {
+                    // Entry
+                    HStack {
+                        Circle().fill(Color.green).frame(width: 8, height: 8)
+                        Text("Entry").font(.subheadline).foregroundColor(AppColors.greyText)
                         Spacer()
+                        Text(String(format: "%.5f", entryPrice))
+                            .font(.subheadline).fontWeight(.semibold).foregroundColor(.green)
+                    }
+
+                    // Take Profit
+                    if let tp = tpPrice {
+                        let profitPct = abs(tp - entryPrice) / entryPrice * 100
+                        HStack {
+                            Circle().fill(Color.blue).frame(width: 8, height: 8)
+                            Text("Take Profit").font(.subheadline).foregroundColor(AppColors.greyText)
+                            Spacer()
+                            Text(String(format: "+%.2f%%", profitPct))
+                                .font(.caption).foregroundColor(.blue)
+                                .padding(.trailing, 4)
+                            Text(String(format: "%.5f", tp))
+                                .font(.subheadline).fontWeight(.semibold).foregroundColor(.blue)
+                        }
+                    }
+
+                    // Stop Loss
+                    if let sl = slPrice {
+                        let lossPct = abs(sl - entryPrice) / entryPrice * 100
+                        HStack {
+                            Circle().fill(Color.red).frame(width: 8, height: 8)
+                            Text("Stop Loss").font(.subheadline).foregroundColor(AppColors.greyText)
+                            Spacer()
+                            Text(String(format: "-%.2f%%", lossPct))
+                                .font(.caption).foregroundColor(.red)
+                                .padding(.trailing, 4)
+                            Text(String(format: "%.5f", sl))
+                                .font(.subheadline).fontWeight(.semibold).foregroundColor(.red)
+                        }
                     }
                 }
             }
@@ -818,7 +892,7 @@ struct MarkerInfoContent: View {
         infoCard {
             HStack {
                 Image(systemName: marker.type == .support ? "arrow.down.to.line" : "arrow.up.to.line")
-                    .font(.title3).foregroundColor(marker.type.color)
+                    .font(.title3).foregroundColor(marker.displayColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(marker.type == .support ? "Support Level" : "Resistance Level")
                         .font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
@@ -850,7 +924,7 @@ struct MarkerInfoContent: View {
         if let pattern = marker.chartPattern {
             infoCard {
                 HStack {
-                    Image(systemName: "chart.bar.doc.horizontal").font(.title3).foregroundColor(marker.type.color)
+                    Image(systemName: "chart.bar.doc.horizontal").font(.title3).foregroundColor(marker.displayColor)
                     Text(pattern.rawValue).font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
                     Spacer()
                 }
@@ -863,7 +937,7 @@ struct MarkerInfoContent: View {
         if let indicator = marker.selectedIndicator {
             infoCard {
                 HStack {
-                    Image(systemName: "waveform.path.ecg").font(.title3).foregroundColor(marker.type.color)
+                    Image(systemName: "waveform.path.ecg").font(.title3).foregroundColor(marker.displayColor)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Indicator Signal").font(.caption).foregroundColor(AppColors.greyText)
                         Text(indicator).font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
@@ -939,7 +1013,7 @@ struct MarkerInfoContent: View {
 // MARK: - Poll Option Row (Using PollOptionDTO)
 
 struct PollOptionRow: View {
-    let option: PollOptionDTO
+    let option: RLPollOptionDTO
     let totalVotes: Int
     let hasVoted: Bool
     
@@ -963,6 +1037,13 @@ struct PollOptionRow: View {
                 }
             }.frame(height: 6)
         }.padding(.vertical, 6)
+    }
+}
+
+extension RLPollOptionDTO {
+    func votePercentage(totalVotes: Int) -> Double {
+        guard totalVotes > 0 else { return 0 }
+        return (Double(voteCount) / Double(totalVotes)) * 100
     }
 }
 

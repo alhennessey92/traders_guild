@@ -192,7 +192,6 @@ struct RLMessagingSheet: View {
     @EnvironmentObject var appState: RLAppState
     @EnvironmentObject var rightDrawerViewModel: RLRightDrawerViewModel
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    @EnvironmentObject var legacyAppState: AppState
     
     @State private var messageText = ""
     @State private var showUserProfile = false
@@ -213,7 +212,7 @@ struct RLMessagingSheet: View {
     // Profile state
     @State private var profileExtendedProfile: RLUserProfileDTO? = nil
     @State private var profileStatistics: RLUserGlobalStatisticsDTO? = nil
-    @State private var profileMarkers: [TopMarkerDTO] = []
+    @State private var profileMarkers: [RLTopMarkerDTO] = []
     @State private var profileAwards: [RLUserAwardDTO] = []
     @State private var profileAwardsSummary: RLAwardsSummaryDTO? = nil
     @State private var isProfileLoading: Bool = false
@@ -439,7 +438,7 @@ struct RLMessagingSheet: View {
             )
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(thread.participant.displayName)
+                Text(thread.participant.username)
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.whiteText)
@@ -649,6 +648,7 @@ struct RLMessagingSheet: View {
                             stats: buildProfileStats(for: member),
                             isCurrentUser: false,
                             username: member.username,
+                            tabs: [.overview, .markers, .awards],
                             onMarkerTap: { marker in
                                 leftDrawerViewModel.requestNavigationToMarker(marker)
                                 dismiss()
@@ -677,7 +677,6 @@ struct RLMessagingSheet: View {
         isProfileLoading = true
         let data = await leftDrawerViewModel.loadMemberProfile(
             member: member,
-            appState: legacyAppState,
             rlAppState: appState,
             guildId: guildId
         )
@@ -692,12 +691,19 @@ struct RLMessagingSheet: View {
     }
 
     private func buildProfileStats(for member: RLGuildMemberDTO) -> [ProfileStatDTO] {
-        [
+        var stats = [
             ProfileStatDTO(
                 label: "Guild Reputation",
                 value: "\(member.reputation)",
                 icon: "shield.checkered",
                 color: AppColors.accentColor,
+                trend: nil
+            ),
+            ProfileStatDTO(
+                label: "Accuracy",
+                value: member.accuracyFormatted ?? "--",
+                icon: "target",
+                color: .green,
                 trend: nil
             ),
             ProfileStatDTO(
@@ -711,7 +717,7 @@ struct RLMessagingSheet: View {
                 label: "Days in Guild",
                 value: "\(member.daysInGuild)",
                 icon: "calendar",
-                color: .green,
+                color: .cyan,
                 trend: nil
             ),
             ProfileStatDTO(
@@ -720,8 +726,9 @@ struct RLMessagingSheet: View {
                 icon: "chart.bar.fill",
                 color: .orange,
                 trend: nil
-            )
+            ),
         ]
+        return stats
     }
     
     // MARK: - Settings View
@@ -782,36 +789,76 @@ struct RLChatroomFooterView: View {
     let chatroom: RLGuildChatroomDTO
     @Binding var messageText: String
     let onMessageSent: (RLChatroomMessageDTO) -> Void
-    
+
     @EnvironmentObject var appState: RLAppState
     @State private var isSending: Bool = false
-    
+
     var body: some View {
         ChatInputFooter(
             messageText: $messageText,
             placeholder: "Message #\(chatroom.name.lowercased().replacingOccurrences(of: " ", with: "-"))...",
             isSending: isSending,
-            onSend: { Task { await sendMessage() } }
+            onSend: { Task { await sendMessage() } },
+            onAttachmentSelected: { data, filename, mimeType in
+                Task { await sendAttachment(data: data, filename: filename, mimeType: mimeType) }
+            }
         )
     }
-    
+
     private func sendMessage() async {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard chatroom.canSendMessages else {
             appState.showError(title: "Cannot Send", message: "You don't have permission to send messages here", style: .toast)
             return
         }
-        
+
         let textToSend = messageText
         messageText = ""
         isSending = true
         defer { isSending = false }
-        
+
         do {
             let message = try await appState.sendChatroomMessage(chatroomId: chatroom.id, content: textToSend)
             onMessageSent(message)
         } catch {
             messageText = textToSend
+        }
+    }
+
+    private func sendAttachment(data: Data, filename: String, mimeType: String) async {
+        guard let guild = appState.currentGuild else { return }
+        guard chatroom.canSendMessages else {
+            appState.showError(title: "Cannot Send", message: "You don't have permission to send messages here", style: .toast)
+            return
+        }
+
+        isSending = true
+        defer { isSending = false }
+
+        do {
+            // 1) Upload the file
+            let upload = try await appState.realApi.uploadChatroomAttachment(
+                guildId: guild.id,
+                chatroomId: chatroom.id,
+                fileData: data,
+                filename: filename,
+                mimeType: mimeType
+            )
+            // 2) Send message with attachment
+            let content = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? filename
+                : messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+            messageText = ""
+            let message = try await appState.sendChatroomMessage(
+                chatroomId: chatroom.id,
+                content: content,
+                attachmentUrl: upload.attachmentUrl,
+                attachmentType: upload.attachmentType,
+                attachmentName: upload.attachmentName
+            )
+            onMessageSent(message)
+        } catch {
+            appState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
     }
 }
@@ -821,37 +868,76 @@ struct RLDMFooterView: View {
     let thread: RLDMThreadDTO
     @Binding var messageText: String
     let onMessageSent: (RLDMMessageDTO) -> Void
-    
+
     @EnvironmentObject var appState: RLAppState
     @State private var isSending: Bool = false
-    
+
     var body: some View {
         ChatInputFooter(
             messageText: $messageText,
             placeholder: "Message \(thread.participant.username.lowercased())...",
             isSending: isSending,
-            onSend: { Task { await sendMessage() } }
+            onSend: { Task { await sendMessage() } },
+            onAttachmentSelected: { data, filename, mimeType in
+                Task { await sendAttachment(data: data, filename: filename, mimeType: mimeType) }
+            }
         )
     }
-    
+
     private func sendMessage() async {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
+
         if thread.isBlocked {
             appState.showError(title: "Cannot Send", message: "You have blocked this user", style: .toast)
             return
         }
-        
+
         let textToSend = messageText
         messageText = ""
         isSending = true
         defer { isSending = false }
-        
+
         do {
             let message = try await appState.sendDMMessage(threadId: thread.id, content: textToSend)
             onMessageSent(message)
         } catch {
             messageText = textToSend
+        }
+    }
+
+    private func sendAttachment(data: Data, filename: String, mimeType: String) async {
+        guard let guild = appState.currentGuild else { return }
+
+        if thread.isBlocked {
+            appState.showError(title: "Cannot Send", message: "You have blocked this user", style: .toast)
+            return
+        }
+
+        isSending = true
+        defer { isSending = false }
+
+        do {
+            let upload = try await appState.realApi.uploadDMAttachment(
+                guildId: guild.id,
+                threadId: thread.id,
+                fileData: data,
+                filename: filename,
+                mimeType: mimeType
+            )
+            let content = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? filename
+                : messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+            messageText = ""
+            let message = try await appState.sendDMMessage(
+                threadId: thread.id,
+                content: content,
+                attachmentUrl: upload.attachmentUrl,
+                attachmentType: upload.attachmentType,
+                attachmentName: upload.attachmentName
+            )
+            onMessageSent(message)
+        } catch {
+            appState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
     }
 }
@@ -863,6 +949,7 @@ struct RLChatroomMessageView: View {
     
     @EnvironmentObject var appState: RLAppState
     @State private var showEditSheet = false
+    @State private var showReportReasonSheet = false
     
     var body: some View {
         RLChatMessageBubble(
@@ -871,7 +958,7 @@ struct RLChatroomMessageView: View {
             onAvatarTap: onAvatarTap,
             onEdit: message.canEdit ? { showEditSheet = true } : nil,
             onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
-            onReport: !message.isCurrentUserMessage ? { Task { await reportMessage() } } : nil,
+            onReport: !message.isCurrentUserMessage ? { showReportReasonSheet = true } : nil,
             onCopy: { appState.showSuccess("Copied to clipboard") }
         )
         .sheet(isPresented: $showEditSheet) {
@@ -883,6 +970,19 @@ struct RLChatroomMessageView: View {
                 )
                 appState.showSuccess("Message updated")
             }
+        }
+        .sheet(isPresented: $showReportReasonSheet) {
+            ReportReasonSheet(
+                title: "Why are you reporting this message?",
+                includeScam: false,
+                onReasonSelected: { reason in
+                    Task {
+                        await reportMessage(reason: reason)
+                        await MainActor.run { showReportReasonSheet = false }
+                    }
+                },
+                onCancel: { showReportReasonSheet = false }
+            )
         }
     }
     
@@ -898,19 +998,31 @@ struct RLChatroomMessageView: View {
         }
     }
     
-    private func reportMessage() async {
-        // TODO: Implement report API call
-        appState.showInfo("Report submitted for review")
+    private func reportMessage(reason: String) async {
+        guard let guildId = appState.currentGuild?.id else { return }
+        HapticFeedback.medium.trigger()
+        do {
+            _ = try await appState.realApi.reportChatroomMessage(
+                guildId: guildId,
+                chatroomId: message.chatroomId,
+                messageId: message.id,
+                reason: reason
+            )
+            appState.showSuccess("Report submitted")
+        } catch {
+            appState.showError(error, title: "Failed to Report", style: .toast)
+        }
     }
 }
 
 // MARK: - DM Message View (Using RLChatMessageBubble)
 struct RLDMMessageView: View {
     let message: RLDMMessageDTO
-    
+
     @EnvironmentObject var appState: RLAppState
     @State private var showEditSheet = false
-    
+    @State private var showReportReasonSheet = false
+
     var body: some View {
         RLChatMessageBubble(
             message: message,
@@ -918,6 +1030,7 @@ struct RLDMMessageView: View {
             isRead: message.isRead,
             onEdit: message.canEdit ? { showEditSheet = true } : nil,
             onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
+            onReport: !message.isCurrentUserMessage ? { showReportReasonSheet = true } : nil,
             onCopy: { appState.showSuccess("Copied to clipboard") }
         )
         .sheet(isPresented: $showEditSheet) {
@@ -930,8 +1043,21 @@ struct RLDMMessageView: View {
                 appState.showSuccess("Message updated")
             }
         }
+        .sheet(isPresented: $showReportReasonSheet) {
+            ReportReasonSheet(
+                title: "Why are you reporting this message?",
+                includeScam: false,
+                onReasonSelected: { reason in
+                    Task {
+                        await reportMessage(reason: reason)
+                        await MainActor.run { showReportReasonSheet = false }
+                    }
+                },
+                onCancel: { showReportReasonSheet = false }
+            )
+        }
     }
-    
+
     private func deleteMessage() async {
         do {
             try await appState.deleteDMMessage(
@@ -941,6 +1067,22 @@ struct RLDMMessageView: View {
             appState.showSuccess("Message deleted")
         } catch {
             appState.showError(error, title: "Failed to Delete Message")
+        }
+    }
+
+    private func reportMessage(reason: String) async {
+        guard let guildId = appState.currentGuild?.id else { return }
+        HapticFeedback.medium.trigger()
+        do {
+            _ = try await appState.realApi.reportDMMessage(
+                guildId: guildId,
+                threadId: message.dmId,
+                messageId: message.id,
+                reason: reason
+            )
+            appState.showSuccess("Report submitted")
+        } catch {
+            appState.showError(error, title: "Failed to Report", style: .toast)
         }
     }
 }

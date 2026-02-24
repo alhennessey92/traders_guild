@@ -10,7 +10,7 @@ import SwiftUI
 
 struct RootBottomBarSymbolButton: View {
     let symbol: String
-    let symbolDTO: TradingSymbolDTO?
+    let symbolDTO: RLTradingSymbolDTO?
     let backgroundColor: Color
     let foregroundColor: Color
     let action: () -> Void
@@ -32,7 +32,7 @@ struct RootBottomBarSymbolButton: View {
     // New init with DTO for icon/color support
     init(
         symbol: String,
-        symbolDTO: TradingSymbolDTO?,
+        symbolDTO: RLTradingSymbolDTO?,
         backgroundColor: Color,
         foregroundColor: Color,
         action: @escaping () -> Void
@@ -144,10 +144,10 @@ struct RootBottomBarSymbolButton: View {
                 action: { print("Tapped EUR/USD") }
             )
             
-            // With DTO
+            // With DTO (example - would need real RLTradingSymbolDTO)
             RootBottomBarSymbolButton(
                 symbol: "BTCUSD",
-                symbolDTO: SampleData.allTradingSymbolDTOs.first { $0.ticker == "BTCUSD" },
+                symbolDTO: nil,
                 backgroundColor: AppColors.gradientBackgroundDark,
                 foregroundColor: .white,
                 action: { print("Tapped BTC") }

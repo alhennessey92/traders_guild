@@ -12,7 +12,7 @@ import SwiftUI
 class CrosshairManager: ObservableObject {
     @Published var isActive: Bool = false
     @Published var position: CGPoint = .zero
-    @Published var targetCandle: CandleDTO?
+    @Published var targetCandle: RLCandleDTO?
     @Published var targetPrice: Double = 0
     
     func activate(at point: CGPoint, coordinateSystem: ChartCoordinateSystem, chartData: ChartDataManager) {
@@ -53,7 +53,7 @@ struct CrosshairView: View {
     var indicatorManager: IndicatorManager? = nil
     
     // Current timeframe for time formatting
-    var timeframe: ChartTimeframe = .h1
+    var timeframe: RLChartTimeframe = .h1
     
     /// Backwards-compatible initializer (creates fallback ChartDataManager)
     init(crosshairManager: CrosshairManager, chartSize: CGSize) {
@@ -77,7 +77,7 @@ struct CrosshairView: View {
         rsiPanelActive: Bool,
         rsiPanelHeight: CGFloat,
         indicatorManager: IndicatorManager?,
-        timeframe: ChartTimeframe
+        timeframe: RLChartTimeframe
     ) {
         self.crosshairManager = crosshairManager
         self.chartSize = chartSize
@@ -181,7 +181,7 @@ struct CrosshairPriceLabel: View {
 
 struct CrosshairTimeLabel: View {
     let timestamp: Date
-    var timeframe: ChartTimeframe = .h1
+    var timeframe: RLChartTimeframe = .h1
     
     /// Format time based on timeframe
     /// - Daily and above: Just show date (no time)
@@ -231,13 +231,13 @@ struct CrosshairTimeLabel: View {
 // MARK: - Compact Crosshair Info Popup (Subtle Design)
 
 struct CrosshairInfoPopupCompact: View {
-    let candle: CandleDTO?
+    let candle: RLCandleDTO?
     let price: Double
     let position: CGPoint
     let chartSize: CGSize
     let chartData: ChartDataManager
     var indicatorManager: IndicatorManager? = nil
-    var timeframe: ChartTimeframe = .h1
+    var timeframe: RLChartTimeframe = .h1
     
     private var popupPosition: CGPoint {
         var x = position.x + 60

@@ -446,7 +446,7 @@ enum PriceSource: String, Codable, CaseIterable {
     case hlc3 = "HLC/3"
     case ohlc4 = "OHLC/4"
     
-    func price(from candle: CandleDTO) -> Double {
+    func price(from candle: RLCandleDTO) -> Double {
         switch self {
         case .open: return candle.open
         case .high: return candle.high

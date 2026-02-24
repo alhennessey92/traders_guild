@@ -7,16 +7,46 @@
 
 import Foundation
 
+enum APIRoutingMode: String {
+    case directServices = "DIRECT_SERVICES"
+    case apiGateway = "API_GATEWAY"
+}
+
 // A struct to hold app constants like API endpoints, keys, and feature flags
 struct AppConfig {
-    // Base URL for your backend API
+    // Base URL for your backend API (legacy)
     static let baseURL = "https://api.yourapp.com"
-    
+
     // Apple Sign-In Client ID for authentication
     static let appleSignInClientID = "com.yourapp.ios"
-    
-    // Other constants could include:
-    // - timeout durations
-    // - default image URLs
-    // - third-party API keys
+
+    // Routing mode for dev-first direct services vs future gateway
+    static var apiRoutingMode: APIRoutingMode {
+        if let raw = ProcessInfo.processInfo.environment["TG_API_ROUTING_MODE"],
+           let mode = APIRoutingMode(rawValue: raw.uppercased()) {
+            return mode
+        }
+
+        #if DEBUG
+        return .directServices
+        #else
+        return .apiGateway
+        #endif
+    }
+
+    static var developmentGatewayBaseURL: String {
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV_SIMULATOR"]
+            ?? ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV"]
+            ?? "http://localhost:30080/api/v1"
+        #else
+        return ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV_DEVICE"]
+            ?? ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV"]
+            ?? "http://localhost:30080/api/v1"
+        #endif
+    }
+
+    static var productionGatewayBaseURL: String {
+        ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_PROD"] ?? "https://api.tradersguild.com/api/v1"
+    }
 }

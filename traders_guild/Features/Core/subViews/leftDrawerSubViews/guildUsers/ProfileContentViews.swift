@@ -19,7 +19,7 @@ struct ProfileContentView: View {
     // Profile data
     let extendedProfile: RLUserProfileDTO?
     let markersSummary: RLUserGlobalStatisticsDTO?
-    let userMarkers: [TopMarkerDTO]
+    let userMarkers: [RLTopMarkerDTO]
     let awards: [RLUserAwardDTO]
     let awardsSummary: RLAwardsSummaryDTO?
     let stats: [ProfileStatDTO]
@@ -27,9 +27,17 @@ struct ProfileContentView: View {
     // Configuration
     let isCurrentUser: Bool
     let username: String
+    var tabs: [ProfileTab] = [.overview, .markers, .awards]
+    var activityItems: [RLActivityItem] = []
+    var isActivityLoading: Bool = false
+    var activityLoadError: String? = nil
+    var guildReputationProfile: RLReputationProfileDTO? = nil
+    var guildAccuracyProfile: RLAccuracyProfileDTO? = nil
+    var onOpenGuildReputationBreakdown: (() -> Void)? = nil
+    var onOpenGuildAccuracyBreakdown: (() -> Void)? = nil
     
     // Callbacks
-    var onMarkerTap: ((TopMarkerDTO) -> Void)? = nil
+    var onMarkerTap: ((RLTopMarkerDTO) -> Void)? = nil
     
     @State private var selectedTab: ProfileTab = .overview
     
@@ -38,6 +46,7 @@ struct ProfileContentView: View {
             // Tab bar - unified style
             UnifiedTabBar(
                 selectedTab: $selectedTab,
+                tabs: tabs,
                 size: .compact,
                 theme: .blue,
                 countForTab: { tab in getCountForTab(tab) },
@@ -55,7 +64,11 @@ struct ProfileContentView: View {
                         OverviewTabContent(
                             extendedProfile: extendedProfile,
                             stats: stats,
-                            isCurrentUser: isCurrentUser
+                            isCurrentUser: isCurrentUser,
+                            guildReputationProfile: guildReputationProfile,
+                            guildAccuracyProfile: guildAccuracyProfile,
+                            onOpenGuildReputationBreakdown: onOpenGuildReputationBreakdown,
+                            onOpenGuildAccuracyBreakdown: onOpenGuildAccuracyBreakdown
                         )
                     case .markers:
                         MarkersTabContent(
@@ -67,6 +80,12 @@ struct ProfileContentView: View {
                         AwardsTabContent(
                             awards: awards,
                             summary: awardsSummary
+                        )
+                    case .activity:
+                        ActivityTabContent(
+                            items: activityItems,
+                            isLoading: isActivityLoading,
+                            errorMessage: activityLoadError
                         )
                     }
                 }
@@ -81,6 +100,7 @@ struct ProfileContentView: View {
         case .overview: return 0 // Don't show count for overview
         case .markers: return userMarkers.count
         case .awards: return awards.filter { $0.isEarned }.count
+        case .activity: return activityItems.count
         }
     }
 }
@@ -93,12 +113,21 @@ struct OverviewTabContent: View {
     let extendedProfile: RLUserProfileDTO?
     let stats: [ProfileStatDTO]
     let isCurrentUser: Bool
+    let guildReputationProfile: RLReputationProfileDTO?
+    let guildAccuracyProfile: RLAccuracyProfileDTO?
+    var onOpenGuildReputationBreakdown: (() -> Void)? = nil
+    var onOpenGuildAccuracyBreakdown: (() -> Void)? = nil
     
     var body: some View {
         VStack(spacing: 16) {
             // Stats grid
             if !stats.isEmpty {
                 statsSection
+            }
+
+            if isCurrentUser,
+               (onOpenGuildReputationBreakdown != nil || onOpenGuildAccuracyBreakdown != nil) {
+                guildBreakdownEntrySection
             }
             
             // Profile info sections
@@ -148,6 +177,32 @@ struct OverviewTabContent: View {
     }
     
     // MARK: - Personal Info Section
+
+    private var guildBreakdownEntrySection: some View {
+        VStack(spacing: 10) {
+            if let onOpenGuildReputationBreakdown {
+                BreakdownEntryCard(
+                    title: "Guild Reputation Breakdown",
+                    subtitle: "Tier, weekly delta, contribution sources",
+                    value: guildReputationProfile.map { "\($0.reputation)" } ?? "--",
+                    icon: "shield.checkered",
+                    iconColor: AppColors.accentColor,
+                    action: onOpenGuildReputationBreakdown
+                )
+            }
+
+            if let onOpenGuildAccuracyBreakdown {
+                BreakdownEntryCard(
+                    title: "Guild Accuracy Breakdown",
+                    subtitle: "Win/loss, streaks, R:R metrics",
+                    value: guildAccuracyProfile?.accuracyFormatted ?? "--",
+                    icon: "target",
+                    iconColor: .green,
+                    action: onOpenGuildAccuracyBreakdown
+                )
+            }
+        }
+    }
     
     private func personalInfoSection(profile: RLUserProfileDTO) -> some View {
         ProfileInfoCard(title: "Personal", icon: "person.fill") {
@@ -297,14 +352,67 @@ struct OverviewTabContent: View {
     }
 }
 
+struct BreakdownEntryCard: View {
+    let title: String
+    let subtitle: String
+    let value: String
+    let icon: String
+    let iconColor: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.headline)
+                    .foregroundColor(iconColor)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.whiteText)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Text(value)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.whiteText)
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.04))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 // MARK: - ================================================================================================
 // MARK: - MARKERS TAB CONTENT
 // MARK: - ================================================================================================
 
 struct MarkersTabContent: View {
     let summary: RLUserGlobalStatisticsDTO?
-    let markers: [TopMarkerDTO]
-    var onMarkerTap: ((TopMarkerDTO) -> Void)? = nil
+    let markers: [RLTopMarkerDTO]
+    var onMarkerTap: ((RLTopMarkerDTO) -> Void)? = nil
     
     var body: some View {
         VStack(spacing: 16) {
@@ -396,7 +504,7 @@ struct MarkersTabContent: View {
 // MARK: - Profile Marker Card
 
 struct ProfileMarkerCard: View {
-    let marker: TopMarkerDTO
+    let marker: RLTopMarkerDTO
     let onTap: () -> Void
     
     @State private var isPressed = false
@@ -411,17 +519,17 @@ struct ProfileMarkerCard: View {
                 VStack(spacing: 4) {
                     ZStack {
                         Circle()
-                            .fill(marker.type.color.opacity(0.2))
+                            .fill(marker.markerTypeEnum.color.opacity(0.2))
                             .frame(width: 36, height: 36)
                         
-                        Image(systemName: marker.type.icon)
+                        Image(systemName: marker.markerTypeEnum.icon)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(marker.type.color)
+                            .foregroundColor(marker.markerTypeEnum.color)
                     }
                     
-                    Text(marker.type.rawValue)
+                    Text(marker.markerTypeEnum.rawValue)
                         .font(.system(size: 8, weight: .medium))
-                        .foregroundColor(marker.type.color)
+                        .foregroundColor(marker.markerTypeEnum.color)
                         .lineLimit(1)
                 }
                 .frame(width: 44)
@@ -492,6 +600,177 @@ struct ProfileMarkerCard: View {
                 isPressed = pressing
             }
         }, perform: {})
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - ACTIVITY TAB CONTENT
+// MARK: - ================================================================================================
+
+struct ActivityTabContent: View {
+    let items: [RLActivityItem]
+    let isLoading: Bool
+    let errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            if isLoading {
+                ProgressView()
+                    .tint(AppColors.accentColor)
+                    .padding(.top, 24)
+            } else if let errorMessage {
+                UnifiedEmptyState(
+                    icon: "exclamationmark.triangle",
+                    title: "Unable to load activity",
+                    subtitle: errorMessage
+                )
+                .padding(.top, 16)
+            } else if items.isEmpty {
+                UnifiedEmptyState(
+                    icon: "clock.badge.questionmark",
+                    title: "No guild activity yet",
+                    subtitle: "Your current guild activity will appear here."
+                )
+                .padding(.top, 20)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        ProfileActivityRow(item: item, isLast: index == items.count - 1)
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white.opacity(0.04))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                )
+            }
+        }
+    }
+}
+
+private struct ProfileActivityRow: View {
+    let item: RLActivityItem
+    let isLast: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(typeColor)
+                    .frame(width: 9, height: 9)
+
+                if !isLast {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.1))
+                        .frame(width: 2)
+                        .frame(maxHeight: .infinity)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    Image(systemName: typeIcon)
+                        .font(.caption)
+                        .foregroundColor(typeColor)
+                    Text(item.title)
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText)
+                }
+
+                Text(item.description)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+
+                HStack(spacing: 8) {
+                    Text(relativeTimestamp)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText.opacity(0.8))
+                    if let guildName = item.guildName {
+                        Text("•")
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText.opacity(0.5))
+                        Text(guildName)
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText.opacity(0.8))
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    if let guildDelta = item.guildRepDelta {
+                        ProfileDeltaBadge(label: "Guild", value: guildDelta)
+                    }
+                    if let globalDelta = item.globalRepDelta {
+                        ProfileDeltaBadge(label: "Global", value: globalDelta)
+                    }
+                    if let metricDelta = item.metricDelta, let metricLabel = item.metricLabel {
+                        ProfileDeltaBadge(
+                            label: metricLabel.replacingOccurrences(of: "_", with: " ").capitalized,
+                            value: metricDelta
+                        )
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.bottom, isLast ? 0 : 14)
+    }
+
+    private var typeIcon: String {
+        switch item.type {
+        case "marker": return "mappin.circle.fill"
+        case "reputation": return "shield.checkered"
+        case "achievement": return "medal.fill"
+        case "guild": return "person.3.fill"
+        case "event": return "calendar.badge.clock"
+        case "role": return "person.crop.circle.badge.checkmark"
+        case "report": return "exclamationmark.bubble.fill"
+        case "moderation": return "gavel.fill"
+        default: return "clock.fill"
+        }
+    }
+
+    private var typeColor: Color {
+        switch item.type {
+        case "marker": return .red
+        case "reputation": return AppColors.accentColor
+        case "achievement": return .yellow
+        case "guild": return .blue
+        case "event": return .mint
+        case "role": return .indigo
+        case "report": return .orange
+        case "moderation": return .purple
+        default: return AppColors.greyText
+        }
+    }
+
+    private var relativeTimestamp: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: item.timestamp, relativeTo: Date())
+    }
+}
+
+private struct ProfileDeltaBadge: View {
+    let label: String
+    let value: Int
+
+    private var tint: Color {
+        value >= 0 ? .green : .red
+    }
+
+    var body: some View {
+        Text("\(label) \(value >= 0 ? "+" : "")\(value)")
+            .font(.caption2)
+            .foregroundColor(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.15))
+            .cornerRadius(6)
     }
 }
 
@@ -766,107 +1045,6 @@ struct AwardCard: View {
                 )
         )
         .opacity(award.isEarned ? 1.0 : 0.7)
-    }
-}
-
-// MARK: - ================================================================================================
-// MARK: - Legacy Conversions (Sample Data Support)
-// MARK: - ================================================================================================
-
-extension RLUserProfileDTO {
-    static func fromLegacy(_ legacy: UserProfileExtendedDTO) -> RLUserProfileDTO {
-        RLUserProfileDTO(
-            userId: legacy.userId,
-            bio: legacy.bio,
-            location: legacy.location,
-            timezone: legacy.timezone,
-            experienceLevel: legacy.experience.rawValue.lowercased(),
-            tradingStyle: legacy.tradingStyle,
-            preferredPairs: legacy.preferredPairs,
-            socialLinks: legacy.socialLinks.map {
-                RLSocialLinkItem(
-                    platform: $0.platform.rawValue.lowercased(),
-                    username: $0.username,
-                    url: $0.url
-                )
-            },
-            tradingInterests: legacy.interests.map {
-                RLTradingInterestItem(
-                    name: $0.name,
-                    icon: $0.icon,
-                    isPrimary: $0.isPrimary
-                )
-            },
-            isProfilePublic: true,
-            showOnlineStatus: true,
-            createdAt: legacy.joinedPlatform,
-            updatedAt: legacy.lastActive
-        )
-    }
-}
-
-extension RLUserGlobalStatisticsDTO {
-    static func fromLegacy(_ legacy: UserMarkersSummaryDTO, userId: UUID) -> RLUserGlobalStatisticsDTO {
-        let successfulMarkers = Int(Double(legacy.totalMarkers) * legacy.accuracyRate)
-        let markersByType = legacy.markersByType.reduce(into: [String: Int]()) { result, entry in
-            result[entry.key.rawValue] = entry.value
-        }
-        
-        return RLUserGlobalStatisticsDTO(
-            userId: userId,
-            totalMarkersPlaced: legacy.totalMarkers,
-            successfulMarkers: successfulMarkers,
-            accuracyRate: legacy.accuracyRate,
-            totalLikesReceived: legacy.totalLikes,
-            totalCommentsMade: legacy.totalComments,
-            currentStreakDays: 0,
-            bestStreakDays: 0,
-            totalGuildsJoined: 0,
-            totalAwardsEarned: 0,
-            totalAwardPoints: 0,
-            topSymbols: legacy.topSymbols,
-            markersByType: markersByType,
-            lastCalculatedAt: Date()
-        )
-    }
-}
-
-extension RLUserAwardDTO {
-    static func fromLegacy(_ legacy: UserAwardDTO, membershipId: UUID, guildId: UUID) -> RLUserAwardDTO {
-        RLUserAwardDTO(
-            id: legacy.id,
-            membershipId: membershipId,
-            guildId: guildId,
-            awardTypeId: legacy.awardId,
-            name: legacy.name,
-            description: legacy.description,
-            icon: legacy.icon,
-            category: legacy.category.rawValue.lowercased(),
-            rarity: legacy.rarity.rawValue.lowercased(),
-            pointsValue: legacy.rarity.pointValue,
-            progress: legacy.progress,
-            currentValue: nil,
-            isNew: legacy.isNew,
-            earnedAt: legacy.earnedAt
-        )
-    }
-}
-
-extension RLAwardsSummaryDTO {
-    static func fromLegacy(_ legacy: AwardsSummaryDTO) -> RLAwardsSummaryDTO {
-        let rarityBreakdown = legacy.rarityBreakdown.reduce(into: [String: Int]()) { result, entry in
-            result[entry.key.rawValue.lowercased()] = entry.value
-        }
-        let recentAwards = legacy.recentAwards.map {
-            RLUserAwardDTO.fromLegacy($0, membershipId: UUID(), guildId: UUID())
-        }
-        
-        return RLAwardsSummaryDTO(
-            totalAwards: legacy.totalAwards,
-            totalPoints: legacy.totalPoints,
-            rarityBreakdown: rarityBreakdown,
-            recentAwards: recentAwards
-        )
     }
 }
 

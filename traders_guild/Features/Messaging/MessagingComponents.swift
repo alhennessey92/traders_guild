@@ -14,41 +14,6 @@
 import SwiftUI
 
 // MARK: - ================================================================================================
-// MARK: - CHAT MESSAGE PROTOCOL
-// MARK: - ================================================================================================
-
-/// Protocol that all message types conform to for unified rendering
-/// Implement this on your message DTOs to use the unified ChatMessageBubble
-protocol ChatMessageDisplayable: Identifiable {
-    var id: UUID { get }
-    var content: String { get }
-    var timestampFormatted: String { get }
-    var isEdited: Bool { get }
-    var isCurrentUserMessage: Bool { get }
-    var canEdit: Bool { get }
-    var canDelete: Bool { get }
-    
-    // Author info - provide these for user display
-    var authorDisplayName: String { get }
-    var authorInitials: String { get }
-    var authorAvatarUrl: String? { get }
-    var authorIsOnline: Bool { get }
-    var authorRole: MemberRole? { get }
-    var authorReputation: Int? { get }
-    var authorIsFriend: Bool { get }
-    var authorIsBlocked: Bool { get }
-}
-
-// MARK: - Default implementations for simpler message types
-extension ChatMessageDisplayable {
-    var authorRole: MemberRole? { nil }
-    var authorReputation: Int? { nil }
-    var authorIsFriend: Bool { false }
-    var authorIsBlocked: Bool { false }
-    var authorAvatarUrl: String? { nil }
-}
-
-// MARK: - ================================================================================================
 // MARK: - CHAT CONTEXT ENUM
 // MARK: - ================================================================================================
 
@@ -81,230 +46,6 @@ enum ChatContext {
     /// Whether to show read receipts (only for DMs)
     var showsReadReceipts: Bool {
         self == .directMessage
-    }
-}
-
-// MARK: - ================================================================================================
-// MARK: - UNIFIED MESSAGE BUBBLE
-// MARK: - ================================================================================================
-
-/// Unified message bubble view that works with any ChatMessageDisplayable
-/// Use this as the base for all chat message rendering
-struct ChatMessageBubble<Message: ChatMessageDisplayable>: View {
-    let message: Message
-    let context: ChatContext
-    let isRead: Bool  // Only used for DMs
-    let onAvatarTap: (() -> Void)?
-    let onEdit: (() -> Void)?
-    let onDelete: (() -> Void)?
-    let onReport: (() -> Void)?
-    let onCopy: (() -> Void)?
-    
-    @EnvironmentObject var appState: AppState
-    @State private var showDeleteConfirmation = false
-    
-    init(
-        message: Message,
-        context: ChatContext,
-        isRead: Bool = false,
-        onAvatarTap: (() -> Void)? = nil,
-        onEdit: (() -> Void)? = nil,
-        onDelete: (() -> Void)? = nil,
-        onReport: (() -> Void)? = nil,
-        onCopy: (() -> Void)? = nil
-    ) {
-        self.message = message
-        self.context = context
-        self.isRead = isRead
-        self.onAvatarTap = onAvatarTap
-        self.onEdit = onEdit
-        self.onDelete = onDelete
-        self.onReport = onReport
-        self.onCopy = onCopy
-    }
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            if message.isCurrentUserMessage {
-                Spacer()
-            } else if context.showsAvatar {
-                avatarView
-            }
-            
-            VStack(alignment: message.isCurrentUserMessage ? .trailing : .leading, spacing: 4) {
-                // User info header (for group chats, non-current user)
-                if !message.isCurrentUserMessage && context.showsUserInfoHeader {
-                    userInfoHeader
-                }
-                
-                // Message bubble
-                messageBubbleContent
-                    .contextMenu { contextMenuItems }
-                
-                // Timestamp and status row
-                timestampRow
-            }
-            
-            if !message.isCurrentUserMessage {
-                Spacer()
-            }
-        }
-        .alert("Delete Message", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                onDelete?()
-            }
-        } message: {
-            Text("Are you sure you want to delete this message? This cannot be undone.")
-        }
-    }
-    
-    // MARK: - Avatar View
-    @ViewBuilder
-    private var avatarView: some View {
-        Button(action: { onAvatarTap?() }) {
-            ChatAvatar(
-                initials: message.authorInitials,
-                avatarURL: message.authorAvatarUrl,
-                isOnline: message.authorIsOnline,
-                size: 32
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    // MARK: - User Info Header
-    @ViewBuilder
-    private var userInfoHeader: some View {
-        HStack(spacing: 2) {
-            // Blocked indicator
-            if message.authorIsBlocked {
-                Image(systemName: "nosign")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.bearCandleRed)
-            }
-            
-            // Username
-            Text(message.authorDisplayName)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(message.authorIsBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.9))
-            
-            // Friend indicator
-            if message.authorIsFriend {
-                Image(systemName: "person.crop.circle")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(message.authorIsBlocked ? AppColors.greyText : AppColors.friendAccent)
-                    .padding(.leading, 3)
-            }
-            
-            // Role and reputation (for full detail contexts)
-            if context.showsFullUserDetails, let role = message.authorRole {
-                Circle()
-                    .fill(AppColors.whiteText.opacity(0.7))
-                    .frame(width: 3, height: 3)
-                    .padding(.horizontal, 3)
-                
-                Text(role.rawValue)
-                    .font(.caption)
-                    .foregroundColor(role.roleForegroundColor)
-                    .fontWeight(role.roleFontWeight)
-                
-                if let reputation = message.authorReputation {
-                    Circle()
-                        .fill(AppColors.whiteText.opacity(0.7))
-                        .frame(width: 3, height: 3)
-                        .padding(.horizontal, 3)
-                    
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    
-                    Text("\(reputation)")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.accentColor)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Message Bubble Content
-    private var messageBubbleContent: some View {
-        HStack(spacing: 8) {
-            Text(message.content)
-                .font(.subheadline)
-                .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
-            
-            if message.isEdited {
-                Text("(edited)")
-                    .font(.caption2)
-                    .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            message.isCurrentUserMessage ?
-            AppColors.accentDarkColor :
-            Color.gray.opacity(0.2)
-        )
-        .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
-    }
-    
-    // MARK: - Timestamp Row
-    private var timestampRow: some View {
-        HStack(spacing: 4) {
-            Text(message.timestampFormatted)
-                .font(.caption2)
-                .foregroundColor(.secondary)
-            
-            // Read receipt for DMs
-            if context.showsReadReceipts && message.isCurrentUserMessage {
-                Image(systemName: isRead ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(.caption2)
-                    .foregroundColor(isRead ? AppColors.accentColor : .secondary)
-            }
-        }
-    }
-    
-    // MARK: - Context Menu
-    @ViewBuilder
-    private var contextMenuItems: some View {
-        if message.canEdit, let editAction = onEdit {
-            Button {
-                editAction()
-            } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-        }
-        
-        if message.canDelete, let deleteAction = onDelete {
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        
-        Button {
-            UIPasteboard.general.string = message.content
-            onCopy?()
-        } label: {
-            Label("Copy", systemImage: "doc.on.doc")
-        }
-        
-        if !message.isCurrentUserMessage, let reportAction = onReport {
-            Divider()
-            Button(role: .destructive) {
-                reportAction()
-            } label: {
-                Label("Report", systemImage: "exclamationmark.triangle")
-            }
-        }
     }
 }
 
@@ -401,29 +142,53 @@ struct ChatInputFooter: View {
     let placeholder: String
     let isSending: Bool
     let onSend: () -> Void
-    var onAttachment: (() -> Void)? = nil
-    var onVoice: (() -> Void)? = nil
-    
+
+    /// Callback when user selects a file/photo attachment: (fileData, filename, mimeType)
+    var onAttachmentSelected: ((Data, String, String) -> Void)? = nil
+
     /// Optional: For sheet contexts where we need to expand to full height
     var selectedDetent: Binding<PresentationDetent>? = nil
     @FocusState private var isInputFocused: Bool
-    
+
+    /// Speech recognition service — self-contained dictation
+    @StateObject private var speechService = SpeechRecognitionService()
+
+    /// Attachment picker state
+    @State private var showPhotoPicker = false
+    @State private var showDocumentPicker = false
+
     var body: some View {
         VStack(spacing: 0) {
+            // Recording indicator bar
+            if speechService.isRecording {
+                recordingIndicator
+            }
+
             Divider()
                 .background(Color.gray.opacity(0.3))
-            
+
             HStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    // Plus/attachment button
-                    Button(action: { onAttachment?() }) {
+                    // Plus/attachment button — shows menu
+                    Menu {
+                        Button {
+                            showPhotoPicker = true
+                        } label: {
+                            Label("Photo", systemImage: "photo.fill")
+                        }
+                        Button {
+                            showDocumentPicker = true
+                        } label: {
+                            Label("File", systemImage: "doc.fill")
+                        }
+                    } label: {
                         Image(systemName: "plus")
                             .font(.title3)
                             .foregroundColor(.secondary)
                             .frame(width: 32, height: 32)
                     }
                     .compositingGroup()
-                    
+
                     // Text field
                     TextField(placeholder, text: $messageText)
                         .font(.subheadline)
@@ -435,17 +200,21 @@ struct ChatInputFooter: View {
                                 onSend()
                             }
                         }
-                    
+
                     HStack(spacing: 8) {
-                        // Mic button
-                        Button(action: { onVoice?() }) {
-                            Image(systemName: "mic.fill")
+                        // Mic button — toggles dictation
+                        Button(action: {
+                            HapticFeedback.light.trigger()
+                            speechService.toggleRecording()
+                        }) {
+                            Image(systemName: speechService.isRecording ? "mic.circle.fill" : "mic.fill")
                                 .font(.title3)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(speechService.isRecording ? .red : .secondary)
                                 .frame(width: 32, height: 32)
+                                .symbolEffect(.pulse, isActive: speechService.isRecording)
                         }
                         .compositingGroup()
-                        
+
                         // Send button
                         if isSending {
                             ProgressView()
@@ -478,11 +247,91 @@ struct ChatInputFooter: View {
             }
         }
         .compositingGroup()
+        .onChange(of: speechService.transcribedText) { _, newValue in
+            // Append transcribed text to message input
+            if !newValue.isEmpty {
+                if messageText.isEmpty {
+                    messageText = newValue
+                } else {
+                    // If user had existing text, append with a space
+                    let trimmedExisting = messageText.trimmingCharacters(in: .whitespaces)
+                    messageText = trimmedExisting + " " + newValue
+                }
+            }
+        }
+        .onChange(of: speechService.isRecording) { _, isRecording in
+            if !isRecording && !speechService.transcribedText.isEmpty {
+                // Recording stopped — final text is already in messageText via transcribedText observer
+                speechService.transcribedText = ""
+            }
+        }
+        .onDisappear {
+            speechService.cleanup()
+        }
+        .fullScreenCover(isPresented: $showPhotoPicker) {
+            PhotoPickerView(
+                onImageSelected: { data, filename, mimeType in
+                    showPhotoPicker = false
+                    onAttachmentSelected?(data, filename, mimeType)
+                },
+                onCancel: { showPhotoPicker = false }
+            )
+            .ignoresSafeArea()
+        }
+        .fullScreenCover(isPresented: $showDocumentPicker) {
+            DocumentPickerView(
+                onDocumentSelected: { data, filename, mimeType in
+                    showDocumentPicker = false
+                    onAttachmentSelected?(data, filename, mimeType)
+                },
+                onCancel: { showDocumentPicker = false }
+            )
+            .ignoresSafeArea()
+        }
     }
-    
+
+    // MARK: - Recording Indicator
+
+    private var recordingIndicator: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
+                .opacity(speechService.isRecording ? 1.0 : 0.3)
+                .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: speechService.isRecording)
+
+            Text("Listening...")
+                .font(.caption)
+                .foregroundColor(.red)
+
+            Spacer()
+
+            if let errorMessage = speechService.errorMessage {
+                Text(errorMessage)
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+                    .lineLimit(1)
+            }
+
+            Button(action: {
+                speechService.stopRecording()
+            }) {
+                Text("Stop")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(Color.red.opacity(0.1))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.2), value: speechService.isRecording)
+    }
+
     private var sendButton: some View {
         let isEmpty = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        
+
         return Button(action: onSend) {
             Image(systemName: "chevron.forward.2")
                 .font(.title3)
@@ -586,7 +435,7 @@ struct ChatEmptyStateView: View {
 // MARK: - ================================================================================================
 
 /// Unified scrollable messages container with auto-scroll behavior
-struct ChatScrollView<Message: ChatMessageDisplayable, Content: View>: View {
+struct ChatScrollView<Message: RLChatMessageDisplayable, Content: View>: View {
     let messages: [Message]
     @ViewBuilder let content: () -> Content
     
@@ -828,44 +677,6 @@ extension View {
 }
 
 // MARK: - ================================================================================================
-// MARK: - DTO PROTOCOL CONFORMANCES
-// MARK: - ================================================================================================
-// These extensions make existing DTOs work with the unified ChatMessageBubble component
-
-extension ChatroomMessageDTO: ChatMessageDisplayable {
-    var authorDisplayName: String { author.globalMember.username }
-    var authorInitials: String { String(author.globalMember.username.prefix(2)) }
-    var authorAvatarUrl: String? { author.globalMember.avatarURL }
-    var authorIsOnline: Bool { author.isOnline }
-    var authorRole: MemberRole? { author.roleInGuild }
-    var authorReputation: Int? { author.reputation }
-    var authorIsFriend: Bool { author.isFriend }
-    var authorIsBlocked: Bool { author.isBlocked }
-}
-
-extension DMMessageDTO: ChatMessageDisplayable {
-    var authorDisplayName: String { author.globalMember.username }
-    var authorInitials: String { String(author.globalMember.username.prefix(2)) }
-    var authorAvatarUrl: String? { author.globalMember.avatarURL }
-    var authorIsOnline: Bool { author.isOnline }
-    var authorRole: MemberRole? { nil }  // DMs don't show role
-    var authorReputation: Int? { nil }   // DMs don't show reputation
-    var authorIsFriend: Bool { author.isFriend }
-    var authorIsBlocked: Bool { author.isBlocked }
-}
-
-extension ChartChatMessageDTO: ChatMessageDisplayable {
-    var authorDisplayName: String { author.globalMember.username }
-    var authorInitials: String { String(author.globalMember.username.prefix(2)) }
-    var authorAvatarUrl: String? { author.globalMember.avatarURL }
-    var authorIsOnline: Bool { author.isOnline }
-    var authorRole: MemberRole? { author.roleInGuild }
-    var authorReputation: Int? { author.reputation }
-    var authorIsFriend: Bool { author.isFriend }
-    var authorIsBlocked: Bool { author.isBlocked }
-}
-
-// MARK: - ================================================================================================
 // MARK: - RL MESSAGE PROTOCOL (for RLAppState-based messaging)
 // MARK: - ================================================================================================
 
@@ -878,16 +689,22 @@ protocol RLChatMessageDisplayable: Identifiable {
     var isCurrentUserMessage: Bool { get }
     var canEdit: Bool { get }
     var canDelete: Bool { get }
-    
+
     // Author info
-    var authorDisplayName: String { get }
+    var authorUsername: String { get }
     var authorInitials: String { get }
     var authorAvatarUrl: String? { get }
     var authorIsOnline: Bool { get }
     var authorRole: RLMemberRole { get }
     var authorReputation: Int { get }
+    var authorAccuracy: Double? { get }
     var authorIsFriend: Bool { get }
     var authorIsBlocked: Bool { get }
+
+    // Attachment info
+    var attachmentUrl: String? { get }
+    var attachmentType: String? { get }
+    var attachmentName: String? { get }
 }
 
 // MARK: - ================================================================================================
@@ -991,7 +808,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             }
             
             // Username - always grey/white, NOT role colored
-            Text(message.authorDisplayName)
+            Text(message.authorUsername)
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(message.authorIsBlocked ? AppColors.greyText : AppColors.whiteText.opacity(0.9))
@@ -1005,48 +822,40 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                     .padding(.leading, 3)
             }
             
-            // Role and reputation (for full detail contexts like guild chatrooms)
+            // Role · reputation · accuracy (unified with rest of app: announcements, markers, etc.)
             if context.showsFullUserDetails {
-                Circle()
-                    .fill(AppColors.whiteText.opacity(0.7))
-                    .frame(width: 3, height: 3)
-                    .padding(.horizontal, 3)
-                
-                // Role text gets role color
-                Text(message.authorRole.displayName)
-                    .font(.caption)
-                    .foregroundColor(message.authorRole.color.opacity(0.9))
-                    .fontWeight(message.authorRole.canModerate ? .bold : .regular)
-                
-                Circle()
-                    .fill(AppColors.whiteText.opacity(0.7))
-                    .frame(width: 3, height: 3)
-                    .padding(.horizontal, 3)
-                
-                Image(systemName: "shield.pattern.checkered")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-                
-                Text("\(message.authorReputation)")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.accentColor)
+                UnifiedRoleBadge(
+                    roleName: message.authorRole.displayName,
+                    roleColor: message.authorRole.color,
+                    reputation: message.authorReputation,
+                    accuracy: message.authorAccuracy.map { "\(Int($0 * 100))%" },
+                    showReputation: true,
+                    fontSize: .caption,
+                    iconSize: .caption2
+                )
             }
         }
     }
     
     // MARK: - Message Bubble Content
     private var messageBubbleContent: some View {
-        HStack(spacing: 8) {
-            Text(message.content)
-                .font(.subheadline)
-                .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
-            
-            if message.isEdited {
-                Text("(edited)")
-                    .font(.caption2)
-                    .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            // Attachment preview (if present)
+            if let attachmentUrl = message.attachmentUrl, !attachmentUrl.isEmpty {
+                attachmentView(url: attachmentUrl, type: message.attachmentType, name: message.attachmentName)
+            }
+
+            // Text content + edited indicator
+            HStack(spacing: 8) {
+                Text(message.content)
+                    .font(.subheadline)
+                    .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
+
+                if message.isEdited {
+                    Text("(edited)")
+                        .font(.caption2)
+                        .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -1057,6 +866,70 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             Color.gray.opacity(0.2)
         )
         .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
+    }
+
+    // MARK: - Attachment View
+    @ViewBuilder
+    private func attachmentView(url: String, type: String?, name: String?) -> some View {
+        let isImage = type?.hasPrefix("image/") == true
+
+        if isImage, let imageUrl = URL(string: url) {
+            // Image attachment — show inline preview
+            AsyncImage(url: imageUrl) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 220, maxHeight: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                case .failure:
+                    fileAttachmentRow(name: name, type: type)
+                case .empty:
+                    ProgressView()
+                        .frame(width: 120, height: 80)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        } else {
+            // Non-image attachment — show file row
+            fileAttachmentRow(name: name, type: type)
+        }
+    }
+
+    private func fileAttachmentRow(name: String?, type: String?) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: fileIcon(for: type))
+                .font(.title3)
+                .foregroundColor(message.isCurrentUserMessage ? .white : AppColors.accentColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name ?? "Attachment")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
+                    .lineLimit(1)
+
+                Text(type ?? "File")
+                    .font(.caption2)
+                    .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+            }
+        }
+        .padding(8)
+        .background(
+            (message.isCurrentUserMessage ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func fileIcon(for mimeType: String?) -> String {
+        guard let type = mimeType else { return "doc.fill" }
+        if type.hasPrefix("image/") { return "photo.fill" }
+        if type == "application/pdf" { return "doc.text.fill" }
+        if type == "text/plain" { return "doc.plaintext.fill" }
+        if type == "application/zip" { return "doc.zipper" }
+        return "doc.fill"
     }
     
     // MARK: - Timestamp Row
@@ -1117,23 +990,37 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
 // MARK: - ================================================================================================
 
 extension RLChatroomMessageDTO: RLChatMessageDisplayable {
-    var authorDisplayName: String { author.displayName }
+    var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: RLMemberRole { author.memberRole }
     var authorReputation: Int { author.reputation }
+    var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
 }
 
 extension RLDMMessageDTO: RLChatMessageDisplayable {
-    var authorDisplayName: String { author.displayName }
+    var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }
     var authorIsOnline: Bool { author.isOnline }
     var authorRole: RLMemberRole { author.memberRole }
     var authorReputation: Int { author.reputation }
+    var authorAccuracy: Double? { author.accuracyRate }
+    var authorIsFriend: Bool { author.isFriend }
+    var authorIsBlocked: Bool { author.isBlocked }
+}
+
+extension RLChartChatMessageDTO: RLChatMessageDisplayable {
+    var authorUsername: String { author.username }
+    var authorInitials: String { author.initials }
+    var authorAvatarUrl: String? { author.avatarUrl }
+    var authorIsOnline: Bool { author.isOnline }
+    var authorRole: RLMemberRole { author.memberRole }
+    var authorReputation: Int { author.reputation }
+    var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
 }
@@ -1153,9 +1040,8 @@ extension RLDMMessageDTO: RLChatMessageDisplayable {
 //  MessagingComponents+RL.swift
 //  traders_guild
 //
-//  Extension to add ChatMessageDisplayable conformance to new RL messaging DTOs.
-//  This allows RLChatroomMessageDTO and RLDMMessageDTO to work with the unified
-//  ChatMessageBubble component.
+//  Extension to add RLChatMessageDisplayable conformance to new RL messaging DTOs.
+//  This allows RLChatroomMessageDTO and RLDMMessageDTO to work with RLChatMessageBubble.
 //
 
 
@@ -1353,8 +1239,17 @@ struct RLChatroomSettingsView: View {
     }
     
     private func reportChatroom(reason: String) {
-        // TODO: Implement report API
-        rlAppState.showInfo("Report submitted for review")
+        Task {
+            guard let guildId = rlAppState.currentGuild?.id else {
+                rlAppState.showError(title: "No Guild Selected", message: "Please select a guild first.", style: .toast)
+                return
+            }
+            do {
+                try await rlAppState.reportChatroom(guildId: guildId, chatroomId: chatroom.id, reason: reason)
+            } catch {
+                // Error already shown by rlAppState
+            }
+        }
     }
 }
 
@@ -1391,12 +1286,12 @@ struct RLDMSettingsView: View {
                         HStack(spacing: 8) {
                             // Avatar
                             UnifiedMemberAvatar(
-                                username: participant.displayName,
+                                username: participant.username,
                                 avatarURL: participant.avatarUrl,
                                 isOnline: participant.isOnline,
                                 size: 36
                             )
-                            
+
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     if thread.isBlocked {
@@ -1404,8 +1299,8 @@ struct RLDMSettingsView: View {
                                             .font(.caption)
                                             .foregroundColor(AppColors.bearCandleRed)
                                     }
-                                    
-                                    Text(participant.displayName)
+
+                                    Text(participant.username)
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(thread.isBlocked ? AppColors.greyText : AppColors.whiteText)
@@ -1421,22 +1316,12 @@ struct RLDMSettingsView: View {
                                     .font(.caption2)
                                     .foregroundColor(AppColors.greyText)
                                 
-                                HStack(spacing: 4) {
-                                    Text(participant.memberRole.displayName)
-                                        .font(.caption2)
-                                        .foregroundColor(participant.memberRole.color)
-                                    
-                                    Text("·")
-                                        .foregroundColor(AppColors.greyText)
-                                    
-                                    Image(systemName: "shield.pattern.checkered")
-                                        .font(.caption2)
-                                        .foregroundColor(AppColors.accentColor)
-                                    
-                                    Text("\(participant.reputation)")
-                                        .font(.caption2)
-                                        .foregroundColor(AppColors.accentColor)
-                                }
+                                UnifiedRoleBadge(
+                                    member: participant,
+                                    showReputation: true,
+                                    fontSize: .caption2,
+                                    iconSize: .caption2
+                                )
                             }
                             
                             Spacer()
@@ -1550,15 +1435,16 @@ struct RLDMSettingsView: View {
         } message: {
             Text("Are you sure you want to delete this conversation? This cannot be undone.")
         }
-        .alert("Report User", isPresented: $showReportOptions) {
-            Button("Spam") { reportUser(reason: "spam") }
-            Button("Harassment") { reportUser(reason: "harassment") }
-            Button("Inappropriate Content") { reportUser(reason: "inappropriate") }
-            Button("Scam or Fraud") { reportUser(reason: "scam") }
-            Button("Other") { reportUser(reason: "other") }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Why are you reporting this user?")
+        .sheet(isPresented: $showReportOptions) {
+            ReportReasonSheet(
+                title: "Why are you reporting this user?",
+                includeScam: true,
+                onReasonSelected: { reason in
+                    reportUser(reason: reason)
+                    showReportOptions = false
+                },
+                onCancel: { showReportOptions = false }
+            )
         }
     }
     
@@ -1610,7 +1496,16 @@ struct RLDMSettingsView: View {
     }
     
     private func reportUser(reason: String) {
-        // TODO: Implement report API
-        rlAppState.showInfo("Report submitted for review")
+        Task {
+            do {
+                try await rlAppState.reportUser(
+                    guildId: thread.guildId,
+                    userId: participant.userId,
+                    reason: reason
+                )
+            } catch {
+                // Error already shown by rlAppState
+            }
+        }
     }
 }

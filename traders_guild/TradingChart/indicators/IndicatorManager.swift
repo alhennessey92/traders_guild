@@ -94,7 +94,7 @@ final class IndicatorManager: ObservableObject {
     
     // MARK: - Recalculate All Indicators
     
-    func recalculateIndicators(candles: [CandleDTO]) {
+    func recalculateIndicators(candles: [RLCandleDTO]) {
         guard !candles.isEmpty else {
             clearAllData()
             return
@@ -241,7 +241,7 @@ final class IndicatorManager: ObservableObject {
     }
     
     /// Helper to calculate all MA types
-    private func calculateAllMovingAverages(candles: [CandleDTO], configs: [MovingAverageConfig]) -> [UUID: [MovingAverageDataPoint]] {
+    private func calculateAllMovingAverages(candles: [RLCandleDTO], configs: [MovingAverageConfig]) -> [UUID: [MovingAverageDataPoint]] {
         var results: [UUID: [MovingAverageDataPoint]] = [:]
         
         for config in configs where config.isEnabled {
@@ -266,7 +266,7 @@ final class IndicatorManager: ObservableObject {
         return results
     }
     
-    func updateWithTick(candles: [CandleDTO]) {
+    func updateWithTick(candles: [RLCandleDTO]) {
         guard !candles.isEmpty else { return }
         
         if candles.count != lastCandleCount || candles.last?.close != lastClosePrice {

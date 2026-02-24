@@ -16,10 +16,10 @@ import SwiftUI
 struct TimeAxisHelper {
     
     /// The current chart timeframe
-    let timeframe: ChartTimeframe
+    let timeframe: RLChartTimeframe
     
     /// Initialize with the active timeframe
-    init(timeframe: ChartTimeframe) {
+    init(timeframe: RLChartTimeframe) {
         self.timeframe = timeframe
     }
     
@@ -255,7 +255,7 @@ struct TimeAxisHelper {
 struct PriceAxisHelper {
     
     /// The trading symbol for context-aware formatting
-    let symbol: TradingSymbolDTO?
+    let symbol: RLTradingSymbolDTO?
     
     /// The visible price range (from chart data)
     let priceRange: (min: Double, max: Double)
@@ -266,7 +266,7 @@ struct PriceAxisHelper {
     /// Optional: actual chart height for more precise calculations
     let chartHeight: CGFloat?
     
-    init(symbol: TradingSymbolDTO?, priceRange: (min: Double, max: Double), priceScale: CGFloat, chartHeight: CGFloat? = nil) {
+    init(symbol: RLTradingSymbolDTO?, priceRange: (min: Double, max: Double), priceScale: CGFloat, chartHeight: CGFloat? = nil) {
         self.symbol = symbol
         self.priceRange = priceRange
         self.priceScale = priceScale
@@ -350,14 +350,10 @@ struct PriceAxisHelper {
             return decimalPlacesFromMagnitude()
         }
         
-        switch symbol.assetClass {
+        let assetClass = symbol.assetClassEnum ?? .forex
+        switch assetClass {
         case .forex:
-            if symbol.ticker.contains("JPY") {
-                return 3
-            } else {
-                return 5
-            }
-            
+            return symbol.ticker.contains("JPY") ? 3 : 5
         case .crypto:
             let avgPrice = (priceRange.min + priceRange.max) / 2
             if avgPrice > 1000 {
@@ -367,23 +363,11 @@ struct PriceAxisHelper {
             } else {
                 return 6
             }
-            
-        case .stocks:
+        case .stocks, .commodities, .futures:
             return 2
-            
-        case .commodities:
-            return 2
-            
         case .indices:
             let avgPrice = (priceRange.min + priceRange.max) / 2
-            if avgPrice > 10000 {
-                return 0
-            } else {
-                return 2
-            }
-            
-        case .futures:
-            return 2
+            return avgPrice > 10000 ? 0 : 2
         }
     }
     
@@ -434,20 +418,16 @@ struct PriceAxisHelper {
 }
 
 
-// MARK: - Extended TradingSymbolDTO Formatting
+// MARK: - Extended RLTradingSymbolDTO Formatting
 
-extension TradingSymbolDTO {
+extension RLTradingSymbolDTO {
     
     /// Get the recommended decimal places for this symbol
     var recommendedDecimalPlaces: Int {
-        switch assetClass {
+        switch assetClassEnum ?? .forex {
         case .forex:
             return ticker.contains("JPY") ? 3 : 5
-        case .crypto:
-            return 2
-        case .stocks, .commodities, .futures:
-            return 2
-        case .indices:
+        case .crypto, .stocks, .commodities, .futures, .indices:
             return 2
         }
     }

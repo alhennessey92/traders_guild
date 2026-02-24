@@ -2,147 +2,124 @@
 //  SignupUsernameView.swift
 //  traders_guild
 //
-//  Created by Al Hennessey on 16/09/2025.
-//
-//
-//  SignUpEmailView.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 21/09/2025.
-//
 
-//
-//  SigninEmail.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 21/09/2025.
-//
 import SwiftUI
-
 
 struct SignupUsernameView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
-    
-    // MARK: - State
+
     @State private var username: String = ""
-    
-    
+
+    private var normalizedUsername: String {
+        RLAuthValidator.trimmed(username)
+    }
+
+    private var isFormValid: Bool {
+        RLAuthValidator.isValidUsername(normalizedUsername)
+    }
 
     var body: some View {
-        
         ZStack {
             StaticAuthBackgroundView()
-            ScrollView (showsIndicators: false){
-                
-                VStack() {
-                    // Description
-                    Text("Hi, \(data.name)! Please choose a Username")
+            ScrollView(showsIndicators: false) {
+                VStack {
+                    Text("Step 2 of 6")
+                        .font(AppFonts.smallNotice())
+                        .foregroundColor(AppColors.greyText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 4)
+
+                    HStack(spacing: 6) {
+                        Capsule().fill(AppColors.whiteText).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                    }
+                    .padding(.horizontal, 20)
+
+                    Text("Choose your username")
                         .font(.largeTitle.bold())
                         .foregroundColor(AppColors.whiteText)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .bottomLeading)
                         .padding(.bottom, 20)
                         .padding(.leading, 20)
-                    
-                    // Email TextField
+
                     StandardTextFieldView(title: "Username", text: $username)
                         .padding(.bottom, 10)
-                    
-                    
-                    
-                    
-                        
-                    
+
+                    Text("3-50 characters. Use letters, numbers, dots, underscores, or hyphens.")
+                        .font(AppFonts.smallNotice())
+                        .foregroundColor(AppColors.greyText)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+
                     VStack(spacing: 0) {
                         Divider()
                             .frame(height: 1)
-
-                            .background(Color.gray.opacity(0.3)) // color
+                            .background(Color.gray.opacity(0.3))
                     }
-                    .padding(.horizontal, 16)  // horizontal inset
+                    .padding(.horizontal, 16)
                     .padding(.top, 16)
-                    
-                    // Login button
-                    
-                    
-                    Spacer() // push content up a bitthis is a test for tpying and seeing if anything will break
+
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
-              
-                
             }
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
-            
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        if !path.isEmpty { path.removeLast() } // Go back
+                        if !path.isEmpty { path.removeLast() }
                     }) {
                         Image(systemName: "chevron.left")
                             .font(.headline)
                             .foregroundColor(AppColors.unhighlightedButtonBackground)
                     }
-                   
                 }
-                
+
                 ToolbarItem(placement: .principal) {
                     Text("TG")
                         .font(.largeTitle)
                         .fontWeight(.heavy)
                         .foregroundColor(AppColors.fadedBackground)
-                      
                 }
-                
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0){
-                    
+                VStack(spacing: 0) {
                     Divider()
-                        .frame(height: 1)                  // thickness
-                        .background(Color.gray.opacity(0.3)) // color
-                    
-                    HStack{
+                        .frame(height: 1)
+                        .background(Color.gray.opacity(0.3))
+
+                    HStack {
                         Spacer()
                         StandardActionButton(
                             title: "Next",
                             backgroundColor: AppColors.whiteText,
-                            foregroundColor: AppColors.gradientBackgroundDark,
-                            action:{
-                                
-                                // Handle validation of username
-                                data.username = username
-                                path.append(.basics)
-                            }
-                        )
+                            foregroundColor: AppColors.gradientBackgroundDark
+                        ) {
+                            data.username = normalizedUsername
+                            path.append(.basics)
+                        }
+                        .disabled(!isFormValid)
+                        .opacity(isFormValid ? 1.0 : 0.5)
                         .padding(.top)
                         .padding(.trailing)
-//                        .disabled(username.isEmpty) // ✅ only enabled when not empty
-//                        .opacity(username.isEmpty ? 0.6 : 1.0)
                     }
                 }
-                
-                
-                
+                .background(AppColors.sheetBackground)
             }
-
         }
-            
-        
+        .onAppear {
+            if username.isEmpty {
+                username = data.username
+            }
+        }
     }
 }
-//
-//#Preview {
-//    SignupUsernameView(
-//        data: .constant(SignupData(
-//            name: "Preview User",
-//            email: "test@example.com",
-//            dob: Date(),
-//            password: "password123",
-//            username: "alhennessey92"
-//        )),
-//        path: .constant([.username]) // starting at topics step
-//    )
-//}
-

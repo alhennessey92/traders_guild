@@ -15,6 +15,25 @@ import Foundation
 import SwiftUI
 
 
+// MARK: - Notification Destination (App Navigation)
+
+enum NotificationDestination: Equatable {
+    /// Navigate to a user's DM chat
+    case userDM(userId: UUID)
+    
+    /// Navigate to a guild chatroom
+    case chatroom(chatroomId: UUID)
+    
+    /// Navigate to a symbol's chart
+    case symbolChart(symbolId: UUID, ticker: String)
+    
+    /// Navigate to a user's profile
+    case userProfile(userId: UUID)
+    
+    /// Navigate to a guild announcement detail
+    case announcement(announcementId: UUID)
+}
+
 // MARK: - Notification Type Enum
 
 /// Maps to backend NotificationType enum.
@@ -28,17 +47,28 @@ enum RLNotificationType: String, Codable, CaseIterable {
     case friendAccept = "friend_accept"
     case mention = "mention"
     case guildInvite = "guild_invite"
-    
+    case memberBanned = "member_banned"
+    case memberUnbanned = "member_unbanned"
+    case roleChanged = "role_changed"
+    case memberKicked = "member_kicked"
+    case memberMuted = "member_muted"
+    case memberSuspended = "member_suspended"
+    case membershipRequestSubmitted = "membership_request_submitted"
+    case membershipRequestDecision = "membership_request_decision"
+    case memberJoined = "member_joined"
+    case markerResult = "marker_result"
+    case reputationTierChange = "reputation_tier_change"
+
     /// Group for tab filtering
     var isPersonal: Bool {
         switch self {
-        case .dm, .chatroom, .friendRequest, .friendAccept, .mention:
+        case .dm, .chatroom, .friendRequest, .friendAccept, .mention, .markerResult, .reputationTierChange:
             return true
-        case .announcement, .event, .guildInvite:
+        case .announcement, .event, .guildInvite, .memberBanned, .memberUnbanned, .roleChanged, .memberKicked, .memberMuted, .memberSuspended, .membershipRequestSubmitted, .membershipRequestDecision, .memberJoined:
             return false
         }
     }
-    
+
     var isGuild: Bool { !isPersonal }
 }
 
@@ -53,7 +83,6 @@ enum RLNotificationDestinationType: String, Codable {
     case announcement = "announcement"
     case event = "event"
 }
-
 
 // MARK: - Notification Destination
 
@@ -152,18 +181,29 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
     /// Icon for the notification type
     var icon: String {
         switch type {
-        case .dm:           return "envelope.fill"
-        case .chatroom:     return "bubble.left.fill"
-        case .announcement: return "megaphone.fill"
-        case .event:        return "calendar"
-        case .friendRequest: return "person.badge.plus"
-        case .friendAccept: return "person.2.fill"
-        case .mention:      return "at"
-        case .guildInvite:  return "person.3.fill"
-        case .none:         return "bell.fill"
+        case .dm:             return "envelope.fill"
+        case .chatroom:       return "bubble.left.fill"
+        case .announcement:   return "megaphone.fill"
+        case .event:          return "calendar"
+        case .friendRequest:  return "person.badge.plus"
+        case .friendAccept:   return "person.2.fill"
+        case .mention:        return "at"
+        case .guildInvite:    return "person.3.fill"
+        case .memberBanned:   return "nosign"
+        case .memberUnbanned: return "checkmark.circle.fill"
+        case .roleChanged:    return "arrow.up.arrow.down"
+        case .memberKicked:   return "person.badge.minus"
+        case .memberMuted:    return "speaker.slash.fill"
+        case .memberSuspended: return "pause.circle.fill"
+        case .membershipRequestSubmitted: return "person.badge.plus"
+        case .membershipRequestDecision: return "checkmark.seal.fill"
+        case .memberJoined: return "person.crop.circle.badge.checkmark"
+        case .markerResult:   return "chart.line.uptrend.xyaxis"
+        case .reputationTierChange: return "star.fill"
+        case .none:           return "bell.fill"
         }
     }
-    
+
     /// Accent color for the notification type
     var accentColor: Color {
         switch type {
@@ -173,6 +213,16 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         case .event:                            return .purple
         case .friendRequest, .friendAccept:     return .green
         case .guildInvite:                      return .indigo
+        case .memberBanned, .memberKicked:      return .red
+        case .memberUnbanned:                   return .green
+        case .roleChanged:                      return .orange
+        case .memberMuted:                      return .orange
+        case .memberSuspended:                  return .red
+        case .membershipRequestSubmitted:       return .indigo
+        case .membershipRequestDecision:        return .blue
+        case .memberJoined:                     return .green
+        case .markerResult:                     return .green
+        case .reputationTierChange:             return .yellow
         case .none:                             return .gray
         }
     }
@@ -184,6 +234,28 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
             ?? data["friend_avatar_url"]?.stringValue
     }
     
+    /// Whether this is a guild invite notification with actionable accept/decline
+    var isGuildInvite: Bool {
+        type == .guildInvite
+    }
+
+    /// Guild ID extracted from data payload (for guild invite actions)
+    var guildId: UUID? {
+        guard let str = data["guild_id"]?.stringValue else { return nil }
+        return UUID(uuidString: str)
+    }
+
+    /// Invite ID extracted from data payload (for guild invite actions)
+    var inviteId: UUID? {
+        guard let str = data["invite_id"]?.stringValue else { return nil }
+        return UUID(uuidString: str)
+    }
+
+    /// Guild name extracted from data payload
+    var guildName: String? {
+        data["guild_name"]?.stringValue
+    }
+
     /// Whether this is a personal or guild notification
     var isPersonal: Bool {
         type?.isPersonal ?? true

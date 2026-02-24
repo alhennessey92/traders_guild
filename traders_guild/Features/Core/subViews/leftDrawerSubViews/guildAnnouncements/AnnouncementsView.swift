@@ -108,10 +108,11 @@ struct AnnouncementRowView: View {
                 .padding(.bottom, 12)
                 
                 // MARK: - Author Footer Bar (uses view model's fallback properties)
-                RLAuthorFooter(
-                    displayName: announcement.authorDisplayName,
-                    avatarUrl: announcement.authorAvatarUrl,
+                UnifiedAuthorFooter(
+                    username: announcement.authorUsername,
                     role: announcement.authorRole,
+                    reputation: announcement.authorReputation,
+                    accuracy: announcement.authorAccuracy,
                     timeText: announcement.timeAgoFormatted,
                     cornerRadius: 14
                 )
@@ -128,10 +129,11 @@ struct AnnouncementDetailView: View {
     let announcement: RLGuildAnnouncementWithAuthorDTO
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove when migration complete
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     @State private var hasRecordedView = false
+    
+    private let drawerBackgroundColor: Color = AppColors.drawerBackground
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -170,10 +172,11 @@ struct AnnouncementDetailView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    RLAuthorRow(
-                        displayName: announcement.authorDisplayName,
-                        avatarUrl: announcement.authorAvatarUrl,
-                        role: announcement.authorRole
+                    UnifiedAuthorRow(
+                        username: announcement.authorUsername,
+                        role: announcement.authorRole,
+                        reputation: announcement.authorReputation,
+                        accuracy: announcement.authorAccuracy
                     )
                 }
                 
@@ -202,7 +205,7 @@ struct AnnouncementDetailView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(drawerBackgroundColor.opacity(0.2))
         .onAppear {
             recordAnnouncementView()
         }

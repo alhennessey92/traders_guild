@@ -14,34 +14,40 @@
 import SwiftUI
 
 struct SigninEmailView: View {
-    // MARK: - State
-    
     @EnvironmentObject var RLAppState: RLAppState
-    
-    
-    
-    //@EnvironmentObject var appState: AppState
-    
+
     @State private var emailOrUsername: String = ""
     @State private var password: String = ""
-    @State private var showPassword: Bool = false
     @State private var isLoggingIn: Bool = false
-    
+
     @Environment(\.dismiss) var dismiss
-    
-    // Validate form before allowing login
-    var isFormValid: Bool {
-        !emailOrUsername.trimmingCharacters(in: .whitespaces).isEmpty &&
-        password.count >= 6
+
+    private var normalizedIdentifier: String {
+        RLAuthValidator.trimmed(emailOrUsername)
+    }
+
+    private var isFormValid: Bool {
+        RLAuthValidator.isValidIdentifier(normalizedIdentifier) &&
+        !password.isEmpty
+    }
+
+    private var identifierHint: String? {
+        guard !normalizedIdentifier.isEmpty else { return nil }
+        if RLAuthValidator.isValidIdentifier(normalizedIdentifier) {
+            return nil
+        }
+        if RLAuthValidator.isLikelyEmailIdentifier(normalizedIdentifier) {
+            return "Enter a valid email address."
+        }
+        return "Username can contain letters, numbers, dots, underscores, and hyphens."
     }
 
     var body: some View {
         ZStack {
             StaticAuthBackgroundView()
-            
+
             ScrollView(showsIndicators: false) {
                 VStack {
-                    // Description
                     Text("Sign In")
                         .font(.largeTitle.bold())
                         .foregroundColor(AppColors.whiteText)
@@ -49,17 +55,24 @@ struct SigninEmailView: View {
                         .frame(maxWidth: .infinity, alignment: .bottomLeading)
                         .padding(.bottom, 20)
                         .padding(.leading, 20)
-                    
-                    // Email/Username TextField
+
                     StandardTextFieldView(title: "Email or Username", text: $emailOrUsername)
                         .padding(.bottom, 10)
                         .disabled(isLoggingIn)
-                    
-                    // Password TextField
+
+                    if let identifierHint {
+                        Text(identifierHint)
+                            .font(AppFonts.smallNotice())
+                            .foregroundColor(.orange)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 8)
+                    }
+
                     StandardTextFieldView(title: "Password", text: $password, isSecure: true)
                         .padding(.bottom, 10)
                         .disabled(isLoggingIn)
-                    
+
                     VStack(spacing: 0) {
                         Divider()
                             .frame(height: 1)
@@ -67,9 +80,8 @@ struct SigninEmailView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
-                    
-                    // ✅ Login button with AppState integration
-                    StandardButton(
+
+                    StandardActionButtonFullWidth(
                         title: isLoggingIn ? "Signing In..." : "Sign In",
                         backgroundColor: AppColors.whiteText,
                         foregroundColor: AppColors.gradientBackgroundDark
@@ -78,7 +90,6 @@ struct SigninEmailView: View {
                             await handleLogin()
                         }
                     }
-                    .frame(maxWidth: .infinity)
                     .disabled(!isFormValid || isLoggingIn)
                     .opacity(isFormValid && !isLoggingIn ? 1.0 : 0.5)
                     .overlay {
@@ -89,7 +100,7 @@ struct SigninEmailView: View {
                                     .scaleEffect(0.8)
                                 Spacer()
                             }
-                            .padding(.leading, 40)
+                            .padding(.leading, 46)
                         }
                     }
                     
@@ -136,34 +147,16 @@ struct SigninEmailView: View {
             }
         }
     }
-    
-    // MARK: - Actions
-    
+
     private func handleLogin() async {
         isLoggingIn = true
-        
+
         do {
-            RLAppState.logout()
-            try await RLAppState.login(email: emailOrUsername, password: password)
-            
-            // ✅ Wait a tiny moment for the sheet to present
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-            
-            // ✅ Dismiss back to root
+            try await RLAppState.login(identifier: normalizedIdentifier, password: password)
+            try? await Task.sleep(nanoseconds: 100_000_000)
             dismiss()
-            
         } catch {
-            // ✅ Error automatically shown by global alert
             isLoggingIn = false
         }
     }
 }
-
-//#Preview {
-//    NavigationStack {
-//        SigninEmailView()
-//            .environmentObject(AppState())
-//    }
-//}
-
-

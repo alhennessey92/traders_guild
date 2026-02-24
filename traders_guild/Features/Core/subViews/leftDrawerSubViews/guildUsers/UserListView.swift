@@ -34,7 +34,6 @@ enum UserListTab: String, CaseIterable, UnifiedTabItem {
 struct UserListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var rlAppState: RLAppState
     @Environment(\.dismiss) private var dismiss
     
@@ -237,80 +236,6 @@ struct UserListView: View {
 }
 
 // MARK: - ================================================================================================
-// MARK: - GUILD USER DETAIL VIEW
-// MARK: - ================================================================================================
-
-struct GuildUserDetailView: View {
-    let user: GuildMembershipDTO
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var rlMessagingManager: RLMessagingManager
-    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            // Main content
-            VStack(alignment: .leading, spacing: 0) {
-                // Top header section with gradient background
-                GuildMemberProfileHeaderView(user: user)
-                
-                // New unified profile content with tabs
-                ProfileContentView(
-                    extendedProfile: RLUserProfileDTO.fromLegacy(SampleData.memberExtendedProfile),
-                    markersSummary: RLUserGlobalStatisticsDTO.fromLegacy(
-                        SampleData.memberMarkersSummary,
-                        userId: user.globalMember.id
-                    ),
-                    userMarkers: SampleData.userPlacedMarkers.prefix(5).map { $0 },
-                    awards: SampleData.memberAwards.map {
-                        RLUserAwardDTO.fromLegacy($0, membershipId: user.id, guildId: user.guild.id)
-                    },
-                    awardsSummary: RLAwardsSummaryDTO.fromLegacy(SampleData.awardsSummary),
-                    stats: SampleData.profileStats,
-                    isCurrentUser: false,
-                    username: user.globalMember.username,
-                    onMarkerTap: { marker in
-                        // TODO: Navigate to marker on chart
-                        leftDrawerViewModel.requestNavigationToMarker(marker)
-                        dismiss()
-                    }
-                )
-                
-                Divider()
-                
-                // Reusable action buttons component
-                GuildUserActionButtons(user: user)
-                    .environmentObject(appState)
-                    .environmentObject(rlAppState)
-                    .environmentObject(rlMessagingManager)
-                    .padding(.horizontal, 25)
-                    .padding(.top, 20)
-                    .background(AppColors.sheetBackground)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(
-                ZStack {
-                    Color.clear
-                        .background(.ultraThinMaterial)
-                    AppColors.sheetBackground
-                    StaticPatternView()
-                }
-            )
-            
-            // Floating dismiss button overlaid on top
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.top, 20)
-            .padding(.trailing, 20)
-        }
-    }
-}
-
-// MARK: - ================================================================================================
 // MARK: - PENDING FRIEND REQUESTS (REAL API)
 // MARK: - ================================================================================================
 
@@ -455,13 +380,13 @@ struct FriendRow: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 UnifiedMemberAvatar(
-                    username: friend.displayName,
+                    username: friend.username,
                     avatarURL: friend.avatarUrl,
                     isOnline: isOnline
                 )
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(friend.displayName)
+                    Text(friend.username)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
@@ -500,13 +425,12 @@ struct GuildUserDetailViewRL: View {
     @State private var member: RLGuildMemberDTO
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlMessagingManager: RLMessagingManager
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     @State private var extendedProfile: RLUserProfileDTO? = nil
     @State private var statistics: RLUserGlobalStatisticsDTO? = nil
-    @State private var userMarkers: [TopMarkerDTO] = []
+    @State private var userMarkers: [RLTopMarkerDTO] = []
     @State private var awards: [RLUserAwardDTO] = []
     @State private var awardsSummary: RLAwardsSummaryDTO? = nil
     @State private var isLoading = true
@@ -542,6 +466,7 @@ struct GuildUserDetailViewRL: View {
                         stats: buildStats(),
                         isCurrentUser: false,
                         username: member.username,
+                        tabs: [.overview, .markers, .awards],
                         onMarkerTap: { marker in
                             leftDrawerViewModel.requestNavigationToMarker(marker)
                             dismiss()
@@ -554,7 +479,6 @@ struct GuildUserDetailViewRL: View {
                 GuildUserActionButtonsRL(member: member) { updatedMember in
                     member = updatedMember
                 }
-                    .environmentObject(appState)
                     .environmentObject(rlMessagingManager)
                     .environmentObject(rlAppState)
                     .padding(.horizontal, 25)
@@ -592,7 +516,6 @@ struct GuildUserDetailViewRL: View {
         
         let data = await leftDrawerViewModel.loadMemberProfile(
             member: member,
-            appState: appState,
             rlAppState: rlAppState,
             guildId: guildId
         )
@@ -642,129 +565,6 @@ struct GuildUserDetailViewRL: View {
 }
 
 // MARK: - ================================================================================================
-// MARK: - GUILD MEMBER PROFILE HEADER VIEW
-// MARK: - ================================================================================================
-
-struct GuildMemberProfileHeaderView: View {
-    let user: GuildMembershipDTO
-    @EnvironmentObject var rlAppState: RLAppState
-    
-    private var isOnline: Bool {
-        rlAppState.effectiveOnlineStatus(userId: user.globalMember.id, fallback: user.isOnline)
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // User header
-            HStack(spacing: 15) {
-                // Avatar with online indicator
-                ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(AppColors.accentColor.opacity(0.3))
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            Text(String(user.globalMember.username.prefix(2)))
-                                .font(.body)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
-                        )
-                        .overlay(alignment: .bottomTrailing) {
-                            Circle()
-                                .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
-                                .frame(width: 14, height: 14)
-                                .overlay(
-                                    Circle()
-                                        .stroke(AppColors.drawerBackground, lineWidth: 2)
-                                )
-                                .padding(.trailing, 2)
-                                .padding(.bottom, 2)
-                        }
-                }
-
-                // User info
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 2) {
-                        if user.isBlocked {
-                            Image(systemName: "nosign")
-                                .font(.body)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.bearCandleRed)
-                        }
-                    
-                        Text(user.globalMember.username)
-                            .font(.title3)
-                            .fontWeight(.medium)
-                            .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.whiteText)
-                        
-                        if user.isFriend {
-                            Image(systemName: "person.crop.circle")
-                                .font(.body)
-                                .fontWeight(.bold)
-                                .foregroundColor(user.isBlocked ? AppColors.greyText : AppColors.friendAccent)
-                                .padding(.leading, 3)
-                        }
-                    }
-
-                    Text(user.roleInGuild.rawValue)
-                        .font(.caption)
-                        .foregroundColor(user.roleInGuild.roleForegroundColor)
-                        .fontWeight(user.roleInGuild.roleFontWeight)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 60)
-            }
-            .padding(.horizontal, 25)
-            .padding(.top, 25)
-
-            VStack(alignment: .leading, spacing: 6) {
-                // Member since
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.greyText)
-                    Text("\(user.memberSince)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.greyText)
-                }
-
-                // Reputation
-                HStack(alignment: .center, spacing: 1) {
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("\(user.reputation)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Guild Reputation")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.greyText)
-                        .padding(.leading, 6)
-                }
-            }
-            .padding(.horizontal, 25)
-
-            Divider()
-        }
-        .background(
-            LinearGradient(
-                colors: [
-                    AppColors.gradientBackgroundDark.opacity(0.3),
-                    AppColors.sheetBackground
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-    }
-}
-
-// MARK: - ================================================================================================
 // MARK: - GUILD MEMBER PROFILE HEADER VIEW (REAL API)
 // MARK: - ================================================================================================
 
@@ -780,7 +580,7 @@ struct GuildMemberProfileHeaderViewRL: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 15) {
                 UnifiedMemberAvatar(
-                    username: member.displayName,
+                    username: member.username,
                     avatarURL: member.avatarUrl,
                     isOnline: isOnline,
                     size: 60
@@ -795,7 +595,7 @@ struct GuildMemberProfileHeaderViewRL: View {
                                 .foregroundColor(AppColors.bearCandleRed)
                         }
                         
-                        Text(member.displayName)
+                        Text(member.username)
                             .font(.title3)
                             .fontWeight(.medium)
                             .foregroundColor(member.isBlocked ? AppColors.greyText : AppColors.whiteText)
@@ -809,11 +609,12 @@ struct GuildMemberProfileHeaderViewRL: View {
                         }
                     }
                     
-                    Text(member.memberRole.displayName)
-                        .font(.caption)
-                        .foregroundColor(member.memberRole.color)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
+                    UnifiedRoleBadge(
+                        member: member,
+                        showReputation: true,
+                        fontSize: .caption,
+                        iconSize: .caption2
+                    )
                 }
                 
                 Spacer(minLength: 60)
@@ -831,22 +632,6 @@ struct GuildMemberProfileHeaderViewRL: View {
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.greyText)
-                }
-                
-                HStack(alignment: .center, spacing: 1) {
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("\(member.reputation)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.accentColor)
-                    Text("Guild Reputation")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.greyText)
-                        .padding(.leading, 6)
                 }
             }
             .padding(.horizontal, 25)
@@ -878,164 +663,6 @@ struct GuildMemberProfileHeaderViewRL: View {
 // - Awards grid with category filters and rarity indicators
 
 // MARK: - ================================================================================================
-// MARK: - GUILD USER ACTION BUTTONS
-// MARK: - ================================================================================================
-
-struct GuildUserActionButtons: View {
-    let user: GuildMembershipDTO
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var rlMessagingManager: RLMessagingManager
-    @Environment(\.dismiss) private var dismiss
-    
-    @State private var showBlockUserConfirmation = false
-    @State private var showUnBlockUserConfirmation = false
-    @State private var showAddFriendConfirmation = false
-    @State private var showRemoveFriendConfirmation = false
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            DrawerActionButton(
-                imageName: "nosign",
-                backgroundColor: user.isBlocked ? AppColors.bearCandleRed.opacity(0.8) : AppColors.bearCandleRed.opacity(0.1),
-                foregroundColor: user.isBlocked ? AppColors.whiteText : AppColors.bearCandleRed,
-                strokeColor: AppColors.bearCandleRed.opacity(0.6),
-                strokeWidth: 0.5,
-                action: {
-                    if user.isBlocked {
-                        showUnBlockUserConfirmation = true
-                    } else {
-                        showBlockUserConfirmation = true
-                    }
-                }
-            )
-            
-            Spacer()
-            
-            DrawerActionButton(
-                imageName: user.isFriend ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
-                backgroundColor: user.isFriend ? AppColors.friendAccent.opacity(0.6) : AppColors.gradientBackgroundDark.opacity(0.05),
-                foregroundColor: AppColors.whiteText.opacity(0.8),
-                strokeColor: user.isFriend ? AppColors.friendAccent : AppColors.whiteText.opacity(0.3),
-                strokeWidth: 0.5,
-                action: {
-                    if user.isFriend {
-                        showRemoveFriendConfirmation = true
-                    } else {
-                        showAddFriendConfirmation = true
-                    }
-                }
-            )
-            
-            DrawerActionButton(
-                title: "Chat",
-                imageName: "message.fill",
-                backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
-                foregroundColor: AppColors.whiteText.opacity(0.8),
-                strokeColor: AppColors.whiteText.opacity(0.3),
-                strokeWidth: 0.5,
-                action: {
-                    dismiss()
-                    Task {
-                        await openRLChat()
-                    }
-                }
-            )
-        }
-        .alert("Block User", isPresented: $showBlockUserConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Block", role: .destructive) {
-                blockUser()
-            }
-        } message: {
-            Text("Are you sure you want to block \(user.globalMember.username)? You won't see their messages or activity.")
-        }
-        .alert("Unblock User", isPresented: $showUnBlockUserConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Unblock") {
-                unBlockUser()
-            }
-        } message: {
-            Text("Are you sure you want to unblock \(user.globalMember.username)?")
-        }
-        .alert("Add Friend", isPresented: $showAddFriendConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Add Friend") {
-                addFriend()
-            }
-        } message: {
-            Text("Send a friend request to \(user.globalMember.username)?")
-        }
-        .alert("Remove Friend", isPresented: $showRemoveFriendConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("End Friendship") {
-                removeFriend()
-            }
-        } message: {
-            Text("Un-friend User: \(user.globalMember.username)?")
-        }
-    }
-    
-    // MARK: - Action Methods
-    
-    private func blockUser() {
-        Task {
-            do {
-                try await appState.blockUser(userId: user.globalMember.id)
-                appState.showSuccess("User blocked successfully")
-                dismiss()
-            } catch {
-                appState.showError(error, title: "Failed to Block User")
-            }
-        }
-    }
-    
-    private func unBlockUser() {
-        Task {
-            do {
-                try await appState.unBlockUser(userId: user.globalMember.id)
-                appState.showSuccess("Unblocked user")
-                dismiss()
-            } catch {
-                appState.showError(error, title: "Failed to Unblock User")
-            }
-        }
-    }
-    
-    private func addFriend() {
-        Task {
-            do {
-                try await appState.sendFriendRequest(userId: user.globalMember.id)
-                appState.showSuccess("Friend request sent!")
-            } catch {
-                appState.showError(error, title: "Failed to Send Friend Request")
-            }
-        }
-    }
-    
-    private func removeFriend() {
-        Task {
-            do {
-                try await appState.sendCancelFriendship(userId: user.globalMember.id)
-                appState.showSuccess("Friendship removed")
-            } catch {
-                appState.showError(error, title: "Failed to end friendship")
-            }
-        }
-    }
-
-    private func openRLChat() async {
-        guard let guildId = rlAppState.currentGuild?.id else { return }
-        do {
-            let member = try await rlAppState.fetchGuildMember(guildId: guildId, userId: user.globalMember.id)
-            await rlMessagingManager.openDMChat(with: member)
-        } catch {
-            rlAppState.showError(error, title: "Failed to Open Chat", style: .toast)
-        }
-    }
-}
-
-// MARK: - ================================================================================================
 // MARK: - GUILD USER ACTION BUTTONS (REAL API)
 // MARK: - ================================================================================================
 
@@ -1059,7 +686,6 @@ struct GuildUserActionButtonsRL: View {
     let member: RLGuildMemberDTO
     let onMemberUpdate: (RLGuildMemberDTO) -> Void
     
-    @EnvironmentObject var appState: AppState               // TODO: Remove when migration complete
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var rlMessagingManager: RLMessagingManager   // NEW: For DM chats
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
@@ -1071,6 +697,11 @@ struct GuildUserActionButtonsRL: View {
     @State private var showAddFriendConfirmation = false
     @State private var showRemoveFriendConfirmation = false
     @State private var isOpeningChat = false
+    @State private var showReportReasonSheet = false
+    
+    private var isCurrentUser: Bool {
+        member.userId == rlAppState.currentUser?.id
+    }
     
     var body: some View {
         HStack(spacing: 8) {
@@ -1129,6 +760,29 @@ struct GuildUserActionButtonsRL: View {
             )
             .opacity(isOpeningChat ? 0.5 : 1.0)
             .disabled(isOpeningChat)
+            
+            // Report user (not shown for current user)
+            if !isCurrentUser {
+                DrawerActionButton(
+                    imageName: "flag",
+                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
+                    foregroundColor: AppColors.whiteText.opacity(0.8),
+                    strokeColor: AppColors.whiteText.opacity(0.3),
+                    strokeWidth: 0.5,
+                    action: { showReportReasonSheet = true }
+                )
+            }
+        }
+        .sheet(isPresented: $showReportReasonSheet) {
+            ReportReasonSheet(
+                title: "Why are you reporting this user?",
+                includeScam: true,
+                onReasonSelected: { reason in
+                    reportUser(reason: reason)
+                    showReportReasonSheet = false
+                },
+                onCancel: { showReportReasonSheet = false }
+            )
         }
         .alert("Block User", isPresented: $showBlockUserConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -1272,6 +926,21 @@ struct GuildUserActionButtonsRL: View {
         }
     }
     
+    private func reportUser(reason: String) {
+        Task {
+            do {
+                guard let guildId = rlAppState.currentGuild?.id else { return }
+                try await rlAppState.reportUser(
+                    guildId: guildId,
+                    userId: member.userId,
+                    reason: reason
+                )
+            } catch {
+                // Error shown by rlAppState
+            }
+        }
+    }
+    
     private func applyMemberUpdate(_ transform: (RLGuildMemberDTO) -> RLGuildMemberDTO) {
         if let updated = leftDrawerViewModel.updateGuildMember(
             membershipId: member.membershipId,
@@ -1305,4 +974,3 @@ extension View {
         self.environmentObject(manager)
     }
 }
-

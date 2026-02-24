@@ -112,11 +112,12 @@ class RealTimeService: ObservableObject {
         
         connectionStatus = .connecting
         
-        let httpURL = APIService.messaging.baseURL
-        let wsURLString = httpURL
+        let httpURL = APIService.realtime.baseURL
+        let wsHost = httpURL
             .replacingOccurrences(of: "https://", with: "wss://")
             .replacingOccurrences(of: "http://", with: "ws://")
-            .replacingOccurrences(of: "/api/v1/messaging", with: "/ws/messaging")
+            .replacingOccurrences(of: "/api/v1", with: "")
+        let wsURLString = "\(wsHost)/ws/messaging"
         
         guard let url = URL(string: "\(wsURLString)?token=\(token)") else {
             print("❌ [WS] Invalid URL")

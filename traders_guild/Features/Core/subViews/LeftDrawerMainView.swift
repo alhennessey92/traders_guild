@@ -37,23 +37,33 @@ enum BottomSheetContent: Identifiable, Equatable {
     case announcement(RLGuildAnnouncementWithAuthorDTO)  // Uses combined DTO from backend
     case event(RLGuildEventWithAuthorDTO)  // Uses combined DTO from backend
     case profile
-    case guildMember(GuildMembershipDTO)
     case guildMemberRL(RLGuildMemberDTO)
-    case createAnnouncement  // <-- ADD THIS LINE
+    case createAnnouncement
     case createEvent
-    
+    case guildSettings
+    case inviteMembers
+    case manageMembers
+    case manageRoles
+    case manageReports
+    case manageGuildWatchlist
+
     var id: String {
         switch self {
         case .announcement(let announcement): return "announcement-\(announcement.id)"
         case .event(let event): return "event-\(event.id)"
         case .profile: return "profile"
-        case .guildMember(let user): return "profile-\(user.id)"
         case .guildMemberRL(let user): return "profile-rl-\(user.id)"
-        case .createAnnouncement: return "create-announcement"  // <-- ADD THIS
+        case .createAnnouncement: return "create-announcement"
         case .createEvent: return "create-event"
+        case .guildSettings: return "guild-settings"
+        case .inviteMembers: return "invite-members"
+        case .manageMembers: return "manage-members"
+        case .manageRoles: return "manage-roles"
+        case .manageReports: return "manage-reports"
+        case .manageGuildWatchlist: return "manage-guild-watchlist"
         }
     }
-    
+
     // Equatable conformance for RLGuildAnnouncementWithAuthorDTO
     static func == (lhs: BottomSheetContent, rhs: BottomSheetContent) -> Bool {
         switch (lhs, rhs) {
@@ -63,13 +73,23 @@ enum BottomSheetContent: Identifiable, Equatable {
             return e1.id == e2.id
         case (.profile, .profile):
             return true
-        case (.guildMember(let m1), .guildMember(let m2)):
-            return m1.id == m2.id
         case (.guildMemberRL(let m1), .guildMemberRL(let m2)):
             return m1.id == m2.id
-        case (.createAnnouncement, .createAnnouncement):  // <-- ADD THIS
+        case (.createAnnouncement, .createAnnouncement):
             return true
-        case (.createEvent, .createEvent):                // <-- ADD THIS
+        case (.createEvent, .createEvent):
+            return true
+        case (.guildSettings, .guildSettings):
+            return true
+        case (.inviteMembers, .inviteMembers):
+            return true
+        case (.manageMembers, .manageMembers):
+            return true
+        case (.manageRoles, .manageRoles):
+            return true
+        case (.manageReports, .manageReports):
+            return true
+        case (.manageGuildWatchlist, .manageGuildWatchlist):
             return true
         default:
             return false
@@ -105,7 +125,6 @@ struct LeftDrawerMainView: View {
     var currentSymbolId: UUID? = nil
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -178,7 +197,7 @@ struct LeftDrawerMainView: View {
             .ignoresSafeArea()
             // Present detail sheets with a clear background and consistent detents (matches right drawer)
             .sheet(item: $bottomSheetContent) { content in
-                BottomSheetView(content: content, selectedDetent: $selectedDetent)  // PASS BINDING
+                BottomSheetView(content: content, selectedDetent: $selectedDetent, bottomSheetContent: $bottomSheetContent)
                     
                     .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
     //                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
@@ -219,13 +238,23 @@ struct LeftDrawerMainView: View {
             return [.fraction(0.6), .large]  // ADD .large
         case .event:
             return [.fraction(0.6), .large]
-        case .guildMember:
-            return [.fraction(0.6), .large]
         case .guildMemberRL:
             return [.fraction(0.6), .large]
-        case .createAnnouncement:           // <-- ADD THIS
+        case .createAnnouncement:
             return [.large]
-        case .createEvent:                  // <-- ADD THIS
+        case .createEvent:
+            return [.large]
+        case .guildSettings:
+            return [.large]
+        case .inviteMembers:
+            return [.large]
+        case .manageMembers:
+            return [.large]
+        case .manageRoles:
+            return [.large]
+        case .manageReports:
+            return [.large]
+        case .manageGuildWatchlist:
             return [.large]
         }
     }
@@ -242,9 +271,39 @@ struct MainDrawerView: View {
     let presentProfile: () -> Void
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: Remove
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    
+    /// Member count: from loaded guild members when available, else guild DTO.
+    private var memberCount: Int {
+        if leftDrawerViewModel.guildMembersTotalCount > 0 { return leftDrawerViewModel.guildMembersTotalCount }
+        return rlAppState.currentGuild?.memberCount ?? 0
+    }
+    
+    /// Online count: from loaded guild members when available, else guild DTO.
+    private var onlineCount: Int {
+        if !leftDrawerViewModel.guildMembers.isEmpty {
+            return leftDrawerViewModel.guildMembers.reduce(into: 0) { total, member in
+                if rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline) {
+                    total += 1
+                }
+            }
+        }
+        return rlAppState.currentGuild?.membersOnline ?? 0
+    }
+    
+    /// Guild reputation: sum of member reputations when members loaded, else guild DTO.
+    private var guildReputation: Int {
+        if !leftDrawerViewModel.guildMembers.isEmpty {
+            return leftDrawerViewModel.guildMembers.reduce(0) { $0 + $1.reputation }
+        }
+        return rlAppState.currentGuild?.reputation ?? 0
+    }
+    
+    /// Guild accuracy: from statistics when loaded, else placeholder.
+    private var guildAccuracyDisplay: String {
+        leftDrawerViewModel.statistics?.averageAccuracyDisplay ?? "--"
+    }
     
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
@@ -260,9 +319,10 @@ struct MainDrawerView: View {
             ("chart.bar.fill", "Statistics", .statistics)
         ]
         
-        // Add Admin Panel for moderators and admins
+        // Add Admin/Mod Panel for moderators and admins
         if rlAppState.canModerate {
-            items.append(("shield.checkered", "Admin Panel", .adminPanel))
+            let panelTitle = rlAppState.isGuildOwner ? "Owner Panel" : (rlAppState.canAdmin ? "Admin Panel" : "Mod Panel")
+            items.append(("shield.checkered", panelTitle, .adminPanel))
         }
         
         return items
@@ -280,10 +340,9 @@ struct MainDrawerView: View {
     
     
     var body: some View {
-        if let guild = appState.currentGuild,
-           let rlUser = rlAppState.currentUser,
+        if let rlUser = rlAppState.currentUser,
            let rlGuild = rlAppState.currentGuild,
-           let rlMembership = rlAppState.currentMembership{
+           let rlMembership = rlAppState.currentMembership {
             VStack(alignment: .leading, spacing: 0) {
             // Header section
             VStack {
@@ -323,7 +382,7 @@ struct MainDrawerView: View {
                 }
                 
                 HStack(spacing: 2) {
-                    Text("\(rlGuild.memberCount)")
+                    Text("\(memberCount)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -336,7 +395,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("\(rlGuild.membersOnline)")
+                    Text("\(onlineCount)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -358,7 +417,7 @@ struct MainDrawerView: View {
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
-                    Text("\(rlGuild.reputation)")
+                    Text("\(guildReputation)")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.accentColor)
@@ -371,7 +430,7 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
-                    Text("99%") // TODO: Get Guild Accuracy
+                    Text(guildAccuracyDisplay)
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.whiteText)
@@ -422,7 +481,7 @@ struct MainDrawerView: View {
             .refreshable {
                 // ✅ Pull to refresh - only refresh announcements on main view
                 // Other data refreshes when navigating to specific sections
-                await leftDrawerViewModel.refreshAnnouncements(guildId: guild.id, rlAppState: rlAppState)
+                await leftDrawerViewModel.refreshAnnouncements(guildId: rlGuild.id, rlAppState: rlAppState)
             }
             .overlay {
                 // ✅ Show loading only on first load
@@ -485,7 +544,6 @@ struct SectionDrawerView: View {
     var currentSymbolId: UUID? = nil
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -556,7 +614,7 @@ struct SectionDrawerView: View {
                     .scrollDismissesKeyboard(.interactively)
                     .refreshable {
                         // ✅ Component-specific refresh based on current section
-                        await refreshCurrentSection(guildId: guild.id, appState: appState, rlAppState: rlAppState)
+                        await refreshCurrentSection(guildId: guild.id, rlAppState: rlAppState)
                     }
                 }
             }
@@ -588,7 +646,7 @@ struct SectionDrawerView: View {
         case .events: return "Events"
         case .userList: return "Members"
         case .statistics: return "Statistics"
-        case .adminPanel: return "Admin Panel"
+        case .adminPanel: return rlAppState.canAdmin ? "Admin Panel" : "Mod Panel"
         
         }
     }
@@ -621,7 +679,7 @@ struct SectionDrawerView: View {
     }
     
     /// Refresh only the data needed for the current section
-    private func refreshCurrentSection(guildId: UUID, appState: AppState, rlAppState: RLAppState) async {
+    private func refreshCurrentSection(guildId: UUID, rlAppState: RLAppState) async {
         switch currentSection {
         case .announcements:
             await leftDrawerViewModel.refreshAnnouncements(guildId: guildId, rlAppState: rlAppState)
@@ -634,7 +692,7 @@ struct SectionDrawerView: View {
         case .statistics:
              await leftDrawerViewModel.refreshStatistics(guildId: guildId, rlAppState: rlAppState)
         case .topMarkers:
-            await leftDrawerViewModel.refreshTopMarkers(for: guildId, appState: appState)
+            await leftDrawerViewModel.refreshTopMarkers(for: guildId, rlAppState: rlAppState)
         default:
             // For sections without specific refresh, do nothing or refresh all
             break
@@ -687,9 +745,9 @@ struct DrawerMenuButton: View {
 struct BottomSheetView: View {
     let content: BottomSheetContent
     @Binding var selectedDetent: PresentationDetent
+    @Binding var bottomSheetContent: BottomSheetContent?
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -703,16 +761,24 @@ struct BottomSheetView: View {
             case .profile:  // Changed from 'user' to 'membership'
                 UserProfileDetailView(selectedDetent: $selectedDetent)
                     .environmentObject(leftDrawerViewModel)
-            case .guildMember(let user):
-                GuildUserDetailView(user: user)
             case .guildMemberRL(let member):
                 GuildUserDetailViewRL(member: member)
-            case .createAnnouncement:           // <-- ADD THIS
+            case .createAnnouncement:
                 CreateAnnouncementView()
-            case .createEvent:                  // <-- ADD THIS
+            case .createEvent:
                 CreateEventView()
-            
-                
+            case .guildSettings:
+                GuildSettingsView()
+            case .inviteMembers:
+                InviteMembersView()
+            case .manageMembers:
+                ManageMembersView()
+            case .manageRoles:
+                ManageRolesView()
+            case .manageReports:
+                ManageReportsView(bottomSheetContent: $bottomSheetContent)
+            case .manageGuildWatchlist:
+                ManageGuildWatchlistView()
             }
 
         }
@@ -752,7 +818,5 @@ extension View {
         )
     }
 }
-
-
 
 

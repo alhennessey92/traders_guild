@@ -10,7 +10,7 @@
 //  traders_guild
 //
 //  Admin Panel for Left Drawer - Moderator/Admin Only Features
-//  Includes: Create Announcements, Create Events, Future: Ban/Invite Members
+//  Includes: Create Announcements, Create Events, Guild Settings, Reports, Invite Members, Manage Members, Manage Roles
 //
 
 import SwiftUI
@@ -46,10 +46,17 @@ struct AdminPanelListView: View {
                     Text("Your Role:")
                         .font(.caption)
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
-                    Text(membership.memberRole.displayName)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(membership.memberRole.color)
+                    if rlAppState.isGuildOwner {
+                        Text("Owner")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentColor)
+                    } else {
+                        Text(membership.memberRole.displayName)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(membership.memberRole.color)
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, 16)
@@ -93,43 +100,101 @@ struct AdminPanelListView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             
-            // Member Management Section (Coming Soon)
+            // Guild Settings Section - Admin/Owner only
+            if rlAppState.canAdmin {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Guild Settings")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        .padding(.horizontal, 16)
+
+                    AdminActionButton(
+                        icon: "gearshape.fill",
+                        title: "Guild Settings",
+                        subtitle: "Update name, description & visibility",
+                        iconColor: .gray
+                    ) {
+                        bottomSheetContent = .guildSettings
+                    }
+
+                    AdminActionButton(
+                        icon: "list.bullet.rectangle",
+                        title: "Guild Watchlist",
+                        subtitle: "Review requests and manage symbols",
+                        iconColor: .blue
+                    ) {
+                        bottomSheetContent = .manageGuildWatchlist
+                    }
+                }
+
+                Divider()
+                    .background(AppColors.whiteText.opacity(0.2))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+
+            // Reports Section - Moderator+ visible
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Reports")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText.opacity(0.7))
+                    .padding(.horizontal, 16)
+
+                AdminActionButton(
+                    icon: "flag.fill",
+                    title: "Manage Reports",
+                    subtitle: rlAppState.canAdmin ? "Review & resolve reports" : "View reported content",
+                    iconColor: .red
+                ) {
+                    bottomSheetContent = .manageReports
+                }
+            }
+
+            Divider()
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+            // Member Management Section
             VStack(alignment: .leading, spacing: 8) {
                 Text("Member Management")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.whiteText.opacity(0.7))
                     .padding(.horizontal, 16)
-                
-                // Invite Members (Coming Soon)
+
+                // Invite Members
                 AdminActionButton(
                     icon: "person.badge.plus",
                     title: "Invite Members",
-                    subtitle: "Coming soon",
-                    iconColor: .blue,
-                    isDisabled: true
-                ) { }
-                
-                // Ban Members (Coming Soon) - Admin only
-                if rlAppState.canAdmin {
-                    AdminActionButton(
-                        icon: "person.badge.minus",
-                        title: "Manage Bans",
-                        subtitle: "Coming soon",
-                        iconColor: .red,
-                        isDisabled: true
-                    ) { }
+                    subtitle: "Search and invite users to your guild",
+                    iconColor: .blue
+                ) {
+                    bottomSheetContent = .inviteMembers
                 }
-                
-                // Promote/Demote Members (Coming Soon) - Admin only
+
+                // Manage Members - Moderator+ (actions gated by role inside)
+                AdminActionButton(
+                    icon: "person.2.fill",
+                    title: "Manage Members",
+                    subtitle: rlAppState.canAdmin ? "Mute, suspend, kick & ban members" : "Mute & suspend members",
+                    iconColor: .purple
+                ) {
+                    bottomSheetContent = .manageMembers
+                }
+
+                // Manage Roles - Admin only
                 if rlAppState.canAdmin {
                     AdminActionButton(
                         icon: "person.badge.shield.checkmark",
                         title: "Manage Roles",
-                        subtitle: "Coming soon",
-                        iconColor: .orange,
-                        isDisabled: true
-                    ) { }
+                        subtitle: "Change member roles, kick or ban",
+                        iconColor: .orange
+                    ) {
+                        bottomSheetContent = .manageRoles
+                    }
                 }
             }
             

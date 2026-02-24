@@ -139,8 +139,16 @@ class RLAppState: ObservableObject {
     @Published var hasCompletedInitialLoad: Bool = false
     @Published var isChartReady: Bool = false
     @Published var isSessionRestored: Bool = false
+    private var transitionMinimumDismissAt: Date?
+    private var isFinalizingOnboarding: Bool = false
     
     @Published var showGuildSelectionSheet: Bool = false
+
+    /// Keeps auth/signup onboarding in ContentView even after auth tokens are issued.
+    @Published var isOnboardingFlowActive: Bool = false
+
+    /// Password reset token captured from deep-link.
+    @Published var pendingPasswordResetToken: String?
     
     /// Flag to prevent race conditions during login/signup flow
     /// When true, external triggers (like onAppear) should NOT call openGuildSelector
@@ -177,6 +185,7 @@ class RLAppState: ObservableObject {
         
         setupRealTimeObservers()
         setupPresenceListeners()
+        setupGuildEventListeners()
         
         Task {
             await restoreSession()
@@ -198,6 +207,8 @@ class RLAppState: ObservableObject {
         userGuilds = []
         showGuildSelectionSheet = false
         isHandlingAuthFlow = false
+        isOnboardingFlowActive = false
+        pendingPasswordResetToken = nil
         
         clearAllKeychain()
         resetChartReadyState()
@@ -214,8 +225,11 @@ class RLAppState: ObservableObject {
     /// Called automatically by RealAPIService after successful token refresh
     private func handleTokensRefreshed(accessToken: String, refreshToken: String) {
         print("🔐 Tokens refreshed - updating keychain")
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
+        DispatchQueue.main.async {
+            self.accessToken = accessToken
+            self.refreshToken = refreshToken
+            RealTimeService.shared.connect(token: accessToken)
+        }
     }
     
     // ================================================================================================
@@ -225,6 +239,7 @@ class RLAppState: ObservableObject {
     func finishTransition() {
         showingTransition = false
         hasCompletedInitialLoad = true
+        transitionMinimumDismissAt = nil
     }
     
     func chartDidBecomeReady() {
@@ -233,18 +248,49 @@ class RLAppState: ObservableObject {
     
     func resetChartReadyState() {
         isChartReady = false
+        transitionMinimumDismissAt = nil
     }
     
-    func showTransitionForChartLoad() {
+    func showTransitionForChartLoad(minimumDuration: TimeInterval = 0) {
         isChartReady = false
         showingTransition = true
+        transitionMinimumDismissAt = minimumDuration > 0 ? Date().addingTimeInterval(minimumDuration) : nil
+    }
+
+    func transitionMinimumRemaining() -> TimeInterval {
+        guard let transitionMinimumDismissAt else { return 0 }
+        return max(0, transitionMinimumDismissAt.timeIntervalSinceNow)
+    }
+
+    func hasSatisfiedTransitionMinimum() -> Bool {
+        transitionMinimumRemaining() <= 0
     }
     
     // ================================================================================================
     // MARK: - Error Management
     // ================================================================================================
+
+    private func isCancellationLikeError(_ error: Error) -> Bool {
+        if Task.isCancelled || error is CancellationError {
+            return true
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return true
+        }
+        if case let APIError.networkError(message) = error {
+            let lower = message.lowercased()
+            if lower.contains("cancelled") || lower.contains("canceled") {
+                return true
+            }
+        }
+        return false
+    }
     
     func showError(_ error: Error, title: String = "Error", style: RLAlertDisplayStyle = .alert) {
+        if isCancellationLikeError(error) {
+            return
+        }
+
         let alert = RLAppAlert(
             title: title,
             message: error.localizedDescription,
@@ -252,6 +298,9 @@ class RLAppState: ObservableObject {
             style: style
         )
         currentAlert = alert
+        if style == .toast {
+            ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+        }
     }
     
     func showError(title: String, message: String, severity: RLAlertSeverity = .error, style: RLAlertDisplayStyle = .alert) {
@@ -262,6 +311,9 @@ class RLAppState: ObservableObject {
             style: style
         )
         currentAlert = alert
+        if style == .toast {
+            ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+        }
     }
     
     func showSuccess(_ message: String, title: String = "Success") {
@@ -272,6 +324,7 @@ class RLAppState: ObservableObject {
             style: .toast
         )
         currentAlert = alert
+        ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
     func showInfo(_ message: String, title: String = "Info") {
@@ -282,6 +335,7 @@ class RLAppState: ObservableObject {
             style: .toast
         )
         currentAlert = alert
+        ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
     func showWarning(_ message: String, title: String = "Warning") {
@@ -303,7 +357,7 @@ class RLAppState: ObservableObject {
     // ================================================================================================
     
     /// Sign up new user
-    func signUp(data: RLSignupData) async throws {
+    func signUp(data: RLSignupData, beginOnboarding: Bool = false) async throws {
         isLoading = true
         errorMessage = nil
         isCompletingSignup = true
@@ -327,9 +381,14 @@ class RLAppState: ObservableObject {
             self.currentUser = response.user
             self.currentGuild = response.defaultGuild
             self.currentMembership = response.defaultGuildMembership
+            self.isSessionRestored = true
             
             showSuccess("Welcome to Traders Guild, \(response.user.username)!")
-            showTransitionForChartLoad()
+            if beginOnboarding {
+                isOnboardingFlowActive = true
+            } else {
+                showTransitionForChartLoad()
+            }
             
         } catch {
             showError(error, title: "Signup Failed", style: .alert)
@@ -337,8 +396,8 @@ class RLAppState: ObservableObject {
         }
     }
     
-    /// Login with email and password
-    func login(email: String, password: String) async throws {
+    /// Login with identifier (email or username) and password
+    func login(identifier: String, password: String) async throws {
         isLoading = true
         errorMessage = nil
         isHandlingAuthFlow = true  // ← Prevent race conditions
@@ -350,7 +409,7 @@ class RLAppState: ObservableObject {
         
         do {
             // Call real API
-            let response = try await realApi.login(email: email, password: password)
+            let response = try await realApi.login(identifier: identifier, password: password)
             
             // Store tokens
             self.accessToken = response.tokens.accessToken
@@ -358,6 +417,10 @@ class RLAppState: ObservableObject {
             
             // Set user (this triggers isAuthenticated = true)
             self.currentUser = response.user
+            // Always require explicit guild selection post-login.
+            self.currentGuild = nil
+            self.currentMembership = nil
+            self.isSessionRestored = true
             
             print("🔐 Login: User set, currentGuild before fetch: \(currentGuild?.name ?? "nil")")
             
@@ -375,16 +438,8 @@ class RLAppState: ObservableObject {
                 showGuildSelectionSheet = true
                 isHandlingAuthFlow = false
                 showWarning("Please join a guild to continue")
-            } else if userGuilds.count == 1 {
-                print("🔐 Login: Single guild - auto-selecting")
-                // Auto-select single guild
-                selectGuild(at: 0)
-                isHandlingAuthFlow = false
-                showTransitionForChartLoad()
             } else {
-                print("🔐 Login: Multiple guilds (\(userGuilds.count)) - showing selection sheet")
-                print("🔐 Login: showGuildSelectionSheet = true")
-                // Multiple guilds - show picker
+                print("🔐 Login: Guild selection required (\(userGuilds.count) guilds)")
                 showGuildSelectionSheet = true
                 isHandlingAuthFlow = false
             }
@@ -394,6 +449,7 @@ class RLAppState: ObservableObject {
             
             print("🔐 Login: Final state - currentGuild: \(currentGuild?.name ?? "nil"), showSheet: \(showGuildSelectionSheet)")
             
+            isOnboardingFlowActive = false
             showSuccess("Welcome back, \(response.user.username)!")
             
         } catch {
@@ -401,6 +457,11 @@ class RLAppState: ObservableObject {
             showError(error, title: "Login Failed", style: .alert)
             throw error
         }
+    }
+
+    /// Backward-compatible login wrapper for older call sites.
+    func login(email: String, password: String) async throws {
+        try await login(identifier: email, password: password)
     }
     
     /// Logout and clear session
@@ -419,6 +480,8 @@ class RLAppState: ObservableObject {
         userGuilds = []
         showGuildSelectionSheet = false  // ← Make sure sheet is dismissed
         isHandlingAuthFlow = false
+        isOnboardingFlowActive = false
+        pendingPasswordResetToken = nil
         presenceByUserId.removeAll()
         currentPresenceChannel = nil
         
@@ -429,29 +492,120 @@ class RLAppState: ObservableObject {
         
         showInfo("You've been logged out")
     }
+
+    func completeOnboardingAndEnterApp() {
+        guard !isFinalizingOnboarding else { return }
+        isFinalizingOnboarding = true
+
+        Task {
+            defer { isFinalizingOnboarding = false }
+
+            if currentUser == nil, accessToken != nil {
+                if let hydratedUser = try? await realApi.getCurrentUser() {
+                    currentUser = hydratedUser
+                }
+            }
+
+            guard isAuthenticated else {
+                showError(
+                    title: "Signup session not ready",
+                    message: "We could not finalize your account session. Please sign in and continue.",
+                    severity: .warning,
+                    style: .alert
+                )
+                return
+            }
+
+            if currentGuild == nil {
+                if userGuilds.isEmpty {
+                    try? await fetchUserGuilds()
+                }
+
+                if currentGuild == nil, let firstGuild = userGuilds.first {
+                    selectGuild(firstGuild, showTransition: false)
+                }
+
+                if currentGuild == nil {
+                    if let fallbackGuild = try? await assignOnboardingGuild(showTransition: false) {
+                        selectGuild(fallbackGuild, showTransition: false)
+                    }
+                }
+            }
+
+            guard currentGuild != nil else {
+                showError(
+                    title: "Guild selection required",
+                    message: "Please select a guild to continue.",
+                    severity: .warning,
+                    style: .alert
+                )
+                showGuildSelectionSheet = true
+                return
+            }
+
+            isOnboardingFlowActive = false
+            showTransitionForChartLoad(minimumDuration: 2.5)
+        }
+    }
+
+    func setPendingPasswordResetToken(_ token: String?) {
+        pendingPasswordResetToken = token
+    }
     
     /// Restore session from keychain
     func restoreSession() async {
         print("🔄 restoreSession: Starting...")
+
+        // Do not let background restoration clobber an active auth/signup flow.
+        if isAuthenticated || isHandlingAuthFlow || isOnboardingFlowActive {
+            isSessionRestored = true
+            return
+        }
         
         // Restore tokens
-        if let token = getTokenFromKeychain() {
-            self.accessToken = token
+        let storedAccessToken = getTokenFromKeychain()
+        let storedRefreshToken = getRefreshTokenFromKeychain()
+
+        if storedAccessToken != nil {
             print("🔄 restoreSession: Found access token")
         }
-        
-        if let refreshToken = getRefreshTokenFromKeychain() {
-            self.refreshToken = refreshToken
+        if storedRefreshToken != nil {
             print("🔄 restoreSession: Found refresh token")
         }
-        
-        // Set tokens on realApi if we have both
-        if let access = accessToken, let refresh = refreshToken {
+
+        var resolvedAccessToken = storedAccessToken
+        var resolvedRefreshToken = storedRefreshToken
+
+        // Set tokens on realApi and try to refresh before publishing accessToken
+        if let access = storedAccessToken, let refresh = storedRefreshToken {
             realApi.setTokens(access: access, refresh: refresh)
             print("🔄 restoreSession: Tokens set on API service")
-        } else if let access = accessToken {
+            do {
+                let refreshed = try await realApi.refreshAccessToken()
+                resolvedAccessToken = refreshed.accessToken
+                resolvedRefreshToken = refreshed.refreshToken
+                print("🔄 restoreSession: Tokens refreshed")
+            } catch {
+                print("⚠️ restoreSession: Token refresh failed: \(error)")
+            }
+        } else if let access = storedAccessToken {
             // Fallback - at least set access token
             realApi.setAccessToken(access)
+        }
+
+        // If auth/signup completed while we were restoring, keep live in-memory state.
+        if isAuthenticated || isHandlingAuthFlow || isOnboardingFlowActive || currentUser != nil {
+            print("🔄 restoreSession: Skipping apply - live auth state already established")
+            isSessionRestored = true
+            return
+        }
+
+        // Publish tokens after refresh attempt so WS connects with valid token
+        if let access = resolvedAccessToken {
+            self.accessToken = access
+        }
+        if let refresh = resolvedRefreshToken {
+            self.refreshToken = refresh
         }
         
         if let user = getUserFromKeychain() {
@@ -509,9 +663,13 @@ class RLAppState: ObservableObject {
     
     /// Select a guild directly (primary method)
     /// - Parameter showTransition: Whether to show loading transition (false for manual guild switching)
-    func selectGuild(_ guildWithMembership: RLGuildWithMembership, showTransition: Bool = false) {
+    func selectGuild(
+        _ guildWithMembership: RLGuildWithMembership,
+        showTransition: Bool = false,
+        minimumTransitionDuration: TimeInterval = 0
+    ) {
         if showTransition {
-            showTransitionForChartLoad()
+            showTransitionForChartLoad(minimumDuration: minimumTransitionDuration)
         }
         
         self.currentGuild = guildWithMembership.guild
@@ -520,6 +678,30 @@ class RLAppState: ObservableObject {
         // Dismiss the sheet if it's open
         if showGuildSelectionSheet {
             showGuildSelectionSheet = false
+        }
+        
+        // Refresh current user's guild reputation from reputation-service so UI never shows stale 0
+        Task { await refreshCurrentGuildReputation() }
+    }
+    
+    /// Refreshes current user's guild reputation and accuracy from reputation-service and updates currentMembership.
+    /// Call after selecting a guild, when app becomes active, and when opening profile so UI never shows stale 0 or missing accuracy.
+    func refreshCurrentGuildReputation() async {
+        guard let guild = currentGuild, let membership = currentMembership else { return }
+        var newReputation: Int? = nil
+        var newAccuracyRate: Double? = nil
+        do {
+            let profile = try await realApi.getMyGuildReputation(guildId: guild.id)
+            newReputation = profile.reputation
+        } catch { /* non-fatal */ }
+        do {
+            let accuracyProfile = try await realApi.getMyGuildAccuracy(guildId: guild.id)
+            newAccuracyRate = accuracyProfile.accuracyRate
+        } catch { /* non-fatal */ }
+        let rep = newReputation ?? membership.reputation
+        let acc = newAccuracyRate ?? membership.accuracyRate
+        if rep != membership.reputation || acc != membership.accuracyRate {
+            currentMembership = membership.withReputation(rep, accuracyRate: acc)
         }
     }
     
@@ -547,12 +729,24 @@ class RLAppState: ObservableObject {
     }
     
     /// Fetch guilds user can join (not already a member of)
-    func fetchJoinableGuilds() async throws -> [RLGuildDTO] {
+    func fetchJoinableGuilds(
+        search: String? = nil,
+        isOpen: Bool? = nil,
+        language: String? = nil,
+        location: String? = nil,
+        sort: String? = nil
+    ) async throws -> [RLGuildDTO] {
         isLoading = true
         defer { isLoading = false }
         
         do {
-            let guilds = try await realApi.getJoinableGuilds()
+            let guilds = try await realApi.getJoinableGuilds(
+                search: search,
+                isOpen: isOpen,
+                language: language,
+                location: location,
+                sort: sort
+            )
             print("🏰 fetchJoinableGuilds: Found \(guilds.count) joinable guilds")
             return guilds
         } catch {
@@ -566,8 +760,33 @@ class RLAppState: ObservableObject {
         return try await fetchJoinableGuilds()
     }
 
+    /// Fetch open guilds available before authentication (signup discovery).
+    func fetchPublicOpenGuilds(
+        search: String? = nil,
+        language: String? = nil,
+        location: String? = nil,
+        sort: String? = nil
+    ) async throws -> [RLGuildDTO] {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let guilds = try await realApi.getPublicOpenGuilds(
+                search: search,
+                language: language,
+                location: location,
+                sort: sort
+            )
+            print("🏰 fetchPublicOpenGuilds: Found \(guilds.count) open guilds")
+            return guilds
+        } catch {
+            showError(error, title: "Failed to Fetch Open Guilds", style: .toast)
+            throw error
+        }
+    }
+
     /// Join a guild - returns the combined guild with membership
-    func joinGuild(guildId: UUID) async throws -> RLGuildWithMembership {
+    func joinGuild(guildId: UUID, showTransition: Bool = true) async throws -> RLGuildWithMembership {
         do {
             let response = try await realApi.joinGuild(guildId: guildId)
             let guildWithMembership = response.asGuildWithMembership
@@ -575,19 +794,75 @@ class RLAppState: ObservableObject {
             // Add to local guild list
             userGuilds.append(guildWithMembership)
             
-            // Select the newly joined guild (show transition)
-            selectGuild(guildWithMembership, showTransition: true)
+            // Select the newly joined guild.
+            selectGuild(guildWithMembership, showTransition: showTransition)
             
             showSuccess("Joined \(guildWithMembership.guild.name) successfully!")
             return guildWithMembership
         } catch {
+            if case APIError.badRequest(let detail) = error, detail == "approval_required" {
+                showError(
+                    title: "Approval Required",
+                    message: "This guild is private. Submit a join request instead.",
+                    severity: .warning,
+                    style: .toast
+                )
+                throw error
+            }
+            if case APIError.serverError(let statusCode, let detail) = error, statusCode == 403 {
+                if detail == "approval_required" {
+                    showError(
+                        title: "Approval Required",
+                        message: "This guild is private. Submit a join request instead.",
+                        severity: .warning,
+                        style: .toast
+                    )
+                    throw error
+                }
+                if detail.hasPrefix("kicked_cooldown_active_until:") {
+                    showError(
+                        title: "Rejoin Cooldown Active",
+                        message: "You were recently removed from this guild and can rejoin after the cooldown, unless invited by an owner/admin.",
+                        severity: .warning,
+                        style: .toast
+                    )
+                    throw error
+                }
+            }
             showError(error, title: "Failed to Join Guild", style: .toast)
+            throw error
+        }
+    }
+
+    /// Assign user to an onboarding fallback guild (no-open-guild signup path).
+    func assignOnboardingGuild(showTransition: Bool = false) async throws -> RLGuildWithMembership {
+        do {
+            let response = try await realApi.assignOnboardingGuild()
+            let guildWithMembership = response.asGuildWithMembership
+
+            if let existingIndex = userGuilds.firstIndex(where: { $0.guild.id == guildWithMembership.guild.id }) {
+                userGuilds[existingIndex] = guildWithMembership
+            } else {
+                userGuilds.append(guildWithMembership)
+            }
+
+            selectGuild(guildWithMembership, showTransition: showTransition)
+            return guildWithMembership
+        } catch {
+            showError(error, title: "Failed to Assign Onboarding Guild", style: .toast)
             throw error
         }
     }
     
     /// Create a new guild - returns the combined guild with membership
-    func createGuild(name: String, description: String?, isOpen: Bool) async throws -> RLGuildWithMembership {
+    func createGuild(
+        name: String,
+        description: String?,
+        isOpen: Bool,
+        language: String? = nil,
+        location: String? = nil,
+        joinQuestions: [RLGuildJoinQuestionInputDTO] = []
+    ) async throws -> RLGuildWithMembership {
         isLoading = true
         defer { isLoading = false }
         
@@ -595,7 +870,10 @@ class RLAppState: ObservableObject {
             let response = try await realApi.createGuild(
                 name: name,
                 description: description,
-                isOpen: isOpen
+                isOpen: isOpen,
+                language: language,
+                location: location,
+                joinQuestions: joinQuestions
             )
             let guildWithMembership = response.asGuildWithMembership
             
@@ -608,6 +886,15 @@ class RLAppState: ObservableObject {
             showSuccess("Created \(guildWithMembership.guild.name) successfully!")
             return guildWithMembership
         } catch {
+            if case APIError.badRequest(let detail) = error, detail == "guild_create_limit_reached" {
+                showError(
+                    title: "Guild Limit Reached",
+                    message: "You can own up to 5 active guilds.",
+                    severity: .warning,
+                    style: .toast
+                )
+                throw error
+            }
             showError(error, title: "Failed to Create Guild", style: .toast)
             throw error
         }
@@ -637,6 +924,67 @@ class RLAppState: ObservableObject {
             }
         } catch {
             showError(error, title: "Failed to Leave Guild", style: .toast)
+            throw error
+        }
+    }
+
+    func getGuildJoinQuestions(guildId: UUID) async throws -> [RLGuildJoinQuestionDTO] {
+        do {
+            let response = try await realApi.getGuildJoinQuestions(guildId: guildId)
+            return response.questions
+        } catch {
+            showError(error, title: "Failed to Load Questions", style: .toast)
+            throw error
+        }
+    }
+
+    func submitGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {
+        do {
+            let result = try await realApi.createGuildJoinRequest(guildId: guildId, note: note, answers: answers)
+            showSuccess("Join request submitted")
+            return result
+        } catch {
+            showError(error, title: "Failed to Submit Request", style: .toast)
+            throw error
+        }
+    }
+
+    func getGuildJoinRequests(guildId: UUID, status: String? = "pending") async throws -> [RLGuildJoinRequestDTO] {
+        do {
+            let response = try await realApi.getGuildJoinRequests(guildId: guildId, status: status)
+            return response.requests
+        } catch {
+            showError(error, title: "Failed to Load Join Requests", style: .toast)
+            throw error
+        }
+    }
+
+    func approveGuildJoinRequest(guildId: UUID, requestId: UUID, reviewNote: String? = nil) async throws -> RLGuildJoinRequestDTO {
+        do {
+            let response = try await realApi.approveGuildJoinRequest(
+                guildId: guildId,
+                requestId: requestId,
+                reviewNote: reviewNote
+            )
+            showSuccess("Join request approved")
+            return response
+        } catch {
+            showError(error, title: "Failed to Approve Request", style: .toast)
+            throw error
+        }
+    }
+
+    func declineGuildJoinRequest(guildId: UUID, requestId: UUID, reviewNote: String? = nil) async throws -> RLGuildJoinRequestDTO {
+        do {
+            let response = try await realApi.declineGuildJoinRequest(
+                guildId: guildId,
+                requestId: requestId,
+                reviewNote: reviewNote
+            )
+            showSuccess("Join request declined")
+            return response
+        } catch {
+            showError(error, title: "Failed to Decline Request", style: .toast)
             throw error
         }
     }
@@ -790,6 +1138,7 @@ class RLAppState: ObservableObject {
                 guildId: guild.id,
                 role: membership.role,
                 reputation: membership.reputation,
+                accuracyRate: nil,
                 userDisplayName: user.displayName,
                 userUsername: user.username,
                 userAvatarUrl: user.avatarUrl
@@ -878,12 +1227,255 @@ class RLAppState: ObservableObject {
         }
     }
     
-    
-    
+
+
+
+    // ================================================================================================
+    // MARK: - Guild Admin Panel (REAL API)
+    // ================================================================================================
+
+    // MARK: Guild Settings
+
+    /// Update guild settings (name, description, is_open)
+    func updateGuild(name: String?, description: String?, isOpen: Bool?) async throws -> RLGuildDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let updated = try await realApi.updateGuild(guildId: guild.id, name: name, description: description, isOpen: isOpen)
+            // Update local state
+            self.currentGuild = updated
+            showSuccess("Guild settings updated!")
+            return updated
+        } catch {
+            showError(error, title: "Failed to Update Guild", style: .toast)
+            throw error
+        }
+    }
+
+    // MARK: Invite Members
+
+    /// Search users for inviting to guild
+    func searchUsersForInvite(search: String) async throws -> [RLUserSearchResultDTO] {
+        guard let guild = currentGuild else { return [] }
+        do {
+            let result = try await realApi.searchUsersForInvite(guildId: guild.id, search: search)
+            return result.users
+        } catch {
+            showError(error, title: "Search Failed", style: .toast)
+            throw error
+        }
+    }
+
+    /// Send a guild invite to a user
+    func sendGuildInvite(username: String) async throws -> RLGuildInvitationDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let invitation = try await realApi.createGuildInvite(guildId: guild.id, username: username)
+            showSuccess("Invite sent!")
+            return invitation
+        } catch {
+            showError(error, title: "Failed to Send Invite", style: .toast)
+            throw error
+        }
+    }
+
+    /// Fetch pending guild invitations
+    func fetchGuildInvites() async throws -> [RLGuildInvitationDTO] {
+        guard let guild = currentGuild else { return [] }
+        do {
+            let result = try await realApi.getGuildInvites(guildId: guild.id)
+            return result.invitations
+        } catch {
+            showError(error, title: "Failed to Load Invites", style: .toast)
+            throw error
+        }
+    }
+
+    /// Cancel a pending guild invite
+    func cancelGuildInvite(inviteId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.cancelGuildInvite(guildId: guild.id, inviteId: inviteId)
+            showSuccess("Invite cancelled")
+        } catch {
+            showError(error, title: "Failed to Cancel Invite", style: .toast)
+            throw error
+        }
+    }
+
+    /// Accept a guild invite
+    func acceptGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLGuildWithMembership {
+        do {
+            let result = try await realApi.acceptGuildInvite(guildId: guildId, inviteId: inviteId)
+            showSuccess("Joined guild!")
+            return result
+        } catch {
+            showError(error, title: "Failed to Accept Invite", style: .toast)
+            throw error
+        }
+    }
+
+    /// Decline a guild invite
+    func declineGuildInvite(guildId: UUID, inviteId: UUID) async throws {
+        do {
+            _ = try await realApi.declineGuildInvite(guildId: guildId, inviteId: inviteId)
+        } catch {
+            showError(error, title: "Failed to Decline Invite", style: .toast)
+            throw error
+        }
+    }
+
+    // MARK: Ban & Kick
+
+    /// Ban a member from the guild
+    func banMember(userId: UUID, reason: String?) async throws -> RLGuildBanDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let ban = try await realApi.banMember(guildId: guild.id, userId: userId, reason: reason)
+            showSuccess("Member banned")
+            return ban
+        } catch {
+            showError(error, title: "Failed to Ban Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Unban a member
+    func unbanMember(banId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.unbanMember(guildId: guild.id, banId: banId)
+            showSuccess("Member unbanned")
+        } catch {
+            showError(error, title: "Failed to Unban Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Fetch banned users for the guild
+    func fetchGuildBans() async throws -> [RLGuildBanDTO] {
+        guard let guild = currentGuild else { return [] }
+        do {
+            let result = try await realApi.getGuildBans(guildId: guild.id)
+            return result.bans
+        } catch {
+            showError(error, title: "Failed to Load Bans", style: .toast)
+            throw error
+        }
+    }
+
+    /// Kick a member from the guild
+    func kickMember(userId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.kickMember(guildId: guild.id, userId: userId)
+            showSuccess("Member kicked")
+        } catch {
+            showError(error, title: "Failed to Kick Member", style: .toast)
+            throw error
+        }
+    }
+
+    // MARK: Mute / Suspend
+
+    /// Mute a member
+    func muteMember(userId: UUID, durationMinutes: Int, reason: String?) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.muteMember(guildId: guild.id, userId: userId, durationMinutes: durationMinutes, reason: reason)
+            showSuccess("Member muted")
+        } catch {
+            showError(error, title: "Failed to Mute Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Unmute a member
+    func unmuteMember(userId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.unmuteMember(guildId: guild.id, userId: userId)
+            showSuccess("Member unmuted")
+        } catch {
+            showError(error, title: "Failed to Unmute Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Suspend a member
+    func suspendMember(userId: UUID, durationMinutes: Int, reason: String?) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.suspendMember(guildId: guild.id, userId: userId, durationMinutes: durationMinutes, reason: reason)
+            showSuccess("Member suspended")
+        } catch {
+            showError(error, title: "Failed to Suspend Member", style: .toast)
+            throw error
+        }
+    }
+
+    /// Unsuspend a member
+    func unsuspendMember(userId: UUID) async throws {
+        guard let guild = currentGuild else { return }
+        do {
+            _ = try await realApi.unsuspendMember(guildId: guild.id, userId: userId)
+            showSuccess("Member unsuspended")
+        } catch {
+            showError(error, title: "Failed to Unsuspend Member", style: .toast)
+            throw error
+        }
+    }
+
+    // MARK: Manage Roles
+
+    /// Change a member's role
+    func changeMemberRole(userId: UUID, role: String) async throws -> RLGuildMemberRoleResponseDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let result = try await realApi.changeMemberRole(guildId: guild.id, userId: userId, role: role)
+            showSuccess("Role updated to \(role)")
+            return result
+        } catch {
+            showError(error, title: "Failed to Change Role", style: .toast)
+            throw error
+        }
+    }
+
+
+    // MARK: Content Reports
+
+    /// Fetch guild reports
+    func fetchGuildReports(status: String? = nil, contentType: String? = nil) async throws -> RLContentReportsListDTO {
+        guard let guild = currentGuild else {
+            return RLContentReportsListDTO(reports: [], totalCount: 0, pendingCount: 0)
+        }
+        do {
+            return try await realApi.getGuildReports(guildId: guild.id, status: status, contentType: contentType)
+        } catch {
+            showError(error, title: "Failed to Load Reports", style: .toast)
+            throw error
+        }
+    }
+
+    /// Resolve or dismiss a report
+    func resolveReport(reportId: UUID, action: String, note: String?) async throws -> RLContentReportDTO {
+        guard let guild = currentGuild else {
+            throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"])
+        }
+        do {
+            let result = try await realApi.resolveReport(guildId: guild.id, reportId: reportId, action: action, note: note)
+            showSuccess("Report \(action)")
+            return result
+        } catch {
+            showError(error, title: "Failed to Resolve Report", style: .toast)
+            throw error
+        }
+    }
+
+
     // ================================================================================================
     // MARK: - User Profile Management (REAL API)
     // ================================================================================================
-    
+
     /// Fetch current user's full profile (profile + stats + awards summary)
     func fetchCurrentUserFullProfile(guildId: UUID? = nil) async throws -> RLUserFullProfileDTO {
         do {
@@ -1015,6 +1607,16 @@ class RLAppState: ObservableObject {
         do {
             return try await realApi.getCurrentUserStatistics()
         } catch {
+            if Task.isCancelled || error is CancellationError {
+                throw error
+            }
+            if let urlError = error as? URLError, urlError.code == .cancelled {
+                throw error
+            }
+            if case let APIError.networkError(message) = error,
+               message.lowercased().contains("cancelled") {
+                throw error
+            }
             showError(error, title: "Failed to Load Statistics", style: .toast)
             throw error
         }
@@ -1023,6 +1625,36 @@ class RLAppState: ObservableObject {
     // =============================================================================================
     // MARK: - Account Management (Settings)
     // =============================================================================================
+
+    /// Request password reset email (email or username identifier).
+    func requestPasswordReset(identifier: String) async throws -> RLPasswordForgotResponseDTO {
+        do {
+            return try await realApi.requestPasswordReset(identifier: identifier)
+        } catch {
+            showError(error, title: "Password Reset Failed", style: .alert)
+            throw error
+        }
+    }
+
+    /// Verify reset token before showing reset form.
+    func verifyPasswordResetToken(_ token: String) async throws -> RLPasswordResetVerifyResponseDTO {
+        do {
+            return try await realApi.verifyPasswordResetToken(token)
+        } catch {
+            showError(error, title: "Invalid Reset Link", style: .alert)
+            throw error
+        }
+    }
+
+    /// Reset password with one-time token.
+    func resetPassword(token: String, newPassword: String) async throws -> RLPasswordResetResponseDTO {
+        do {
+            return try await realApi.resetPassword(token: token, newPassword: newPassword)
+        } catch {
+            showError(error, title: "Reset Password Failed", style: .alert)
+            throw error
+        }
+    }
 
     /// Request email change (sends verification to new email)
     func requestEmailChange(newEmail: String, currentPassword: String) async throws -> RLDetailResponseDTO {
@@ -1466,7 +2098,7 @@ class RLAppState: ObservableObject {
     }
     
     /// Send a chatroom message
-    func sendChatroomMessage(chatroomId: UUID, content: String) async throws -> RLChatroomMessageDTO {
+    func sendChatroomMessage(chatroomId: UUID, content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) async throws -> RLChatroomMessageDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
@@ -1474,7 +2106,10 @@ class RLAppState: ObservableObject {
             return try await realApi.sendChatroomMessage(
                 guildId: guild.id,
                 chatroomId: chatroomId,
-                content: content
+                content: content,
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
             )
         } catch {
             showError(error, title: "Failed to Send Message", style: .toast)
@@ -1671,7 +2306,7 @@ class RLAppState: ObservableObject {
     }
     
     /// Send a DM message
-    func sendDMMessage(threadId: UUID, content: String) async throws -> RLDMMessageDTO {
+    func sendDMMessage(threadId: UUID, content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) async throws -> RLDMMessageDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
@@ -1679,7 +2314,10 @@ class RLAppState: ObservableObject {
             return try await realApi.sendDMMessage(
                 guildId: guild.id,
                 threadId: threadId,
-                content: content
+                content: content,
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
             )
         } catch {
             showError(error, title: "Failed to Send Message", style: .toast)
@@ -1880,9 +2518,113 @@ class RLAppState: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // =============================================================================================
+    // MARK: - GUILD EVENT LISTENERS (Real-Time Sync)
+    // =============================================================================================
 
+    /// Listen for guild_updated and member_role_changed WebSocket events
+    /// to keep all clients in sync when an admin makes changes.
+    func setupGuildEventListeners() {
+        RealTimeService.shared.messageSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                guard let self = self else { return }
+                guard let type = WSMessageType(rawValue: message.type) else { return }
 
-    
+                switch type {
+                case .guildUpdated:
+                    self.handleGuildUpdatedEvent(message)
+                case .memberRoleChanged:
+                    self.handleMemberRoleChangedEvent(message)
+                case .memberMuted:
+                    self.handleMemberMutedEvent(message)
+                case .memberSuspended:
+                    self.handleMemberSuspendedEvent(message)
+                default:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleGuildUpdatedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSGuildUpdatedPayload.self) else { return }
+        guard let guildId = UUID(uuidString: payload.guildId) else { return }
+
+        // Update currentGuild if it matches
+        if let current = currentGuild, current.id == guildId {
+            currentGuild = current.withUpdatedSettings(
+                name: payload.name,
+                description: payload.description,
+                isOpen: payload.isOpen
+            )
+            print("🏰 [AppState] Guild settings updated via WebSocket: \(payload.name ?? "nil")")
+        }
+    }
+
+    private func handleMemberRoleChangedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSMemberRoleChangedPayload.self) else { return }
+        guard let userId = UUID(uuidString: payload.userId),
+              let guildId = UUID(uuidString: payload.guildId) else { return }
+
+        // If the role change affects the current user's own membership, update it
+        if userId == currentUser?.id, let membership = currentMembership, membership.guildId == guildId {
+            currentMembership = membership.withRole(payload.newRole)
+            print("🏰 [AppState] Own role updated via WebSocket: \(payload.oldRole) → \(payload.newRole)")
+        }
+
+        // Post a notification so any open member lists/profiles can refresh
+        NotificationCenter.default.post(
+            name: .guildMemberRoleChanged,
+            object: nil,
+            userInfo: [
+                "guildId": guildId,
+                "userId": userId,
+                "oldRole": payload.oldRole,
+                "newRole": payload.newRole
+            ]
+        )
+        print("🏰 [AppState] Member role changed via WebSocket: user=\(payload.userId) \(payload.oldRole)→\(payload.newRole)")
+    }
+
+    private func handleMemberMutedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSMemberMutedPayload.self) else { return }
+        guard let userId = UUID(uuidString: payload.userId),
+              let guildId = UUID(uuidString: payload.guildId) else { return }
+
+        // Post notification so member lists can update
+        NotificationCenter.default.post(
+            name: .guildMemberMuteChanged,
+            object: nil,
+            userInfo: [
+                "guildId": guildId,
+                "userId": userId,
+                "mutedUntil": payload.mutedUntil as Any,
+                "action": payload.action
+            ]
+        )
+        print("🔇 [AppState] Member mute event via WebSocket: user=\(payload.userId) action=\(payload.action)")
+    }
+
+    private func handleMemberSuspendedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSMemberSuspendedPayload.self) else { return }
+        guard let userId = UUID(uuidString: payload.userId),
+              let guildId = UUID(uuidString: payload.guildId) else { return }
+
+        // Post notification so member lists can update
+        NotificationCenter.default.post(
+            name: .guildMemberSuspendChanged,
+            object: nil,
+            userInfo: [
+                "guildId": guildId,
+                "userId": userId,
+                "suspendedUntil": payload.suspendedUntil as Any,
+                "action": payload.action
+            ]
+        )
+        print("⏸️ [AppState] Member suspend event via WebSocket: user=\(payload.userId) action=\(payload.action)")
+    }
+
     // =============================================================================================
     // MARK: - NOTIFICATION MANAGEMENT
     // =============================================================================================
@@ -1962,6 +2704,203 @@ class RLAppState: ObservableObject {
         let channel = "user:\(userId):notifications"
         RealTimeService.shared.unsubscribe(from: [channel], owner: "notifications")
     }
+    
+    // =============================================================================================
+    // MARK: - Chart Management (REAL API)
+    // =============================================================================================
+    
+    /// Fetch user's personal watchlist
+    func fetchPersonalWatchlist() async throws -> RLPersonalWatchlistDTO {
+        do {
+            return try await realApi.getPersonalWatchlist()
+        } catch {
+            showError(error, title: "Failed to Load Watchlist", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch guild's watchlist
+    func fetchGuildWatchlist(guildId: UUID) async throws -> RLGuildWatchlistDTO {
+        do {
+            return try await realApi.getGuildWatchlist(guildId: guildId)
+        } catch {
+            showError(error, title: "Failed to Load Watchlist", style: .toast)
+            throw error
+        }
+    }
+
+    /// Add symbol to guild watchlist (admin/owner)
+    func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
+        do {
+            let result = try await realApi.addToGuildWatchlist(guildId: guildId, symbolId: symbolId)
+            showSuccess("Added to guild watchlist")
+            return result
+        } catch {
+            showError(error, title: "Failed to Add Symbol", style: .toast)
+            throw error
+        }
+    }
+
+    /// Remove symbol from guild watchlist (admin/owner)
+    func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
+        do {
+            _ = try await realApi.removeFromGuildWatchlist(guildId: guildId, symbolId: symbolId)
+            showSuccess("Removed from guild watchlist")
+        } catch {
+            showError(error, title: "Failed to Remove Symbol", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Add symbol to personal watchlist
+    func addToPersonalWatchlist(symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
+        do {
+            let result = try await realApi.addToPersonalWatchlist(symbolId: symbolId)
+            showSuccess("Added to watchlist")
+            return result
+        } catch {
+            showError(error, title: "Failed to Add Symbol", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Remove symbol from personal watchlist
+    func removeFromPersonalWatchlist(symbolId: UUID) async throws {
+        do {
+            _ = try await realApi.removeFromPersonalWatchlist(symbolId: symbolId)
+            showSuccess("Removed from watchlist")
+        } catch {
+            showError(error, title: "Failed to Remove Symbol", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Reorder personal watchlist
+    func reorderPersonalWatchlist(symbolIds: [UUID]) async throws {
+        do {
+            _ = try await realApi.reorderPersonalWatchlist(symbolIds: symbolIds)
+        } catch {
+            showError(error, title: "Failed to Reorder Watchlist", style: .toast)
+            throw error
+        }
+    }
+
+    /// Request a guild watchlist addition
+    func requestGuildWatchlistAddition(guildId: UUID, symbolId: UUID) async throws {
+        do {
+            _ = try await realApi.requestGuildWatchlistAddition(guildId: guildId, symbolId: symbolId)
+            showSuccess("Request submitted")
+        } catch {
+            showError(error, title: "Failed to Request Watchlist Add", style: .toast)
+            throw error
+        }
+    }
+
+    /// Fetch guild watchlist requests
+    func fetchGuildWatchlistRequests(status: String = "pending") async throws -> RLGuildWatchlistRequestsListResponseDTO {
+        guard let guildId = currentGuild?.id else {
+            return RLGuildWatchlistRequestsListResponseDTO(requests: [], totalCount: 0)
+        }
+        do {
+            return try await realApi.getGuildWatchlistRequests(guildId: guildId, status: status)
+        } catch {
+            showError(error, title: "Failed to Load Requests", style: .toast)
+            throw error
+        }
+    }
+
+    /// Approve or reject a guild watchlist request
+    func reviewGuildWatchlistRequest(
+        requestId: UUID,
+        action: String,
+        reviewNote: String? = nil
+    ) async throws -> RLGuildWatchlistRequestResponseDTO {
+        guard let guildId = currentGuild?.id else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            let response = try await realApi.reviewGuildWatchlistRequest(
+                guildId: guildId,
+                requestId: requestId,
+                action: action,
+                reviewNote: reviewNote
+            )
+            showSuccess(action == "approved" ? "Request approved" : "Request rejected")
+            return response
+        } catch {
+            showError(error, title: "Failed to Review Request", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Fetch combined chart data (symbol + candles + markers)
+    func fetchChartData(guildId: UUID, symbolId: UUID, timeframe: String, candleLimit: Int = 200) async throws -> RLChartDataDTO {
+        do {
+            return try await realApi.getChartData(
+                guildId: guildId,
+                symbolId: symbolId,
+                timeframe: timeframe,
+                candleLimit: candleLimit
+            )
+        } catch {
+            showError(error, title: "Failed to Load Chart Data", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Get or create a chart chat for a symbol + guild
+    func getOrCreateChartChat(guildId: UUID, symbolId: UUID) async throws -> RLChartChatDTO {
+        do {
+            return try await realApi.getOrCreateChartChat(guildId: guildId, symbolId: symbolId)
+        } catch {
+            showError(error, title: "Failed to Open Chat", style: .toast)
+            throw error
+        }
+    }
+    
+    /// Send a message to a chart chat
+    func sendChartChatMessage(chatId: UUID, content: String) async throws -> RLChartChatMessageDTO {
+        do {
+            return try await realApi.sendChartChatMessage(chatId: chatId, content: content)
+        } catch {
+            showError(error, title: "Failed to Send Message", style: .toast)
+            throw error
+        }
+    }
+
+    // =============================================================================================
+    // MARK: - Reporting & Sharing (Pending backend support)
+    // =============================================================================================
+
+    func reportChatroom(guildId: UUID, chatroomId: UUID, reason: String) async throws {
+        do {
+            _ = try await realApi.reportChatroom(guildId: guildId, chatroomId: chatroomId, reason: reason)
+            showSuccess("Report submitted")
+        } catch {
+            showError(error, title: "Failed to Report Chatroom", style: .toast)
+            throw error
+        }
+    }
+
+    func reportUser(guildId: UUID, userId: UUID, reason: String) async throws {
+        do {
+            _ = try await realApi.reportUser(guildId: guildId, userId: userId, reason: reason)
+            showSuccess("Report submitted")
+        } catch {
+            showError(error, title: "Failed to Report User", style: .toast)
+            throw error
+        }
+    }
+
+    func shareEvent(guildId: UUID, eventId: UUID, friendId: UUID) async throws {
+        do {
+            _ = try await realApi.shareEvent(guildId: guildId, eventId: eventId, friendId: friendId)
+            showSuccess("Event shared")
+        } catch {
+            showError(error, title: "Failed to Share Event", style: .toast)
+            throw error
+        }
+    }
 }
 
 // ================================================================================================
@@ -1988,3 +2927,26 @@ enum RLAppError: LocalizedError {
     }
 }
 
+// MARK: - Notification Names for Guild Events
+
+extension Notification.Name {
+    /// Posted when a member's role changes via WebSocket.
+    /// userInfo: ["guildId": UUID, "userId": UUID, "oldRole": String, "newRole": String]
+    static let guildMemberRoleChanged = Notification.Name("guildMemberRoleChanged")
+
+    /// Posted when a member's mute status changes via WebSocket.
+    /// userInfo: ["guildId": UUID, "userId": UUID, "mutedUntil": String?, "action": String]
+    static let guildMemberMuteChanged = Notification.Name("guildMemberMuteChanged")
+
+    /// Posted when a member's suspend status changes via WebSocket.
+    /// userInfo: ["guildId": UUID, "userId": UUID, "suspendedUntil": String?, "action": String]
+    static let guildMemberSuspendChanged = Notification.Name("guildMemberSuspendChanged")
+
+    /// Posted when a user's reputation changes via WebSocket.
+    /// userInfo: ["guildId": String, "newGuildReputation": Int, "newGlobalReputation": Int, "tierLevel": Int, "tierChanged": Bool, "pointsAwarded": Int]
+    static let reputationDidUpdate = Notification.Name("reputationDidUpdate")
+
+    /// Posted when a user's trading accuracy changes via WebSocket (prediction win/loss).
+    /// userInfo: ["guildId": String, "newAccuracyRate": Double, "totalPredictions": Int, "successfulPredictions": Int, "winStreak": Int, "isWin": Bool]
+    static let accuracyDidUpdate = Notification.Name("accuracyDidUpdate")
+}

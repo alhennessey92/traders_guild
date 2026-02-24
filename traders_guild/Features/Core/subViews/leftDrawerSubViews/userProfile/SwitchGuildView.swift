@@ -15,7 +15,6 @@ struct SwitchGuildView: View {
     @Binding var selectedDetent: PresentationDetent
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
     @State private var isLoading: Bool = false
@@ -106,6 +105,13 @@ struct SwitchGuildView: View {
             
             Divider()
 
+            Text("More options")
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 25)
+                .padding(.top, 12)
+
             HStack(spacing: 8) {
                 DrawerActionButton(
                     title: "Join a Guild",
@@ -117,9 +123,9 @@ struct SwitchGuildView: View {
                         showJoinGuild = true
                     }
                 )
-                
+
                 Spacer()
-                
+
                 DrawerActionButton(
                     title: "Create a Guild",
                     backgroundColor: AppColors.whiteText.opacity(0.8),
@@ -132,7 +138,8 @@ struct SwitchGuildView: View {
                 )
             }
             .padding(.horizontal, 25)
-            .padding(.top, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 16)
             .background(AppColors.sheetBackground)
         }
         .task {
@@ -141,12 +148,10 @@ struct SwitchGuildView: View {
         .fullScreenCover(isPresented: $showJoinGuild) {
             JoinGuildFlowView()
                 .environmentObject(rlAppState)
-                .environmentObject(appState)
         }
         .fullScreenCover(isPresented: $showCreateGuild) {
             CreateGuildFlowView()
                 .environmentObject(rlAppState)
-                .environmentObject(appState)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
@@ -225,9 +230,9 @@ struct GuildSwitchRow: View {
                         .foregroundColor(AppColors.whiteText)
                         .padding(.leading, 15)
                     
-                    // Owner info (TODO: backend will return embedded owner)
+                    // Owner info
                     HStack(spacing: 3) {
-                        Text("Owner Name")  // TODO: item.guild.owner.displayName
+                        Text(item.guild.ownerDisplayName ?? item.guild.ownerUsername ?? "Unknown Owner")
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
                             .lineLimit(1)
@@ -236,13 +241,29 @@ struct GuildSwitchRow: View {
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
                         
-                        Text("Admin")  // TODO: item.guild.ownerRole.displayName
+                        Text("Owner")
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(AppColors.accentColor)
                             .fontWeight(.semibold)
                             .lineLimit(1)
                     }
                     .padding(.leading, 15)
+
+                    if item.guild.language != nil || item.guild.location != nil {
+                        HStack(spacing: 6) {
+                            if let language = item.guild.language, !language.isEmpty {
+                                Text(language)
+                                    .font(.caption2)
+                                    .foregroundColor(AppColors.whiteText.opacity(0.75))
+                            }
+                            if let location = item.guild.location, !location.isEmpty {
+                                Text("• \(location)")
+                                    .font(.caption2)
+                                    .foregroundColor(AppColors.whiteText.opacity(0.75))
+                            }
+                        }
+                        .padding(.leading, 15)
+                    }
                     
                     // Members online
                     HStack(spacing: 3) {
@@ -274,33 +295,20 @@ struct GuildSwitchRow: View {
                     
                     Divider()
                     
-                    // User's role and reputation in this guild
-                    HStack(spacing: 2) {
+                    // User's role · reputation · accuracy in this guild
+                    HStack(spacing: 4) {
                         Text("You are a ")
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText)
-                       
-                        Text(item.role.displayName)
-                            .font(.caption)
-                            .foregroundColor(item.role.color)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                        
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.7))
-                            .frame(width: 3, height: 3)
-                            .padding(.top, 1)
-                            .padding(.leading, 3)
-                            .padding(.trailing, 3)
-                        
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text("\(item.membership.reputation)")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
+                        UnifiedRoleBadge(
+                            roleName: item.role.displayName,
+                            roleColor: item.role.color,
+                            reputation: item.membership.reputation,
+                            accuracy: item.membership.accuracyFormatted,
+                            showReputation: true,
+                            fontSize: .caption,
+                            iconSize: .caption2
+                        )
                     }
                     .padding(.leading, 15)
                 }
@@ -343,9 +351,8 @@ struct GuildSwitchRow: View {
 
 struct JoinGuildFlowView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
 
     @State private var selectedGuild: RLGuildDTO?
     @State private var showGuildDetail = false
@@ -353,52 +360,19 @@ struct JoinGuildFlowView: View {
     var body: some View {
         NavigationStack {
             JoinGuildView(
+                onCancel: { dismiss() },
                 onSelectGuild: { guild in
                     selectedGuild = guild
                     showGuildDetail = true
                 }
             )
             .environmentObject(rlAppState)
-            .environmentObject(appState)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        AppColors.gradientBackgroundDark,
-                        AppColors.gradientBackgroundDark,
-                        AppColors.fadedBackground.opacity(0.6),
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .navigationTitle("Join a Guild")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .foregroundColor(AppColors.whiteText)
-                }
-            }
             .navigationDestination(isPresented: $showGuildDetail) {
                 if let guild = selectedGuild {
                     GuildDetailView(guild: guild, onJoin: {
                         dismiss()
                     })
                     .environmentObject(rlAppState)
-                    .environmentObject(appState)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                AppColors.gradientBackgroundDark,
-                                AppColors.gradientBackgroundDark,
-                                AppColors.fadedBackground.opacity(0.6)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
                 }
             }
         }
@@ -410,108 +384,225 @@ struct JoinGuildFlowView: View {
 // MARK: - Main Join Guild View (Search/List)
 
 struct JoinGuildView: View {
+    let onCancel: () -> Void
     let onSelectGuild: (RLGuildDTO) -> Void
+
+    struct DiscoverGuildItem: Identifiable {
+        let guild: RLGuildDTO
+        let isJoined: Bool
+
+        var id: UUID { guild.id }
+    }
+
+    enum AccessFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case open = "Open"
+        case closed = "Closed"
+
+        var id: String { rawValue }
+
+        var isOpenValue: Bool? {
+            switch self {
+            case .all: return nil
+            case .open: return true
+            case .closed: return false
+            }
+        }
+    }
+
+    enum SortOption: String, CaseIterable, Identifiable {
+        case popular = "Popular"
+        case newest = "Newest"
+        case name = "Name"
+
+        var id: String { rawValue }
+        var backendValue: String {
+            switch self {
+            case .popular: return "popular"
+            case .newest: return "newest"
+            case .name: return "name"
+            }
+        }
+    }
 
     @EnvironmentObject var rlAppState: RLAppState
     @State private var searchText: String = ""
     @FocusState private var isSearchFocused: Bool
-    @State private var openGuilds: [RLGuildDTO] = []
+    @State private var discoverGuilds: [DiscoverGuildItem] = []
     @State private var isLoading: Bool = false
+    @State private var showFilters: Bool = false
+    @State private var selectedAccess: AccessFilter = .all
+    @State private var selectedSort: SortOption = .popular
+    @State private var languageFilter: String = ""
+    @State private var locationFilter: String = ""
+    @State private var hasLoadedMemberships: Bool = false
 
-    var filteredGuilds: [RLGuildDTO] {
-        if searchText.isEmpty {
-            return openGuilds
-        }
-        return openGuilds.filter { guild in
-            guild.name.localizedCaseInsensitiveContains(searchText) ||
-            (guild.description?.localizedCaseInsensitiveContains(searchText) ?? false)
-        }
+    var filteredGuilds: [DiscoverGuildItem] {
+        discoverGuilds
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Search bar with filter
-            HStack(spacing: 8) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(AppColors.whiteText.opacity(0.6))
-                        .font(.subheadline)
+        ZStack {
+            StaticAuthBackgroundView()
 
-                    TextField("Search guilds...", text: $searchText)
-                        .font(.subheadline)
+            VStack(alignment: .leading, spacing: 0) {
+                // Title header
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Discover Guilds")
+                        .font(.title.bold())
                         .foregroundColor(AppColors.whiteText)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .submitLabel(.done)
-                        .focused($isSearchFocused)
 
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(AppColors.whiteText.opacity(0.6))
-                                .font(.subheadline)
+                    Text("Find your trading community")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 2)
+                .padding(.bottom, 10)
+
+                // Search bar with filter
+                HStack(spacing: 8) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(AppColors.whiteText.opacity(0.6))
+                            .font(.subheadline)
+
+                        TextField("Search guilds...", text: $searchText)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.whiteText)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .submitLabel(.done)
+                            .focused($isSearchFocused)
+                            .onSubmit {
+                                Task { await loadOpenGuilds() }
+                            }
+
+                        if !searchText.isEmpty {
+                            Button(action: {
+                                searchText = ""
+                                Task { await loadOpenGuilds() }
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(AppColors.whiteText.opacity(0.6))
+                                    .font(.subheadline)
+                            }
                         }
                     }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(AppColors.whiteText.opacity(0.06))
-                .clipShape(Capsule())
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(AppColors.unhighlightedTextBoxBackground.opacity(0.92))
+                    .overlay(
+                        Capsule()
+                            .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
+                    )
+                    .clipShape(Capsule())
 
-                Button(action: {}) {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                        .font(.title3)
-                        .foregroundColor(AppColors.whiteText.opacity(0.8))
-                        .frame(width: 40, height: 40)
-                        .background(AppColors.whiteText.opacity(0.04))
-                        .clipShape(Circle())
-                }
-            }
-            .padding(.horizontal)
-
-            // Guild search results
-            if isLoading {
-                VStack {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                    Text("Loading guilds...")
-                        .foregroundColor(.secondary)
-                        .padding(.top, 8)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if filteredGuilds.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
-                    Text(searchText.isEmpty ? "No open guilds available" : "No guilds found")
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    VStack(spacing: 20) {
-                        ForEach(filteredGuilds) { guild in
-                            JoinGuildRow(
-                                guild: guild,
-                                onTap: {
-                                    onSelectGuild(guild)
-                                }
+                    Button(action: { showFilters = true }) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .font(.title3)
+                            .foregroundColor(AppColors.whiteText.opacity(0.8))
+                            .frame(width: 40, height: 40)
+                            .background(AppColors.unhighlightedTextBoxBackground.opacity(0.92))
+                            .overlay(
+                                Circle()
+                                    .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
                             )
-                        }
+                            .clipShape(Circle())
                     }
-                    .padding(.horizontal)
                 }
-                .scrollDismissesKeyboard(.interactively)
-                .onTapGesture {
-                    isSearchFocused = false
-                    hideKeyboard()
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+
+                // Guild search results
+                if isLoading {
+                    VStack {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Loading guilds...")
+                            .foregroundColor(.secondary)
+                            .padding(.top, 8)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredGuilds.isEmpty {
+                    VStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(AppColors.whiteText.opacity(0.06))
+                                .frame(width: 72, height: 72)
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 28))
+                                .foregroundColor(AppColors.greyText)
+                        }
+
+                        Text(searchText.isEmpty ? "No guilds available" : "No guilds found")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        Text(searchText.isEmpty
+                            ? "Check back later or try adjusting your filters."
+                            : "Try a different search term or adjust your filters.")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 14) {
+                            ForEach(filteredGuilds) { guild in
+                                JoinGuildRow(
+                                    guild: guild.guild,
+                                    isJoined: guild.isJoined,
+                                    onTap: {
+                                        onSelectGuild(guild.guild)
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onTapGesture {
+                        isSearchFocused = false
+                        hideKeyboard()
+                    }
                 }
             }
         }
-        .padding(.top, 10)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.medium))
+                        .foregroundColor(AppColors.whiteText)
+                }
+            }
+            ToolbarItem(placement: .principal) {
+                Text("TG")
+                    .font(.largeTitle)
+                    .fontWeight(.heavy)
+                    .foregroundColor(AppColors.fadedBackground)
+            }
+        }
+        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
         .task {
             await loadOpenGuilds()
+        }
+        .sheet(isPresented: $showFilters) {
+            JoinGuildFilterSheet(
+                selectedAccess: $selectedAccess,
+                selectedSort: $selectedSort,
+                languageFilter: $languageFilter,
+                locationFilter: $locationFilter,
+                onApply: {
+                    Task { await loadOpenGuilds() }
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -521,12 +612,94 @@ struct JoinGuildView: View {
         defer { isLoading = false }
 
         do {
-            let guilds = try await rlAppState.fetchJoinableGuilds()
-            openGuilds = guilds
+            if !hasLoadedMemberships {
+                try? await rlAppState.fetchUserGuilds()
+                hasLoadedMemberships = true
+            }
+
+            let guilds = try await rlAppState.fetchJoinableGuilds(
+                search: searchText.isEmpty ? nil : searchText,
+                isOpen: selectedAccess.isOpenValue,
+                language: languageFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : languageFilter,
+                location: locationFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : locationFilter,
+                sort: selectedSort.backendValue
+            )
+
+            let normalizedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let joinedGuilds = rlAppState.userGuilds
+                .map(\.guild)
+                .filter { guild in
+                    guildMatchesFilters(guild, normalizedSearch: normalizedSearch)
+                }
+
+            var merged: [UUID: DiscoverGuildItem] = [:]
+            for guild in guilds {
+                merged[guild.id] = DiscoverGuildItem(guild: guild, isJoined: false)
+            }
+            for guild in joinedGuilds {
+                merged[guild.id] = DiscoverGuildItem(guild: guild, isJoined: true)
+            }
+
+            discoverGuilds = sortGuilds(Array(merged.values))
         } catch is CancellationError {
             return
         } catch {
             rlAppState.showError(error, title: "Failed to Load Guilds", style: .toast)
+        }
+    }
+
+    private func guildMatchesFilters(_ guild: RLGuildDTO, normalizedSearch: String) -> Bool {
+        if let isOpen = selectedAccess.isOpenValue, guild.isOpen != isOpen {
+            return false
+        }
+
+        let language = languageFilter.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !language.isEmpty {
+            let guildLanguage = guild.language ?? ""
+            if !guildLanguage.localizedCaseInsensitiveContains(language) {
+                return false
+            }
+        }
+
+        let location = locationFilter.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !location.isEmpty {
+            let guildLocation = guild.location ?? ""
+            if !guildLocation.localizedCaseInsensitiveContains(location) {
+                return false
+            }
+        }
+
+        if !normalizedSearch.isEmpty {
+            let nameMatches = guild.name.localizedCaseInsensitiveContains(normalizedSearch)
+            let descriptionMatches = (guild.description ?? "").localizedCaseInsensitiveContains(normalizedSearch)
+            if !nameMatches && !descriptionMatches {
+                return false
+            }
+        }
+
+        return guild.isActive
+    }
+
+    private func sortGuilds(_ guilds: [DiscoverGuildItem]) -> [DiscoverGuildItem] {
+        switch selectedSort {
+        case .name:
+            return guilds.sorted {
+                $0.guild.name.localizedCaseInsensitiveCompare($1.guild.name) == .orderedAscending
+            }
+        case .newest:
+            return guilds.sorted {
+                $0.guild.dateCreated > $1.guild.dateCreated
+            }
+        case .popular:
+            return guilds.sorted {
+                if $0.guild.memberCount != $1.guild.memberCount {
+                    return $0.guild.memberCount > $1.guild.memberCount
+                }
+                if $0.guild.reputation != $1.guild.reputation {
+                    return $0.guild.reputation > $1.guild.reputation
+                }
+                return $0.guild.dateCreated > $1.guild.dateCreated
+            }
         }
     }
 
@@ -535,75 +708,210 @@ struct JoinGuildView: View {
     }
 }
 
+struct JoinGuildFilterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedAccess: JoinGuildView.AccessFilter
+    @Binding var selectedSort: JoinGuildView.SortOption
+    @Binding var languageFilter: String
+    @Binding var locationFilter: String
+    let onApply: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Access filter
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Access")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        HStack(spacing: 8) {
+                            ForEach(JoinGuildView.AccessFilter.allCases) { option in
+                                Button {
+                                    selectedAccess = option
+                                } label: {
+                                    Text(option.rawValue)
+                                        .font(.subheadline)
+                                        .foregroundColor(selectedAccess == option ? AppColors.gradientBackgroundDark : AppColors.whiteText)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            Capsule().fill(selectedAccess == option ? AppColors.whiteText : AppColors.whiteText.opacity(0.08))
+                                        )
+                                }
+                            }
+                        }
+                    }
+
+                    // Sort option
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Sort By")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        HStack(spacing: 8) {
+                            ForEach(JoinGuildView.SortOption.allCases) { option in
+                                Button {
+                                    selectedSort = option
+                                } label: {
+                                    Text(option.rawValue)
+                                        .font(.subheadline)
+                                        .foregroundColor(selectedSort == option ? AppColors.gradientBackgroundDark : AppColors.whiteText)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            Capsule().fill(selectedSort == option ? AppColors.whiteText : AppColors.whiteText.opacity(0.08))
+                                        )
+                                }
+                            }
+                        }
+                    }
+
+                    // Language & Location
+                    StandardTextFieldView(title: "Language", text: $languageFilter)
+                    StandardTextFieldView(title: "Location", text: $locationFilter)
+                }
+                .padding()
+            }
+            .background(AppColors.sheetBackground)
+            .navigationTitle("Filters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Reset") {
+                        selectedAccess = .all
+                        selectedSort = .popular
+                        languageFilter = ""
+                        locationFilter = ""
+                        onApply()
+                        dismiss()
+                    }
+                    .foregroundColor(AppColors.greyText)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Apply") {
+                        onApply()
+                        dismiss()
+                    }
+                    .foregroundColor(AppColors.whiteText)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Join Guild Row
 
 struct JoinGuildRow: View {
     let guild: RLGuildDTO
+    let isJoined: Bool
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 20) {
+            HStack(spacing: 14) {
+                // Icon circle
+                ZStack {
+                    Circle()
+                        .fill(AppColors.accentColor.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "shield.pattern.checkered")
+                        .font(.title3)
+                        .foregroundColor(AppColors.accentColor)
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.title2)
-                            .foregroundColor(AppColors.accentColor.opacity(0.6))
-
+                    // Guild name + access badge
+                    HStack(spacing: 8) {
                         Text(guild.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                    }
-
-                    Text("\(guild.memberCount) Members • \(guild.isOpen ? "Open" : "Private")")
-                        .font(.caption)
-                        .foregroundColor(AppColors.whiteText)
-                        .padding(.leading, 15)
-
-                    // Owner info (TODO: backend will return embedded owner)
-                    HStack(spacing: 3) {
-                        Text("Owner Name")  // TODO: guild.owner.displayName
-                            .font(.caption)
+                            .font(.headline)
                             .foregroundColor(AppColors.whiteText)
                             .lineLimit(1)
 
-                        Text("-")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText)
-
-                        Text("Admin")  // TODO: guild.ownerRole.displayName
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                    }
-                    .padding(.leading, 15)
-
-                    HStack(spacing: 2) {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text(guild.reputationDisplay)
+                        Text(guild.isOpen ? "Open" : "Private")
                             .font(.caption2)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text(" Guild Reputation")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-                            .lineLimit(1)
+                            .foregroundColor(guild.isOpen ? AppColors.accentColor : AppColors.whiteText.opacity(0.7))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(guild.isOpen ? AppColors.accentColor.opacity(0.18) : AppColors.whiteText.opacity(0.08))
+                            )
+
+                        if isJoined {
+                            Text("Joined")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.bullCandleGreen)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule().fill(AppColors.bullCandleGreen.opacity(0.16))
+                                )
+                        }
                     }
-                    .padding(.leading, 15)
+
+                    // Description
+                    if let description = guild.description, !description.isEmpty {
+                        Text(description)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                            .lineLimit(2)
+                    }
+
+                    // Compact stat row
+                    HStack(spacing: 6) {
+                        Text("\(guild.memberCount) members")
+                            .font(.caption)
+                            .foregroundColor(AppColors.whiteText.opacity(0.7))
+
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.3))
+                            .frame(width: 3, height: 3)
+
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 6, height: 6)
+                            Text("\(guild.membersOnline) online")
+                                .font(.caption)
+                                .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        }
+
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.3))
+                            .frame(width: 3, height: 3)
+
+                        HStack(spacing: 2) {
+                            Image(systemName: "shield.pattern.checkered")
+                                .font(.caption2)
+                                .foregroundColor(AppColors.accentColor)
+                            Text(guild.reputationDisplay)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.accentColor)
+                        }
+                    }
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.headline)
-                    .foregroundColor(AppColors.whiteText.opacity(0.5))
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.whiteText.opacity(0.4))
             }
-            .padding(.top, 10)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                    )
+            )
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -616,66 +924,205 @@ struct GuildDetailView: View {
     let onJoin: () -> Void
 
     @EnvironmentObject var rlAppState: RLAppState
+    @Environment(\.dismiss) private var dismiss
     @State private var showJoinForm = false
     @State private var isJoining = false
+    @State private var joinQuestions: [RLGuildJoinQuestionDTO] = []
+
+    private var joinedGuildEntry: RLGuildWithMembership? {
+        rlAppState.userGuilds.first(where: { $0.guild.id == guild.id })
+    }
+
+    private var isAlreadyJoined: Bool {
+        joinedGuildEntry != nil
+    }
+
+    private var isCurrentGuild: Bool {
+        rlAppState.currentGuild?.id == guild.id
+    }
+
+    private var ownerName: String {
+        guild.ownerDisplayName ?? guild.ownerUsername ?? "Owner unavailable"
+    }
+
+    private var accessLabel: String {
+        guild.isOpen ? "Open Access" : "Private Approval"
+    }
+
+    private var joinRequirementText: String {
+        if isAlreadyJoined {
+            return isCurrentGuild ? "You are currently active in this guild." : "You are already a member of this guild."
+        }
+        if guild.isOpen {
+            return "Anyone can join immediately."
+        }
+        if joinQuestions.isEmpty {
+            return "Approval is required to join."
+        }
+        return "Approval is required and \(joinQuestions.count) application question\(joinQuestions.count == 1 ? "" : "s") must be completed."
+    }
+
+    private var createdDateText: String {
+        guild.dateCreated.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    // Section card helper
+    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                )
+        )
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Guild header
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.largeTitle)
-                            .foregroundColor(AppColors.accentColor)
+        ZStack {
+            StaticAuthBackgroundView()
 
-                        VStack(alignment: .leading) {
-                            Text(guild.name)
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.whiteText)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Title
+                    Text("Guild Details")
+                        .font(.title.bold())
+                        .foregroundColor(AppColors.whiteText)
+                        .padding(.top, 2)
 
-                            Text("\(guild.memberCount) Members")
+                    // Guild header card
+                    sectionCard {
+                        HStack(alignment: .top, spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppColors.accentColor.opacity(0.12))
+                                    .frame(width: 48, height: 48)
+                                Image(systemName: "shield.lefthalf.filled")
+                                    .font(.title3)
+                                    .foregroundColor(AppColors.accentColor)
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(guild.name)
+                                    .font(.title3)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(AppColors.whiteText)
+
+                                HStack(spacing: 8) {
+                                    Text(accessLabel)
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(AppColors.accentColor.opacity(0.18))
+                                        .foregroundColor(AppColors.accentColor)
+                                        .clipShape(Capsule())
+
+                                    Text("Created \(createdDateText)")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                }
+                            }
+                        }
+
+                        if let description = guild.description, !description.isEmpty {
+                            Text(description)
                                 .font(.subheadline)
-                                .foregroundColor(AppColors.greyText)
+                                .foregroundColor(AppColors.whiteText.opacity(0.85))
                         }
                     }
 
-                    if let description = guild.description {
-                        Text(description)
-                            .font(.body)
-                            .foregroundColor(AppColors.whiteText.opacity(0.8))
-                            .padding(.top, 8)
-                    }
-                }
-                .padding()
-                .background(AppColors.whiteText.opacity(0.05))
-                .cornerRadius(10)
+                    // Guild Snapshot card
+                    sectionCard {
+                        Text("Guild Snapshot")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
 
-                // Guild stats
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Guild Stats")
-                        .font(.headline)
+                        HStack(spacing: 10) {
+                            StatBox(label: "Members", value: "\(guild.memberCount)")
+                            StatBox(label: "Online", value: "\(guild.membersOnline)")
+                        }
+                        HStack(spacing: 10) {
+                            StatBox(label: "Reputation", value: guild.reputationDisplay)
+                            StatBox(label: "Type", value: guild.isOpen ? "Open" : "Private")
+                        }
+                    }
+
+                    // Guild Information card
+                    sectionCard {
+                        Text("Guild Information")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        GuildInfoRow(icon: "person.crop.circle", title: "Owner", value: ownerName)
+                        GuildInfoRow(icon: "globe", title: "Language", value: displayValue(guild.language))
+                        GuildInfoRow(icon: "mappin.and.ellipse", title: "Location", value: displayValue(guild.location))
+                    }
+
+                    // Join Requirements card
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Join Requirements")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        Text(joinRequirementText)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.whiteText.opacity(0.82))
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(AppColors.accentColor.opacity(0.25), lineWidth: 1)
+                            )
+                    )
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 100)
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.medium))
                         .foregroundColor(AppColors.whiteText)
-
-                    HStack {
-                        StatBox(label: "Reputation", value: guild.reputationDisplay)
-                        StatBox(label: "Online", value: "\(guild.membersOnline)")
-                        StatBox(label: "Members", value: "\(guild.memberCount)")
-                    }
                 }
-                .padding()
-                .background(AppColors.whiteText.opacity(0.05))
-                .cornerRadius(10)
-
-                Spacer(minLength: 20)
-
-                // Join button
+            }
+            ToolbarItem(placement: .principal) {
+                Text("TG")
+                    .font(.largeTitle)
+                    .fontWeight(.heavy)
+                    .foregroundColor(AppColors.fadedBackground)
+            }
+        }
+        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 0) {
+                Divider()
                 if isJoining {
                     ProgressView()
-                        .scaleEffect(1.2)
+                        .scaleEffect(1.1)
                         .frame(maxWidth: .infinity)
-                        .padding()
+                        .padding(.vertical, 16)
+                } else if isAlreadyJoined {
+                    StandardActionButtonFullWidth(
+                        title: isCurrentGuild ? "Current Guild" : "Switch to Guild",
+                        backgroundColor: AppColors.whiteText,
+                        foregroundColor: Color.black,
+                        action: switchToGuild
+                    )
+                    .disabled(isCurrentGuild)
+                    .opacity(isCurrentGuild ? 0.55 : 1.0)
                 } else {
                     StandardActionButtonFullWidth(
                         title: guild.isOpen ? "Join Guild" : "Request to Join",
@@ -683,9 +1130,7 @@ struct GuildDetailView: View {
                         foregroundColor: Color.black,
                         action: {
                             if guild.isOpen {
-                                Task {
-                                    await joinGuild()
-                                }
+                                Task { await joinGuild() }
                             } else {
                                 showJoinForm = true
                             }
@@ -693,17 +1138,18 @@ struct GuildDetailView: View {
                     )
                 }
             }
-            .padding()
+            .background(AppColors.sheetBackground)
         }
-        .navigationTitle("Guild Details")
-        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showJoinForm) {
-            JoinGuildFormView(guild: guild, onComplete: {
-                Task {
-                    await joinGuild()
-                }
+            JoinGuildFormView(guild: guild, questions: joinQuestions, onComplete: {
+                onJoin()
             })
             .environmentObject(rlAppState)
+        }
+        .task {
+            if !guild.isOpen && !isAlreadyJoined {
+                await loadJoinQuestions()
+            }
         }
     }
 
@@ -720,6 +1166,31 @@ struct GuildDetailView: View {
         } catch {
             // Error already shown by rlAppState
         }
+    }
+
+    private func switchToGuild() {
+        guard let entry = joinedGuildEntry, !isCurrentGuild else {
+            return
+        }
+        rlAppState.selectGuild(entry)
+        onJoin()
+    }
+
+    private func loadJoinQuestions() async {
+        do {
+            joinQuestions = try await rlAppState.getGuildJoinQuestions(guildId: guild.id)
+        } catch is CancellationError {
+            return
+        } catch {
+            joinQuestions = []
+        }
+    }
+
+    private func displayValue(_ value: String?) -> String {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return "Not specified"
+        }
+        return value
     }
 }
 
@@ -741,8 +1212,37 @@ struct StatBox: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(AppColors.gradientBackgroundDark.opacity(0.3))
-        .cornerRadius(8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+}
+
+struct GuildInfoRow: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundColor(AppColors.accentColor.opacity(0.85))
+                .frame(width: 18)
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(AppColors.whiteText.opacity(0.75))
+            Spacer()
+            Text(value)
+                .font(.subheadline)
+                .foregroundColor(AppColors.whiteText)
+                .multilineTextAlignment(.trailing)
+        }
     }
 }
 
@@ -750,62 +1250,206 @@ struct StatBox: View {
 
 struct JoinGuildFormView: View {
     let guild: RLGuildDTO
+    let questions: [RLGuildJoinQuestionDTO]
     let onComplete: () -> Void
 
     @EnvironmentObject var rlAppState: RLAppState
     @Environment(\.dismiss) private var dismiss
     @State private var message: String = ""
+    @State private var answers: [UUID: String] = [:]
+    @State private var isSubmitting: Bool = false
+
+    private var canSubmit: Bool {
+        !questions.contains { question in
+            if !question.isRequired {
+                return false
+            }
+            return (answers[question.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Why do you want to join \(guild.name)?")
-                    .font(.headline)
-                    .foregroundColor(AppColors.whiteText)
+            ZStack {
+                StaticAuthBackgroundView()
 
-                TextField("Write your message...", text: $message, axis: .vertical)
-                    .lineLimit(5...10)
-                    .foregroundColor(AppColors.whiteText)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(AppColors.gradientBackgroundDark.opacity(0.3))
-                            .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
-                    )
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Title header
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Join Request")
+                                .font(.title.bold())
+                                .foregroundColor(AppColors.whiteText)
 
-                Spacer()
+                            Text("Application for \(guild.name)")
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        .padding(.top, 8)
 
-                Button(action: {
-                    onComplete()
-                    dismiss()
-                }) {
-                    Text("Send Request")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(AppColors.accentColor)
-                        .cornerRadius(10)
+                        // Application Questions card
+                        if !questions.isEmpty {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Application Questions")
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.whiteText)
+
+                                ForEach(questions) { question in
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack(spacing: 6) {
+                                            Text(question.prompt)
+                                                .font(.subheadline)
+                                                .foregroundColor(AppColors.whiteText)
+
+                                            if question.isRequired {
+                                                Text("Required")
+                                                    .font(.caption2)
+                                                    .fontWeight(.semibold)
+                                                    .foregroundColor(AppColors.accentColor)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(
+                                                        Capsule().fill(AppColors.accentColor.opacity(0.15))
+                                                    )
+                                            }
+                                        }
+
+                                        TextField("Your answer...", text: Binding(
+                                            get: { answers[question.id] ?? "" },
+                                            set: { answers[question.id] = $0 }
+                                        ), axis: .vertical)
+                                        .lineLimit(3...6)
+                                        .foregroundColor(AppColors.whiteText)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 14)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                                    )
+                            )
+                        }
+
+                        // Additional Note card
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Additional Note")
+                                .font(.headline)
+                                .foregroundColor(AppColors.whiteText)
+
+                            Text("Optional - add anything else you'd like the guild owner to know.")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+
+                            TextEditor(text: $message)
+                                .frame(minHeight: 80)
+                                .padding(8)
+                                .font(.body)
+                                .foregroundColor(AppColors.whiteText)
+                                .scrollContentBackground(.hidden)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100)
                 }
-                .disabled(message.isEmpty)
-                .opacity(message.isEmpty ? 0.5 : 1.0)
             }
-            .padding()
-            .background(AppColors.gradientBackgroundDark)
-            .navigationTitle("Join Request")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.medium))
+                            .foregroundColor(AppColors.whiteText)
                     }
-                    .foregroundColor(AppColors.whiteText)
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("TG")
+                        .font(.largeTitle)
+                        .fontWeight(.heavy)
+                        .foregroundColor(AppColors.fadedBackground)
+                }
+            }
+            .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+        }
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 0) {
+                Divider()
+                if isSubmitting {
+                    ProgressView()
+                        .scaleEffect(1.1)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(AppColors.sheetBackground)
+                } else {
+                    StandardActionButtonFullWidth(
+                        title: "Send Request",
+                        backgroundColor: AppColors.whiteText,
+                        foregroundColor: Color.black,
+                        action: {
+                            Task { await submitRequest() }
+                        }
+                    )
+                    .disabled(!canSubmit)
+                    .opacity(canSubmit ? 1.0 : 0.5)
+                    .background(AppColors.sheetBackground)
                 }
             }
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+    }
+
+    private func submitRequest() async {
+        isSubmitting = true
+        defer { isSubmitting = false }
+        let answerPayload: [RLGuildJoinRequestAnswerInputDTO] = questions.compactMap { question in
+            let value = (answers[question.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if value.isEmpty { return nil }
+            return RLGuildJoinRequestAnswerInputDTO(questionId: question.id, answerText: value)
+        }
+
+        do {
+            _ = try await rlAppState.submitGuildJoinRequest(
+                guildId: guild.id,
+                note: message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message,
+                answers: answerPayload
+            )
+            onComplete()
+            dismiss()
+        } catch is CancellationError {
+            return
+        } catch {
+            return
+        }
     }
 }
 
@@ -814,36 +1458,14 @@ struct JoinGuildFormView: View {
 struct CreateGuildFlowView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState // TODO: remove
-    
+
     var body: some View {
         NavigationStack {
-            CreateGuildView(onComplete: {
-                dismiss()
-            })
-            .environmentObject(rlAppState)
-            .environmentObject(appState)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        AppColors.gradientBackgroundDark,
-                        AppColors.gradientBackgroundDark,
-                        AppColors.fadedBackground.opacity(0.6)
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+            CreateGuildView(
+                onCancel: { dismiss() },
+                onComplete: { dismiss() }
             )
-            .navigationTitle("Create a Guild")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .foregroundColor(AppColors.whiteText)
-                }
-            }
+            .environmentObject(rlAppState)
         }
         .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
@@ -853,108 +1475,318 @@ struct CreateGuildFlowView: View {
 // MARK: - Create Guild View
 
 struct CreateGuildView: View {
+    let onCancel: () -> Void
     let onComplete: () -> Void
-    
+
     @EnvironmentObject var rlAppState: RLAppState
     @State private var guildName: String = ""
     @State private var guildDescription: String = ""
     @State private var isOpen: Bool = true
     @State private var isCreating: Bool = false
-    
+    @State private var language: String = ""
+    @State private var location: String = ""
+    @State private var joinQuestions: [String] = [""]
+
+    // Section card helper
+    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                )
+        )
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Guild name
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Guild Name")
-                        .font(.headline)
-                        .foregroundColor(AppColors.whiteText)
-                    
-                    TextField("Enter guild name", text: $guildName)
-                        .foregroundColor(AppColors.whiteText)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
-                                .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
-                        )
-                }
-                
-                // Guild description
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Description")
-                        .font(.headline)
-                        .foregroundColor(AppColors.whiteText)
-                    
-                    TextField("Describe your guild...", text: $guildDescription, axis: .vertical)
-                        .lineLimit(3...6)
-                        .foregroundColor(AppColors.whiteText)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
-                                .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
-                        )
-                }
-                
-                // Privacy toggle
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Open Guild")
-                            .font(.headline)
+        ZStack {
+            StaticAuthBackgroundView()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Title header
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Create a Guild")
+                            .font(.title.bold())
                             .foregroundColor(AppColors.whiteText)
-                        Text(isOpen ? "Anyone can join" : "Require approval to join")
-                            .font(.caption)
+
+                        Text("Build your trading community")
+                            .font(.subheadline)
                             .foregroundColor(AppColors.greyText)
                     }
-                    
-                    Spacer()
-                    
-                    Toggle("", isOn: $isOpen)
-                        .tint(AppColors.accentColor)
+                    .padding(.top, 2)
+
+                    // Guild Identity card
+                    sectionCard {
+                        Text("Guild Identity")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        // Guild preview
+                        VStack(spacing: 10) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppColors.accentColor.opacity(0.12))
+                                    .frame(width: 64, height: 64)
+                                Image(systemName: "shield.lefthalf.filled")
+                                    .font(.title)
+                                    .foregroundColor(AppColors.accentColor)
+                            }
+
+                            Text(guildName.isEmpty ? "Your Guild" : guildName)
+                                .font(.title3.bold())
+                                .foregroundColor(guildName.isEmpty ? AppColors.greyText : AppColors.whiteText)
+                                .lineLimit(1)
+                                .animation(.easeInOut(duration: 0.2), value: guildName)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+
+                        // Guild name field (inline, no extra horizontal padding)
+                        VStack(alignment: .leading, spacing: 4) {
+                            TextField("Guild name", text: $guildName)
+                                .font(.body)
+                                .foregroundColor(AppColors.whiteText)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.words)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
+
+                            Text("\(guildName.count)/50")
+                                .font(.caption2)
+                                .foregroundColor(guildName.count > 50 ? .red : AppColors.greyText)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                    }
+
+                    // Details card
+                    sectionCard {
+                        Text("Details")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Description (optional)")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+
+                            TextEditor(text: $guildDescription)
+                                .frame(minHeight: 80)
+                                .padding(8)
+                                .font(.body)
+                                .foregroundColor(AppColors.whiteText)
+                                .scrollContentBackground(.hidden)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Language")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+
+                            TextField("e.g. English", text: $language)
+                                .font(.body)
+                                .foregroundColor(AppColors.whiteText)
+                                .autocorrectionDisabled()
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Location")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+
+                            TextField("e.g. London", text: $location)
+                                .font(.body)
+                                .foregroundColor(AppColors.whiteText)
+                                .autocorrectionDisabled()
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
+                        }
+                    }
+
+                    // Access & Moderation card
+                    sectionCard {
+                        Text("Access & Moderation")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Open Guild")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppColors.whiteText)
+                                Text(isOpen ? "Anyone can join" : "Require approval to join")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: $isOpen)
+                                .tint(AppColors.accentColor)
+                        }
+
+                        if !isOpen {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("Join Questions")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(AppColors.whiteText)
+                                    Spacer()
+                                    Text("Max 3")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.greyText)
+                                }
+
+                                ForEach(joinQuestions.indices, id: \.self) { index in
+                                    HStack(spacing: 8) {
+                                        TextField("Question \(index + 1)", text: $joinQuestions[index], axis: .vertical)
+                                            .lineLimit(2...4)
+                                            .foregroundColor(AppColors.whiteText)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 14)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 12)
+                                                            .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                                    )
+                                            )
+
+                                        if joinQuestions.count > 1 {
+                                            Button {
+                                                joinQuestions.remove(at: index)
+                                            } label: {
+                                                Image(systemName: "minus.circle.fill")
+                                                    .font(.title3)
+                                                    .foregroundColor(.red.opacity(0.8))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if joinQuestions.count < 3 {
+                                    Button {
+                                        joinQuestions.append("")
+                                    } label: {
+                                        Label("Add Question", systemImage: "plus.circle")
+                                            .font(.subheadline)
+                                            .foregroundColor(AppColors.accentColor)
+                                    }
+                                }
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isOpen)
                 }
-                
-                Spacer(minLength: 100)
-                
-                // Create button
+                .padding(.horizontal, 20)
+                .padding(.bottom, 100)
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.medium))
+                        .foregroundColor(AppColors.whiteText)
+                }
+            }
+            ToolbarItem(placement: .principal) {
+                Text("TG")
+                    .font(.largeTitle)
+                    .fontWeight(.heavy)
+                    .foregroundColor(AppColors.fadedBackground)
+            }
+        }
+        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 0) {
+                Divider()
                 if isCreating {
                     ProgressView()
                         .scaleEffect(1.2)
                         .frame(maxWidth: .infinity)
-                        .padding()
+                        .padding(.vertical, 16)
+                        .background(AppColors.sheetBackground)
                 } else {
-                    Button(action: {
-                        Task {
-                            await createGuild()
-                        }
-                    }) {
-                        Text("Create Guild")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(AppColors.accentColor)
-                            .cornerRadius(10)
+                    StandardActionButtonFullWidth(
+                        title: "Create Guild",
+                        backgroundColor: AppColors.whiteText,
+                        foregroundColor: AppColors.gradientBackgroundDark
+                    ) {
+                        Task { await createGuild() }
                     }
                     .disabled(guildName.isEmpty)
                     .opacity(guildName.isEmpty ? 0.5 : 1.0)
+                    .background(AppColors.sheetBackground)
                 }
             }
-            .padding()
         }
     }
-    
+
     // Create guild
     private func createGuild() async {
         isCreating = true
         defer { isCreating = false }
-        
+
         do {
             let _ = try await rlAppState.createGuild(
                 name: guildName,
                 description: guildDescription.isEmpty ? nil : guildDescription,
-                isOpen: isOpen
+                isOpen: isOpen,
+                language: language.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : language,
+                location: location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : location,
+                joinQuestions: isOpen ? [] : joinQuestions
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .enumerated()
+                    .map { index, prompt in
+                        RLGuildJoinQuestionInputDTO(prompt: prompt, isRequired: true, displayOrder: index)
+                    }
             )
             onComplete()
         } catch is CancellationError {
@@ -968,16 +1800,4 @@ struct CreateGuildView: View {
 #Preview {
     SwitchGuildView(onBack: {}, selectedDetent: .constant(.large))
         .environmentObject(RLAppState())
-        .environmentObject(AppState())
 }
-
-
-
-
-
-
-
-
-
-
-

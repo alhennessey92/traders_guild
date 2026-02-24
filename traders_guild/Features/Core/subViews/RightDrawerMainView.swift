@@ -451,6 +451,11 @@ struct RLMemberRowView: View {
     let onTap: () -> Void
 
     @State private var isPressed = false
+    @EnvironmentObject var appState: RLAppState
+
+    private var isEffectivelyOnline: Bool {
+        appState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline)
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -471,7 +476,7 @@ struct RLMemberRowView: View {
                     }
 
                     Circle()
-                        .fill(member.isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                        .fill(isEffectivelyOnline ? AppColors.bullCandleGreen : AppColors.greyText)
                         .frame(width: 10, height: 10)
                         .overlay(
                             Circle()
@@ -489,7 +494,7 @@ struct RLMemberRowView: View {
                                 .foregroundColor(AppColors.bearCandleRed)
                         }
 
-                        Text(member.displayName)
+                        Text(member.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(member.isBlocked ? AppColors.greyText : AppColors.whiteText)
@@ -503,29 +508,12 @@ struct RLMemberRowView: View {
                         }
                     }
 
-                    HStack(spacing: 2) {
-                        Text(member.memberRole.displayName)
-                            .font(.caption)
-                            .foregroundColor(member.memberRole.color.opacity(0.9))
-                            .fontWeight(member.memberRole.canModerate ? .bold : .regular)
-                            .lineLimit(1)
-
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.5))
-                            .frame(width: 4, height: 4)
-                            .padding(.top, 1)
-                            .padding(.horizontal, 3)
-
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-
-                        Text("\(member.reputation)")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
-                    }
+                    UnifiedRoleBadge(
+                        member: member,
+                        showReputation: true,
+                        fontSize: .caption,
+                        iconSize: .caption2
+                    )
                 }
 
                 Spacer()
@@ -546,7 +534,7 @@ struct RLMemberRowView: View {
             .fill(AppColors.accentColor.opacity(0.3))
             .frame(width: 40, height: 40)
             .overlay(
-                Text(member.displayName.prefix(2))
+                Text(member.username.prefix(2))
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.accentColor)

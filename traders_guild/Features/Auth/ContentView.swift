@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var path: [RLSignupStep] = []
     @State private var data = RLSignupData()
     @EnvironmentObject var RLAppState: RLAppState
+    @State private var showResetFromDeepLink: Bool = false
     
     
     //@EnvironmentObject var appState: AppState
@@ -33,10 +34,31 @@ struct ContentView: View {
                         SignupUsernameView(data: $data, path: $path)
                     case .basics:
                         SignupBasicsView(data: $data, path: $path)
+                    case .interests:
+                        SignupInterestsView(data: $data, path: $path)
                     case .guild:
                         SignupGuildView(data: $data, path: $path)
+                    case .profile:
+                        SignupProfileSetupView(data: $data, path: $path)
                     }
                 }
+        }
+        .onAppear {
+            showResetFromDeepLink = RLAppState.pendingPasswordResetToken != nil
+        }
+        .onChange(of: RLAppState.pendingPasswordResetToken) { _, newValue in
+            showResetFromDeepLink = newValue != nil
+        }
+        .fullScreenCover(isPresented: $showResetFromDeepLink, onDismiss: {
+            RLAppState.setPendingPasswordResetToken(nil)
+        }) {
+            NavigationStack {
+                ForgotPasswordView(
+                    initialToken: RLAppState.pendingPasswordResetToken,
+                    launchedFromDeepLink: true
+                )
+                .environmentObject(RLAppState)
+            }
         }
     }
 }

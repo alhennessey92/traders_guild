@@ -23,12 +23,8 @@ final class traders_guildUITests: XCTestCase {
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
-        app.launch()
-
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+    func testSignupHappyPath() throws {
+        throw XCTSkip("Requires full iOS simulator + backend test environment configuration.")
     }
 
     @MainActor
@@ -39,5 +35,32 @@ final class traders_guildUITests: XCTestCase {
                 XCUIApplication().launch()
             }
         }
+    }
+
+    @MainActor
+    func testLoginByEmail() throws {
+        throw XCTSkip("Requires seeded backend user + simulator environment.")
+    }
+
+    @MainActor
+    func testLoginByUsername() throws {
+        throw XCTSkip("Requires seeded backend user + simulator environment.")
+    }
+
+    @MainActor
+    func testForgotRequestAndResetCompletion() throws {
+        throw XCTSkip("Requires email reset link fixture and deep-link harness.")
+    }
+
+    @MainActor
+    func testGuildPickerDisplaysBackendOwnerDataAndSolidBottomBar() throws {
+        throw XCTSkip("Requires mocked guild data injection in UI test runtime.")
+    }
+
+    @MainActor
+    func testNoAuthTestViewRoutes() throws {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertFalse(app.otherElements["TestView"].exists)
     }
 }

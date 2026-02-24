@@ -28,13 +28,35 @@ struct RLRegisterRequestDTO: Codable {
 
 /// Matches backend LoginRequest schema
 struct RLLoginRequestDTO: Codable {
-    let email: String
+    let identifier: String
     let password: String
+
+    init(identifier: String, password: String) {
+        self.identifier = identifier
+        self.password = password
+    }
+
+    // Backward-compatible convenience for old call sites.
+    init(email: String, password: String) {
+        self.identifier = email
+        self.password = password
+    }
 }
 
 /// Matches backend RefreshTokenRequest schema
 struct RLRefreshTokenRequestDTO: Codable {
     let refreshToken: String         // backend: refresh_token
+}
+
+/// Matches backend PasswordForgotRequest schema
+struct RLPasswordForgotRequestDTO: Codable {
+    let identifier: String
+}
+
+/// Matches backend PasswordResetRequest schema
+struct RLPasswordResetRequestDTO: Codable {
+    let token: String
+    let newPassword: String          // backend: new_password
 }
 
 
@@ -52,8 +74,8 @@ struct RLLoginResponseDTO: Codable {
 struct RLRegistrationResponseDTO: Codable {
     let user: RLUserDTO
     let tokens: RLTokenDTO
-    let defaultGuild: RLGuildDTO                       // backend: default_guild
-    let defaultGuildMembership: RLGuildMembershipDTO   // backend: default_guild_membership
+    let defaultGuild: RLGuildDTO?                      // backend: default_guild
+    let defaultGuildMembership: RLGuildMembershipDTO?  // backend: default_guild_membership
 }
 
 
@@ -67,6 +89,22 @@ struct RLTokenDTO: Codable, Equatable {
     let refreshToken: String         // backend: refresh_token
     let tokenType: String            // backend: token_type
     let expiresIn: Int               // backend: expires_in (seconds)
+}
+
+/// Matches backend PasswordForgotResponse schema
+struct RLPasswordForgotResponseDTO: Codable {
+    let detail: String
+}
+
+/// Matches backend PasswordResetVerifyResponse schema
+struct RLPasswordResetVerifyResponseDTO: Codable {
+    let valid: Bool
+    let detail: String
+}
+
+/// Matches backend PasswordResetResponse schema
+struct RLPasswordResetResponseDTO: Codable {
+    let detail: String
 }
 
 
@@ -168,6 +206,11 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
     let reputation: Int
     let memberCount: Int             // backend: member_count
     let membersOnline: Int           // backend: members_online
+    let ownerDisplayName: String?    // backend: owner_display_name
+    let ownerUsername: String?       // backend: owner_username
+    let ownerAvatarUrl: String?      // backend: owner_avatar_url
+    let language: String?            // backend: language
+    let location: String?            // backend: location
     let status: String
     let dateCreated: Date            // backend: date_created
     let updatedAt: Date              // backend: updated_at
@@ -199,6 +242,29 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
     var isActive: Bool {
         status == "active"
     }
+
+    /// Create a copy with updated guild settings fields
+    func withUpdatedSettings(name: String? = nil, description: String? = nil, isOpen: Bool? = nil) -> RLGuildDTO {
+        RLGuildDTO(
+            id: id,
+            name: name ?? self.name,
+            description: description ?? self.description,
+            imageUrl: imageUrl,
+            ownerId: ownerId,
+            isOpen: isOpen ?? self.isOpen,
+            reputation: reputation,
+            memberCount: memberCount,
+            membersOnline: membersOnline,
+            ownerDisplayName: ownerDisplayName,
+            ownerUsername: ownerUsername,
+            ownerAvatarUrl: ownerAvatarUrl,
+            language: language,
+            location: location,
+            status: status,
+            dateCreated: dateCreated,
+            updatedAt: Date()
+        )
+    }
 }
 
 
@@ -217,8 +283,15 @@ struct RLGuildMembershipDTO: Codable, Identifiable, Equatable {
     let contributionScore: Int       // backend: contribution_score
     let status: String
     let dateJoined: Date             // backend: date_joined
+    let accuracyRate: Double?        // backend: accuracy_rate (trading accuracy 0.0–1.0)
     
     // MARK: - Computed Properties
+    
+    /// Accuracy as percentage string (e.g. "72%"), or nil if no accuracy data
+    var accuracyFormatted: String? {
+        guard let rate = accuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
+    }
     
     var memberRole: RLMemberRole {
         RLMemberRole(from: role)
@@ -248,6 +321,36 @@ struct RLGuildMembershipDTO: Codable, Identifiable, Equatable {
             return "Member for \(days / 365) years"
         }
     }
+
+    /// Create a copy with an updated role
+    func withRole(_ newRole: String) -> RLGuildMembershipDTO {
+        RLGuildMembershipDTO(
+            id: id,
+            userId: userId,
+            guildId: guildId,
+            role: newRole,
+            reputation: reputation,
+            contributionScore: contributionScore,
+            status: status,
+            dateJoined: dateJoined,
+            accuracyRate: accuracyRate
+        )
+    }
+
+    /// Create a copy with updated reputation (and optionally accuracy) from reputation-service.
+    func withReputation(_ newReputation: Int, accuracyRate newAccuracyRate: Double? = nil) -> RLGuildMembershipDTO {
+        RLGuildMembershipDTO(
+            id: id,
+            userId: userId,
+            guildId: guildId,
+            role: role,
+            reputation: newReputation,
+            contributionScore: contributionScore,
+            status: status,
+            dateJoined: dateJoined,
+            accuracyRate: newAccuracyRate ?? accuracyRate
+        )
+    }
 }
 
 /// Guild Simple Membership Response (for embedding in other responses)
@@ -257,6 +360,7 @@ struct RLGuildSimpleMembershipResponse: Codable {
     let guildId: UUID                        // backend: guild_id
     let role: String                         // backend: role
     let reputation: Int                      // backend: reputation
+    let accuracyRate: Double?                // backend: accuracy_rate
     
     // Optional user display info (backend may include these)
     let userDisplayName: String?             // backend: user_display_name
@@ -275,6 +379,12 @@ struct RLGuildSimpleMembershipResponse: Codable {
     
     var username: String {
         userUsername ?? "unknown"
+    }
+    
+    /// Accuracy as percentage string (e.g. "72%"), or nil if no accuracy data
+    var accuracyFormatted: String? {
+        guard let rate = accuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
     }
 }
 
@@ -381,11 +491,81 @@ struct RLGuildStatisticsResponse: Codable {
 // MARK: - Guild Request DTOs
 // ================================================================================================
 
+struct RLGuildJoinQuestionInputDTO: Codable, Identifiable {
+    let prompt: String
+    let isRequired: Bool
+    let displayOrder: Int
+
+    var id: String { "\(displayOrder)-\(prompt)" }
+}
+
 /// Request to create a new guild
 struct RLCreateGuildRequestDTO: Codable {
     let name: String
     let description: String?
     let isOpen: Bool                 // backend: is_open
+    let language: String?
+    let location: String?
+    let joinQuestions: [RLGuildJoinQuestionInputDTO]
+}
+
+struct RLGuildJoinQuestionDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let prompt: String
+    let isRequired: Bool
+    let displayOrder: Int
+    let isActive: Bool
+}
+
+struct RLGuildJoinQuestionsListDTO: Codable {
+    let questions: [RLGuildJoinQuestionDTO]
+}
+
+struct RLGuildJoinQuestionsUpdateRequestDTO: Codable {
+    let questions: [RLGuildJoinQuestionInputDTO]
+}
+
+struct RLGuildJoinRequestAnswerInputDTO: Codable {
+    let questionId: UUID
+    let answerText: String
+}
+
+struct RLGuildJoinRequestCreateRequestDTO: Codable {
+    let note: String?
+    let answers: [RLGuildJoinRequestAnswerInputDTO]
+}
+
+struct RLGuildJoinRequestDecisionRequestDTO: Codable {
+    let reviewNote: String?
+}
+
+struct RLGuildJoinRequestAnswerDTO: Codable, Identifiable {
+    let id: UUID
+    let questionId: UUID
+    let questionPrompt: String
+    let answerText: String
+}
+
+struct RLGuildJoinRequestDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let requesterUserId: UUID
+    let requesterUsername: String
+    let requesterDisplayName: String
+    let requesterAvatarUrl: String?
+    let status: String
+    let note: String?
+    let reviewNote: String?
+    let reviewedByUserId: UUID?
+    let reviewedByDisplayName: String?
+    let createdAt: Date
+    let reviewedAt: Date?
+    let answers: [RLGuildJoinRequestAnswerDTO]
+}
+
+struct RLGuildJoinRequestsListDTO: Codable {
+    let requests: [RLGuildJoinRequestDTO]
 }
 
 
@@ -491,6 +671,8 @@ struct RLGuildAnnouncementWithAuthorDTO: Codable, Identifiable {
     var authorAvatarUrl: String? { authorMembership.userAvatarUrl }
     var authorRole: RLMemberRole { authorMembership.memberRole }
     var authorReputation: Int { authorMembership.reputation }
+    var authorAccuracy: String? { authorMembership.accuracyFormatted }
+    
     
     // Time formatting
     var timeAgoFormatted: String {
@@ -684,7 +866,12 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
     let reputation: Int
     let contributionScore: Int          // backend: contribution_score
     let dateJoined: Date                // backend: date_joined
-    
+    let accuracyRate: Double?           // backend: accuracy_rate (trading accuracy 0.0-1.0)
+
+    // Moderation data
+    let mutedUntil: Date?               // backend: muted_until
+    let suspendedUntil: Date?           // backend: suspended_until
+
     // User data (embedded - no lookup!)
     let userId: UUID                    // backend: user_id
     let username: String
@@ -692,19 +879,35 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
     let avatarUrl: String?              // backend: avatar_url
     let isOnline: Bool                  // backend: is_online
     let globalReputation: Int           // backend: global_reputation
-    
+
     // Relationship to current user (personalized per request)
     let isFriend: Bool                  // backend: is_friend
     let friendshipStatus: String?       // backend: friendship_status (none, pending_sent, pending_received, accepted)
     let isBlocked: Bool                 // backend: is_blocked
     let isBlockedBy: Bool               // backend: is_blocked_by
-    
+
     var id: UUID { membershipId }
-    
+
     // MARK: - Computed Properties
-    
+
+    /// Accuracy as percentage string (e.g. "72%"), or nil if no accuracy data
+    var accuracyFormatted: String? {
+        guard let rate = accuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
+    }
+
     var memberRole: RLMemberRole {
         RLMemberRole(from: role)
+    }
+
+    var isMuted: Bool {
+        guard let mutedUntil = mutedUntil else { return false }
+        return mutedUntil > Date()
+    }
+
+    var isSuspended: Bool {
+        guard let suspendedUntil = suspendedUntil else { return false }
+        return suspendedUntil > Date()
     }
     
     var initials: String {
@@ -743,6 +946,29 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
             return self
         }
         return updated
+    }
+
+    func withRole(_ newRole: String) -> RLGuildMemberDTO {
+        RLGuildMemberDTO(
+            membershipId: membershipId,
+            role: newRole,
+            reputation: reputation,
+            contributionScore: contributionScore,
+            dateJoined: dateJoined,
+            accuracyRate: accuracyRate,
+            mutedUntil: mutedUntil,
+            suspendedUntil: suspendedUntil,
+            userId: userId,
+            username: username,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            isOnline: isOnline,
+            globalReputation: globalReputation,
+            isFriend: isFriend,
+            friendshipStatus: friendshipStatus,
+            isBlocked: isBlocked,
+            isBlockedBy: isBlockedBy
+        )
     }
     
     /// Friendship status display text
@@ -928,6 +1154,41 @@ struct RLUserGlobalStatisticsDTO: Codable, Equatable {
     let topSymbols: [String]            // backend: top_symbols
     let markersByType: [String: Int]    // backend: markers_by_type
     let lastCalculatedAt: Date          // backend: last_calculated_at
+
+    enum CodingKeys: String, CodingKey {
+        case userId
+        case totalMarkersPlaced
+        case successfulMarkers
+        case accuracyRate
+        case totalLikesReceived
+        case totalCommentsMade
+        case currentStreakDays
+        case bestStreakDays
+        case totalGuildsJoined
+        case totalAwardsEarned
+        case totalAwardPoints
+        case topSymbols
+        case markersByType
+        case lastCalculatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(UUID.self, forKey: .userId)
+        totalMarkersPlaced = try container.decodeIfPresent(Int.self, forKey: .totalMarkersPlaced) ?? 0
+        successfulMarkers = try container.decodeIfPresent(Int.self, forKey: .successfulMarkers) ?? 0
+        accuracyRate = try container.decodeIfPresent(Double.self, forKey: .accuracyRate) ?? 0
+        totalLikesReceived = try container.decodeIfPresent(Int.self, forKey: .totalLikesReceived) ?? 0
+        totalCommentsMade = try container.decodeIfPresent(Int.self, forKey: .totalCommentsMade) ?? 0
+        currentStreakDays = try container.decodeIfPresent(Int.self, forKey: .currentStreakDays) ?? 0
+        bestStreakDays = try container.decodeIfPresent(Int.self, forKey: .bestStreakDays) ?? 0
+        totalGuildsJoined = try container.decodeIfPresent(Int.self, forKey: .totalGuildsJoined) ?? 0
+        totalAwardsEarned = try container.decodeIfPresent(Int.self, forKey: .totalAwardsEarned) ?? 0
+        totalAwardPoints = try container.decodeIfPresent(Int.self, forKey: .totalAwardPoints) ?? 0
+        topSymbols = try container.decodeIfPresent([String].self, forKey: .topSymbols) ?? []
+        markersByType = try container.decodeIfPresent([String: Int].self, forKey: .markersByType) ?? [:]
+        lastCalculatedAt = try container.decodeIfPresent(Date.self, forKey: .lastCalculatedAt) ?? Date.distantPast
+    }
     
     var accuracyFormatted: String {
         String(format: "%.1f%%", accuracyRate * 100)
@@ -1354,50 +1615,253 @@ enum RLMemberRole: String, Codable, CaseIterable {
     case member = "member"
     case moderator = "moderator"
     case admin = "admin"
-    
+    case owner = "owner"
+
     /// Initialize from backend string (case-insensitive)
     init(from string: String) {
         switch string.lowercased() {
-        case "admin", "owner": self = .admin
+        case "owner": self = .owner
+        case "admin": self = .admin
         case "moderator", "mod": self = .moderator
         default: self = .member
         }
     }
-    
+
     var displayName: String {
         rawValue.capitalized
     }
-    
+
     var color: Color {
         switch self {
         case .member: return .gray
         case .moderator: return .orange
         case .admin: return .red
+        case .owner: return .yellow
         }
     }
-    
+
     var icon: String {
         switch self {
+        case .owner: return "crown.fill"
         case .admin: return "star.fill"
         case .moderator: return "shield.fill"
         case .member: return "person.fill"
         }
     }
-    
+
     var canModerate: Bool {
-        self == .moderator || self == .admin
+        self == .moderator || self == .admin || self == .owner
     }
-    
+
     var canAdmin: Bool {
-        self == .admin
+        self == .admin || self == .owner
     }
-    
+
+    var isOwner: Bool {
+        self == .owner
+    }
+
     var canManageMembers: Bool {
-        self == .admin
+        self == .admin || self == .owner
     }
 }
 
 
+// ================================================================================================
+// MARK: - Admin Panel DTOs
+// ================================================================================================
+
+/// Request DTO for updating guild settings
+struct RLUpdateGuildRequestDTO: Codable {
+    let name: String?
+    let description: String?
+    let isOpen: Bool?
+}
+
+/// Guild invitation response DTO
+struct RLGuildInvitationDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let invitedUserId: UUID
+    let invitedByUserId: UUID
+    let invitedUsername: String
+    let invitedDisplayName: String
+    let invitedAvatarUrl: String?
+    let invitedByDisplayName: String
+    let status: String
+    let createdAt: Date
+}
+
+/// List of guild invitations
+struct RLGuildInvitationsListDTO: Codable {
+    let invitations: [RLGuildInvitationDTO]
+}
+
+/// User search result for invite
+struct RLUserSearchResultDTO: Codable, Identifiable {
+    let userId: UUID
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+    let isMember: Bool
+    let hasPendingInvite: Bool
+
+    var id: UUID { userId }
+}
+
+/// List of user search results
+struct RLUserSearchResultsDTO: Codable {
+    let users: [RLUserSearchResultDTO]
+}
+
+/// Request DTO for banning a member
+struct RLGuildBanRequestDTO: Codable {
+    let reason: String?
+}
+
+/// Guild ban response DTO
+struct RLGuildBanDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let bannedUserId: UUID
+    let bannedUsername: String
+    let bannedDisplayName: String
+    let bannedAvatarUrl: String?
+    let bannedByDisplayName: String
+    let reason: String?
+    let bannedAt: Date
+}
+
+/// List of guild bans
+struct RLGuildBansListDTO: Codable {
+    let bans: [RLGuildBanDTO]
+}
+
+/// Request DTO for changing a member's role
+struct RLGuildRoleChangeRequestDTO: Codable {
+    let role: String
+}
+
+/// Response DTO after changing a member's role
+struct RLGuildMemberRoleResponseDTO: Codable {
+    let userId: UUID
+    let membershipId: UUID
+    let oldRole: String
+    let newRole: String
+}
+
+/// Request DTO for muting a member
+struct RLGuildMuteRequestDTO: Codable {
+    let durationMinutes: Int
+    let reason: String?
+}
+
+/// Request DTO for suspending a member
+struct RLGuildSuspendRequestDTO: Codable {
+    let durationMinutes: Int
+    let reason: String?
+}
+
+/// Response DTO after performing a moderation action (mute/unmute/suspend/unsuspend)
+struct RLGuildMemberActionResponseDTO: Codable {
+    let userId: UUID
+    let membershipId: UUID
+    let action: String  // "muted", "unmuted", "suspended", "unsuspended"
+    let until: Date?
+    let reason: String?
+}
+
+
+// ================================================================================================
+// MARK: - Content Reports DTOs
+// ================================================================================================
+
+/// Request to report content
+struct RLContentReportRequestDTO: Codable {
+    let reason: String
+    let details: String?
+}
+
+/// Single content report response
+struct RLContentReportDTO: Codable, Identifiable {
+    let id: UUID
+    let reporterId: UUID
+    let reporterUsername: String?
+    let reporterDisplayName: String?
+    let contentType: String
+    let contentId: UUID
+    let guildId: UUID?
+    let reason: String
+    let details: String?
+    let status: String
+    let reviewedBy: UUID?
+    let reviewerDisplayName: String?
+    let reviewedAt: Date?
+    let resolutionNote: String?
+    let createdAt: Date
+    let reportedUserId: UUID?
+    let contentSnippet: String?
+
+    var isPending: Bool { status == "pending" }
+    var isResolved: Bool { status == "resolved" }
+    var isDismissed: Bool { status == "dismissed" }
+
+    var contentTypeDisplay: String {
+        switch contentType {
+        case "user": return "User"
+        case "chatroom_message": return "Chat Message"
+        case "dm_message": return "DM Message"
+        case "chart_chat_message": return "Chart Chat"
+        case "marker_comment": return "Marker Comment"
+        case "chart_marker": return "Marker"
+        default: return contentType.capitalized
+        }
+    }
+
+    var contentTypeIcon: String {
+        switch contentType {
+        case "user": return "person.fill"
+        case "chatroom_message", "dm_message", "chart_chat_message": return "bubble.left.fill"
+        case "marker_comment": return "text.bubble.fill"
+        case "chart_marker": return "mappin.circle.fill"
+        default: return "doc.fill"
+        }
+    }
+
+    var reasonDisplay: String {
+        switch reason {
+        case "spam": return "Spam"
+        case "harassment": return "Harassment"
+        case "hate_speech": return "Hate Speech"
+        case "inappropriate": return "Inappropriate"
+        case "misinformation": return "Misinformation"
+        case "other": return "Other"
+        default: return reason.capitalized
+        }
+    }
+
+    var statusColor: Color {
+        switch status {
+        case "pending": return .orange
+        case "resolved": return .green
+        case "dismissed": return .gray
+        default: return .secondary
+        }
+    }
+}
+
+/// List of content reports
+struct RLContentReportsListDTO: Codable {
+    let reports: [RLContentReportDTO]
+    let totalCount: Int
+    let pendingCount: Int
+}
+
+/// Request to resolve or dismiss a report
+struct RLResolveReportRequestDTO: Codable {
+    let action: String  // "resolved" or "dismissed"
+    let resolutionNote: String?
+}
 
 
 
@@ -1541,6 +2005,30 @@ struct RLSupportTicketRequest: Codable {
     let deviceInfo: [String: String]?
 }
 
+// MARK: - Reporting & Sharing Requests
+
+struct RLChatroomReportRequest: Codable {
+    let reason: String
+}
+
+struct RLUserReportRequest: Codable {
+    let reason: String
+}
+
+struct RLContentReportRequest: Codable {
+    let reason: String
+    let details: String?
+
+    init(reason: String, details: String? = nil) {
+        self.reason = reason
+        self.details = details
+    }
+}
+
+struct RLShareEventRequest: Codable {
+    let friendId: UUID
+}
+
 // MARK: - Activity Feed DTOs
 
 struct RLActivityItem: Codable, Identifiable {
@@ -1551,6 +2039,11 @@ struct RLActivityItem: Codable, Identifiable {
     let timestamp: Date
     let guildId: UUID?
     let guildName: String?
+    let guildRepDelta: Int?
+    let globalRepDelta: Int?
+    let metricDelta: Int?
+    let metricLabel: String?
+    let sourceType: String?
 }
 
 struct RLActivityFeedResponse: Codable {
@@ -1620,6 +2113,7 @@ struct RLSignupData {
     var username: String = ""
     var password: String = ""
     var name: String = ""            // Maps to displayName when creating RegisterRequestDTO
+    var selectedInterests: [String] = []
     
     /// Convert to API request format
     func toRequest() -> RLRegisterRequestDTO {
@@ -1632,11 +2126,62 @@ struct RLSignupData {
     }
 }
 
+enum RLAuthValidator {
+    private static let emailRegex = #"^[A-Z0-9a-z._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,64}$"#
+    private static let usernameRegex = #"^[A-Za-z0-9_.-]{3,50}$"#
+
+    static func trimmed(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func isValidDisplayName(_ value: String) -> Bool {
+        let trimmedValue = trimmed(value)
+        return !trimmedValue.isEmpty && trimmedValue.count <= 100
+    }
+
+    static func isValidEmail(_ email: String) -> Bool {
+        let normalized = trimmed(email)
+        guard !normalized.isEmpty else { return false }
+        return normalized.range(of: emailRegex, options: .regularExpression) != nil
+    }
+
+    static func isValidUsername(_ username: String) -> Bool {
+        let normalized = trimmed(username)
+        guard !normalized.isEmpty else { return false }
+        return normalized.range(of: usernameRegex, options: .regularExpression) != nil
+    }
+
+    static func isLikelyEmailIdentifier(_ identifier: String) -> Bool {
+        trimmed(identifier).contains("@")
+    }
+
+    static func isValidIdentifier(_ identifier: String) -> Bool {
+        if isLikelyEmailIdentifier(identifier) {
+            return isValidEmail(identifier)
+        }
+        return isValidUsername(identifier)
+    }
+
+    static func isValidPassword(_ password: String) -> Bool {
+        let bytes = password.utf8.count
+        guard bytes >= 8 && bytes <= 72 else { return false }
+        guard password.rangeOfCharacter(from: .uppercaseLetters) != nil else { return false }
+        guard password.rangeOfCharacter(from: .lowercaseLetters) != nil else { return false }
+        guard password.rangeOfCharacter(from: .decimalDigits) != nil else { return false }
+        return true
+    }
+
+    static func doPasswordsMatch(_ first: String, _ second: String) -> Bool {
+        !first.isEmpty && first == second
+    }
+}
+
 enum RLSignupStep: Hashable {
     case accountInfo
     case username
     case basics
+    case interests
     case guild
+    case profile
     
 }
-

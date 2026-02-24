@@ -14,7 +14,7 @@ final class IndicatorCalculator {
     // MARK: - Simple Moving Average (SMA)
     
     static func calculateSMA(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int,
         priceSource: PriceSource = .close
     ) -> [MovingAverageDataPoint] {
@@ -55,7 +55,7 @@ final class IndicatorCalculator {
     // MARK: - Exponential Moving Average (EMA)
     
     static func calculateEMA(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int,
         priceSource: PriceSource = .close
     ) -> [MovingAverageDataPoint] {
@@ -96,7 +96,7 @@ final class IndicatorCalculator {
     // MARK: - RSI Calculation
     
     static func calculateRSI(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int = 14
     ) -> [RSIDataPoint] {
         guard candles.count > period && period > 0 else { return [] }
@@ -166,7 +166,7 @@ final class IndicatorCalculator {
     ///   - signalPeriod: Signal line EMA period (default 9)
     /// - Returns: Array of MACD data points
     static func calculateMACD(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         fastPeriod: Int = 12,
         slowPeriod: Int = 26,
         signalPeriod: Int = 9
@@ -233,7 +233,7 @@ final class IndicatorCalculator {
     
     /// Calculate EMA and return just the values (for internal use)
     private static func calculateEMAValues(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int,
         priceSource: PriceSource = .close
     ) -> [Double] {
@@ -290,7 +290,7 @@ final class IndicatorCalculator {
     ///   - smoothK: %K smoothing period (default 3, use 1 for fast stochastic)
     /// - Returns: Array of Stochastic data points
     static func calculateStochastic(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         kPeriod: Int = 14,
         dPeriod: Int = 3,
         smoothK: Int = 3
@@ -403,7 +403,7 @@ extension Comparable {
 extension IndicatorCalculator {
     
     static func calculateAllMovingAverages(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         configs: [MovingAverageConfig]
     ) -> [UUID: [MovingAverageDataPoint]] {
         var results: [UUID: [MovingAverageDataPoint]] = [:]
@@ -446,7 +446,7 @@ extension IndicatorCalculator {
     ///   - standardDeviations: Number of standard deviations for bands (default 2.0)
     /// - Returns: Array of Bollinger Bands data points
     static func calculateBollingerBands(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int = 20,
         standardDeviations: Double = 2.0
     ) -> [BollingerBandsDataPoint] {
@@ -503,7 +503,7 @@ extension IndicatorCalculator {
     ///   - resetDaily: Whether to reset VWAP at start of each day (default true for intraday)
     /// - Returns: Array of VWAP data points
     static func calculateVWAP(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         resetDaily: Bool = true
     ) -> [VWAPDataPoint] {
         guard !candles.isEmpty else { return [] }
@@ -583,7 +583,7 @@ extension IndicatorCalculator {
     
     /// Calculate Weighted Moving Average
     static func calculateWMA(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int,
         priceSource: PriceSource = .close
     ) -> [MovingAverageDataPoint] {
@@ -622,7 +622,7 @@ extension IndicatorCalculator {
     /// Calculate Hull Moving Average
     /// HMA = WMA(2 * WMA(n/2) - WMA(n), sqrt(n))
     static func calculateHMA(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int,
         priceSource: PriceSource = .close
     ) -> [MovingAverageDataPoint] {
@@ -704,7 +704,7 @@ extension IndicatorCalculator {
     
     /// Calculate Donchian Channels
     static func calculateDonchianChannels(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int = 20
     ) -> [DonchianChannelsDataPoint] {
         guard candles.count >= period && period > 0 else { return [] }
@@ -741,7 +741,7 @@ extension IndicatorCalculator {
     
     /// Calculate Average True Range
     static func calculateATR(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int = 14
     ) -> [ATRDataPoint] {
         guard candles.count >= period + 1 && period > 0 else { return [] }
@@ -796,7 +796,7 @@ extension IndicatorCalculator {
     
     /// Calculate Keltner Channels
     static func calculateKeltnerChannels(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         emaPeriod: Int = 20,
         atrPeriod: Int = 10,
         atrMultiplier: Double = 2.0
@@ -848,7 +848,7 @@ extension IndicatorCalculator {
     
     /// Calculate Parabolic SAR
     static func calculateParabolicSAR(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         accelerationStart: Double = 0.02,
         accelerationIncrement: Double = 0.02,
         accelerationMax: Double = 0.2
@@ -937,7 +937,7 @@ extension IndicatorCalculator {
     
     /// Calculate Commodity Channel Index
     static func calculateCCI(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int = 20
     ) -> [CCIDataPoint] {
         guard candles.count >= period && period > 0 else { return [] }
@@ -985,7 +985,7 @@ extension IndicatorCalculator {
     
     /// Calculate Williams %R
     static func calculateWilliamsR(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         period: Int = 14
     ) -> [WilliamsRDataPoint] {
         guard candles.count >= period && period > 0 else { return [] }
@@ -1026,7 +1026,7 @@ extension IndicatorCalculator {
     
     /// Calculate Volume data with optional MA
     static func calculateVolume(
-        candles: [CandleDTO],
+        candles: [RLCandleDTO],
         maPeriod: Int = 20
     ) -> [VolumeDataPoint] {
         guard !candles.isEmpty else { return [] }

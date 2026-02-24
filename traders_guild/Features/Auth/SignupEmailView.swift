@@ -1,167 +1,225 @@
 //
-//  SignUpEmailView.swift
+//  SignupEmailView.swift
 //  traders_guild
-//
-//  Created by Al Hennessey on 21/09/2025.
 //
 
-//
-//  SigninEmail.swift
-//  traders_guild
-//
-//  Created by Al Hennessey on 21/09/2025.
-//
 import SwiftUI
 
+private struct SignupPasswordRequirement: Identifiable {
+    let title: String
+    let isMet: Bool
+
+    var id: String { title }
+}
 
 struct SignupEmailView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
-    // MARK: - State
+
     @State private var name: String = ""
     @State private var email: String = ""
-    @State private var dob: Date = Date()
     @State private var password: String = ""
-    @State private var showPassword: Bool = false
-    
+    @State private var confirmPassword: String = ""
 
-    // Validate form before allowing next progression
-    var isFormValid: Bool {
-        !name.isEmpty &&
-        email.contains("@") &&
-        password.count >= 6
+    private var normalizedName: String {
+        RLAuthValidator.trimmed(name)
     }
-    
-    
-    
+
+    private var normalizedEmail: String {
+        RLAuthValidator.trimmed(email).lowercased()
+    }
+
+    private var isFormValid: Bool {
+        RLAuthValidator.isValidDisplayName(normalizedName) &&
+        RLAuthValidator.isValidEmail(normalizedEmail) &&
+        RLAuthValidator.isValidPassword(password) &&
+        RLAuthValidator.doPasswordsMatch(password, confirmPassword)
+    }
+
+    private var isValidLength: Bool {
+        let bytes = password.utf8.count
+        return bytes >= 8 && bytes <= 72
+    }
+
+    private var hasUppercase: Bool {
+        password.rangeOfCharacter(from: .uppercaseLetters) != nil
+    }
+
+    private var hasLowercase: Bool {
+        password.rangeOfCharacter(from: .lowercaseLetters) != nil
+    }
+
+    private var hasNumber: Bool {
+        password.rangeOfCharacter(from: .decimalDigits) != nil
+    }
+
+    private var passwordsMatch: Bool {
+        RLAuthValidator.doPasswordsMatch(password, confirmPassword)
+    }
+
+    private var passwordRequirements: [SignupPasswordRequirement] {
+        [
+            SignupPasswordRequirement(title: "8-72 characters", isMet: isValidLength),
+            SignupPasswordRequirement(title: "At least one uppercase letter", isMet: hasUppercase),
+            SignupPasswordRequirement(title: "At least one lowercase letter", isMet: hasLowercase),
+            SignupPasswordRequirement(title: "At least one number", isMet: hasNumber),
+        ]
+    }
+
+    private var passwordValidationState: StandardTextFieldValidationState {
+        if password.isEmpty { return .neutral }
+        return RLAuthValidator.isValidPassword(password) ? .valid : .invalid
+    }
+
+    private var confirmPasswordValidationState: StandardTextFieldValidationState {
+        if confirmPassword.isEmpty { return .neutral }
+        return passwordsMatch ? .valid : .invalid
+    }
+
+    private var passwordMatchColor: Color {
+        passwordsMatch ? AppColors.bullCandleGreen : AppColors.bearCandleRed
+    }
+
     var body: some View {
-        
         ZStack {
             StaticAuthBackgroundView()
-            ScrollView (showsIndicators: false){
-                
-                VStack() {
-                    // Description
-                    Text("Sign Up with Email")
+            ScrollView(showsIndicators: false) {
+                VStack {
+                    Text("Step 1 of 6")
+                        .font(AppFonts.smallNotice())
+                        .foregroundColor(AppColors.greyText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 4)
+
+                    HStack(spacing: 6) {
+                        Capsule().fill(AppColors.whiteText).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
+                    }
+                    .padding(.horizontal, 20)
+
+                    Text("Create your account")
                         .font(.largeTitle.bold())
                         .foregroundColor(AppColors.whiteText)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .bottomLeading)
                         .padding(.bottom, 20)
                         .padding(.leading, 20)
-                    
-                    // Email TextField
-                    StandardTextFieldView(title: "Name", text: $name)
+
+                    StandardTextFieldView(title: "Display name", text: $name)
                         .padding(.bottom, 10)
-                    
+
                     StandardTextFieldView(title: "Email", text: $email)
                         .padding(.bottom, 10)
-                    
-//                    StandardDatePickerView(title: "Date of Birth", date: $dob)
-//                        .padding(.bottom, 10) // TODO: REALAPI
-                    
-                    Text("Password must contain at least 8 characters, one uppercase letter, one lowercase letter, and one number.")
+
+                    Text("Password requirements")
                         .font(AppFonts.smallNotice())
                         .foregroundColor(AppColors.greyText)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(0)
-                        .frame(maxWidth: .infinity, alignment: .center) // full width
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 10)
                         .padding(.bottom, 5)
-                    
-                    StandardTextFieldView(title: "Password", text: $password, isSecure: true)
+                        .padding(.horizontal, 24)
+
+                    StandardTextFieldView(
+                        title: "Password",
+                        text: $password,
+                        isSecure: true,
+                        validationState: passwordValidationState
+                    )
                         .padding(.bottom, 10)
-                        
-                    
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(passwordRequirements) { requirement in
+                            HStack(spacing: 7) {
+                                Image(systemName: requirement.isMet ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(requirement.isMet ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+
+                                Text(requirement.title)
+                                    .font(.caption)
+                                    .foregroundColor(requirement.isMet ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 12)
+
+                    StandardTextFieldView(
+                        title: "Confirm Password",
+                        text: $confirmPassword,
+                        isSecure: true,
+                        validationState: confirmPasswordValidationState
+                    )
+                    .padding(.bottom, 4)
+
+                    if !confirmPassword.isEmpty {
+                        HStack(spacing: 7) {
+                            Image(systemName: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .font(.caption)
+                                .foregroundColor(passwordMatchColor)
+
+                            Text(passwordsMatch ? "Passwords match" : "Passwords do not match")
+                                .font(.caption)
+                                .foregroundColor(passwordMatchColor)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 10)
+                    }
+
                     VStack(spacing: 0) {
                         Divider()
                             .frame(height: 1)
-
-                            .background(Color.gray.opacity(0.3)) // color
+                            .background(Color.gray.opacity(0.3))
                     }
-                    .padding(.horizontal, 16)  // horizontal inset
+                    .padding(.horizontal, 16)
                     .padding(.top, 16)
-                    
-                    // Login button
+
                     StandardActionButtonFullWidth(
-                        title: "Sign Up",
+                        title: "Continue",
                         backgroundColor: AppColors.whiteText,
-                        foregroundColor: AppColors.gradientBackgroundDark,
-                        action:{
-                            data.name = name
-                            data.email = email
-                            //data.dob = dob
-                            data.password = password
-                            path.append(.username)
-                        }
-                        
-                    )
+                        foregroundColor: AppColors.gradientBackgroundDark
+                    ) {
+                        data.name = normalizedName
+                        data.email = normalizedEmail
+                        data.password = password
+                        path.append(.username)
+                    }
                     .frame(maxWidth: .infinity)
-//                    .disabled(!isFormValid) // ✅ disable until valid
-//                    .opacity(isFormValid ? 1.0 : 0.5) 
-                    
-                    Spacer() // push content up a bit
+                    .disabled(!isFormValid)
+                    .opacity(isFormValid ? 1.0 : 0.5)
+
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
-              
-                
             }
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
-            
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    
                     Button(action: {
-                        if !path.isEmpty { path.removeLast() } // Go back
+                        if !path.isEmpty { path.removeLast() }
                     }) {
                         Image(systemName: "chevron.left")
                             .font(.headline)
                             .foregroundColor(AppColors.unhighlightedButtonBackground)
                     }
-                   
                 }
-                
+
                 ToolbarItem(placement: .principal) {
                     Text("TG")
                         .font(.largeTitle)
                         .fontWeight(.heavy)
                         .foregroundColor(AppColors.fadedBackground)
-                      
                 }
-                
             }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0){
-                    
-//                    Divider()
-//                        .frame(height: 1)                  // thickness
-//                        .background(Color.gray.opacity(0.3)) // color
-//                    
-//                    NavigationLink(destination: ForgotPasswordView()) {
-//                        Text("Forgot your password?")
-//                            .font(AppFonts.smallNotice())
-//                            .foregroundColor(AppColors.whiteText)
-//                            .multilineTextAlignment(.center)
-//                            .frame(maxWidth: .infinity, alignment: .center) // full width
-//                            .fixedSize(horizontal: false, vertical: true)
-//                            .padding()
-//                    }
-                }
-                
-                
-                
-            }
-
         }
-            
-        
     }
 }
-
-//#Preview {
-//    @State var previewData = SignupData()
-//    SignupEmailView(data: $previewData, onNext: {}, onBack: {})
-//        .environmentObject(SessionStore())
-//}

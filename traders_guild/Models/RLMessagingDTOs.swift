@@ -30,6 +30,9 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let isCurrentUserMessage: Bool
     let canEdit: Bool
     let canDelete: Bool
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
     
     // MARK: - Hashable
     
@@ -149,6 +152,9 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let canEdit: Bool
     let canDelete: Bool
     let isRead: Bool
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
     
     // MARK: - Hashable
     
@@ -287,6 +293,16 @@ struct RLUnreadCountsDTO: Codable, Equatable {
 /// Backend: SendMessageRequest
 struct RLSendMessageRequest: Codable {
     let content: String
+    let attachmentUrl: String?
+    let attachmentType: String?
+    let attachmentName: String?
+
+    init(content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) {
+        self.content = content
+        self.attachmentUrl = attachmentUrl
+        self.attachmentType = attachmentType
+        self.attachmentName = attachmentName
+    }
 }
 
 /// Edit message request
@@ -328,6 +344,45 @@ enum WSMessageType: String, Codable {
     case unsubscribed = "unsubscribed"
     case pong = "pong"
     case error = "error"
+    // Guild events
+    case guildUpdated = "guild_updated"
+    case memberRoleChanged = "member_role_changed"
+    case memberMuted = "member_muted"
+    case memberSuspended = "member_suspended"
+}
+
+// MARK: - Guild Event Payloads
+
+/// Payload for guild_updated WebSocket event
+struct WSGuildUpdatedPayload: Codable {
+    let guildId: String
+    let name: String?
+    let description: String?
+    let isOpen: Bool?
+}
+
+/// Payload for member_role_changed WebSocket event
+struct WSMemberRoleChangedPayload: Codable {
+    let guildId: String
+    let userId: String
+    let oldRole: String
+    let newRole: String
+}
+
+/// Payload for member_muted WebSocket event
+struct WSMemberMutedPayload: Codable {
+    let guildId: String
+    let userId: String
+    let mutedUntil: String?
+    let action: String  // "muted" or "unmuted"
+}
+
+/// Payload for member_suspended WebSocket event
+struct WSMemberSuspendedPayload: Codable {
+    let guildId: String
+    let userId: String
+    let suspendedUntil: String?
+    let action: String  // "suspended" or "unsuspended"
 }
 
 /// Incoming WebSocket message wrapper
@@ -343,12 +398,42 @@ struct WSIncomingMessage: Codable {
     /// Parse payload as specific type
     func payload<T: Decodable>(as type: T.Type) -> T? {
         guard let payload = payload else { return nil }
-        
+
         do {
             let data = try JSONEncoder().encode(payload)
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            decoder.dateDecodingStrategy = .iso8601
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateString = try container.decode(String.self)
+
+                // Try ISO8601 with fractional seconds (Python's default datetime format)
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+
+                // Try ISO8601 without fractional seconds
+                formatter.formatOptions = [.withInternetDateTime]
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+
+                // Try datetime without timezone
+                let noTZFormatter = DateFormatter()
+                noTZFormatter.locale = Locale(identifier: "en_US_POSIX")
+                noTZFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+                noTZFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+                if let date = noTZFormatter.date(from: dateString) {
+                    return date
+                }
+
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Cannot decode date: \(dateString)"
+                )
+            }
             return try decoder.decode(T.self, from: data)
         } catch {
             print("Failed to decode payload: \(error)")

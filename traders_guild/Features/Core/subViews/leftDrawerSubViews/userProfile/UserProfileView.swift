@@ -21,7 +21,6 @@ struct UserProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var appState: AppState
     
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     
@@ -31,9 +30,16 @@ struct UserProfileDetailView: View {
     // Profile data loading
     @State private var extendedProfile: RLUserProfileDTO? = nil
     @State private var markersSummary: RLUserGlobalStatisticsDTO? = nil
-    @State private var userMarkers: [TopMarkerDTO] = []
+    @State private var userMarkers: [RLTopMarkerDTO] = []
     @State private var awards: [RLUserAwardDTO] = []
     @State private var awardsSummary: RLAwardsSummaryDTO? = nil
+    @State private var guildActivity: [RLActivityItem] = []
+    @State private var guildActivityLoadError: String?
+    @State private var isGuildActivityLoading = false
+    @State private var guildReputationProfile: RLReputationProfileDTO?
+    @State private var guildAccuracyProfile: RLAccuracyProfileDTO?
+    @State private var showGuildReputationBreakdown = false
+    @State private var showGuildAccuracyBreakdown = false
     @State private var isLoading = true
 
     var body: some View {
@@ -87,6 +93,34 @@ struct UserProfileDetailView: View {
         .task {
             await loadProfileData()
         }
+        .sheet(isPresented: $showGuildReputationBreakdown) {
+            NavigationStack {
+                GuildReputationBreakdownSheetView()
+                    .environmentObject(rlAppState)
+                    .navigationTitle("Guild Reputation Breakdown")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { showGuildReputationBreakdown = false }
+                                .foregroundColor(AppColors.accentColor)
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showGuildAccuracyBreakdown) {
+            NavigationStack {
+                GuildAccuracyBreakdownSheetView()
+                    .environmentObject(rlAppState)
+                    .navigationTitle("Guild Accuracy Breakdown")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { showGuildAccuracyBreakdown = false }
+                                .foregroundColor(AppColors.accentColor)
+                        }
+                    }
+            }
+        }
     }
     
     // MARK: - Profile View
@@ -119,6 +153,14 @@ struct UserProfileDetailView: View {
                     stats: buildStats(),
                     isCurrentUser: true,
                     username: rlAppState.currentUser?.username ?? "", // TODO: check for change
+                    tabs: [.overview, .markers, .awards, .activity],
+                    activityItems: guildActivity,
+                    isActivityLoading: isGuildActivityLoading,
+                    activityLoadError: guildActivityLoadError,
+                    guildReputationProfile: guildReputationProfile,
+                    guildAccuracyProfile: guildAccuracyProfile,
+                    onOpenGuildReputationBreakdown: { showGuildReputationBreakdown = true },
+                    onOpenGuildAccuracyBreakdown: { showGuildAccuracyBreakdown = true },
                     onMarkerTap: { marker in
                         // Navigate to marker on chart
                         leftDrawerViewModel.requestNavigationToMarker(marker)
@@ -192,31 +234,77 @@ struct UserProfileDetailView: View {
     
     // MARK: - Load Profile Data
     private func loadProfileData() async {
-        let data = await leftDrawerViewModel.loadCurrentUserProfile(appState: appState, rlAppState: rlAppState)
+        await rlAppState.refreshCurrentGuildReputation()
+        isGuildActivityLoading = true
+        guildActivityLoadError = nil
+
+        async let profileDataTask = leftDrawerViewModel.loadCurrentUserProfile(rlAppState: rlAppState)
+
+        var loadedGuildReputation: RLReputationProfileDTO?
+        var loadedGuildAccuracy: RLAccuracyProfileDTO?
+        var loadedGuildActivity: [RLActivityItem] = []
+        var loadedGuildActivityError: String?
+
+        if let guildId = rlAppState.currentGuild?.id {
+            async let guildReputationTask = rlAppState.realApi.getMyGuildReputation(guildId: guildId)
+            async let guildAccuracyTask = rlAppState.realApi.getMyGuildAccuracy(guildId: guildId)
+            async let guildActivityTask = rlAppState.realApi.getUserActivity(skip: 0, limit: 100, guildId: guildId)
+
+            loadedGuildReputation = try? await guildReputationTask
+            loadedGuildAccuracy = try? await guildAccuracyTask
+            do {
+                let activity = try await guildActivityTask
+                loadedGuildActivity = activity.items
+            } catch {
+                if !isCancellationError(error) {
+                    loadedGuildActivityError = error.localizedDescription
+                }
+            }
+        } else {
+            loadedGuildActivityError = "No guild selected"
+        }
+
+        let profileData = await profileDataTask
         await MainActor.run {
-            extendedProfile = data.profile
-            markersSummary = data.statistics
-            userMarkers = data.userMarkers
-            awards = data.awards
-            awardsSummary = data.awardsSummary
+            extendedProfile = profileData.profile
+            markersSummary = profileData.statistics
+            userMarkers = profileData.userMarkers
+            awards = profileData.awards
+            awardsSummary = profileData.awardsSummary
+            guildReputationProfile = loadedGuildReputation
+            guildAccuracyProfile = loadedGuildAccuracy
+            guildActivity = loadedGuildActivity
+            guildActivityLoadError = loadedGuildActivityError
+            isGuildActivityLoading = false
             isLoading = false
         }
     }
+
+    private func isCancellationError(_ error: Error) -> Bool {
+        if Task.isCancelled || error is CancellationError {
+            return true
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return true
+        }
+        if case let APIError.networkError(message) = error,
+           message.lowercased().contains("cancelled") {
+            return true
+        }
+        return false
+    }
     
-    // MARK: - Build Stats
-    
-    // TODO: Need prod functionality
+    // MARK: - Build Stats (real data from currentMembership and currentUser; no placeholder trends)
     private func buildStats() -> [ProfileStatDTO] {
         guard let user = rlAppState.currentUser else { return [] }
         guard let membership = rlAppState.currentMembership else { return [] }
-        
-        return [
+        var items: [ProfileStatDTO] = [
             ProfileStatDTO(
                 label: "Guild Reputation",
                 value: "\(membership.reputation)",
                 icon: "shield.checkered",
                 color: AppColors.accentColor,
-                trend: .up("+32 this week")
+                trend: nil
             ),
             ProfileStatDTO(
                 label: "Global Reputation",
@@ -237,90 +325,81 @@ struct UserProfileDetailView: View {
                 value: "\(membership.contributionScore)%",
                 icon: "chart.bar.fill",
                 color: .orange,
-                trend: .up("+5%")
+                trend: nil
             )
         ]
+        if let accuracy = membership.accuracyFormatted {
+            items.insert(
+                ProfileStatDTO(
+                    label: "Guild Accuracy",
+                    value: accuracy,
+                    icon: "target",
+                    color: .green,
+                    trend: nil
+                ),
+                at: 2
+            )
+        }
+        return items
     }
 }
 
 
-// MARK: - User Profile Header Component
+// MARK: - User Profile Header Component (unified: username · role · reputation · accuracy)
 struct UserProfileHeaderView: View {
-    
     @EnvironmentObject var rlAppState: RLAppState
-    
+
     private var isOnline: Bool {
         guard let currentUser = rlAppState.currentUser else { return false }
         return rlAppState.effectiveOnlineStatus(userId: currentUser.id, fallback: currentUser.isOnline)
     }
-    
+
     var body: some View {
-        // Top header section with gradient background
-        VStack(alignment: .leading, spacing: 20) {
-            // User header
+        VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 15) {
-                // Avatar with online indicator
                 UnifiedMemberAvatar(
-                    username: rlAppState.currentUser?.displayName ?? "Unknown",
+                    username: rlAppState.currentUser?.username ?? "Unknown",
                     avatarURL: rlAppState.currentUser?.avatarUrl,
                     isOnline: isOnline,
                     size: 60
                 )
-                
-                // User info
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(rlAppState.currentUser?.displayName ?? "Unknown")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(rlAppState.currentUser?.username ?? "Unknown")
                         .font(.title3)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
-                    
-                    Text(rlAppState.currentMembership?.role ?? "Unknown")
-                        .font(.caption)
-                        .foregroundColor(rlAppState.currentMembership?.memberRole.color)
-                        .fontWeight(.bold) // TODO: add bold
-                        .lineLimit(1)
+                    if let membership = rlAppState.currentMembership {
+                        UnifiedRoleBadge(
+                            roleName: membership.memberRole.displayName,
+                            roleColor: membership.memberRole.color,
+                            reputation: membership.reputation,
+                            accuracy: membership.accuracyFormatted,
+                            showReputation: true,
+                            fontSize: .subheadline,
+                            iconSize: .caption
+                        )
+                    }
                 }
-                
-                Spacer(minLength: 60) // Leave space for dismiss button
+                Spacer(minLength: 60)
             }
             .padding(.horizontal, 25)
             .padding(.top, 25)
-        
-        VStack(alignment: .leading, spacing: 6) {
-            // member since
-            HStack(spacing: 6) {
-                Image(systemName: "calendar")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.greyText)
-                Text("\(rlAppState.currentMembership?.memberSince ?? "Member Since - Unknown")")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.greyText)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.greyText)
+                    Text(rlAppState.currentMembership?.memberSince ?? "Member Since – Unknown")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                }
             }
-            
-            // User guild reputation
-            HStack(alignment: .center, spacing: 2) {
-                Image(systemName: "shield.pattern.checkered")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-                Text("\(rlAppState.currentMembership?.reputation ?? 0)")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
-                Text("Guild Reputation")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.greyText)
-                    .padding(.leading, 4)
-            }
-        }
-        .padding(.horizontal, 25)
-        
-        
-        Divider()
-            
+            .padding(.horizontal, 25)
+
+            Divider()
         }
         .background(
             LinearGradient(
@@ -332,7 +411,6 @@ struct UserProfileHeaderView: View {
                 endPoint: .bottom
             )
         )
-        
     }
 }
 
@@ -398,4 +476,3 @@ struct UserProfileFooterView: View {
     }
     
 }
-

@@ -8,7 +8,7 @@
 
 import Foundation
 
-extension CandleDTO {
+extension RLCandleDTO {
     
     // MARK: - Timeframe-Aware Sample Data Generation
     
@@ -22,45 +22,33 @@ extension CandleDTO {
     /// - Returns: Array of candles with aligned timestamps, oldest first
     static func generateAlignedSampleData(
         count: Int = 200,
-        timeframe: ChartTimeframe,
+        timeframe: RLChartTimeframe,
         endDate: Date = Date(),
         basePrice: Double = 100.0
-    ) -> [CandleDTO] {
-        var candles: [CandleDTO] = []
+    ) -> [RLCandleDTO] {
+        var candles: [RLCandleDTO] = []
         var currentPrice = basePrice
         
-        // Round the end date to the nearest timeframe boundary
         let alignedEndDate = alignToTimeframe(date: endDate, timeframe: timeframe)
         var currentDate = alignedEndDate
         
         for _ in 0..<count {
-            // Generate candle with the aligned timestamp
-            let candle = CandleDTO.random(basePrice: currentPrice, timestamp: currentDate)
+            let candle = RLCandleDTO.random(basePrice: currentPrice, timestamp: currentDate)
             candles.append(candle)
-            
-            // Move to next candle's price (for realistic trends)
             currentPrice = candle.close
-            
-            // Move backwards in time by one timeframe interval
             currentDate = currentDate.addingTimeInterval(-timeframe.seconds)
         }
         
-        // Reverse so oldest candles are first, newest at end
         return candles.reversed()
     }
     
     /// Generate sample data for a specific trading symbol
     /// Uses appropriate base price and volatility for the asset class
-    /// - Parameters:
-    ///   - count: Number of candles to generate
-    ///   - timeframe: The chart timeframe
-    ///   - symbol: The trading symbol (determines base price and characteristics)
-    /// - Returns: Array of candles appropriate for the symbol
     static func generateSampleData(
         count: Int = 200,
-        timeframe: ChartTimeframe,
-        symbol: TradingSymbolDTO
-    ) -> [CandleDTO] {
+        timeframe: RLChartTimeframe,
+        symbol: RLTradingSymbolDTO
+    ) -> [RLCandleDTO] {
         let basePrice = defaultBasePrice(for: symbol)
         let volatility = defaultVolatility(for: symbol)
         
@@ -76,19 +64,19 @@ extension CandleDTO {
     /// Generate aligned sample data with custom volatility
     static func generateAlignedSampleData(
         count: Int = 200,
-        timeframe: ChartTimeframe,
+        timeframe: RLChartTimeframe,
         endDate: Date = Date(),
         basePrice: Double = 100.0,
         volatility: Double = 0.02
-    ) -> [CandleDTO] {
-        var candles: [CandleDTO] = []
+    ) -> [RLCandleDTO] {
+        var candles: [RLCandleDTO] = []
         var currentPrice = basePrice
         
         let alignedEndDate = alignToTimeframe(date: endDate, timeframe: timeframe)
         var currentDate = alignedEndDate
         
         for _ in 0..<count {
-            let candle = CandleDTO.randomWithVolatility(
+            let candle = RLCandleDTO.randomWithVolatility(
                 basePrice: currentPrice,
                 timestamp: currentDate,
                 volatility: volatility
@@ -103,76 +91,51 @@ extension CandleDTO {
     
     // MARK: - Time Alignment Helpers
     
-    /// Align a date to the nearest timeframe boundary
-    /// - Parameters:
-    ///   - date: The date to align
-    ///   - timeframe: The timeframe to align to
-    /// - Returns: Date rounded down to the nearest timeframe boundary
-    private static func alignToTimeframe(date: Date, timeframe: ChartTimeframe) -> Date {
+    private static func alignToTimeframe(date: Date, timeframe: RLChartTimeframe) -> Date {
         let calendar = Calendar.current
         var components = calendar.dateComponents(
             [.year, .month, .day, .hour, .minute, .second],
             from: date
         )
         
-        // Always zero out seconds
         components.second = 0
         
         switch timeframe {
         case .m1:
-            // Already aligned to minute
             break
-            
         case .m5:
-            // Round down to nearest 5 minutes
             if let minute = components.minute {
                 components.minute = (minute / 5) * 5
             }
-            
         case .m15:
-            // Round down to nearest 15 minutes
             if let minute = components.minute {
                 components.minute = (minute / 15) * 15
             }
-            
         case .m30:
-            // Round down to nearest 30 minutes
             if let minute = components.minute {
                 components.minute = (minute / 30) * 30
             }
-            
         case .h1:
-            // Round down to nearest hour
             components.minute = 0
-            
         case .h4:
-            // Round down to nearest 4 hours
             components.minute = 0
             if let hour = components.hour {
                 components.hour = (hour / 4) * 4
             }
-            
         case .d1:
-            // Round down to start of day (market open would be different per exchange)
             components.hour = 0
             components.minute = 0
-            
         case .w1:
-            // Round down to start of week (Monday)
             components.hour = 0
             components.minute = 0
-            // Find the Monday of this week
             if let date = calendar.date(from: components) {
                 let weekday = calendar.component(.weekday, from: date)
-                // weekday: 1 = Sunday, 2 = Monday, ..., 7 = Saturday
-                let daysFromMonday = (weekday + 5) % 7  // Days since last Monday
+                let daysFromMonday = (weekday + 5) % 7
                 if let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: date) {
                     return monday
                 }
             }
-            
         case .mn:
-            // Round down to start of month
             components.day = 1
             components.hour = 0
             components.minute = 0
@@ -183,28 +146,24 @@ extension CandleDTO {
     
     // MARK: - Symbol-Specific Configuration
     
-    /// Get default base price for a trading symbol
-    private static func defaultBasePrice(for symbol: TradingSymbolDTO) -> Double {
-        switch symbol.assetClass {
+    private static func defaultBasePrice(for symbol: RLTradingSymbolDTO) -> Double {
+        switch symbol.assetClassEnum {
         case .forex:
             if symbol.ticker.contains("JPY") {
-                return 150.0  // USDJPY, EURJPY, etc.
+                return 150.0
             } else {
-                return 1.08   // EURUSD, GBPUSD, etc.
+                return 1.08
             }
-            
         case .crypto:
             if symbol.ticker.contains("BTC") {
                 return 45000.0
             } else if symbol.ticker.contains("ETH") {
                 return 2500.0
             } else {
-                return 1.0  // Altcoins
+                return 1.0
             }
-            
         case .stocks:
-            return 150.0  // Typical stock price
-            
+            return 150.0
         case .commodities:
             if symbol.ticker.contains("GOLD") || symbol.ticker.contains("XAU") {
                 return 2000.0
@@ -213,7 +172,6 @@ extension CandleDTO {
             } else {
                 return 100.0
             }
-            
         case .indices:
             if symbol.ticker.contains("SPX") || symbol.ticker.contains("SP500") {
                 return 4500.0
@@ -224,63 +182,56 @@ extension CandleDTO {
             } else {
                 return 1000.0
             }
-            
         case .futures:
             return 100.0
+        case .none:
+            return symbol.currentPrice ?? 100.0
         }
     }
     
-    /// Get default volatility for a trading symbol
-    private static func defaultVolatility(for symbol: TradingSymbolDTO) -> Double {
-        switch symbol.assetClass {
+    private static func defaultVolatility(for symbol: RLTradingSymbolDTO) -> Double {
+        switch symbol.assetClassEnum {
         case .forex:
-            return 0.003  // Forex is relatively stable (0.3% moves typical)
-            
+            return 0.003
         case .crypto:
-            return 0.03   // Crypto is volatile (3% moves common)
-            
+            return 0.03
         case .stocks:
-            return 0.015  // Stocks moderate volatility
-            
+            return 0.015
         case .commodities:
-            return 0.02   // Commodities moderate
-            
+            return 0.02
         case .indices:
-            return 0.01   // Indices less volatile
-            
+            return 0.01
         case .futures:
             return 0.02
+        case .none:
+            return 0.01
         }
     }
     
     // MARK: - Enhanced Random Generation
     
-    /// Generate a random candle with custom volatility
-    /// FIXED: Now uses proper CandleDTO initializer with all required fields
     static func randomWithVolatility(
         basePrice: Double,
         timestamp: Date,
         volatility: Double
-    ) -> CandleDTO {
-        // Generate open price with some variance from base
-        let open = basePrice * (1.0 + Double.random(in: -volatility...volatility))
-        
-        // Generate close price with variance from open
-        let close = open * (1.0 + Double.random(in: -volatility...volatility))
-        
-        // Ensure high is actually the highest value
+    ) -> RLCandleDTO {
+        random(basePrice: basePrice, timestamp: timestamp, volatility: volatility)
+    }
+    
+    static func random(
+        basePrice: Double,
+        timestamp: Date,
+        volatility: Double = 0.02
+    ) -> RLCandleDTO {
+        let open = basePrice + (Double.random(in: -volatility...volatility) * basePrice)
+        let close = open + (Double.random(in: -volatility...volatility) * basePrice)
         let bodyHigh = max(open, close)
         let bodyLow = min(open, close)
-        
-        // Add wicks that extend beyond the body
-        let high = bodyHigh * (1.0 + Double.random(in: 0...(volatility * 0.5)))
-        let low = bodyLow * (1.0 - Double.random(in: 0...(volatility * 0.5)))
-        
+        let high = bodyHigh + (Double.random(in: 0...(volatility / 2)) * basePrice)
+        let low = bodyLow - (Double.random(in: 0...(volatility / 2)) * basePrice)
         let volume = Double.random(in: 100_000...1_000_000)
         
-        // FIXED: Use proper CandleDTO initializer
-        return CandleDTO(
-            id: UUID(),
+        return RLCandleDTO(
             timestamp: timestamp,
             timestampFormatted: formatTimestamp(timestamp),
             open: open,
@@ -291,8 +242,6 @@ extension CandleDTO {
             volumeFormatted: formatVolume(volume)
         )
     }
-    
-    // MARK: - Formatting Helpers
     
     private static func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -313,11 +262,3 @@ extension CandleDTO {
         }
     }
 }
-
-// NOTE: ChartDataManager methods are now in ChartDataManager.swift
-// The regenerateMockData(symbol:timeframe:) method is built into ChartDataManager directly
-
-
-
-
-

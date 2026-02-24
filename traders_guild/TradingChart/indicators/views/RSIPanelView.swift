@@ -20,7 +20,7 @@ struct RSIPanelView: View {
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
     
-    var timeframe: ChartTimeframe = .h1
+    var timeframe: RLChartTimeframe = .h1
     
     // Panel height state
     @Binding var panelHeight: CGFloat
@@ -546,7 +546,7 @@ struct RSIPanelView: View {
         }
     }
     
-    private func getNiceTimeStep(timeframe: ChartTimeframe, zoomScale: CGFloat) -> Double {
+    private func getNiceTimeStep(timeframe: RLChartTimeframe, zoomScale: CGFloat) -> Double {
         let screenWidth: CGFloat = UIScreen.main.bounds.width
         let visibleCandles = screenWidth / totalCandleWidth
         

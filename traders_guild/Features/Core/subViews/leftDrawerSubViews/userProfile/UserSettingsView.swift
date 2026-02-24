@@ -13,7 +13,6 @@ import SwiftUI
 
 
 struct UserSettingsSheetView: View {
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var rlAppState: RLAppState
     
     let onBack: () -> Void
@@ -549,7 +548,6 @@ struct UserSettingsSheetView: View {
 
 #Preview {
     UserSettingsSheetView(onBack: {})
-        .environmentObject(AppState())
         .environmentObject(RLAppState())
         .preferredColorScheme(.dark)
 }

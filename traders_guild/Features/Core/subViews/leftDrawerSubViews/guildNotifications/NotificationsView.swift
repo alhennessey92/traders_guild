@@ -37,7 +37,6 @@ enum NotificationTab: String, CaseIterable, UnifiedTabItem {
 struct NotificationsListView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var rlAppState: RLAppState
     
     // Tab state
@@ -193,16 +192,17 @@ struct NotificationsListView: View {
 
 struct NotificationCard: View {
     let notification: RLNotificationDTO       // <<< Changed type
-    
+
     @State private var isPressed = false
     @State private var hasRecordedView = false
     @State private var showAsUnread: Bool
-    
-    @EnvironmentObject var appState: AppState
+    @State private var inviteActionTaken = false
+    @State private var isProcessingInvite = false
+
     @EnvironmentObject var rlAppState: RLAppState     // <<< Add rlAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var notificationNavigationManager: NotificationNavigationManager
-    
+
     init(notification: RLNotificationDTO) {           // <<< Changed type
         self.notification = notification
         _showAsUnread = State(initialValue: !notification.isRead)
@@ -239,23 +239,65 @@ struct NotificationCard: View {
                             .foregroundColor(AppColors.whiteText)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
-                        
+
                         Spacer()
-                        
+
                         Text(notification.timeAgoFormatted)
                             .font(.system(size: 10))
                             .foregroundColor(AppColors.whiteText.opacity(0.4))
                     }
-                    
+
                     Text(notification.displayBody)               // <<< .content -> .displayBody
                         .font(.system(size: 12))
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+
+                    // Guild Invite Action Buttons
+                    if notification.isGuildInvite && !inviteActionTaken {
+                        HStack(spacing: 8) {
+                            Button(action: acceptInvite) {
+                                HStack(spacing: 4) {
+                                    if isProcessingInvite {
+                                        ProgressView()
+                                            .scaleEffect(0.6)
+                                            .tint(.white)
+                                    }
+                                    Text("Accept")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.green.opacity(0.8))
+                                .foregroundColor(.white)
+                                .cornerRadius(6)
+                            }
+                            .disabled(isProcessingInvite)
+
+                            Button(action: declineInvite) {
+                                Text("Decline")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.white.opacity(0.1))
+                                    .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                    .cornerRadius(6)
+                            }
+                            .disabled(isProcessingInvite)
+
+                            Spacer()
+                        }
+                        .padding(.top, 4)
+                    } else if notification.isGuildInvite && inviteActionTaken {
+                        Text("Responded")
+                            .font(.system(size: 11))
+                            .foregroundColor(AppColors.whiteText.opacity(0.4))
+                            .padding(.top, 2)
+                    }
                 }
-                
+
                 // Chevron for navigable notifications
-                if notification.isActionable {                   // <<< .destination != nil -> .isActionable
+                if notification.isActionable && !notification.isGuildInvite {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(AppColors.whiteText.opacity(0.3))
@@ -342,6 +384,60 @@ struct NotificationCard: View {
                 notificationId: notification.id,
                 rlAppState: rlAppState
             )
+        }
+    }
+
+    // MARK: - Guild Invite Actions
+
+    private func acceptInvite() {
+        guard let guildId = notification.guildId,
+              let inviteId = notification.inviteId else { return }
+
+        isProcessingInvite = true
+        HapticFeedback.light.trigger()
+
+        Task {
+            do {
+                _ = try await rlAppState.acceptGuildInvite(guildId: guildId, inviteId: inviteId)
+                withAnimation {
+                    inviteActionTaken = true
+                    showAsUnread = false
+                }
+                leftDrawerViewModel.markNotificationAsRead(
+                    notificationId: notification.id,
+                    rlAppState: rlAppState
+                )
+                // Refresh guild list so the new guild appears
+                try await rlAppState.fetchUserGuilds()
+            } catch {
+                // Error shown by appState
+            }
+            isProcessingInvite = false
+        }
+    }
+
+    private func declineInvite() {
+        guard let guildId = notification.guildId,
+              let inviteId = notification.inviteId else { return }
+
+        isProcessingInvite = true
+        HapticFeedback.light.trigger()
+
+        Task {
+            do {
+                try await rlAppState.declineGuildInvite(guildId: guildId, inviteId: inviteId)
+                withAnimation {
+                    inviteActionTaken = true
+                    showAsUnread = false
+                }
+                leftDrawerViewModel.markNotificationAsRead(
+                    notificationId: notification.id,
+                    rlAppState: rlAppState
+                )
+            } catch {
+                // Error shown by appState
+            }
+            isProcessingInvite = false
         }
     }
 }

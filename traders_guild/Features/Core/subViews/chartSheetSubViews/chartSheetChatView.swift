@@ -16,14 +16,16 @@ import Combine
 struct ImprovedChartSheetChatView: View {
     @ObservedObject var chartViewModel: ChartViewModel
     @ObservedObject var chartChatManager: ChartChatManager
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     @Binding var selectedDetent: PresentationDetent
     
     // Message input state - shared with parent footer
     @Binding var messageText: String
     
     @State private var showEditSheet = false
-    @State private var messageToEdit: ChartChatMessageDTO? = nil
+    @State private var messageToEdit: RLChartChatMessageDTO? = nil
+    @State private var showReportReasonSheet = false
+    @State private var messageToReport: RLChartChatMessageDTO? = nil
     
     var body: some View {
         ZStack {
@@ -58,7 +60,7 @@ struct ImprovedChartSheetChatView: View {
     }
     
     // MARK: - Main Chat Content View
-    private func chatContentView(for chat: ChartChatDTO) -> some View {
+    private func chatContentView(for chat: RLChartChatDTO) -> some View {
         VStack(spacing: 0) {
             // Header - compact and clean
             chartChatHeader(for: chat)
@@ -80,10 +82,31 @@ struct ImprovedChartSheetChatView: View {
                 }
             }
         }
+        .sheet(isPresented: $showReportReasonSheet) {
+            if let message = messageToReport {
+                ReportReasonSheet(
+                    title: "Why are you reporting this message?",
+                    includeScam: false,
+                    onReasonSelected: { reason in
+                        Task {
+                            await reportMessage(message, reason: reason)
+                            await MainActor.run {
+                                showReportReasonSheet = false
+                                messageToReport = nil
+                            }
+                        }
+                    },
+                    onCancel: {
+                        showReportReasonSheet = false
+                        messageToReport = nil
+                    }
+                )
+            }
+        }
     }
     
     // MARK: - Chat Header
-    private func chartChatHeader(for chat: ChartChatDTO) -> some View {
+    private func chartChatHeader(for chat: RLChartChatDTO) -> some View {
         HStack(spacing: 12) {
             // Symbol avatar with chart icon
             Circle()
@@ -144,10 +167,11 @@ struct ImprovedChartSheetChatView: View {
                                 showEditSheet = true
                             },
                             onReport: {
-                                Task { await reportMessage(message) }
+                                messageToReport = message
+                                showReportReasonSheet = true
                             }
                         )
-                        .environmentObject(appState)
+                        .environmentObject(rlAppState)
                         .id(message.id)
                     }
                 }
@@ -174,55 +198,63 @@ struct ImprovedChartSheetChatView: View {
     
     // MARK: - Message Actions
     
-    private func deleteMessage(_ message: ChartChatMessageDTO) async {
+    private func deleteMessage(_ message: RLChartChatMessageDTO) async {
         do {
-            try await chartChatManager.deleteMessage(messageId: message.id, api: MockAPIService())
+            try await chartChatManager.deleteMessage(messageId: message.id)
             HapticFeedback.medium.trigger()
-            appState.showSuccess("Message deleted")
+            rlAppState.showSuccess("Message deleted")
         } catch {
-            appState.showError(error, title: "Failed to Delete", style: .toast)
+            rlAppState.showError(error, title: "Failed to Delete", style: .toast)
         }
     }
     
-    private func editMessage(_ message: ChartChatMessageDTO, newContent: String) async {
+    private func editMessage(_ message: RLChartChatMessageDTO, newContent: String) async {
         do {
             try await chartChatManager.editMessage(
                 messageId: message.id,
-                newContent: newContent,
-                api: MockAPIService()
+                newContent: newContent
             )
             HapticFeedback.light.trigger()
-            appState.showSuccess("Message updated")
+            rlAppState.showSuccess("Message updated")
         } catch {
-            appState.showError(error, title: "Failed to Edit", style: .toast)
+            rlAppState.showError(error, title: "Failed to Edit", style: .toast)
         }
     }
     
-    private func reportMessage(_ message: ChartChatMessageDTO) async {
+    private func reportMessage(_ message: RLChartChatMessageDTO, reason: String) async {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
         HapticFeedback.medium.trigger()
-        appState.showInfo("Message reported for review")
+        do {
+            _ = try await rlAppState.realApi.reportChartChatMessage(
+                guildId: guildId,
+                messageId: message.id,
+                reason: reason
+            )
+            rlAppState.showSuccess("Report submitted")
+        } catch {
+            rlAppState.showError(error, title: "Failed to Report", style: .toast)
+        }
     }
 }
 
 // MARK: - Chart Message Row (Using Unified ChatMessageBubble)
 
 struct ChartMessageRow: View {
-    let message: ChartChatMessageDTO
+    let message: RLChartChatMessageDTO
     @ObservedObject var chartChatManager: ChartChatManager
     let onDelete: () -> Void
     let onEdit: () -> Void
     let onReport: () -> Void
     
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var rlAppState: RLAppState
     
     private var canDeleteMessage: Bool {
-        guard let currentUserRole = appState.currentGuild?.roleInGuild else {
+        // Check if current user can delete this message
+        // For now, allow deletion if it's the current user's message or if user is admin
+        guard let currentMembership = rlAppState.currentMembership else {
             return false
         }
-        return currentUserRole.canDelete(
-            messageFrom: message.author.roleInGuild,
-            isOwnMessage: message.isCurrentUserMessage
-        )
+        return message.isCurrentUserMessage || currentMembership.canModerate
     }
     
     private var canEditMessage: Bool {
@@ -230,7 +262,7 @@ struct ChartMessageRow: View {
     }
     
     var body: some View {
-        ChatMessageBubble(
+        RLChatMessageBubble(
             message: message,
             context: .chartChat,
             onAvatarTap: {
@@ -239,7 +271,7 @@ struct ChartMessageRow: View {
             onEdit: canEditMessage ? onEdit : nil,
             onDelete: canDeleteMessage ? onDelete : nil,
             onReport: !message.isCurrentUserMessage ? onReport : nil,
-            onCopy: { appState.showSuccess("Copied to clipboard") }
+            onCopy: { rlAppState.showSuccess("Copied to clipboard") }
         )
     }
 }

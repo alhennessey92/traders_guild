@@ -8,6 +8,20 @@
 import SwiftUI
 import UIKit
 
+/// Window that only accepts touches in the bottom toast region so the rest of the app stays interactive.
+private final class ToastPassthroughWindow: UIWindow {
+    /// Height of the bottom strip where the toast lives; touches outside pass through.
+    private let toastRegionHeight: CGFloat = 140
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let inToastRegion = point.y >= bounds.maxY - toastRegionHeight
+        if inToastRegion {
+            return super.hitTest(point, with: event)
+        }
+        return nil
+    }
+}
+
 @MainActor
 class ToastWindowManager: ObservableObject {
     static let shared = ToastWindowManager()
@@ -16,11 +30,11 @@ class ToastWindowManager: ObservableObject {
     
     private init() {}
     
-    func showToast(_ alert: AppAlert, onDismiss: @escaping () -> Void) {
-        // Create window if needed
+    func showToast(_ alert: RLAppAlert, onDismiss: @escaping () -> Void) {
+        // Create window if needed (passthrough so touches outside toast don't block app)
         if toastWindow == nil {
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                let window = UIWindow(windowScene: windowScene)
+                let window = ToastPassthroughWindow(windowScene: windowScene)
                 window.windowLevel = .alert + 1
                 window.backgroundColor = .clear
                 window.isUserInteractionEnabled = true

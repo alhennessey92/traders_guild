@@ -27,36 +27,45 @@ enum APIEnvironment {
 }
 
 enum APIService {
-    case auth    // Registration, login, tokens (port 8000)
-    case core    // Users, guilds, memberships, etc. (port 8001)
-    case messaging    // Messaging, threads, messages, etc. (port 8002)
-    
+    case auth       // Registration, login, tokens (port 8000)
+    case core       // Users, guilds, memberships, messaging REST (port 8001)
+    case chart      // Chart, symbols, candles, markers, watchlists (port 8003)
+    case realtime   // WebSocket connections only (port 8002)
+    case reputation // Reputation system (port 8005)
+
     var baseURL: String {
-        switch APIEnvironment.current {
-        case .development:
-            #if targetEnvironment(simulator)
-            switch self {
-            case .auth: return "http://localhost:8000/api/v1"
-            case .core: return "http://localhost:8001/api/v1"
-            case .messaging: return "http://localhost:8002/api/v1/messaging"
+        switch AppConfig.apiRoutingMode {
+        case .apiGateway:
+            switch APIEnvironment.current {
+            case .development:
+                return AppConfig.developmentGatewayBaseURL
+            case .production:
+                return AppConfig.productionGatewayBaseURL
             }
-            #else
-            // ⚠️ UPDATE THIS to your Mac's IP for device testing
-            let macIP = "192.168.1.182"
-            switch self {
-            case .auth: return "http://\(macIP):8000/api/v1"
-            case .core: return "http://\(macIP):8001/api/v1"
-            case .messaging: return "http://\(macIP):8002/api/v1/messaging"
-            }
-            #endif
-            
-        case .production:
-            // Kong routes all services through one URL
-            switch self {
-            case .messaging:
-                return "https://api.tradersguild.com/api/v1/messaging"
-            case .auth, .core:
-                return "https://api.tradersguild.com/api/v1"
+        case .directServices:
+            switch APIEnvironment.current {
+            case .development:
+                #if targetEnvironment(simulator)
+                switch self {
+                case .auth:       return "http://localhost:8000/api/v1"
+                case .core:       return "http://localhost:8001/api/v1"
+                case .chart:      return "http://localhost:8003/api/v1"
+                case .realtime:   return "http://localhost:8002/api/v1"
+                case .reputation: return "http://localhost:8005/api/v1"
+                }
+                #else
+                // ⚠️ UPDATE THIS to your Mac's IP for device testing
+                let macIP = "192.168.1.182"
+                switch self {
+                case .auth:       return "http://\(macIP):8000/api/v1"
+                case .core:       return "http://\(macIP):8001/api/v1"
+                case .chart:      return "http://\(macIP):8003/api/v1"
+                case .realtime:   return "http://\(macIP):8002/api/v1"
+                case .reputation: return "http://\(macIP):8005/api/v1"
+                }
+                #endif
+            case .production:
+                return AppConfig.productionGatewayBaseURL
             }
         }
     }
@@ -227,6 +236,9 @@ class RealAPIService {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
+            if let urlError = error as? URLError, urlError.code == .cancelled {
+                throw CancellationError()
+            }
             throw APIError.networkError(error.localizedDescription)
         }
         
@@ -284,6 +296,13 @@ class RealAPIService {
             }
         }
         
+        // Handle 204 No Content or empty body for EmptyResponse
+        if data.isEmpty || httpResponse.statusCode == 204 {
+            if let empty = EmptyResponse() as? T {
+                return empty
+            }
+        }
+
         // Decode response
         do {
             return try decoder.decode(T.self, from: data)
@@ -459,9 +478,9 @@ extension RealAPIService {
         return response
     }
     
-    /// Login with email and password
-    func login(email: String, password: String) async throws -> RLLoginResponseDTO {
-        let requestBody = RLLoginRequestDTO(email: email, password: password)
+    /// Login with identifier (email or username) and password
+    func login(identifier: String, password: String) async throws -> RLLoginResponseDTO {
+        let requestBody = RLLoginRequestDTO(identifier: identifier, password: password)
         
         let response: RLLoginResponseDTO = try await request(
             "/auth/login",
@@ -474,6 +493,38 @@ extension RealAPIService {
         setTokens(access: response.tokens.accessToken, refresh: response.tokens.refreshToken)
         
         return response
+    }
+
+    /// Request password reset email
+    func requestPasswordReset(identifier: String) async throws -> RLPasswordForgotResponseDTO {
+        let requestBody = RLPasswordForgotRequestDTO(identifier: identifier)
+        return try await request(
+            "/auth/password/forgot",
+            service: .auth,
+            method: "POST",
+            body: requestBody
+        )
+    }
+
+    /// Verify reset token validity
+    func verifyPasswordResetToken(_ token: String) async throws -> RLPasswordResetVerifyResponseDTO {
+        let encoded = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
+        return try await request(
+            "/auth/password/reset/verify?token=\(encoded)",
+            service: .auth,
+            method: "GET"
+        )
+    }
+
+    /// Reset password with token
+    func resetPassword(token: String, newPassword: String) async throws -> RLPasswordResetResponseDTO {
+        let requestBody = RLPasswordResetRequestDTO(token: token, newPassword: newPassword)
+        return try await request(
+            "/auth/password/reset",
+            service: .auth,
+            method: "POST",
+            body: requestBody
+        )
     }
     
     /// Refresh access token (manual call - usually automatic refresh handles this)
@@ -568,22 +619,66 @@ extension RealAPIService {
             auth: true
         )
     }
-    
-    /// Get open guilds (for discovery) - Backend Implemented (Not tested)
-//    func getOpenGuilds() async throws -> [RLGuildDTO] {
-//        return try await request(
-//            "/guilds?is_open=true",
-//            service: .core,
-//            auth: true
-//        )
-//    }
+
+    /// Get public/open guilds without authentication (signup discovery).
+    func getPublicOpenGuilds(
+        search: String? = nil,
+        language: String? = nil,
+        location: String? = nil,
+        sort: String? = nil,
+        skip: Int = 0,
+        limit: Int = 50
+    ) async throws -> [RLGuildDTO] {
+        var queryParts: [String] = ["skip=\(skip)", "limit=\(limit)"]
+        if let search = search, !search.isEmpty {
+            queryParts.append("search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)")
+        }
+        if let language = language, !language.isEmpty {
+            queryParts.append("language=\(language.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? language)")
+        }
+        if let location = location, !location.isEmpty {
+            queryParts.append("location=\(location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location)")
+        }
+        if let sort = sort, !sort.isEmpty {
+            queryParts.append("sort=\(sort)")
+        }
+        return try await request(
+            "/guilds/public/open?\(queryParts.joined(separator: "&"))",
+            service: .core,
+            auth: false
+        )
+    }
     
     /// Get guilds user is not a member of (for discovery/joining)
     /// Backend endpoint: GET /guilds/not-member
-    func getJoinableGuilds() async throws -> [RLGuildDTO] {
+    func getJoinableGuilds(
+        search: String? = nil,
+        isOpen: Bool? = nil,
+        language: String? = nil,
+        location: String? = nil,
+        sort: String? = nil,
+        skip: Int = 0,
+        limit: Int = 100
+    ) async throws -> [RLGuildDTO] {
         print("🏰 getJoinableGuilds: Fetching guilds user can join")
+        var queryParts: [String] = ["skip=\(skip)", "limit=\(limit)"]
+        if let search = search, !search.isEmpty {
+            queryParts.append("search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)")
+        }
+        if let isOpen = isOpen {
+            queryParts.append("is_open=\(isOpen ? "true" : "false")")
+        }
+        if let language = language, !language.isEmpty {
+            queryParts.append("language=\(language.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? language)")
+        }
+        if let location = location, !location.isEmpty {
+            queryParts.append("location=\(location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location)")
+        }
+        if let sort = sort, !sort.isEmpty {
+            queryParts.append("sort=\(sort)")
+        }
         let result: [RLGuildDTO] = try await request(
-            "/guilds/not-member",
+            "/guilds/not-member?\(queryParts.joined(separator: "&"))",
             service: .core,
             auth: true
         )
@@ -600,13 +695,33 @@ extension RealAPIService {
             auth: true
         )
     }
+
+    /// Assign user to system-managed onboarding guild fallback.
+    func assignOnboardingGuild() async throws -> RLJoinGuildResponseDTO {
+        return try await request(
+            "/guilds/onboarding/assign",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
     
     /// Create a new guild - returns both guild and membership
-    func createGuild(name: String, description: String?, isOpen: Bool) async throws -> RLCreateGuildResponseDTO {
+    func createGuild(
+        name: String,
+        description: String?,
+        isOpen: Bool,
+        language: String? = nil,
+        location: String? = nil,
+        joinQuestions: [RLGuildJoinQuestionInputDTO] = []
+    ) async throws -> RLCreateGuildResponseDTO {
         let requestBody = RLCreateGuildRequestDTO(
             name: name,
             description: description,
-            isOpen: isOpen
+            isOpen: isOpen,
+            language: language,
+            location: location,
+            joinQuestions: joinQuestions
         )
         
         return try await request(
@@ -624,6 +739,72 @@ extension RealAPIService {
             "/guilds/\(guildId.uuidString)/leave",
             service: .core,
             method: "POST",
+            auth: true
+        )
+    }
+
+    func getGuildJoinQuestions(guildId: UUID) async throws -> RLGuildJoinQuestionsListDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/join-questions",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    func updateGuildJoinQuestions(guildId: UUID, questions: [RLGuildJoinQuestionInputDTO]) async throws -> RLGuildJoinQuestionsListDTO {
+        let body = RLGuildJoinQuestionsUpdateRequestDTO(questions: questions)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/join-questions",
+            service: .core,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+
+    func createGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {
+        let body = RLGuildJoinRequestCreateRequestDTO(note: note, answers: answers)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/join-requests",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    func getGuildJoinRequests(guildId: UUID, status: String? = "pending") async throws -> RLGuildJoinRequestsListDTO {
+        var path = "/guilds/\(guildId.uuidString)/join-requests"
+        if let status = status, !status.isEmpty {
+            path += "?status=\(status)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    func approveGuildJoinRequest(guildId: UUID, requestId: UUID, reviewNote: String?) async throws -> RLGuildJoinRequestDTO {
+        let body = RLGuildJoinRequestDecisionRequestDTO(reviewNote: reviewNote)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/join-requests/\(requestId.uuidString)/approve",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    func declineGuildJoinRequest(guildId: UUID, requestId: UUID, reviewNote: String?) async throws -> RLGuildJoinRequestDTO {
+        let body = RLGuildJoinRequestDecisionRequestDTO(reviewNote: reviewNote)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/join-requests/\(requestId.uuidString)/decline",
+            service: .core,
+            method: "POST",
+            body: body,
             auth: true
         )
     }
@@ -654,7 +835,7 @@ extension RealAPIService {
     /// Get single announcement
     func getAnnouncement(announcementId: UUID) async throws -> RLGuildAnnouncementWithAuthorDTO {
         return try await request(
-            "/announcements/\(announcementId.uuidString)",
+            "/guilds/announcements/\(announcementId.uuidString)",
             service: .core,
             auth: true
         )
@@ -741,6 +922,18 @@ extension RealAPIService {
         )
     }
     
+    /// Share event with a friend (pending backend support)
+    func shareEvent(guildId: UUID, eventId: UUID, friendId: UUID) async throws -> RLDetailResponseDTO {
+        let body = RLShareEventRequest(friendId: friendId)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/events/\(eventId.uuidString)/share",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
     
     /// Create event (admin/mod only)
     /// NOTE: Backend returns GuildEventResponse, we return the raw response
@@ -823,7 +1016,7 @@ extension RealAPIService {
     /// Get a specific guild member's info with relationship data
     /// GET /guilds/{guild_id}/members/{user_id}
     func getGuildMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberDTO {
-        
+
         return try await request(
             "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)",
             service: .core,
@@ -833,6 +1026,237 @@ extension RealAPIService {
     }
 }
 
+
+// =============================================================================================
+// MARK: - Guild Admin Panel
+// =============================================================================================
+extension RealAPIService {
+
+    // MARK: Guild Settings
+
+    /// Update guild settings (name, description, is_open)
+    /// PATCH /guilds/{guild_id}
+    func updateGuild(guildId: UUID, name: String?, description: String?, isOpen: Bool?) async throws -> RLGuildDTO {
+        let body = RLUpdateGuildRequestDTO(name: name, description: description, isOpen: isOpen)
+        return try await request(
+            "/guilds/\(guildId.uuidString)",
+            service: .core,
+            method: "PATCH",
+            body: body,
+            auth: true
+        )
+    }
+
+    // MARK: Invite Members
+
+    /// Search users by username/display_name for inviting
+    /// GET /guilds/{guild_id}/invites/search?search=
+    func searchUsersForInvite(guildId: UUID, search: String) async throws -> RLUserSearchResultsDTO {
+        let encoded = search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites/search?search=\(encoded)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Create a guild invite
+    /// POST /guilds/{guild_id}/invites
+    func createGuildInvite(guildId: UUID, username: String) async throws -> RLGuildInvitationDTO {
+        struct Body: Codable { let username: String }
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites",
+            service: .core,
+            method: "POST",
+            body: Body(username: username),
+            auth: true
+        )
+    }
+
+    /// List pending guild invitations
+    /// GET /guilds/{guild_id}/invites
+    func getGuildInvites(guildId: UUID) async throws -> RLGuildInvitationsListDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Cancel a pending guild invite
+    /// DELETE /guilds/{guild_id}/invites/{invite_id}
+    func cancelGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites/\(inviteId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    /// Accept a guild invite
+    /// POST /guilds/{guild_id}/invites/{invite_id}/accept
+    func acceptGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLGuildWithMembership {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites/\(inviteId.uuidString)/accept",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    /// Decline a guild invite
+    /// POST /guilds/{guild_id}/invites/{invite_id}/decline
+    func declineGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invites/\(inviteId.uuidString)/decline",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    // MARK: Ban & Kick
+
+    /// Ban a member from the guild
+    /// POST /guilds/{guild_id}/members/{user_id}/ban
+    func banMember(guildId: UUID, userId: UUID, reason: String?) async throws -> RLGuildBanDTO {
+        let body = RLGuildBanRequestDTO(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/ban",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// List banned users
+    /// GET /guilds/{guild_id}/bans
+    func getGuildBans(guildId: UUID) async throws -> RLGuildBansListDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/bans",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Unban a member
+    /// DELETE /guilds/{guild_id}/bans/{ban_id}
+    func unbanMember(guildId: UUID, banId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/bans/\(banId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    /// Kick a member (remove without ban)
+    /// POST /guilds/{guild_id}/members/{user_id}/kick
+    func kickMember(guildId: UUID, userId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/kick",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    // MARK: Mute / Suspend
+
+    /// Mute a member
+    /// POST /guilds/{guild_id}/members/{user_id}/mute
+    func muteMember(guildId: UUID, userId: UUID, durationMinutes: Int, reason: String?) async throws -> RLGuildMemberActionResponseDTO {
+        let body = RLGuildMuteRequestDTO(durationMinutes: durationMinutes, reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/mute",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Unmute a member
+    /// DELETE /guilds/{guild_id}/members/{user_id}/mute
+    func unmuteMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberActionResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/mute",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    /// Suspend a member
+    /// POST /guilds/{guild_id}/members/{user_id}/suspend
+    func suspendMember(guildId: UUID, userId: UUID, durationMinutes: Int, reason: String?) async throws -> RLGuildMemberActionResponseDTO {
+        let body = RLGuildSuspendRequestDTO(durationMinutes: durationMinutes, reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/suspend",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Unsuspend a member
+    /// DELETE /guilds/{guild_id}/members/{user_id}/suspend
+    func unsuspendMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberActionResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/suspend",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    // MARK: Manage Roles
+
+    /// Change a member's role
+    /// PATCH /guilds/{guild_id}/members/{user_id}/role
+    func changeMemberRole(guildId: UUID, userId: UUID, role: String) async throws -> RLGuildMemberRoleResponseDTO {
+        let body = RLGuildRoleChangeRequestDTO(role: role)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/role",
+            service: .core,
+            method: "PATCH",
+            body: body,
+            auth: true
+        )
+    }
+
+    // MARK: Content Reports
+
+    /// List guild reports
+    /// GET /guilds/{guild_id}/reports
+    func getGuildReports(guildId: UUID, status: String? = nil, contentType: String? = nil) async throws -> RLContentReportsListDTO {
+        var path = "/guilds/\(guildId.uuidString)/reports"
+        var params: [String] = []
+        if let status = status { params.append("status=\(status)") }
+        if let contentType = contentType { params.append("content_type=\(contentType)") }
+        if !params.isEmpty { path += "?" + params.joined(separator: "&") }
+        return try await request(path, service: .core, method: "GET", auth: true)
+    }
+
+    /// Resolve or dismiss a report
+    /// PATCH /guilds/{guild_id}/reports/{report_id}
+    func resolveReport(guildId: UUID, reportId: UUID, action: String, note: String?) async throws -> RLContentReportDTO {
+        let body = RLResolveReportRequestDTO(action: action, resolutionNote: note)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/reports/\(reportId.uuidString)",
+            service: .core,
+            method: "PATCH",
+            body: body,
+            auth: true
+        )
+    }
+}
 
 
 // =============================================================================================
@@ -1201,9 +1625,17 @@ extension RealAPIService {
     func sendChatroomMessage(
         guildId: UUID,
         chatroomId: UUID,
-        content: String
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) async throws -> RLChatroomMessageDTO {
-        let body = RLSendMessageRequest(content: content)
+        let body = RLSendMessageRequest(
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
+        )
         return try await request(
             "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages",
             service: .core,
@@ -1361,9 +1793,17 @@ extension RealAPIService {
     func sendDMMessage(
         guildId: UUID,
         threadId: UUID,
-        content: String
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) async throws -> RLDMMessageDTO {
-        let body = RLSendMessageRequest(content: content)
+        let body = RLSendMessageRequest(
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
+        )
         return try await request(
             "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages",
             service: .core,
@@ -1427,6 +1867,93 @@ extension RealAPIService {
             auth: true
         )
     }
+
+    // MARK: - Reporting
+    
+    func reportChatroom(guildId: UUID, chatroomId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLChatroomReportRequest(reason: reason)
+        return try await request(
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+    
+    // Report user to admin (user_id = the reported user's id)
+    func reportUser(guildId: UUID, userId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLUserReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/members/\(userId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    // MARK: - Content Reporting
+
+    /// Report a chatroom message
+    func reportChatroomMessage(guildId: UUID, chatroomId: UUID, messageId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Report a DM message
+    func reportDMMessage(guildId: UUID, threadId: UUID, messageId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Report a chart chat message
+    func reportChartChatMessage(guildId: UUID, messageId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/chart-chats/messages/\(messageId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Report a chart marker
+    func reportMarker(guildId: UUID, markerId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Report a marker comment
+    func reportMarkerComment(guildId: UUID, markerId: UUID, commentId: UUID, reason: String) async throws -> RLDetailResponseDTO {
+        let body = RLContentReportRequest(reason: reason)
+        return try await request(
+            "/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)/report",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
 }
 
 
@@ -1454,9 +1981,13 @@ extension RealAPIService {
     
     // MARK: - Activity Feed
 
-    func getUserActivity(skip: Int = 0, limit: Int = 50) async throws -> RLActivityFeedResponse {
+    func getUserActivity(skip: Int = 0, limit: Int = 50, guildId: UUID? = nil) async throws -> RLActivityFeedResponse {
+        var path = "/users/me/activity?skip=\(skip)&limit=\(limit)"
+        if let guildId = guildId {
+            path += "&guild_id=\(guildId.uuidString)"
+        }
         return try await request(
-            "/users/me/activity?skip=\(skip)&limit=\(limit)",
+            path,
             service: .core,
             method: "GET",
             auth: true
@@ -1547,6 +2078,114 @@ extension RealAPIService {
         return try decoder.decode(RLAvatarUpdateResponse.self, from: data)
     }
     
+    // MARK: - Message Attachment Upload
+
+    /// Upload response from attachment endpoints
+    struct RLAttachmentUploadResponse: Codable {
+        let attachmentUrl: String
+        let attachmentType: String
+        let attachmentName: String
+    }
+
+    /// Generic attachment upload helper (multipart/form-data)
+    private func uploadAttachment(
+        endpoint: String,
+        service: APIService,
+        fileData: Data,
+        filename: String,
+        mimeType: String
+    ) async throws -> RLAttachmentUploadResponse {
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        guard let url = URL(string: "\(service.baseURL)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            throw APIError.unauthorized
+        }
+
+        // Build multipart body
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let detail = extractErrorDetailFromData(data)
+            switch httpResponse.statusCode {
+            case 401: throw APIError.unauthorized
+            case 400, 422: throw APIError.badRequest(detail)
+            default: throw APIError.serverError(httpResponse.statusCode, detail)
+            }
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(RLAttachmentUploadResponse.self, from: data)
+    }
+
+    /// Upload attachment for a chatroom message
+    func uploadChatroomAttachment(guildId: UUID, chatroomId: UUID, fileData: Data, filename: String, mimeType: String) async throws -> RLAttachmentUploadResponse {
+        try await uploadAttachment(
+            endpoint: "/messaging/guilds/\(guildId)/chatrooms/\(chatroomId)/upload",
+            service: .core,
+            fileData: fileData,
+            filename: filename,
+            mimeType: mimeType
+        )
+    }
+
+    /// Upload attachment for a DM message
+    func uploadDMAttachment(guildId: UUID, threadId: UUID, fileData: Data, filename: String, mimeType: String) async throws -> RLAttachmentUploadResponse {
+        try await uploadAttachment(
+            endpoint: "/messaging/guilds/\(guildId)/dms/\(threadId)/upload",
+            service: .core,
+            fileData: fileData,
+            filename: filename,
+            mimeType: mimeType
+        )
+    }
+
+    /// Upload attachment for a chart chat message
+    func uploadChartChatAttachment(guildId: UUID, chatId: UUID, fileData: Data, filename: String, mimeType: String) async throws -> RLAttachmentUploadResponse {
+        try await uploadAttachment(
+            endpoint: "/chart/guilds/\(guildId)/chart-chats/\(chatId)/upload",
+            service: .chart,
+            fileData: fileData,
+            filename: filename,
+            mimeType: mimeType
+        )
+    }
+
+    /// Upload attachment for a marker comment
+    func uploadMarkerCommentAttachment(guildId: UUID, markerId: UUID, fileData: Data, filename: String, mimeType: String) async throws -> RLAttachmentUploadResponse {
+        try await uploadAttachment(
+            endpoint: "/chart/guilds/\(guildId)/markers/\(markerId)/comments/upload",
+            service: .chart,
+            fileData: fileData,
+            filename: filename,
+            mimeType: mimeType
+        )
+    }
+
     /// Remove avatar (revert to default)
     /// DELETE /users/me/avatar
     func removeAvatar() async throws -> RLDetailResponseDTO {
@@ -1719,10 +2358,10 @@ extension RealAPIService {
     // =============================================================================================
     
     /// Submit a support ticket
-    /// POST /support/tickets
+    /// POST /users/support/tickets
     func submitSupportTicket(_ ticketRequest: RLSupportTicketRequest) async throws -> RLDetailResponseDTO {
         return try await request(
-            "/support/tickets",
+            "/users/support/tickets",
             service: .core,
             method: "POST",
             body: ticketRequest,
@@ -1914,7 +2553,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -1925,7 +2564,7 @@ extension RealAPIService {
     func getSymbol(symbolId: UUID) async throws -> RLTradingSymbolDTO {
         return try await request(
             "/chart/symbols/\(symbolId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -1943,7 +2582,36 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// List global active symbols with membership flags for the current guild.
+    /// GET /chart/symbols/global?guild_id=...&limit=...&cursor=...&asset_class=...
+    func getGlobalSymbols(
+        guildId: UUID,
+        limit: Int = 100,
+        cursor: String? = nil,
+        assetClass: String? = nil
+    ) async throws -> RLGlobalSymbolsListDTO {
+        var queryParts: [String] = [
+            "guild_id=\(guildId.uuidString)",
+            "limit=\(limit)"
+        ]
+        if let cursor = cursor, !cursor.isEmpty {
+            let encodedCursor = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cursor
+            queryParts.append("cursor=\(encodedCursor)")
+        }
+        if let assetClass = assetClass, !assetClass.isEmpty {
+            queryParts.append("asset_class=\(assetClass)")
+        }
+
+        let path = "/chart/symbols/global?\(queryParts.joined(separator: "&"))"
+        return try await request(
+            path,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -1973,7 +2641,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -1989,7 +2657,7 @@ extension RealAPIService {
     func getPersonalWatchlist() async throws -> RLPersonalWatchlistDTO {
         return try await request(
             "/chart/watchlist/personal",
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2001,7 +2669,7 @@ extension RealAPIService {
         let body = RLWatchlistAddRequest(symbolId: symbolId)
         return try await request(
             "/chart/watchlist/personal",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2013,7 +2681,7 @@ extension RealAPIService {
     func removeFromPersonalWatchlist(symbolId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/watchlist/personal/\(symbolId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
             auth: true
         )
@@ -2025,7 +2693,7 @@ extension RealAPIService {
         let body = RLWatchlistReorderRequest(symbolIds: symbolIds)
         return try await request(
             "/chart/watchlist/personal/reorder",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2042,32 +2710,78 @@ extension RealAPIService {
     func getGuildWatchlist(guildId: UUID) async throws -> RLGuildWatchlistDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/watchlist",
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
     }
     
-    /// Add symbol to guild watchlist (admin/moderator only)
+    /// Add symbol to guild watchlist (admin/owner only)
     /// POST /chart/guilds/{guild_id}/watchlist
     func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
         let body = RLWatchlistAddRequest(symbolId: symbolId)
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/watchlist",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
         )
     }
     
-    /// Remove symbol from guild watchlist (admin/moderator only)
+    /// Remove symbol from guild watchlist (admin/owner only)
     /// DELETE /chart/guilds/{guild_id}/watchlist/{symbol_id}
     func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/watchlist/\(symbolId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
+            auth: true
+        )
+    }
+    
+    /// Request a guild watchlist addition
+    /// POST /chart/guilds/{guild_id}/watchlist/requests
+    func requestGuildWatchlistAddition(guildId: UUID, symbolId: UUID, reason: String? = nil) async throws -> RLGuildWatchlistRequestResponseDTO {
+        let body = RLGuildWatchlistAddRequestDTO(symbolId: symbolId, reason: reason)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/watchlist/requests",
+            service: .chart,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// List guild watchlist requests
+    /// GET /chart/guilds/{guild_id}/watchlist/requests?status={status}
+    func getGuildWatchlistRequests(
+        guildId: UUID,
+        status: String = "pending"
+    ) async throws -> RLGuildWatchlistRequestsListResponseDTO {
+        let path = "/chart/guilds/\(guildId.uuidString)/watchlist/requests?status=\(status)"
+        return try await request(
+            path,
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Review a guild watchlist request (approve/reject)
+    /// PATCH /chart/guilds/{guild_id}/watchlist/requests/{request_id}
+    func reviewGuildWatchlistRequest(
+        guildId: UUID,
+        requestId: UUID,
+        action: String,
+        reviewNote: String? = nil
+    ) async throws -> RLGuildWatchlistRequestResponseDTO {
+        let body = RLGuildWatchlistReviewRequestDTO(action: action, reviewNote: reviewNote)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/watchlist/requests/\(requestId.uuidString)",
+            service: .chart,
+            method: "PATCH",
+            body: body,
             auth: true
         )
     }
@@ -2092,7 +2806,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2110,6 +2824,7 @@ extension RealAPIService {
         note: String? = nil,
         horizontalLinePrice: Double? = nil,
         targetPrice: Double? = nil,
+        stopLossPrice: Double? = nil,
         alertSeverity: String? = nil,
         trendlineDirection: String? = nil,
         selectedIndicator: String? = nil,
@@ -2128,6 +2843,7 @@ extension RealAPIService {
             note: note,
             horizontalLinePrice: horizontalLinePrice,
             targetPrice: targetPrice,
+            stopLossPrice: stopLossPrice,
             alertSeverity: alertSeverity,
             trendlineDirection: trendlineDirection,
             selectedIndicator: selectedIndicator,
@@ -2138,7 +2854,7 @@ extension RealAPIService {
         )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2175,7 +2891,7 @@ extension RealAPIService {
         )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2187,7 +2903,7 @@ extension RealAPIService {
     func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
             auth: true
         )
@@ -2203,8 +2919,30 @@ extension RealAPIService {
     func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/like",
-            service: .core,
+            service: .chart,
             method: "POST",
+            auth: true
+        )
+    }
+    
+    /// Get top markers (trending, by symbol, following, mine)
+    /// GET /chart/guilds/{guild_id}/top-markers
+    func getTopMarkers(guildId: UUID, timeWindowHours: Int = 48) async throws -> RLTopMarkersListDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/top-markers?time_window_hours=\(timeWindowHours)",
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Get markers placed by a specific user in a guild (for viewing other users' profiles)
+    /// GET /chart/guilds/{guild_id}/users/{user_id}/markers
+    func getUserMarkers(guildId: UUID, userId: UUID) async throws -> RLTopMarkersListDTO {
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/users/\(userId.uuidString)/markers",
+            service: .chart,
+            method: "GET",
             auth: true
         )
     }
@@ -2227,7 +2965,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2238,12 +2976,20 @@ extension RealAPIService {
     func addMarkerComment(
         guildId: UUID,
         markerId: UUID,
-        content: String
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) async throws -> RLMarkerCommentDTO {
-        let body = RLCreateMarkerCommentRequest(content: content)
+        let body = RLCreateMarkerCommentRequest(
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
+        )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2261,7 +3007,7 @@ extension RealAPIService {
         let body = RLEditMarkerCommentRequest(content: content)
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2277,7 +3023,7 @@ extension RealAPIService {
     ) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
             auth: true
         )
@@ -2298,7 +3044,7 @@ extension RealAPIService {
         let body = RLVotePollRequest(optionId: optionId)
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/vote",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2318,7 +3064,7 @@ extension RealAPIService {
     ) async throws -> RLChartChatDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/chart-chat",
-            service: .core,
+            service: .chart,
             method: "POST",
             auth: true
         )
@@ -2337,7 +3083,7 @@ extension RealAPIService {
         }
         return try await request(
             path,
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2347,12 +3093,20 @@ extension RealAPIService {
     /// POST /chart/chart-chats/{chat_id}/messages
     func sendChartChatMessage(
         chatId: UUID,
-        content: String
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
     ) async throws -> RLChartChatMessageDTO {
-        let body = RLSendChartChatMessageRequest(content: content)
+        let body = RLSendChartChatMessageRequest(
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
+        )
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/messages",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2369,7 +3123,7 @@ extension RealAPIService {
         let body = RLEditChartChatMessageRequest(content: content)
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2384,7 +3138,7 @@ extension RealAPIService {
     ) async throws -> RLDetailResponseDTO {
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)",
-            service: .core,
+            service: .chart,
             method: "DELETE",
             auth: true
         )
@@ -2405,7 +3159,7 @@ extension RealAPIService {
     ) async throws -> RLChartDataDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/chart-data?timeframe=\(timeframe)&candle_limit=\(candleLimit)",
-            service: .core,
+            service: .chart,
             method: "GET",
             auth: true
         )
@@ -2425,7 +3179,7 @@ extension RealAPIService {
         let body = RLUpdateChartChatSettingsRequest(isMuted: isMuted, isPinned: isPinned)
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/settings",
-            service: .core,
+            service: .chart,
             method: "PUT",
             body: body,
             auth: true
@@ -2434,10 +3188,10 @@ extension RealAPIService {
     
     /// Mark chart chat as read (resets unread count)
     /// POST /chart/chart-chats/{chat_id}/mark-read
-    func markChartChatRead(chatId: UUID) async throws -> RLDetailResponseDTO {
-        return try await request(
+    func markChartChatRead(chatId: UUID) async throws {
+        let _: EmptyResponse = try await request(
             "/chart/chart-chats/\(chatId.uuidString)/mark-read",
-            service: .core,
+            service: .chart,
             method: "POST",
             auth: true
         )
@@ -2465,7 +3219,7 @@ extension RealAPIService {
         )
         return try await request(
             "/chart/report",
-            service: .core,
+            service: .chart,
             method: "POST",
             body: body,
             auth: true
@@ -2474,6 +3228,126 @@ extension RealAPIService {
 }
 
 
+// ================================================================================================
+// MARK: - Reputation API Extension
+// ================================================================================================
 
+extension RealAPIService {
 
+    // MARK: - Tier Definitions
 
+    /// Get all reputation tier definitions for client display
+    func getReputationTiers() async throws -> [RLReputationTierDTO] {
+        return try await request(
+            "/reputation/tiers",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // MARK: - Guild Reputation Profile
+
+    /// Get current user's reputation profile within a specific guild
+    func getMyGuildReputation(guildId: UUID) async throws -> RLReputationProfileDTO {
+        return try await request(
+            "/reputation/me/guild/\(guildId.uuidString)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get another user's reputation profile within a specific guild
+    func getUserGuildReputation(userId: UUID, guildId: UUID) async throws -> RLReputationProfileDTO {
+        return try await request(
+            "/reputation/users/\(userId.uuidString)/guild/\(guildId.uuidString)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // MARK: - Global Reputation
+
+    /// Get current user's global cross-guild reputation
+    func getMyGlobalReputation() async throws -> RLGlobalReputationDTO {
+        return try await request(
+            "/reputation/me/global",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get another user's global cross-guild reputation
+    func getUserGlobalReputation(userId: UUID) async throws -> RLGlobalReputationDTO {
+        return try await request(
+            "/reputation/users/\(userId.uuidString)/global",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // MARK: - Leaderboard
+
+    /// Get guild reputation leaderboard
+    func getGuildReputationLeaderboard(guildId: UUID, limit: Int = 50) async throws -> RLReputationLeaderboardDTO {
+        return try await request(
+            "/reputation/guilds/\(guildId.uuidString)/leaderboard?limit=\(limit)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // MARK: - History
+
+    /// Get paginated reputation event history for current user
+    func getReputationHistory(guildId: UUID? = nil, page: Int = 1, pageSize: Int = 20) async throws -> RLReputationHistoryDTO {
+        var path = "/reputation/me/history?page=\(page)&page_size=\(pageSize)"
+        if let guildId = guildId {
+            path += "&guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    // =========================================================================
+    // MARK: - Trading Accuracy
+    // =========================================================================
+
+    /// Get my accuracy profile within a specific guild.
+    func getMyGuildAccuracy(guildId: UUID) async throws -> RLAccuracyProfileDTO {
+        return try await request(
+            "/reputation/me/accuracy/guild/\(guildId.uuidString)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get another user's accuracy profile within a specific guild.
+    func getUserGuildAccuracy(userId: UUID, guildId: UUID) async throws -> RLAccuracyProfileDTO {
+        return try await request(
+            "/reputation/users/\(userId.uuidString)/accuracy/guild/\(guildId.uuidString)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get my global accuracy profile (weighted across all guilds).
+    func getMyGlobalAccuracy() async throws -> RLAccuracyProfileDTO {
+        return try await request(
+            "/reputation/me/accuracy/global",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    /// Get the accuracy leaderboard for a guild.
+    func getGuildAccuracyLeaderboard(guildId: UUID, minPredictions: Int = 10, limit: Int = 50) async throws -> RLAccuracyLeaderboardDTO {
+        return try await request(
+            "/reputation/guilds/\(guildId.uuidString)/accuracy-leaderboard?min_predictions=\(minPredictions)&limit=\(limit)",
+            service: .reputation,
+            auth: true
+        )
+    }
+}

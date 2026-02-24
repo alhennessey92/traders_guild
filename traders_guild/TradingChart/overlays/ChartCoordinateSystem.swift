@@ -78,6 +78,18 @@ class ChartCoordinateSystem {
         let price = priceRange.min + (normalizedY * (priceRange.max - priceRange.min))
         return price.clamped(to: priceRange.min...priceRange.max)
     }
+
+    /// Unclamped version — allows prices beyond the visible candle range
+    /// Used by drag overlays for TP/SL/placement lines where users may want targets
+    /// beyond the currently visible price range
+    func unclampedPrice(atYPosition y: CGFloat) -> Double {
+        let priceRange = chartData.priceRange
+        let adjustedY = y + gestureState.verticalPanOffset + dragState.height
+        let normalizedY = (chartSize.height - adjustedY) / (chartSize.height * gestureState.priceScale)
+        let price = priceRange.min + (normalizedY * (priceRange.max - priceRange.min))
+        // Only enforce price > 0 (can't have negative prices)
+        return max(0.0001, price)
+    }
     
     // MARK: - Visibility Checks
     

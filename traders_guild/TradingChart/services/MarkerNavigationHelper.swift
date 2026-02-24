@@ -48,12 +48,12 @@ class MarkerNavigationHelper {
     ///   - chartWidth: Current chart width (uses screen width if nil)
     ///   - completion: Called after navigation completes
     func navigateToMarker(
-        _ marker: TopMarkerDTO,
+        _ marker: RLTopMarkerDTO,
         chartWidth: CGFloat? = nil,
         completion: (() -> Void)? = nil
     ) {
         print("🎯 === MARKER NAVIGATION START ===")
-        print("🎯 Target: \(marker.symbolTicker) | Timeframe: \(marker.timeframe.rawValue) | Candle: \(marker.candleIndex)")
+        print("🎯 Target: \(marker.symbolTicker) | Timeframe: \(marker.timeframe) | Timestamp: \(marker.candleTimestamp)")
         
         guard let chartViewModel = chartViewModel else {
             print("❌ MarkerNavigationHelper: chartViewModel is nil")
@@ -81,7 +81,8 @@ class MarkerNavigationHelper {
         print("🎯 Needs symbol change: \(needsSymbolChange)")
         
         // Step 3: Check if we need to change timeframe
-        let needsTimeframeChange = currentTimeframe != marker.timeframe
+        let markerTimeframe = RLChartTimeframe.fromBackendString(marker.timeframe) ?? currentTimeframe
+        let needsTimeframeChange = currentTimeframe != markerTimeframe
         print("🎯 Needs timeframe change: \(needsTimeframeChange)")
         
         // Step 4: Perform symbol change if needed
@@ -99,8 +100,8 @@ class MarkerNavigationHelper {
         
         // Step 5: Perform timeframe change if needed
         if needsTimeframeChange {
-            print("✅ Setting timeframe to: \(marker.timeframe.rawValue)")
-            chartViewModel.setTimeframe(marker.timeframe)
+            print("✅ Setting timeframe to: \(markerTimeframe.rawValue)")
+            chartViewModel.setTimeframe(markerTimeframe)
         }
         
         // Step 6: Wait for data to load, then scroll to candle
@@ -108,8 +109,7 @@ class MarkerNavigationHelper {
         print("🎯 Waiting \(scrollDelay)s for data to load...")
         
         // Capture values directly to avoid weak self issues
-        let markerTimestamp = marker.timestamp
-        let fallbackCandleIndex = marker.candleIndex
+        let markerTimestamp = marker.candleTimestamp
         let capturedGestureState = gestureState
         let capturedChartViewModel = chartViewModel
         let baseCandleWidth = self.baseCandleWidth
@@ -127,13 +127,10 @@ class MarkerNavigationHelper {
             if let foundIndex = Self.findCandleIndex(forTimestamp: markerTimestamp, in: candles) {
                 print("🎯 Found candle at index \(foundIndex) for timestamp")
                 targetCandleIndex = foundIndex
-            } else if fallbackCandleIndex < candles.count {
-                print("🎯 Using fallback candle index: \(fallbackCandleIndex)")
-                targetCandleIndex = fallbackCandleIndex
             } else {
-                // Default to showing recent candles if index is out of range
+                // Default to showing recent candles if timestamp isn't found
                 let safeIndex = max(0, candles.count - 50)
-                print("🎯 Candle index \(fallbackCandleIndex) out of range, using safe index: \(safeIndex)")
+                print("🎯 No candle match found, using safe index: \(safeIndex)")
                 targetCandleIndex = safeIndex
             }
             
@@ -150,13 +147,30 @@ class MarkerNavigationHelper {
             print("🎯 Scroll params: candleWidthScale=\(capturedGestureState.candleWidthScale), totalCandleWidth=\(totalCandleWidth)")
             print("🎯 Current panOffset before: \(capturedGestureState.panOffset.width)")
             
-            // Use the gestureState's built-in method
-            capturedGestureState.centerOnCandle(
-                at: targetCandleIndex,
-                chartWidth: width,
-                candleWidth: totalCandleWidth
-            )
-            
+            // Center on candle with smooth animation
+            let candle = targetCandleIndex < candles.count ? candles[targetCandleIndex] : nil
+            let priceRange = capturedChartViewModel.dataManager.priceRange
+            let chartHeight = UIScreen.main.bounds.height * 0.6 // Approximate chart height
+
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                if let candle = candle, priceRange.max > priceRange.min {
+                    capturedGestureState.centerOnMarker(
+                        at: targetCandleIndex,
+                        chartWidth: width,
+                        candleWidth: totalCandleWidth,
+                        price: candle.close,
+                        chartHeight: chartHeight,
+                        priceRange: priceRange
+                    )
+                } else {
+                    capturedGestureState.centerOnCandle(
+                        at: targetCandleIndex,
+                        chartWidth: width,
+                        candleWidth: totalCandleWidth
+                    )
+                }
+            }
+
             print("🎯 Current panOffset after: \(capturedGestureState.panOffset.width)")
             print("🎯 === MARKER NAVIGATION COMPLETE ===")
             
@@ -167,7 +181,7 @@ class MarkerNavigationHelper {
     // MARK: - Private Methods
     
     /// Find the candle index closest to the given timestamp
-    private static func findCandleIndex(forTimestamp timestamp: Date, in candles: [CandleDTO]) -> Int? {
+    private static func findCandleIndex(forTimestamp timestamp: Date, in candles: [RLCandleDTO]) -> Int? {
         guard !candles.isEmpty else { return nil }
         
         // Binary search for efficiency
@@ -207,7 +221,7 @@ class MarkerNavigationHelper {
     // MARK: - Private Methods
     
     /// Find a symbol by ticker in the view model's watchlists or SampleData
-    private func findSymbol(ticker: String, in viewModel: ChartViewModel) -> TradingSymbolDTO? {
+    private func findSymbol(ticker: String, in viewModel: ChartViewModel) -> RLTradingSymbolDTO? {
         print("🔍 Looking for symbol: \(ticker)")
         
         // Check personal watchlist first
@@ -227,10 +241,10 @@ class MarkerNavigationHelper {
             print("🔍 Found in combinedWatchlist")
             return symbol
         }
-        
-        // FALLBACK: Check SampleData.allTradingSymbolDTOs directly
-        if let symbol = SampleData.allTradingSymbolDTOs.first(where: { $0.ticker == ticker }) {
-            print("🔍 Found in SampleData.allTradingSymbolDTOs (fallback)")
+
+        // Check global symbols fallback
+        if let symbol = viewModel.globalSymbols.first(where: { $0.ticker == ticker }) {
+            print("🔍 Found in globalSymbols")
             return symbol
         }
         
@@ -252,13 +266,15 @@ class MarkerNavigationHelper {
         print("🎯 Scroll params: candleWidthScale=\(gestureState.candleWidthScale), totalCandleWidth=\(totalCandleWidth)")
         print("🎯 Current panOffset before: \(gestureState.panOffset.width)")
         
-        // Use the gestureState's built-in method
-        gestureState.centerOnCandle(
-            at: index,
-            chartWidth: chartWidth,
-            candleWidth: totalCandleWidth
-        )
-        
+        // Use the gestureState's built-in method with animation
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            gestureState.centerOnCandle(
+                at: index,
+                chartWidth: chartWidth,
+                candleWidth: totalCandleWidth
+            )
+        }
+
         print("🎯 Current panOffset after: \(gestureState.panOffset.width)")
     }
 }

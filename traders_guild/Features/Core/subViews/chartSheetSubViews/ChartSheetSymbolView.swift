@@ -20,6 +20,7 @@ import UIKit
 enum SymbolSheetTab: String, CaseIterable, UnifiedTabItem {
     case personal = "Personal"
     case guild = "Guild"
+    case global = "Global"
     case search = "Search"
     
     var title: String { rawValue }
@@ -28,6 +29,7 @@ enum SymbolSheetTab: String, CaseIterable, UnifiedTabItem {
         switch self {
         case .personal: return "star.fill"
         case .guild: return "person.3.fill"
+        case .global: return "globe"
         case .search: return "magnifyingglass"
         }
     }
@@ -37,29 +39,29 @@ enum SymbolSheetTab: String, CaseIterable, UnifiedTabItem {
 
 struct ChartSheetSymbolView: View {
     @ObservedObject var chartViewModel: ChartViewModel
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    @EnvironmentObject var rlAppState: RLAppState
     
     // Watchlist tab state
     @State private var selectedWatchlistTab: SymbolSheetTab = .personal
     @State private var searchText: String = ""
     @State private var isSearching: Bool = false
-    @State private var searchResults: [TradingSymbolDTO] = []
+    @State private var searchResults: [RLTradingSymbolDTO] = []
     
     // Watchlist button loading states
     @State private var isAddingToPersonal: Bool = false
     @State private var isRequestingGuild: Bool = false
+    @State private var pendingGuildRequests: [RLGuildWatchlistRequestResponseDTO] = []
     
     // Confirmation dialog state (personal only now)
-    @State private var symbolToRemove: TradingSymbolDTO? = nil
+    @State private var symbolToRemove: RLTradingSymbolDTO? = nil
     @State private var showRemoveConfirmation: Bool = false
     
     // Guild request alert state
     @State private var showGuildRequestAlert: Bool = false
-    @State private var symbolToRequest: TradingSymbolDTO? = nil
+    @State private var symbolToRequest: RLTradingSymbolDTO? = nil
     
     // Helper to get current symbol as DTO
-    private var currentSymbolDTO: TradingSymbolDTO? {
+    private var currentSymbolDTO: RLTradingSymbolDTO? {
         return chartViewModel.currentSymbol
     }
     
@@ -108,14 +110,30 @@ struct ChartSheetSymbolView: View {
         .onDisappear {
             dismissKeyboard()
         }
+        .onAppear {
+            Task {
+                await reloadGuildRequestState()
+            }
+        }
+        .onChange(of: rlAppState.currentGuild?.id) { _ in
+            Task {
+                await reloadGuildRequestState()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .guildWatchlistUpdated)) { _ in
+            Task {
+                await chartViewModel.reloadData()
+                await reloadGuildRequestState()
+            }
+        }
     }
     
-    private func requestRemoveSymbol(_ symbol: TradingSymbolDTO) {
+    private func requestRemoveSymbol(_ symbol: RLTradingSymbolDTO) {
         symbolToRemove = symbol
         showRemoveConfirmation = true
     }
     
-    private func confirmRemoveSymbol(_ symbol: TradingSymbolDTO) {
+    private func confirmRemoveSymbol(_ symbol: RLTradingSymbolDTO) {
         togglePersonalWatchlist(symbol: symbol, isCurrentlyIn: true)
         symbolToRemove = nil
     }
@@ -152,7 +170,7 @@ struct ChartSheetSymbolView: View {
                                     .font(.system(size: 9))
                                     .foregroundColor(.white.opacity(0.4))
                                 
-                                Text(symbol.assetClass.rawValue)
+                                Text(symbol.assetClass.capitalized)
                                     .font(.system(size: 11))
                                     .foregroundColor(.white.opacity(0.6))
                             }
@@ -167,9 +185,9 @@ struct ChartSheetSymbolView: View {
                                 .lineLimit(1)
                             
                             HStack(spacing: 2) {
-                                Image(systemName: symbol.isUp ? "arrow.up.right" : "arrow.down.right")
+                                Image(systemName: (symbol.isUp ?? true) ? "arrow.up.right" : "arrow.down.right")
                                     .font(.system(size: 9, weight: .bold))
-                                Text(symbol.changeFormatted)
+                                Text(symbol.changeFormatted ?? "--")
                                     .font(.system(size: 11, weight: .semibold))
                             }
                             .foregroundColor(symbol.changeColor)
@@ -202,10 +220,12 @@ struct ChartSheetSymbolView: View {
     
     // MARK: - Watchlist Buttons
     
-    private func watchlistButtons(for symbol: TradingSymbolDTO) -> some View {
-        // Use leftDrawerViewModel as single source of truth
-        let inPersonal = leftDrawerViewModel.personalTradingWatchlist.contains { $0.id == symbol.id }
-        let inGuild = leftDrawerViewModel.guildTradingWatchlist.contains { $0.id == symbol.id }
+    private func watchlistButtons(for symbol: RLTradingSymbolDTO) -> some View {
+        // Use chartViewModel watchlists as single source of truth
+        let inPersonal = chartViewModel.personalWatchlist.contains { $0.id == symbol.id }
+        let inGuild = chartViewModel.guildWatchlist.contains { $0.id == symbol.id }
+        let isRequested = pendingGuildRequests.contains { $0.symbolId == symbol.id && $0.status.lowercased() == "pending" }
+        let canDirectlyManageGuildWatchlist = rlAppState.canAdmin
         
         return HStack(spacing: 10) {
             // Personal watchlist button - unchanged behavior
@@ -245,43 +265,44 @@ struct ChartSheetSymbolView: View {
             .buttonStyle(.plain)
             .disabled(isAddingToPersonal)
             
-            // Guild watchlist button - now shows "In Guild" or "Request Guild"
+            // Guild watchlist button with role-aware states
             Button(action: {
-                if !inGuild {
-                    // Show request alert
+                if inGuild || isRequested {
+                    return
+                }
+                if canDirectlyManageGuildWatchlist {
+                    addToGuildWatchlistWithPreflight(symbol: symbol)
+                } else {
                     symbolToRequest = symbol
                     showGuildRequestAlert = true
                 }
-                // If already in guild, button is disabled - no action needed
             }) {
                 HStack(spacing: 6) {
                     if isRequestingGuild {
                         ProgressView()
                             .scaleEffect(0.6)
-                            .tint(inGuild ? .blue : .white.opacity(0.7))
+                            .tint((inGuild || isRequested) ? .blue : .white.opacity(0.7))
                     } else {
-                        Image(systemName: inGuild ? "person.3.fill" : "person.3.sequence")
+                        Image(systemName: guildButtonIcon(inGuild: inGuild, isRequested: isRequested, canManage: canDirectlyManageGuildWatchlist))
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    Text(inGuild ? "In Guild" : "Request")
+                    Text(guildButtonTitle(inGuild: inGuild, isRequested: isRequested, canManage: canDirectlyManageGuildWatchlist))
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(inGuild ? .blue : .white.opacity(0.7))
+                .foregroundColor(guildButtonForegroundColor(inGuild: inGuild, isRequested: isRequested))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
-                    inGuild ?
-                    Color.blue.opacity(0.2) :
-                    Color.white.opacity(0.1)
+                    guildButtonBackgroundColor(inGuild: inGuild, isRequested: isRequested)
                 )
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(inGuild ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
+                        .stroke(guildButtonStrokeColor(inGuild: inGuild, isRequested: isRequested), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
-            .disabled(inGuild || isRequestingGuild)
+            .disabled(inGuild || isRequested || isRequestingGuild)
             
             Spacer()
         }
@@ -289,9 +310,7 @@ struct ChartSheetSymbolView: View {
     
     // MARK: - Watchlist Toggle Actions
     
-    private func togglePersonalWatchlist(symbol: TradingSymbolDTO, isCurrentlyIn: Bool) {
-        guard let userId = appState.currentUser?.id else { return }
-        
+    private func togglePersonalWatchlist(symbol: RLTradingSymbolDTO, isCurrentlyIn: Bool) {
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
         
@@ -300,21 +319,17 @@ struct ChartSheetSymbolView: View {
         Task {
             do {
                 if isCurrentlyIn {
-                    try await appState.removeFromPersonalWatchlist(userId: userId, symbolId: symbol.id)
-                    await MainActor.run {
-                        leftDrawerViewModel.personalTradingWatchlist.removeAll { $0.id == symbol.id }
-                    }
+                    try await rlAppState.removeFromPersonalWatchlist(symbolId: symbol.id)
+                    // Refresh watchlist from chartViewModel
+                    await chartViewModel.reloadData()
                 } else {
-                    try await appState.addToPersonalWatchlist(userId: userId, symbolId: symbol.id)
-                    await MainActor.run {
-                        if !leftDrawerViewModel.personalTradingWatchlist.contains(where: { $0.id == symbol.id }) {
-                            leftDrawerViewModel.personalTradingWatchlist.append(symbol)
-                        }
-                    }
+                    _ = try await rlAppState.addToPersonalWatchlist(symbolId: symbol.id)
+                    // Refresh watchlist from chartViewModel
+                    await chartViewModel.reloadData()
                 }
             } catch {
                 await MainActor.run {
-                    appState.showError(error, title: "Failed to update watchlist")
+                    rlAppState.showError(error, title: "Failed to update watchlist", style: .toast)
                 }
             }
             
@@ -324,29 +339,33 @@ struct ChartSheetSymbolView: View {
         }
     }
     
-    private func sendGuildWatchlistRequest(symbol: TradingSymbolDTO) {
-        guard let guildId = appState.currentGuild?.id,
-              let userId = appState.currentUser?.id else { return }
-        
+    private func sendGuildWatchlistRequest(symbol: RLTradingSymbolDTO) {
         let impact = UIImpactFeedbackGenerator(style: .light)
         impact.impactOccurred()
+
+        guard symbol.isActive else {
+            rlAppState.showError(
+                title: "Symbol Inactive",
+                message: "This symbol is inactive and cannot be added to the guild watchlist.",
+                style: .toast
+            )
+            return
+        }
         
         isRequestingGuild = true
         
         Task {
             do {
-                try await appState.requestGuildWatchlistAddition(
+                guard let guildId = rlAppState.currentGuild?.id else {
+                    throw RLAppError.noGuildSelected
+                }
+                try await rlAppState.requestGuildWatchlistAddition(
                     guildId: guildId,
-                    userId: userId,
                     symbolId: symbol.id
                 )
-                await MainActor.run {
-                    appState.showSuccess("Request sent to guild admins")
-                }
+                await reloadGuildRequestState()
             } catch {
-                await MainActor.run {
-                    appState.showError(error, title: "Failed to send request")
-                }
+                // RLAppState already surfaces request errors.
             }
             
             await MainActor.run {
@@ -354,6 +373,91 @@ struct ChartSheetSymbolView: View {
                 symbolToRequest = nil
             }
         }
+    }
+
+    private func addToGuildWatchlistWithPreflight(symbol: RLTradingSymbolDTO) {
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+
+        guard symbol.isActive else {
+            rlAppState.showError(
+                title: "Symbol Inactive",
+                message: "This symbol is inactive and cannot be added to the guild watchlist.",
+                style: .toast
+            )
+            return
+        }
+
+        isRequestingGuild = true
+        Task {
+            do {
+                guard let guildId = rlAppState.currentGuild?.id else {
+                    throw RLAppError.noGuildSelected
+                }
+
+                // Preflight refresh protects against stale local state after admin reviews.
+                await chartViewModel.reloadData()
+                let alreadyInGuild = chartViewModel.guildWatchlist.contains { $0.id == symbol.id }
+                if alreadyInGuild {
+                    await reloadGuildRequestState()
+                    await MainActor.run {
+                        isRequestingGuild = false
+                    }
+                    return
+                }
+
+                _ = try await rlAppState.addToGuildWatchlist(guildId: guildId, symbolId: symbol.id)
+                await chartViewModel.reloadData()
+                await reloadGuildRequestState()
+                NotificationCenter.default.post(name: .guildWatchlistUpdated, object: nil)
+            } catch {
+                // RLAppState already surfaces add/remove errors.
+            }
+
+            await MainActor.run {
+                isRequestingGuild = false
+            }
+        }
+    }
+
+    @MainActor
+    private func reloadGuildRequestState() async {
+        do {
+            let response = try await rlAppState.fetchGuildWatchlistRequests(status: "pending")
+            pendingGuildRequests = response.requests
+        } catch {
+            pendingGuildRequests = []
+        }
+    }
+
+    private func guildButtonTitle(inGuild: Bool, isRequested: Bool, canManage: Bool) -> String {
+        if inGuild { return "In Guild" }
+        if isRequested { return "Requested" }
+        return canManage ? "Add Guild" : "Request"
+    }
+
+    private func guildButtonIcon(inGuild: Bool, isRequested: Bool, canManage: Bool) -> String {
+        if inGuild { return "person.3.fill" }
+        if isRequested { return "clock.fill" }
+        return canManage ? "plus.circle.fill" : "person.3.sequence"
+    }
+
+    private func guildButtonForegroundColor(inGuild: Bool, isRequested: Bool) -> Color {
+        if inGuild { return .blue }
+        if isRequested { return .orange }
+        return .white.opacity(0.7)
+    }
+
+    private func guildButtonBackgroundColor(inGuild: Bool, isRequested: Bool) -> Color {
+        if inGuild { return Color.blue.opacity(0.2) }
+        if isRequested { return Color.orange.opacity(0.2) }
+        return Color.white.opacity(0.1)
+    }
+
+    private func guildButtonStrokeColor(inGuild: Bool, isRequested: Bool) -> Color {
+        if inGuild { return Color.blue.opacity(0.4) }
+        if isRequested { return Color.orange.opacity(0.4) }
+        return Color.clear
     }
     
     // MARK: - Loading Indicator
@@ -401,7 +505,7 @@ struct ChartSheetSymbolView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
-    private func timeframeRow(title: String, timeframes: [ChartTimeframe]) -> some View {
+    private func timeframeRow(title: String, timeframes: [RLChartTimeframe]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption)
@@ -442,8 +546,9 @@ struct ChartSheetSymbolView: View {
                     theme: .blue,
                     countForTab: { tab in
                         switch tab {
-                        case .personal: return leftDrawerViewModel.personalTradingWatchlist.count
-                        case .guild: return leftDrawerViewModel.guildTradingWatchlist.count
+                        case .personal: return chartViewModel.personalWatchlist.count
+                        case .guild: return chartViewModel.guildWatchlist.count
+                        case .global: return chartViewModel.globalSymbols.count
                         case .search: return searchResults.count
                         }
                     },
@@ -483,18 +588,18 @@ struct ChartSheetSymbolView: View {
     private var watchlistContent: some View {
         switch selectedWatchlistTab {
         case .personal:
-            if leftDrawerViewModel.personalTradingWatchlist.isEmpty {
+            if chartViewModel.personalWatchlist.isEmpty {
                 UnifiedEmptyState(
                     icon: "star",
                     title: "No Personal Symbols",
                     subtitle: "Add symbols from the Search tab"
                 )
             } else {
-                symbolListView(symbols: leftDrawerViewModel.personalTradingWatchlist)
+                symbolListView(symbols: chartViewModel.personalWatchlist)
             }
             
         case .guild:
-            if leftDrawerViewModel.guildTradingWatchlist.isEmpty {
+            if chartViewModel.guildWatchlist.isEmpty {
                 UnifiedEmptyState(
                     icon: "person.3",
                     title: "No Guild Symbols",
@@ -512,14 +617,27 @@ struct ChartSheetSymbolView: View {
                     .foregroundColor(.gray)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    symbolListView(symbols: leftDrawerViewModel.guildTradingWatchlist)
+                    symbolListView(symbols: chartViewModel.guildWatchlist)
                 }
+            }
+
+        case .global:
+            if chartViewModel.globalSymbols.isEmpty {
+                UnifiedEmptyState(
+                    icon: "globe",
+                    title: "No Global Symbols",
+                    subtitle: "No active symbols are available right now"
+                )
+            } else {
+                globalSymbolListView(symbols: chartViewModel.globalSymbols)
             }
             
         case .search:
             if searchText.isEmpty {
                 // Show search hint when not searching
                 searchHintView
+            } else if isSearching {
+                UnifiedLoadingState(message: "Searching symbols...")
             } else if searchResults.isEmpty {
                 UnifiedNoResultsState(searchText: searchText)
             } else {
@@ -550,9 +668,12 @@ struct ChartSheetSymbolView: View {
     }
     
     /// Grouped symbol list view
-    private func symbolListView(symbols: [TradingSymbolDTO]) -> some View {
-        let grouped = Dictionary(grouping: symbols) { $0.assetClass }
-        let orderedClasses: [AssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+    private func symbolListView(symbols: [RLTradingSymbolDTO]) -> some View {
+        // Group by asset class (convert string to enum for grouping)
+        let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
+            RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
+        }
+        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
         
         return VStack(spacing: 10) {
             ForEach(orderedClasses, id: \.self) { assetClass in
@@ -569,6 +690,38 @@ struct ChartSheetSymbolView: View {
             }
         }
     }
+
+    private func globalSymbolListView(symbols: [RLTradingSymbolDTO]) -> some View {
+        let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
+            RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
+        }
+        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+
+        return VStack(spacing: 10) {
+            ForEach(orderedClasses, id: \.self) { assetClass in
+                if let classSymbols = grouped[assetClass], !classSymbols.isEmpty {
+                    UnifiedDisclosureGroup(
+                        title: assetClass.rawValue,
+                        count: classSymbols.count,
+                        icon: assetClass.icon,
+                        iconColor: assetClassColor(assetClass),
+                        isExpandedByDefault: true
+                    ) {
+                        VStack(spacing: 6) {
+                            ForEach(classSymbols) { symbol in
+                                GlobalSymbolListRow(
+                                    symbol: symbol,
+                                    isSelected: currentSymbolDTO?.id == symbol.id
+                                ) {
+                                    selectSymbol(symbol)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     // MARK: - Helper Methods
     
@@ -577,19 +730,36 @@ struct ChartSheetSymbolView: View {
     }
     
     private func performSearch(query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespaces).uppercased()
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
             searchResults = []
+            isSearching = false
             return
         }
         
-        searchResults = SampleData.allTradingSymbolDTOs.filter { symbol in
-            symbol.ticker.uppercased().contains(trimmed) ||
-            symbol.displayName.uppercased().contains(trimmed)
+        isSearching = true
+        
+        Task {
+            do {
+                let searchResult = try await rlAppState.realApi.searchSymbols(
+                    query: trimmed,
+                    limit: 50
+                )
+                await MainActor.run {
+                    searchResults = searchResult.results
+                    isSearching = false
+                }
+            } catch {
+                await MainActor.run {
+                    rlAppState.showError(error, title: "Search Failed", style: .toast)
+                    searchResults = []
+                    isSearching = false
+                }
+            }
         }
     }
     
-    private func selectSymbol(_ symbol: TradingSymbolDTO) {
+    private func selectSymbol(_ symbol: RLTradingSymbolDTO) {
         dismissKeyboard()
         
         let impact = UIImpactFeedbackGenerator(style: .medium)
@@ -602,7 +772,7 @@ struct ChartSheetSymbolView: View {
 // MARK: - Symbol Icon View
 
 struct SymbolIconView: View {
-    let symbol: TradingSymbolDTO
+    let symbol: RLTradingSymbolDTO
     var size: CGFloat = 48
     
     var body: some View {
@@ -645,7 +815,7 @@ struct SymbolIconView: View {
 // MARK: - Asset Class Badge
 
 struct AssetClassBadge: View {
-    let assetClass: AssetClass
+    let assetClass: RLAssetClass
     
     var body: some View {
         HStack(spacing: 4) {
@@ -665,7 +835,7 @@ struct AssetClassBadge: View {
 // MARK: - Timeframe Chip
 
 struct TimeframeChip: View {
-    let timeframe: ChartTimeframe
+    let timeframe: RLChartTimeframe
     let isSelected: Bool
     let action: () -> Void
     
@@ -704,10 +874,10 @@ struct TimeframeChip: View {
 // MARK: - Symbol Asset Group (Using UnifiedDisclosureGroup)
 
 struct SymbolAssetGroup: View {
-    let assetClass: AssetClass
-    let symbols: [TradingSymbolDTO]
+    let assetClass: RLAssetClass
+    let symbols: [RLTradingSymbolDTO]
     let currentSymbolId: UUID?
-    let onSelectSymbol: (TradingSymbolDTO) -> Void
+    let onSelectSymbol: (RLTradingSymbolDTO) -> Void
     
     var body: some View {
         UnifiedDisclosureGroup(
@@ -734,7 +904,7 @@ struct SymbolAssetGroup: View {
 // MARK: - Symbol List Row
 
 struct SymbolListRow: View {
-    let symbol: TradingSymbolDTO
+    let symbol: RLTradingSymbolDTO
     let isSelected: Bool
     let action: () -> Void
     
@@ -770,15 +940,15 @@ struct SymbolListRow: View {
                 
                 // Price and Change
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(symbol.priceFormatted)
+                    Text(symbol.priceFormatted ?? "--")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(.white)
                     
                     HStack(spacing: 2) {
-                        Image(systemName: symbol.isUp ? "arrow.up" : "arrow.down")
+                        Image(systemName: (symbol.isUp ?? true) ? "arrow.up" : "arrow.down")
                             .font(.system(size: 9, weight: .bold))
-                        Text(symbol.changeFormatted)
+                        Text(symbol.changeFormatted ?? "--")
                             .font(.caption)
                             .fontWeight(.medium)
                     }
@@ -817,6 +987,117 @@ struct SymbolListRow: View {
                     )
             )
             .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct GlobalSymbolListRow: View {
+    let symbol: RLTradingSymbolDTO
+    let isSelected: Bool
+    let action: () -> Void
+
+    private var statusBadges: [String] {
+        var badges: [String] = []
+        if symbol.inPersonalWatchlist == true {
+            badges.append("Personal")
+        }
+        if symbol.inGuildWatchlist == true {
+            badges.append("Guild")
+        }
+        if symbol.isRequestedForGuild == true {
+            badges.append("Requested")
+        }
+        return badges
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    SymbolIconView(symbol: symbol, size: 44)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(symbol.ticker)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+
+                            SymbolMarketStatus(isActive: symbol.isActive)
+                        }
+
+                        Text(symbol.displayName)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(symbol.priceFormatted ?? "--")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+
+                        HStack(spacing: 2) {
+                            Image(systemName: (symbol.isUp ?? true) ? "arrow.up" : "arrow.down")
+                                .font(.system(size: 9, weight: .bold))
+                            Text(symbol.changeFormatted ?? "--")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(symbol.changeColor)
+                    }
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title3)
+                    }
+                }
+                .padding(12)
+                .background(
+                    isSelected ?
+                    LinearGradient(
+                        colors: [
+                            symbol.primaryColorValue.opacity(0.25),
+                            symbol.secondaryColorValue.opacity(0.1)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ) :
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.05), Color.white.opacity(0.03)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            isSelected ? symbol.primaryColorValue.opacity(0.4) : Color.clear,
+                            lineWidth: 1
+                        )
+                )
+                .cornerRadius(12)
+
+                if !statusBadges.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(statusBadges, id: \.self) { badge in
+                            Text(badge)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.9))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.14))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
+            }
         }
         .buttonStyle(.plain)
     }
@@ -861,6 +1142,3 @@ extension Notification.Name {
         .padding()
     }
 }
-
-
-

@@ -27,10 +27,6 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var upcomingEvents: [RLGuildEventWithAuthorDTO] = []
     
     
-    // These still use old DTOs (to be migrated later)
-    
-    @Published var members: [GuildMembershipDTO] = []
-    @Published var watchlist: GuildWatchlistDTO?
     @Published var userNotifications: [RLNotificationDTO] = []
     @Published var notificationStats: RLNotificationStatsDTO?
     @Published var statistics: RLGuildStatisticsResponse?
@@ -40,9 +36,6 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var guildMembersTotalCount: Int = 0
     @Published var guildMembersOnlineCount: Int = 0
     @Published var isLoadingGuildMembers: Bool = false
-    
-    // Friends list
-    @Published var friends: [GuildMembershipDTO] = []
     
     // Pending friend requests (real API)
     @Published var pendingFriendRequestsIncoming: [RLFriendRequestIncomingDTO] = []
@@ -55,11 +48,15 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var friendsRLOnlineCount: Int = 0
     @Published var isLoadingFriendsRL: Bool = false
 
-    // Global leaderboard
-    @Published var globalLeaderboard: [GuildMembershipDTO] = []
-    
-    @Published var guildTradingWatchlist: [TradingSymbolDTO] = []
-    @Published var personalTradingWatchlist: [TradingSymbolDTO] = []
+    // Global leaderboard (not yet implemented)
+    @Published var globalLeaderboard: [RLGuildMemberDTO] = []
+
+    // Accuracy leaderboard
+    @Published var accuracyLeaderboard: [RLAccuracyLeaderboardMemberDTO] = []
+    @Published var isLoadingAccuracyLeaderboard: Bool = false
+
+    @Published var guildTradingWatchlist: [RLTradingSymbolDTO] = []
+    @Published var personalTradingWatchlist: [RLTradingSymbolDTO] = []
     
     @Published var isLoading: Bool = false
     @Published var lastRefresh: Date?
@@ -73,10 +70,10 @@ class LeftDrawerViewModel: ObservableObject {
     // MARK: - Top Markers State
     // ================================================================================================
     
-    @Published var trendingMarkers: [TopMarkerDTO] = []
-    @Published var symbolGroupedMarkers: [String: [TopMarkerDTO]] = [:]
-    @Published var followingMarkers: [TopMarkerDTO] = []
-    @Published var myMarkers: [TopMarkerDTO] = []
+    @Published var trendingMarkers: [RLTopMarkerDTO] = []
+    @Published var symbolGroupedMarkers: [String: [RLTopMarkerDTO]] = [:]
+    @Published var followingMarkers: [RLTopMarkerDTO] = []
+    @Published var myMarkers: [RLTopMarkerDTO] = []
     @Published var topMarkersLastRefresh: Date?
     @Published var isLoadingTopMarkers: Bool = false
     
@@ -97,11 +94,11 @@ class LeftDrawerViewModel: ObservableObject {
 
     /// When set, parent views should navigate to this marker on the chart
     /// After handling navigation, parent should set this back to nil
-    @Published var pendingMarkerNavigation: TopMarkerDTO? = nil
+    @Published var pendingMarkerNavigation: RLTopMarkerDTO? = nil
     
     /// Request navigation to a specific marker
     /// Parent views observe `pendingMarkerNavigation` and handle the actual navigation
-    func requestNavigationToMarker(_ marker: TopMarkerDTO) {
+    func requestNavigationToMarker(_ marker: RLTopMarkerDTO) {
         pendingMarkerNavigation = marker
     }
     
@@ -119,12 +116,22 @@ class LeftDrawerViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         applyPresenceUpdates(rlAppState.presenceByUserId)
-    }
-    
-    // Load sample data (for development)
-    func loadSampleFriendsAndLeaderboard() {
-        friends = SampleData.sampleFriends
-        globalLeaderboard = SampleData.sampleGlobalLeaderboard
+
+        // Listen for member role changes to update guild members list in real-time
+        NotificationCenter.default.publisher(for: .guildMemberRoleChanged)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let userInfo = notification.userInfo,
+                      let userId = userInfo["userId"] as? UUID,
+                      let newRole = userInfo["newRole"] as? String else { return }
+
+                if let index = self.guildMembers.firstIndex(where: { $0.userId == userId }) {
+                    self.guildMembers[index] = self.guildMembers[index].withRole(newRole)
+                    print("🏰 [LeftDrawer] Updated member role: \(userId) → \(newRole)")
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // ================================================================================================
@@ -157,13 +164,18 @@ class LeftDrawerViewModel: ObservableObject {
 
     private func applyPresenceUpdates(_ presenceMap: [UUID: Bool]) {
         if presenceMap.isEmpty {
+            let status = RealTimeService.shared.connectionStatus
+            let isTransient = status == .connected || status == .connecting
+            if isTransient {
+                return
+            }
             guildMembers = guildMembers.map { $0.withOnlineStatus(false) }
             guildMembersOnlineCount = 0
             friendsRL = friendsRL.map { $0.withOnlineStatus(false) }
             friendsRLOnlineCount = 0
             return
         }
-        
+
         guildMembers = guildMembers.map { member in
             let isOnline = presenceMap[member.userId] ?? false
             return member.isOnline == isOnline ? member : member.withOnlineStatus(isOnline)
@@ -218,8 +230,7 @@ class LeftDrawerViewModel: ObservableObject {
     // ================================================================================================
     
     /// Preload all drawer data in parallel - each fetch is independent (failures don't cascade)
-    /// NOTE: Announcements now use rlAppState, everything else still uses old appState
-    func preloadData(for guildId: UUID, appState: AppState, rlAppState: RLAppState) async {
+    func preloadData(for guildId: UUID, rlAppState: RLAppState) async {
         guard shouldRefresh(for: guildId) else {
             print("📋 preloadData: Skipping refresh (cache still valid)")
             return
@@ -231,7 +242,7 @@ class LeftDrawerViewModel: ObservableObject {
         defer { isLoading = false }
         
         // Capture userId for personal watchlist
-        let userId = appState.currentUser?.id
+        let userId = rlAppState.currentUser?.id
         
         // Run all fetches independently - failures don't cascade
         await withTaskGroup(of: Void.self) { group in
@@ -261,35 +272,30 @@ class LeftDrawerViewModel: ObservableObject {
                 }
             }
             
-            // Members
+            // Guild members (real API)
             group.addTask {
                 do {
-                    let fetched = try await appState.fetchGuildMembers(guildId: guildId)
-                    await MainActor.run { self.members = fetched }
+                    let response = try await rlAppState.fetchGuildMembers(guildId: guildId)
+                    await MainActor.run {
+                        self.guildMembers = response.members
+                        self.guildMembersTotalCount = response.totalCount
+                        self.guildMembersOnlineCount = response.onlineCount
+                        self.applyPresenceUpdates(rlAppState.presenceByUserId)
+                    }
                 } catch is CancellationError {
                     // Silent
                 } catch {
-                    print("⚠️ Failed to fetch members: \(error)")
-                }
-            }
-            
-            // Watchlist
-            group.addTask {
-                do {
-                    let fetched = try await appState.fetchGuildWatchlist(guildId: guildId)
-                    await MainActor.run { self.watchlist = fetched }
-                } catch is CancellationError {
-                    // Silent
-                } catch {
-                    print("⚠️ Failed to fetch watchlist: \(error)")
+                    print("⚠️ Failed to fetch guild members: \(error)")
                 }
             }
             
             // Guild Trading Watchlist
             group.addTask {
                 do {
-                    let fetched = try await appState.fetchGuildTradingWatchlist(guildId: guildId)
-                    await MainActor.run { self.guildTradingWatchlist = fetched }
+                    let fetched = try await rlAppState.realApi.getGuildWatchlist(guildId: guildId)
+                    await MainActor.run {
+                        self.guildTradingWatchlist = fetched.symbols.map { $0.symbol }
+                    }
                 } catch is CancellationError {
                     // Silent
                 } catch {
@@ -301,8 +307,10 @@ class LeftDrawerViewModel: ObservableObject {
             if let userId = userId {
                 group.addTask {
                     do {
-                        let fetched = try await appState.fetchPersonalTradingWatchlist(userId: userId)
-                        await MainActor.run { self.personalTradingWatchlist = fetched }
+                        let fetched = try await rlAppState.realApi.getPersonalWatchlist()
+                        await MainActor.run {
+                            self.personalTradingWatchlist = fetched.symbols.map { $0.symbol }
+                        }
                     } catch is CancellationError {
                         // Silent
                     } catch {
@@ -398,9 +406,9 @@ class LeftDrawerViewModel: ObservableObject {
     
     /// Manual refresh - forces reload of ALL data
     /// NOTE: Requires rlAppState for announcements
-    func refresh(for guildId: UUID, appState: AppState, rlAppState: RLAppState) async {
+    func refresh(for guildId: UUID, rlAppState: RLAppState) async {
         lastRefresh = nil
-        await preloadData(for: guildId, appState: appState, rlAppState: rlAppState)
+        await preloadData(for: guildId, rlAppState: rlAppState)
     }
     
     /// Legacy refresh - for backwards compatibility (doesn't refresh announcements)
@@ -443,20 +451,6 @@ class LeftDrawerViewModel: ObservableObject {
         }
     }
     
-    /// Refresh only members - use this in MembersView
-    func refreshMembers(guildId: UUID, appState: AppState) async {
-        do {
-            let fetched = try await appState.fetchGuildMembers(guildId: guildId)
-            await MainActor.run {
-                self.members = fetched
-            }
-        } catch is CancellationError {
-            print("📋 refreshMembers: Cancelled")
-        } catch {
-            print("⚠️ Failed to refresh members: \(error)")
-        }
-    }
-    
     /// Refresh guild members from real API (new DTOs)
     func refreshGuildMembers(guildId: UUID, rlAppState: RLAppState, search: String? = nil) async {
         isLoadingGuildMembers = true
@@ -468,6 +462,7 @@ class LeftDrawerViewModel: ObservableObject {
                 self.guildMembers = response.members
                 self.guildMembersTotalCount = response.totalCount
                 self.guildMembersOnlineCount = response.onlineCount
+                self.applyPresenceUpdates(rlAppState.presenceByUserId)
             }
         } catch is CancellationError {
             print("📋 refreshGuildMembers: Cancelled")
@@ -517,6 +512,7 @@ class LeftDrawerViewModel: ObservableObject {
                 self.friendsRL = response.friends
                 self.friendsRLTotalCount = response.totalCount
                 self.friendsRLOnlineCount = response.onlineCount
+                self.applyPresenceUpdates(rlAppState.presenceByUserId)
             }
         } catch is CancellationError {
             print("📋 refreshFriends: Cancelled")
@@ -528,6 +524,23 @@ class LeftDrawerViewModel: ObservableObject {
             print("⚠️ Failed to refresh friends: \(error)")
         } catch {
             print("⚠️ Failed to refresh friends: \(error)")
+        }
+    }
+
+    /// Refresh the accuracy leaderboard for the current guild
+    func refreshAccuracyLeaderboard(guildId: UUID, rlAppState: RLAppState) async {
+        isLoadingAccuracyLeaderboard = true
+        defer { isLoadingAccuracyLeaderboard = false }
+
+        do {
+            let response = try await rlAppState.realApi.getGuildAccuracyLeaderboard(guildId: guildId)
+            await MainActor.run {
+                self.accuracyLeaderboard = response.members
+            }
+        } catch is CancellationError {
+            print("📋 refreshAccuracyLeaderboard: Cancelled")
+        } catch {
+            print("⚠️ Failed to refresh accuracy leaderboard: \(error)")
         }
     }
 
@@ -578,8 +591,6 @@ class LeftDrawerViewModel: ObservableObject {
     func clearCache() {
         announcements = []
         upcomingEvents = []
-        members = []
-        watchlist = nil
         guildTradingWatchlist = []
         personalTradingWatchlist = []
         userNotifications = []
@@ -595,6 +606,7 @@ class LeftDrawerViewModel: ObservableObject {
         friendsRLTotalCount = 0
         friendsRLOnlineCount = 0
         isLoadingFriendsRL = false
+        globalLeaderboard = []
         lastRefresh = nil
         currentGuildId = nil
         
@@ -611,44 +623,44 @@ class LeftDrawerViewModel: ObservableObject {
     // ================================================================================================
     
     /// Load all top markers data from API
-    func loadTopMarkers(for guildId: UUID, appState: AppState) async {
+    func loadTopMarkers(for guildId: UUID, rlAppState: RLAppState, timeWindowHours: Int = 48) async {
         // Check cache freshness (5 minute cache)
         if let lastRefresh = topMarkersLastRefresh,
            Date().timeIntervalSince(lastRefresh) < 300 {
             return
         }
-        
+
         isLoadingTopMarkers = true
         defer { isLoadingTopMarkers = false }
-        
+
         do {
-            let response = try await appState.fetchTopMarkers(guildId: guildId)
-            
+            let response = try await rlAppState.realApi.getTopMarkers(guildId: guildId, timeWindowHours: timeWindowHours)
+
             self.trendingMarkers = response.trending
             self.symbolGroupedMarkers = response.bySymbol
             self.followingMarkers = response.following
             self.myMarkers = response.mine
             self.topMarkersLastRefresh = Date()
-            
+
             print("✅ Loaded top markers - Trending: \(response.trending.count), Symbols: \(response.bySymbol.count), Following: \(response.following.count), Mine: \(response.mine.count)")
-            
+
         } catch is CancellationError {
             return
         } catch {
             print("⚠️ Failed to load top markers: \(error)")
         }
     }
-    
+
     /// Force refresh top markers (bypasses cache)
-    func refreshTopMarkers(for guildId: UUID, appState: AppState) async {
+    func refreshTopMarkers(for guildId: UUID, rlAppState: RLAppState, timeWindowHours: Int = 48) async {
         topMarkersLastRefresh = nil
-        await loadTopMarkers(for: guildId, appState: appState)
+        await loadTopMarkers(for: guildId, rlAppState: rlAppState, timeWindowHours: timeWindowHours)
     }
     
     /// Toggle like on a marker and update local cache
-    func toggleMarkerLike(markerId: UUID, appState: AppState) async {
+    func toggleMarkerLike(markerId: UUID, rlAppState: RLAppState) async {
         do {
-            let result = try await appState.toggleTopMarkerLike(markerId: markerId)
+            let result = try await rlAppState.realApi.toggleMarkerLike(guildId: rlAppState.currentGuild?.id ?? UUID(), markerId: markerId)
             
             // Update in trending
             if let index = trendingMarkers.firstIndex(where: { $0.id == markerId }) {
@@ -736,49 +748,134 @@ class LeftDrawerViewModel: ObservableObject {
     }()
     
     private func handleWebSocketNotification(_ message: WSIncomingMessage) {
-        
-        
+
+
         switch message.type {
         case "notification":
             // New notification received in real-time
-            guard let payloadData = message.payload,
-                let jsonData = try? JSONSerialization.data(withJSONObject: payloadData),
-                let notification = try? notificationDecoder.decode(RLNotificationDTO.self, from: jsonData)
-            else {
+            // Use message.payload(as:) which uses the flexible custom date decoder
+            // instead of JSONSerialization which crashes on AnyCodable payloads
+            guard let notification = message.payload(as: RLNotificationDTO.self) else {
                 print("⚠️ Failed to decode notification payload")
                 return
             }
-            
+
             // Insert at the top of the list
             if !userNotifications.contains(where: { $0.id == notification.id }) {
                 userNotifications.insert(notification, at: 0)
                 print("🔔 New real-time notification: \(notification.displayTitle)")
             }
-            
+
         case "notification_stats_update":
             // Badge counts updated
-            guard let payloadData = message.payload,
-                let jsonData = try? JSONSerialization.data(withJSONObject: payloadData),
-                let stats = try? notificationDecoder.decode(RLNotificationStatsDTO.self, from: jsonData)
-            else { return }
-            
+            guard let stats = message.payload(as: RLNotificationStatsDTO.self) else { return }
+
             notificationStats = stats
             print("📊 Notification stats updated: \(stats.unreadCount) unread")
-            
+
+        case "reputation_update":
+            // Real-time reputation change
+            guard let update = message.payload(as: RLReputationUpdatePayload.self) else {
+                print("⚠️ Failed to decode reputation update payload")
+                return
+            }
+            handleReputationUpdate(update)
+
+        case "accuracy_update":
+            // Real-time trading accuracy change (prediction win/loss)
+            guard let update = message.payload(as: RLAccuracyUpdatePayload.self) else {
+                print("⚠️ Failed to decode accuracy update payload")
+                return
+            }
+            handleAccuracyUpdate(update)
+
         default:
             break
         }
     }
+
+    private func handleReputationUpdate(_ update: RLReputationUpdatePayload) {
+        print("⭐ Reputation update: \(update.eventType) \(update.pointsFormatted) pts → guild:\(update.newGuildReputation) global:\(update.newGlobalReputation)")
+
+        // Update in-memory state so UI reflects immediately
+        if let membership = rlAppState?.currentMembership,
+           update.guildId == membership.guildId.uuidString {
+            // Create updated membership with new reputation
+            let updated = RLGuildMembershipDTO(
+                id: membership.id,
+                userId: membership.userId,
+                guildId: membership.guildId,
+                role: membership.role,
+                reputation: update.newGuildReputation,
+                contributionScore: membership.contributionScore,
+                status: membership.status,
+                dateJoined: membership.dateJoined,
+                accuracyRate: membership.accuracyRate
+            )
+            rlAppState?.currentMembership = updated
+        }
+
+        // Notify observers for any reputation-dependent views
+        NotificationCenter.default.post(
+            name: .reputationDidUpdate,
+            object: nil,
+            userInfo: [
+                "guildId": update.guildId,
+                "newGuildReputation": update.newGuildReputation,
+                "newGlobalReputation": update.newGlobalReputation,
+                "tierLevel": update.tierLevel,
+                "tierChanged": update.tierChanged,
+                "pointsAwarded": update.pointsAwarded,
+            ]
+        )
+    }
+
+    private func handleAccuracyUpdate(_ update: RLAccuracyUpdatePayload) {
+        print("🎯 Accuracy update: \(update.eventType) \(update.resultDisplay) → accuracy:\(update.accuracyFormatted) streak:\(update.winStreak)")
+
+        // Update current user's membership in app state so user bar (username · role · reputation · accuracy) updates without refetch
+        if let membership = rlAppState?.currentMembership,
+           update.guildId == membership.guildId.uuidString,
+           update.userId == rlAppState?.currentUser?.id.uuidString {
+            let updated = RLGuildMembershipDTO(
+                id: membership.id,
+                userId: membership.userId,
+                guildId: membership.guildId,
+                role: membership.role,
+                reputation: membership.reputation,
+                contributionScore: membership.contributionScore,
+                status: membership.status,
+                dateJoined: membership.dateJoined,
+                accuracyRate: update.newAccuracyRate
+            )
+            rlAppState?.currentMembership = updated
+        }
+
+        // Notify observers for any accuracy-dependent views
+        NotificationCenter.default.post(
+            name: .accuracyDidUpdate,
+            object: nil,
+            userInfo: [
+                "guildId": update.guildId,
+                "newAccuracyRate": update.newAccuracyRate,
+                "totalPredictions": update.totalPredictions,
+                "successfulPredictions": update.successfulPredictions,
+                "winStreak": update.winStreak,
+                "isWin": update.isWin,
+            ]
+        )
+    }
+
     // ================================================================================================
     // MARK: - Load User Profiles Methods
     // ================================================================================================
     
     
     /// Load profile data for the current user
-    func loadCurrentUserProfile(appState: AppState, rlAppState: RLAppState) async -> (
+    func loadCurrentUserProfile(rlAppState: RLAppState) async -> (
         profile: RLUserProfileDTO?,
         statistics: RLUserGlobalStatisticsDTO?,
-        userMarkers: [TopMarkerDTO],
+        userMarkers: [RLTopMarkerDTO],
         awards: [RLUserAwardDTO],
         awardsSummary: RLAwardsSummaryDTO?
     ) {
@@ -788,17 +885,27 @@ class LeftDrawerViewModel: ObservableObject {
         
         do {
             async let fullProfileTask = rlAppState.fetchCurrentUserFullProfile(guildId: rlAppState.currentGuild?.id)
-            async let markersTask = appState.fetchUserMarkers(userId: userId)
             async let awardsTask = rlAppState.fetchCurrentUserAwards(guildId: rlAppState.currentGuild?.id)
             async let awardsSummaryTask = rlAppState.fetchCurrentUserAwardsSummary(guildId: rlAppState.currentGuild?.id)
-            
-            let (fullProfile, markers, awards, awardsSummary) = try await (
+
+            // Fetch user's markers from user-specific markers endpoint (no time window filter)
+            var markers: [RLTopMarkerDTO] = []
+            if let guildId = rlAppState.currentGuild?.id,
+               let userId = rlAppState.currentUser?.id {
+                do {
+                    let userMarkers = try await rlAppState.realApi.getUserMarkers(guildId: guildId, userId: userId)
+                    markers = userMarkers.mine
+                } catch {
+                    print("⚠️ Failed to load user markers: \(error)")
+                }
+            }
+
+            let (fullProfile, awards, awardsSummary) = try await (
                 fullProfileTask,
-                markersTask,
                 awardsTask,
                 awardsSummaryTask
             )
-            
+
             return (fullProfile.profile, fullProfile.statistics, markers, awards, awardsSummary)
             
         } catch {
@@ -810,24 +917,38 @@ class LeftDrawerViewModel: ObservableObject {
     /// Load profile data for a guild member (uses real API where available)
     func loadMemberProfile(
         member: RLGuildMemberDTO,
-        appState: AppState,
         rlAppState: RLAppState,
         guildId: UUID
     ) async -> (
         profile: RLUserProfileDTO?,
         statistics: RLUserGlobalStatisticsDTO?,
-        userMarkers: [TopMarkerDTO],
+        userMarkers: [RLTopMarkerDTO],
         awards: [RLUserAwardDTO],
         awardsSummary: RLAwardsSummaryDTO?
     ) {
         do {
             async let fullProfileTask = rlAppState.fetchUserFullProfile(userId: member.userId, guildId: guildId)
-            async let markersTask = appState.fetchUserMarkers(userId: member.userId, limit: 10)
+
+            // Fetch member's markers from user-specific markers endpoint
+            var markers: [RLTopMarkerDTO] = []
+            do {
+                let topMarkers = try await rlAppState.realApi.getUserMarkers(guildId: guildId, userId: member.userId)
+                markers = topMarkers.mine
+            } catch {
+                print("⚠️ Failed to load member markers: \(error)")
+            }
+
+            let fullProfile = try await fullProfileTask
             
-            let (fullProfile, markers) = try await (fullProfileTask, markersTask)
-            
-            let awards = SampleData.memberAwards.map { RLUserAwardDTO.fromLegacy($0, membershipId: member.membershipId, guildId: guildId) }
-            let awardsSummary = RLAwardsSummaryDTO.fromLegacy(SampleData.awardsSummary)
+            // Awards will be loaded from backend API when needed
+            // For now, use empty arrays - these should be fetched from rlAppState
+            let awards: [RLUserAwardDTO] = []
+            let awardsSummary = RLAwardsSummaryDTO(
+                totalAwards: 0,
+                totalPoints: 0,
+                rarityBreakdown: [:],
+                recentAwards: []
+            )
             
             return (fullProfile.profile, fullProfile.statistics, markers, awards, awardsSummary)
             
@@ -849,7 +970,7 @@ class LeftDrawerViewModel: ObservableObject {
         }
         
         // Refresh if cache is empty
-        if announcements.isEmpty && upcomingEvents.isEmpty && members.isEmpty && watchlist == nil && userNotifications.isEmpty && statistics == nil && guildTradingWatchlist.isEmpty && personalTradingWatchlist.isEmpty {
+        if announcements.isEmpty && upcomingEvents.isEmpty && guildMembers.isEmpty && userNotifications.isEmpty && statistics == nil && guildTradingWatchlist.isEmpty && personalTradingWatchlist.isEmpty {
             return true
         }
         
@@ -870,12 +991,12 @@ class LeftDrawerViewModel: ObservableObject {
     
     /// Online members count
     var onlineMembersCount: Int {
-        members.filter { $0.isOnline }.count
+        guildMembersOnlineCount
     }
     
     /// Has watchlist been loaded
     var hasWatchlist: Bool {
-        watchlist != nil
+        !guildTradingWatchlist.isEmpty || !personalTradingWatchlist.isEmpty
     }
     
     /// Has statistics been loaded
@@ -921,6 +1042,9 @@ extension RLGuildMemberDTO {
             reputation: reputation,
             contributionScore: contributionScore,
             dateJoined: dateJoined,
+            accuracyRate: accuracyRate,
+            mutedUntil: mutedUntil,
+            suspendedUntil: suspendedUntil,
             userId: userId,
             username: username,
             displayName: displayName,
@@ -934,7 +1058,6 @@ extension RLGuildMemberDTO {
         )
     }
 }
-
 
 
 

@@ -18,7 +18,7 @@ struct IndicatorPanelContainer: View {
     
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
-    var timeframe: ChartTimeframe = .h1
+    var timeframe: RLChartTimeframe = .h1
     
     @Binding var rsiPanelHeight: CGFloat
     @Binding var macdPanelHeight: CGFloat
