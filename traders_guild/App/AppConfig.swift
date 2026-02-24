@@ -35,7 +35,15 @@ struct AppConfig {
     }
 
     static var developmentGatewayBaseURL: String {
-        ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV"] ?? "http://localhost:8080/api/v1"
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV_SIMULATOR"]
+            ?? ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV"]
+            ?? "http://localhost:30080/api/v1"
+        #else
+        return ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV_DEVICE"]
+            ?? ProcessInfo.processInfo.environment["TG_GATEWAY_BASE_URL_DEV"]
+            ?? "http://localhost:30080/api/v1"
+        #endif
     }
 
     static var productionGatewayBaseURL: String {

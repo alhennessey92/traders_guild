@@ -1,0 +1,6 @@
+// Staging Kubernetes debug configuration
+// Attach this config to a dedicated Debug build configuration if needed.
+
+TG_API_ROUTING_MODE = API_GATEWAY
+TG_GATEWAY_BASE_URL_DEV = http://localhost:30080/api/v1
+TG_GATEWAY_BASE_URL_DEV_DEVICE = http://YOUR_MAC_LAN_IP:30080/api/v1
