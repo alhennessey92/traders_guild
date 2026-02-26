@@ -1,0 +1,10 @@
+# Xcode user-specific data
+*.xcuserstate
+**/xcuserdata/
+
+# Build artifacts
+DerivedData/
+build/
+
+# macOS noise
+.DS_Store
