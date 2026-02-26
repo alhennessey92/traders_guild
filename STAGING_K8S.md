@@ -17,18 +17,25 @@ If a scheme does not show in Xcode:
 
 Use scheme: `traders_guild Compose Dev`
 
-- `TG_API_ROUTING_MODE=DIRECT_SERVICES`
-- Simulator connects directly to compose service ports (`localhost:8000..8006`)
-- Device mode uses the app-configured Mac LAN IP mappings for direct service ports
+- `TG_API_ROUTING_MODE=DIRECT_SERVICES` (client calls service ports directly)
+- Simulator connects to compose service ports (`localhost:8000..8006`)
+- Device mode uses app-configured Mac LAN IP mappings for direct service ports
 
 ## Staging Kubernetes Mode
 
 Use scheme: `traders_guild Staging K8s`
 
-- `TG_API_ROUTING_MODE=API_GATEWAY`
+- `TG_API_ROUTING_MODE=API_GATEWAY` (client calls Kong gateway)
 - Simulator gateway URL: `http://localhost:30080/api/v1`
 - Device gateway URL: `http://<YOUR_MAC_LAN_IP>:30080/api/v1`
   - Set via `TG_GATEWAY_BASE_URL_DEV_DEVICE`
+
+## Validation Commands (Platform Repo)
+
+```bash
+make argocd-apps-local    # Check local staging app sync/health
+make smoke-staging-local  # Verify Kong routes + websocket + schema
+```
 
 ## Production-Like Validation
 

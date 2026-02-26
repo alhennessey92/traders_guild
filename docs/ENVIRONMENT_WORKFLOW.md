@@ -11,9 +11,9 @@ This guide aligns iOS testing with backend/platform promotion flow.
 Backend commands (from `traders-guild-backend`):
 
 ```bash
-make start
-make migrate
-make smoke-compose
+make start          # Start local backend/data/observability containers
+make migrate        # Apply latest DB migrations inside compose auth-service
+make smoke-compose  # Verify API + websocket baseline from compose
 ```
 
 ## 2) Local Staging Validation (Kubernetes + Kong)
@@ -26,9 +26,9 @@ make smoke-compose
 Platform commands (from `traders-guild-platform`):
 
 ```bash
-make staging-pr-merge-latest
-make argocd-apps-local
-make smoke-staging-local
+make staging-pr-merge-latest  # Merge newest staging image automation PR
+make argocd-apps-local        # Confirm local Argo apps are Synced/Healthy
+make smoke-staging-local      # Run schema + Kong route + websocket checks
 ```
 
 Scheme/env requirements:
@@ -47,10 +47,10 @@ Scheme/env requirements:
 Platform commands:
 
 ```bash
-make prod-promote-validate
-make prod-promote-open-pr
-make argocd-apps-prod
-make smoke-prod
+make prod-promote-validate  # Verify staged tags exist in Artifact Registry
+make prod-promote-open-pr   # Create production promotion PR from validated tags
+make argocd-apps-prod       # Check production Argo app health/sync
+make smoke-prod             # Run production schema + Kong smoke checks
 ```
 
 ## 4) Access and Debugging
