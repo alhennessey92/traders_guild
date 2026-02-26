@@ -42,7 +42,7 @@ Scheme/env requirements:
 1. Promote staging image map to production.
 2. Sync production Argo apps.
 3. Run production smoke checks.
-4. Regression-test iOS against production-like behavior as needed.
+4. Start prod Kong port-forward and use `traders_guild Prod K8s` scheme for iOS regression tests.
 
 Platform commands:
 
@@ -51,7 +51,14 @@ make prod-promote-validate  # Verify staged tags exist in Artifact Registry
 make prod-promote-open-pr   # Create production promotion PR from validated tags
 make argocd-apps-prod       # Check production Argo app health/sync
 make smoke-prod             # Run production schema + Kong smoke checks
+make kong-prod-port-forward # Expose prod Kong to simulator at localhost:30081
 ```
+
+Scheme/env requirements for `traders_guild Prod K8s`:
+
+- `TG_API_ROUTING_MODE=API_GATEWAY`
+- Simulator: `TG_GATEWAY_BASE_URL_DEV=http://localhost:30081/api/v1`
+- Device: `TG_GATEWAY_BASE_URL_DEV_DEVICE=http://<mac-lan-ip>:30081/api/v1`
 
 ## 4) Access and Debugging
 

@@ -6,6 +6,7 @@ Use shared Xcode schemes to switch between local Compose and Kubernetes gateway 
 
 - `traders_guild Compose Dev`
 - `traders_guild Staging K8s`
+- `traders_guild Prod K8s`
 
 If a scheme does not show in Xcode:
 
@@ -30,11 +31,22 @@ Use scheme: `traders_guild Staging K8s`
 - Device gateway URL: `http://<YOUR_MAC_LAN_IP>:30080/api/v1`
   - Set via `TG_GATEWAY_BASE_URL_DEV_DEVICE`
 
+## Production Kubernetes Mode (Private, Via Port-Forward)
+
+Use scheme: `traders_guild Prod K8s`
+
+- `TG_API_ROUTING_MODE=API_GATEWAY`
+- Simulator gateway URL: `http://localhost:30081/api/v1`
+- Device gateway URL: `http://<YOUR_MAC_LAN_IP>:30081/api/v1`
+  - Set via `TG_GATEWAY_BASE_URL_DEV_DEVICE`
+
 ## Validation Commands (Platform Repo)
 
 ```bash
 make argocd-apps-local    # Check local staging app sync/health
 make smoke-staging-local  # Verify Kong routes + websocket + schema
+make kong-prod-port-forward  # Expose prod Kong for simulator at localhost:30081
+make kong-prod-port-forward-device MAC_LAN_IP=<your-mac-lan-ip>  # Expose prod Kong for device
 ```
 
 ## Production-Like Validation
