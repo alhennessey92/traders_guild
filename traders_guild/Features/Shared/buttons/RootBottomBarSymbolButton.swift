@@ -71,41 +71,13 @@ struct RootBottomBarSymbolButton: View {
     @ViewBuilder
     private var symbolIcon: some View {
         if let dto = symbolDTO {
-            if let iconName = dto.iconName {
-                // Has custom icon - fill entire circle
-                Image(iconName)
-                    .renderingMode(.original)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 40, height: 40)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
-                    )
-            } else {
-                // No icon - show gradient with letter
-                ZStack {
-                    LinearGradient(
-                        colors: [
-                            dto.primaryColorValue,
-                            dto.secondaryColorValue.opacity(0.8)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    
-                    Text(dto.fallbackInitial)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                }
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
-                )
-            }
+            TradingSymbolIconView(
+                symbol: dto,
+                size: 40,
+                cornerRadiusRatio: 0.5,
+                strokeOpacity: 0.3,
+                showShadow: false
+            )
         } else {
             // No DTO - fallback to default
             ZStack {

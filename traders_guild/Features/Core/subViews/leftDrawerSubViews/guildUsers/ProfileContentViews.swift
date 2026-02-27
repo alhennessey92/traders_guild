@@ -633,11 +633,32 @@ struct ActivityTabContent: View {
                 )
                 .padding(.top, 20)
             } else {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        ProfileActivityRow(item: item, isLast: index == items.count - 1)
-                    }
-                }
+                UnifiedActivityTimeline(items: items, style: .card)
+            }
+        }
+    }
+}
+
+enum UnifiedActivityTimelineStyle {
+    case card
+    case plain
+}
+
+struct UnifiedActivityTimeline: View {
+    let items: [RLActivityItem]
+    var style: UnifiedActivityTimelineStyle = .card
+    var horizontalPadding: CGFloat = 0
+
+    var body: some View {
+        let content = LazyVStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                UnifiedActivityRow(item: item, isLast: index == items.count - 1)
+            }
+        }
+
+        switch style {
+        case .card:
+            content
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
@@ -647,12 +668,14 @@ struct ActivityTabContent: View {
                                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
                         )
                 )
-            }
+        case .plain:
+            content
+                .padding(.horizontal, horizontalPadding)
         }
     }
 }
 
-private struct ProfileActivityRow: View {
+struct UnifiedActivityRow: View {
     let item: RLActivityItem
     let isLast: Bool
 
@@ -660,7 +683,7 @@ private struct ProfileActivityRow: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(spacing: 0) {
                 Circle()
-                    .fill(typeColor)
+                    .fill(item.activityColor)
                     .frame(width: 9, height: 9)
 
                 if !isLast {
@@ -673,9 +696,9 @@ private struct ProfileActivityRow: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
-                    Image(systemName: typeIcon)
+                    Image(systemName: item.activityIcon)
                         .font(.caption)
-                        .foregroundColor(typeColor)
+                        .foregroundColor(item.activityColor)
                     Text(item.title)
                         .font(.subheadline)
                         .foregroundColor(AppColors.whiteText)
@@ -686,7 +709,7 @@ private struct ProfileActivityRow: View {
                     .foregroundColor(AppColors.greyText)
 
                 HStack(spacing: 8) {
-                    Text(relativeTimestamp)
+                    Text(item.relativeTimestamp)
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText.opacity(0.8))
                     if let guildName = item.guildName {
@@ -701,13 +724,13 @@ private struct ProfileActivityRow: View {
 
                 HStack(spacing: 6) {
                     if let guildDelta = item.guildRepDelta {
-                        ProfileDeltaBadge(label: "Guild", value: guildDelta)
+                        UnifiedActivityDeltaBadge(label: "Guild", value: guildDelta)
                     }
                     if let globalDelta = item.globalRepDelta {
-                        ProfileDeltaBadge(label: "Global", value: globalDelta)
+                        UnifiedActivityDeltaBadge(label: "Global", value: globalDelta)
                     }
                     if let metricDelta = item.metricDelta, let metricLabel = item.metricLabel {
-                        ProfileDeltaBadge(
+                        UnifiedActivityDeltaBadge(
                             label: metricLabel.replacingOccurrences(of: "_", with: " ").capitalized,
                             value: metricDelta
                         )
@@ -719,43 +742,9 @@ private struct ProfileActivityRow: View {
         }
         .padding(.bottom, isLast ? 0 : 14)
     }
-
-    private var typeIcon: String {
-        switch item.type {
-        case "marker": return "mappin.circle.fill"
-        case "reputation": return "shield.checkered"
-        case "achievement": return "medal.fill"
-        case "guild": return "person.3.fill"
-        case "event": return "calendar.badge.clock"
-        case "role": return "person.crop.circle.badge.checkmark"
-        case "report": return "exclamationmark.bubble.fill"
-        case "moderation": return "gavel.fill"
-        default: return "clock.fill"
-        }
-    }
-
-    private var typeColor: Color {
-        switch item.type {
-        case "marker": return .red
-        case "reputation": return AppColors.accentColor
-        case "achievement": return .yellow
-        case "guild": return .blue
-        case "event": return .mint
-        case "role": return .indigo
-        case "report": return .orange
-        case "moderation": return .purple
-        default: return AppColors.greyText
-        }
-    }
-
-    private var relativeTimestamp: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: item.timestamp, relativeTo: Date())
-    }
 }
 
-private struct ProfileDeltaBadge: View {
+struct UnifiedActivityDeltaBadge: View {
     let label: String
     let value: Int
 
@@ -771,6 +760,42 @@ private struct ProfileDeltaBadge: View {
             .padding(.vertical, 3)
             .background(tint.opacity(0.15))
             .cornerRadius(6)
+    }
+}
+
+extension RLActivityItem {
+    var activityIcon: String {
+        switch type {
+        case "marker": return "mappin.circle.fill"
+        case "reputation": return "shield.checkered"
+        case "achievement": return "medal.fill"
+        case "guild": return "person.3.fill"
+        case "event": return "calendar.badge.clock"
+        case "role": return "person.crop.circle.badge.checkmark"
+        case "report": return "exclamationmark.bubble.fill"
+        case "moderation": return "gavel.fill"
+        default: return "clock.fill"
+        }
+    }
+
+    var activityColor: Color {
+        switch type {
+        case "marker": return .red
+        case "reputation": return AppColors.accentColor
+        case "achievement": return .yellow
+        case "guild": return .blue
+        case "event": return .mint
+        case "role": return .indigo
+        case "report": return .orange
+        case "moderation": return .purple
+        default: return AppColors.greyText
+        }
+    }
+
+    var relativeTimestamp: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: timestamp, relativeTo: Date())
     }
 }
 

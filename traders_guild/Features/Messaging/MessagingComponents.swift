@@ -12,6 +12,7 @@
 //  State management remains in individual managers (MessagingManager, ChartChatManager, etc.)
 
 import SwiftUI
+import UIKit
 
 // MARK: - ================================================================================================
 // MARK: - CHAT CONTEXT ENUM
@@ -137,72 +138,257 @@ struct ChatAvatar: View {
 // MARK: - ================================================================================================
 
 /// Unified chat input footer - use across all chat interfaces
+struct ChatAttachmentDraft: Equatable, Identifiable {
+    let id: UUID
+    let data: Data
+    let filename: String
+    let mimeType: String
+
+    init(id: UUID = UUID(), data: Data, filename: String, mimeType: String) {
+        self.id = id
+        self.data = data
+        self.filename = filename
+        self.mimeType = mimeType
+    }
+
+    var isImage: Bool {
+        mimeType.hasPrefix("image/")
+    }
+}
+
+struct ChatComposerPayload: Equatable {
+    let text: String
+    let attachments: [ChatAttachmentDraft]
+}
+
+struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
+    let markerId: UUID
+    let symbolId: UUID
+    let symbolTicker: String?
+    let timeframe: String
+    let candleTimestamp: Date
+
+    init(
+        markerId: UUID,
+        symbolId: UUID,
+        symbolTicker: String?,
+        timeframe: String,
+        candleTimestamp: Date
+    ) {
+        self.markerId = markerId
+        self.symbolId = symbolId
+        self.symbolTicker = symbolTicker
+        self.timeframe = timeframe
+        self.candleTimestamp = candleTimestamp
+    }
+
+    var notificationUserInfo: [String: Any] {
+        var info: [String: Any] = [
+            "markerId": markerId.uuidString,
+            "symbolId": symbolId.uuidString,
+            "timeframe": timeframe,
+            "candleTimestamp": candleTimestamp
+        ]
+        if let symbolTicker {
+            info["symbolTicker"] = symbolTicker
+        }
+        return info
+    }
+
+    init?(_ userInfo: [AnyHashable: Any]) {
+        guard
+            let markerIdRaw = userInfo["markerId"] as? String,
+            let markerId = UUID(uuidString: markerIdRaw),
+            let symbolIdRaw = userInfo["symbolId"] as? String,
+            let symbolId = UUID(uuidString: symbolIdRaw),
+            let timeframe = userInfo["timeframe"] as? String
+        else {
+            return nil
+        }
+
+        let candleTimestamp: Date
+        if let date = userInfo["candleTimestamp"] as? Date {
+            candleTimestamp = date
+        } else if let value = userInfo["candleTimestamp"] as? String {
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let parsed = iso.date(from: value) {
+                candleTimestamp = parsed
+            } else {
+                iso.formatOptions = [.withInternetDateTime]
+                guard let parsed = iso.date(from: value) else { return nil }
+                candleTimestamp = parsed
+            }
+        } else {
+            return nil
+        }
+
+        self.markerId = markerId
+        self.symbolId = symbolId
+        self.symbolTicker = userInfo["symbolTicker"] as? String
+        self.timeframe = timeframe
+        self.candleTimestamp = candleTimestamp
+    }
+}
+
+enum MarkerShareCodec {
+    private static let tokenPrefix = "[[TG_MARKER_SHARE_V1:"
+    private static let tokenSuffix = "]]"
+
+    static func buildMessage(note: String, payload: MarkerSharePayloadV1) -> String {
+        guard let token = encodedToken(for: payload) else {
+            let fallback = note.trimmingCharacters(in: .whitespacesAndNewlines)
+            return fallback.isEmpty ? "Shared marker \(payload.markerId.uuidString.prefix(8).uppercased())" : fallback
+        }
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedNote.isEmpty {
+            return token
+        }
+        return "\(trimmedNote)\n\n\(token)"
+    }
+
+    static func extract(from content: String) -> (payload: MarkerSharePayloadV1, visibleText: String)? {
+        guard let start = content.range(of: tokenPrefix) else { return nil }
+        guard let suffixRange = content[start.upperBound...].range(of: tokenSuffix) else { return nil }
+
+        let encoded = String(content[start.upperBound..<suffixRange.lowerBound])
+        guard let payload = decodePayload(from: encoded) else { return nil }
+
+        var visible = content
+        visible.removeSubrange(start.lowerBound..<suffixRange.upperBound)
+        visible = visible.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (payload, visible)
+    }
+
+    private static func encodedToken(for payload: MarkerSharePayloadV1) -> String? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(payload) else { return nil }
+        let encoded = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "\(tokenPrefix)\(encoded)\(tokenSuffix)"
+    }
+
+    private static func decodePayload(from encoded: String) -> MarkerSharePayloadV1? {
+        var base64 = encoded
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64.append(String(repeating: "=", count: 4 - remainder))
+        }
+        guard let data = Data(base64Encoded: base64) else { return nil }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+            formatter.formatOptions = [.withInternetDateTime]
+            guard let date = formatter.date(from: dateString) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid marker share date \(dateString)"
+                )
+            }
+            return date
+        }
+        return try? decoder.decode(MarkerSharePayloadV1.self, from: data)
+    }
+}
+
 struct ChatInputFooter: View {
     @Binding var messageText: String
     let placeholder: String
     let isSending: Bool
-    let onSend: () -> Void
-
-    /// Callback when user selects a file/photo attachment: (fileData, filename, mimeType)
-    var onAttachmentSelected: ((Data, String, String) -> Void)? = nil
+    let onSend: (ChatComposerPayload) -> Void
 
     /// Optional: For sheet contexts where we need to expand to full height
     var selectedDetent: Binding<PresentationDetent>? = nil
+
+    /// Optional leading accessory view (e.g. back button in chart chat)
+    var leadingAccessory: AnyView? = nil
+
     @FocusState private var isInputFocused: Bool
 
-    /// Speech recognition service — self-contained dictation
     @StateObject private var speechService = SpeechRecognitionService()
 
-    /// Attachment picker state
+    @State private var showActionPanel = false
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
+    @State private var showReviewSheet = false
+    @State private var pendingAttachments: [ChatAttachmentDraft] = []
 
     var body: some View {
         VStack(spacing: 0) {
-            // Recording indicator bar
             if speechService.isRecording {
                 recordingIndicator
+            }
+
+            if !pendingAttachments.isEmpty {
+                attachmentDraftRow
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 10)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if showActionPanel {
+                attachmentActionPanel
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             Divider()
                 .background(Color.gray.opacity(0.3))
 
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
+                if let leadingAccessory {
+                    leadingAccessory
+                }
+
                 HStack(spacing: 12) {
-                    // Plus/attachment button — shows menu
-                    Menu {
-                        Button {
-                            showPhotoPicker = true
-                        } label: {
-                            Label("Photo", systemImage: "photo.fill")
-                        }
-                        Button {
-                            showDocumentPicker = true
-                        } label: {
-                            Label("File", systemImage: "doc.fill")
+                    Button {
+                        HapticFeedback.light.trigger()
+                        isInputFocused = false
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showActionPanel.toggle()
                         }
                     } label: {
-                        Image(systemName: "plus")
-                            .font(.title3)
-                            .foregroundColor(.secondary)
+                        Image(systemName: showActionPanel ? "xmark" : "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(showActionPanel ? .white : .secondary)
                             .frame(width: 32, height: 32)
+                            .background(showActionPanel ? AppColors.accentColor.opacity(0.8) : Color.clear)
+                            .clipShape(Circle())
+                            .contentTransition(.symbolEffect(.replace))
                     }
                     .compositingGroup()
 
-                    // Text field
                     TextField(placeholder, text: $messageText)
                         .font(.subheadline)
                         .submitLabel(.send)
                         .focused($isInputFocused)
                         .disabled(isSending)
                         .onSubmit {
-                            if !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                onSend()
+                            if canSend {
+                                sendComposedMessage()
+                            }
+                        }
+                        .onTapGesture {
+                            if showActionPanel {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    showActionPanel = false
+                                }
                             }
                         }
 
                     HStack(spacing: 8) {
-                        // Mic button — toggles dictation
                         Button(action: {
                             HapticFeedback.light.trigger()
                             speechService.toggleRecording()
@@ -215,7 +401,6 @@ struct ChatInputFooter: View {
                         }
                         .compositingGroup()
 
-                        // Send button
                         if isSending {
                             ProgressView()
                                 .scaleEffect(0.8)
@@ -230,11 +415,11 @@ struct ChatInputFooter: View {
                 .background(AppColors.whiteText.opacity(0.08))
                 .cornerRadius(25)
             }
-            .padding()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
         .background(AppColors.sheetBackground)
         .overlay {
-            // Tap to expand sheet if not at full height
             if let detent = selectedDetent, detent.wrappedValue != .large {
                 Color.clear
                     .contentShape(Rectangle())
@@ -248,12 +433,10 @@ struct ChatInputFooter: View {
         }
         .compositingGroup()
         .onChange(of: speechService.transcribedText) { _, newValue in
-            // Append transcribed text to message input
             if !newValue.isEmpty {
                 if messageText.isEmpty {
                     messageText = newValue
                 } else {
-                    // If user had existing text, append with a space
                     let trimmedExisting = messageText.trimmingCharacters(in: .whitespaces)
                     messageText = trimmedExisting + " " + newValue
                 }
@@ -261,33 +444,141 @@ struct ChatInputFooter: View {
         }
         .onChange(of: speechService.isRecording) { _, isRecording in
             if !isRecording && !speechService.transcribedText.isEmpty {
-                // Recording stopped — final text is already in messageText via transcribedText observer
                 speechService.transcribedText = ""
             }
         }
         .onDisappear {
             speechService.cleanup()
         }
-        .fullScreenCover(isPresented: $showPhotoPicker) {
+        .sheet(isPresented: $showPhotoPicker) {
             PhotoPickerView(
-                onImageSelected: { data, filename, mimeType in
+                onImagesSelected: { selected in
                     showPhotoPicker = false
-                    onAttachmentSelected?(data, filename, mimeType)
+                    appendAttachments(selected)
+                    if !pendingAttachments.isEmpty {
+                        showReviewSheet = true
+                    }
                 },
-                onCancel: { showPhotoPicker = false }
+                onCancel: { showPhotoPicker = false },
+                selectionLimit: max(1, 10 - pendingAttachments.count)
             )
-            .ignoresSafeArea()
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
-        .fullScreenCover(isPresented: $showDocumentPicker) {
+        .sheet(isPresented: $showDocumentPicker) {
             DocumentPickerView(
-                onDocumentSelected: { data, filename, mimeType in
+                onDocumentsSelected: { selected in
                     showDocumentPicker = false
-                    onAttachmentSelected?(data, filename, mimeType)
+                    appendAttachments(selected)
+                    if !pendingAttachments.isEmpty {
+                        showReviewSheet = true
+                    }
                 },
-                onCancel: { showDocumentPicker = false }
+                onCancel: { showDocumentPicker = false },
+                selectionLimit: max(1, 10 - pendingAttachments.count)
             )
-            .ignoresSafeArea()
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showReviewSheet) {
+            AttachmentReviewSheet(
+                attachments: pendingAttachments,
+                caption: messageText,
+                onSend: { finalAttachments, caption in
+                    pendingAttachments = finalAttachments
+                    messageText = caption
+                    showReviewSheet = false
+                },
+                onAddMorePhotos: {
+                    showReviewSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        showPhotoPicker = true
+                    }
+                },
+                onAddMoreFiles: {
+                    showReviewSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        showDocumentPicker = true
+                    }
+                },
+                onCancel: {
+                    pendingAttachments = []
+                    messageText = ""
+                    showReviewSheet = false
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Action Panel (WhatsApp-style)
+
+    private var attachmentActionPanel: some View {
+        HStack(spacing: 0) {
+            actionPanelButton(
+                icon: "camera.fill",
+                label: "Camera",
+                tint: AppColors.accentColor
+            ) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    showActionPanel = false
+                }
+                showPhotoPicker = true
+            }
+
+            actionPanelButton(
+                icon: "photo.on.rectangle.angled",
+                label: "Photos",
+                tint: Color.purple
+            ) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    showActionPanel = false
+                }
+                showPhotoPicker = true
+            }
+
+            actionPanelButton(
+                icon: "doc.fill",
+                label: "Files",
+                tint: Color.orange
+            ) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    showActionPanel = false
+                }
+                showDocumentPicker = true
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 20)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AppColors.whiteText.opacity(0.06))
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+    }
+
+    private func actionPanelButton(icon: String, label: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            HapticFeedback.light.trigger()
+            action()
+        }) {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+                    .foregroundColor(.white)
+                    .frame(width: 54, height: 54)
+                    .background(tint.opacity(0.85))
+                    .clipShape(Circle())
+
+                Text(label)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(AppColors.greyText)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Recording Indicator
@@ -329,10 +620,12 @@ struct ChatInputFooter: View {
         .animation(.easeInOut(duration: 0.2), value: speechService.isRecording)
     }
 
-    private var sendButton: some View {
-        let isEmpty = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    // MARK: - Send Button
 
-        return Button(action: onSend) {
+    private var sendButton: some View {
+        let isEmpty = !canSend
+
+        return Button(action: sendComposedMessage) {
             Image(systemName: "chevron.forward.2")
                 .font(.title3)
                 .fontWeight(.bold)
@@ -344,6 +637,337 @@ struct ChatInputFooter: View {
         }
         .disabled(isEmpty)
         .compositingGroup()
+    }
+
+    private var canSend: Bool {
+        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+    }
+
+    // MARK: - Attachment Draft Row
+
+    private var attachmentDraftRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("\(pendingAttachments.count) attachment\(pendingAttachments.count == 1 ? "" : "s") ready")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText)
+                Spacer(minLength: 8)
+
+                Button {
+                    showReviewSheet = true
+                } label: {
+                    Text("Edit")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.accentColor)
+                }
+
+                Button("Remove all") {
+                    withAnimation { pendingAttachments = [] }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppColors.bearCandleRed.opacity(0.92))
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(pendingAttachments) { attachment in
+                        attachmentPreviewChip(for: attachment)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private func attachmentPreviewChip(for attachment: ChatAttachmentDraft) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if attachment.isImage, let image = UIImage(data: attachment.data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 76, height: 76)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: "doc.fill")
+                            .font(.caption)
+                            .foregroundColor(AppColors.accentColor.opacity(0.92))
+                        Text(attachment.filename)
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(AppColors.whiteText.opacity(0.92))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 76)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(AppColors.whiteText.opacity(0.1))
+                    )
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            )
+
+            Button {
+                withAnimation { pendingAttachments.removeAll { $0.id == attachment.id } }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .background(Color.black.opacity(0.45), in: Circle())
+            }
+            .offset(x: 4, y: -4)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func appendAttachments(_ selected: [(Data, String, String)]) {
+        let maxCount = 10
+        let existingSignatures = Set(pendingAttachments.map { "\($0.filename.lowercased())-\($0.data.count)" })
+        var mutableSignatures = existingSignatures
+        for (data, filename, mimeType) in selected {
+            guard pendingAttachments.count < maxCount else { break }
+            let signature = "\(filename.lowercased())-\(data.count)"
+            if mutableSignatures.contains(signature) { continue }
+            mutableSignatures.insert(signature)
+            pendingAttachments.append(
+                ChatAttachmentDraft(data: data, filename: filename, mimeType: mimeType)
+            )
+        }
+    }
+
+    private func sendComposedMessage() {
+        let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !isSending, (!pendingAttachments.isEmpty || !trimmed.isEmpty) else { return }
+
+        onSend(
+            ChatComposerPayload(
+                text: trimmed,
+                attachments: pendingAttachments
+            )
+        )
+
+        messageText = ""
+        pendingAttachments = []
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            showActionPanel = false
+        }
+    }
+}
+
+private struct AttachmentReviewSheet: View {
+    let onSend: ([ChatAttachmentDraft], String) -> Void
+    let onAddMorePhotos: () -> Void
+    let onAddMoreFiles: () -> Void
+    let onCancel: () -> Void
+
+    @State private var attachments: [ChatAttachmentDraft]
+    @State private var caption: String
+
+    private let maxAttachmentCount = 10
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
+    init(
+        attachments: [ChatAttachmentDraft],
+        caption: String,
+        onSend: @escaping ([ChatAttachmentDraft], String) -> Void,
+        onAddMorePhotos: @escaping () -> Void,
+        onAddMoreFiles: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.onSend = onSend
+        self.onAddMorePhotos = onAddMorePhotos
+        self.onAddMoreFiles = onAddMoreFiles
+        self.onCancel = onCancel
+        _attachments = State(initialValue: attachments)
+        _caption = State(initialValue: caption)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        HStack {
+                            Text("\(attachments.count) of \(maxAttachmentCount)")
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.greyText)
+                            Spacer()
+                        }
+
+                        if attachments.isEmpty {
+                            emptyState
+                        } else {
+                            attachmentGrid
+                        }
+                    }
+                    .padding(16)
+                }
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 12) {
+                    Divider().background(Color.white.opacity(0.1))
+
+                    TextField("Add a caption...", text: $caption, axis: .vertical)
+                        .lineLimit(1...4)
+                        .font(.subheadline)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(AppColors.whiteText.opacity(0.08))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                        )
+                        .padding(.horizontal, 16)
+
+                    Button {
+                        onSend(attachments, caption.trimmingCharacters(in: .whitespacesAndNewlines))
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Attach \(attachments.count) item\(attachments.count == 1 ? "" : "s")")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(AppColors.whiteText)
+                        )
+                    }
+                    .disabled(attachments.isEmpty)
+                    .opacity(attachments.isEmpty ? 0.4 : 1)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                }
+            }
+            .navigationTitle("Review")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onCancel() }
+                        .foregroundColor(AppColors.greyText)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    addMoreMenu
+                }
+            }
+        }
+    }
+
+    private var addMoreMenu: some View {
+        Menu {
+            Button {
+                onAddMorePhotos()
+            } label: {
+                Label("Add Photos", systemImage: "photo.on.rectangle.angled")
+            }
+            Button {
+                onAddMoreFiles()
+            } label: {
+                Label("Add Files", systemImage: "doc.fill")
+            }
+        } label: {
+            Image(systemName: "plus.circle.fill")
+                .font(.title3)
+                .foregroundColor(AppColors.accentColor)
+        }
+        .disabled(attachments.count >= maxAttachmentCount)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 36))
+                .foregroundColor(AppColors.greyText.opacity(0.5))
+            Text("No items selected")
+                .font(.subheadline)
+                .foregroundColor(AppColors.greyText)
+        }
+        .frame(maxWidth: .infinity, minHeight: 160)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.whiteText.opacity(0.04))
+        )
+    }
+
+    private var attachmentGrid: some View {
+        LazyVGrid(columns: gridColumns, spacing: 8) {
+            ForEach(attachments) { attachment in
+                attachmentTile(for: attachment)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func attachmentTile(for attachment: ChatAttachmentDraft) -> some View {
+        let size: CGFloat = (UIScreen.main.bounds.width - 64) / 3
+
+        ZStack(alignment: .topTrailing) {
+            if attachment.isImage, let image = UIImage(data: attachment.data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            } else {
+                VStack(spacing: 6) {
+                    Image(systemName: "doc.fill")
+                        .font(.title2)
+                        .foregroundColor(AppColors.accentColor)
+                    Text(attachment.filename)
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(AppColors.whiteText.opacity(0.9))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(width: size, height: size)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppColors.whiteText.opacity(0.08))
+                )
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    attachments.removeAll { $0.id == attachment.id }
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color.black.opacity(0.6))
+            }
+            .offset(x: -4, y: 4)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        )
     }
 }
 
@@ -721,6 +1345,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     let onDelete: (() -> Void)?
     let onReport: (() -> Void)?
     let onCopy: (() -> Void)?
+    let onMarkerShareTap: ((MarkerSharePayloadV1) -> Void)?
     
     @EnvironmentObject var appState: RLAppState
     @State private var showDeleteConfirmation = false
@@ -733,7 +1358,8 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         onEdit: (() -> Void)? = nil,
         onDelete: (() -> Void)? = nil,
         onReport: (() -> Void)? = nil,
-        onCopy: (() -> Void)? = nil
+        onCopy: (() -> Void)? = nil,
+        onMarkerShareTap: ((MarkerSharePayloadV1) -> Void)? = nil
     ) {
         self.message = message
         self.context = context
@@ -743,6 +1369,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         self.onDelete = onDelete
         self.onReport = onReport
         self.onCopy = onCopy
+        self.onMarkerShareTap = onMarkerShareTap
     }
     
     var body: some View {
@@ -845,16 +1472,30 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                 attachmentView(url: attachmentUrl, type: message.attachmentType, name: message.attachmentName)
             }
 
-            // Text content + edited indicator
-            HStack(spacing: 8) {
-                Text(message.content)
-                    .font(.subheadline)
-                    .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
+            if let markerShare = markerShareContent {
+                MarkerShareCard(
+                    payload: markerShare.payload,
+                    isCurrentUserMessage: message.isCurrentUserMessage,
+                    onTap: {
+                        onMarkerShareTap?(markerShare.payload)
+                    }
+                )
+            }
 
-                if message.isEdited {
-                    Text("(edited)")
-                        .font(.caption2)
-                        .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+            // Text content + edited indicator
+            if !displayMessageText.isEmpty || message.isEdited {
+                HStack(spacing: 8) {
+                    if !displayMessageText.isEmpty {
+                        Text(displayMessageText)
+                            .font(.subheadline)
+                            .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
+                    }
+
+                    if message.isEdited {
+                        Text("(edited)")
+                            .font(.caption2)
+                            .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+                    }
                 }
             }
         }
@@ -931,6 +1572,14 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         if type == "application/zip" { return "doc.zipper" }
         return "doc.fill"
     }
+
+    private var markerShareContent: (payload: MarkerSharePayloadV1, visibleText: String)? {
+        MarkerShareCodec.extract(from: message.content)
+    }
+
+    private var displayMessageText: String {
+        markerShareContent?.visibleText ?? message.content
+    }
     
     // MARK: - Timestamp Row
     private var timestampRow: some View {
@@ -968,7 +1617,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         }
         
         Button {
-            UIPasteboard.general.string = message.content
+            UIPasteboard.general.string = displayMessageText.isEmpty ? message.content : displayMessageText
             onCopy?()
         } label: {
             Label("Copy", systemImage: "doc.on.doc")
@@ -982,6 +1631,68 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                 Label("Report", systemImage: "exclamationmark.triangle")
             }
         }
+    }
+}
+
+private struct MarkerShareCard: View {
+    let payload: MarkerSharePayloadV1
+    let isCurrentUserMessage: Bool
+    let onTap: () -> Void
+
+    private var tickerLabel: String {
+        if let ticker = payload.symbolTicker, !ticker.isEmpty {
+            return ticker
+        }
+        return payload.symbolId.uuidString.prefix(8).uppercased()
+    }
+
+    private var timeframeLabel: String {
+        payload.timeframe.uppercased()
+    }
+
+    private var timestampLabel: String {
+        payload.candleTimestamp.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .center, spacing: 10) {
+                Circle()
+                    .fill(isCurrentUserMessage ? Color.white.opacity(0.22) : AppColors.accentColor.opacity(0.22))
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.caption)
+                            .foregroundColor(isCurrentUserMessage ? .white : AppColors.accentColor)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Marker Share")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isCurrentUserMessage ? .white.opacity(0.8) : AppColors.greyText)
+                    Text("\(tickerLabel) • \(timeframeLabel)")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isCurrentUserMessage ? .white : .primary)
+                    Text(timestampLabel)
+                        .font(.caption2)
+                        .foregroundColor(isCurrentUserMessage ? .white.opacity(0.75) : .secondary)
+                }
+
+                Spacer(minLength: 6)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.caption)
+                    .foregroundColor(isCurrentUserMessage ? .white.opacity(0.8) : AppColors.accentColor)
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isCurrentUserMessage ? Color.white.opacity(0.15) : Color.white.opacity(0.1))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

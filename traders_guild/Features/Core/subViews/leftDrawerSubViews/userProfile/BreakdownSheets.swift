@@ -41,11 +41,14 @@ struct GlobalReputationBreakdownSheetView: View {
                             }
                         }
 
-                        BreakdownMiniChart(
-                            values: profile.guildContributions.map { Double(max(0, $0.reputation)) },
-                            tint: AppColors.accentColor
+                        BreakdownDateBarChart(
+                            points: reputationTrendPoints(
+                                from: profile.reputationTrend30d,
+                                positiveTint: AppColors.accentColor
+                            ),
+                            centeredBaseline: true
                         )
-                        .padding(.top, 8)
+                        .padding(.top, 10)
                     }
 
                     BreakdownCard(title: "Guild Contributions") {
@@ -128,14 +131,14 @@ struct GlobalAccuracyBreakdownSheetView: View {
                         }
                         .frame(maxWidth: .infinity)
 
-                        BreakdownMiniChart(
-                            values: [
-                                Double(profile.successfulPredictions),
-                                Double(max(0, profile.totalPredictions - profile.successfulPredictions))
-                            ],
-                            tint: breakdownAccuracyColor(profile.accuracyRate)
+                        BreakdownDateBarChart(
+                            points: accuracyTrendPoints(
+                                from: profile.accuracyTrend30d,
+                                tint: breakdownAccuracyColor(profile.accuracyRate)
+                            ),
+                            centeredBaseline: false
                         )
-                        .padding(.top, 8)
+                        .padding(.top, 10)
                     }
 
                     BreakdownCard(title: "Performance") {
@@ -235,15 +238,14 @@ struct GuildReputationBreakdownSheetView: View {
                             }
                         }
 
-                        BreakdownMiniChart(
-                            values: [
-                                Double(max(0, profile.breakdown.socialRep)),
-                                Double(max(0, profile.breakdown.activityRep)),
-                                Double(abs(min(0, profile.breakdown.penaltyRep)))
-                            ],
-                            tint: profile.tier.color
+                        BreakdownDateBarChart(
+                            points: reputationTrendPoints(
+                                from: profile.reputationTrend30d,
+                                positiveTint: profile.tier.color
+                            ),
+                            centeredBaseline: true
                         )
-                        .padding(.top, 8)
+                        .padding(.top, 10)
                     }
 
                     BreakdownCard(title: "Progress") {
@@ -348,15 +350,14 @@ struct GuildAccuracyBreakdownSheetView: View {
                         }
                         .frame(maxWidth: .infinity)
 
-                        BreakdownMiniChart(
-                            values: [
-                                Double(profile.successfulPredictions),
-                                Double(max(0, profile.totalPredictions - profile.successfulPredictions)),
-                                Double(profile.bestWinStreak)
-                            ],
-                            tint: breakdownAccuracyColor(profile.accuracyRate)
+                        BreakdownDateBarChart(
+                            points: accuracyTrendPoints(
+                                from: profile.accuracyTrend30d,
+                                tint: breakdownAccuracyColor(profile.accuracyRate)
+                            ),
+                            centeredBaseline: false
                         )
-                        .padding(.top, 8)
+                        .padding(.top, 10)
                     }
 
                     BreakdownCard(title: "Performance") {
@@ -524,31 +525,118 @@ private struct BreakdownBarRow: View {
     }
 }
 
-private struct BreakdownMiniChart: View {
-    let values: [Double]
+private struct BreakdownDateBarPoint: Identifiable {
+    let day: Date
+    let value: Double
     let tint: Color
 
-    private var normalized: [Double] {
-        let maxValue = max(values.max() ?? 1, 1)
-        return values.map { max(0.12, min(1, $0 / maxValue)) }
+    var id: Date { day }
+}
+
+private struct BreakdownDateBarChart: View {
+    let points: [BreakdownDateBarPoint]
+    let centeredBaseline: Bool
+
+    private var maxMagnitude: Double {
+        max(points.map { abs($0.value) }.max() ?? 1, 1)
+    }
+
+    private var baselineAlignment: Alignment {
+        centeredBaseline ? .center : .bottom
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 6) {
-            ForEach(Array(normalized.enumerated()), id: \.offset) { _, value in
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(
-                        LinearGradient(
-                            colors: [tint.opacity(0.85), tint.opacity(0.3)],
-                            startPoint: .top,
-                            endPoint: .bottom
+        VStack(spacing: 6) {
+            GeometryReader { geometry in
+                if points.isEmpty {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.04))
+                        .overlay(
+                            Text("No 30-day trend data")
+                                .font(.caption2)
+                                .foregroundColor(AppColors.greyText)
                         )
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44 * value)
+                } else {
+                    ZStack(alignment: baselineAlignment) {
+                        if centeredBaseline {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.12))
+                                .frame(height: 1)
+                        }
+
+                        HStack(alignment: centeredBaseline ? .center : .bottom, spacing: 2) {
+                            ForEach(points) { point in
+                                let ratio = max(0.05, min(1, abs(point.value) / maxMagnitude))
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(point.tint)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: (geometry.size.height - 4) * ratio)
+                                    .offset(y: centeredBaseline ? (point.value >= 0 ? -(geometry.size.height * 0.25 * ratio) : geometry.size.height * 0.25 * ratio) : 0)
+                            }
+                        }
+                    }
+                }
             }
+            .frame(height: 64)
+
+            HStack {
+                Text(dateLabel(for: points.first?.day))
+                Spacer()
+                Text(dateLabel(for: points.dropFirst(points.count / 2).first?.day))
+                Spacer()
+                Text(dateLabel(for: points.last?.day))
+            }
+            .font(.caption2)
+            .foregroundColor(AppColors.greyText.opacity(0.85))
         }
-        .frame(height: 48, alignment: .bottom)
+    }
+
+    private func dateLabel(for date: Date?) -> String {
+        guard let date else { return "--" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
+    }
+}
+
+private func reputationTrendPoints(
+    from trend: [RLReputationTrendPointDTO],
+    positiveTint: Color
+) -> [BreakdownDateBarPoint] {
+    trend.map { point in
+        BreakdownDateBarPoint(
+            day: point.day,
+            value: Double(point.value),
+            tint: point.value >= 0 ? positiveTint : .red.opacity(0.82)
+        )
+    }
+}
+
+private func accuracyTrendPoints(
+    from trend: [RLAccuracyTrendPointDTO],
+    tint: Color
+) -> [BreakdownDateBarPoint] {
+    var previous: Double?
+    return trend.map { point in
+        let value = point.value
+        let direction: Color
+        if let previous {
+            if value > previous + 0.0001 {
+                direction = .green
+            } else if value + 0.0001 < previous {
+                direction = .red
+            } else {
+                direction = tint.opacity(0.6)
+            }
+        } else {
+            direction = tint
+        }
+        previous = value
+        return BreakdownDateBarPoint(
+            day: point.day,
+            value: value,
+            tint: direction
+        )
     }
 }
 

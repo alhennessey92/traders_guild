@@ -776,39 +776,13 @@ struct SymbolIconView: View {
     var size: CGFloat = 48
     
     var body: some View {
-        Group {
-            if let iconName = symbol.iconName {
-                // Has SVG icon - render it to fill the entire icon area
-                Image(iconName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: size * 0.25))
-            } else {
-                // No icon - show gradient background with abbreviation text
-                ZStack {
-                    LinearGradient(
-                        colors: [
-                            symbol.primaryColorValue,
-                            symbol.secondaryColorValue
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    
-                    Text(symbol.fallbackInitial)
-                        .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                }
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.25))
-            }
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: size * 0.25)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        TradingSymbolIconView(
+            symbol: symbol,
+            size: size,
+            cornerRadiusRatio: 0.25,
+            strokeOpacity: 0.2,
+            showShadow: true
         )
-        .shadow(color: symbol.primaryColorValue.opacity(0.4), radius: 4, x: 0, y: 2)
     }
 }
 

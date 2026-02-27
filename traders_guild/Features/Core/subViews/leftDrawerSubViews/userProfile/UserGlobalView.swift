@@ -582,15 +582,11 @@ struct UserGlobalSheetView: View {
                 .padding(.vertical, 50)
                 .padding(.horizontal, 25)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(recentActivity.enumerated()), id: \.element.id) { index, activity in
-                        GlobalActivityRow(
-                            activity: activity,
-                            isLast: index == recentActivity.count - 1
-                        )
-                    }
-                }
-                .padding(.horizontal, 25)
+                UnifiedActivityTimeline(
+                    items: recentActivity,
+                    style: .plain,
+                    horizontalPadding: 25
+                )
 
                 if hasMoreActivity {
                     Text("Showing latest activity. Pull to refresh for newer events.")
@@ -896,130 +892,6 @@ struct GlobalGuildCard: View {
         .padding(14)
         .background(Color.white.opacity(0.03))
         .cornerRadius(12)
-    }
-}
-
-struct GlobalActivityRow: View {
-    let activity: RLActivityItem
-    let isLast: Bool
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(activity.activityColor)
-                    .frame(width: 10, height: 10)
-
-                if !isLast {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.1))
-                        .frame(width: 2)
-                        .frame(maxHeight: .infinity)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Image(systemName: activity.activityIcon)
-                        .font(.caption)
-                        .foregroundColor(activity.activityColor)
-
-                    Text(activity.title)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.whiteText)
-                }
-
-                Text(activity.description)
-                    .font(.caption)
-                    .foregroundColor(AppColors.greyText)
-
-                HStack(spacing: 8) {
-                    Text(activity.relativeTimestamp)
-                        .font(.caption2)
-                        .foregroundColor(AppColors.greyText.opacity(0.7))
-
-                    if let guild = activity.guildName {
-                        Text("•")
-                            .font(.caption2)
-                            .foregroundColor(AppColors.greyText.opacity(0.5))
-                        Text(guild)
-                            .font(.caption2)
-                            .foregroundColor(AppColors.greyText.opacity(0.7))
-                    }
-                }
-
-                HStack(spacing: 6) {
-                    if let guildDelta = activity.guildRepDelta {
-                        ActivityDeltaBadge(label: "Guild", value: guildDelta)
-                    }
-                    if let globalDelta = activity.globalRepDelta {
-                        ActivityDeltaBadge(label: "Global", value: globalDelta)
-                    }
-                    if let metricDelta = activity.metricDelta, let metricLabel = activity.metricLabel {
-                        ActivityDeltaBadge(label: metricLabel.replacingOccurrences(of: "_", with: " ").capitalized, value: metricDelta)
-                    }
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.bottom, isLast ? 0 : 16)
-    }
-}
-
-struct ActivityDeltaBadge: View {
-    let label: String
-    let value: Int
-
-    private var valueColor: Color {
-        value >= 0 ? .green : .red
-    }
-
-    var body: some View {
-        Text("\(label) \(value >= 0 ? "+" : "")\(value)")
-            .font(.caption2)
-            .foregroundColor(valueColor)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(valueColor.opacity(0.15))
-            .cornerRadius(6)
-    }
-}
-
-private extension RLActivityItem {
-    var activityIcon: String {
-        switch type {
-        case "marker": return "mappin.circle.fill"
-        case "reputation": return "shield.pattern.checkered"
-        case "achievement": return "medal.fill"
-        case "guild": return "person.3.fill"
-        case "event": return "calendar.badge.clock"
-        case "role": return "person.crop.circle.badge.checkmark"
-        case "report": return "exclamationmark.bubble.fill"
-        case "moderation": return "gavel.fill"
-        default: return "clock.fill"
-        }
-    }
-
-    var activityColor: Color {
-        switch type {
-        case "marker": return .red
-        case "reputation": return AppColors.accentColor
-        case "achievement": return .yellow
-        case "guild": return .blue
-        case "event": return .mint
-        case "role": return .indigo
-        case "report": return .orange
-        case "moderation": return .purple
-        default: return AppColors.greyText
-        }
-    }
-
-    var relativeTimestamp: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: timestamp, relativeTo: Date())
     }
 }
 

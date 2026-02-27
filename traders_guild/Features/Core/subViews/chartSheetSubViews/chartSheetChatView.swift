@@ -271,11 +271,17 @@ struct ChartMessageRow: View {
             onEdit: canEditMessage ? onEdit : nil,
             onDelete: canDeleteMessage ? onDelete : nil,
             onReport: !message.isCurrentUserMessage ? onReport : nil,
-            onCopy: { rlAppState.showSuccess("Copied to clipboard") }
+            onCopy: { rlAppState.showSuccess("Copied to clipboard") },
+            onMarkerShareTap: { payload in
+                NotificationCenter.default.post(
+                    name: .openSharedMarker,
+                    object: nil,
+                    userInfo: payload.notificationUserInfo
+                )
+            }
         )
     }
 }
-
 
 
 

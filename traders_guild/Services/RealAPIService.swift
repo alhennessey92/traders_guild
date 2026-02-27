@@ -2798,11 +2798,21 @@ extension RealAPIService {
         symbolId: UUID,
         timeframe: String = "1m",
         limit: Int = 50,
-        cursor: String? = nil
+        cursor: String? = nil,
+        startTime: Date? = nil,
+        endTime: Date? = nil
     ) async throws -> RLMarkersListDTO {
         var path = "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/markers?timeframe=\(timeframe)&limit=\(limit)"
         if let cursor = cursor {
             path += "&cursor=\(cursor)"
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let startTime = startTime {
+            path += "&start_time=\(formatter.string(from: startTime))"
+        }
+        if let endTime = endTime {
+            path += "&end_time=\(formatter.string(from: endTime))"
         }
         return try await request(
             path,

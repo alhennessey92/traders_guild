@@ -36,7 +36,7 @@ extension RLTradingSymbolDTO {
     
     /// Whether this symbol has a custom icon asset
     var hasCustomIcon: Bool {
-        iconName != nil
+        (iconUrl?.isEmpty == false) || (iconName?.isEmpty == false)
     }
     
     /// Format a price according to this symbol's specifications

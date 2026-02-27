@@ -149,6 +149,20 @@ struct RLReputationBreakdownDTO: Codable, Equatable {
     let total: Int
 }
 
+struct RLReputationTrendPointDTO: Codable, Equatable, Identifiable {
+    let day: Date
+    let value: Int
+
+    var id: Date { day }
+}
+
+struct RLAccuracyTrendPointDTO: Codable, Equatable, Identifiable {
+    let day: Date
+    let value: Double
+
+    var id: Date { day }
+}
+
 
 // MARK: - Guild Reputation Profile
 
@@ -164,6 +178,36 @@ struct RLReputationProfileDTO: Codable, Equatable {
     let predictionsToday: Int
     let dailySocialCapRemaining: Double
     let weeklyDelta: Int
+    let reputationTrend30d: [RLReputationTrendPointDTO]
+
+    enum CodingKeys: String, CodingKey {
+        case userId
+        case guildId
+        case reputation
+        case tier
+        case breakdown
+        case recentEvents
+        case rankInGuild
+        case predictionsToday
+        case dailySocialCapRemaining
+        case weeklyDelta
+        case reputationTrend30d
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(UUID.self, forKey: .userId)
+        guildId = try container.decode(UUID.self, forKey: .guildId)
+        reputation = try container.decodeIfPresent(Int.self, forKey: .reputation) ?? 0
+        tier = try container.decode(RLReputationTierDTO.self, forKey: .tier)
+        breakdown = try container.decode(RLReputationBreakdownDTO.self, forKey: .breakdown)
+        recentEvents = try container.decodeIfPresent([RLReputationEventDTO].self, forKey: .recentEvents) ?? []
+        rankInGuild = try container.decodeIfPresent(Int.self, forKey: .rankInGuild) ?? 0
+        predictionsToday = try container.decodeIfPresent(Int.self, forKey: .predictionsToday) ?? 0
+        dailySocialCapRemaining = try container.decodeIfPresent(Double.self, forKey: .dailySocialCapRemaining) ?? 0
+        weeklyDelta = try container.decodeIfPresent(Int.self, forKey: .weeklyDelta) ?? 0
+        reputationTrend30d = try container.decodeIfPresent([RLReputationTrendPointDTO].self, forKey: .reputationTrend30d) ?? []
+    }
 
     static func == (lhs: RLReputationProfileDTO, rhs: RLReputationProfileDTO) -> Bool {
         lhs.userId == rhs.userId && lhs.guildId == rhs.guildId && lhs.reputation == rhs.reputation
@@ -245,6 +289,7 @@ struct RLGlobalReputationDTO: Codable, Equatable {
     let modifiers: RLGlobalModifiersDTO
     let consecutiveActiveDays: Int
     let weeklyDelta: Int
+    let reputationTrend30d: [RLReputationTrendPointDTO]
 
     enum CodingKeys: String, CodingKey {
         case userId
@@ -254,6 +299,7 @@ struct RLGlobalReputationDTO: Codable, Equatable {
         case modifiers
         case consecutiveActiveDays
         case weeklyDelta
+        case reputationTrend30d
     }
 
     init(from decoder: Decoder) throws {
@@ -278,6 +324,7 @@ struct RLGlobalReputationDTO: Codable, Equatable {
         )
         consecutiveActiveDays = try container.decodeIfPresent(Int.self, forKey: .consecutiveActiveDays) ?? 0
         weeklyDelta = try container.decodeIfPresent(Int.self, forKey: .weeklyDelta) ?? 0
+        reputationTrend30d = try container.decodeIfPresent([RLReputationTrendPointDTO].self, forKey: .reputationTrend30d) ?? []
     }
 
     static func == (lhs: RLGlobalReputationDTO, rhs: RLGlobalReputationDTO) -> Bool {
@@ -384,6 +431,7 @@ struct RLAccuracyProfileDTO: Codable, Equatable {
     let rollingWins30d: Int
     let rollingTotal30d: Int
     let rankInGuild: Int?
+    let accuracyTrend30d: [RLAccuracyTrendPointDTO]
                                  
     enum CodingKeys: String, CodingKey {
         case userId
@@ -395,10 +443,10 @@ struct RLAccuracyProfileDTO: Codable, Equatable {
         case winStreak
         case lossStreak
         case bestWinStreak
-        // convertFromSnakeCase maps *_30d -> *30D
-        case rollingAccuracy30D
-        case rollingWins30D
-        case rollingTotal30D
+        case rollingAccuracy30d
+        case rollingWins30d
+        case rollingTotal30d
+        case accuracyTrend30d
         case rankInGuild
     }
 
@@ -413,9 +461,10 @@ struct RLAccuracyProfileDTO: Codable, Equatable {
         winStreak = try container.decodeIfPresent(Int.self, forKey: .winStreak) ?? 0
         lossStreak = try container.decodeIfPresent(Int.self, forKey: .lossStreak) ?? 0
         bestWinStreak = try container.decodeIfPresent(Int.self, forKey: .bestWinStreak) ?? 0
-        rollingAccuracy30d = try container.decodeIfPresent(Double.self, forKey: .rollingAccuracy30D)
-        rollingWins30d = try container.decodeIfPresent(Int.self, forKey: .rollingWins30D) ?? 0
-        rollingTotal30d = try container.decodeIfPresent(Int.self, forKey: .rollingTotal30D) ?? 0
+        rollingAccuracy30d = try container.decodeIfPresent(Double.self, forKey: .rollingAccuracy30d)
+        rollingWins30d = try container.decodeIfPresent(Int.self, forKey: .rollingWins30d) ?? 0
+        rollingTotal30d = try container.decodeIfPresent(Int.self, forKey: .rollingTotal30d) ?? 0
+        accuracyTrend30d = try container.decodeIfPresent([RLAccuracyTrendPointDTO].self, forKey: .accuracyTrend30d) ?? []
         rankInGuild = try container.decodeIfPresent(Int.self, forKey: .rankInGuild)
     }
 
@@ -430,9 +479,10 @@ struct RLAccuracyProfileDTO: Codable, Equatable {
         try container.encode(winStreak, forKey: .winStreak)
         try container.encode(lossStreak, forKey: .lossStreak)
         try container.encode(bestWinStreak, forKey: .bestWinStreak)
-        try container.encodeIfPresent(rollingAccuracy30d, forKey: .rollingAccuracy30D)
-        try container.encode(rollingWins30d, forKey: .rollingWins30D)
-        try container.encode(rollingTotal30d, forKey: .rollingTotal30D)
+        try container.encodeIfPresent(rollingAccuracy30d, forKey: .rollingAccuracy30d)
+        try container.encode(rollingWins30d, forKey: .rollingWins30d)
+        try container.encode(rollingTotal30d, forKey: .rollingTotal30d)
+        try container.encode(accuracyTrend30d, forKey: .accuracyTrend30d)
         try container.encodeIfPresent(rankInGuild, forKey: .rankInGuild)
     }
 

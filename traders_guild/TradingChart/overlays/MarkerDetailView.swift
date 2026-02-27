@@ -29,6 +29,7 @@ struct MarkerDetailView: View {
     @State private var showComments: Bool = false
     @State private var showDeleteMarkerConfirmation: Bool = false
     @State private var showReportReasonSheet: Bool = false
+    @State private var showShareSheet: Bool = false
     
     init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
         self.marker = marker
@@ -108,6 +109,10 @@ struct MarkerDetailView: View {
                     onCancel: { showReportReasonSheet = false }
                 )
             }
+            .sheet(isPresented: $showShareSheet) {
+                MarkerShareSheet(marker: marker)
+                    .environmentObject(rlAppState)
+            }
             .navigationDestination(isPresented: $showComments) {
                 CommentsView(
                     marker: marker,
@@ -151,7 +156,7 @@ struct MarkerDetailView: View {
     
     private func handleShare() {
         HapticFeedback.medium.trigger()
-        print("Share marker: \(marker.id)")
+        showShareSheet = true
     }
     
     private func handleReport(reason: String) {
@@ -177,6 +182,267 @@ struct MarkerDetailView: View {
             await markerManager.deleteMarker(id: marker.id)
             rlAppState.showSuccess("Marker deleted")
             dismiss()
+        }
+    }
+}
+
+private struct MarkerShareSheet: View {
+    enum DestinationMode: String, CaseIterable, Identifiable {
+        case chatroom = "Chatroom"
+        case dm = "DM"
+
+        var id: String { rawValue }
+    }
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var rlAppState: RLAppState
+
+    let marker: ChartMarkerUI
+
+    @State private var mode: DestinationMode = .chatroom
+    @State private var note: String = ""
+    @State private var chatrooms: [RLGuildChatroomDTO] = []
+    @State private var dmThreads: [RLDMThreadDTO] = []
+    @State private var selectedChatroomId: UUID?
+    @State private var selectedThreadId: UUID?
+    @State private var symbolTicker: String?
+    @State private var isLoading = true
+    @State private var isSending = false
+    @State private var loadError: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 14) {
+                Picker("Destination", selection: $mode) {
+                    ForEach(DestinationMode.allCases) { value in
+                        Text(value.rawValue).tag(value)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.top, 8)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Optional Note")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                    TextEditor(text: $note)
+                        .frame(minHeight: 90, maxHeight: 120)
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.white.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                }
+
+                if isLoading {
+                    VStack(spacing: 10) {
+                        ProgressView().tint(AppColors.accentColor)
+                        Text("Loading destinations...")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                } else if let loadError {
+                    UnifiedEmptyState(
+                        icon: "exclamationmark.triangle",
+                        title: "Unable to load destinations",
+                        subtitle: loadError
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    destinationList
+                }
+
+                Button {
+                    Task { await sendMarkerShare() }
+                } label: {
+                    if isSending {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Share Marker")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppColors.accentColor)
+                .disabled(isSending || !hasSelection || isLoading || loadError != nil)
+                .padding(.bottom, 6)
+            }
+            .padding(.horizontal, 16)
+            .navigationTitle("Share Marker")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accentColor)
+                }
+            }
+            .background(AppColors.sheetBackground.ignoresSafeArea())
+            .task { await loadDestinations() }
+        }
+    }
+
+    @ViewBuilder
+    private var destinationList: some View {
+        if mode == .chatroom {
+            if chatrooms.isEmpty {
+                emptyDestination(icon: "number", text: "No chatrooms available")
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 8) {
+                        ForEach(chatrooms) { chatroom in
+                            destinationRow(
+                                title: "#\(chatroom.name)",
+                                subtitle: "\(chatroom.memberCount) members",
+                                isSelected: selectedChatroomId == chatroom.id
+                            ) {
+                                selectedChatroomId = chatroom.id
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        } else {
+            if dmThreads.isEmpty {
+                emptyDestination(icon: "person.2", text: "No DM threads available")
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 8) {
+                        ForEach(dmThreads) { thread in
+                            destinationRow(
+                                title: thread.participant.displayName,
+                                subtitle: "@\(thread.participant.username)",
+                                isSelected: selectedThreadId == thread.id
+                            ) {
+                                selectedThreadId = thread.id
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
+    private var hasSelection: Bool {
+        switch mode {
+        case .chatroom:
+            return selectedChatroomId != nil
+        case .dm:
+            return selectedThreadId != nil
+        }
+    }
+
+    private func destinationRow(title: String, subtitle: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                }
+                Spacer()
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? AppColors.accentColor : AppColors.greyText)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(isSelected ? 0.11 : 0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(isSelected ? AppColors.accentColor.opacity(0.65) : Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func emptyDestination(icon: String, text: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(AppColors.greyText.opacity(0.8))
+            Text(text)
+                .font(.subheadline)
+                .foregroundColor(AppColors.greyText)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 22)
+    }
+
+    private func loadDestinations() async {
+        guard let guildId = rlAppState.currentGuild?.id else {
+            loadError = "No guild selected"
+            isLoading = false
+            return
+        }
+
+        isLoading = true
+        loadError = nil
+        defer { isLoading = false }
+
+        do {
+            async let chatroomsTask = rlAppState.fetchCurrentGuildChatrooms()
+            async let dmsTask = rlAppState.fetchCurrentGuildDMThreads()
+
+            let (loadedChatrooms, loadedDms) = try await (chatroomsTask, dmsTask)
+            chatrooms = loadedChatrooms.filter { $0.isActive && $0.canSendMessages }
+            dmThreads = loadedDms.filter { !$0.isBlocked }
+            selectedChatroomId = chatrooms.first?.id
+            selectedThreadId = dmThreads.first?.id
+            symbolTicker = try? await rlAppState.realApi.getSymbol(symbolId: marker.symbolId).ticker
+        } catch {
+            if error is CancellationError { return }
+            loadError = error.localizedDescription
+        }
+    }
+
+    private func sendMarkerShare() async {
+        guard !isSending else { return }
+
+        let targetChatroomId = selectedChatroomId
+        let targetThreadId = selectedThreadId
+        if mode == .chatroom, targetChatroomId == nil { return }
+        if mode == .dm, targetThreadId == nil { return }
+
+        isSending = true
+        defer { isSending = false }
+
+        let payload = MarkerSharePayloadV1(
+            markerId: marker.id,
+            symbolId: marker.symbolId,
+            symbolTicker: symbolTicker,
+            timeframe: marker.timeframe,
+            candleTimestamp: marker.candleTimestamp
+        )
+        let content = MarkerShareCodec.buildMessage(note: note, payload: payload)
+
+        do {
+            switch mode {
+            case .chatroom:
+                guard let targetChatroomId else { return }
+                _ = try await rlAppState.sendChatroomMessage(chatroomId: targetChatroomId, content: content)
+            case .dm:
+                guard let targetThreadId else { return }
+                _ = try await rlAppState.sendDMMessage(threadId: targetThreadId, content: content)
+            }
+
+            rlAppState.showSuccess("Marker shared")
+            dismiss()
+        } catch {
+            rlAppState.showError(error, title: "Failed to Share Marker", style: .toast)
         }
     }
 }
@@ -277,7 +543,9 @@ struct CommentsView: View {
                 commentText: $commentText,
                 isInputFocused: _isCommentInputFocused,
                 isSending: isSendingComment,
-                onSend: handleAddComment,
+                onSend: { payload in
+                    handleAddComment(payload)
+                },
                 selectedDetent: $selectedDetent
             )
         }
@@ -305,21 +573,61 @@ struct CommentsView: View {
     
     // MARK: - Actions
     
-    private func handleAddComment() {
-        let trimmed = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        
+    private func handleAddComment(_ payload: ChatComposerPayload) {
+        let trimmed = payload.text
+        guard !trimmed.isEmpty || !payload.attachments.isEmpty else { return }
+
         HapticFeedback.light.trigger()
         
         isSendingComment = true
         isCommentInputFocused = false
-        
-        commentText = ""
+
+        if !payload.attachments.isEmpty {
+            Task {
+                await sendCommentWithAttachments(caption: trimmed, attachments: payload.attachments)
+                isSendingComment = false
+            }
+            return
+        }
 
         // Add comment through marker manager (optimistic update happens there)
         Task {
             await markerManager.addComment(markerId: marker.id, content: trimmed)
             isSendingComment = false
+        }
+    }
+
+    private func sendCommentWithAttachments(caption: String, attachments: [ChatAttachmentDraft]) async {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+
+        do {
+            var isFirstMessage = true
+            for attachment in attachments {
+                let upload = try await rlAppState.realApi.uploadMarkerCommentAttachment(
+                    guildId: guildId,
+                    markerId: marker.id,
+                    fileData: attachment.data,
+                    filename: attachment.filename,
+                    mimeType: attachment.mimeType
+                )
+
+                let content: String
+                if isFirstMessage {
+                    content = caption.isEmpty ? attachment.filename : caption
+                } else {
+                    content = attachment.filename
+                }
+                await markerManager.addComment(
+                    markerId: marker.id,
+                    content: content,
+                    attachmentUrl: upload.attachmentUrl,
+                    attachmentType: upload.attachmentType,
+                    attachmentName: upload.attachmentName
+                )
+                isFirstMessage = false
+            }
+        } catch {
+            rlAppState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
     }
     
@@ -359,7 +667,7 @@ struct MarkerCommentInputFooter: View {
     @Binding var commentText: String
     @FocusState var isInputFocused: Bool
     let isSending: Bool
-    let onSend: () -> Void
+    let onSend: (ChatComposerPayload) -> Void
     @Binding var selectedDetent: PresentationDetent
     
     var body: some View {
@@ -1056,5 +1364,3 @@ extension Date {
         return formatter.localizedString(for: self, relativeTo: Date())
     }
 }
-
-

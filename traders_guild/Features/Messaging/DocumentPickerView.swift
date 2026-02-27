@@ -8,8 +8,9 @@ import UniformTypeIdentifiers
 /// SwiftUI wrapper around UIDocumentPickerViewController for selecting files.
 /// Returns selected file data, filename, and MIME type to the caller.
 struct DocumentPickerView: UIViewControllerRepresentable {
-    let onDocumentSelected: (Data, String, String) -> Void  // (fileData, filename, mimeType)
+    let onDocumentsSelected: ([(Data, String, String)]) -> Void  // [(fileData, filename, mimeType)]
     let onCancel: () -> Void
+    var selectionLimit: Int = 10
 
     /// Supported document types
     private let supportedTypes: [UTType] = [
@@ -25,48 +26,59 @@ struct DocumentPickerView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: supportedTypes, asCopy: true)
         picker.delegate = context.coordinator
-        picker.allowsMultipleSelection = false
+        picker.allowsMultipleSelection = true
         return picker
     }
 
     func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onDocumentSelected: onDocumentSelected, onCancel: onCancel)
+        Coordinator(
+            onDocumentsSelected: onDocumentsSelected,
+            onCancel: onCancel,
+            selectionLimit: selectionLimit
+        )
     }
 
     class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let onDocumentSelected: (Data, String, String) -> Void
+        let onDocumentsSelected: ([(Data, String, String)]) -> Void
         let onCancel: () -> Void
+        let selectionLimit: Int
 
-        init(onDocumentSelected: @escaping (Data, String, String) -> Void, onCancel: @escaping () -> Void) {
-            self.onDocumentSelected = onDocumentSelected
+        init(
+            onDocumentsSelected: @escaping ([(Data, String, String)]) -> Void,
+            onCancel: @escaping () -> Void,
+            selectionLimit: Int
+        ) {
+            self.onDocumentsSelected = onDocumentsSelected
             self.onCancel = onCancel
+            self.selectionLimit = selectionLimit
         }
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let url = urls.first else {
+            let selectedURLs = Array(urls.prefix(selectionLimit))
+            guard !selectedURLs.isEmpty else {
                 onCancel()
                 return
             }
 
-            // Security-scoped resource access
-            guard url.startAccessingSecurityScopedResource() else {
-                onCancel()
-                return
-            }
-            defer { url.stopAccessingSecurityScopedResource() }
-
-            do {
-                let data = try Data(contentsOf: url)
-                let filename = url.lastPathComponent
-                let mimeType = mimeTypeForExtension(url.pathExtension)
-                DispatchQueue.main.async {
-                    self.onDocumentSelected(data, filename, mimeType)
+            var payloads: [(Data, String, String)] = []
+            for url in selectedURLs {
+                guard url.startAccessingSecurityScopedResource() else { continue }
+                defer { url.stopAccessingSecurityScopedResource() }
+                do {
+                    let data = try Data(contentsOf: url)
+                    payloads.append((data, url.lastPathComponent, mimeTypeForExtension(url.pathExtension)))
+                } catch {
+                    continue
                 }
-            } catch {
-                DispatchQueue.main.async {
+            }
+
+            DispatchQueue.main.async {
+                if payloads.isEmpty {
                     self.onCancel()
+                } else {
+                    self.onDocumentsSelected(payloads)
                 }
             }
         }

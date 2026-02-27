@@ -101,11 +101,15 @@ class MarkerManager: ObservableObject {
         do {
             // Fetch markers from RealAPIService
             let timeframeString = timeframe.toBackendString()
+            let startTime = candles.first?.timestamp
+            let endTime = candles.last?.timestamp
             let markersListDTO = try await api.getMarkers(
                 guildId: guildId,
                 symbolId: symbolId,
                 timeframe: timeframeString,
-                limit: 100
+                limit: 100,
+                startTime: startTime,
+                endTime: endTime
             )
             
             // Convert RLChartMarkerUI to ChartMarkerUI (UI model)
@@ -152,6 +156,7 @@ class MarkerManager: ObservableObject {
         guard !candles.isEmpty else { return nil }
         var closestIndex: Int?
         var smallestDiff: TimeInterval = .greatestFiniteMagnitude
+        let tolerance = candleMatchTolerance(in: candles)
         
         for (index, candle) in candles.enumerated() {
             let diff = abs(candle.timestamp.timeIntervalSince(timestamp))
@@ -160,7 +165,36 @@ class MarkerManager: ObservableObject {
                 closestIndex = index
             }
         }
+
+        guard smallestDiff <= tolerance else {
+            return nil
+        }
         return closestIndex
+    }
+
+    private func candleMatchTolerance(in candles: [RLCandleDTO]) -> TimeInterval {
+        guard candles.count > 1 else {
+            let timeframeSeconds = currentTimeframe?.seconds ?? 60
+            return max(30, timeframeSeconds * 0.6)
+        }
+
+        var diffs: [TimeInterval] = []
+        diffs.reserveCapacity(candles.count - 1)
+        for idx in 1..<candles.count {
+            let diff = abs(candles[idx].timestamp.timeIntervalSince(candles[idx - 1].timestamp))
+            if diff > 0 {
+                diffs.append(diff)
+            }
+        }
+
+        guard !diffs.isEmpty else {
+            let timeframeSeconds = currentTimeframe?.seconds ?? 60
+            return max(30, timeframeSeconds * 0.6)
+        }
+
+        let sorted = diffs.sorted()
+        let median = sorted[sorted.count / 2]
+        return max(30, median * 0.6)
     }
     
     
@@ -313,6 +347,7 @@ class MarkerManager: ObservableObject {
                 markers[i].candleIndex = newIndex
             }
         }
+        markers = MarkerPositionCalculator.assignStablePositions(markers: markers, candles: candles)
     }
 
     func clearMarkers() {
@@ -617,7 +652,13 @@ class MarkerManager: ObservableObject {
         }
     }
     
-    func addComment(markerId: UUID, content: String) async {
+    func addComment(
+        markerId: UUID,
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
+    ) async {
         guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
         
         let tempCommentId = UUID()
@@ -633,7 +674,10 @@ class MarkerManager: ObservableObject {
             isEdited: false,
             isCurrentUserMessage: true,
             canEdit: true,
-            canDelete: true
+            canDelete: true,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
         )
         
         let optimisticComments = markers[index].comments + [comment]
@@ -651,7 +695,10 @@ class MarkerManager: ObservableObject {
             let createdComment = try await api.addMarkerComment(
                 guildId: currentGuildId,
                 markerId: markerId,
-                content: content
+                content: content,
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
             )
             
             // Replace optimistic comment with real one from backend
@@ -1415,4 +1462,3 @@ struct ChartMarkerSystem {
         return nil
     }
 }
-

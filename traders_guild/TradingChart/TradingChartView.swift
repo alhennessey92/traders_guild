@@ -626,6 +626,11 @@ struct TradingChartView: View {
         .onChange(of: chartData.candles.count) { oldCount, newCount in
             handleCandleCountChange(oldCount: oldCount, newCount: newCount)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .focusSharedMarker)) { notification in
+            guard let userInfo = notification.userInfo,
+                  let payload = MarkerSharePayloadV1(userInfo) else { return }
+            focusSharedMarker(payload)
+        }
     }
     
     // MARK: - Main Chart Content
@@ -1686,6 +1691,50 @@ struct TradingChartView: View {
         }
         if minDiff < 86400 { return closestIndex }
         return nil
+    }
+
+    private func focusSharedMarker(_ payload: MarkerSharePayloadV1) {
+        attemptSharedMarkerFocus(payload, attemptsRemaining: 6)
+    }
+
+    private func attemptSharedMarkerFocus(_ payload: MarkerSharePayloadV1, attemptsRemaining: Int) {
+        let matchingMarker = markerManager.markers.first { $0.id == payload.markerId }
+        let candleIndex = matchingMarker?.candleIndex
+            ?? Self.findCandleIndexForTimestamp(payload.candleTimestamp, in: chartData.candles)
+
+        if matchingMarker == nil && candleIndex == nil && attemptsRemaining > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                attemptSharedMarkerFocus(payload, attemptsRemaining: attemptsRemaining - 1)
+            }
+            return
+        }
+
+        guard let resolvedIndex = candleIndex else { return }
+        guard chartData.candles.indices.contains(resolvedIndex) else { return }
+
+        if let matchingMarker {
+            markerManager.selectedMarker = matchingMarker
+            tappedMarkerId = matchingMarker.id
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                tappedMarkerId = nil
+            }
+        }
+
+        let chartWidth = UIScreen.main.bounds.width
+        let chartHeight = UIScreen.main.bounds.height * 0.55
+        let candleWidth = totalCandleWidth
+        let focusPrice = matchingMarker?.price ?? chartData.candles[resolvedIndex].close
+
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            gestureState.centerOnMarker(
+                at: resolvedIndex,
+                chartWidth: chartWidth,
+                candleWidth: candleWidth,
+                price: focusPrice,
+                chartHeight: chartHeight,
+                priceRange: chartData.priceRange
+            )
+        }
     }
     
     private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
@@ -3736,5 +3785,4 @@ struct StaticTargetLineOverlay: View {
         .allowsHitTesting(false)
     }
 }
-
 

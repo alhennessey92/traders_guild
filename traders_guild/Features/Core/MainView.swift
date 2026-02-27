@@ -369,6 +369,11 @@ struct MainView: View {
                         }
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .openSharedMarker)) { notification in
+                    Task {
+                        await handleOpenSharedMarker(notification.userInfo)
+                    }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .guildWatchlistUpdated)) { _ in
                     guard let guildId = rlAppState.currentGuild?.id else { return }
                     Task {
@@ -654,6 +659,45 @@ struct MainView: View {
     
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    private func handleOpenSharedMarker(_ userInfo: [AnyHashable: Any]?) async {
+        guard let userInfo, let payload = MarkerSharePayloadV1(userInfo) else { return }
+
+        dismissKeyboard()
+        withAnimation(AnimationConstants.standard) {
+            showLeftDrawer = false
+            showRightDrawer = false
+            showOverlay = false
+            leftDragTranslation = 0
+            rightDragTranslation = 0
+            selectedDetent = .fraction(0.11)
+        }
+
+        if chartViewModel.currentSymbol?.id != payload.symbolId {
+            if let cached = chartViewModel.allAvailableSymbols.first(where: { $0.id == payload.symbolId }) {
+                chartViewModel.setSymbol(cached)
+            } else {
+                do {
+                    let symbol = try await rlAppState.realApi.getSymbol(symbolId: payload.symbolId)
+                    chartViewModel.setSymbol(symbol)
+                } catch {
+                    rlAppState.showError(error, title: "Unable to Open Marker", style: .toast)
+                    return
+                }
+            }
+        }
+
+        if let timeframe = RLChartTimeframe.fromBackendString(payload.timeframe),
+           chartViewModel.currentTimeframe != timeframe {
+            chartViewModel.setTimeframe(timeframe)
+        }
+
+        NotificationCenter.default.post(
+            name: .focusSharedMarker,
+            object: nil,
+            userInfo: payload.notificationUserInfo
+        )
     }
 }
 
@@ -1260,9 +1304,7 @@ struct ChartBottomSheet: View {
     // Chat state - managed here since parent handles input
     @StateObject private var chartChatManager: ChartChatManager
     @State private var chatMessageText: String = ""
-    @FocusState private var isChatInputFocused: Bool
-    @State private var showChartChatPhotoPicker = false
-    @State private var showChartChatDocPicker = false
+    @State private var isSendingChartMessage = false
     
     init(
         controlViewModel: ChartControlViewModel,
@@ -1380,141 +1422,92 @@ struct ChartBottomSheet: View {
     // MARK: - Chat Input Footer (Replaces Tab Bar in Chat Mode)
     
     private var chatInputFooter: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .background(Color.gray.opacity(0.3))
-            
-            HStack(spacing: 12) {
-                // Back button - circular like tab buttons
+        ChatInputFooter(
+            messageText: $chatMessageText,
+            placeholder: "Message #\(chartChatManager.activeChartChat?.symbolTicker.lowercased() ?? "chat")...",
+            isSending: isSendingChartMessage,
+            onSend: { payload in
+                Task {
+                    await sendChartComposedMessage(payload)
+                }
+            },
+            selectedDetent: $selectedDetent,
+            leadingAccessory: AnyView(
                 Button(action: {
-                    isChatInputFocused = false
                     withAnimation(.easeInOut(duration: 0.25)) {
                         selectedView = .symbol
                     }
                 }) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(AppColors.whiteText.opacity(0.9))
-                        .frame(width: 50, height: 50)
+                        .frame(width: 40, height: 40)
                         .background(AppColors.gradientBackgroundDark)
                         .clipShape(Circle())
                         .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
                 }
-                .padding(.horizontal, 4)
-                
-                // Chat input (matching ChatInputFooter style)
-                HStack(spacing: 12) {
-                    // Plus/attachment button — shows menu
-                    Menu {
-                        Button {
-                            showChartChatPhotoPicker = true
-                        } label: {
-                            Label("Photo", systemImage: "photo.fill")
-                        }
-                        Button {
-                            showChartChatDocPicker = true
-                        } label: {
-                            Label("File", systemImage: "doc.fill")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.title3)
-                            .foregroundColor(.secondary)
-                            .frame(width: 32, height: 32)
-                    }
-                    .compositingGroup()
-
-                    // Text field
-                    TextField("Message #\(chartChatManager.activeChartChat?.symbolTicker.lowercased() ?? "chat")...", text: $chatMessageText)
-                        .font(.subheadline)
-                        .submitLabel(.send)
-                        .focused($isChatInputFocused)
-                        .onSubmit {
-                            sendChatMessage()
-                        }
-
-                    HStack(spacing: 8) {
-                        // Mic button
-                        Button(action: {
-                            isChatInputFocused = false
-                            // Handle voice
-                        }) {
-                            Image(systemName: "mic.fill")
-                                .font(.title3)
-                                .foregroundColor(.secondary)
-                                .frame(width: 32, height: 32)
-                        }
-                        .compositingGroup()
-
-                        // Send button
-                        Button(action: {
-                            sendChatMessage()
-                        }) {
-                            Image(systemName: "chevron.forward.2")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(chatMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : AppColors.gradientBackgroundDark.opacity(0.8))
-                                .frame(width: 40, height: 40)
-                                .padding(.leading, 2)
-                                .background(chatMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppColors.whiteText.opacity(0.3) : AppColors.whiteText)
-                                .clipShape(Capsule())
-                        }
-                        .disabled(chatMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .compositingGroup()
-                    }
-                }
-                .padding(.leading, 10)
-                .frame(height: 44)
-                .background(AppColors.whiteText.opacity(0.08))
-                .cornerRadius(25)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(AppColors.sheetBackground)
-        }
-        .frame(height: 70)
-        .fullScreenCover(isPresented: $showChartChatPhotoPicker) {
-            PhotoPickerView(
-                onImageSelected: { data, filename, mimeType in
-                    showChartChatPhotoPicker = false
-                    // TODO: Upload attachment and send with message
-                },
-                onCancel: { showChartChatPhotoPicker = false }
             )
-            .ignoresSafeArea()
-        }
-        .fullScreenCover(isPresented: $showChartChatDocPicker) {
-            DocumentPickerView(
-                onDocumentSelected: { data, filename, mimeType in
-                    showChartChatDocPicker = false
-                    // TODO: Upload attachment and send with message
-                },
-                onCancel: { showChartChatDocPicker = false }
-            )
-            .ignoresSafeArea()
-        }
+        )
     }
 
     // MARK: - Chat Message Sending
     
-    private func sendChatMessage() {
-        let trimmed = chatMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        
-        // Clear input immediately for responsive feel
-        let messageToSend = trimmed
-        chatMessageText = ""
-        isChatInputFocused = false
-        
-        Task {
-            do {
-                try await chartChatManager.sendMessage(content: messageToSend)
-                HapticFeedback.light.trigger()
-            } catch {
-                // Restore message on error
-                chatMessageText = messageToSend
-                rlAppState.showError(error, title: "Failed to Send Message", style: .toast)
+    private func sendChartComposedMessage(_ payload: ChatComposerPayload) async {
+        guard !isSendingChartMessage else { return }
+        isSendingChartMessage = true
+        defer { isSendingChartMessage = false }
+
+        if !payload.attachments.isEmpty {
+            await sendChartAttachments(payload: payload)
+            return
+        }
+
+        do {
+            try await chartChatManager.sendMessage(content: payload.text)
+            HapticFeedback.light.trigger()
+        } catch {
+            rlAppState.showError(error, title: "Failed to Send Message", style: .toast)
+        }
+    }
+
+    private func sendChartAttachments(payload: ChatComposerPayload) async {
+        guard let guildId = rlAppState.currentGuild?.id,
+              let chatId = chartChatManager.activeChartChat?.id else {
+            rlAppState.showError(
+                title: "Unable to Send",
+                message: "No active chart chat was found.",
+                style: .toast
+            )
+            return
+        }
+
+        do {
+            var isFirstMessage = true
+            for attachment in payload.attachments {
+                let upload = try await rlAppState.realApi.uploadChartChatAttachment(
+                    guildId: guildId,
+                    chatId: chatId,
+                    fileData: attachment.data,
+                    filename: attachment.filename,
+                    mimeType: attachment.mimeType
+                )
+                let content: String
+                if isFirstMessage {
+                    content = payload.text.isEmpty ? attachment.filename : payload.text
+                } else {
+                    content = attachment.filename
+                }
+                try await chartChatManager.sendMessage(
+                    content: content,
+                    attachmentUrl: upload.attachmentUrl,
+                    attachmentType: upload.attachmentType,
+                    attachmentName: upload.attachmentName
+                )
+                isFirstMessage = false
             }
+            HapticFeedback.light.trigger()
+        } catch {
+            rlAppState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
     }
     

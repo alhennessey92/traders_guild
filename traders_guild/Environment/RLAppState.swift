@@ -2949,4 +2949,12 @@ extension Notification.Name {
     /// Posted when a user's trading accuracy changes via WebSocket (prediction win/loss).
     /// userInfo: ["guildId": String, "newAccuracyRate": Double, "totalPredictions": Int, "successfulPredictions": Int, "winStreak": Int, "isWin": Bool]
     static let accuracyDidUpdate = Notification.Name("accuracyDidUpdate")
+
+    /// Posted when a marker share card is tapped inside chat.
+    /// userInfo: ["markerId": String, "symbolId": String, "timeframe": String, "candleTimestamp": Date, "symbolTicker": String?]
+    static let openSharedMarker = Notification.Name("openSharedMarker")
+
+    /// Posted after chart symbol/timeframe has been prepared for a shared marker.
+    /// userInfo mirrors openSharedMarker payload.
+    static let focusSharedMarker = Notification.Name("focusSharedMarker")
 }

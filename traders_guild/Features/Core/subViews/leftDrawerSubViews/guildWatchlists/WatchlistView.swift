@@ -690,38 +690,12 @@ struct WatchlistSymbolIcon: View {
     var size: CGFloat = 44
     
     var body: some View {
-        Group {
-            if let iconName = symbol.iconName {
-                // Has SVG icon - render it to fill the entire icon area
-                Image(iconName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
-            } else {
-                // No icon - show gradient background with abbreviation text
-                ZStack {
-                    LinearGradient(
-                        colors: [
-                            symbol.primaryColorValue,
-                            symbol.secondaryColorValue
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    
-                    Text(symbol.fallbackInitial)
-                        .font(.system(size: size * 0.38, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                }
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
-            }
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: size * 0.22)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        TradingSymbolIconView(
+            symbol: symbol,
+            size: size,
+            cornerRadiusRatio: 0.22,
+            strokeOpacity: 0.15,
+            showShadow: false
         )
     }
 }
-

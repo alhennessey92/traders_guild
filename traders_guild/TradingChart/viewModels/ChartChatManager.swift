@@ -158,13 +158,21 @@ class ChartChatManager: ObservableObject {
     }
     
     /// Send a new message to the active chart chat
-    func sendMessage(content: String) async throws {
+    func sendMessage(
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil
+    ) async throws {
         guard let chat = activeChartChat else { return }
         
         // Call RealAPIService to send message
         let newMessage = try await api.sendChartChatMessage(
             chatId: chat.id,
-            content: content
+            content: content,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName
         )
         
         // Add to local messages

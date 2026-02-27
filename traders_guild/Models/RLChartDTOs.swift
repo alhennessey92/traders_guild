@@ -300,6 +300,7 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
     
     // Visual identity
     let iconName: String?
+    let iconUrl: String?
     let primaryColor: String
     let secondaryColor: String
     
@@ -1259,6 +1260,7 @@ extension RLTradingSymbolDTO {
         decimalPlaces: 2,
         isActive: true,
         iconName: "bitcoinsign.circle.fill",
+        iconUrl: nil,
         primaryColor: "#F7931A",
         secondaryColor: "#4A4A4A",
         currentPrice: 97500.50,
@@ -1287,6 +1289,7 @@ extension RLTradingSymbolDTO {
         decimalPlaces: 5,
         isActive: true,
         iconName: "eurosign.circle.fill",
+        iconUrl: nil,
         primaryColor: "#003399",
         secondaryColor: "#FFD700",
         currentPrice: 1.08520,

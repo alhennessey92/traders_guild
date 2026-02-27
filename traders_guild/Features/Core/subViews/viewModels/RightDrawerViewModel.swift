@@ -256,9 +256,35 @@ class RLRightDrawerViewModel: ObservableObject {
     }
 
     private func preloadMembersFallback(for guildId: UUID, appState: RLAppState) async {
+        let pageSize = 200
+        let maxMembers = 2000
+        var skip = 0
+        var collected: [RLGuildMemberDTO] = []
+
         do {
-            let response = try await appState.fetchGuildMembers(guildId: guildId, limit: 200)
-            guildMembers = response.members.filter { $0.userId != appState.currentUser?.id }
+            while skip < maxMembers {
+                let response = try await appState.fetchGuildMembers(
+                    guildId: guildId,
+                    skip: skip,
+                    limit: pageSize
+                )
+                let pageMembers = response.members.filter { $0.userId != appState.currentUser?.id }
+                collected.append(contentsOf: pageMembers)
+                if pageMembers.count < pageSize {
+                    break
+                }
+                skip += pageSize
+            }
+
+            // Deduplicate by user id while preserving order.
+            var seenUserIds = Set<UUID>()
+            guildMembers = collected.filter { member in
+                if seenUserIds.contains(member.userId) {
+                    return false
+                }
+                seenUserIds.insert(member.userId)
+                return true
+            }
             rebuildDMSections()
         } catch {
             print("⚠️ Failed to load member fallback list: \(error)")

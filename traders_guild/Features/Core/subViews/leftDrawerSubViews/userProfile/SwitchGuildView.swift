@@ -9,6 +9,19 @@
 
 import SwiftUI
 
+// MARK: - Shared Guild Background
+private struct GuildFlowBackground: View {
+    var body: some View {
+        ZStack {
+            Color.clear
+                .background(.ultraThinMaterial)
+            AppColors.sheetBackground
+            StaticPatternView()
+        }
+        .ignoresSafeArea()
+    }
+}
+
 // MARK: - Switch Guild Main View
 struct SwitchGuildView: View {
     let onBack: () -> Void
@@ -23,35 +36,41 @@ struct SwitchGuildView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 20) {
-                // Back button
-                Button(action: onBack) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                            .font(.headline)
-                        Text("Back")
-                            .font(.headline)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Button(action: onBack) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                                .font(.headline)
+                            Text("Back")
+                                .font(.headline)
+                        }
+                        .foregroundColor(AppColors.whiteText)
                     }
-                    .foregroundColor(AppColors.whiteText)
+                    Spacer()
                 }
-                .padding(.top, 20)
-                .padding(.horizontal)
-                
-                HStack(spacing: 8) {
+
+                HStack(spacing: 10) {
                     Image(systemName: "arrow.trianglehead.2.counterclockwise")
                         .font(.headline)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.whiteText)
-                    Text("Switch Guild")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.whiteText)
+                        .foregroundColor(AppColors.accentColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Switch Guild")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.whiteText)
+                        Text("Choose your active community")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                    }
                 }
-                .padding(.top, 5)
-                .padding(.horizontal)
-                
-                Divider()
+
+                Divider().opacity(0.8)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
             .background(
                 LinearGradient(
                     colors: [
@@ -105,12 +124,12 @@ struct SwitchGuildView: View {
             
             Divider()
 
-            Text("More options")
+            Text("Guild actions")
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 25)
-                .padding(.top, 12)
+                .padding(.top, 10)
 
             HStack(spacing: 8) {
                 DrawerActionButton(
@@ -138,8 +157,8 @@ struct SwitchGuildView: View {
                 )
             }
             .padding(.horizontal, 25)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 14)
             .background(AppColors.sheetBackground)
         }
         .task {
@@ -376,7 +395,7 @@ struct JoinGuildFlowView: View {
                 }
             }
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+        .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
     }
 }
@@ -441,74 +460,109 @@ struct JoinGuildView: View {
         discoverGuilds
     }
 
+    private var activeFilterBadges: [String] {
+        var badges: [String] = []
+        if selectedAccess != .all {
+            badges.append(selectedAccess.rawValue)
+        }
+        if !languageFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            badges.append("Language")
+        }
+        if !locationFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            badges.append("Location")
+        }
+        return badges
+    }
+
     var body: some View {
         ZStack {
-            StaticAuthBackgroundView()
+            GuildFlowBackground()
 
             VStack(alignment: .leading, spacing: 0) {
-                // Title header
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Discover Guilds")
-                        .font(.title.bold())
-                        .foregroundColor(AppColors.whiteText)
-
-                    Text("Find your trading community")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.greyText)
-                }
+                GuildFlowTitleHeader(
+                    title: "Discover Guilds",
+                    subtitle: "Find your trading community",
+                    icon: "safari.fill"
+                )
                 .padding(.horizontal, 20)
-                .padding(.top, 2)
-                .padding(.bottom, 10)
+                .padding(.top, 4)
+                .padding(.bottom, 12)
 
                 // Search bar with filter
-                HStack(spacing: 8) {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-                            .font(.subheadline)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(AppColors.whiteText.opacity(0.6))
+                                .font(.subheadline)
 
-                        TextField("Search guilds...", text: $searchText)
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.whiteText)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .submitLabel(.done)
-                            .focused($isSearchFocused)
-                            .onSubmit {
-                                Task { await loadOpenGuilds() }
-                            }
+                            TextField("Search guilds...", text: $searchText)
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.whiteText)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .submitLabel(.done)
+                                .focused($isSearchFocused)
+                                .onSubmit {
+                                    Task { await loadOpenGuilds() }
+                                }
 
-                        if !searchText.isEmpty {
-                            Button(action: {
-                                searchText = ""
-                                Task { await loadOpenGuilds() }
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(AppColors.whiteText.opacity(0.6))
-                                    .font(.subheadline)
+                            if !searchText.isEmpty {
+                                Button(action: {
+                                    searchText = ""
+                                    Task { await loadOpenGuilds() }
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                                        .font(.subheadline)
+                                }
                             }
                         }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(AppColors.unhighlightedTextBoxBackground.opacity(0.92))
-                    .overlay(
-                        Capsule()
-                            .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
-                    )
-                    .clipShape(Capsule())
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(AppColors.unhighlightedTextBoxBackground.opacity(0.92))
+                        .overlay(
+                            Capsule()
+                                .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
+                        )
+                        .clipShape(Capsule())
 
-                    Button(action: { showFilters = true }) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.title3)
-                            .foregroundColor(AppColors.whiteText.opacity(0.8))
-                            .frame(width: 40, height: 40)
-                            .background(AppColors.unhighlightedTextBoxBackground.opacity(0.92))
-                            .overlay(
-                                Circle()
-                                    .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
+                        Button(action: { showFilters = true }) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.title3)
+                                .foregroundColor(AppColors.whiteText.opacity(0.8))
+                                .frame(width: 40, height: 40)
+                                .background(AppColors.unhighlightedTextBoxBackground.opacity(0.92))
+                                .overlay(
+                                    Circle()
+                                        .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
+                                )
+                                .clipShape(Circle())
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        Label("\(filteredGuilds.count) results", systemImage: "person.3.fill")
+                            .font(.caption2)
+                            .foregroundColor(AppColors.whiteText.opacity(0.78))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule().fill(AppColors.whiteText.opacity(0.12))
                             )
-                            .clipShape(Circle())
+
+                        ForEach(activeFilterBadges, id: \.self) { badge in
+                            Text(badge)
+                                .font(.caption2)
+                                .foregroundColor(AppColors.accentColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule().fill(AppColors.accentColor.opacity(0.17))
+                                )
+                        }
+
+                        Spacer(minLength: 0)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -587,7 +641,7 @@ struct JoinGuildView: View {
                     .foregroundColor(AppColors.fadedBackground)
             }
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+        .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         .task {
             await loadOpenGuilds()
         }
@@ -777,7 +831,7 @@ struct JoinGuildFilterSheet: View {
             .background(AppColors.sheetBackground)
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+            .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -800,6 +854,47 @@ struct JoinGuildFilterSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct GuildFlowTitleHeader: View {
+    let title: String
+    let subtitle: String
+    var icon: String = "shield.lefthalf.filled"
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(AppColors.accentColor.opacity(0.16))
+                    .frame(width: 44, height: 44)
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppColors.accentColor)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(AppColors.whiteText)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.greyText)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -906,10 +1001,10 @@ struct JoinGuildRow: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                    .fill(AppColors.gradientBackgroundDark.opacity(0.3))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                            .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
                     )
             )
         }
@@ -928,6 +1023,7 @@ struct GuildDetailView: View {
     @State private var showJoinForm = false
     @State private var isJoining = false
     @State private var joinQuestions: [RLGuildJoinQuestionDTO] = []
+    @State private var visibleSections: Set<Int> = []
 
     private var joinedGuildEntry: RLGuildWithMembership? {
         rlAppState.userGuilds.first(where: { $0.guild.id == guild.id })
@@ -975,25 +1071,38 @@ struct GuildDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
                 )
         )
     }
 
     var body: some View {
         ZStack {
-            StaticAuthBackgroundView()
+            GuildFlowBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Title
-                    Text("Guild Details")
-                        .font(.title.bold())
-                        .foregroundColor(AppColors.whiteText)
-                        .padding(.top, 2)
+                    GuildFlowTitleHeader(
+                        title: guild.name,
+                        subtitle: "Guild details and entry requirements",
+                        icon: "shield.pattern.checkered"
+                    )
+                    .padding(.top, 2)
+                    .opacity(visibleSections.contains(0) ? 1 : 0)
+                    .offset(y: visibleSections.contains(0) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.0), value: visibleSections.contains(0))
+
+                    HStack(spacing: 8) {
+                        GuildMetaChip(label: "Members", value: "\(guild.memberCount)")
+                        GuildMetaChip(label: "Online", value: "\(guild.membersOnline)")
+                        GuildMetaChip(label: "Rep", value: guild.reputationDisplay)
+                    }
+                    .opacity(visibleSections.contains(1) ? 1 : 0)
+                    .offset(y: visibleSections.contains(1) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.05), value: visibleSections.contains(1))
 
                     // Guild header card
                     sectionCard {
@@ -1036,6 +1145,9 @@ struct GuildDetailView: View {
                                 .foregroundColor(AppColors.whiteText.opacity(0.85))
                         }
                     }
+                    .opacity(visibleSections.contains(2) ? 1 : 0)
+                    .offset(y: visibleSections.contains(2) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.1), value: visibleSections.contains(2))
 
                     // Guild Snapshot card
                     sectionCard {
@@ -1052,6 +1164,9 @@ struct GuildDetailView: View {
                             StatBox(label: "Type", value: guild.isOpen ? "Open" : "Private")
                         }
                     }
+                    .opacity(visibleSections.contains(3) ? 1 : 0)
+                    .offset(y: visibleSections.contains(3) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
 
                     // Guild Information card
                     sectionCard {
@@ -1063,6 +1178,9 @@ struct GuildDetailView: View {
                         GuildInfoRow(icon: "globe", title: "Language", value: displayValue(guild.language))
                         GuildInfoRow(icon: "mappin.and.ellipse", title: "Location", value: displayValue(guild.location))
                     }
+                    .opacity(visibleSections.contains(4) ? 1 : 0)
+                    .offset(y: visibleSections.contains(4) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.2), value: visibleSections.contains(4))
 
                     // Join Requirements card
                     VStack(alignment: .leading, spacing: 8) {
@@ -1078,15 +1196,25 @@ struct GuildDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                            .fill(AppColors.gradientBackgroundDark.opacity(0.3))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14)
                                     .stroke(AppColors.accentColor.opacity(0.25), lineWidth: 1)
                             )
                     )
+                    .opacity(visibleSections.contains(5) ? 1 : 0)
+                    .offset(y: visibleSections.contains(5) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.25), value: visibleSections.contains(5))
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 100)
+                .onAppear {
+                    for i in 0...5 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
+                            visibleSections.insert(i)
+                        }
+                    }
+                }
             }
         }
         .navigationBarBackButtonHidden(true)
@@ -1105,7 +1233,7 @@ struct GuildDetailView: View {
                     .foregroundColor(AppColors.fadedBackground)
             }
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+        .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 Divider()
@@ -1194,6 +1322,33 @@ struct GuildDetailView: View {
     }
 }
 
+private struct GuildMetaChip: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(AppColors.whiteText)
+                .lineLimit(1)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(AppColors.greyText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.gradientBackgroundDark.opacity(0.25))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                )
+        )
+    }
+}
+
 // MARK: - Stat Box
 
 struct StatBox: View {
@@ -1214,10 +1369,10 @@ struct StatBox: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                .fill(AppColors.gradientBackgroundDark.opacity(0.25))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
                 )
         )
     }
@@ -1271,21 +1426,15 @@ struct JoinGuildFormView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                StaticAuthBackgroundView()
+                GuildFlowBackground()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        // Title header
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Join Request")
-                                .font(.title.bold())
-                                .foregroundColor(AppColors.whiteText)
-
-                            Text("Application for \(guild.name)")
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        .padding(.top, 8)
+                        GuildFlowTitleHeader(
+                            title: "Join Request",
+                            subtitle: "Application for \(guild.name)"
+                        )
+                        .padding(.top, 2)
 
                         // Application Questions card
                         if !questions.isEmpty {
@@ -1336,10 +1485,10 @@ struct JoinGuildFormView: View {
                             .padding(16)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                                    .fill(AppColors.gradientBackgroundDark.opacity(0.3))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 14)
-                                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                                            .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
                                     )
                             )
                         }
@@ -1372,10 +1521,10 @@ struct JoinGuildFormView: View {
                         .padding(16)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
-                                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14)
-                                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
                                 )
                         )
                     }
@@ -1399,7 +1548,7 @@ struct JoinGuildFormView: View {
                         .foregroundColor(AppColors.fadedBackground)
                 }
             }
-            .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+            .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         }
         .toolbarColorScheme(.dark, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
@@ -1467,7 +1616,7 @@ struct CreateGuildFlowView: View {
             )
             .environmentObject(rlAppState)
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+        .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
     }
 }
@@ -1486,6 +1635,7 @@ struct CreateGuildView: View {
     @State private var language: String = ""
     @State private var location: String = ""
     @State private var joinQuestions: [String] = [""]
+    @State private var visibleSections: Set<Int> = []
 
     // Section card helper
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -1496,31 +1646,38 @@ struct CreateGuildView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
                 )
         )
     }
 
     var body: some View {
         ZStack {
-            StaticAuthBackgroundView()
+            GuildFlowBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Title header
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Create a Guild")
-                            .font(.title.bold())
-                            .foregroundColor(AppColors.whiteText)
-
-                        Text("Build your trading community")
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
-                    }
+                    GuildFlowTitleHeader(
+                        title: "Create a Guild",
+                        subtitle: "Build your trading community",
+                        icon: "plus.circle.fill"
+                    )
                     .padding(.top, 2)
+                    .opacity(visibleSections.contains(0) ? 1 : 0)
+                    .offset(y: visibleSections.contains(0) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.0), value: visibleSections.contains(0))
+
+                    HStack(spacing: 8) {
+                        GuildMetaChip(label: "Access", value: isOpen ? "Open" : "Private")
+                        GuildMetaChip(label: "Questions", value: isOpen ? "0" : "\(joinQuestions.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count)")
+                        GuildMetaChip(label: "Name", value: guildName.isEmpty ? "Draft" : "\(min(guildName.count, 50))/50")
+                    }
+                    .opacity(visibleSections.contains(1) ? 1 : 0)
+                    .offset(y: visibleSections.contains(1) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.05), value: visibleSections.contains(1))
 
                     // Guild Identity card
                     sectionCard {
@@ -1572,6 +1729,9 @@ struct CreateGuildView: View {
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                     }
+                    .opacity(visibleSections.contains(2) ? 1 : 0)
+                    .offset(y: visibleSections.contains(2) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.1), value: visibleSections.contains(2))
 
                     // Details card
                     sectionCard {
@@ -1642,6 +1802,9 @@ struct CreateGuildView: View {
                                 )
                         }
                     }
+                    .opacity(visibleSections.contains(3) ? 1 : 0)
+                    .offset(y: visibleSections.contains(3) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
 
                     // Access & Moderation card
                     sectionCard {
@@ -1721,9 +1884,19 @@ struct CreateGuildView: View {
                         }
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isOpen)
+                    .opacity(visibleSections.contains(4) ? 1 : 0)
+                    .offset(y: visibleSections.contains(4) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.2), value: visibleSections.contains(4))
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 100)
+                .onAppear {
+                    for i in 0...4 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
+                            visibleSections.insert(i)
+                        }
+                    }
+                }
             }
         }
         .navigationBarBackButtonHidden(true)
@@ -1742,7 +1915,7 @@ struct CreateGuildView: View {
                     .foregroundColor(AppColors.fadedBackground)
             }
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
+        .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 Divider()

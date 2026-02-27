@@ -10,115 +10,144 @@ import SwiftUI
 struct StatisticsView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
 
-    /// Guild reputation: sum of all members' reputation when members are loaded.
-    private var guildReputationDisplay: String {
-        if leftDrawerViewModel.guildMembers.isEmpty {
-            return "--"
-        }
-        let total = leftDrawerViewModel.guildMembers.reduce(0) { $0 + $1.reputation }
-        return "\(total)"
+    private var guildMemberCount: Int {
+        leftDrawerViewModel.guildMembers.count
+    }
+
+    private var guildReputationTotal: Int {
+        leftDrawerViewModel.guildMembers.reduce(0) { $0 + $1.reputation }
     }
 
     var body: some View {
         VStack(spacing: 12) {
-            // ✅ Loading state
             if leftDrawerViewModel.isLoading && leftDrawerViewModel.statistics == nil {
                 VStack(spacing: 16) {
                     ProgressView()
                         .scaleEffect(1.2)
                     Text("Loading Guild Statistics...")
                         .font(.subheadline)
-                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                        .foregroundColor(AppColors.whiteText.opacity(0.55))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
-            }
-            else {
-                if let statistics = leftDrawerViewModel.statistics {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Guild Performance")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText)
-                            .padding(.bottom, 4)
-                        
-                        StatRow(label: "Guild Reputation", value: guildReputationDisplay)
-                        StatRow(label: "Total Predictions", value: statistics.totalPredictionsDisplay)
-                        StatRow(label: "Correct Predictions", value: statistics.correctPredictionsDisplay)
-                        StatRow(label: "Average Accuracy", value: statistics.averageAccuracyDisplay)
-                        StatRow(label: "Guild Rank", value: statistics.guildRankDisplay)
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(10)
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("This Week")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText)
-                            .padding(.bottom, 4)
-                        
-                        StatRow(label: "New Members", value: statistics.newMembersDisplay)
-                        StatRow(label: "Active Users", value: statistics.activeUsersDisplay)
-                        StatRow(label: "Predictions Made", value: statistics.predictionsMadeDisplay)
-                        StatRow(label: "Reputation Earned", value: statistics.reputationEarnedDisplay)
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(10)
+            } else if let statistics = leftDrawerViewModel.statistics {
+                GuildStatsCard(title: "Snapshot", subtitle: "Guild rank and totals") {
+                    StatMetricRow(label: "Guild Reputation", value: formatInt(guildReputationTotal), accent: AppColors.accentColor)
+                    StatMetricRow(label: "Guild Rank", value: statistics.guildRankDisplay, accent: .yellow)
+                    StatMetricRow(label: "Total Predictions", value: statistics.totalPredictionsDisplay, accent: AppColors.whiteText)
+                    StatMetricRow(label: "Member Count", value: "\(guildMemberCount)", accent: AppColors.whiteText)
                 }
-                
-//                VStack(alignment: .leading, spacing: 12) {
-//                    Text("Top Contributors")
-//                        .font(.headline)
-//                        .fontWeight(.semibold)
-//                        .foregroundColor(AppColors.whiteText)
-//                        .padding(.bottom, 4)
-//                    
-//                    ForEach(1...5, id: \.self) { index in
-//                        HStack {
-//                            Text("\(index).")
-//                                .font(.caption)
-//                                .foregroundColor(AppColors.whiteText.opacity(0.5))
-//                                .frame(width: 20)
-//                            Text("User\(index)")
-//                                .font(.subheadline)
-//                                .foregroundColor(AppColors.whiteText)
-//                            Spacer()
-//                            Text("+\(200 - index * 30)")
-//                                .font(.subheadline)
-//                                .fontWeight(.semibold)
-//                                .foregroundColor(AppColors.accentColor)
-//                        }
-//                    }
-//                }
-//                .padding()
-//                .background(Color.white.opacity(0.08))
-//                .cornerRadius(10)
-                
+
+                GuildStatsCard(title: "Prediction Quality", subtitle: "Wins, losses and consistency") {
+                    let losses = max(0, statistics.totalPredictions - statistics.correctPredictions)
+                    let errorRate = statistics.totalPredictions > 0
+                        ? Double(losses) / Double(statistics.totalPredictions)
+                        : 0
+
+                    StatMetricRow(label: "Wins", value: formatInt(statistics.correctPredictions), accent: .green)
+                    StatMetricRow(label: "Losses", value: formatInt(losses), accent: .red)
+                    StatMetricRow(label: "Accuracy", value: statistics.averageAccuracyDisplay, accent: accuracyTint(statistics.averageAccuracy))
+                    StatMetricRow(label: "Error Rate", value: percent(errorRate), accent: .orange)
+                }
+
+                GuildStatsCard(title: "Weekly Momentum", subtitle: "Most recent guild movement") {
+                    StatMetricRow(label: "New Members", value: statistics.newMembersDisplay, accent: .mint)
+                    StatMetricRow(label: "Active Users", value: statistics.activeUsersDisplay, accent: .blue)
+                    StatMetricRow(label: "Predictions", value: statistics.predictionsMadeDisplay, accent: .purple)
+                    StatMetricRow(label: "Rep Earned", value: statistics.reputationEarnedDisplay, accent: statistics.reputationEarnedWeek >= 0 ? .green : .red)
+                }
+
+                GuildStatsCard(title: "Derived Efficiency", subtitle: "Calculated from existing data") {
+                    let repPerPrediction = statistics.predictionsWeek > 0
+                        ? Double(statistics.reputationEarnedWeek) / Double(statistics.predictionsWeek)
+                        : 0
+                    let participationRatio = guildMemberCount > 0
+                        ? Double(statistics.activeMembersWeek) / Double(guildMemberCount)
+                        : 0
+                    let hitRate = statistics.totalPredictions > 0
+                        ? Double(statistics.correctPredictions) / Double(statistics.totalPredictions)
+                        : 0
+                    let predictionsPerActiveUser = statistics.activeMembersWeek > 0
+                        ? Double(statistics.predictionsWeek) / Double(statistics.activeMembersWeek)
+                        : 0
+
+                    StatMetricRow(label: "Rep / Prediction", value: String(format: "%.2f", repPerPrediction), accent: AppColors.accentColor)
+                    StatMetricRow(label: "Participation", value: percent(participationRatio), accent: .blue)
+                    StatMetricRow(label: "Hit Rate", value: percent(hitRate), accent: accuracyTint(hitRate))
+                    StatMetricRow(label: "Predictions / Active User", value: String(format: "%.2f", predictionsPerActiveUser), accent: .orange)
+                }
             }
-            
         }
         .padding(.horizontal, 16)
     }
+
+    private func accuracyTint(_ accuracy: Double) -> Color {
+        if accuracy >= 0.7 { return .green }
+        if accuracy >= 0.5 { return .yellow }
+        if accuracy >= 0.35 { return .orange }
+        return .red
+    }
+
+    private func percent(_ value: Double) -> String {
+        String(format: "%.1f%%", value * 100)
+    }
+
+    private func formatInt(_ value: Int) -> String {
+        if value >= 1_000_000 {
+            return String(format: "%.1fM", Double(value) / 1_000_000)
+        }
+        if value >= 1_000 {
+            return String(format: "%.1fK", Double(value) / 1_000)
+        }
+        return "\(value)"
+    }
 }
 
-/// One-line label/value row used in statistics cards.
-struct StatRow: View {
+private struct GuildStatsCard<Content: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(AppColors.whiteText)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+            }
+
+            content
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+}
+
+private struct StatMetricRow: View {
     let label: String
     let value: String
-    
+    let accent: Color
+
     var body: some View {
         HStack {
             Text(label)
                 .font(.subheadline)
-                .foregroundColor(AppColors.whiteText.opacity(0.7))
+                .foregroundColor(AppColors.whiteText.opacity(0.75))
             Spacer()
             Text(value)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(AppColors.whiteText)
+                .foregroundColor(accent)
         }
     }
 }

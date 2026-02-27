@@ -77,16 +77,40 @@ struct RLRightDrawerMainView: View {
             member.displayName.localizedCaseInsensitiveContains(searchText)
         }
     }
+
+    private var filteredMemberFriendsWithoutThread: [RLGuildMemberDTO] {
+        let threadedUserIds = Set(filteredFriends.map { $0.participant.userId })
+        return filteredMemberFriends.filter { !threadedUserIds.contains($0.userId) }
+    }
+
+    private var filteredMemberOnlineWithoutThread: [RLGuildMemberDTO] {
+        let threadedUserIds = Set(filteredOnlineNonFriends.map { $0.participant.userId })
+        return filteredMemberOnlineNonFriends.filter { !threadedUserIds.contains($0.userId) }
+    }
+
+    private var filteredMemberOfflineWithoutThread: [RLGuildMemberDTO] {
+        let threadedUserIds = Set(filteredOfflineNonFriends.map { $0.participant.userId })
+        return filteredMemberOfflineNonFriends.filter { !threadedUserIds.contains($0.userId) }
+    }
+
+    private var friendsCount: Int {
+        filteredFriends.count + filteredMemberFriendsWithoutThread.count
+    }
+
+    private var onlineCount: Int {
+        filteredOnlineNonFriends.count + filteredMemberOnlineWithoutThread.count
+    }
+
+    private var offlineCount: Int {
+        filteredOfflineNonFriends.count + filteredMemberOfflineWithoutThread.count
+    }
     
     private var hasNoResults: Bool {
         !searchText.isEmpty &&
         filteredChatrooms.isEmpty &&
-        filteredFriends.isEmpty &&
-        filteredOnlineNonFriends.isEmpty &&
-        filteredOfflineNonFriends.isEmpty &&
-        filteredMemberFriends.isEmpty &&
-        filteredMemberOnlineNonFriends.isEmpty &&
-        filteredMemberOfflineNonFriends.isEmpty
+        friendsCount == 0 &&
+        onlineCount == 0 &&
+        offlineCount == 0
     }
     
     var body: some View {
@@ -188,107 +212,50 @@ struct RLRightDrawerMainView: View {
                                 )
                             }
                             
-                            if rightDrawerViewModel.hasAnyDMThreads {
-                                if !filteredFriends.isEmpty {
-                                    RLDMDisclosureGroup(
-                                        title: "Friends",
-                                        count: filteredFriends.count,
-                                        icon: "person.crop.circle",
-                                        iconColor: AppColors.friendAccent,
-                                        threads: filteredFriends,
-                                        onThreadTap: { thread in
-                                            messagingManager.openDMThread(thread)
-                                        }
-                                    )
+                            RLDMDisclosureGroup(
+                                title: "Friends",
+                                count: friendsCount,
+                                icon: "person.crop.circle",
+                                iconColor: AppColors.friendAccent,
+                                threads: filteredFriends,
+                                members: filteredMemberFriendsWithoutThread,
+                                onThreadTap: { thread in
+                                    messagingManager.openDMThread(thread)
+                                },
+                                onMemberTap: { member in
+                                    openOrCreateDM(with: member, guildId: guild.id)
                                 }
-                                
-                                if !filteredOnlineNonFriends.isEmpty {
-                                    RLDMDisclosureGroup(
-                                        title: "Online",
-                                        count: filteredOnlineNonFriends.count,
-                                        icon: "circle.fill",
-                                        iconColor: Color.green,
-                                        threads: filteredOnlineNonFriends,
-                                        onThreadTap: { thread in
-                                            messagingManager.openDMThread(thread)
-                                        }
-                                    )
+                            )
+
+                            RLDMDisclosureGroup(
+                                title: "Online",
+                                count: onlineCount,
+                                icon: "circle.fill",
+                                iconColor: Color.green,
+                                threads: filteredOnlineNonFriends,
+                                members: filteredMemberOnlineWithoutThread,
+                                onThreadTap: { thread in
+                                    messagingManager.openDMThread(thread)
+                                },
+                                onMemberTap: { member in
+                                    openOrCreateDM(with: member, guildId: guild.id)
                                 }
-                                
-                                if !filteredOfflineNonFriends.isEmpty {
-                                    RLDMDisclosureGroup(
-                                        title: "Offline",
-                                        count: filteredOfflineNonFriends.count,
-                                        icon: "circle.fill",
-                                        iconColor: Color.gray,
-                                        threads: filteredOfflineNonFriends,
-                                        onThreadTap: { thread in
-                                            messagingManager.openDMThread(thread)
-                                        }
-                                    )
+                            )
+
+                            RLDMDisclosureGroup(
+                                title: "Offline",
+                                count: offlineCount,
+                                icon: "circle.fill",
+                                iconColor: Color.gray,
+                                threads: filteredOfflineNonFriends,
+                                members: filteredMemberOfflineWithoutThread,
+                                onThreadTap: { thread in
+                                    messagingManager.openDMThread(thread)
+                                },
+                                onMemberTap: { member in
+                                    openOrCreateDM(with: member, guildId: guild.id)
                                 }
-                            } else {
-                                // Member fallback when no threads exist yet
-                                if !filteredMemberFriends.isEmpty {
-                                    RLMemberDisclosureGroup(
-                                        title: "Friends",
-                                        count: filteredMemberFriends.count,
-                                        icon: "person.crop.circle",
-                                        iconColor: AppColors.friendAccent,
-                                        members: filteredMemberFriends,
-                                        onMemberTap: { member in
-                                            Task {
-                                                if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
-                                                    messagingManager.openDMThread(thread)
-                                                } else {
-                                                    await messagingManager.openDMChat(with: member)
-                                                    await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                                
-                                if !filteredMemberOnlineNonFriends.isEmpty {
-                                    RLMemberDisclosureGroup(
-                                        title: "Online",
-                                        count: filteredMemberOnlineNonFriends.count,
-                                        icon: "circle.fill",
-                                        iconColor: Color.green,
-                                        members: filteredMemberOnlineNonFriends,
-                                        onMemberTap: { member in
-                                            Task {
-                                                if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
-                                                    messagingManager.openDMThread(thread)
-                                                } else {
-                                                    await messagingManager.openDMChat(with: member)
-                                                    await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                                
-                                if !filteredMemberOfflineNonFriends.isEmpty {
-                                    RLMemberDisclosureGroup(
-                                        title: "Offline",
-                                        count: filteredMemberOfflineNonFriends.count,
-                                        icon: "circle.fill",
-                                        iconColor: Color.gray,
-                                        members: filteredMemberOfflineNonFriends,
-                                        onMemberTap: { member in
-                                            Task {
-                                                if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
-                                                    messagingManager.openDMThread(thread)
-                                                } else {
-                                                    await messagingManager.openDMChat(with: member)
-                                                    await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                            }
+                            )
                         }
                     }
                     .padding(.horizontal, 16)
@@ -359,6 +326,17 @@ struct RLRightDrawerMainView: View {
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
+
+    private func openOrCreateDM(with member: RLGuildMemberDTO, guildId: UUID) {
+        Task {
+            if let thread = rightDrawerViewModel.findDMThread(for: member.userId) {
+                messagingManager.openDMThread(thread)
+            } else {
+                await messagingManager.openDMChat(with: member)
+                await rightDrawerViewModel.refresh(for: guildId, appState: appState)
+            }
+        }
+    }
 }
 
 // MARK: - Chatroom Disclosure Group (Using UnifiedDisclosureGroup)
@@ -398,7 +376,9 @@ struct RLDMDisclosureGroup: View {
     let icon: String
     let iconColor: Color
     let threads: [RLDMThreadDTO]
+    let members: [RLGuildMemberDTO]
     let onThreadTap: (RLDMThreadDTO) -> Void
+    let onMemberTap: (RLGuildMemberDTO) -> Void
     
     var body: some View {
         UnifiedDisclosureGroup(
@@ -411,6 +391,9 @@ struct RLDMDisclosureGroup: View {
             VStack(spacing: 6) {
                 ForEach(threads) { thread in
                     RLUserDMRowView(thread: thread, onTap: { onThreadTap(thread) })
+                }
+                ForEach(members) { member in
+                    RLMemberRowView(member: member, onTap: { onMemberTap(member) })
                 }
             }
         }
