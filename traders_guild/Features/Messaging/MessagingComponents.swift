@@ -322,7 +322,6 @@ struct ChatInputFooter: View {
     @State private var showActionPanel = false
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
-    @State private var showReviewSheet = false
     @State private var pendingAttachments: [ChatAttachmentDraft] = []
 
     var body: some View {
@@ -455,9 +454,6 @@ struct ChatInputFooter: View {
                 onImagesSelected: { selected in
                     showPhotoPicker = false
                     appendAttachments(selected)
-                    if !pendingAttachments.isEmpty {
-                        showReviewSheet = true
-                    }
                 },
                 onCancel: { showPhotoPicker = false },
                 selectionLimit: max(1, 10 - pendingAttachments.count)
@@ -470,42 +466,9 @@ struct ChatInputFooter: View {
                 onDocumentsSelected: { selected in
                     showDocumentPicker = false
                     appendAttachments(selected)
-                    if !pendingAttachments.isEmpty {
-                        showReviewSheet = true
-                    }
                 },
                 onCancel: { showDocumentPicker = false },
                 selectionLimit: max(1, 10 - pendingAttachments.count)
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showReviewSheet) {
-            AttachmentReviewSheet(
-                attachments: pendingAttachments,
-                caption: messageText,
-                onSend: { finalAttachments, caption in
-                    pendingAttachments = finalAttachments
-                    messageText = caption
-                    showReviewSheet = false
-                },
-                onAddMorePhotos: {
-                    showReviewSheet = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        showPhotoPicker = true
-                    }
-                },
-                onAddMoreFiles: {
-                    showReviewSheet = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        showDocumentPicker = true
-                    }
-                },
-                onCancel: {
-                    pendingAttachments = []
-                    messageText = ""
-                    showReviewSheet = false
-                }
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -654,9 +617,12 @@ struct ChatInputFooter: View {
                 Spacer(minLength: 8)
 
                 Button {
-                    showReviewSheet = true
+                    HapticFeedback.light.trigger()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        showActionPanel = true
+                    }
                 } label: {
-                    Text("Edit")
+                    Text("Add more")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(AppColors.accentColor)
                 }
@@ -766,208 +732,6 @@ struct ChatInputFooter: View {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             showActionPanel = false
         }
-    }
-}
-
-private struct AttachmentReviewSheet: View {
-    let onSend: ([ChatAttachmentDraft], String) -> Void
-    let onAddMorePhotos: () -> Void
-    let onAddMoreFiles: () -> Void
-    let onCancel: () -> Void
-
-    @State private var attachments: [ChatAttachmentDraft]
-    @State private var caption: String
-
-    private let maxAttachmentCount = 10
-    private let gridColumns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
-
-    init(
-        attachments: [ChatAttachmentDraft],
-        caption: String,
-        onSend: @escaping ([ChatAttachmentDraft], String) -> Void,
-        onAddMorePhotos: @escaping () -> Void,
-        onAddMoreFiles: @escaping () -> Void,
-        onCancel: @escaping () -> Void
-    ) {
-        self.onSend = onSend
-        self.onAddMorePhotos = onAddMorePhotos
-        self.onAddMoreFiles = onAddMoreFiles
-        self.onCancel = onCancel
-        _attachments = State(initialValue: attachments)
-        _caption = State(initialValue: caption)
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        HStack {
-                            Text("\(attachments.count) of \(maxAttachmentCount)")
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.greyText)
-                            Spacer()
-                        }
-
-                        if attachments.isEmpty {
-                            emptyState
-                        } else {
-                            attachmentGrid
-                        }
-                    }
-                    .padding(16)
-                }
-
-                Spacer(minLength: 0)
-
-                VStack(spacing: 12) {
-                    Divider().background(Color.white.opacity(0.1))
-
-                    TextField("Add a caption...", text: $caption, axis: .vertical)
-                        .lineLimit(1...4)
-                        .font(.subheadline)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(AppColors.whiteText.opacity(0.08))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                                )
-                        )
-                        .padding(.horizontal, 16)
-
-                    Button {
-                        onSend(attachments, caption.trimmingCharacters(in: .whitespacesAndNewlines))
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "paperplane.fill")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Attach \(attachments.count) item\(attachments.count == 1 ? "" : "s")")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(AppColors.whiteText)
-                        )
-                    }
-                    .disabled(attachments.isEmpty)
-                    .opacity(attachments.isEmpty ? 0.4 : 1)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-                }
-            }
-            .navigationTitle("Review")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onCancel() }
-                        .foregroundColor(AppColors.greyText)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    addMoreMenu
-                }
-            }
-        }
-    }
-
-    private var addMoreMenu: some View {
-        Menu {
-            Button {
-                onAddMorePhotos()
-            } label: {
-                Label("Add Photos", systemImage: "photo.on.rectangle.angled")
-            }
-            Button {
-                onAddMoreFiles()
-            } label: {
-                Label("Add Files", systemImage: "doc.fill")
-            }
-        } label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.title3)
-                .foregroundColor(AppColors.accentColor)
-        }
-        .disabled(attachments.count >= maxAttachmentCount)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 36))
-                .foregroundColor(AppColors.greyText.opacity(0.5))
-            Text("No items selected")
-                .font(.subheadline)
-                .foregroundColor(AppColors.greyText)
-        }
-        .frame(maxWidth: .infinity, minHeight: 160)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.whiteText.opacity(0.04))
-        )
-    }
-
-    private var attachmentGrid: some View {
-        LazyVGrid(columns: gridColumns, spacing: 8) {
-            ForEach(attachments) { attachment in
-                attachmentTile(for: attachment)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func attachmentTile(for attachment: ChatAttachmentDraft) -> some View {
-        let size: CGFloat = (UIScreen.main.bounds.width - 64) / 3
-
-        ZStack(alignment: .topTrailing) {
-            if attachment.isImage, let image = UIImage(data: attachment.data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            } else {
-                VStack(spacing: 6) {
-                    Image(systemName: "doc.fill")
-                        .font(.title2)
-                        .foregroundColor(AppColors.accentColor)
-                    Text(attachment.filename)
-                        .font(.caption2.weight(.medium))
-                        .foregroundColor(AppColors.whiteText.opacity(0.9))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(width: size, height: size)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(AppColors.whiteText.opacity(0.08))
-                )
-            }
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    attachments.removeAll { $0.id == attachment.id }
-                }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 20))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, Color.black.opacity(0.6))
-            }
-            .offset(x: -4, y: 4)
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-        )
     }
 }
 
@@ -1771,6 +1535,15 @@ struct RLChatroomSettingsView: View {
     @State private var showReportOptions = false
     @State private var isPinned = false
     @State private var isMuted = false
+
+    private var resolvedChatroom: RLGuildChatroomDTO {
+        rightDrawerViewModel.findChatroom(id: chatroom.id) ?? chatroom
+    }
+
+    private var displayDescription: String {
+        let trimmed = resolvedChatroom.description?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "No description yet" : trimmed
+    }
     
     var body: some View {
         ZStack {
@@ -1785,12 +1558,12 @@ struct RLChatroomSettingsView: View {
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(AppColors.gradientBackgroundDark.opacity(0.4))
                                     .frame(width: 36, height: 36)
-                                Image(systemName: "number")
-                                    .font(.subheadline)
+                                Text(resolvedChatroom.displayIcon)
+                                    .font(.subheadline.weight(.semibold))
                                     .fontWeight(.semibold)
                                     .foregroundColor(AppColors.whiteText.opacity(0.4))
                                 
-                                if chatroom.isPinned {
+                                if isPinned {
                                     Image(systemName: "pin.fill")
                                         .font(.caption)
                                         .foregroundColor(.yellow)
@@ -1800,25 +1573,24 @@ struct RLChatroomSettingsView: View {
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
-                                    Text(chatroom.name)
+                                    Text(resolvedChatroom.name)
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(AppColors.whiteText)
                                     
-                                    if chatroom.isMuted {
+                                    if isMuted {
                                         Image(systemName: "speaker.slash.fill")
                                             .font(.caption)
                                             .foregroundColor(AppColors.greyText)
                                     }
                                 }
                                 
-                                if let description = chatroom.description {
-                                    Text(description)
-                                        .font(.caption2)
-                                        .foregroundColor(AppColors.greyText)
-                                }
+                                Text(displayDescription)
+                                    .font(.caption2)
+                                    .foregroundColor(AppColors.greyText)
+                                    .lineLimit(2)
                                 
-                                Text("\(chatroom.memberCount) members")
+                                Text("\(resolvedChatroom.memberCount) members")
                                     .font(.caption2)
                                     .foregroundColor(AppColors.greyText)
                             }
@@ -1913,8 +1685,8 @@ struct RLChatroomSettingsView: View {
             }
         }
         .onAppear {
-            isPinned = chatroom.isPinned
-            isMuted = chatroom.isMuted
+            isPinned = resolvedChatroom.isPinned
+            isMuted = resolvedChatroom.isMuted
         }
         .alert("Mute Chatroom", isPresented: $showMuteOptions) {
             Button("Cancel", role: .cancel) { }

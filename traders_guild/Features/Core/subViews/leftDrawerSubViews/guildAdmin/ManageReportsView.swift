@@ -130,7 +130,7 @@ struct ManageReportsView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(AdminSheetBackground())
         .onAppear {
             loadReports()
         }
@@ -148,41 +148,21 @@ struct ManageReportsView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack(spacing: 12) {
-            UnifiedIconBadge(
-                icon: "flag.fill",
-                color: .red,
-                size: 44,
-                iconSize: 20,
-                backgroundOpacity: 0.2
-            )
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text("Manage Reports")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-
-                    // Pending badge
-                    if pendingCount > 0 {
-                        Text("\(pendingCount)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(.orange))
-                    }
-                }
-
-                Text(canAdmin ? "Review & resolve reports" : "View reported content")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-        }
+        AdminSheetHeader(
+            icon: "flag.fill",
+            iconColor: .red,
+            title: "Manage Reports",
+            subtitle: canAdmin ? "Review & resolve reports" : "View reported content",
+            trailing: pendingCount > 0 ? AnyView(
+                Text("\(pendingCount)")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.orange))
+            ) : nil
+        )
     }
 
     // MARK: - Status Filter Bar

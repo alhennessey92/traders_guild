@@ -244,6 +244,19 @@ class RLRightDrawerViewModel: ObservableObject {
         guildMembers = []
         await preloadData(for: guildId, appState: appState)
     }
+
+    /// Refresh only chatrooms to keep right drawer in sync after admin channel CRUD.
+    func refreshChatrooms(for guildId: UUID, appState: RLAppState) async {
+        self.appState = appState
+        do {
+            guildChatrooms = try await appState.fetchGuildChatrooms(guildId: guildId)
+            currentGuildId = guildId
+            lastRefresh = Date()
+            subscribeToAllChannels(guildId: guildId)
+        } catch {
+            print("⚠️ Failed to refresh chatrooms: \(error)")
+        }
+    }
     
     func clearCache() {
         guildChatrooms = []

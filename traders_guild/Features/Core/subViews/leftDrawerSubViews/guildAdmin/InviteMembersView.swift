@@ -24,28 +24,12 @@ struct InviteMembersView: View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 16) {
                 // Header
-                HStack(spacing: 12) {
-                    UnifiedIconBadge(
-                        icon: "person.badge.plus",
-                        color: .blue,
-                        size: 44,
-                        iconSize: 20,
-                        backgroundOpacity: 0.2
-                    )
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Invite Members")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.primary)
-
-                        Text("Search and invite users to your guild")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
-                }
+                AdminSheetHeader(
+                    icon: "person.badge.plus",
+                    iconColor: .blue,
+                    title: "Invite Members",
+                    subtitle: "Search and invite users to your guild"
+                )
                 .padding(.horizontal)
                 .padding(.top, 30)
 
@@ -56,34 +40,22 @@ struct InviteMembersView: View {
                     Text("Search Users")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(AppColors.whiteText)
                         .padding(.horizontal)
 
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        TextField("Search by username...", text: $searchText)
-                            .textFieldStyle(.plain)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
+                    ZStack(alignment: .trailing) {
+                        UnifiedSearchBar(
+                            text: $searchText,
+                            placeholder: "Search by username..."
+                        )
+                        .padding(.horizontal)
+
                         if isSearching {
                             ProgressView()
                                 .scaleEffect(0.7)
-                        }
-                        if !searchText.isEmpty {
-                            Button(action: {
-                                searchText = ""
-                                searchResults = []
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                            }
+                                .padding(.trailing, 26)
                         }
                     }
-                    .padding(10)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(10)
-                    .padding(.horizontal)
                 }
 
                 // Content
@@ -157,7 +129,7 @@ struct InviteMembersView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(AdminSheetBackground())
         .onChange(of: searchText) { _, newValue in
             debounceSearch(query: newValue)
         }

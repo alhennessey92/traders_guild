@@ -629,6 +629,8 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let candleTimestamp: Date
     let timeframe: String
     let price: Double
+    let targetPrice: Double?
+    let stopLossPrice: Double?
     
     // Engagement
     var likeCount: Int

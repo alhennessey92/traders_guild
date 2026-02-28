@@ -2,149 +2,85 @@
 //  GuildSettingsView.swift
 //  traders_guild
 //
-//  Admin Panel - Guild Settings View
-//  Update guild name, description, and visibility
+//  Admin Panel - Guild settings editor.
 //
 
 import SwiftUI
 
 struct GuildSettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject private var rlAppState: RLAppState
 
-    @State private var name: String = ""
-    @State private var description: String = ""
-    @State private var isOpen: Bool = true
-    @State private var isSubmitting: Bool = false
+    @State private var name = ""
+    @State private var description = ""
+    @State private var isOpen = true
+    @State private var isSubmitting = false
 
     private var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        name.count >= 3
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && name.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3
     }
 
     private var hasChanges: Bool {
         guard let guild = rlAppState.currentGuild else { return false }
-        return name != guild.name ||
-               description != (guild.description ?? "") ||
-               isOpen != guild.isOpen
+        return name != guild.name
+            || description != (guild.description ?? "")
+            || isOpen != guild.isOpen
     }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
-                HStack(spacing: 12) {
-                    UnifiedIconBadge(
-                        icon: "gearshape.fill",
-                        color: .blue,
-                        size: 44,
-                        iconSize: 20,
-                        backgroundOpacity: 0.2
-                    )
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Guild Settings")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.primary)
-
-                        Text("Update your guild's details")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
-                }
+            VStack(spacing: 0) {
+                AdminSheetHeader(
+                    icon: "gearshape.fill",
+                    iconColor: .blue,
+                    title: "Guild Settings",
+                    subtitle: "Update name, description, and visibility"
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 30)
 
                 Divider()
+                    .background(Color.white.opacity(0.15))
+                    .padding(.top, 12)
 
-                // Form
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Name Field
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Guild Name")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-
-                            TextField("Guild name...", text: $name)
-                                .textFieldStyle(.roundedBorder)
+                    VStack(spacing: 12) {
+                        AdminSectionCard {
+                            AdminInputField(
+                                title: "Guild Name",
+                                placeholder: "Guild name",
+                                text: $name
+                            )
+                            AdminInputTextEditor(
+                                title: "Description (Optional)",
+                                placeholder: "Tell members what this guild is about",
+                                text: $description
+                            )
+                            AdminToggleRow(
+                                title: "Open Guild",
+                                subtitle: isOpen ? "Anyone can join" : "Invite only",
+                                icon: isOpen ? "lock.open.fill" : "lock.fill",
+                                iconColor: isOpen ? .green : .orange,
+                                isOn: $isOpen
+                            )
                         }
-
-                        // Description Field
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text("Description")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
-                                Text("(Optional)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            TextEditor(text: $description)
-                                .frame(minHeight: 100)
-                                .padding(8)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color(.systemGray4), lineWidth: 0.5)
-                                )
-                        }
-
-                        // Open/Closed Toggle
-                        Toggle(isOn: $isOpen) {
-                            HStack(spacing: 8) {
-                                Image(systemName: isOpen ? "lock.open.fill" : "lock.fill")
-                                    .foregroundColor(isOpen ? .green : .orange)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Open Guild")
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                    Text(isOpen ? "Anyone can join" : "Invite only")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 8)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                 }
 
-                Spacer()
-
-                Divider()
-
-                // Action Buttons
-                HStack(spacing: 12) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
-
-                    Button(action: saveSettings) {
-                        HStack {
-                            if isSubmitting {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            }
-                            Text(isSubmitting ? "Saving..." : "Save Settings")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!isValid || !hasChanges || isSubmitting)
-                }
+                AdminFooterActions(
+                    primaryTitle: "Save Settings",
+                    primaryDisabled: !isValid || !hasChanges,
+                    isSubmitting: isSubmitting,
+                    onCancel: { dismiss() },
+                    onPrimary: { Task { await saveSettings() } }
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .padding(.top, 30)
-            .padding(.horizontal)
-            .padding(.bottom, 20)
 
-            // Dismiss button
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
@@ -153,31 +89,31 @@ struct GuildSettingsView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(AdminSheetBackground())
         .onAppear {
-            if let guild = rlAppState.currentGuild {
-                name = guild.name
-                description = guild.description ?? ""
-                isOpen = guild.isOpen
-            }
+            guard let guild = rlAppState.currentGuild else { return }
+            name = guild.name
+            description = guild.description ?? ""
+            isOpen = guild.isOpen
         }
     }
 
-    private func saveSettings() {
-        guard isValid && hasChanges else { return }
+    private func saveSettings() async {
+        guard isValid && hasChanges && !isSubmitting else { return }
         isSubmitting = true
+        defer { isSubmitting = false }
 
-        Task {
-            do {
-                _ = try await rlAppState.updateGuild(
-                    name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                    description: description.isEmpty ? nil : description.trimmingCharacters(in: .whitespacesAndNewlines),
-                    isOpen: isOpen
-                )
-                dismiss()
-            } catch {
-                isSubmitting = false
-            }
+        do {
+            _ = try await rlAppState.updateGuild(
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? nil
+                    : description.trimmingCharacters(in: .whitespacesAndNewlines),
+                isOpen: isOpen
+            )
+            dismiss()
+        } catch {
+            // RLAppState handles toast error.
         }
     }
 }

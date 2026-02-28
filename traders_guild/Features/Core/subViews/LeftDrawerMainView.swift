@@ -41,6 +41,7 @@ enum BottomSheetContent: Identifiable, Equatable {
     case createAnnouncement
     case createEvent
     case guildSettings
+    case manageChatrooms
     case inviteMembers
     case manageMembers
     case manageRoles
@@ -56,6 +57,7 @@ enum BottomSheetContent: Identifiable, Equatable {
         case .createAnnouncement: return "create-announcement"
         case .createEvent: return "create-event"
         case .guildSettings: return "guild-settings"
+        case .manageChatrooms: return "manage-chatrooms"
         case .inviteMembers: return "invite-members"
         case .manageMembers: return "manage-members"
         case .manageRoles: return "manage-roles"
@@ -80,6 +82,8 @@ enum BottomSheetContent: Identifiable, Equatable {
         case (.createEvent, .createEvent):
             return true
         case (.guildSettings, .guildSettings):
+            return true
+        case (.manageChatrooms, .manageChatrooms):
             return true
         case (.inviteMembers, .inviteMembers):
             return true
@@ -245,6 +249,8 @@ struct LeftDrawerMainView: View {
         case .createEvent:
             return [.large]
         case .guildSettings:
+            return [.large]
+        case .manageChatrooms:
             return [.large]
         case .inviteMembers:
             return [.large]
@@ -769,6 +775,8 @@ struct BottomSheetView: View {
                 CreateEventView()
             case .guildSettings:
                 GuildSettingsView()
+            case .manageChatrooms:
+                ManageChatroomsView()
             case .inviteMembers:
                 InviteMembersView()
             case .manageMembers:
@@ -818,5 +826,4 @@ extension View {
         )
     }
 }
-
 

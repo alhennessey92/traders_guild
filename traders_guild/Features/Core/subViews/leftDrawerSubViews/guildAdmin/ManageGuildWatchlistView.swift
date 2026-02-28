@@ -53,7 +53,7 @@ struct ManageGuildWatchlistView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(AdminSheetBackground())
         .onAppear {
             Task {
                 await loadAll()
@@ -62,26 +62,12 @@ struct ManageGuildWatchlistView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            UnifiedIconBadge(
-                icon: "list.bullet.rectangle",
-                color: .blue,
-                size: 44,
-                iconSize: 20,
-                backgroundOpacity: 0.2
-            )
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Guild Watchlist")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
-                Text("Review symbol requests and manage guild symbols")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-        }
+        AdminSheetHeader(
+            icon: "list.bullet.rectangle",
+            iconColor: .blue,
+            title: "Guild Watchlist",
+            subtitle: "Review symbol requests and manage guild symbols"
+        )
     }
 
     private var tabBar: some View {
@@ -276,11 +262,14 @@ struct ManageGuildWatchlistView: View {
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
 
-            TextField("Search symbols...", text: $searchText)
-                .textFieldStyle(.roundedBorder)
-                .onChange(of: searchText) { query in
-                    performSearch(query: query)
-                }
+            AdminInputField(
+                title: "Search Symbols",
+                placeholder: "Search symbols...",
+                text: $searchText
+            )
+            .onChange(of: searchText) { query in
+                performSearch(query: query)
+            }
 
             if isSearching {
                 ProgressView("Searching...")

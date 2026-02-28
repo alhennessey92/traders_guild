@@ -1707,19 +1707,50 @@ extension RealAPIService {
         )
     }
     
-    /// Create a new chatroom (admin only)
+    /// Create a new chatroom (owner/admin only)
     /// POST /guilds/{guild_id}/chatrooms
     func createChatroom(
         guildId: UUID,
         name: String,
-        description: String? = nil
+        description: String,
+        icon: String? = nil
     ) async throws -> RLGuildChatroomDTO {
-        let body = RLCreateChatroomRequest(name: name, description: description)
+        let body = RLCreateChatroomRequest(name: name, description: description, icon: icon)
         return try await request(
             "/messaging/guilds/\(guildId.uuidString)/chatrooms",
             service: .core,
             method: "POST",
             body: body,
+            auth: true
+        )
+    }
+
+    /// Update chatroom metadata (owner/admin only)
+    /// PUT /guilds/{guild_id}/chatrooms/{chatroom_id}
+    func updateChatroom(
+        guildId: UUID,
+        chatroomId: UUID,
+        name: String? = nil,
+        description: String? = nil,
+        icon: String? = nil
+    ) async throws -> RLGuildChatroomDTO {
+        let body = RLUpdateChatroomRequest(name: name, description: description, icon: icon)
+        return try await request(
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)",
+            service: .core,
+            method: "PUT",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Archive a chatroom (owner/admin only)
+    /// DELETE /guilds/{guild_id}/chatrooms/{chatroom_id}
+    func deleteChatroom(guildId: UUID, chatroomId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)",
+            service: .core,
+            method: "DELETE",
             auth: true
         )
     }

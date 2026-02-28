@@ -33,28 +33,12 @@ struct ManageRolesView: View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 16) {
                 // Header
-                HStack(spacing: 12) {
-                    UnifiedIconBadge(
-                        icon: "person.badge.shield.checkmark",
-                        color: .orange,
-                        size: 44,
-                        iconSize: 20,
-                        backgroundOpacity: 0.2
-                    )
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Manage Roles")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.primary)
-
-                        Text("Change member roles, kick or ban")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
-                }
+                AdminSheetHeader(
+                    icon: "person.badge.shield.checkmark",
+                    iconColor: .orange,
+                    title: "Manage Roles",
+                    subtitle: "Change member roles, kick or ban"
+                )
                 .padding(.horizontal)
                 .padding(.top, 30)
 
@@ -104,7 +88,7 @@ struct ManageRolesView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(AdminSheetBackground())
         .onAppear {
             loadMembers()
         }

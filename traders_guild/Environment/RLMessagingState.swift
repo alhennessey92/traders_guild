@@ -200,6 +200,7 @@ struct RLMessagingSheet: View {
     @State private var hasMarkedAsRead = false
     @State private var typingWorkItem: DispatchWorkItem? = nil
     @State private var hasSentTyping: Bool = false
+    @State private var lastChatroomMetadataSignature: String? = nil
     
     // Message state
     @State private var chatroomMessages: [RLChatroomMessageDTO] = []
@@ -291,7 +292,7 @@ struct RLMessagingSheet: View {
                     // Header content
                     switch contentType {
                     case .chatroom(let chatroom):
-                        chatroomHeader(chatroom)
+                        chatroomHeader(resolvedChatroom(for: chatroom))
                     case .dmThread(let thread):
                         Button(action: {
                             withAnimation {
@@ -328,7 +329,7 @@ struct RLMessagingSheet: View {
             switch contentType {
             case .chatroom(let chatroom):
                 RLChatroomFooterView(
-                    chatroom: chatroom,
+                    chatroom: resolvedChatroom(for: chatroom),
                     messageText: $messageText,
                     onMessageSent: { message in
                         chatroomMessages.append(message)
@@ -355,6 +356,12 @@ struct RLMessagingSheet: View {
         .task(id: contentType.id) {
             resetMessageState()
             await loadMessages()
+        }
+        .onAppear {
+            initializeMetadataSignature()
+        }
+        .onReceive(rightDrawerViewModel.$guildChatrooms) { _ in
+            handleChatroomMetadataSync()
         }
         .onChange(of: messageText) { _, newValue in
             handleTypingChange(newValue)
@@ -406,19 +413,23 @@ struct RLMessagingSheet: View {
     // MARK: - Headers
     
     private func chatroomHeader(_ chatroom: RLGuildChatroomDTO) -> some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 4) {
-                Image(systemName: "number")
-                    .font(.headline)
+        let trimmedDescription = chatroom.description?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let subtitle = trimmedDescription.isEmpty ? "No description yet" : trimmedDescription
+
+        return VStack(spacing: 2) {
+            HStack(spacing: 6) {
+                Text(chatroom.displayIcon)
+                    .font(.headline.weight(.bold))
                 Text(chatroom.name)
                     .font(.headline)
                     .fontWeight(.semibold)
             }
             .foregroundColor(AppColors.whiteText)
             
-            Text("\(chatroom.memberCount) members")
+            Text(subtitle)
                 .font(.caption)
                 .foregroundColor(AppColors.whiteText.opacity(0.6))
+                .lineLimit(1)
         }
     }
     
@@ -597,6 +608,36 @@ struct RLMessagingSheet: View {
         hasMoreMessages = false
         nextCursor = nil
         hasMarkedAsRead = false
+        lastChatroomMetadataSignature = nil
+    }
+
+    private func initializeMetadataSignature() {
+        guard case .chatroom(let chatroom) = contentType else {
+            lastChatroomMetadataSignature = nil
+            return
+        }
+        let resolved = resolvedChatroom(for: chatroom)
+        lastChatroomMetadataSignature = metadataSignature(for: resolved)
+    }
+
+    private func handleChatroomMetadataSync() {
+        guard case .chatroom(let chatroom) = contentType else { return }
+        let resolved = resolvedChatroom(for: chatroom)
+        let newSignature = metadataSignature(for: resolved)
+
+        guard let previousSignature = lastChatroomMetadataSignature else {
+            lastChatroomMetadataSignature = newSignature
+            return
+        }
+
+        guard previousSignature != newSignature else { return }
+        lastChatroomMetadataSignature = newSignature
+        appState.showSuccess("Chatroom details updated")
+    }
+
+    private func metadataSignature(for chatroom: RLGuildChatroomDTO) -> String {
+        let description = chatroom.description?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return "\(chatroom.id.uuidString.lowercased())|\(chatroom.name)|\(chatroom.displayIcon)|\(description)"
     }
 
     // MARK: - User Profile View
@@ -767,7 +808,7 @@ struct RLMessagingSheet: View {
             // Settings content based on content type
             switch contentType {
             case .chatroom(let chatroom):
-                RLChatroomSettingsView(chatroom: chatroom)
+                RLChatroomSettingsView(chatroom: resolvedChatroom(for: chatroom))
                 
             case .dmThread(let thread):
                 RLDMSettingsView(thread: thread)
@@ -781,6 +822,10 @@ struct RLMessagingSheet: View {
                 StaticPatternView()
             }
         )
+    }
+
+    private func resolvedChatroom(for fallback: RLGuildChatroomDTO) -> RLGuildChatroomDTO {
+        rightDrawerViewModel.findChatroom(id: fallback.id) ?? fallback
     }
 }
 

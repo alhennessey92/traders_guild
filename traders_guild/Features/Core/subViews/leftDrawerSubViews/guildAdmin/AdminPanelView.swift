@@ -119,6 +119,15 @@ struct AdminPanelListView: View {
                     }
 
                     AdminActionButton(
+                        icon: "bubble.left.and.bubble.right.fill",
+                        title: "Manage Chatrooms",
+                        subtitle: "Create, edit, and archive guild chatrooms",
+                        iconColor: .cyan
+                    ) {
+                        bottomSheetContent = .manageChatrooms
+                    }
+
+                    AdminActionButton(
                         icon: "list.bullet.rectangle",
                         title: "Guild Watchlist",
                         subtitle: "Review requests and manage symbols",

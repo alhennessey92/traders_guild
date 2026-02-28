@@ -16,13 +16,33 @@ extension IndicatorCategory: UnifiedTabItem {
     // icon property is already defined in IndicatorModels.swift
 }
 
+enum IndicatorSettingsTab: String, CaseIterable, UnifiedTabItem {
+    case active = "Active"
+    case trend = "Trend"
+    case volatility = "Volatility"
+    case momentum = "Momentum"
+    case volume = "Volume"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .active: return "checkmark.circle.fill"
+        case .trend: return IndicatorCategory.trend.icon
+        case .volatility: return IndicatorCategory.volatility.icon
+        case .momentum: return IndicatorCategory.momentum.icon
+        case .volume: return IndicatorCategory.volume.icon
+        }
+    }
+}
+
 // MARK: - Main Settings Content
 
 struct IndicatorSettingsContent: View {
     @ObservedObject var indicatorManager: IndicatorManager
     var onRecalculate: () -> Void
     
-    @State private var selectedCategory: IndicatorCategory = .trend
+    @State private var selectedTab: IndicatorSettingsTab = .active
     @State private var addingIndicatorType: IndicatorType?
     
     // Edit sheet states
@@ -49,7 +69,8 @@ struct IndicatorSettingsContent: View {
             
             ScrollView {
                 VStack(spacing: 12) {
-                    switch selectedCategory {
+                    switch selectedTab {
+                    case .active: activeIndicators
                     case .trend: trendIndicators
                     case .volatility: volatilityIndicators
                     case .momentum: momentumIndicators
@@ -134,10 +155,11 @@ struct IndicatorSettingsContent: View {
     // MARK: - Category Tabs (Using UnifiedCategoryTabBar)
     
     private var categoryTabs: some View {
-        UnifiedCategoryTabBar(
-            selectedTab: $selectedCategory,
+        UnifiedTabBar(
+            selectedTab: $selectedTab,
+            size: .compact,
             theme: .blue,
-            spacing: 8
+            spacing: 6
         )
     }
     
@@ -157,6 +179,245 @@ struct IndicatorSettingsContent: View {
                 .clipShape(Capsule())
         }
         .padding(.horizontal, 4)
+    }
+
+    // MARK: - Active Indicators
+
+    private var activeIndicators: some View {
+        VStack(spacing: 8) {
+            if !indicatorManager.activeIndicators.hasActiveIndicators {
+                VStack(spacing: 10) {
+                    Image(systemName: "chart.line.uptrend.xyaxis.circle")
+                        .font(.system(size: 28))
+                        .foregroundColor(.gray.opacity(0.8))
+                    Text("No active indicators")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    Button("Browse indicator categories") {
+                        selectedTab = .trend
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(Color.blue.opacity(0.45))
+                    )
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(Color.white.opacity(0.04))
+                .cornerRadius(12)
+            } else {
+                if !indicatorManager.activeIndicators.enabledMovingAverages.isEmpty {
+                    IndicatorSectionHeader(title: "Moving Averages", icon: "chart.line.uptrend.xyaxis")
+                    ForEach(indicatorManager.activeIndicators.enabledMovingAverages) { ma in
+                        ActiveIndicatorRow(
+                            title: ma.label,
+                            color: ma.color.color,
+                            isActive: ma.isEnabled,
+                            onToggle: {
+                                indicatorManager.toggleMovingAverage(id: ma.id)
+                                onRecalculate()
+                            },
+                            onEdit: { editingMA = ma },
+                            onRemove: {
+                                indicatorManager.removeMovingAverage(id: ma.id)
+                                onRecalculate()
+                            }
+                        )
+                    }
+                }
+
+                if indicatorManager.isVWAPActive {
+                    IndicatorRowWithEdit(
+                        title: "VWAP",
+                        subtitle: indicatorManager.activeIndicators.vwap?.showStandardDeviationBands == true ? "with std bands" : nil,
+                        icon: "chart.line.flattrend.xyaxis",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.vwap?.color.color ?? .orange,
+                        onToggle: {
+                            indicatorManager.toggleVWAP()
+                            onRecalculate()
+                        },
+                        onEdit: { editingVWAP = true }
+                    )
+                }
+
+                if indicatorManager.isParabolicSARActive {
+                    IndicatorRowWithEdit(
+                        title: "Parabolic SAR",
+                        subtitle: nil,
+                        icon: "circle.dotted",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.parabolicSAR?.bullishColor.color ?? .green,
+                        onToggle: {
+                            indicatorManager.toggleParabolicSAR()
+                            onRecalculate()
+                        },
+                        onEdit: { editingSAR = true }
+                    )
+                }
+
+                if indicatorManager.isBollingerBandsActive {
+                    IndicatorRowWithEdit(
+                        title: "Bollinger Bands",
+                        subtitle: indicatorManager.activeIndicators.bollingerBands.map { "(\($0.period), \(String(format: "%.1f", $0.standardDeviations))σ)" },
+                        icon: "arrow.up.and.down",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.bollingerBands?.upperBandColor.color ?? .pink,
+                        onToggle: {
+                            indicatorManager.toggleBollingerBands()
+                            onRecalculate()
+                        },
+                        onEdit: { editingBB = true }
+                    )
+                }
+
+                if indicatorManager.isDonchianChannelsActive {
+                    IndicatorRowWithEdit(
+                        title: "Donchian Channels",
+                        subtitle: indicatorManager.activeIndicators.donchianChannels.map { "(\($0.period))" },
+                        icon: "arrow.up.and.down",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.donchianChannels?.upperBandColor.color ?? .blue,
+                        onToggle: {
+                            indicatorManager.toggleDonchianChannels()
+                            onRecalculate()
+                        },
+                        onEdit: { editingDC = true }
+                    )
+                }
+
+                if indicatorManager.isKeltnerChannelsActive {
+                    IndicatorRowWithEdit(
+                        title: "Keltner Channels",
+                        subtitle: indicatorManager.activeIndicators.keltnerChannels.map { "(\($0.emaPeriod), \($0.atrPeriod))" },
+                        icon: "arrow.up.and.down",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.keltnerChannels?.color.color ?? .purple,
+                        onToggle: {
+                            indicatorManager.toggleKeltnerChannels()
+                            onRecalculate()
+                        },
+                        onEdit: { editingKC = true }
+                    )
+                }
+
+                if indicatorManager.isRSIActive {
+                    PanelIndicatorRowWithEdit(
+                        title: "RSI",
+                        subtitle: indicatorManager.activeIndicators.rsi.map { "(\($0.period))" },
+                        icon: "waveform.path.ecg",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.rsi?.color.color ?? .purple,
+                        canAdd: true,
+                        onToggle: {
+                            indicatorManager.toggleRSI()
+                            onRecalculate()
+                        },
+                        onEdit: { editingRSI = true }
+                    )
+                }
+
+                if indicatorManager.isMACDActive {
+                    PanelIndicatorRowWithEdit(
+                        title: "MACD",
+                        subtitle: indicatorManager.activeIndicators.macd.map { "(\($0.fastPeriod),\($0.slowPeriod),\($0.signalPeriod))" },
+                        icon: "chart.bar.xaxis",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.macd?.color.color ?? .cyan,
+                        canAdd: true,
+                        onToggle: {
+                            indicatorManager.toggleMACD()
+                            onRecalculate()
+                        },
+                        onEdit: { editingMACD = true }
+                    )
+                }
+
+                if indicatorManager.isStochasticActive {
+                    PanelIndicatorRowWithEdit(
+                        title: "Stochastic",
+                        subtitle: indicatorManager.activeIndicators.stochastic.map { "(\($0.kPeriod),\($0.dPeriod))" },
+                        icon: "waveform.path.ecg.rectangle",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.stochastic?.color.color ?? .yellow,
+                        canAdd: true,
+                        onToggle: {
+                            indicatorManager.toggleStochastic()
+                            onRecalculate()
+                        },
+                        onEdit: { editingStochastic = true }
+                    )
+                }
+
+                if indicatorManager.isCCIActive {
+                    PanelIndicatorRowWithEdit(
+                        title: "CCI",
+                        subtitle: indicatorManager.activeIndicators.cci.map { "(\($0.period))" },
+                        icon: "arrow.up.arrow.down.circle",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.cci?.color.color ?? .orange,
+                        canAdd: true,
+                        onToggle: {
+                            indicatorManager.toggleCCI()
+                            onRecalculate()
+                        },
+                        onEdit: { editingCCI = true }
+                    )
+                }
+
+                if indicatorManager.isWilliamsRActive {
+                    PanelIndicatorRowWithEdit(
+                        title: "Williams %R",
+                        subtitle: indicatorManager.activeIndicators.williamsR.map { "(\($0.period))" },
+                        icon: "waveform.path.ecg.rectangle",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.williamsR?.color.color ?? .pink,
+                        canAdd: true,
+                        onToggle: {
+                            indicatorManager.toggleWilliamsR()
+                            onRecalculate()
+                        },
+                        onEdit: { editingWilliamsR = true }
+                    )
+                }
+
+                if indicatorManager.isATRActive {
+                    PanelIndicatorRowWithEdit(
+                        title: "ATR",
+                        subtitle: indicatorManager.activeIndicators.atr.map { "(\($0.period))" },
+                        icon: "ruler",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.atr?.color.color ?? .red,
+                        canAdd: true,
+                        onToggle: {
+                            indicatorManager.toggleATR()
+                            onRecalculate()
+                        },
+                        onEdit: { editingATR = true }
+                    )
+                }
+
+                if indicatorManager.isVolumeActive {
+                    PanelIndicatorRowWithEdit(
+                        title: "Volume",
+                        subtitle: indicatorManager.activeIndicators.volume?.showMA == true ? "with MA(\(indicatorManager.activeIndicators.volume?.maPeriod ?? 20))" : nil,
+                        icon: "chart.bar",
+                        isActive: true,
+                        color: indicatorManager.activeIndicators.volume?.bullishColor.color ?? .green,
+                        canAdd: true,
+                        onToggle: {
+                            indicatorManager.toggleVolume()
+                            onRecalculate()
+                        },
+                        onEdit: { editingVolume = true }
+                    )
+                }
+            }
+        }
     }
     
     // MARK: - Trend Indicators

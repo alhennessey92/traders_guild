@@ -16,7 +16,7 @@ struct chartSheetMarkersView: View {
     @ObservedObject var chartViewModel: ChartViewModel
     // MARK: - Chart Control ViewModel
     @ObservedObject var controlViewModel: ChartControlViewModel
-    
+    var onShowMarkerActivity: (() -> Void)? = nil
 
     
     var body: some View {
@@ -31,10 +31,23 @@ struct chartSheetMarkersView: View {
                         .padding(.top, 15)
                     
                     Spacer()
-                    
-                    MarkerSettingsButton()
-                        .padding(.trailing, 15)
-                        .padding(.top, 15)
+
+                    HStack(spacing: 10) {
+                        if let onShowMarkerActivity {
+                            Button(action: onShowMarkerActivity) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .frame(width: 34, height: 34)
+                                    .background(Color.white.opacity(0.08))
+                                    .clipShape(Circle())
+                            }
+                        }
+
+                        MarkerSettingsButton()
+                    }
+                    .padding(.trailing, 15)
+                    .padding(.top, 15)
                     
                 }
                 
@@ -264,6 +277,5 @@ struct MarkerButton: View {
         .buttonStyle(.plain)
     }
 }
-
 
 

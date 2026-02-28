@@ -223,7 +223,10 @@ struct MainView: View {
                 ChartBottomSheet(
                     controlViewModel: chartControlVM,
                     chartViewModel: chartViewModel,
-                    selectedDetent: $selectedDetent
+                    selectedDetent: $selectedDetent,
+                    onNavigateToMarker: { marker in
+                        leftDrawerViewModel.requestNavigationToMarker(marker)
+                    }
                 )
                 .environmentObject(rlAppState)
                 .presentationDetents([.fraction(0.11), .fraction(0.5), .fraction(0.9)],
@@ -1300,20 +1303,24 @@ struct ChartBottomSheet: View {
     @ObservedObject var chartViewModel: ChartViewModel
     @Binding var selectedDetent: PresentationDetent
     @EnvironmentObject var rlAppState: RLAppState
+    let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
     
     // Chat state - managed here since parent handles input
     @StateObject private var chartChatManager: ChartChatManager
     @State private var chatMessageText: String = ""
     @State private var isSendingChartMessage = false
+    @State private var showMarkerActivitySheet = false
     
     init(
         controlViewModel: ChartControlViewModel,
         chartViewModel: ChartViewModel,
-        selectedDetent: Binding<PresentationDetent>
+        selectedDetent: Binding<PresentationDetent>,
+        onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
     ) {
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
         self._selectedDetent = selectedDetent
+        self.onNavigateToMarker = onNavigateToMarker
         // Initialize ChartChatManager with RealAPIService
         // We'll configure it with rlAppState in onAppear
         _chartChatManager = StateObject(wrappedValue: ChartChatManager(
@@ -1399,6 +1406,16 @@ struct ChartBottomSheet: View {
             if newView == .chat {
                 loadChatForCurrentSymbol()
             }
+        }
+        .sheet(isPresented: $showMarkerActivitySheet) {
+            MarkerActivitySheet { marker in
+                if let onNavigateToMarker {
+                    onNavigateToMarker(marker)
+                }
+            }
+            .environmentObject(rlAppState)
+            .presentationDetents([.fraction(0.6), .large])
+            .presentationDragIndicator(.visible)
         }
     }
     
@@ -1626,7 +1643,10 @@ struct ChartBottomSheet: View {
     private var markersContent: some View {
         chartSheetMarkersView(
             chartViewModel: chartViewModel,
-            controlViewModel: controlViewModel
+            controlViewModel: controlViewModel,
+            onShowMarkerActivity: {
+                showMarkerActivitySheet = true
+            }
         )
     }
     

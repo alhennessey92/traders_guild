@@ -77,6 +77,7 @@ struct RLGuildChatroomDTO: Codable, Identifiable, Equatable, Hashable {
     let guildId: UUID
     let name: String
     let description: String?
+    let icon: String
     let lastMessage: RLChatroomMessageDTO?
     let isActive: Bool
     let lastActivity: Date
@@ -86,6 +87,41 @@ struct RLGuildChatroomDTO: Codable, Identifiable, Equatable, Hashable {
     let isPinned: Bool
     let isMuted: Bool
     let canSendMessages: Bool
+    let canManageChatroom: Bool
+
+    init(
+        id: UUID,
+        guildId: UUID,
+        name: String,
+        description: String?,
+        icon: String,
+        lastMessage: RLChatroomMessageDTO?,
+        isActive: Bool,
+        lastActivity: Date,
+        lastActivityFormatted: String,
+        unreadCount: Int,
+        memberCount: Int,
+        isPinned: Bool,
+        isMuted: Bool,
+        canSendMessages: Bool,
+        canManageChatroom: Bool
+    ) {
+        self.id = id
+        self.guildId = guildId
+        self.name = name
+        self.description = description
+        self.icon = icon
+        self.lastMessage = lastMessage
+        self.isActive = isActive
+        self.lastActivity = lastActivity
+        self.lastActivityFormatted = lastActivityFormatted
+        self.unreadCount = unreadCount
+        self.memberCount = memberCount
+        self.isPinned = isPinned
+        self.isMuted = isMuted
+        self.canSendMessages = canSendMessages
+        self.canManageChatroom = canManageChatroom
+    }
     
     // MARK: - Hashable
     
@@ -96,9 +132,48 @@ struct RLGuildChatroomDTO: Codable, Identifiable, Equatable, Hashable {
     static func == (lhs: RLGuildChatroomDTO, rhs: RLGuildChatroomDTO) -> Bool {
         lhs.id == rhs.id &&
         lhs.name == rhs.name &&
+        lhs.description == rhs.description &&
+        lhs.icon == rhs.icon &&
         lhs.unreadCount == rhs.unreadCount &&
         lhs.isPinned == rhs.isPinned &&
         lhs.isMuted == rhs.isMuted
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case guildId
+        case name
+        case description
+        case icon
+        case lastMessage
+        case isActive
+        case lastActivity
+        case lastActivityFormatted
+        case unreadCount
+        case memberCount
+        case isPinned
+        case isMuted
+        case canSendMessages
+        case canManageChatroom
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        guildId = try container.decode(UUID.self, forKey: .guildId)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? "#"
+        lastMessage = try container.decodeIfPresent(RLChatroomMessageDTO.self, forKey: .lastMessage)
+        isActive = try container.decode(Bool.self, forKey: .isActive)
+        lastActivity = try container.decode(Date.self, forKey: .lastActivity)
+        lastActivityFormatted = try container.decode(String.self, forKey: .lastActivityFormatted)
+        unreadCount = try container.decode(Int.self, forKey: .unreadCount)
+        memberCount = try container.decode(Int.self, forKey: .memberCount)
+        isPinned = try container.decode(Bool.self, forKey: .isPinned)
+        isMuted = try container.decode(Bool.self, forKey: .isMuted)
+        canSendMessages = try container.decode(Bool.self, forKey: .canSendMessages)
+        canManageChatroom = try container.decodeIfPresent(Bool.self, forKey: .canManageChatroom) ?? false
     }
     
     // MARK: - Convenience
@@ -106,6 +181,12 @@ struct RLGuildChatroomDTO: Codable, Identifiable, Equatable, Hashable {
     /// Check if chatroom has unread messages
     var hasUnread: Bool {
         unreadCount > 0
+    }
+
+    /// Safe icon for display, defaults to # if server value is missing/invalid.
+    var displayIcon: String {
+        let trimmed = icon.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count == 1 ? trimmed : "#"
     }
 }
 
@@ -315,7 +396,16 @@ struct RLEditMessageRequest: Codable {
 /// Backend: CreateChatroomRequest
 struct RLCreateChatroomRequest: Codable {
     let name: String
+    let description: String
+    let icon: String?
+}
+
+/// Update chatroom request
+/// Backend: UpdateChatroomRequest
+struct RLUpdateChatroomRequest: Codable {
+    let name: String?
     let description: String?
+    let icon: String?
 }
 
 /// Update chatroom settings request
@@ -559,6 +649,7 @@ extension RLGuildChatroomDTO {
         guildId: UUID(),
         name: "general",
         description: "General discussion",
+        icon: "#",
         lastMessage: nil,
         isActive: true,
         lastActivity: Date(),
@@ -567,7 +658,8 @@ extension RLGuildChatroomDTO {
         memberCount: 42,
         isPinned: false,
         isMuted: false,
-        canSendMessages: true
+        canSendMessages: true,
+        canManageChatroom: true
     )
     
     static let samples: [RLGuildChatroomDTO] = [
@@ -576,6 +668,7 @@ extension RLGuildChatroomDTO {
             guildId: UUID(),
             name: "general",
             description: "General chat",
+            icon: "#",
             lastMessage: nil,
             isActive: true,
             lastActivity: Date(),
@@ -584,13 +677,15 @@ extension RLGuildChatroomDTO {
             memberCount: 128,
             isPinned: true,
             isMuted: false,
-            canSendMessages: true
+            canSendMessages: true,
+            canManageChatroom: true
         ),
         RLGuildChatroomDTO(
             id: UUID(),
             guildId: UUID(),
             name: "trading-signals",
             description: "Share your trades",
+            icon: "@",
             lastMessage: nil,
             isActive: true,
             lastActivity: Date().addingTimeInterval(-3600),
@@ -599,13 +694,15 @@ extension RLGuildChatroomDTO {
             memberCount: 89,
             isPinned: false,
             isMuted: false,
-            canSendMessages: true
+            canSendMessages: true,
+            canManageChatroom: true
         ),
         RLGuildChatroomDTO(
             id: UUID(),
             guildId: UUID(),
             name: "announcements",
             description: "Important updates",
+            icon: "A",
             lastMessage: nil,
             isActive: true,
             lastActivity: Date().addingTimeInterval(-86400),
@@ -614,7 +711,8 @@ extension RLGuildChatroomDTO {
             memberCount: 128,
             isPinned: true,
             isMuted: true,
-            canSendMessages: false
+            canSendMessages: false,
+            canManageChatroom: false
         )
     ]
 }

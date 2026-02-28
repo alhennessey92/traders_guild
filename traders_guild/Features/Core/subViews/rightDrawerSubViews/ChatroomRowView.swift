@@ -33,10 +33,10 @@ struct RLChatroomRowView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(AppColors.gradientBackgroundDark.opacity(0.4))
                         .frame(width: 44, height: 44)
-                    Image(systemName: "number")
-                        .font(.title3)
+                    Text(chatroom.displayIcon)
+                        .font(.title2.weight(.bold))
                         .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText.opacity(0.4))
+                        .foregroundColor(AppColors.whiteText.opacity(0.6))
                     
                     // Pinned indicator
                     if chatroom.isPinned {
@@ -73,14 +73,14 @@ struct RLChatroomRowView: View {
                         .foregroundColor(AppColors.whiteText.opacity(0.6))
                         .lineLimit(1)
                     } else {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(chatroom.isActive ? AppColors.bullCandleGreen : Color.gray.opacity(0.5))
-                                .frame(width: 8, height: 8)
-                            Text("\(chatroom.memberCount) members")
-                                .font(.caption)
-                                .foregroundColor(AppColors.whiteText.opacity(0.6))
-                        }
+                        Text(
+                            chatroom.description?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                            ? (chatroom.description ?? "")
+                            : "No description yet"
+                        )
+                        .font(.caption)
+                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        .lineLimit(1)
                     }
                 }
                 
@@ -88,12 +88,9 @@ struct RLChatroomRowView: View {
                 
                 // Right side indicators
                 VStack(alignment: .trailing, spacing: 4) {
-                    // Last activity time
-                    if chatroom.lastMessage != nil {
-                        Text(chatroom.lastActivityFormatted)
-                            .font(.caption2)
-                            .foregroundColor(AppColors.whiteText.opacity(0.5))
-                    }
+                    Text(chatroom.lastActivityFormatted)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.whiteText.opacity(0.5))
                     
                     HStack(spacing: 6) {
                         // Unread badge

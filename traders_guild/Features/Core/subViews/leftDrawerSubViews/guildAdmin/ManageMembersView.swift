@@ -89,7 +89,7 @@ struct ManageMembersView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(AdminSheetBackground())
         .onAppear {
             loadData()
         }
@@ -145,28 +145,12 @@ struct ManageMembersView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack(spacing: 12) {
-            UnifiedIconBadge(
-                icon: "person.2.fill",
-                color: .purple,
-                size: 44,
-                iconSize: 20,
-                backgroundOpacity: 0.2
-            )
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Manage Members")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
-
-                Text("Moderate guild membership")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-        }
+        AdminSheetHeader(
+            icon: "person.2.fill",
+            iconColor: .purple,
+            title: "Manage Members",
+            subtitle: "Moderate guild membership"
+        )
     }
 
     // MARK: - Tab Bar

@@ -2206,8 +2206,12 @@ class RLAppState: ObservableObject {
         }
     }
     
-    /// Create a new chatroom (admin only)
-    func createChatroom(name: String, description: String? = nil) async throws -> RLGuildChatroomDTO {
+    /// Create a new chatroom (owner/admin only)
+    func createChatroom(
+        name: String,
+        description: String,
+        icon: String? = nil
+    ) async throws -> RLGuildChatroomDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
@@ -2215,12 +2219,53 @@ class RLAppState: ObservableObject {
             let chatroom = try await realApi.createChatroom(
                 guildId: guild.id,
                 name: name,
-                description: description
+                description: description,
+                icon: icon
             )
             showSuccess("Chatroom created")
             return chatroom
         } catch {
             showError(error, title: "Failed to Create Chatroom", style: .toast)
+            throw error
+        }
+    }
+
+    /// Update chatroom metadata (owner/admin only)
+    func updateChatroom(
+        chatroomId: UUID,
+        name: String? = nil,
+        description: String? = nil,
+        icon: String? = nil
+    ) async throws -> RLGuildChatroomDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            let chatroom = try await realApi.updateChatroom(
+                guildId: guild.id,
+                chatroomId: chatroomId,
+                name: name,
+                description: description,
+                icon: icon
+            )
+            showSuccess("Chatroom updated")
+            return chatroom
+        } catch {
+            showError(error, title: "Failed to Update Chatroom", style: .toast)
+            throw error
+        }
+    }
+
+    /// Archive chatroom (owner/admin only)
+    func deleteChatroom(chatroomId: UUID) async throws {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            _ = try await realApi.deleteChatroom(guildId: guild.id, chatroomId: chatroomId)
+            showSuccess("Chatroom archived")
+        } catch {
+            showError(error, title: "Failed to Archive Chatroom", style: .toast)
             throw error
         }
     }
