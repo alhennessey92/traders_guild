@@ -24,6 +24,8 @@ struct RLRegisterRequestDTO: Codable {
     let username: String
     let displayName: String          // backend: display_name
     let password: String
+    let language: String?
+    let location: String?
 }
 
 /// Matches backend LoginRequest schema
@@ -507,6 +509,10 @@ struct RLCreateGuildRequestDTO: Codable {
     let language: String?
     let location: String?
     let joinQuestions: [RLGuildJoinQuestionInputDTO]
+    let initialAnnouncementTitle: String
+    let initialAnnouncementContent: String
+    let initialAnnouncementPreview: String?
+    let initialAnnouncementIsImportant: Bool
 }
 
 struct RLGuildJoinQuestionDTO: Codable, Identifiable {
@@ -1058,6 +1064,7 @@ struct RLTradingInterestItem: Codable, Identifiable, Equatable, Hashable {
 struct RLUserProfileDTO: Codable, Equatable {
     let userId: UUID                    // backend: user_id
     let bio: String?
+    let language: String?
     let location: String?
     let timezone: String?
     let experienceLevel: String         // backend: experience_level
@@ -1097,6 +1104,7 @@ struct RLUserProfileDTO: Codable, Equatable {
 /// Update user profile request - matches backend UserProfileUpdateRequest
 struct RLUserProfileUpdateRequest: Codable {
     var bio: String?
+    var language: String?
     var location: String?
     var timezone: String?
     var experienceLevel: String?        // backend: experience_level
@@ -1109,6 +1117,7 @@ struct RLUserProfileUpdateRequest: Codable {
     
     init(
         bio: String? = nil,
+        language: String? = nil,
         location: String? = nil,
         timezone: String? = nil,
         experienceLevel: String? = nil,
@@ -1120,6 +1129,7 @@ struct RLUserProfileUpdateRequest: Codable {
         showOnlineStatus: Bool? = nil
     ) {
         self.bio = bio
+        self.language = language
         self.location = location
         self.timezone = timezone
         self.experienceLevel = experienceLevel
@@ -1985,6 +1995,21 @@ struct RLUserSettingsDTO: Codable {
     let activityVisible: Bool
     let analyticsEnabled: Bool
     let personalizedContentEnabled: Bool
+    let dmPermissionMode: String
+
+    var dmPermission: RLDMPermissionMode {
+        RLDMPermissionMode(rawValue: dmPermissionMode) ?? .all
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        showOnlineStatus = try container.decodeIfPresent(Bool.self, forKey: .showOnlineStatus) ?? true
+        allowFriendRequests = try container.decodeIfPresent(Bool.self, forKey: .allowFriendRequests) ?? true
+        activityVisible = try container.decodeIfPresent(Bool.self, forKey: .activityVisible) ?? true
+        analyticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .analyticsEnabled) ?? true
+        personalizedContentEnabled = try container.decodeIfPresent(Bool.self, forKey: .personalizedContentEnabled) ?? true
+        dmPermissionMode = try container.decodeIfPresent(String.self, forKey: .dmPermissionMode) ?? "all"
+    }
 }
 
 struct RLUserSettingsUpdateRequest: Codable {
@@ -1993,6 +2018,47 @@ struct RLUserSettingsUpdateRequest: Codable {
     let activityVisible: Bool?
     let analyticsEnabled: Bool?
     let personalizedContentEnabled: Bool?
+    let dmPermissionMode: String?
+
+    init(
+        showOnlineStatus: Bool? = nil,
+        allowFriendRequests: Bool? = nil,
+        activityVisible: Bool? = nil,
+        analyticsEnabled: Bool? = nil,
+        personalizedContentEnabled: Bool? = nil,
+        dmPermissionMode: String? = nil
+    ) {
+        self.showOnlineStatus = showOnlineStatus
+        self.allowFriendRequests = allowFriendRequests
+        self.activityVisible = activityVisible
+        self.analyticsEnabled = analyticsEnabled
+        self.personalizedContentEnabled = personalizedContentEnabled
+        self.dmPermissionMode = dmPermissionMode
+    }
+}
+
+enum RLDMPermissionMode: String, CaseIterable, Codable, Identifiable {
+    case all
+    case friends
+    case none
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "All users"
+        case .friends: return "Friends only"
+        case .none: return "No one"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .all: return "Allow direct messages from anyone."
+        case .friends: return "Only users in your friends list can DM you."
+        case .none: return "Block all incoming direct messages."
+        }
+    }
 }
 
 // MARK: - Support Request DTOs
@@ -2104,6 +2170,62 @@ enum RLAlertDisplayStyle {
 
 
 // ================================================================================================
+// MARK: - Trading Interests Catalog (Shared)
+// ================================================================================================
+
+enum RLTradingInterestsCatalog {
+    static let categories: [(category: String, items: [RLTradingInterestItem])] = [
+        (
+            "Markets",
+            [
+                RLTradingInterestItem(name: "Forex", icon: "dollarsign.circle.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Stocks", icon: "chart.line.uptrend.xyaxis", isPrimary: false),
+                RLTradingInterestItem(name: "Crypto", icon: "bitcoinsign.circle.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Commodities", icon: "cube.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Indices", icon: "chart.bar.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Futures", icon: "calendar.circle.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Options", icon: "arrow.left.arrow.right", isPrimary: false),
+            ]
+        ),
+        (
+            "Trading Styles",
+            [
+                RLTradingInterestItem(name: "Day Trading", icon: "sun.max.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Swing Trading", icon: "waveform.path.ecg", isPrimary: false),
+                RLTradingInterestItem(name: "Scalping", icon: "bolt.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Position Trading", icon: "calendar", isPrimary: false),
+                RLTradingInterestItem(name: "Algorithmic", icon: "cpu.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Event Trading", icon: "newspaper.fill", isPrimary: false),
+            ]
+        ),
+        (
+            "Analysis",
+            [
+                RLTradingInterestItem(name: "Technical Analysis", icon: "chart.xyaxis.line", isPrimary: false),
+                RLTradingInterestItem(name: "Fundamental Analysis", icon: "doc.text.magnifyingglass", isPrimary: false),
+                RLTradingInterestItem(name: "Sentiment Analysis", icon: "person.3.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Price Action", icon: "candybarphone", isPrimary: false),
+                RLTradingInterestItem(name: "Macro", icon: "globe.europe.africa.fill", isPrimary: false),
+            ]
+        ),
+        (
+            "Risk & Execution",
+            [
+                RLTradingInterestItem(name: "Risk Management", icon: "shield.checkered", isPrimary: false),
+                RLTradingInterestItem(name: "Portfolio Building", icon: "briefcase.fill", isPrimary: false),
+                RLTradingInterestItem(name: "Copy Trading", icon: "person.2.wave.2.fill", isPrimary: false),
+                RLTradingInterestItem(name: "High Frequency", icon: "speedometer", isPrimary: false),
+            ]
+        ),
+    ]
+
+    static var allItems: [RLTradingInterestItem] {
+        categories.flatMap(\.items)
+    }
+}
+
+
+// ================================================================================================
 // MARK: - Signup Form Data (UI Only)
 // ================================================================================================
 
@@ -2114,14 +2236,35 @@ struct RLSignupData {
     var password: String = ""
     var name: String = ""            // Maps to displayName when creating RegisterRequestDTO
     var selectedInterests: [String] = []
+    var language: String = RLSignupData.defaultLanguage()
+    var location: String = RLSignupData.defaultLocation()
+
+    static func defaultLanguage() -> String {
+        let preferred = Locale.preferredLanguages.first ?? Locale.current.identifier
+        let locale = Locale(identifier: preferred)
+        let code = locale.languageCode ?? preferred.components(separatedBy: "-").first ?? preferred
+        return Locale.current.localizedString(forLanguageCode: code)?.capitalized ?? code.uppercased()
+    }
+
+    static func defaultLocation() -> String {
+        if let regionCode = Locale.current.regionCode {
+            return Locale.current.localizedString(forRegionCode: regionCode) ?? regionCode
+        }
+        let fallback = TimeZone.current.identifier.components(separatedBy: "/").last ?? ""
+        return fallback.replacingOccurrences(of: "_", with: " ")
+    }
     
     /// Convert to API request format
     func toRequest() -> RLRegisterRequestDTO {
-        RLRegisterRequestDTO(
+        let normalizedLanguage = RLAuthValidator.trimmed(language)
+        let normalizedLocation = RLAuthValidator.trimmed(location)
+        return RLRegisterRequestDTO(
             email: email,
             username: username,
             displayName: name,
-            password: password
+            password: password,
+            language: normalizedLanguage.isEmpty ? nil : normalizedLanguage,
+            location: normalizedLocation.isEmpty ? nil : normalizedLocation
         )
     }
 }

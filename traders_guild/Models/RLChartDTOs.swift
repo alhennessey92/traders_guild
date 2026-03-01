@@ -323,6 +323,9 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
     let isRequestedForGuild: Bool?
     let activeMarketProvider: String?
     let isSupportedByActiveProvider: Bool?
+    let isMarketOpen: Bool?
+    let marketStatusUpdatedAt: Date?
+    let activityBadges: [String]?
     
     // MARK: - Hashable
     
@@ -355,6 +358,18 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
         activeMarketProvider?
             .replacingOccurrences(of: "_", with: " ")
             .uppercased()
+    }
+
+    var providerDisplayLabel: String {
+        (activeProviderDisplayName ?? exchange ?? "MARKET").uppercased()
+    }
+
+    var effectiveIsMarketOpen: Bool {
+        isMarketOpen ?? false
+    }
+
+    var activityBadgeValues: [String] {
+        activityBadges ?? []
     }
 }
 
@@ -1298,7 +1313,10 @@ extension RLTradingSymbolDTO {
         inGuildWatchlist: nil,
         isRequestedForGuild: nil,
         activeMarketProvider: "twelve_data",
-        isSupportedByActiveProvider: true
+        isSupportedByActiveProvider: true,
+        isMarketOpen: true,
+        marketStatusUpdatedAt: Date(),
+        activityBadges: ["Trending", "Hot"]
     )
     
     static let sampleEURUSD = RLTradingSymbolDTO(
@@ -1329,7 +1347,10 @@ extension RLTradingSymbolDTO {
         inGuildWatchlist: nil,
         isRequestedForGuild: nil,
         activeMarketProvider: "twelve_data",
-        isSupportedByActiveProvider: true
+        isSupportedByActiveProvider: true,
+        isMarketOpen: false,
+        marketStatusUpdatedAt: Date(),
+        activityBadges: ["New Markers"]
     )
 }
 #endif

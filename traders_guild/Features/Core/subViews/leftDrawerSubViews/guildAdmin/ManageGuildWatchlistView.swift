@@ -298,6 +298,20 @@ struct ManageGuildWatchlistView: View {
                 Text(symbol.displayName)
                     .font(.caption2)
                     .foregroundColor(.secondary)
+
+                HStack(spacing: 6) {
+                    Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
+                        .font(.system(size: symbol.effectiveIsMarketOpen ? 6 : 8, weight: .semibold))
+                        .foregroundColor(symbol.effectiveIsMarketOpen ? .green : .gray.opacity(0.8))
+
+                    Text(symbol.providerDisplayLabel)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.secondary)
+
+                    ForEach(symbol.activityBadgeValues, id: \.self) { badge in
+                        watchlistActivityBadge(label: badge)
+                    }
+                }
             }
             Spacer()
 
@@ -338,6 +352,20 @@ struct ManageGuildWatchlistView: View {
                 Text(symbol.displayName)
                     .font(.caption2)
                     .foregroundColor(.secondary)
+
+                HStack(spacing: 6) {
+                    Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
+                        .font(.system(size: symbol.effectiveIsMarketOpen ? 6 : 8, weight: .semibold))
+                        .foregroundColor(symbol.effectiveIsMarketOpen ? .green : .gray.opacity(0.8))
+
+                    Text(symbol.providerDisplayLabel)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.secondary)
+
+                    ForEach(symbol.activityBadgeValues, id: \.self) { badge in
+                        watchlistActivityBadge(label: badge)
+                    }
+                }
             }
             Spacer()
             if canManage {
@@ -370,6 +398,35 @@ struct ManageGuildWatchlistView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Capsule().fill(color.opacity(0.18)))
+    }
+
+    private func watchlistActivityBadge(label: String) -> some View {
+        let color: Color
+        let icon: String
+        switch label.lowercased() {
+        case "trending":
+            color = .orange
+            icon = "chart.line.uptrend.xyaxis"
+        case "hot":
+            color = .red
+            icon = "flame.fill"
+        case "new markers":
+            color = .green
+            icon = "sparkles"
+        default:
+            color = .gray
+            icon = "circle.fill"
+        }
+        return HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 8, weight: .bold))
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+        }
+            .foregroundColor(.white.opacity(0.95))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(color.opacity(0.45)))
     }
 
     @MainActor

@@ -24,38 +24,46 @@
 
 13. [FIXED] In the chat attachment section add option to link a marker user has placed, on click show a panel listing all markers starting with latest, user can click one with a caption and link to it in chat
 
-14. Make sure auth initialisation checks email and username for uniqueness / no blocking etc. Also gather initial language and location for providing correct recommendations for guilds etc... Want to provide guilds with same language at least
+14. [FIXED] Make sure auth initialisation checks email and username for uniqueness / no blocking etc. Also gather initial language and location for providing correct recommendations for guilds etc... Want to provide guilds with same language at least
 
-15. Make sure when choosing guild in auth that if no other guilds to choose, initially show the onboarding guild as pre selected to join, rather than showing no guilds and showing after pressing submit, make it look cleaner
+15. [FIXED] Make sure when choosing guild in auth that if no other guilds to choose, initially show the onboarding guild as pre selected to join, rather than showing no guilds and showing after pressing submit, make it look cleaner
 
-16. Implement a spam/abuse service monitoring chats/markers for spam, racial, abuse anything not good and auto mute users and report to admin
+16. [FIXED] Implement a spam/abuse service monitoring chats/markers for spam, racial, abuse anything not good and auto mute users and report to admin
 
-17. in profile setup in auth provide options for location and language, allowing to change but pre fill with defaults from users device?
+17. [FIXED] in profile setup in auth provide options for location and language, allowing to change but pre fill with defaults from users device?
 
-18. Marker when placing needs to appear above the vertical dotted line, same for marker name type
+18. [FIXED] Marker when placing needs to appear above the vertical dotted line, same for marker name type
 
-19. Toggle buttons in marker types visibility appearing as pure white, needs to look like proper toggle
+19. [FIXED] Toggle buttons in marker types visibility appearing as pure white, needs to look like proper toggle
 
-20. When adding prediction marker on view to add the submit button appears as pure white, so cant see any writing
+20. [FIXED] When adding prediction marker on view to add the submit button appears as pure white, so cant see any writing
 
-21. marker visibility and latest buttons in chart need to move to the right up to price y axis
+21. [FIXED] marker visibility and latest buttons in chart need to move to the right up to price y axis
 
-22. Need to provide a symbol detail section in bottom sheet outlinging current symbol information, history, current provider, running hours, highs, lows of the day, week etc. a full detail list, this section can be collapsible - this can show info regarding whether it is bullish or bearish at the moment relevant to global guild analysis
+22. [FIXED] Need to provide a symbol detail section in bottom sheet outlinging current symbol information, history, current provider, running hours, highs, lows of the day, week etc. a full detail list, this section can be collapsible - this can show info regarding whether it is bullish or bearish at the moment relevant to global guild analysis
 
-23. Need to display provider name, open/ closed icon in top left symbol section.
+23. [FIXED] Need to display provider name, open/ closed icon in top left symbol section.
 
-24. Need to make sure symbol open / closed status is working and correct, show right icon relevant to symbols status if it is still providing candles at the current time. Currently 3pm on sunday here yet eurusd shows open status which its not its closed, last candle 21.59 on friday evening
+24. [FIXED] Need to make sure symbol open / closed status is working and correct, show right icon relevant to symbols status if it is still providing candles at the current time. Currently 3pm on sunday here yet eurusd shows open status which its not its closed, last candle 21.59 on friday evening
 
-25. Need to add more interests in auth to choose from
+25. [FIXED] Need to add more interests in auth to choose from
 
-26. Need to review settings section, amking sure they are all relevant, implemented etc... certain things to add, allow DMs from all users or just friends or no one etc...
+26. [FIXED] Need to review settings section, amking sure they are all relevant, implemented etc... certain things to add, allow DMs from all users or just friends or no one etc...
 
-27. Colors for tabs in leaderboard need to be unique as you get down the hierarchy, same colors for tabs as top global tab to 2nd stage reputation and accuracy, yet reputation and accuracy in guild is different
+27. [FIXED] Colors for tabs in leaderboard need to be unique as you get down the hierarchy, same colors for tabs as top global tab to 2nd stage reputation and accuracy, yet reputation and accuracy in guild is different
 
-28. Need initial notification for user when they join guild, and same for other users in guild need to receive a new member notification.
+28. [FIXED] Need initial notification for user when they join guild, and same for other users in guild need to receive a new member notification.
 
-29. Initial announcment for new guilds etc...or force guild owners to make a initial announcment when creating
+29. [FIXED] Initial announcment for new guilds etc...or force guild owners to make a initial announcment when creating
 
-30. Need to add a icon set next to provider name in symbol list/watchlist saying things like "Trending", "Hot", "New Markers" etc... so users can see a brief view of interesting symbols, could tie this into notifciations for users on watchlist symbols of activity like "High Activity" etc...
+30. [FIXED] Need to add a icon set next to provider name in symbol list/watchlist saying things like "Trending", "Hot", "New Markers" etc... so users can see a brief view of interesting symbols, could tie this into notifciations for users on watchlist symbols of activity like "High Activity" etc...
 
 31. For production market ingestion, will need to seed possibly 2-3 years of symbols beforehand so user when viewing monthly have initial data
+
+32. Full audit of x axis timing labels and vertical lines for grid, need to make sure they are consistent with timeframe, are of good pattern so for 1 min should be every 5 mins or 10 mins we display a time, and this needs to take into account zoom amount, it needs to adapt. Also where relevant display the current date or day so users know what day they are looking at etc... and this needs to be done to every timeframe we offer
+
+33. Regarding symbol data in top left of chart it should be - symbol name   timeframe   open/closed icon
+                                                              Provider name
+                                                              current price with variation   
+
+34. Change the bottom sheet symbol button - remove the open/closed icon and provider name, replace with symbol category like Forex or Commodity or Stock etc...

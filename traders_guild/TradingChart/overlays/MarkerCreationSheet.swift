@@ -597,10 +597,12 @@ struct MarkerCreationSheet: View {
     }
     
     private var buttonBackgroundColor: Color {
+        if markerType == .predictionTarget { return Color.blue.opacity(0.9) }
         if markerType == .emoji { return Color.gray.opacity(0.5) }
-        return markerType.color
+        return markerType.color.opacity(0.9)
     }
     private var buttonForegroundColor: Color {
+        if markerType == .predictionTarget { return .white }
         if markerType == .emoji { return .white }
         return canPlaceMarker ? .white : .white.opacity(0.6)
     }

@@ -59,6 +59,7 @@ struct ChartSheetSymbolView: View {
     // Guild request alert state
     @State private var showGuildRequestAlert: Bool = false
     @State private var symbolToRequest: RLTradingSymbolDTO? = nil
+    @State private var isSymbolDetailsExpanded: Bool = true
     
     // Helper to get current symbol as DTO
     private var currentSymbolDTO: RLTradingSymbolDTO? {
@@ -69,6 +70,9 @@ struct ChartSheetSymbolView: View {
         VStack(spacing: 20) {
             // Current Symbol Header
             currentSymbolHeader
+
+            // Symbol Details
+            currentSymbolDetailsSection
             
             // Loading indicator
             if chartViewModel.isLoadingData {
@@ -164,14 +168,16 @@ struct ChartSheetSymbolView: View {
                                     .foregroundColor(.white.opacity(0.6))
                                 
                                 // Market status
-                                SymbolMarketStatus(isActive: symbol.isActive)
+                                SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
 
-                                if let provider = symbol.activeProviderDisplayName {
-                                    SymbolProviderBadge(provider: provider)
-                                }
+                                SymbolProviderBadge(provider: symbol.providerDisplayLabel)
 
                                 if !symbol.isSelectableForActiveProvider {
                                     UnsupportedSymbolBadge()
+                                }
+
+                                ForEach(symbol.activityBadgeValues, id: \.self) { badge in
+                                    SymbolActivityBadge(label: badge)
                                 }
                                 
                                 Text("•")
@@ -222,6 +228,82 @@ struct ChartSheetSymbolView: View {
                         .stroke(symbol.primaryColorValue.opacity(0.3), lineWidth: 1)
                 )
                 .cornerRadius(14)
+            }
+        }
+    }
+
+    private var currentSymbolDetailsSection: some View {
+        Group {
+            if let symbol = currentSymbolDTO {
+                VStack(spacing: 10) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isSymbolDetailsExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+
+                            Text("Symbol Details")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+
+                            Spacer()
+
+                            Image(systemName: isSymbolDetailsExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.65))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.06))
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    if isSymbolDetailsExpanded {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SymbolDetailRow(
+                                title: "Provider",
+                                value: symbol.providerDisplayLabel
+                            )
+                            SymbolDetailRow(
+                                title: "Status",
+                                value: symbol.effectiveIsMarketOpen ? "Open" : "Closed"
+                            )
+                            SymbolDetailRow(
+                                title: "Running Hours",
+                                value: runningHoursText(for: symbol)
+                            )
+                            SymbolDetailRow(
+                                title: "Day High / Low",
+                                value: dayHighLowText(for: symbol)
+                            )
+                            SymbolDetailRow(
+                                title: "Week High / Low",
+                                value: weekHighLowText(for: symbol)
+                            )
+                            SymbolDetailRow(
+                                title: "Global Sentiment",
+                                value: bullishBearishSummary(for: symbol)
+                            )
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.04))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
             }
         }
     }
@@ -790,12 +872,53 @@ struct ChartSheetSymbolView: View {
     }
 
     private func showUnsupportedSymbolToast(_ symbol: RLTradingSymbolDTO) {
-        let providerText = symbol.activeProviderDisplayName ?? "active provider"
+        let providerText = symbol.providerDisplayLabel
         rlAppState.showError(
             title: "Symbol Unavailable",
             message: "\(symbol.ticker) is not supported by \(providerText).",
             style: .toast
         )
+    }
+
+    private func runningHoursText(for symbol: RLTradingSymbolDTO) -> String {
+        switch symbol.assetClass.lowercased() {
+        case "crypto":
+            return "24/7 continuous trading"
+        case "forex":
+            return "Sun 22:00 to Fri 22:00 UTC"
+        case "stocks":
+            return "Exchange session hours"
+        case "commodities", "futures":
+            return "Exchange-dependent sessions"
+        default:
+            return "Market schedule varies"
+        }
+    }
+
+    private func dayHighLowText(for symbol: RLTradingSymbolDTO) -> String {
+        guard let high = symbol.high24h, let low = symbol.low24h else { return "Unavailable" }
+        return "\(symbol.formatPrice(high)) / \(symbol.formatPrice(low))"
+    }
+
+    private func weekHighLowText(for symbol: RLTradingSymbolDTO) -> String {
+        let weekAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+        let weekCandles = chartViewModel.dataManager.candles.filter { $0.timestamp >= weekAgo }
+        guard let maxHigh = weekCandles.map(\.high).max(),
+              let minLow = weekCandles.map(\.low).min() else {
+            return "Unavailable"
+        }
+        return "\(symbol.formatPrice(maxHigh)) / \(symbol.formatPrice(minLow))"
+    }
+
+    private func bullishBearishSummary(for symbol: RLTradingSymbolDTO) -> String {
+        let dayChange = symbol.changePercent24h ?? 0
+        if dayChange > 0.15 {
+            return "Bullish bias (+\(String(format: "%.2f", dayChange))%)"
+        }
+        if dayChange < -0.15 {
+            return "Bearish bias (\(String(format: "%.2f", dayChange))%)"
+        }
+        return "Neutral / range-bound"
     }
 }
 
@@ -931,7 +1054,7 @@ struct SymbolListRow: View {
                             .foregroundColor(.white)
                         
                         // Market status indicator
-                        SymbolMarketStatus(isActive: symbol.isActive)
+                        SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
                     }
                     
                     Text(symbol.displayName)
@@ -940,8 +1063,9 @@ struct SymbolListRow: View {
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
-                        if let provider = symbol.activeProviderDisplayName {
-                            SymbolProviderBadge(provider: provider)
+                        SymbolProviderBadge(provider: symbol.providerDisplayLabel)
+                        ForEach(symbol.activityBadgeValues, id: \.self) { badge in
+                            SymbolActivityBadge(label: badge)
                         }
                         if !symbol.isSelectableForActiveProvider {
                             UnsupportedSymbolBadge()
@@ -1040,7 +1164,7 @@ struct GlobalSymbolListRow: View {
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
 
-                            SymbolMarketStatus(isActive: symbol.isActive)
+                            SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
                         }
 
                         Text(symbol.displayName)
@@ -1049,8 +1173,9 @@ struct GlobalSymbolListRow: View {
                             .lineLimit(1)
 
                         HStack(spacing: 6) {
-                            if let provider = symbol.activeProviderDisplayName {
-                                SymbolProviderBadge(provider: provider)
+                            SymbolProviderBadge(provider: symbol.providerDisplayLabel)
+                            ForEach(symbol.activityBadgeValues, id: \.self) { badge in
+                                SymbolActivityBadge(label: badge)
                             }
                             if !symbol.isSelectableForActiveProvider {
                                 UnsupportedSymbolBadge()
@@ -1133,10 +1258,10 @@ struct GlobalSymbolListRow: View {
 // MARK: - Market Status Indicator (for Symbol List)
 
 struct SymbolMarketStatus: View {
-    let isActive: Bool
+    let isMarketOpen: Bool
     
     var body: some View {
-        if isActive {
+        if isMarketOpen {
             Circle()
                 .fill(Color.green)
                 .frame(width: 6, height: 6)
@@ -1172,6 +1297,70 @@ struct UnsupportedSymbolBadge: View {
             .padding(.vertical, 3)
             .background(Color.red.opacity(0.35))
             .clipShape(Capsule())
+    }
+}
+
+struct SymbolActivityBadge: View {
+    let label: String
+
+    private var iconName: String {
+        switch label.lowercased() {
+        case "trending":
+            return "chart.line.uptrend.xyaxis"
+        case "hot":
+            return "flame.fill"
+        case "new markers":
+            return "sparkles"
+        default:
+            return "circle.fill"
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch label.lowercased() {
+        case "trending":
+            return Color.orange.opacity(0.28)
+        case "hot":
+            return Color.red.opacity(0.28)
+        case "new markers":
+            return Color.green.opacity(0.25)
+        default:
+            return Color.white.opacity(0.2)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: iconName)
+                .font(.system(size: 8, weight: .bold))
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+        }
+        .foregroundColor(.white.opacity(0.95))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(backgroundColor)
+        .clipShape(Capsule())
+    }
+}
+
+private struct SymbolDetailRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.65))
+                .frame(width: 110, alignment: .leading)
+
+            Text(value)
+                .font(.caption.weight(.medium))
+                .foregroundColor(.white.opacity(0.92))
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 

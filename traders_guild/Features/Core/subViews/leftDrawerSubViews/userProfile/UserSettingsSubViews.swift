@@ -50,6 +50,7 @@ struct EditProfileView: View {
     @State private var displayName: String = ""
     @State private var username: String = ""
     @State private var bio: String = ""
+    @State private var language: String = ""
     @State private var location: String = ""
     @State private var isLoading = false
     @State private var isSaving = false
@@ -187,6 +188,17 @@ struct EditProfileView: View {
                                 
                                 // Location
                                 SettingsTextField(
+                                    title: "Language",
+                                    placeholder: "Preferred language",
+                                    text: $language,
+                                    icon: "globe"
+                                )
+                                .onChange(of: language) { _, _ in
+                                    hasChanges = true
+                                }
+
+                                // Location
+                                SettingsTextField(
                                     title: "Location",
                                     placeholder: "City, Country",
                                     text: $location,
@@ -257,6 +269,7 @@ struct EditProfileView: View {
             let profile = try await rlAppState.fetchExtendedProfile()
             extendedProfile = profile
             bio = profile.bio ?? ""
+            language = profile.language ?? ""
             location = profile.location ?? ""
         } catch {
             print("Failed to load extended profile: \(error)")
@@ -310,14 +323,16 @@ struct EditProfileView: View {
                     )
                 }
                 
-                // Update extended profile (bio and location)
+                // Update extended profile (bio, language, and location)
                 let hasBioChange = bio != (extendedProfile?.bio ?? "")
+                let hasLanguageChange = language != (extendedProfile?.language ?? "")
                 let hasLocationChange = location != (extendedProfile?.location ?? "")
                 
-                if hasBioChange || hasLocationChange {
+                if hasBioChange || hasLanguageChange || hasLocationChange {
                     _ = try await rlAppState.updateUserProfile(
                         RLUserProfileUpdateRequest(
                             bio: hasBioChange ? bio : nil,
+                            language: hasLanguageChange ? language : nil,
                             location: hasLocationChange ? location : nil
                         )
                     )
@@ -1129,30 +1144,7 @@ struct TradingInterestsView: View {
     @State private var isSaving = false
     @State private var showSuccessAlert = false
     
-    // Available interests
-    private let availableInterests: [(category: String, items: [RLTradingInterestItem])] = [
-        ("Markets", [
-            RLTradingInterestItem(name: "Forex", icon: "dollarsign.circle.fill", isPrimary: false),
-            RLTradingInterestItem(name: "Stocks", icon: "chart.line.uptrend.xyaxis", isPrimary: false),
-            RLTradingInterestItem(name: "Crypto", icon: "bitcoinsign.circle.fill", isPrimary: false),
-            RLTradingInterestItem(name: "Commodities", icon: "cube.fill", isPrimary: false),
-            RLTradingInterestItem(name: "Indices", icon: "chart.bar.fill", isPrimary: false),
-            RLTradingInterestItem(name: "Options", icon: "arrow.left.arrow.right", isPrimary: false),
-        ]),
-        ("Trading Styles", [
-            RLTradingInterestItem(name: "Day Trading", icon: "sun.max.fill", isPrimary: false),
-            RLTradingInterestItem(name: "Swing Trading", icon: "waveform.path.ecg", isPrimary: false),
-            RLTradingInterestItem(name: "Scalping", icon: "bolt.fill", isPrimary: false),
-            RLTradingInterestItem(name: "Position Trading", icon: "calendar", isPrimary: false),
-            RLTradingInterestItem(name: "Algorithmic", icon: "cpu.fill", isPrimary: false),
-        ]),
-        ("Analysis", [
-            RLTradingInterestItem(name: "Technical Analysis", icon: "chart.xyaxis.line", isPrimary: false),
-            RLTradingInterestItem(name: "Fundamental Analysis", icon: "doc.text.magnifyingglass", isPrimary: false),
-            RLTradingInterestItem(name: "Sentiment Analysis", icon: "person.3.fill", isPrimary: false),
-            RLTradingInterestItem(name: "Price Action", icon: "candybarphone", isPrimary: false),
-        ])
-    ]
+    private let availableInterests = RLTradingInterestsCatalog.categories
     
     var body: some View {
         ZStack {
@@ -1531,6 +1523,7 @@ struct DataPrivacyView: View {
     let onBack: () -> Void
     
     @State private var activityVisible = true
+    @State private var dmPermissionMode: RLDMPermissionMode = .all
     @State private var dataAnalytics = true
     @State private var personalizedAds = true
     @State private var showClearDataAlert = false
@@ -1559,6 +1552,41 @@ struct DataPrivacyView: View {
                             )
                             .onChange(of: activityVisible) { _, newValue in
                                 updateUserSettings(activityVisible: newValue)
+                            }
+
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.orange.opacity(0.2))
+                                            .frame(width: 36, height: 36)
+                                        Image(systemName: "paperplane.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.orange)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Direct Messages")
+                                            .font(.subheadline)
+                                            .foregroundColor(AppColors.whiteText)
+                                        Text(dmPermissionMode.subtitle)
+                                            .font(.caption)
+                                            .foregroundColor(AppColors.greyText)
+                                    }
+                                    Spacer()
+                                }
+
+                                Picker("Direct Messages", selection: $dmPermissionMode) {
+                                    ForEach(RLDMPermissionMode.allCases) { mode in
+                                        Text(mode.title).tag(mode)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                            .padding(.horizontal, 25)
+                            .padding(.vertical, 12)
+                            .onChange(of: dmPermissionMode) { _, newValue in
+                                updateUserSettings(dmPermissionMode: newValue)
                             }
                         }
                         
@@ -1647,6 +1675,7 @@ struct DataPrivacyView: View {
     private func syncSettingsFromState(_ settings: RLUserSettingsDTO) {
         isSyncingSettings = true
         activityVisible = settings.activityVisible
+        dmPermissionMode = settings.dmPermission
         dataAnalytics = settings.analyticsEnabled
         personalizedAds = settings.personalizedContentEnabled
         isSyncingSettings = false
@@ -1654,6 +1683,7 @@ struct DataPrivacyView: View {
     
     private func updateUserSettings(
         activityVisible: Bool? = nil,
+        dmPermissionMode: RLDMPermissionMode? = nil,
         analyticsEnabled: Bool? = nil,
         personalizedContentEnabled: Bool? = nil
     ) {
@@ -1665,7 +1695,8 @@ struct DataPrivacyView: View {
                     allowFriendRequests: nil,
                     activityVisible: activityVisible,
                     analyticsEnabled: analyticsEnabled,
-                    personalizedContentEnabled: personalizedContentEnabled
+                    personalizedContentEnabled: personalizedContentEnabled,
+                    dmPermissionMode: dmPermissionMode?.rawValue
                 )
                 let updated = try await rlAppState.updateUserSettings(request)
                 syncSettingsFromState(updated)

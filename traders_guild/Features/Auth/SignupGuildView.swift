@@ -273,16 +273,17 @@ struct SignupGuildView: View {
         defer { isLoadingGuilds = false }
 
         do {
-            let guilds = try await rlAppState.fetchPublicOpenGuilds()
+            let preferredLanguage = data.language.trimmingCharacters(in: .whitespacesAndNewlines)
+            let preferredLocation = data.location.trimmingCharacters(in: .whitespacesAndNewlines)
+            let guilds = try await rlAppState.fetchPublicOpenGuilds(
+                language: preferredLanguage.isEmpty ? nil : preferredLanguage,
+                location: preferredLocation.isEmpty ? nil : preferredLocation
+            )
             availableGuilds = guilds
             assignmentErrorMessage = nil
 
             if guilds.isEmpty {
-                _ = await recoverAssignedGuildFromCurrentState()
-                if guildMode != .assignedFallbackMode {
-                    selectedGuild = nil
-                    guildMode = .openSelectionMode
-                }
+                await prepareAssignedFallbackGuild()
             } else {
                 guildMode = .openSelectionMode
                 if let selectedGuild, !guilds.contains(where: { $0.id == selectedGuild.id }) {
@@ -294,8 +295,31 @@ struct SignupGuildView: View {
         } catch {
             // Error surfaced by rlAppState
             if availableGuilds.isEmpty {
-                _ = await recoverAssignedGuildFromCurrentState()
+                await prepareAssignedFallbackGuild()
             }
+        }
+    }
+
+    private func prepareAssignedFallbackGuild() async {
+        if await recoverAssignedGuildFromCurrentState() {
+            assignmentErrorMessage = nil
+            return
+        }
+
+        do {
+            try await ensureRegisteredIfNeeded()
+            let assignedGuild = try await rlAppState.assignOnboardingGuild(showTransition: false).guild
+            selectedGuild = assignedGuild
+            guildMode = .assignedFallbackMode
+            assignmentErrorMessage = nil
+        } catch {
+            if await recoverAssignedGuildFromCurrentState() {
+                assignmentErrorMessage = nil
+                return
+            }
+            selectedGuild = nil
+            guildMode = .openSelectionMode
+            assignmentErrorMessage = "Assignment failed. Retry assignment to continue."
         }
     }
 
@@ -357,6 +381,7 @@ struct SignupGuildView: View {
     private func ensureRegisteredIfNeeded() async throws {
         guard !rlAppState.isAuthenticated else { return }
         isPreparingAccount = true
+        defer { isPreparingAccount = false }
         try await rlAppState.signUp(data: data, beginOnboarding: true)
     }
 
@@ -388,6 +413,7 @@ struct SignupProfileSetupView: View {
     @EnvironmentObject var rlAppState: RLAppState
 
     @State private var bio: String = ""
+    @State private var language: String = ""
     @State private var location: String = ""
     @State private var tradingStyle: String = ""
     @State private var twitterHandle: String = ""
@@ -400,14 +426,7 @@ struct SignupProfileSetupView: View {
     @State private var showingImagePicker: Bool = false
     @State private var isSaving: Bool = false
 
-    private let suggestedInterests: [RLTradingInterestItem] = [
-        RLTradingInterestItem(name: "Forex", icon: "dollarsign.circle.fill", isPrimary: false),
-        RLTradingInterestItem(name: "Stocks", icon: "chart.line.uptrend.xyaxis", isPrimary: false),
-        RLTradingInterestItem(name: "Crypto", icon: "bitcoinsign.circle.fill", isPrimary: false),
-        RLTradingInterestItem(name: "Day Trading", icon: "sun.max.fill", isPrimary: false),
-        RLTradingInterestItem(name: "Swing Trading", icon: "waveform.path.ecg", isPrimary: false),
-        RLTradingInterestItem(name: "Technical Analysis", icon: "chart.xyaxis.line", isPrimary: false)
-    ]
+    private let suggestedInterests: [RLTradingInterestItem] = RLTradingInterestsCatalog.allItems
 
     var body: some View {
         ZStack {
@@ -496,6 +515,7 @@ struct SignupProfileSetupView: View {
                     // About You section
                     profileSetupSection(title: "About You") {
                         VStack(spacing: 12) {
+                            StandardTextFieldView(title: "Language (optional)", text: $language)
                             StandardTextFieldView(title: "Location (optional)", text: $location)
                             StandardTextFieldView(title: "Trading Style (optional)", text: $tradingStyle)
 
@@ -631,6 +651,12 @@ struct SignupProfileSetupView: View {
             if selectedInterests.isEmpty, !data.selectedInterests.isEmpty {
                 selectedInterests = Set(data.selectedInterests)
             }
+            if language.isEmpty {
+                language = data.language
+            }
+            if location.isEmpty {
+                location = data.location
+            }
         }
     }
 
@@ -712,12 +738,15 @@ struct SignupProfileSetupView: View {
 
             let request = RLUserProfileUpdateRequest(
                 bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : bio.trimmingCharacters(in: .whitespacesAndNewlines),
+                language: language.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : language.trimmingCharacters(in: .whitespacesAndNewlines),
                 location: location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines),
                 tradingStyle: tradingStyle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : tradingStyle.trimmingCharacters(in: .whitespacesAndNewlines),
                 socialLinks: links.isEmpty ? nil : links,
                 tradingInterests: selected.isEmpty ? nil : selected
             )
             _ = try await rlAppState.updateCurrentUserProfile(request)
+            data.language = language
+            data.location = location
         } catch {
             // Error surfaced by RLAppState
         }

@@ -49,13 +49,29 @@ struct RootBottomBarSymbolButton: View {
             HStack(spacing: 10) {
                 // Symbol icon - use DTO if available, otherwise fallback
                 symbolIcon
-                
-                Text(symbol)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(foregroundColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .padding(.trailing, 4)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(symbol)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(foregroundColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+
+                    if let symbolDTO {
+                        HStack(spacing: 4) {
+                            Image(systemName: symbolDTO.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
+                                .font(.system(size: symbolDTO.effectiveIsMarketOpen ? 6 : 7, weight: .semibold))
+                                .foregroundColor(symbolDTO.effectiveIsMarketOpen ? .green : .gray.opacity(0.75))
+
+                            Text(symbolDTO.providerDisplayLabel)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(foregroundColor.opacity(0.75))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                    }
+                }
+                .padding(.trailing, 4)
             }
             .padding(.vertical, 5)
             .padding(.leading, 5)

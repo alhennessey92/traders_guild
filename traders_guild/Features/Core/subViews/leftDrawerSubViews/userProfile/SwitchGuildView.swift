@@ -1597,8 +1597,18 @@ struct CreateGuildView: View {
     @State private var isCreating: Bool = false
     @State private var language: String = ""
     @State private var location: String = ""
+    @State private var initialAnnouncementTitle: String = ""
+    @State private var initialAnnouncementContent: String = ""
+    @State private var initialAnnouncementImportant: Bool = true
     @State private var joinQuestions: [String] = [""]
     @State private var visibleSections: Set<Int> = []
+
+    private var canCreateGuild: Bool {
+        let name = guildName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let announcementTitle = initialAnnouncementTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let announcementContent = initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !name.isEmpty && !announcementTitle.isEmpty && !announcementContent.isEmpty
+    }
 
     // Section card helper
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -1848,12 +1858,84 @@ struct CreateGuildView: View {
                     .opacity(visibleSections.contains(3) ? 1 : 0)
                     .offset(y: visibleSections.contains(3) ? 0 : 12)
                     .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
+
+                    // Initial announcement card
+                    sectionCard {
+                        Text("Initial Announcement")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        Text("This announcement is required and will be posted immediately after guild creation.")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Title")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+
+                            TextField("Welcome to the guild", text: $initialAnnouncementTitle)
+                                .font(.body)
+                                .foregroundColor(AppColors.whiteText)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.sentences)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Content")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+
+                            TextEditor(text: $initialAnnouncementContent)
+                                .frame(minHeight: 90)
+                                .padding(8)
+                                .font(.body)
+                                .foregroundColor(AppColors.whiteText)
+                                .scrollContentBackground(.hidden)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Mark as important")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppColors.whiteText)
+                                Text("Highlights this post for new members.")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $initialAnnouncementImportant)
+                                .tint(AppColors.accentColor)
+                        }
+                    }
+                    .opacity(visibleSections.contains(4) ? 1 : 0)
+                    .offset(y: visibleSections.contains(4) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.2), value: visibleSections.contains(4))
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     .padding(.bottom, 100)
                     .onAppear {
-                        for i in 0...3 {
+                        for i in 0...4 {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
                                 visibleSections.insert(i)
                             }
@@ -1880,8 +1962,8 @@ struct CreateGuildView: View {
                     ) {
                         Task { await createGuild() }
                     }
-                    .disabled(guildName.isEmpty)
-                    .opacity(guildName.isEmpty ? 0.5 : 1.0)
+                    .disabled(!canCreateGuild)
+                    .opacity(canCreateGuild ? 1.0 : 0.5)
                     .background(AppColors.sheetBackground)
                 }
             }
@@ -1906,7 +1988,11 @@ struct CreateGuildView: View {
                     .enumerated()
                     .map { index, prompt in
                         RLGuildJoinQuestionInputDTO(prompt: prompt, isRequired: true, displayOrder: index)
-                    }
+                    },
+                initialAnnouncementTitle: initialAnnouncementTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                initialAnnouncementContent: initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines),
+                initialAnnouncementPreview: String(initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines).prefix(180)),
+                initialAnnouncementIsImportant: initialAnnouncementImportant
             )
             onComplete()
         } catch is CancellationError {

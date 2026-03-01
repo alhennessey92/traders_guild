@@ -861,7 +861,11 @@ class RLAppState: ObservableObject {
         isOpen: Bool,
         language: String? = nil,
         location: String? = nil,
-        joinQuestions: [RLGuildJoinQuestionInputDTO] = []
+        joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
+        initialAnnouncementTitle: String,
+        initialAnnouncementContent: String,
+        initialAnnouncementPreview: String? = nil,
+        initialAnnouncementIsImportant: Bool = true
     ) async throws -> RLGuildWithMembership {
         isLoading = true
         defer { isLoading = false }
@@ -873,7 +877,11 @@ class RLAppState: ObservableObject {
                 isOpen: isOpen,
                 language: language,
                 location: location,
-                joinQuestions: joinQuestions
+                joinQuestions: joinQuestions,
+                initialAnnouncementTitle: initialAnnouncementTitle,
+                initialAnnouncementContent: initialAnnouncementContent,
+                initialAnnouncementPreview: initialAnnouncementPreview,
+                initialAnnouncementIsImportant: initialAnnouncementIsImportant
             )
             let guildWithMembership = response.asGuildWithMembership
             

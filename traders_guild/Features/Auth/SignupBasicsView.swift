@@ -202,14 +202,7 @@ struct SignupInterestsView: View {
 
     @State private var selectedInterests: Set<String> = []
 
-    private let suggestedInterests: [RLTradingInterestItem] = [
-        RLTradingInterestItem(name: "Forex", icon: "dollarsign.circle.fill", isPrimary: false),
-        RLTradingInterestItem(name: "Stocks", icon: "chart.line.uptrend.xyaxis", isPrimary: false),
-        RLTradingInterestItem(name: "Crypto", icon: "bitcoinsign.circle.fill", isPrimary: false),
-        RLTradingInterestItem(name: "Day Trading", icon: "sun.max.fill", isPrimary: false),
-        RLTradingInterestItem(name: "Swing Trading", icon: "waveform.path.ecg", isPrimary: false),
-        RLTradingInterestItem(name: "Technical Analysis", icon: "chart.xyaxis.line", isPrimary: false),
-    ]
+    private let suggestedInterests: [RLTradingInterestItem] = RLTradingInterestsCatalog.allItems
 
     var body: some View {
         ZStack {

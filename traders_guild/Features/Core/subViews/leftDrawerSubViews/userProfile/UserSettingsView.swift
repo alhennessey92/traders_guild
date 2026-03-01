@@ -26,6 +26,7 @@ struct UserSettingsSheetView: View {
     // Global settings states (synced from backend)
     @State private var showGlobalOnlineStatus = true
     @State private var allowFriendRequests = true
+    @State private var dmPermissionMode: RLDMPermissionMode = .all
     @State private var isSyncingSettings = false
     
     var body: some View {
@@ -356,6 +357,41 @@ struct UserSettingsSheetView: View {
                 .onChange(of: allowFriendRequests) { _, newValue in
                     updateUserSettings(allowFriendRequests: newValue)
                 }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.orange.opacity(0.2))
+                                .frame(width: 36, height: 36)
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.orange)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Direct Messages")
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.whiteText)
+                            Text(dmPermissionMode.subtitle)
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        Spacer()
+                    }
+
+                    Picker("Direct Messages", selection: $dmPermissionMode) {
+                        ForEach(RLDMPermissionMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .padding(.horizontal, 25)
+                .padding(.vertical, 12)
+                .onChange(of: dmPermissionMode) { _, newValue in
+                    updateUserSettings(dmPermissionMode: newValue)
+                }
                 
                 SettingsButtonRow(
                     icon: "hand.raised.fill",
@@ -511,12 +547,14 @@ struct UserSettingsSheetView: View {
         isSyncingSettings = true
         showGlobalOnlineStatus = settings.showOnlineStatus
         allowFriendRequests = settings.allowFriendRequests
+        dmPermissionMode = settings.dmPermission
         isSyncingSettings = false
     }
     
     private func updateUserSettings(
         showOnlineStatus: Bool? = nil,
-        allowFriendRequests: Bool? = nil
+        allowFriendRequests: Bool? = nil,
+        dmPermissionMode: RLDMPermissionMode? = nil
     ) {
         guard !isSyncingSettings else { return }
         Task {
@@ -526,7 +564,8 @@ struct UserSettingsSheetView: View {
                     allowFriendRequests: allowFriendRequests,
                     activityVisible: nil,
                     analyticsEnabled: nil,
-                    personalizedContentEnabled: nil
+                    personalizedContentEnabled: nil,
+                    dmPermissionMode: dmPermissionMode?.rawValue
                 )
                 let updated = try await rlAppState.updateUserSettings(request)
                 syncSettingsFromState(updated)
@@ -1114,7 +1153,6 @@ struct UserSettingsSheetView: View {
 //         .environmentObject(RLAppState())
 //         .preferredColorScheme(.dark)
 // }
-
 
 
 

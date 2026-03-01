@@ -298,6 +298,9 @@ enum UnifiedTabTheme {
     case blue           // Default blue accent
     case colored        // Per-tab colors (personal=yellow, guild=blue, etc.)
     case accent         // Uses AppColors.accentColor
+    case emerald
+    case amber
+    case magenta
     
     // Consistent blue gradient used across all tab types
     static var consistentBlueGradient: LinearGradient {
@@ -334,6 +337,24 @@ enum UnifiedTabTheme {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
+        case .emerald:
+            return LinearGradient(
+                colors: [Color.green.opacity(0.72), Color.teal.opacity(0.58)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .amber:
+            return LinearGradient(
+                colors: [Color.orange.opacity(0.72), Color.yellow.opacity(0.55)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .magenta:
+            return LinearGradient(
+                colors: [Color.pink.opacity(0.72), Color.indigo.opacity(0.58)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         }
     }
     
@@ -346,6 +367,12 @@ enum UnifiedTabTheme {
             return colors[index % colors.count].opacity(0.3)
         case .accent:
             return AppColors.accentColor.opacity(0.4)
+        case .emerald:
+            return Color.green.opacity(0.45)
+        case .amber:
+            return Color.orange.opacity(0.45)
+        case .magenta:
+            return Color.pink.opacity(0.45)
         }
     }
 }

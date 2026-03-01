@@ -666,11 +666,14 @@ struct TradingChartView: View {
 
                 mainChartCanvas(geometry: geometry)
 
+                markerGuideOverlay(geometry: geometry)
+                    .zIndex(8)
+
                 if shouldShowMarkerPlacementOverlay {
                     markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                        .zIndex(18)
                 }
 
-                markerGuideOverlay(geometry: geometry)
                 yAxisOverlay(geometry: geometry)
 
                 // Interactive placement line for trade idea markers (Entry/Exit/TP/SL)
@@ -2253,10 +2256,28 @@ struct TradingChartView: View {
     @ViewBuilder
     private var symbolTimeframeRow: some View {
         HStack(spacing: 8) {
-            Text(currentSymbol?.ticker ?? "—")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-            
+            if let symbol = currentSymbol {
+                Text(symbol.ticker)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+
+                Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
+                    .font(.system(size: symbol.effectiveIsMarketOpen ? 7 : 8, weight: .semibold))
+                    .foregroundColor(symbol.effectiveIsMarketOpen ? .green : .gray.opacity(0.75))
+
+                Text(symbol.providerDisplayLabel)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.blue.opacity(0.24))
+                    .clipShape(Capsule())
+            } else {
+                Text("—")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+            }
+
             Text(currentTimeframe.shortName)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.white.opacity(0.8))
@@ -2301,7 +2322,7 @@ struct TradingChartView: View {
     @ViewBuilder
     func chartControlsBox(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.11 + 40
-        let yaxisOverlayWidth = yAxisWidth + 10
+        let yAxisTrailingInset: CGFloat = 6
         let panelPadding: CGFloat = indicatorPanelBottomPadding > 0 ? indicatorPanelBottomPadding - 30 : 0
 
         VStack {
@@ -2365,7 +2386,7 @@ struct TradingChartView: View {
                 }
             }
             .padding(.bottom, bottomAreaHeight + panelPadding)
-            .padding(.trailing, yaxisOverlayWidth)
+            .padding(.trailing, yAxisTrailingInset)
             .animation(.easeInOut(duration: 0.2), value: isMarkerVisibilityPanelExpanded)
         }
         .allowsHitTesting(true)
@@ -2402,6 +2423,7 @@ struct TradingChartView: View {
                             Text(type.rawValue)
                         }
                     }
+                    .tint(AppColors.accentColor)
                 }
             }
             .navigationTitle("Marker Types")
@@ -2706,19 +2728,23 @@ struct ChartBottomControlButton: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(isActive ? .white : color)
+                    .foregroundColor(isActive ? AppColors.gradientBackgroundDark : color)
                 Text(title)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(isActive ? .white : color)
+                    .foregroundColor(isActive ? AppColors.gradientBackgroundDark : color)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(
                 isActive ?
-                color :
+                Color.white.opacity(0.85) :
                 Color.white.opacity(0.08)
             )
             .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isActive ? Color.white.opacity(0.4) : Color.clear, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }

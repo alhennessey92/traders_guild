@@ -726,7 +726,11 @@ extension RealAPIService {
         isOpen: Bool,
         language: String? = nil,
         location: String? = nil,
-        joinQuestions: [RLGuildJoinQuestionInputDTO] = []
+        joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
+        initialAnnouncementTitle: String,
+        initialAnnouncementContent: String,
+        initialAnnouncementPreview: String? = nil,
+        initialAnnouncementIsImportant: Bool = true
     ) async throws -> RLCreateGuildResponseDTO {
         let requestBody = RLCreateGuildRequestDTO(
             name: name,
@@ -734,7 +738,11 @@ extension RealAPIService {
             isOpen: isOpen,
             language: language,
             location: location,
-            joinQuestions: joinQuestions
+            joinQuestions: joinQuestions,
+            initialAnnouncementTitle: initialAnnouncementTitle,
+            initialAnnouncementContent: initialAnnouncementContent,
+            initialAnnouncementPreview: initialAnnouncementPreview,
+            initialAnnouncementIsImportant: initialAnnouncementIsImportant
         )
         
         return try await request(
