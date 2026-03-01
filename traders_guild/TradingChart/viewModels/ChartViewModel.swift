@@ -460,8 +460,13 @@ class ChartViewModel: ObservableObject {
                 volumeFormatted: nil
             )
             let firstTimestampBefore = dataManager.candles.first?.timestamp
-            dataManager.processRealCandle(candle)
+            let trimmedCount = dataManager.processRealCandle(candle)
             let firstTimestampAfter = dataManager.candles.first?.timestamp
+
+            if trimmedCount > 0 {
+                // Preserve viewport continuity when front candles are dropped.
+                gestureState.panOffset.width += CGFloat(trimmedCount) * totalCandleWidth
+            }
 
             // If front candles were trimmed, recalculate marker indices from timestamps
             if let before = firstTimestampBefore, let after = firstTimestampAfter, before != after {

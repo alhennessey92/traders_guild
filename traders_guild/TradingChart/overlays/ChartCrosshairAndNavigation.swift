@@ -5,6 +5,7 @@
 //  UPDATED - Subtle crosshair design + symbol-aware price formatting
 //
 
+import Foundation
 import SwiftUI
 
 // MARK: - Crosshair Manager
@@ -54,6 +55,7 @@ struct CrosshairView: View {
     
     // Current timeframe for time formatting
     var timeframe: RLChartTimeframe = .h1
+    var timeZone: TimeZone = .current
     
     /// Backwards-compatible initializer (creates fallback ChartDataManager)
     init(crosshairManager: CrosshairManager, chartSize: CGSize) {
@@ -77,7 +79,8 @@ struct CrosshairView: View {
         rsiPanelActive: Bool,
         rsiPanelHeight: CGFloat,
         indicatorManager: IndicatorManager?,
-        timeframe: RLChartTimeframe
+        timeframe: RLChartTimeframe,
+        timeZone: TimeZone = .current
     ) {
         self.crosshairManager = crosshairManager
         self.chartSize = chartSize
@@ -86,6 +89,7 @@ struct CrosshairView: View {
         self.rsiPanelHeight = rsiPanelHeight
         self.indicatorManager = indicatorManager
         self.timeframe = timeframe
+        self.timeZone = timeZone
     }
     
     /// Computed property for time label Y position
@@ -130,7 +134,7 @@ struct CrosshairView: View {
                 // Time label on X-axis - only show when RSI panel is NOT active
                 // (RSI panel has its own time label on its x-axis)
                 if !rsiPanelActive, let candle = crosshairManager.targetCandle {
-                    CrosshairTimeLabel(timestamp: candle.timestamp, timeframe: timeframe)
+                    CrosshairTimeLabel(timestamp: candle.timestamp, timeframe: timeframe, timeZone: timeZone)
                         .position(x: crosshairManager.position.x, y: timeLabelY)
                 }
                 
@@ -182,12 +186,13 @@ struct CrosshairPriceLabel: View {
 struct CrosshairTimeLabel: View {
     let timestamp: Date
     var timeframe: RLChartTimeframe = .h1
+    var timeZone: TimeZone = .current
     
     /// Format time based on timeframe
     /// - Daily and above: Just show date (no time)
     /// - Below daily: Show date and time (hour:minute)
     private var formattedTime: String {
-        MarkerPlacementLabelFormatter.format(timestamp, timeframe: timeframe)
+        MarkerPlacementLabelFormatter.format(timestamp, timeframe: timeframe, timeZone: timeZone)
     }
     
     var body: some View {

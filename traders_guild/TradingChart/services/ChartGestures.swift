@@ -29,6 +29,7 @@ struct MarkerPlacementGuideState: Equatable {
 /// IMPORTANT: This should be instantiated as @StateObject in TradingChartView
 /// for optimal performance. Do NOT route through ChartViewModel's @Published properties.
 class ChartGestureState: ObservableObject {
+    static let horizontalEdgePadding: CGFloat = 100
     // MARK: - Published Properties
     
     /// Current scale for candle width (horizontal zoom)
@@ -175,7 +176,7 @@ class ChartGestureState: ObservableObject {
         var newVerticalOffset = verticalPanOffset + translation.height
         
         // Horizontal limits
-        let edgePadding: CGFloat = 100
+        let edgePadding: CGFloat = Self.horizontalEdgePadding
         let totalChartWidth = CGFloat(candleCount) * candleWidth
         let maxHorizontalOffset = edgePadding
         let minHorizontalOffset = -(totalChartWidth - chartWidth + edgePadding)

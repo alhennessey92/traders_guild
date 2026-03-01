@@ -275,6 +275,9 @@ struct ChartSheetSymbolView: View {
                                 title: "Status",
                                 value: symbol.effectiveIsMarketOpen ? "Open" : "Closed"
                             )
+
+                            MarketSessionTimeline(symbol: symbol)
+
                             SymbolDetailRow(
                                 title: "Running Hours",
                                 value: runningHoursText(for: symbol)
@@ -1361,6 +1364,273 @@ private struct SymbolDetailRow: View {
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+// MARK: - Market Session Timeline
+
+struct MarketSessionTimeline: View {
+    let symbol: RLTradingSymbolDTO
+
+    @State private var now = Date()
+    private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    private var session: RLTradingSymbolDTO.MarketSession { symbol.marketSession }
+    private var tz: TimeZone { symbol.exchangeTimeZone }
+
+    private var exchangeTimeString: String {
+        let formatter = DateFormatter()
+        formatter.timeZone = tz
+        formatter.dateFormat = "HH:mm"
+        let timeStr = formatter.string(from: now)
+        let abbrev = tz.abbreviation(for: now) ?? tz.identifier
+        return "\(abbrev) \(timeStr)"
+    }
+
+    private var currentFraction: Double {
+        var calendar = Calendar.current
+        calendar.timeZone = tz
+        let comps = calendar.dateComponents([.hour, .minute], from: now)
+        return (Double(comps.hour ?? 0) + Double(comps.minute ?? 0) / 60.0) / 24.0
+    }
+
+    private var isWeekend: Bool {
+        var calendar = Calendar.current
+        calendar.timeZone = tz
+        return calendar.isDateInWeekend(now)
+    }
+
+    private var isInSession: Bool {
+        if session.isContinuous {
+            return !(session.closedWeekend && isWeekend)
+        }
+        if session.closedWeekend && isWeekend { return false }
+
+        if session.openHour <= session.closeHour {
+            return currentFraction >= session.openFraction && currentFraction < session.closeFraction
+        } else {
+            return currentFraction >= session.openFraction || currentFraction < session.closeFraction
+        }
+    }
+
+    private var countdownText: String {
+        var calendar = Calendar.current
+        calendar.timeZone = tz
+
+        if session.isContinuous && !session.closedWeekend {
+            return "Always Open"
+        }
+
+        if session.isContinuous && session.closedWeekend {
+            if isWeekend {
+                if let nextMonday = calendar.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0, weekday: 2), matchingPolicy: .nextTime) {
+                    return "Opens \(relativeCountdown(to: nextMonday))"
+                }
+                return "Closed (Weekend)"
+            }
+            let weekday = calendar.component(.weekday, from: now)
+            if weekday == 6 {
+                if let midnight = calendar.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0), matchingPolicy: .nextTime) {
+                    return "Closes \(relativeCountdown(to: midnight))"
+                }
+            }
+            return "Open"
+        }
+
+        if isInSession {
+            var closeComps = DateComponents()
+            closeComps.hour = session.closeHour >= 24 ? 0 : session.closeHour
+            closeComps.minute = session.closeMinute
+            if let closeTime = calendar.nextDate(after: now, matching: closeComps, matchingPolicy: .nextTime) {
+                return "Closes \(relativeCountdown(to: closeTime))"
+            }
+            return "Open"
+        } else {
+            if isWeekend {
+                if let nextMonday = calendar.nextDate(after: now, matching: DateComponents(hour: session.openHour, minute: session.openMinute, weekday: 2), matchingPolicy: .nextTime) {
+                    return "Opens \(relativeCountdown(to: nextMonday))"
+                }
+                return "Closed (Weekend)"
+            }
+            var openComps = DateComponents()
+            openComps.hour = session.openHour
+            openComps.minute = session.openMinute
+            if let openTime = calendar.nextDate(after: now, matching: openComps, matchingPolicy: .nextTime) {
+                return "Opens \(relativeCountdown(to: openTime))"
+            }
+            return "Closed"
+        }
+    }
+
+    private func relativeCountdown(to target: Date) -> String {
+        let interval = target.timeIntervalSince(now)
+        guard interval > 0 else { return "soon" }
+        let hours = Int(interval) / 3600
+        let minutes = (Int(interval) % 3600) / 60
+        if hours > 0 {
+            return "in \(hours)h \(minutes)m"
+        }
+        return "in \(minutes)m"
+    }
+
+    private func timeLabel(_ hour: Int, _ minute: Int) -> String {
+        String(format: "%02d:%02d", hour >= 24 ? 0 : hour, minute)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "clock")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+                Text(exchangeTimeString)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.9))
+                Spacer()
+                Text(countdownText)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(isInSession ? .green.opacity(0.9) : .orange.opacity(0.9))
+            }
+
+            if !session.isContinuous {
+                sessionBar
+            } else if session.closedWeekend {
+                weekBar
+            } else {
+                continuousBar
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .onReceive(timer) { _ in now = Date() }
+    }
+
+    private var sessionBar: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let openX = session.openFraction * w
+            let closeX = session.closeFraction * w
+            let nowX = currentFraction * w
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 6)
+
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(
+                        LinearGradient(
+                            colors: [.green.opacity(0.5), .green.opacity(0.3)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: closeX - openX, height: 6)
+                    .offset(x: openX)
+
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: .white.opacity(0.4), radius: 3)
+                    .offset(x: nowX - 4)
+
+                Text(timeLabel(session.openHour, session.openMinute))
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.5))
+                    .offset(x: max(0, openX - 10), y: 12)
+
+                Text(timeLabel(session.closeHour, session.closeMinute))
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.5))
+                    .offset(x: min(w - 28, closeX - 10), y: 12)
+            }
+        }
+        .frame(height: 24)
+    }
+
+    private var weekBar: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let dayWidth = w / 7.0
+            var calendar = Calendar.current
+            let _ = calendar.timeZone = tz
+            let currentWeekday = calendar.component(.weekday, from: now)
+            let nowX = currentFraction * w
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 6)
+
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(
+                        LinearGradient(
+                            colors: [.green.opacity(0.5), .green.opacity(0.3)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: dayWidth * 5, height: 6)
+                    .offset(x: dayWidth)
+
+                if !isWeekend {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 8, height: 8)
+                        .shadow(color: .white.opacity(0.4), radius: 3)
+                        .offset(x: (CGFloat(currentWeekday - 1) * dayWidth + nowX / 7.0) - 4)
+                }
+
+                HStack(spacing: 0) {
+                    ForEach(Array(["S", "M", "T", "W", "T", "F", "S"].enumerated()), id: \.offset) { _, day in
+                        Text(day)
+                            .font(.system(size: 7, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.4))
+                            .frame(width: dayWidth)
+                    }
+                }
+                .offset(y: 12)
+            }
+        }
+        .frame(height: 24)
+    }
+
+    private var continuousBar: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let nowX = currentFraction * w
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(
+                        LinearGradient(
+                            colors: [.green.opacity(0.4), .green.opacity(0.25)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 6)
+
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: .white.opacity(0.4), radius: 3)
+                    .offset(x: nowX - 4)
+
+                Text("24/7")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+                    .offset(x: w / 2 - 10, y: 12)
+            }
+        }
+        .frame(height: 24)
     }
 }
 

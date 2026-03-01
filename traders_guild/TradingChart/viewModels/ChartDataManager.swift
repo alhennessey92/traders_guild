@@ -124,7 +124,9 @@ class ChartDataManager: ObservableObject {
     /// Process a complete candle from a data feed
     /// Use this when receiving historical or completed candles
     /// - Parameter candle: The complete candle data
-    func processRealCandle(_ candle: RLCandleDTO) {
+    @discardableResult
+    func processRealCandle(_ candle: RLCandleDTO) -> Int {
+        var trimmedCount = 0
         // Check if this candle should update the last one or be appended
         if let lastCandle = candles.last {
             if candle.timestamp == lastCandle.timestamp {
@@ -135,7 +137,8 @@ class ChartDataManager: ObservableObject {
                 candles.append(candle)
                 
                 if candles.count > maxCandles {
-                    candles.removeFirst(candles.count - maxCandles)
+                    trimmedCount = candles.count - maxCandles
+                    candles.removeFirst(trimmedCount)
                 }
             }
             // Older candles are ignored (historical data should use updateWithMarketData)
@@ -146,6 +149,7 @@ class ChartDataManager: ObservableObject {
         currentPrice = candle.close
         basePrice = candle.close
         updatePriceRange()
+        return trimmedCount
     }
     
     // MARK: - Timer Management (for cleanup only - no mock data generation)

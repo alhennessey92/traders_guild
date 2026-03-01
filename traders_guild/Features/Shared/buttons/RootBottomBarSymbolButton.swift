@@ -58,17 +58,11 @@ struct RootBottomBarSymbolButton: View {
                         .minimumScaleFactor(0.5)
 
                     if let symbolDTO {
-                        HStack(spacing: 4) {
-                            Image(systemName: symbolDTO.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
-                                .font(.system(size: symbolDTO.effectiveIsMarketOpen ? 6 : 7, weight: .semibold))
-                                .foregroundColor(symbolDTO.effectiveIsMarketOpen ? .green : .gray.opacity(0.75))
-
-                            Text(symbolDTO.providerDisplayLabel)
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(foregroundColor.opacity(0.75))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
+                        Text(symbolDTO.assetClassDisplayName)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(foregroundColor.opacity(0.75))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 .padding(.trailing, 4)

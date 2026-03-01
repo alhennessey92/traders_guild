@@ -287,7 +287,7 @@ struct TradingChartView: View {
     
     /// Edge padding to prevent endless scrolling
     /// Provides buffer space at chart boundaries
-    private let edgePadding: CGFloat = 200
+    private let edgePadding: CGFloat = ChartGestureState.horizontalEdgePadding
     
     /// Width of the Y-axis interaction area on the right side
     /// This area captures vertical drag/pinch gestures for price scaling
@@ -302,6 +302,10 @@ struct TradingChartView: View {
     /// This computed property lets us keep using "chartData" throughout the file
     private var chartData: ChartDataManager {
         chartViewModel.dataManager
+    }
+
+    private var axisTimeZone: TimeZone {
+        currentSymbol?.exchangeTimeZone ?? .current
     }
     
     // MARK: - Sensitivity Configuration
@@ -659,83 +663,16 @@ struct TradingChartView: View {
     @ViewBuilder
     private func chartContent(geometry: GeometryProxy) -> some View {
         let coordinateSystem = createCoordinateSystem(geometry: geometry)
+        let linePlacementMarkerType = linePlacementOverlayMarkerType
+        let predictionPlacementActive = isPredictionPlacementOverlayActive
 
         ZStack {
-            ZStack {
-                Color.black.ignoresSafeArea().opacity(0.2)
-
-                mainChartCanvas(geometry: geometry)
-
-                markerGuideOverlay(geometry: geometry)
-                    .zIndex(8)
-
-                if shouldShowMarkerPlacementOverlay {
-                    markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                        .zIndex(18)
-                }
-
-                yAxisOverlay(geometry: geometry)
-
-                // Interactive placement line for trade idea markers (Entry/Exit/TP/SL)
-                // Placed AFTER yAxisOverlay so price labels render ON TOP of Y-axis background
-                if controlViewModel.isMarkerPlacementMode,
-                   let markerType = controlViewModel.currentMarkerType,
-                   markerType != .predictionTarget,
-                   [RLMarkerType.entry, .exit, .takeProfit, .stopLoss, .support, .resistance].contains(markerType),
-                   effectiveCandleIndex >= 0,
-                   effectiveCandleIndex < chartData.candles.count {
-                    let candle = chartData.candles[effectiveCandleIndex]
-                    let defaultPrice = markerType.lineSource.priceFromCandle(candle)
-                    PlacementLineDragOverlay(
-                        markerType: markerType,
-                        defaultPrice: defaultPrice,
-                        linePrice: $placementLinePrice,
-                        isDragging: $isDraggingPlacementLine,
-                        coordinateSystem: coordinateSystem,
-                        chartWidth: geometry.size.width,
-                        chartHeight: geometry.size.height,
-                        chartData: chartData
-                    )
-                }
-
-                // Prediction 3-line overlay (Entry + TP + SL)
-                // Placed AFTER yAxisOverlay so price labels render ON TOP of Y-axis background
-                if controlViewModel.isMarkerPlacementMode,
-                   controlViewModel.currentMarkerType == .predictionTarget,
-                   predictionPlacement != nil {
-                    PredictionPlacementOverlay(
-                        placement: $predictionPlacement,
-                        draggingLine: $draggingPredictionLine,
-                        coordinateSystem: coordinateSystem,
-                        chartWidth: geometry.size.width,
-                        chartHeight: geometry.size.height,
-                        chartData: chartData
-                    )
-                }
-
-                priceIndicatorView(geometry: geometry)
-                xAxisOverlay(geometry: geometry)
-                chartInfoBox(geometry: geometry)
-                markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
-
-                CrosshairView(
-                    crosshairManager: crosshairManager,
-                    chartSize: geometry.size,
-                    chartData: chartData,
-                    rsiPanelActive: chartViewModel.indicatorManager.shouldShowAnyPanel,
-                    rsiPanelHeight: rsiPanelHeight,
-                    indicatorManager: chartViewModel.indicatorManager,
-                    timeframe: chartViewModel.currentTimeframe
-                )
-
-                if shouldShowInstructionBanner {
-                    instructionBanner(coordinateSystem: coordinateSystem)
-                }
-            }
-            // Gestures are attached only to the interactive chart layer.
+            interactiveChartLayer(
+                geometry: geometry,
+                coordinateSystem: coordinateSystem,
+                linePlacementMarkerType: linePlacementMarkerType,
+                predictionPlacementActive: predictionPlacementActive
+            )
             .gesture(crosshairDismissTapGesture())
             .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
             .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
@@ -770,6 +707,113 @@ struct TradingChartView: View {
             chartControlsBox(geometry: geometry)
                 .zIndex(60)
         }
+    }
+
+    @ViewBuilder
+    private func interactiveChartLayer(
+        geometry: GeometryProxy,
+        coordinateSystem: ChartCoordinateSystem,
+        linePlacementMarkerType: RLMarkerType?,
+        predictionPlacementActive: Bool
+    ) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea().opacity(0.2)
+
+            mainChartCanvas(geometry: geometry)
+
+            markerGuideOverlay(geometry: geometry)
+                .zIndex(8)
+
+            if shouldShowMarkerPlacementOverlay {
+                markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                    .zIndex(18)
+            }
+
+            yAxisOverlay(geometry: geometry)
+
+            if let markerType = linePlacementMarkerType {
+                linePlacementOverlay(
+                    markerType: markerType,
+                    geometry: geometry,
+                    coordinateSystem: coordinateSystem
+                )
+            }
+
+            if predictionPlacementActive {
+                PredictionPlacementOverlay(
+                    placement: $predictionPlacement,
+                    draggingLine: $draggingPredictionLine,
+                    coordinateSystem: coordinateSystem,
+                    chartWidth: geometry.size.width,
+                    chartHeight: geometry.size.height,
+                    chartData: chartData
+                )
+            }
+
+            priceIndicatorView(geometry: geometry)
+            xAxisOverlay(geometry: geometry)
+            chartInfoBox(geometry: geometry)
+            markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+            draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+            draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+            targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
+
+            CrosshairView(
+                crosshairManager: crosshairManager,
+                chartSize: geometry.size,
+                chartData: chartData,
+                rsiPanelActive: chartViewModel.indicatorManager.shouldShowAnyPanel,
+                rsiPanelHeight: rsiPanelHeight,
+                indicatorManager: chartViewModel.indicatorManager,
+                timeframe: chartViewModel.currentTimeframe,
+                timeZone: axisTimeZone
+            )
+
+            if shouldShowInstructionBanner {
+                instructionBanner(coordinateSystem: coordinateSystem)
+            }
+        }
+    }
+
+    private var linePlacementOverlayMarkerType: RLMarkerType? {
+        guard controlViewModel.isMarkerPlacementMode,
+              let markerType = controlViewModel.currentMarkerType,
+              markerType != .predictionTarget,
+              effectiveCandleIndex >= 0,
+              effectiveCandleIndex < chartData.candles.count
+        else {
+            return nil
+        }
+
+        let supportedTypes: Set<RLMarkerType> = [.entry, .exit, .takeProfit, .stopLoss, .support, .resistance]
+        return supportedTypes.contains(markerType) ? markerType : nil
+    }
+
+    private var isPredictionPlacementOverlayActive: Bool {
+        controlViewModel.isMarkerPlacementMode &&
+        controlViewModel.currentMarkerType == .predictionTarget &&
+        predictionPlacement != nil
+    }
+
+    @ViewBuilder
+    private func linePlacementOverlay(
+        markerType: RLMarkerType,
+        geometry: GeometryProxy,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> some View {
+        let candle = chartData.candles[effectiveCandleIndex]
+        let defaultPrice = markerType.lineSource.priceFromCandle(candle)
+
+        PlacementLineDragOverlay(
+            markerType: markerType,
+            defaultPrice: defaultPrice,
+            linePrice: $placementLinePrice,
+            isDragging: $isDraggingPlacementLine,
+            coordinateSystem: coordinateSystem,
+            chartWidth: geometry.size.width,
+            chartHeight: geometry.size.height,
+            chartData: chartData
+        )
     }
     
     // MARK: - Coordinate System Factory
@@ -2130,7 +2174,8 @@ struct TradingChartView: View {
                     timestamp: timestamp,
                     xPosition: gestureState.markerPlacementGuide.x,
                     chartHeight: geometry.size.height,
-                    timeframe: chartViewModel.currentTimeframe
+                    timeframe: chartViewModel.currentTimeframe,
+                    timeZone: axisTimeZone
                 )
             }
         }
@@ -2158,9 +2203,9 @@ struct TradingChartView: View {
                 totalCandleWidth: totalCandleWidth,
                 actualCandleWidth: actualCandleWidth,
                 width: size.width,
-                timeZone: .current,
+                timeZone: axisTimeZone,
                 locale: Locale(identifier: "en_US_POSIX"),
-                minSpacing: 46
+                minSpacing: 60
             ),
             style: .mainChart
         )
@@ -2243,6 +2288,7 @@ struct TradingChartView: View {
     private var chartInfoContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             symbolTimeframeRow
+            providerRow
             priceRow
             // Use chartViewModel.indicatorManager (not just indicatorManager)
             ActiveIndicatorsLegendView(indicatorManager: chartViewModel.indicatorManager)
@@ -2260,18 +2306,6 @@ struct TradingChartView: View {
                 Text(symbol.ticker)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
-
-                Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
-                    .font(.system(size: symbol.effectiveIsMarketOpen ? 7 : 8, weight: .semibold))
-                    .foregroundColor(symbol.effectiveIsMarketOpen ? .green : .gray.opacity(0.75))
-
-                Text(symbol.providerDisplayLabel)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.85))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.blue.opacity(0.24))
-                    .clipShape(Capsule())
             } else {
                 Text("—")
                     .font(.system(size: 14, weight: .bold))
@@ -2285,6 +2319,25 @@ struct TradingChartView: View {
                 .padding(.vertical, 2)
                 .background(Color.blue.opacity(0.6))
                 .cornerRadius(4)
+
+            if let symbol = currentSymbol {
+                Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
+                    .font(.system(size: symbol.effectiveIsMarketOpen ? 7 : 8, weight: .semibold))
+                    .foregroundColor(symbol.effectiveIsMarketOpen ? .green : .gray.opacity(0.75))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var providerRow: some View {
+        if let symbol = currentSymbol {
+            Text(symbol.providerDisplayLabel)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.blue.opacity(0.24))
+                .clipShape(Capsule())
         }
     }
     
@@ -2322,74 +2375,121 @@ struct TradingChartView: View {
     @ViewBuilder
     func chartControlsBox(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.11 + 40
-        let yAxisTrailingInset: CGFloat = 6
+        let yAxisTrailingInset: CGFloat = yAxisWidth + 4
         let panelPadding: CGFloat = indicatorPanelBottomPadding > 0 ? indicatorPanelBottomPadding - 30 : 0
 
         VStack {
             Spacer()
-            VStack(alignment: .trailing, spacing: 8) {
-                HStack(spacing: 10) {
-                    ChartBottomControlButton(
-                        title: isMarkerVisibilityPanelExpanded ? "Close" : "Marker Visibility",
-                        icon: isMarkerVisibilityPanelExpanded ? "xmark.circle" : "eye",
-                        color: .white.opacity(0.8),
-                        isActive: isMarkerVisibilityPanelExpanded
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isMarkerVisibilityPanelExpanded.toggle()
-                        }
-                    }
-                    .allowsHitTesting(true)
+            HStack(alignment: .bottom) {
+                dayDatePill
+                    .padding(.leading, 6)
 
-                    ChartBottomControlButton(
-                        title: "Latest",
-                        icon: "arrow.right.to.line",
-                        color: .white.opacity(0.5)
-                    ) {
-                        controlViewModel.jumpToLatest()
-                    }
-                    .allowsHitTesting(true)
-                }
+                Spacer()
 
-                if isMarkerVisibilityPanelExpanded {
-                    VStack(alignment: .trailing, spacing: 8) {
-                        Picker("Visibility", selection: $markerManager.visibilityMode) {
-                            ForEach(MarkerVisibilityMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
+                VStack(alignment: .trailing, spacing: 8) {
+                    HStack(spacing: 10) {
+                        ChartBottomControlButton(
+                            title: isMarkerVisibilityPanelExpanded ? "Close" : "Marker Visibility",
+                            icon: isMarkerVisibilityPanelExpanded ? "xmark.circle" : "eye",
+                            color: .white.opacity(0.8),
+                            isActive: isMarkerVisibilityPanelExpanded
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isMarkerVisibilityPanelExpanded.toggle()
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 260)
+                        .allowsHitTesting(true)
 
-                        Button {
-                            showMarkerTypeFilterSheet = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "line.3.horizontal.decrease.circle")
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text(markerTypeFilterSummary)
-                                    .font(.system(size: 10, weight: .semibold))
-                            }
-                            .foregroundColor(AppColors.whiteText.opacity(0.9))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.12))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        ChartBottomControlButton(
+                            title: "Latest",
+                            icon: "arrow.right.to.line",
+                            color: .white.opacity(0.5)
+                        ) {
+                            controlViewModel.jumpToLatest()
                         }
-                        .buttonStyle(.plain)
+                        .allowsHitTesting(true)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.5))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+
+                    if isMarkerVisibilityPanelExpanded {
+                        VStack(alignment: .trailing, spacing: 8) {
+                            Picker("Visibility", selection: $markerManager.visibilityMode) {
+                                ForEach(MarkerVisibilityMode.allCases) { mode in
+                                    Text(mode.title).tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 260)
+
+                            Button {
+                                showMarkerTypeFilterSheet = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "line.3.horizontal.decrease.circle")
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Text(markerTypeFilterSummary)
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
+                                .foregroundColor(AppColors.whiteText.opacity(0.9))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
+                .padding(.trailing, yAxisTrailingInset)
+                .animation(.easeInOut(duration: 0.2), value: isMarkerVisibilityPanelExpanded)
             }
             .padding(.bottom, bottomAreaHeight + panelPadding)
-            .padding(.trailing, yAxisTrailingInset)
-            .animation(.easeInOut(duration: 0.2), value: isMarkerVisibilityPanelExpanded)
         }
         .allowsHitTesting(true)
+    }
+
+    // MARK: - Day/Date Pill
+
+    @ViewBuilder
+    private var dayDatePill: some View {
+        let _ = gestureState.panOffset.width
+        let _ = gestureState.candleWidthScale
+        let labelText = visibleDayLabelText
+
+        if !labelText.isEmpty {
+            HStack(spacing: 5) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+                Text(labelText)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.08))
+            .cornerRadius(6)
+            .allowsHitTesting(false)
+        }
+    }
+
+    private var visibleDayLabelText: String {
+        ChartXAxisLabelEngine.visibleDayLabel(
+            input: .init(
+                candles: chartData.candles,
+                timeframe: chartViewModel.currentTimeframe,
+                totalOffset: gestureState.panOffset.width,
+                totalCandleWidth: totalCandleWidth,
+                actualCandleWidth: actualCandleWidth,
+                width: 400,
+                timeZone: axisTimeZone,
+                locale: Locale(identifier: "en_US_POSIX")
+            )
+        )
     }
 
     private var markerTypeFilterSummary: String {
@@ -2502,16 +2602,20 @@ struct TradingChartView: View {
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
         let totalOffset = gestureState.panOffset.width
         let timeframe = chartViewModel.currentTimeframe
-        
-        let gridPath = Path { path in
-            drawVerticalGridLines(path: &path, size: size, totalOffset: totalOffset, timeframe: timeframe)
+
+        let verticalGrid = verticalGridPaths(size: size, totalOffset: totalOffset, timeframe: timeframe)
+        let horizontalPath = Path { path in
             drawHorizontalGridLines(path: &path, size: size, priceRange: priceRange, scaledHeight: scaledHeight, totalVerticalOffset: totalVerticalOffset)
         }
-        
-        context.stroke(gridPath, with: .color(.gray.opacity(0.2)), lineWidth: 0.5)
+
+        context.stroke(horizontalPath, with: .color(.gray.opacity(0.18)), lineWidth: 0.5)
+        context.stroke(verticalGrid.minor, with: .color(.gray.opacity(0.16)), lineWidth: 0.45)
+        context.stroke(verticalGrid.major, with: .color(.gray.opacity(0.3)), lineWidth: 0.6)
     }
-    
-    private func drawVerticalGridLines(path: inout Path, size: CGSize, totalOffset: CGFloat, timeframe: RLChartTimeframe) {
+
+    private func verticalGridPaths(size: CGSize, totalOffset: CGFloat, timeframe: RLChartTimeframe) -> (major: Path, minor: Path) {
+        var majorPath = Path()
+        var minorPath = Path()
         let labels = ChartXAxisLabelEngine.makeLabels(
             input: .init(
                 candles: chartData.candles,
@@ -2520,18 +2624,25 @@ struct TradingChartView: View {
                 totalCandleWidth: totalCandleWidth,
                 actualCandleWidth: actualCandleWidth,
                 width: size.width,
-                timeZone: .current,
+                timeZone: axisTimeZone,
                 locale: Locale(identifier: "en_US_POSIX"),
-                minSpacing: 46
+                minSpacing: 60
             )
         )
 
         for label in labels {
             if label.x >= -100 && label.x <= size.width + 100 {
-                path.move(to: CGPoint(x: label.x, y: 0))
-                path.addLine(to: CGPoint(x: label.x, y: size.height))
+                if label.kind == .primary {
+                    majorPath.move(to: CGPoint(x: label.x, y: 0))
+                    majorPath.addLine(to: CGPoint(x: label.x, y: size.height))
+                } else {
+                    minorPath.move(to: CGPoint(x: label.x, y: 0))
+                    minorPath.addLine(to: CGPoint(x: label.x, y: size.height))
+                }
             }
         }
+
+        return (major: majorPath, minor: minorPath)
     }
     
     private func drawHorizontalGridLines(path: inout Path, size: CGSize, priceRange: (min: Double, max: Double), scaledHeight: CGFloat, totalVerticalOffset: CGFloat) {

@@ -533,7 +533,11 @@ struct MACDPanelView: View {
     }
     
     private func formatCrosshairTime(_ date: Date) -> String {
-        MarkerPlacementLabelFormatter.format(date, timeframe: timeframe)
+        MarkerPlacementLabelFormatter.format(
+            date,
+            timeframe: timeframe,
+            timeZone: chartData.currentSymbol?.exchangeTimeZone ?? .current
+        )
     }
     
     private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {
@@ -547,9 +551,9 @@ struct MACDPanelView: View {
                 totalCandleWidth: totalCandleWidth,
                 actualCandleWidth: actualCandleWidth,
                 width: size.width,
-                timeZone: .current,
+                timeZone: chartData.currentSymbol?.exchangeTimeZone ?? .current,
                 locale: Locale(identifier: "en_US_POSIX"),
-                minSpacing: 42
+                minSpacing: 52
             ),
             style: .indicatorPanel
         )
