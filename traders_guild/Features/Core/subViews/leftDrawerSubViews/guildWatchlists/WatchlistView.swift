@@ -405,6 +405,10 @@ struct WatchlistView: View {
     // MARK: - Actions
     
     private func selectSymbol(_ symbol: RLTradingSymbolDTO) {
+        guard symbol.isSelectableForActiveProvider else {
+            showUnsupportedSymbolToast(symbol)
+            return
+        }
         dismissKeyboard()
         
         let impact = UIImpactFeedbackGenerator(style: .medium)
@@ -421,6 +425,15 @@ struct WatchlistView: View {
             name: .selectChartSymbol,
             object: nil,
             userInfo: ["symbol": symbol]
+        )
+    }
+
+    private func showUnsupportedSymbolToast(_ symbol: RLTradingSymbolDTO) {
+        let providerText = symbol.activeProviderDisplayName ?? "active provider"
+        rlAppState.showError(
+            title: "Symbol Unavailable",
+            message: "\(symbol.ticker) is not supported by \(providerText).",
+            style: .toast
         )
     }
     
@@ -455,6 +468,10 @@ struct WatchlistView: View {
     }
     
     private func addToPersonalWatchlist(_ symbol: RLTradingSymbolDTO) {
+        guard symbol.isSelectableForActiveProvider else {
+            showUnsupportedSymbolToast(symbol)
+            return
+        }
         isAddingSymbol = symbol.id
         
         let impact = UIImpactFeedbackGenerator(style: .light)
@@ -517,6 +534,15 @@ struct PersonalWatchlistRow: View {
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                         .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        if let provider = symbol.activeProviderDisplayName {
+                            SymbolProviderBadge(provider: provider)
+                        }
+                        if !symbol.isSelectableForActiveProvider {
+                            UnsupportedSymbolBadge()
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -555,6 +581,7 @@ struct PersonalWatchlistRow: View {
                     .stroke(isCurrentSymbol ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
             )
         }
+        .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)
         .buttonStyle(.plain)
         .contextMenu {
             Button(role: .destructive) {
@@ -590,6 +617,15 @@ struct GuildWatchlistRow: View {
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                         .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        if let provider = symbol.activeProviderDisplayName {
+                            SymbolProviderBadge(provider: provider)
+                        }
+                        if !symbol.isSelectableForActiveProvider {
+                            UnsupportedSymbolBadge()
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -621,6 +657,7 @@ struct GuildWatchlistRow: View {
                     .stroke(isCurrentSymbol ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
             )
         }
+        .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)
         .buttonStyle(.plain)
         // No context menu - guild watchlist is read-only
     }
@@ -651,6 +688,15 @@ struct SearchResultSymbolRow: View {
                         .font(.system(size: 11))
                         .foregroundColor(.gray)
                         .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        if let provider = symbol.activeProviderDisplayName {
+                            SymbolProviderBadge(provider: provider)
+                        }
+                        if !symbol.isSelectableForActiveProvider {
+                            UnsupportedSymbolBadge()
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -659,13 +705,17 @@ struct SearchResultSymbolRow: View {
                 Button(action: onAddToPersonal) {
                     Image(systemName: inPersonal ? "star.fill" : "star")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(inPersonal ? .yellow : .gray)
+                        .foregroundColor(
+                            !symbol.isSelectableForActiveProvider
+                                ? .red.opacity(0.8)
+                                : (inPersonal ? .yellow : .gray)
+                        )
                         .frame(width: 32, height: 32)
                         .background(inPersonal ? Color.yellow.opacity(0.2) : Color.white.opacity(0.1))
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .disabled(inPersonal || isAddingSymbol)
+                .disabled(inPersonal || isAddingSymbol || !symbol.isSelectableForActiveProvider)
                 
                 if isAddingSymbol {
                     ProgressView()
@@ -679,6 +729,7 @@ struct SearchResultSymbolRow: View {
                     .fill(Color.white.opacity(0.05))
             )
         }
+        .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)
         .buttonStyle(.plain)
     }
 }

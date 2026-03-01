@@ -321,6 +321,8 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
     let inPersonalWatchlist: Bool?
     let inGuildWatchlist: Bool?
     let isRequestedForGuild: Bool?
+    let activeMarketProvider: String?
+    let isSupportedByActiveProvider: Bool?
     
     // MARK: - Hashable
     
@@ -344,6 +346,23 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
     var shortTicker: String {
         ticker.replacingOccurrences(of: "/", with: "")
     }
+
+    var isSelectableForActiveProvider: Bool {
+        isSupportedByActiveProvider ?? true
+    }
+
+    var activeProviderDisplayName: String? {
+        activeMarketProvider?
+            .replacingOccurrences(of: "_", with: " ")
+            .uppercased()
+    }
+}
+
+/// Active market provider status.
+/// Backend: MarketDataProviderStatusResponse
+struct RLMarketDataProviderStatusDTO: Codable {
+    let activeProvider: String
+    let updatedAt: Date?
 }
 
 
@@ -1277,7 +1296,9 @@ extension RLTradingSymbolDTO {
         volumeFormatted: "28.5B",
         inPersonalWatchlist: nil,
         inGuildWatchlist: nil,
-        isRequestedForGuild: nil
+        isRequestedForGuild: nil,
+        activeMarketProvider: "twelve_data",
+        isSupportedByActiveProvider: true
     )
     
     static let sampleEURUSD = RLTradingSymbolDTO(
@@ -1306,7 +1327,9 @@ extension RLTradingSymbolDTO {
         volumeFormatted: nil,
         inPersonalWatchlist: nil,
         inGuildWatchlist: nil,
-        isRequestedForGuild: nil
+        isRequestedForGuild: nil,
+        activeMarketProvider: "twelve_data",
+        isSupportedByActiveProvider: true
     )
 }
 #endif

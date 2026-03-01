@@ -387,9 +387,21 @@ class RealAPIService {
     }
     
     private func extractErrorDetail(from data: Data) -> String {
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let detail = json["detail"] as? String {
-            return detail
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let detail = json["detail"] as? String {
+                return detail
+            }
+            if let detailObj = json["detail"] as? [String: Any] {
+                if let message = detailObj["message"] as? String, !message.isEmpty {
+                    return message
+                }
+                if let code = detailObj["code"] as? String, !code.isEmpty {
+                    return code
+                }
+            }
+            if let message = json["message"] as? String, !message.isEmpty {
+                return message
+            }
         }
         return "Unknown error"
     }
@@ -2231,11 +2243,7 @@ extension RealAPIService {
     
     // Helper to extract error detail from response data
     private func extractErrorDetailFromData(_ data: Data) -> String {
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let detail = json["detail"] as? String {
-            return detail
-        }
-        return "Unknown error"
+        extractErrorDetail(from: data)
     }
     
     // =============================================================================================
@@ -2614,6 +2622,17 @@ extension RealAPIService {
         }
         return try await request(
             path,
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Get active market data provider status.
+    /// GET /chart/market-data/provider
+    func getMarketDataProviderStatus() async throws -> RLMarketDataProviderStatusDTO {
+        return try await request(
+            "/chart/market-data/provider",
             service: .chart,
             method: "GET",
             auth: true

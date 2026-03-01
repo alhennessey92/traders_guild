@@ -38,6 +38,8 @@ class ChartViewModel: ObservableObject {
     @Published var currentSymbol: RLTradingSymbolDTO?
     @Published var currentTimeframe: RLChartTimeframe = .m5
     @Published var availableSymbols: [RLTradingSymbolDTO] = []
+    @Published var activeMarketProvider: String?
+    @Published var activeMarketProviderUpdatedAt: Date?
     @Published var isLoadingData: Bool = false
     @Published var errorMessage: String?
     
@@ -103,6 +105,14 @@ class ChartViewModel: ObservableObject {
         errorMessage = nil
         
         do {
+            do {
+                let providerStatus = try await api.getMarketDataProviderStatus()
+                activeMarketProvider = providerStatus.activeProvider
+                activeMarketProviderUpdatedAt = providerStatus.updatedAt
+            } catch {
+                // Non-fatal: symbol payloads also carry active provider metadata.
+            }
+
             // Load watchlists using new API
             let personalWatchlistDTO = try await api.getPersonalWatchlist()
             personalWatchlist = personalWatchlistDTO.symbols.map { $0.symbol }
@@ -118,11 +128,23 @@ class ChartViewModel: ObservableObject {
 
             // Set initial symbol from watchlists, then global fallback.
             let available = allAvailableSymbols
-            if let current = currentSymbol, !available.contains(where: { $0.id == current.id }) {
+            if let providerFromSymbols = available.first(where: { $0.activeMarketProvider != nil })?.activeMarketProvider {
+                activeMarketProvider = providerFromSymbols
+            }
+
+            if let current = currentSymbol,
+               let refreshedCurrent = available.first(where: { $0.id == current.id }),
+               !refreshedCurrent.isSelectableForActiveProvider {
+                currentSymbol = nil
+            } else if let current = currentSymbol,
+                      !available.contains(where: { $0.id == current.id }) {
                 currentSymbol = nil
             }
             if currentSymbol == nil {
-                currentSymbol = combinedWatchlist.first ?? globalSymbols.first
+                currentSymbol = firstSupportedSymbol(in: combinedWatchlist)
+                    ?? firstSupportedSymbol(in: globalSymbols)
+                    ?? combinedWatchlist.first
+                    ?? globalSymbols.first
             }
             availableSymbols = available
             
@@ -164,6 +186,7 @@ class ChartViewModel: ObservableObject {
             if currentSymbol?.id != chartData.symbol.id {
                 currentSymbol = chartData.symbol
             }
+            activeMarketProvider = chartData.symbol.activeMarketProvider ?? activeMarketProvider
 
             // Sync symbol to dataManager so MarkerCreationSheet can access it
             dataManager.currentSymbol = chartData.symbol
@@ -190,18 +213,78 @@ class ChartViewModel: ObservableObject {
             }
 
         } catch {
+            if case let APIError.serverError(statusCode, detail) = error, statusCode == 409 {
+                await handleUnsupportedSymbolFallback(
+                    previousSymbolId: symbolId,
+                    guildId: guildId,
+                    timeframe: timeframe,
+                    detail: detail,
+                    skipSubscribe: skipSubscribe
+                )
+                return
+            }
             errorMessage = "Failed to load chart data: \(error.localizedDescription)"
             appState.showError(error, title: "Failed to Load Chart", style: .toast)
             // Clear candles on error - don't show stale or mock data
             dataManager.updateWithMarketData([])
         }
     }
+
+    private func handleUnsupportedSymbolFallback(
+        previousSymbolId: UUID,
+        guildId: UUID,
+        timeframe: RLChartTimeframe,
+        detail: String,
+        skipSubscribe: Bool
+    ) async {
+        let fallback = allAvailableSymbols.first {
+            $0.id != previousSymbolId && $0.isSelectableForActiveProvider
+        }
+        if let fallback {
+            currentSymbol = fallback
+            activeMarketProvider = fallback.activeMarketProvider ?? activeMarketProvider
+            appState.showError(
+                title: "Symbol Unavailable",
+                message: "Provider changed. Switched to \(fallback.ticker).",
+                style: .toast
+            )
+            await loadChartData(
+                symbolId: fallback.id,
+                guildId: guildId,
+                timeframe: timeframe,
+                skipSubscribe: skipSubscribe
+            )
+            return
+        }
+
+        errorMessage = "No symbols supported by active provider"
+        dataManager.updateWithMarketData([])
+        appState.showError(
+            title: "No Supported Symbols",
+            message: detail.isEmpty
+                ? "No symbols are supported by the active market provider."
+                : detail,
+            style: .toast
+        )
+    }
     
     /// Set the current symbol and regenerate chart data
     func setSymbol(_ symbol: RLTradingSymbolDTO) {
+        guard symbol.isSelectableForActiveProvider else {
+            let providerText = symbol.activeProviderDisplayName ?? "active provider"
+            appState.showError(
+                title: "Symbol Unavailable",
+                message: "\(symbol.ticker) is not supported by \(providerText).",
+                style: .toast
+            )
+            return
+        }
         guard currentSymbol?.id != symbol.id else { return }
         
         currentSymbol = symbol
+        if let provider = symbol.activeMarketProvider {
+            activeMarketProvider = provider
+        }
         handleSymbolChange()
     }
     
@@ -288,6 +371,10 @@ class ChartViewModel: ObservableObject {
                 RealTimeService.shared.unsubscribe(from: oldChannels, owner: "chart")
             }
         }
+    }
+
+    private func firstSupportedSymbol(in symbols: [RLTradingSymbolDTO]) -> RLTradingSymbolDTO? {
+        symbols.first(where: { $0.isSelectableForActiveProvider })
     }
     
     /// Load user's personal watchlist
@@ -455,5 +542,3 @@ struct MarketCandleData: Codable {
     let close: Double
     let volume: Double
 }
-
-

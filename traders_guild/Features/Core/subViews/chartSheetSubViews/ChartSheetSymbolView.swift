@@ -165,6 +165,14 @@ struct ChartSheetSymbolView: View {
                                 
                                 // Market status
                                 SymbolMarketStatus(isActive: symbol.isActive)
+
+                                if let provider = symbol.activeProviderDisplayName {
+                                    SymbolProviderBadge(provider: provider)
+                                }
+
+                                if !symbol.isSelectableForActiveProvider {
+                                    UnsupportedSymbolBadge()
+                                }
                                 
                                 Text("•")
                                     .font(.system(size: 9))
@@ -226,10 +234,15 @@ struct ChartSheetSymbolView: View {
         let inGuild = chartViewModel.guildWatchlist.contains { $0.id == symbol.id }
         let isRequested = pendingGuildRequests.contains { $0.symbolId == symbol.id && $0.status.lowercased() == "pending" }
         let canDirectlyManageGuildWatchlist = rlAppState.canAdmin
+        let isUnsupported = !symbol.isSelectableForActiveProvider
         
         return HStack(spacing: 10) {
             // Personal watchlist button - unchanged behavior
             Button(action: {
+                if isUnsupported {
+                    showUnsupportedSymbolToast(symbol)
+                    return
+                }
                 if inPersonal {
                     requestRemoveSymbol(symbol)
                 } else {
@@ -263,10 +276,14 @@ struct ChartSheetSymbolView: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(isAddingToPersonal)
+            .disabled(isAddingToPersonal || isUnsupported)
             
             // Guild watchlist button with role-aware states
             Button(action: {
+                if isUnsupported {
+                    showUnsupportedSymbolToast(symbol)
+                    return
+                }
                 if inGuild || isRequested {
                     return
                 }
@@ -302,7 +319,7 @@ struct ChartSheetSymbolView: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(inGuild || isRequested || isRequestingGuild)
+            .disabled(inGuild || isRequested || isRequestingGuild || isUnsupported)
             
             Spacer()
         }
@@ -760,12 +777,25 @@ struct ChartSheetSymbolView: View {
     }
     
     private func selectSymbol(_ symbol: RLTradingSymbolDTO) {
+        guard symbol.isSelectableForActiveProvider else {
+            showUnsupportedSymbolToast(symbol)
+            return
+        }
         dismissKeyboard()
         
         let impact = UIImpactFeedbackGenerator(style: .medium)
         impact.impactOccurred()
         
         chartViewModel.setSymbol(symbol)
+    }
+
+    private func showUnsupportedSymbolToast(_ symbol: RLTradingSymbolDTO) {
+        let providerText = symbol.activeProviderDisplayName ?? "active provider"
+        rlAppState.showError(
+            title: "Symbol Unavailable",
+            message: "\(symbol.ticker) is not supported by \(providerText).",
+            style: .toast
+        )
     }
 }
 
@@ -908,6 +938,15 @@ struct SymbolListRow: View {
                         .font(.caption)
                         .foregroundColor(.gray)
                         .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        if let provider = symbol.activeProviderDisplayName {
+                            SymbolProviderBadge(provider: provider)
+                        }
+                        if !symbol.isSelectableForActiveProvider {
+                            UnsupportedSymbolBadge()
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -962,6 +1001,7 @@ struct SymbolListRow: View {
             )
             .cornerRadius(12)
         }
+        .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)
         .buttonStyle(.plain)
     }
 }
@@ -981,6 +1021,9 @@ struct GlobalSymbolListRow: View {
         }
         if symbol.isRequestedForGuild == true {
             badges.append("Requested")
+        }
+        if symbol.isSupportedByActiveProvider == false {
+            badges.append("Unsupported")
         }
         return badges
     }
@@ -1004,6 +1047,15 @@ struct GlobalSymbolListRow: View {
                             .font(.caption)
                             .foregroundColor(.gray)
                             .lineLimit(1)
+
+                        HStack(spacing: 6) {
+                            if let provider = symbol.activeProviderDisplayName {
+                                SymbolProviderBadge(provider: provider)
+                            }
+                            if !symbol.isSelectableForActiveProvider {
+                                UnsupportedSymbolBadge()
+                            }
+                        }
                     }
 
                     Spacer()
@@ -1073,6 +1125,7 @@ struct GlobalSymbolListRow: View {
                 }
             }
         }
+        .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)
         .buttonStyle(.plain)
     }
 }
@@ -1093,6 +1146,32 @@ struct SymbolMarketStatus: View {
                 .font(.system(size: 8))
                 .foregroundColor(.gray.opacity(0.7))
         }
+    }
+}
+
+struct SymbolProviderBadge: View {
+    let provider: String
+
+    var body: some View {
+        Text(provider)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(.white.opacity(0.9))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.blue.opacity(0.25))
+            .clipShape(Capsule())
+    }
+}
+
+struct UnsupportedSymbolBadge: View {
+    var body: some View {
+        Text("Unsupported")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(.white.opacity(0.95))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.red.opacity(0.35))
+            .clipShape(Capsule())
     }
 }
 
