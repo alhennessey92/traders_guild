@@ -239,7 +239,8 @@ class RealAPIService {
             if let urlError = error as? URLError, urlError.code == .cancelled {
                 throw CancellationError()
             }
-            throw APIError.networkError(error.localizedDescription)
+            let context = "\(request.url?.absoluteString ?? "\(service.baseURL)\(endpoint)") [mode=\(AppConfig.apiRoutingMode.rawValue)]"
+            throw APIError.networkError("\(error.localizedDescription) | \(context)")
         }
         
         guard let httpResponse = response as? HTTPURLResponse else {

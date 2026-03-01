@@ -403,6 +403,9 @@
 				DEVELOPMENT_TEAM = B4WE2NR99U;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Traders Guild uses local network access for development connections to local staging services.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Traders Guild needs microphone access for voice dictation in chat messages.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Traders Guild uses speech recognition to transcribe your voice into chat messages.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

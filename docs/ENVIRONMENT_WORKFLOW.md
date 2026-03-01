@@ -36,6 +36,7 @@ Scheme/env requirements:
 - `TG_API_ROUTING_MODE=API_GATEWAY`
 - Simulator: `TG_GATEWAY_BASE_URL_DEV=http://localhost:30080/api/v1`
 - Device: `TG_GATEWAY_BASE_URL_DEV_DEVICE=http://<mac-lan-ip>:30080/api/v1`
+- Device gateway exposure: `make kong-local-port-forward-device MAC_LAN_IP=<mac-lan-ip>`
 
 ## 3) Production Promotion Validation
 
@@ -59,6 +60,7 @@ Scheme/env requirements for `traders_guild Prod K8s`:
 - `TG_API_ROUTING_MODE=API_GATEWAY`
 - Simulator: `TG_GATEWAY_BASE_URL_DEV=http://localhost:30081/api/v1`
 - Device: `TG_GATEWAY_BASE_URL_DEV_DEVICE=http://<mac-lan-ip>:30081/api/v1`
+- Device gateway exposure: `make kong-prod-port-forward-device MAC_LAN_IP=<mac-lan-ip>`
 
 ## 4) Access and Debugging
 

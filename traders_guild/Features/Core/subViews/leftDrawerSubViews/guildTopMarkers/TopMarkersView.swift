@@ -413,7 +413,7 @@ struct TopMarkerCard: View {
                                     Text("\(marker.likeCount)")
                                         .font(.system(size: 11, weight: .medium))
                                 }
-                                .foregroundColor(marker.isLikedByCurrentUser ? .red : AppColors.whiteText.opacity(0.5))
+                                .foregroundColor(marker.isLikedByCurrentUser ? AppColors.markerHeartTint : AppColors.markerHeartMuted)
                             }
                             .buttonStyle(.plain)
                         }

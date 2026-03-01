@@ -187,24 +187,7 @@ struct CrosshairTimeLabel: View {
     /// - Daily and above: Just show date (no time)
     /// - Below daily: Show date and time (hour:minute)
     private var formattedTime: String {
-        let formatter = DateFormatter()
-        
-        switch timeframe {
-        case .d1, .w1, .mn:
-            // Daily and above - just show date
-            formatter.dateFormat = "dd MMM yyyy"
-        case .h4:
-            // 4-hour - show date and hour
-            formatter.dateFormat = "dd MMM HH:mm"
-        case .h1:
-            // Hourly - show date and time
-            formatter.dateFormat = "dd MMM HH:mm"
-        case .m30, .m15, .m5, .m1:
-            // Sub-hourly - show date and time
-            formatter.dateFormat = "dd MMM HH:mm"
-        }
-        
-        return formatter.string(from: timestamp)
+        MarkerPlacementLabelFormatter.format(timestamp, timeframe: timeframe)
     }
     
     var body: some View {
@@ -839,7 +822,6 @@ struct ZoomControls: View {
         }
     }
 }
-
 
 
 

@@ -30,6 +30,7 @@ Use scheme: `traders_guild Staging K8s`
 - Simulator gateway URL: `http://localhost:30080/api/v1`
 - Device gateway URL: `http://<YOUR_MAC_LAN_IP>:30080/api/v1`
   - Set via `TG_GATEWAY_BASE_URL_DEV_DEVICE`
+  - In the shared scheme this variable is enabled by default; replace `YOUR_MAC_LAN_IP` before running on device.
 
 ## Production Kubernetes Mode (Private, Via Port-Forward)
 
@@ -45,6 +46,7 @@ Use scheme: `traders_guild Prod K8s`
 ```bash
 make argocd-apps-local    # Check local staging app sync/health
 make smoke-staging-local  # Verify Kong routes + websocket + schema
+make kong-local-port-forward-device MAC_LAN_IP=<your-mac-lan-ip>  # Expose local Kong for device on LAN
 make kong-prod-port-forward  # Expose prod Kong for simulator at localhost:30081
 make kong-prod-port-forward-device MAC_LAN_IP=<your-mac-lan-ip>  # Expose prod Kong for device
 ```

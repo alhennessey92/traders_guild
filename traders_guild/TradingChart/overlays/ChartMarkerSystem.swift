@@ -16,6 +16,25 @@
 
 import SwiftUI
 import Combine
+import UIKit
+
+enum MarkerVisibilityMode: String, CaseIterable, Identifiable {
+    case off
+    case all
+    case mine
+    case friends
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off: return "Off"
+        case .all: return "All"
+        case .mine: return "Mine"
+        case .friends: return "Friends"
+        }
+    }
+}
 
 // MARK: - Marker Manager
 
@@ -24,8 +43,7 @@ class MarkerManager: ObservableObject {
     @Published var markers: [ChartMarkerUI] = []
     @Published var selectedMarker: ChartMarkerUI?
     @Published var visibleTypes: Set<RLMarkerType> = Set(RLMarkerType.allCases)
-    @Published var showOnlyMyMarkers: Bool = false
-    @Published var markersHidden: Bool = false
+    @Published var visibilityMode: MarkerVisibilityMode = .all
     
     /// Tracks if we should show a "like existing marker" prompt
     @Published var duplicateMarkerToLike: ChartMarkerUI?
@@ -99,22 +117,37 @@ class MarkerManager: ObservableObject {
         self.currentGuildId = guildId
         
         do {
-            // Fetch markers from RealAPIService
+            // Fetch markers from RealAPIService (paged)
             let timeframeString = timeframe.toBackendString()
             let startTime = candles.first?.timestamp
             let endTime = candles.last?.timestamp
-            let markersListDTO = try await api.getMarkers(
-                guildId: guildId,
-                symbolId: symbolId,
-                timeframe: timeframeString,
-                limit: 100,
-                startTime: startTime,
-                endTime: endTime
-            )
+            var cursor: String?
+            var pageCount = 0
+            let maxPages = 10
+            var fetchedMarkers: [RLChartMarkerDTO] = []
+
+            repeat {
+                let markersListDTO = try await api.getMarkers(
+                    guildId: guildId,
+                    symbolId: symbolId,
+                    timeframe: timeframeString,
+                    limit: 100,
+                    cursor: cursor,
+                    startTime: startTime,
+                    endTime: endTime
+                )
+                fetchedMarkers.append(contentsOf: markersListDTO.markers)
+                cursor = markersListDTO.nextCursor
+                pageCount += 1
+
+                if !markersListDTO.hasMore || cursor == nil {
+                    break
+                }
+            } while pageCount < maxPages
             
             // Convert RLChartMarkerUI to ChartMarkerUI (UI model)
             var convertedMarkers: [ChartMarkerUI] = []
-            for rlMarker in markersListDTO.markers {
+            for rlMarker in fetchedMarkers {
                 if let candleIndex = findCandleIndex(timestamp: rlMarker.candleTimestamp, in: candles) {
                     convertedMarkers.append(ChartMarkerUI(marker: rlMarker, candleIndex: candleIndex))
                 }
@@ -561,6 +594,40 @@ class MarkerManager: ObservableObject {
             print("Failed to delete marker: \(error)")
         }
     }
+
+    private struct MarkerLayoutSnapshot {
+        let candleIndex: Int
+        let positionedBelow: Bool
+        let proximityTier: Int
+        let stackIndex: Int
+    }
+
+    private func markerIndex(for id: UUID) -> Int? {
+        markers.firstIndex(where: { $0.id == id })
+    }
+
+    private func snapshotLayout(for marker: ChartMarkerUI) -> MarkerLayoutSnapshot {
+        MarkerLayoutSnapshot(
+            candleIndex: marker.candleIndex,
+            positionedBelow: marker.positionedBelow,
+            proximityTier: marker.proximityTier,
+            stackIndex: marker.stackIndex
+        )
+    }
+
+    private func applyingLayout(_ snapshot: MarkerLayoutSnapshot, to marker: ChartMarkerUI) -> ChartMarkerUI {
+        var updated = marker
+        updated.candleIndex = snapshot.candleIndex
+        updated.positionedBelow = snapshot.positionedBelow
+        updated.proximityTier = snapshot.proximityTier
+        updated.stackIndex = snapshot.stackIndex
+        return updated
+    }
+
+    private func syncSelectedMarker(_ marker: ChartMarkerUI) {
+        guard selectedMarker?.id == marker.id else { return }
+        selectedMarker = marker
+    }
     
     /// Update a marker with any combination of fields (all optional). Only provided fields are sent to the backend.
     func updateMarker(
@@ -576,12 +643,14 @@ class MarkerManager: ObservableObject {
         chartPattern: String? = nil,
         selectedEmoji: String? = nil
     ) async {
-        guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = markerIndex(for: id) else { return }
         guard let api = api else { return }
 
         let originalMarker = markers[index]
+        let originalSnapshot = snapshotLayout(for: originalMarker)
         if let note = note {
             markers[index] = originalMarker.withMarker(originalMarker.marker.updating(note: note))
+            syncSelectedMarker(markers[index])
         }
 
         do {
@@ -599,21 +668,32 @@ class MarkerManager: ObservableObject {
                 chartPattern: chartPattern,
                 selectedEmoji: selectedEmoji
             )
-            var updated = ChartMarkerUI(marker: updatedMarker, candleIndex: markers[index].candleIndex)
-            updated.positionedBelow = markers[index].positionedBelow
-            updated.proximityTier = markers[index].proximityTier
-            updated.stackIndex = markers[index].stackIndex
-            markers[index] = updated
+            guard let latestIndex = markerIndex(for: id) else { return }
+
+            let latestSnapshot = snapshotLayout(for: markers[latestIndex])
+            let updated = applyingLayout(
+                latestSnapshot,
+                to: ChartMarkerUI(marker: updatedMarker, candleIndex: latestSnapshot.candleIndex)
+            )
+            markers[latestIndex] = updated
+            syncSelectedMarker(updated)
         } catch {
+            guard let latestIndex = markerIndex(for: id) else { return }
+
             if note != nil {
-                markers[index] = originalMarker.withMarker(originalMarker.marker.updating(note: originalMarker.note))
+                let rolledBack = applyingLayout(
+                    originalSnapshot,
+                    to: ChartMarkerUI(marker: originalMarker.marker, candleIndex: originalSnapshot.candleIndex)
+                )
+                markers[latestIndex] = rolledBack
+                syncSelectedMarker(rolledBack)
             }
             print("Failed to update marker: \(error)")
         }
     }
     
     func toggleLike(markerId: UUID) async {
-        guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
+        guard let index = markerIndex(for: markerId) else { return }
         
         // Optimistic update
         let currentMarker = markers[index]
@@ -626,28 +706,36 @@ class MarkerManager: ObservableObject {
                 isLikedByCurrentUser: !wasLiked
             )
         )
+        syncSelectedMarker(markers[index])
         
         // Persist to backend
         guard let api = api else { return }
         
         do {
             let response = try await api.toggleMarkerLike(guildId: currentGuildId, markerId: markerId)
+            guard let latestIndex = markerIndex(for: markerId) else { return }
+
             // Update with real like count from backend
-            let updated = markers[index].withMarker(
-                markers[index].marker.updating(
+            let updated = markers[latestIndex].withMarker(
+                markers[latestIndex].marker.updating(
                     likeCount: response.likeCount,
                     isLikedByCurrentUser: response.isLiked
                 )
             )
-            markers[index] = updated
+            markers[latestIndex] = updated
+            syncSelectedMarker(updated)
         } catch {
+            guard let latestIndex = markerIndex(for: markerId) else { return }
+
             // Revert optimistic update on error
-            markers[index] = currentMarker.withMarker(
+            let rolledBack = currentMarker.withMarker(
                 currentMarker.marker.updating(
                     likeCount: oldLikeCount,
                     isLikedByCurrentUser: wasLiked
                 )
             )
+            markers[latestIndex] = rolledBack
+            syncSelectedMarker(rolledBack)
             print("Failed to toggle like: \(error)")
         }
     }
@@ -659,7 +747,7 @@ class MarkerManager: ObservableObject {
         attachmentType: String? = nil,
         attachmentName: String? = nil
     ) async {
-        guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
+        guard let index = markerIndex(for: markerId) else { return }
         
         let tempCommentId = UUID()
         
@@ -687,6 +775,7 @@ class MarkerManager: ObservableObject {
                 commentCount: optimisticComments.count
             )
         )
+        syncSelectedMarker(markers[index])
         
         // Persist to backend
         guard let api = api else { return }
@@ -701,51 +790,97 @@ class MarkerManager: ObservableObject {
                 attachmentName: attachmentName
             )
             
+            guard let latestIndex = markerIndex(for: markerId) else { return }
+
             // Replace optimistic comment with real one from backend
-            var updatedComments = markers[index].comments
+            var updatedComments = markers[latestIndex].comments
             if let commentIndex = updatedComments.firstIndex(where: { $0.id == tempCommentId }) {
                 updatedComments[commentIndex] = createdComment
+            } else {
+                updatedComments.append(createdComment)
             }
-            markers[index] = markers[index].withMarker(
-                markers[index].marker.updating(
+            let updated = markers[latestIndex].withMarker(
+                markers[latestIndex].marker.updating(
                     comments: updatedComments,
                     commentCount: updatedComments.count
                 )
             )
+            markers[latestIndex] = updated
+            syncSelectedMarker(updated)
         } catch {
+            guard let latestIndex = markerIndex(for: markerId) else { return }
+
             // Revert optimistic update on error
-            let rolledBackComments = markers[index].comments.filter { $0.id != tempCommentId }
-            markers[index] = markers[index].withMarker(
-                markers[index].marker.updating(
+            let rolledBackComments = markers[latestIndex].comments.filter { $0.id != tempCommentId }
+            let updated = markers[latestIndex].withMarker(
+                markers[latestIndex].marker.updating(
                     comments: rolledBackComments,
                     commentCount: rolledBackComments.count
                 )
             )
+            markers[latestIndex] = updated
+            syncSelectedMarker(updated)
             print("Failed to add comment: \(error)")
         }
     }
     
-    func deleteComment(markerId: UUID, commentId: UUID) {
-        guard let markerIndex = markers.firstIndex(where: { $0.id == markerId }) else { return }
-        let updatedComments = markers[markerIndex].comments.filter { $0.id != commentId }
-        markers[markerIndex] = markers[markerIndex].withMarker(
-            markers[markerIndex].marker.updating(
+    @discardableResult
+    func deleteComment(markerId: UUID, commentId: UUID) async -> Bool {
+        guard let initialIndex = markerIndex(for: markerId) else { return false }
+
+        let originalComments = markers[initialIndex].comments
+        guard originalComments.contains(where: { $0.id == commentId }) else { return true }
+
+        let updatedComments = originalComments.filter { $0.id != commentId }
+        let optimisticallyUpdated = markers[initialIndex].withMarker(
+            markers[initialIndex].marker.updating(
                 comments: updatedComments,
                 commentCount: updatedComments.count
             )
         )
+        markers[initialIndex] = optimisticallyUpdated
+        syncSelectedMarker(optimisticallyUpdated)
+
+        guard let api = api else { return true }
+
+        do {
+            _ = try await api.deleteMarkerComment(
+                guildId: currentGuildId,
+                markerId: markerId,
+                commentId: commentId
+            )
+            return true
+        } catch {
+            guard let latestIndex = markerIndex(for: markerId) else { return false }
+            let rolledBack = markers[latestIndex].withMarker(
+                markers[latestIndex].marker.updating(
+                    comments: originalComments,
+                    commentCount: originalComments.count
+                )
+            )
+            markers[latestIndex] = rolledBack
+            syncSelectedMarker(rolledBack)
+            print("Failed to delete comment: \(error)")
+            return false
+        }
     }
     
     var filteredMarkers: [ChartMarkerUI] {
-        if markersHidden { return [] }
-        
+        if visibilityMode == .off { return [] }
+
         return markers.filter { marker in
             guard marker.isVisible else { return false }
             guard visibleTypes.contains(marker.type) else { return false }
-            if showOnlyMyMarkers && !marker.isCurrentUserMarker {
+            switch visibilityMode {
+            case .off:
                 return false
+            case .all:
+                return true
+            case .mine:
+                return marker.isCurrentUserMarker || marker.author.userId == currentUserId
+            case .friends:
+                return marker.author.isFriend
             }
-            return true
         }
     }
     
@@ -1138,6 +1273,50 @@ struct MarkerPositionCalculator {
 // MARK: - Chart Marker System (Canvas Drawing)
 
 struct ChartMarkerSystem {
+    struct UsernameLabelCandidate {
+        let markerId: UUID
+        let rect: CGRect
+        let sortKey: Int
+
+        init(markerId: UUID, rect: CGRect, sortKey: Int = 0) {
+            self.markerId = markerId
+            self.rect = rect
+            self.sortKey = sortKey
+        }
+    }
+
+    private struct RenderedMarker {
+        let marker: ChartMarkerUI
+        let position: CGPoint
+        let isSelected: Bool
+        let scale: CGFloat
+        let sortKey: Int
+    }
+
+    static func visibleUsernameMarkerIDs(from candidates: [UsernameLabelCandidate]) -> Set<UUID> {
+        var visible = Set<UUID>()
+        var occupiedRects: [CGRect] = []
+
+        let sortedCandidates = candidates.sorted {
+            if $0.sortKey != $1.sortKey {
+                return $0.sortKey < $1.sortKey
+            }
+            return $0.markerId.uuidString < $1.markerId.uuidString
+        }
+
+        for candidate in sortedCandidates {
+            let paddedRect = candidate.rect.insetBy(dx: -4, dy: -2)
+            let hasCollision = occupiedRects.contains(where: { $0.intersects(paddedRect) })
+            if hasCollision {
+                continue
+            }
+
+            visible.insert(candidate.markerId)
+            occupiedRects.append(candidate.rect)
+        }
+
+        return visible
+    }
     
     static func drawMarkers(
         context: GraphicsContext,
@@ -1163,8 +1342,13 @@ struct ChartMarkerSystem {
         let scaledHeight = chartSize.height * priceScale
         let allVisibleMarkers = markers.filter { $0.isVisible }
         let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
-        
-        for (candleIndex, markersAtCandle) in groupedMarkers {
+        let sortedCandleIndices = groupedMarkers.keys.sorted()
+
+        var renderQueue: [RenderedMarker] = []
+        renderQueue.reserveCapacity(allVisibleMarkers.count)
+
+        for candleIndex in sortedCandleIndices {
+            guard let markersAtCandle = groupedMarkers[candleIndex] else { continue }
             guard candleIndex >= 0 && candleIndex < candles.count else { continue }
             
             let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
@@ -1179,7 +1363,6 @@ struct ChartMarkerSystem {
             let centerX = x + actualCandleWidth / 2
             
             let sortedMarkers = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-            let hideUsernames = markersAtCandle.count > 1
             
             var markerPositions: [(marker: ChartMarkerUI, position: CGPoint)] = []
             for marker in sortedMarkers {
@@ -1198,21 +1381,59 @@ struct ChartMarkerSystem {
             
             drawStackedConnectionLines(context: markerContext, markers: aboveMarkers, anchorY: candleHighY, centerX: centerX, isBelow: false)
             drawStackedConnectionLines(context: markerContext, markers: belowMarkers, anchorY: candleLowY, centerX: centerX, isBelow: true)
-
-            for (marker, position) in markerPositions {
+            for (markerOrder, markerAndPosition) in markerPositions.enumerated() {
+                let marker = markerAndPosition.marker
+                let position = markerAndPosition.position
                 let isSelected = selectedMarkerId == marker.id
                 let scale: CGFloat = isSelected ? 1.3 : 1.0
 
-                drawSingleMarker(
-                    context: markerContext,
-                    marker: marker,
-                    position: position,
-                    isBelow: marker.positionedBelow,
-                    scale: scale,
-                    hideUsername: hideUsernames,
-                    isSelected: isSelected
+                renderQueue.append(
+                    RenderedMarker(
+                        marker: marker,
+                        position: position,
+                        isSelected: isSelected,
+                        scale: scale,
+                        sortKey: candleIndex * 10_000 + markerOrder
+                    )
                 )
             }
+        }
+
+        let usernameCandidates = renderQueue.compactMap { rendered in
+            usernameLabelCandidate(for: rendered.marker, position: rendered.position, scale: rendered.scale, sortKey: rendered.sortKey)
+        }
+        let visibleUsernameIds = visibleUsernameMarkerIDs(from: usernameCandidates)
+
+        for rendered in renderQueue {
+            guard visibleUsernameIds.contains(rendered.marker.id) else { continue }
+            drawUsernameLabel(
+                context: markerContext,
+                marker: rendered.marker,
+                position: rendered.position,
+                isBelow: rendered.marker.positionedBelow,
+                scale: rendered.scale
+            )
+        }
+
+        let glyphQueue = renderQueue.sorted {
+            if $0.isSelected != $1.isSelected {
+                return !$0.isSelected
+            }
+            if $0.sortKey != $1.sortKey {
+                return $0.sortKey < $1.sortKey
+            }
+            return $0.marker.id.uuidString < $1.marker.id.uuidString
+        }
+
+        for rendered in glyphQueue {
+            drawSingleMarker(
+                context: markerContext,
+                marker: rendered.marker,
+                position: rendered.position,
+                isBelow: rendered.marker.positionedBelow,
+                scale: rendered.scale,
+                isSelected: rendered.isSelected
+            )
         }
     }
     
@@ -1252,7 +1473,6 @@ struct ChartMarkerSystem {
         position: CGPoint,
         isBelow: Bool,
         scale: CGFloat = 1.0,
-        hideUsername: Bool = false,
         isSelected: Bool = false
     ) {
         let baseRadius: CGFloat = 16
@@ -1366,7 +1586,7 @@ struct ChartMarkerSystem {
                 width: 14,
                 height: 14
             )
-            context.fill(Path(roundedRect: badgeRect, cornerRadius: 7), with: .color(.red))
+            context.fill(Path(roundedRect: badgeRect, cornerRadius: 7), with: .color(AppColors.markerHeartBadge))
             context.draw(
                 Text("\(marker.likeCount)")
                     .font(.system(size: 8, weight: .bold))
@@ -1374,17 +1594,45 @@ struct ChartMarkerSystem {
                 at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 7)
             )
         }
-        
-        // Username label
-        if !hideUsername {
-            let labelY = isBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
-            context.draw(
-                Text(marker.author.username)
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85)),
-                at: CGPoint(x: position.x, y: labelY)
-            )
-        }
+    }
+
+    private static func usernameLabelCandidate(
+        for marker: ChartMarkerUI,
+        position: CGPoint,
+        scale: CGFloat,
+        sortKey: Int
+    ) -> UsernameLabelCandidate? {
+        let username = marker.author.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !username.isEmpty else { return nil }
+
+        let scaledRadius = 16 * scale
+        let labelY = marker.positionedBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
+        let estimatedWidth = min(140, max(24, CGFloat(username.count) * 5.2 + 10))
+        let rect = CGRect(
+            x: position.x - estimatedWidth / 2,
+            y: labelY - 6,
+            width: estimatedWidth,
+            height: 12
+        )
+        return UsernameLabelCandidate(markerId: marker.id, rect: rect, sortKey: sortKey)
+    }
+
+    private static func drawUsernameLabel(
+        context: GraphicsContext,
+        marker: ChartMarkerUI,
+        position: CGPoint,
+        isBelow: Bool,
+        scale: CGFloat
+    ) {
+        let scaledRadius = 16 * scale
+        let labelY = isBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
+        let usernameColor = MarkerLabelStyling.usernameColor(for: marker)
+        context.draw(
+            Text(marker.author.username)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundColor(usernameColor.opacity(0.95)),
+            at: CGPoint(x: position.x, y: labelY)
+        )
     }
     
     private static func getIconCharacter(for type: RLMarkerType) -> String {
@@ -1460,5 +1708,72 @@ struct ChartMarkerSystem {
         }
         
         return nil
+    }
+}
+
+enum MarkerLabelStyling {
+    private static let chartBackground = UIColor(red: 25.0 / 255.0, green: 25.0 / 255.0, blue: 33.0 / 255.0, alpha: 1.0)
+    private static let minimumContrast: CGFloat = 2.8
+
+    static func usernameColor(for marker: ChartMarkerUI) -> Color {
+        let baseColor = UIColor(marker.displayColor)
+        let contrast = baseColor.contrastRatio(against: chartBackground)
+        if contrast >= minimumContrast {
+            return Color(baseColor)
+        }
+
+        let deficit = minimumContrast - contrast
+        let blendAmount = min(0.6, max(0.2, deficit / minimumContrast))
+        return Color(baseColor.blended(with: .white, amount: blendAmount))
+    }
+}
+
+private extension UIColor {
+    var relativeLuminance: CGFloat {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        func channel(_ value: CGFloat) -> CGFloat {
+            if value <= 0.03928 {
+                return value / 12.92
+            }
+            return pow((value + 0.055) / 1.055, 2.4)
+        }
+
+        let r = channel(red)
+        let g = channel(green)
+        let b = channel(blue)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    func contrastRatio(against color: UIColor) -> CGFloat {
+        let a = relativeLuminance
+        let b = color.relativeLuminance
+        let lighter = max(a, b)
+        let darker = min(a, b)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    func blended(with color: UIColor, amount: CGFloat) -> UIColor {
+        let clampedAmount = min(1.0, max(0.0, amount))
+        var r1: CGFloat = 0
+        var g1: CGFloat = 0
+        var b1: CGFloat = 0
+        var a1: CGFloat = 0
+        var r2: CGFloat = 0
+        var g2: CGFloat = 0
+        var b2: CGFloat = 0
+        var a2: CGFloat = 0
+        getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        color.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        return UIColor(
+            red: r1 + (r2 - r1) * clampedAmount,
+            green: g1 + (g2 - g1) * clampedAmount,
+            blue: b1 + (b2 - b1) * clampedAmount,
+            alpha: a1 + (a2 - a1) * clampedAmount
+        )
     }
 }

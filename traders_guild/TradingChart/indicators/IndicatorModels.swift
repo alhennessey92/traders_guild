@@ -493,6 +493,14 @@ enum RSICondition {
         case .neutral: return .gray
         }
     }
+
+    var label: String {
+        switch self {
+        case .overbought: return "OVERBOUGHT"
+        case .oversold: return "OVERSOLD"
+        case .neutral: return ""
+        }
+    }
 }
 
 // MARK: - MACD Data Point
@@ -914,6 +922,14 @@ enum CCICondition {
         case .neutral: return .gray
         }
     }
+
+    var label: String {
+        switch self {
+        case .overbought: return "OVERBOUGHT"
+        case .oversold: return "OVERSOLD"
+        case .neutral: return ""
+        }
+    }
 }
 
 // MARK: - Williams %R Configuration
@@ -1063,6 +1079,22 @@ struct VolumeDataPoint: Identifiable {
     let isBullish: Bool
     let ma: Double?  // Moving average of volume
     let timestamp: Date
+
+    var condition: VolumeCondition {
+        isBullish ? .bullish : .bearish
+    }
+}
+
+enum VolumeCondition {
+    case bullish
+    case bearish
+
+    var label: String {
+        switch self {
+        case .bullish: return "BULLISH"
+        case .bearish: return "BEARISH"
+        }
+    }
 }
 
 // MARK: - Preset Configurations
@@ -1206,5 +1238,3 @@ extension CCIConfig: Identifiable {}
 extension WilliamsRConfig: Identifiable {}
 extension ATRConfig: Identifiable {}
 extension VolumeConfig: Identifiable {}
-
-

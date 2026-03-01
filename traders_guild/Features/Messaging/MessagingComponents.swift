@@ -156,9 +156,83 @@ struct ChatAttachmentDraft: Equatable, Identifiable {
     }
 }
 
+struct ChatMarkerFilter: Equatable {
+    var symbolId: UUID? = nil
+    var timeframe: String? = nil
+
+    func allows(_ marker: RLTopMarkerDTO) -> Bool {
+        if let symbolId, marker.symbolId != symbolId {
+            return false
+        }
+        if let timeframe, marker.timeframe.lowercased() != timeframe.lowercased() {
+            return false
+        }
+        return true
+    }
+}
+
+struct ChatMarkerLinkDraft: Equatable, Identifiable {
+    let markerId: UUID
+    let symbolId: UUID
+    let symbolTicker: String
+    let timeframe: String
+    let candleTimestamp: Date
+    let markerType: String
+    let createdAt: Date
+    let notePreview: String?
+
+    var id: UUID { markerId }
+
+    var markerTypeEnum: RLMarkerType {
+        RLMarkerType.fromBackendString(markerType) ?? .note
+    }
+
+    var payload: MarkerSharePayloadV1 {
+        MarkerSharePayloadV1(
+            markerId: markerId,
+            symbolId: symbolId,
+            symbolTicker: symbolTicker,
+            timeframe: timeframe,
+            candleTimestamp: candleTimestamp
+        )
+    }
+
+    init(marker: RLTopMarkerDTO) {
+        self.markerId = marker.id
+        self.symbolId = marker.symbolId
+        self.symbolTicker = marker.symbolTicker
+        self.timeframe = marker.timeframe
+        self.candleTimestamp = marker.candleTimestamp
+        self.markerType = marker.markerType
+        self.createdAt = marker.createdAt
+        self.notePreview = marker.notePreview
+    }
+}
+
 struct ChatComposerPayload: Equatable {
     let text: String
     let attachments: [ChatAttachmentDraft]
+    let markerShareDraft: ChatMarkerLinkDraft?
+
+    init(
+        text: String,
+        attachments: [ChatAttachmentDraft],
+        markerShareDraft: ChatMarkerLinkDraft? = nil
+    ) {
+        self.text = text
+        self.attachments = attachments
+        self.markerShareDraft = markerShareDraft
+    }
+
+    var hasBodyContent: Bool {
+        !text.isEmpty || markerShareDraft != nil
+    }
+
+    func encodedContent(fallback: String = "") -> String {
+        let note = text.isEmpty ? fallback : text
+        guard let markerShareDraft else { return note }
+        return MarkerShareCodec.buildMessage(note: note, payload: markerShareDraft.payload)
+    }
 }
 
 struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
@@ -308,12 +382,16 @@ struct ChatInputFooter: View {
     let placeholder: String
     let isSending: Bool
     let onSend: (ChatComposerPayload) -> Void
+    var allowsMarkerLinkAttachment: Bool = false
+    var markerFilter: ChatMarkerFilter? = nil
 
     /// Optional: For sheet contexts where we need to expand to full height
     var selectedDetent: Binding<PresentationDetent>? = nil
 
     /// Optional leading accessory view (e.g. back button in chart chat)
     var leadingAccessory: AnyView? = nil
+
+    @EnvironmentObject private var appState: RLAppState
 
     @FocusState private var isInputFocused: Bool
 
@@ -322,7 +400,12 @@ struct ChatInputFooter: View {
     @State private var showActionPanel = false
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
+    @State private var showMarkerPicker = false
     @State private var pendingAttachments: [ChatAttachmentDraft] = []
+    @State private var selectedMarkerDraft: ChatMarkerLinkDraft? = nil
+    @State private var markerDrafts: [ChatMarkerLinkDraft] = []
+    @State private var isLoadingMarkerDrafts = false
+    @State private var markerPickerError: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -330,7 +413,7 @@ struct ChatInputFooter: View {
                 recordingIndicator
             }
 
-            if !pendingAttachments.isEmpty {
+            if !pendingAttachments.isEmpty || selectedMarkerDraft != nil {
                 attachmentDraftRow
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -473,6 +556,22 @@ struct ChatInputFooter: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showMarkerPicker) {
+            ChatMarkerPickerSheet(
+                markers: markerDrafts,
+                isLoading: isLoadingMarkerDrafts,
+                errorMessage: markerPickerError,
+                onRetry: {
+                    Task { await loadMarkerDrafts() }
+                },
+                onSelect: { draft in
+                    selectedMarkerDraft = draft
+                    showMarkerPicker = false
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Action Panel (WhatsApp-style)
@@ -510,6 +609,20 @@ struct ChatInputFooter: View {
                     showActionPanel = false
                 }
                 showDocumentPicker = true
+            }
+
+            if allowsMarkerLinkAttachment {
+                actionPanelButton(
+                    icon: "mappin.and.ellipse",
+                    label: "Marker",
+                    tint: Color.blue
+                ) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        showActionPanel = false
+                    }
+                    showMarkerPicker = true
+                    Task { await loadMarkerDrafts() }
+                }
             }
         }
         .padding(.vertical, 16)
@@ -603,7 +716,9 @@ struct ChatInputFooter: View {
     }
 
     private var canSend: Bool {
-        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !pendingAttachments.isEmpty ||
+        selectedMarkerDraft != nil
     }
 
     // MARK: - Attachment Draft Row
@@ -611,7 +726,7 @@ struct ChatInputFooter: View {
     private var attachmentDraftRow: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(pendingAttachments.count) attachment\(pendingAttachments.count == 1 ? "" : "s") ready")
+                Text(draftSummaryText)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(AppColors.whiteText)
                 Spacer(minLength: 8)
@@ -628,7 +743,10 @@ struct ChatInputFooter: View {
                 }
 
                 Button("Remove all") {
-                    withAnimation { pendingAttachments = [] }
+                    withAnimation {
+                        pendingAttachments = []
+                        selectedMarkerDraft = nil
+                    }
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundColor(AppColors.bearCandleRed.opacity(0.92))
@@ -636,6 +754,9 @@ struct ChatInputFooter: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
+                    if let selectedMarkerDraft {
+                        markerPreviewChip(for: selectedMarkerDraft)
+                    }
                     ForEach(pendingAttachments) { attachment in
                         attachmentPreviewChip(for: attachment)
                     }
@@ -652,6 +773,17 @@ struct ChatInputFooter: View {
                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                 )
         )
+    }
+
+    private var draftSummaryText: String {
+        switch (pendingAttachments.count, selectedMarkerDraft != nil) {
+        case (0, true):
+            return "1 marker link ready"
+        case (let count, false):
+            return "\(count) attachment\(count == 1 ? "" : "s") ready"
+        case (let count, true):
+            return "\(count) attachment\(count == 1 ? "" : "s") + marker link ready"
+        }
     }
 
     @ViewBuilder
@@ -699,6 +831,48 @@ struct ChatInputFooter: View {
         }
     }
 
+    private func markerPreviewChip(for marker: ChatMarkerLinkDraft) -> some View {
+        ZStack(alignment: .topTrailing) {
+            HStack(spacing: 8) {
+                Image(systemName: marker.markerTypeEnum.icon)
+                    .font(.caption)
+                    .foregroundColor(marker.markerTypeEnum.color)
+                    .frame(width: 22, height: 22)
+                    .background(marker.markerTypeEnum.color.opacity(0.15))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Linked Marker")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(AppColors.greyText)
+                    Text("\(marker.symbolTicker) • \(marker.timeframe.uppercased())")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.95))
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(AppColors.whiteText.opacity(0.1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+            )
+
+            Button {
+                withAnimation { selectedMarkerDraft = nil }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .background(Color.black.opacity(0.45), in: Circle())
+            }
+            .offset(x: 4, y: -4)
+        }
+    }
+
     // MARK: - Helpers
 
     private func appendAttachments(_ selected: [(Data, String, String)]) {
@@ -716,21 +890,148 @@ struct ChatInputFooter: View {
         }
     }
 
+    @MainActor
+    private func loadMarkerDrafts() async {
+        guard allowsMarkerLinkAttachment else { return }
+        guard let guildId = appState.currentGuild?.id,
+              let userId = appState.currentUser?.id else {
+            markerPickerError = "No guild or user context found."
+            markerDrafts = []
+            isLoadingMarkerDrafts = false
+            return
+        }
+
+        isLoadingMarkerDrafts = true
+        markerPickerError = nil
+
+        do {
+            let response = try await appState.realApi.getUserMarkers(guildId: guildId, userId: userId)
+            let mapped = response.mine
+                .filter { markerFilter?.allows($0) ?? true }
+                .sorted { $0.createdAt > $1.createdAt }
+                .map(ChatMarkerLinkDraft.init(marker:))
+            markerDrafts = mapped
+            isLoadingMarkerDrafts = false
+        } catch {
+            markerPickerError = "Failed to load markers."
+            markerDrafts = []
+            isLoadingMarkerDrafts = false
+        }
+    }
+
     private func sendComposedMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isSending, (!pendingAttachments.isEmpty || !trimmed.isEmpty) else { return }
+        guard !isSending, (!pendingAttachments.isEmpty || !trimmed.isEmpty || selectedMarkerDraft != nil) else { return }
 
         onSend(
             ChatComposerPayload(
                 text: trimmed,
-                attachments: pendingAttachments
+                attachments: pendingAttachments,
+                markerShareDraft: selectedMarkerDraft
             )
         )
 
         messageText = ""
         pendingAttachments = []
+        selectedMarkerDraft = nil
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             showActionPanel = false
+        }
+    }
+}
+
+private struct ChatMarkerPickerSheet: View {
+    let markers: [ChatMarkerLinkDraft]
+    let isLoading: Bool
+    let errorMessage: String?
+    let onRetry: () -> Void
+    let onSelect: (ChatMarkerLinkDraft) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Loading markers...")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let errorMessage {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.title2)
+                            .foregroundColor(AppColors.bearCandleRed)
+                        Text(errorMessage)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.whiteText)
+                        Button("Retry", action: onRetry)
+                            .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if markers.isEmpty {
+                    ChatEmptyStateView(
+                        icon: "mappin.and.ellipse",
+                        title: "No markers found",
+                        subtitle: "Place a marker to share it in chat."
+                    )
+                } else {
+                    List(markers) { marker in
+                        Button {
+                            onSelect(marker)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(marker.markerTypeEnum.color.opacity(0.18))
+                                    .frame(width: 30, height: 30)
+                                    .overlay(
+                                        Image(systemName: marker.markerTypeEnum.icon)
+                                            .font(.caption)
+                                            .foregroundColor(marker.markerTypeEnum.color)
+                                    )
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("\(marker.symbolTicker) • \(marker.timeframe.uppercased())")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundColor(AppColors.whiteText)
+                                    Text(marker.markerTypeEnum.rawValue)
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundColor(marker.markerTypeEnum.color.opacity(0.9))
+                                    Text(marker.candleTimestamp.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.caption2)
+                                        .foregroundColor(AppColors.greyText)
+                                    if let note = marker.notePreview, !note.isEmpty {
+                                        Text(note)
+                                            .font(.caption2)
+                                            .foregroundColor(AppColors.greyText.opacity(0.9))
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(ChatBackground())
+                }
+            }
+            .navigationTitle("Link Marker")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                        .foregroundColor(AppColors.accentColor)
+                }
+            }
+            .background(ChatBackground())
         }
     }
 }
@@ -1099,12 +1400,22 @@ protocol RLChatMessageDisplayable: Identifiable {
 // MARK: - RL MESSAGE BUBBLE
 // MARK: - ================================================================================================
 
+enum ChatAuthorTapRouting {
+    static func resolved(
+        onAuthorTap: (() -> Void)?,
+        onAvatarTap: (() -> Void)?
+    ) -> (() -> Void)? {
+        onAuthorTap ?? onAvatarTap
+    }
+}
+
 /// RL version of ChatMessageBubble - works with RLAppState and RLMemberRole
 struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     let message: Message
     let context: ChatContext
     let isRead: Bool
     let onAvatarTap: (() -> Void)?
+    let onAuthorTap: (() -> Void)?
     let onEdit: (() -> Void)?
     let onDelete: (() -> Void)?
     let onReport: (() -> Void)?
@@ -1119,6 +1430,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         context: ChatContext,
         isRead: Bool = false,
         onAvatarTap: (() -> Void)? = nil,
+        onAuthorTap: (() -> Void)? = nil,
         onEdit: (() -> Void)? = nil,
         onDelete: (() -> Void)? = nil,
         onReport: (() -> Void)? = nil,
@@ -1129,11 +1441,16 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         self.context = context
         self.isRead = isRead
         self.onAvatarTap = onAvatarTap
+        self.onAuthorTap = onAuthorTap
         self.onEdit = onEdit
         self.onDelete = onDelete
         self.onReport = onReport
         self.onCopy = onCopy
         self.onMarkerShareTap = onMarkerShareTap
+    }
+
+    private var resolvedAuthorTap: (() -> Void)? {
+        ChatAuthorTapRouting.resolved(onAuthorTap: onAuthorTap, onAvatarTap: onAvatarTap)
     }
     
     var body: some View {
@@ -1175,7 +1492,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     // MARK: - Avatar View
     @ViewBuilder
     private var avatarView: some View {
-        Button(action: { onAvatarTap?() }) {
+        Button(action: { resolvedAuthorTap?() }) {
             ChatAvatar(
                 initials: message.authorInitials,
                 avatarURL: message.authorAvatarUrl,
@@ -1189,6 +1506,18 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     // MARK: - User Info Header
     @ViewBuilder
     private var userInfoHeader: some View {
+        if let resolvedAuthorTap {
+            Button(action: resolvedAuthorTap) {
+                userInfoHeaderContent
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else {
+            userInfoHeaderContent
+        }
+    }
+
+    private var userInfoHeaderContent: some View {
         HStack(spacing: 2) {
             // Blocked indicator
             if message.authorIsBlocked {

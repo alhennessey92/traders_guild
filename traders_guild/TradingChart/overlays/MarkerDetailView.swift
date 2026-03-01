@@ -30,6 +30,7 @@ struct MarkerDetailView: View {
     @State private var showDeleteMarkerConfirmation: Bool = false
     @State private var showReportReasonSheet: Bool = false
     @State private var showShareSheet: Bool = false
+    @State private var selectedAuthorProfileMember: RLGuildMemberDTO? = nil
     
     init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
         self.marker = marker
@@ -50,7 +51,10 @@ struct MarkerDetailView: View {
                         marker: marker,
                         isLiked: isLiked,
                         likeCount: likeCount,
-                        commentCount: comments.count
+                        commentCount: comments.count,
+                        onAuthorTap: {
+                            selectedAuthorProfileMember = marker.author
+                        }
                     )
                     
                     // Info content
@@ -111,6 +115,10 @@ struct MarkerDetailView: View {
             }
             .sheet(isPresented: $showShareSheet) {
                 MarkerShareSheet(marker: marker)
+                    .environmentObject(rlAppState)
+            }
+            .sheet(item: $selectedAuthorProfileMember) { member in
+                GuildUserDetailViewRL(member: member)
                     .environmentObject(rlAppState)
             }
             .navigationDestination(isPresented: $showComments) {
@@ -460,6 +468,7 @@ struct CommentsView: View {
     @FocusState private var isCommentInputFocused: Bool
     @State private var showReportCommentReasonSheet: Bool = false
     @State private var commentToReport: RLMarkerCommentDTO? = nil
+    @State private var selectedProfileMember: RLGuildMemberDTO? = nil
     
     @Binding var selectedDetent: PresentationDetent
     
@@ -489,6 +498,9 @@ struct CommentsView: View {
                             ForEach(comments.sorted(by: { $0.timestamp < $1.timestamp })) { comment in
                                 MarkerCommentRow(
                                     comment: comment,
+                                    onAuthorTap: { member in
+                                        selectedProfileMember = member
+                                    },
                                     onReport: {
                                         commentToReport = comment
                                         showReportCommentReasonSheet = true
@@ -569,6 +581,10 @@ struct CommentsView: View {
                 )
             }
         }
+        .sheet(item: $selectedProfileMember) { member in
+            GuildUserDetailViewRL(member: member)
+                .environmentObject(rlAppState)
+        }
     }
     
     // MARK: - Actions
@@ -637,9 +653,20 @@ struct CommentsView: View {
         withAnimation(.easeOut(duration: 0.2)) {
             comments.removeAll { $0.id == comment.id }
         }
-        
-        markerManager.deleteComment(markerId: marker.id, commentId: comment.id)
-        rlAppState.showSuccess("Comment deleted")
+
+        Task {
+            let success = await markerManager.deleteComment(markerId: marker.id, commentId: comment.id)
+            if success {
+                rlAppState.showSuccess("Comment deleted")
+                return
+            }
+
+            withAnimation(.easeOut(duration: 0.2)) {
+                comments.append(comment)
+                comments.sort { $0.timestamp < $1.timestamp }
+            }
+            rlAppState.showError(title: "Failed to Delete Comment", message: "Please try again.", style: .toast)
+        }
     }
     
     private func handleReportComment(_ comment: RLMarkerCommentDTO, reason: String) {
@@ -685,6 +712,7 @@ struct MarkerCommentInputFooter: View {
 
 struct MarkerCommentRow: View {
     let comment: RLMarkerCommentDTO
+    var onAuthorTap: ((RLGuildMemberDTO) -> Void)? = nil
     let onReport: () -> Void
     var onDelete: (() -> Void)? = nil
     
@@ -698,10 +726,11 @@ struct MarkerCommentRow: View {
             } else {
                 // Avatar using embedded author info
                 Button(action: {
-                    // Could navigate to user profile
+                    onAuthorTap?(comment.author)
                 }) {
                     ChatAvatar(
                         initials: comment.author.initials,
+                        avatarURL: comment.author.avatarUrl,
                         isOnline: comment.author.isOnline,
                         size: 32
                     )
@@ -712,18 +741,40 @@ struct MarkerCommentRow: View {
             VStack(alignment: comment.isCurrentUserMessage ? .trailing : .leading, spacing: 4) {
                 // User info row (only for other users)
                 if !comment.isCurrentUserMessage {
-                    HStack(spacing: 2) {
-                        Text(comment.author.username)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText.opacity(0.9))
+                    if let onAuthorTap {
+                        Button {
+                            onAuthorTap(comment.author)
+                        } label: {
+                            HStack(spacing: 2) {
+                                Text(comment.author.username)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(AppColors.whiteText.opacity(0.9))
 
-                        UnifiedSeparatorDot(size: 3, opacity: 0.7)
+                                UnifiedSeparatorDot(size: 3, opacity: 0.7)
 
-                        UnifiedRoleBadge(
-                            member: comment.author,
-                            showReputation: true
-                        )
+                                UnifiedRoleBadge(
+                                    member: comment.author,
+                                    showReputation: true
+                                )
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        HStack(spacing: 2) {
+                            Text(comment.author.username)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.whiteText.opacity(0.9))
+
+                            UnifiedSeparatorDot(size: 3, opacity: 0.7)
+
+                            UnifiedRoleBadge(
+                                member: comment.author,
+                                showReputation: true
+                            )
+                        }
                     }
                 }
                 
@@ -804,52 +855,43 @@ struct MarkerDetailHeaderView: View {
     let isLiked: Bool
     let likeCount: Int
     let commentCount: Int
+    var onAuthorTap: (() -> Void)? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Main header row
-            HStack(spacing: 15) {
-                // Marker type icon with colored background (Alert uses severity color)
+            // Marker icon + marker name on one line
+            HStack(spacing: 12) {
                 ZStack {
                     Circle()
                         .fill(marker.displayColor.opacity(0.2))
-                        .frame(width: 56, height: 56)
+                        .frame(width: 50, height: 50)
                     
                     Circle()
                         .stroke(marker.displayColor.opacity(0.4), lineWidth: 2)
-                        .frame(width: 56, height: 56)
+                        .frame(width: 50, height: 50)
                     
                     Image(systemName: marker.type.icon)
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 21, weight: .semibold))
                         .foregroundColor(marker.displayColor)
                 }
                 
-                // Marker info — username on its own line, role · reputation on next line
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(marker.type.rawValue)
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.whiteText)
+                Text(marker.type.rawValue)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppColors.whiteText)
+                
+                Spacer()
+            }
 
-                    // Username
-                    Text(marker.author.username)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.whiteText)
-
-                    // Role · Reputation
-                    // Role · Reputation · Accuracy
-                    UnifiedRoleBadge(
-                        member: marker.author,
-                        showReputation: true
-                    )
-
-                    Text(marker.createdAtFormatted)
-                        .font(.caption2)
-                        .foregroundColor(AppColors.greyText)
+            // User row styled like profile header
+            if let onAuthorTap {
+                Button(action: onAuthorTap) {
+                    authorRowContent
+                        .contentShape(Rectangle())
                 }
-
-                Spacer(minLength: 8)
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                authorRowContent
             }
             
             // Note (if present)
@@ -867,11 +909,11 @@ struct MarkerDetailHeaderView: View {
                 HStack(spacing: 4) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(.caption)
-                        .foregroundColor(isLiked ? .red : AppColors.greyText)
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.markerHeartMuted)
                     Text("\(likeCount)")
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundColor(AppColors.greyText)
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.greyText)
                 }
                 
                 // Comments
@@ -914,6 +956,56 @@ struct MarkerDetailHeaderView: View {
             )
         )
     }
+
+    private var authorRowContent: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ChatAvatar(
+                initials: marker.author.initials,
+                avatarURL: marker.author.avatarUrl,
+                isOnline: marker.author.isOnline,
+                size: 38
+            )
+            .allowsHitTesting(false)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 3) {
+                    if marker.author.isBlocked {
+                        Image(systemName: "nosign")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.bearCandleRed)
+                    }
+
+                    Text(marker.author.username)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(marker.author.isBlocked ? AppColors.greyText : AppColors.whiteText)
+
+                    if marker.author.isFriend {
+                        Image(systemName: "person.crop.circle")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(marker.author.isBlocked ? AppColors.greyText : AppColors.friendAccent)
+                            .padding(.leading, 2)
+                    }
+                }
+
+                UnifiedRoleBadge(
+                    member: marker.author,
+                    showReputation: true,
+                    fontSize: .caption,
+                    iconSize: .caption2
+                )
+            }
+
+            Spacer()
+
+            Text(marker.createdAtFormatted)
+                .font(.caption2)
+                .foregroundColor(AppColors.greyText)
+        }
+        .padding(.vertical, 2)
+    }
 }
 
 // MARK: - Marker Detail Footer (Using ChartMarkerUI)
@@ -948,25 +1040,25 @@ struct MarkerDetailFooterView: View {
                 HStack(spacing: 6) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(isLiked ? .white : AppColors.whiteText.opacity(0.9))
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.whiteText.opacity(0.9))
                         .scaleEffect(likeScale)
                     
                     Text("\(likeCount)")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(isLiked ? .white : AppColors.whiteText.opacity(0.9))
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.whiteText.opacity(0.9))
                 }
                 .frame(minWidth: 80)
                 .frame(height: 44)
                 .padding(.horizontal, 16)
                 .background(
                     Capsule()
-                        .fill(isLiked ? Color.red : AppColors.gradientBackgroundDark.opacity(0.3))
+                        .fill(isLiked ? AppColors.markerHeartBackground : AppColors.gradientBackgroundDark.opacity(0.3))
                 )
                 .overlay(
                     Capsule()
                         .stroke(
-                            isLiked ? Color.red.opacity(0.5) : AppColors.whiteText.opacity(0.2),
+                            isLiked ? AppColors.markerHeartBorder : AppColors.whiteText.opacity(0.2),
                             lineWidth: 1
                         )
                 )

@@ -32,20 +32,6 @@ struct GenericIndicatorPanelView: View {
     @State private var dragStartHeight: CGFloat = 0
     @State private var lastDragTranslation: CGSize = .zero
     
-    // MARK: - Static Formatters (matches RSIPanelView)
-    
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "dd MMM"
-        return f
-    }()
-    
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-    
     // MARK: - Computed Properties
     
     private var actualCandleWidth: CGFloat {
@@ -78,6 +64,14 @@ struct GenericIndicatorPanelView: View {
         case .volume: return indicatorManager.activeIndicators.volume?.color.color ?? .blue
         default: return .white
         }
+    }
+
+    private var cciConfig: CCIConfig? {
+        indicatorManager.activeIndicators.cci
+    }
+
+    private var volumeConfig: VolumeConfig? {
+        indicatorManager.activeIndicators.volume
     }
     
     // MARK: - Body
@@ -191,7 +185,7 @@ struct GenericIndicatorPanelView: View {
             }
             
             // Crosshair line overlay
-            if gestureState.crosshairActive {
+            if gestureState.crosshairActive || gestureState.markerPlacementGuide.isActive {
                 crosshairLine
             }
             
@@ -212,12 +206,20 @@ struct GenericIndicatorPanelView: View {
     private var crosshairLine: some View {
         GeometryReader { geometry in
             Path { path in
-                path.move(to: CGPoint(x: gestureState.crosshairX, y: 0))
-                path.addLine(to: CGPoint(x: gestureState.crosshairX, y: geometry.size.height))
+                path.move(to: CGPoint(x: activeGuideX, y: 0))
+                path.addLine(to: CGPoint(x: activeGuideX, y: geometry.size.height))
             }
-            .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
+            .stroke(activeGuideColor, style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
         }
         .allowsHitTesting(false)
+    }
+
+    private var activeGuideX: CGFloat {
+        gestureState.crosshairActive ? gestureState.crosshairX : gestureState.markerPlacementGuide.x
+    }
+
+    private var activeGuideColor: Color {
+        gestureState.crosshairActive ? Color.white.opacity(0.4) : Color.blue.opacity(0.6)
     }
     
     // MARK: - Y-Axis Labels Overlay
@@ -274,18 +276,50 @@ struct GenericIndicatorPanelView: View {
     
     private var panelHeaderOverlay: some View {
         VStack {
-            HStack {
-                Text(panelTitle)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding(6)
-                    .background(Color.black.opacity(0.6))
-                    .cornerRadius(4)
-                Spacer()
-            }
-            .padding(.leading, 8)
-            .padding(.top, 4)
+            let headerState = panelHeaderState
+            IndicatorPanelHeaderRow(
+                title: panelTitle,
+                valueText: headerState.valueText,
+                valueColor: headerState.valueColor,
+                badgeText: headerState.badgeText,
+                badgeColor: headerState.badgeColor
+            )
             Spacer()
+        }
+    }
+
+    private var panelHeaderState: (valueText: String?, valueColor: Color, badgeText: String?, badgeColor: Color?) {
+        switch panelType {
+        case .cci:
+            guard let latest = indicatorManager.latestCCI else {
+                return (nil, .white.opacity(0.9), nil, nil)
+            }
+            let condition = cciCondition(for: latest.value)
+            return (
+                formatValue(latest.value),
+                condition.label.isEmpty ? .white.opacity(0.9) : condition.color,
+                condition.label.isEmpty ? nil : condition.label,
+                condition.label.isEmpty ? nil : condition.color
+            )
+        case .volume:
+            guard let latest = indicatorManager.volumeData.last else {
+                return (nil, .white.opacity(0.9), nil, nil)
+            }
+            let condition = latest.condition
+            let badgeColor = condition == .bullish
+                ? (volumeConfig?.bullishColor.color ?? .green)
+                : (volumeConfig?.bearishColor.color ?? .red)
+            return (
+                formatValue(latest.volume),
+                badgeColor,
+                condition.label,
+                badgeColor
+            )
+        default:
+            guard let currentValue = getCurrentValue() else {
+                return (nil, .white.opacity(0.9), nil, nil)
+            }
+            return (formatValue(currentValue), lineColor, nil, nil)
         }
     }
     
@@ -296,6 +330,7 @@ struct GenericIndicatorPanelView: View {
         let _ = gestureState.candleWidthScale
         let _ = gestureState.crosshairActive
         let _ = gestureState.crosshairX
+        let _ = gestureState.markerPlacementGuide.isActive
         
         return ZStack {
             Canvas { context, size in
@@ -305,14 +340,16 @@ struct GenericIndicatorPanelView: View {
             .background(Color.black)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
-                crosshairTimeLabelOverlay(timestamp: timestamp)
+                crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
+            } else if gestureState.markerPlacementGuide.isActive, let timestamp = gestureState.markerPlacementGuide.timestamp {
+                crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.markerPlacementGuide.x)
             }
         }
         .frame(height: 22)
     }
     
     @ViewBuilder
-    private func crosshairTimeLabelOverlay(timestamp: Date) -> some View {
+    private func crosshairTimeLabelOverlay(timestamp: Date, xPosition: CGFloat) -> some View {
         VStack(spacing: 1) {
             Image(systemName: "arrowtriangle.up.fill")
                 .font(.system(size: 5))
@@ -328,114 +365,30 @@ struct GenericIndicatorPanelView: View {
                         .fill(Color.cyan.opacity(0.9))
                 )
         }
-        .position(x: gestureState.crosshairX, y: 11)
+        .position(x: xPosition, y: 11)
     }
     
     private func formatCrosshairTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        switch timeframe {
-        case .d1, .w1, .mn:
-            formatter.dateFormat = "dd MMM yyyy"
-        default:
-            formatter.dateFormat = "dd MMM HH:mm"
-        }
-        return formatter.string(from: date)
+        MarkerPlacementLabelFormatter.format(date, timeframe: timeframe)
     }
     
     private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {
-        guard chartData.candles.count >= 2 else { return }
-        
-        let firstCandle = chartData.candles.first!
-        let lastCandle = chartData.candles.last!
-        let timePerCandle = chartData.candles[1].timestamp.timeIntervalSince(chartData.candles[0].timestamp)
-        guard timePerCandle > 0 else { return }
-        
-        let niceTimeStep = getNiceTimeStep(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
-        
-        let calendar = Calendar.current
-        let startTime = firstCandle.timestamp.timeIntervalSince1970
-        let alignedStart = floor(startTime / niceTimeStep) * niceTimeStep
-        
-        var currentTime = alignedStart
-        let endTime = lastCandle.timestamp.timeIntervalSince1970 + timePerCandle * 10
-        
-        var lastDrawnX: CGFloat = -200
-        let minSpacing: CGFloat = 30
-        
-        while currentTime <= endTime {
-            let candleIndex = (currentTime - startTime) / timePerCandle
-            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
-            
-            if x >= -50 && x <= size.width + 50 && (x - lastDrawnX) >= minSpacing {
-                let date = Date(timeIntervalSince1970: currentTime)
-                let components = calendar.dateComponents([.hour, .minute], from: date)
-                let hour = components.hour ?? 0
-                let minute = components.minute ?? 0
-                let isMidnight = hour == 0 && minute == 0
-                
-                if isMidnight {
-                    let text = Self.dateFormatter.string(from: date)
-                    context.draw(
-                        Text(text)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white),
-                        at: CGPoint(x: x, y: 10)
-                    )
-                } else {
-                    let text = Self.timeFormatter.string(from: date)
-                    context.draw(
-                        Text(text)
-                            .font(.system(size: 9))
-                            .foregroundColor(.gray),
-                        at: CGPoint(x: x, y: 10)
-                    )
-                }
-                lastDrawnX = x
-            }
-            
-            currentTime += niceTimeStep
-        }
-    }
-    
-    private func getNiceTimeStep(timeframe: RLChartTimeframe, zoomScale: CGFloat) -> Double {
-        let screenWidth: CGFloat = UIScreen.main.bounds.width
-        let visibleCandles = screenWidth / totalCandleWidth
-        
-        let secondsPerCandle: Double
-        switch timeframe {
-        case .m1: secondsPerCandle = 60
-        case .m5: secondsPerCandle = 300
-        case .m15: secondsPerCandle = 900
-        case .m30: secondsPerCandle = 1800
-        case .h1: secondsPerCandle = 3600
-        case .h4: secondsPerCandle = 14400
-        case .d1: secondsPerCandle = 86400
-        case .w1: secondsPerCandle = 604800
-        case .mn: secondsPerCandle = 2592000
-        }
-        
-        let visibleTimeSpan = Double(visibleCandles) * secondsPerCandle
-        let targetLabels: Double = 5.0
-        let roughStep = visibleTimeSpan / targetLabels
-        
-        return roundToNiceTimeInterval(roughStep)
-    }
-    
-    private func roundToNiceTimeInterval(_ roughStep: Double) -> Double {
-        let niceIntervals: [Double] = [
-            60, 120, 300, 600, 900, 1800,
-            3600, 7200, 14400, 21600, 28800, 43200,
-            86400, 172800, 259200, 432000,
-            604800, 1209600, 2592000, 5184000
-        ]
-        
-        for interval in niceIntervals {
-            if interval >= roughStep * 0.7 {
-                return interval
-            }
-        }
-        
-        return niceIntervals.last!
+        ChartXAxisLabelEngine.drawLabels(
+            context: context,
+            size: size,
+            input: .init(
+                candles: chartData.candles,
+                timeframe: timeframe,
+                totalOffset: totalOffset,
+                totalCandleWidth: totalCandleWidth,
+                actualCandleWidth: actualCandleWidth,
+                width: size.width,
+                timeZone: .current,
+                locale: Locale(identifier: "en_US_POSIX"),
+                minSpacing: 42
+            ),
+            style: .indicatorPanel
+        )
     }
     
     // MARK: - Drawing
@@ -710,6 +663,14 @@ struct GenericIndicatorPanelView: View {
         default:
             return nil
         }
+    }
+
+    private func cciCondition(for value: Double) -> CCICondition {
+        let overbought = cciConfig?.overboughtLevel ?? 100
+        let oversold = cciConfig?.oversoldLevel ?? -100
+        if value >= overbought { return .overbought }
+        if value <= oversold { return .oversold }
+        return .neutral
     }
     
     private func formatValue(_ value: Double) -> String {

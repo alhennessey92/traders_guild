@@ -563,10 +563,10 @@ struct ProfileMarkerCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
                                 .font(.caption2)
-                                .foregroundColor(marker.isLikedByCurrentUser ? .red : AppColors.greyText)
+                                .foregroundColor(marker.isLikedByCurrentUser ? AppColors.markerHeartTint : AppColors.markerHeartMuted)
                             Text("\(marker.likeCount)")
                                 .font(.caption2)
-                                .foregroundColor(AppColors.greyText)
+                                .foregroundColor(marker.isLikedByCurrentUser ? AppColors.markerHeartTint : AppColors.greyText)
                         }
                         
                         HStack(spacing: 4) {

@@ -27,5 +27,12 @@ enum AppColors {
     static let sheetBackgroundDark = Color("TGSheetBackgroundDark")
     
     static let friendAccent = Color("TGFriend")
+
+    // Shared marker-like token colors (chart badges + marker hearts across surfaces)
+    static let markerHeartTint = Color(red: 0.88, green: 0.24, blue: 0.28)
+    static let markerHeartMuted = markerHeartTint.opacity(0.55)
+    static let markerHeartBadge = markerHeartTint.opacity(0.92)
+    static let markerHeartBackground = markerHeartTint.opacity(0.22)
+    static let markerHeartBorder = markerHeartTint.opacity(0.42)
     
 }

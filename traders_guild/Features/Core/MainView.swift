@@ -354,7 +354,10 @@ struct MainView: View {
                 StaticBackgroundView()
                 
                 VStack(spacing: 0) {
-                    chartView(controlViewModel: chartControlVM)
+                    if let user = rlAppState.currentUser,
+                       let guild = rlAppState.currentGuild {
+                        chartView(controlViewModel: chartControlVM, user: user, guild: guild)
+                    }
                 }
                 .opacity(fadeIn ? 1 : 0)
                 .animation(.easeIn(duration: 1.5), value: fadeIn)
@@ -506,8 +509,38 @@ struct MainView: View {
     }
     
     // UPDATED: Pass total indicator panel height for proper bottom controls positioning
-    private func chartView(controlViewModel: ChartControlViewModel) -> some View {
-        TradingChartView(
+    private func chartView(controlViewModel: ChartControlViewModel, user: RLUserDTO, guild: RLGuildDTO) -> some View {
+        let currentMember: RLGuildMemberDTO
+        if let membership = rlAppState.currentMembership {
+            currentMember = RLGuildMemberDTO.fromCurrentUser(user: user, membership: membership)
+        } else {
+            currentMember = RLGuildMemberDTO(
+                membershipId: UUID(),
+                role: "member",
+                reputation: 0,
+                contributionScore: 0,
+                dateJoined: Date(),
+                accuracyRate: nil,
+                mutedUntil: nil,
+                suspendedUntil: nil,
+                userId: user.id,
+                username: user.username,
+                displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
+                isOnline: user.isOnline,
+                globalReputation: user.globalReputation,
+                isFriend: false,
+                friendshipStatus: nil,
+                isBlocked: false,
+                isBlockedBy: false
+            )
+        }
+
+        return TradingChartView(
+            userId: user.id,
+            username: user.username,
+            guildId: guild.id,
+            currentUserMember: currentMember,
             controlViewModel: controlViewModel,
             chartViewModel: chartViewModel,
             gestureState: chartGestureState,
@@ -1448,6 +1481,7 @@ struct ChartBottomSheet: View {
                     await sendChartComposedMessage(payload)
                 }
             },
+            allowsMarkerLinkAttachment: true,
             selectedDetent: $selectedDetent,
             leadingAccessory: AnyView(
                 Button(action: {
@@ -1479,8 +1513,10 @@ struct ChartBottomSheet: View {
             return
         }
 
+        guard payload.hasBodyContent else { return }
+
         do {
-            try await chartChatManager.sendMessage(content: payload.text)
+            try await chartChatManager.sendMessage(content: payload.encodedContent())
             HapticFeedback.light.trigger()
         } catch {
             rlAppState.showError(error, title: "Failed to Send Message", style: .toast)
@@ -1510,7 +1546,9 @@ struct ChartBottomSheet: View {
                 )
                 let content: String
                 if isFirstMessage {
-                    content = payload.text.isEmpty ? attachment.filename : payload.text
+                    content = payload.encodedContent(
+                        fallback: payload.text.isEmpty ? attachment.filename : payload.text
+                    )
                 } else {
                     content = attachment.filename
                 }

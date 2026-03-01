@@ -26,6 +26,7 @@ struct ImprovedChartSheetChatView: View {
     @State private var messageToEdit: RLChartChatMessageDTO? = nil
     @State private var showReportReasonSheet = false
     @State private var messageToReport: RLChartChatMessageDTO? = nil
+    @State private var selectedAuthor: RLGuildMemberDTO? = nil
     
     var body: some View {
         ZStack {
@@ -103,6 +104,10 @@ struct ImprovedChartSheetChatView: View {
                 )
             }
         }
+        .sheet(item: $selectedAuthor) { member in
+            GuildUserDetailViewRL(member: member)
+                .environmentObject(rlAppState)
+        }
     }
     
     // MARK: - Chat Header
@@ -159,6 +164,9 @@ struct ImprovedChartSheetChatView: View {
                         ChartMessageRow(
                             message: message,
                             chartChatManager: chartChatManager,
+                            onAuthorTap: { member in
+                                selectedAuthor = member
+                            },
                             onDelete: {
                                 Task { await deleteMessage(message) }
                             },
@@ -242,6 +250,7 @@ struct ImprovedChartSheetChatView: View {
 struct ChartMessageRow: View {
     let message: RLChartChatMessageDTO
     @ObservedObject var chartChatManager: ChartChatManager
+    let onAuthorTap: (RLGuildMemberDTO) -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
     let onReport: () -> Void
@@ -265,9 +274,8 @@ struct ChartMessageRow: View {
         RLChatMessageBubble(
             message: message,
             context: .chartChat,
-            onAvatarTap: {
-                // Could navigate to user profile if needed
-            },
+            onAvatarTap: { onAuthorTap(message.author) },
+            onAuthorTap: { onAuthorTap(message.author) },
             onEdit: canEditMessage ? onEdit : nil,
             onDelete: canDeleteMessage ? onDelete : nil,
             onReport: !message.isCurrentUserMessage ? onReport : nil,
@@ -282,7 +290,6 @@ struct ChartMessageRow: View {
         )
     }
 }
-
 
 
 

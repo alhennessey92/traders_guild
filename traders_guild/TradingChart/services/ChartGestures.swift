@@ -11,6 +11,20 @@
 import SwiftUI
 import Combine
 
+enum MarkerPlacementGuideSource: String, Equatable {
+    case placement
+    case selected
+}
+
+/// Shared placement guide state so chart and indicator panels can render a synchronized marker guide.
+struct MarkerPlacementGuideState: Equatable {
+    var isActive: Bool = false
+    var x: CGFloat = 0
+    var timestamp: Date?
+    var markerType: RLMarkerType?
+    var source: MarkerPlacementGuideSource = .placement
+}
+
 /// Manages the state of all gestures for the trading chart
 /// IMPORTANT: This should be instantiated as @StateObject in TradingChartView
 /// for optimal performance. Do NOT route through ChartViewModel's @Published properties.
@@ -39,6 +53,9 @@ class ChartGestureState: ObservableObject {
     
     /// Crosshair timestamp for time label
     @Published var crosshairTimestamp: Date?
+
+    /// Marker placement guide state shared with indicator panels.
+    @Published var markerPlacementGuide = MarkerPlacementGuideState()
     
     // MARK: - Momentum State
     
@@ -284,6 +301,7 @@ class ChartGestureState: ObservableObject {
         priceScale = 1.0
         panOffset = .zero
         verticalPanOffset = 0
+        markerPlacementGuide = MarkerPlacementGuideState()
     }
     
     // MARK: - Navigation
@@ -379,8 +397,6 @@ extension View {
         )
     }
 }
-
-
 
 
 

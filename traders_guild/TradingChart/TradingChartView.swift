@@ -136,6 +136,12 @@ struct TradingChartView: View {
     /// Total height of all active indicator panels (for bottom controls positioning)
     /// Passed from MainView to ensure controls float above panels
     var indicatorPanelBottomPadding: CGFloat = 0
+
+    /// Current user/guild context for marker ownership and filtering.
+    private let currentUserId: UUID
+    private let currentGuildId: UUID
+    private let currentUserMember: RLGuildMemberDTO
+    private let currentUsername: String
     
     /// Current drag translation for smooth real-time panning feedback
     /// Using @State instead of @GestureState to avoid spring-back animation
@@ -243,6 +249,10 @@ struct TradingChartView: View {
     
     /// Whether to show duplicate marker type alert
     @State private var showDuplicateMarkerAlert = false
+
+    /// Marker visibility type-filter sheet state.
+    @State private var showMarkerTypeFilterSheet = false
+    @State private var isMarkerVisibilityPanelExpanded = false
     
 
     
@@ -389,20 +399,17 @@ struct TradingChartView: View {
     ///   - rsiPanelHeight: Binding to RSI panel height (for control box positioning)
     ///   - indicatorPanelBottomPadding: Total height of all active indicator panels
     init(
-        userId: String = "user123",
+        userId: UUID = UUID(),
         username: String = "TestUser",
-        guildId: String = "guild1",
+        guildId: UUID = UUID(),
+        currentUserMember: RLGuildMemberDTO? = nil,
         controlViewModel: ChartControlViewModel,
         chartViewModel: ChartViewModel,
         gestureState: ChartGestureState,
         rsiPanelHeight: Binding<CGFloat> = .constant(120),
         indicatorPanelBottomPadding: CGFloat = 0
     ) {
-        // MarkerManager will be properly configured when chart data loads
-        // For now, use temporary UUIDs - real data will be set via loadMarkersFromAPI
-        let tempUserId = UUID()
-        let tempGuildId = UUID()
-        let tempMember = RLGuildMemberDTO(
+        let resolvedMember = currentUserMember ?? RLGuildMemberDTO(
             membershipId: UUID(),
             role: "member",
             reputation: 0,
@@ -411,7 +418,7 @@ struct TradingChartView: View {
             accuracyRate: nil,
             mutedUntil: nil,
             suspendedUntil: nil,
-            userId: tempUserId,
+            userId: userId,
             username: username,
             displayName: username,
             avatarUrl: nil,
@@ -422,10 +429,15 @@ struct TradingChartView: View {
             isBlocked: false,
             isBlockedBy: false
         )
+
+        self.currentUserId = userId
+        self.currentGuildId = guildId
+        self.currentUserMember = resolvedMember
+        self.currentUsername = username
         _markerManager = StateObject(wrappedValue: MarkerManager(
-            userId: tempUserId,
-            guildId: tempGuildId,
-            currentUserMember: tempMember
+            userId: userId,
+            guildId: guildId,
+            currentUserMember: resolvedMember
         ))
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
@@ -573,7 +585,7 @@ struct TradingChartView: View {
                 candleIndex: info.candleIndex,
                 timestamp: info.timestamp,
                 price: info.price,
-                username: "TestUser",
+                username: currentUsername,
                 chartData: chartData,
                 candles: chartData.candles,
                 markerType: info.markerType,
@@ -605,12 +617,21 @@ struct TradingChartView: View {
             .presentationCornerRadius(33)
             .presentationBackgroundInteraction(.enabled(upThrough: .large))
         }
+        .sheet(isPresented: $showMarkerTypeFilterSheet) {
+            markerTypeFilterSheet
+        }
         .onChange(of: markerManager.selectedMarker) { _, new in
             if new != nil {
                 markerDetailDetent = .fraction(0.35)
             }
         }
         .onAppear(perform: handleOnAppear)
+        .onChange(of: currentGuildId) { _, _ in
+            syncMarkerContext()
+        }
+        .onChange(of: currentUserId) { _, _ in
+            syncMarkerContext()
+        }
         .onChange(of: controlViewModel.isMarkerPlacementMode) { oldValue, newValue in
             handleMarkerPlacementModeChange(oldValue: oldValue, newValue: newValue)
         }
@@ -638,88 +659,113 @@ struct TradingChartView: View {
     @ViewBuilder
     private func chartContent(geometry: GeometryProxy) -> some View {
         let coordinateSystem = createCoordinateSystem(geometry: geometry)
-        
+
         ZStack {
-            Color.black.ignoresSafeArea().opacity(0.2)
-            
-            mainChartCanvas(geometry: geometry)
-            
-            if shouldShowMarkerPlacementOverlay {
-                markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-            }
+            ZStack {
+                Color.black.ignoresSafeArea().opacity(0.2)
 
-            yAxisOverlay(geometry: geometry)
+                mainChartCanvas(geometry: geometry)
 
-            // Interactive placement line for trade idea markers (Entry/Exit/TP/SL)
-            // Placed AFTER yAxisOverlay so price labels render ON TOP of Y-axis background
-            if controlViewModel.isMarkerPlacementMode,
-               let markerType = controlViewModel.currentMarkerType,
-               markerType != .predictionTarget,
-               [RLMarkerType.entry, .exit, .takeProfit, .stopLoss, .support, .resistance].contains(markerType),
-               effectiveCandleIndex >= 0,
-               effectiveCandleIndex < chartData.candles.count {
-                let candle = chartData.candles[effectiveCandleIndex]
-                let defaultPrice = markerType.lineSource.priceFromCandle(candle)
-                PlacementLineDragOverlay(
-                    markerType: markerType,
-                    defaultPrice: defaultPrice,
-                    linePrice: $placementLinePrice,
-                    isDragging: $isDraggingPlacementLine,
-                    coordinateSystem: coordinateSystem,
-                    chartWidth: geometry.size.width,
-                    chartHeight: geometry.size.height,
-                    chartData: chartData
+                if shouldShowMarkerPlacementOverlay {
+                    markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                }
+
+                markerGuideOverlay(geometry: geometry)
+                yAxisOverlay(geometry: geometry)
+
+                // Interactive placement line for trade idea markers (Entry/Exit/TP/SL)
+                // Placed AFTER yAxisOverlay so price labels render ON TOP of Y-axis background
+                if controlViewModel.isMarkerPlacementMode,
+                   let markerType = controlViewModel.currentMarkerType,
+                   markerType != .predictionTarget,
+                   [RLMarkerType.entry, .exit, .takeProfit, .stopLoss, .support, .resistance].contains(markerType),
+                   effectiveCandleIndex >= 0,
+                   effectiveCandleIndex < chartData.candles.count {
+                    let candle = chartData.candles[effectiveCandleIndex]
+                    let defaultPrice = markerType.lineSource.priceFromCandle(candle)
+                    PlacementLineDragOverlay(
+                        markerType: markerType,
+                        defaultPrice: defaultPrice,
+                        linePrice: $placementLinePrice,
+                        isDragging: $isDraggingPlacementLine,
+                        coordinateSystem: coordinateSystem,
+                        chartWidth: geometry.size.width,
+                        chartHeight: geometry.size.height,
+                        chartData: chartData
+                    )
+                }
+
+                // Prediction 3-line overlay (Entry + TP + SL)
+                // Placed AFTER yAxisOverlay so price labels render ON TOP of Y-axis background
+                if controlViewModel.isMarkerPlacementMode,
+                   controlViewModel.currentMarkerType == .predictionTarget,
+                   predictionPlacement != nil {
+                    PredictionPlacementOverlay(
+                        placement: $predictionPlacement,
+                        draggingLine: $draggingPredictionLine,
+                        coordinateSystem: coordinateSystem,
+                        chartWidth: geometry.size.width,
+                        chartHeight: geometry.size.height,
+                        chartData: chartData
+                    )
+                }
+
+                priceIndicatorView(geometry: geometry)
+                xAxisOverlay(geometry: geometry)
+                chartInfoBox(geometry: geometry)
+                markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
+
+                CrosshairView(
+                    crosshairManager: crosshairManager,
+                    chartSize: geometry.size,
+                    chartData: chartData,
+                    rsiPanelActive: chartViewModel.indicatorManager.shouldShowAnyPanel,
+                    rsiPanelHeight: rsiPanelHeight,
+                    indicatorManager: chartViewModel.indicatorManager,
+                    timeframe: chartViewModel.currentTimeframe
                 )
+
+                if shouldShowInstructionBanner {
+                    instructionBanner(coordinateSystem: coordinateSystem)
+                }
+            }
+            // Gestures are attached only to the interactive chart layer.
+            .gesture(crosshairDismissTapGesture())
+            .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
+            .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
+            .simultaneousGesture(dragGesture(in: geometry.size, coordinateSystem: coordinateSystem))
+            .simultaneousGesture(pinchGesture(in: geometry.size))
+            .overlay(yAxisGestureOverlay)
+            .overlay(loadingOverlayIfNeeded)
+            .overlay(duplicateMarkerOverlayIfNeeded)
+            .onAppear {
+                updateChartSize(geometry.size)
+                syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+            }
+            .onChange(of: markerManager.selectedMarker?.id) { _, _ in
+                syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+            }
+            .onChange(of: markerManager.selectedMarker?.candleIndex) { _, _ in
+                syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+            }
+            .onChange(of: gestureState.panOffset.width) { _, _ in
+                syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+            }
+            .onChange(of: gestureState.candleWidthScale) { _, _ in
+                syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+            }
+            .onChange(of: chartData.candles.count) { _, _ in
+                syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+            }
+            .onChange(of: controlViewModel.isMarkerPlacementMode) { _, _ in
+                syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
             }
 
-            // Prediction 3-line overlay (Entry + TP + SL)
-            // Placed AFTER yAxisOverlay so price labels render ON TOP of Y-axis background
-            if controlViewModel.isMarkerPlacementMode,
-               controlViewModel.currentMarkerType == .predictionTarget,
-               predictionPlacement != nil {
-                PredictionPlacementOverlay(
-                    placement: $predictionPlacement,
-                    draggingLine: $draggingPredictionLine,
-                    coordinateSystem: coordinateSystem,
-                    chartWidth: geometry.size.width,
-                    chartHeight: geometry.size.height,
-                    chartData: chartData
-                )
-            }
-            priceIndicatorView(geometry: geometry)
-            xAxisOverlay(geometry: geometry)
-            chartInfoBox(geometry: geometry)
             chartControlsBox(geometry: geometry)
-            markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-            draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-            draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-            targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
-            
-            CrosshairView(
-                crosshairManager: crosshairManager,
-                chartSize: geometry.size,
-                chartData: chartData,
-                rsiPanelActive: chartViewModel.indicatorManager.shouldShowRSIPanel,
-                rsiPanelHeight: rsiPanelHeight,
-                indicatorManager: chartViewModel.indicatorManager,
-                timeframe: chartViewModel.currentTimeframe
-            )
-            
-            if shouldShowInstructionBanner {
-                instructionBanner(coordinateSystem: coordinateSystem)
-            }
-        }
-        // Gestures on the ZStack directly
-        .gesture(crosshairDismissTapGesture())
-        .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
-        .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
-        .simultaneousGesture(dragGesture(in: geometry.size, coordinateSystem: coordinateSystem))
-        .simultaneousGesture(pinchGesture(in: geometry.size))
-        .overlay(yAxisGestureOverlay)
-        .overlay(loadingOverlayIfNeeded)
-        .overlay(duplicateMarkerOverlayIfNeeded)
-        .onAppear {
-            updateChartSize(geometry.size)
+                .zIndex(60)
         }
     }
     
@@ -1192,31 +1238,43 @@ struct TradingChartView: View {
     private func markerPlacementOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         ZStack {
             if effectiveCandleIndex >= 0 && effectiveCandleIndex < chartData.candles.count {
-                verticalGuideLine(geometry: geometry, coordinateSystem: coordinateSystem)
                 previewMarkerView(geometry: geometry, coordinateSystem: coordinateSystem)
             }
         }
+        .onAppear {
+            updatePlacementGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+        }
+        .onChange(of: effectiveCandleIndex) { _, _ in
+            updatePlacementGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+        }
+        .onChange(of: controlViewModel.currentMarkerType) { _, _ in
+            updatePlacementGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+        }
+        .onChange(of: gestureState.panOffset.width) { _, _ in
+            updatePlacementGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+        }
+        .onChange(of: gestureState.candleWidthScale) { _, _ in
+            updatePlacementGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+        }
+        .onDisappear {
+            if gestureState.markerPlacementGuide.source == .placement {
+                gestureState.markerPlacementGuide = MarkerPlacementGuideState()
+            }
+        }
     }
-    
+
     @ViewBuilder
-    private func verticalGuideLine(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
-        let candle = chartData.candles[effectiveCandleIndex]
-        let x = coordinateSystem.xCenterPosition(forCandleIndex: effectiveCandleIndex)
-        
-        if x >= -50 && x <= geometry.size.width + 50 {
+    private func markerGuideOverlay(geometry: GeometryProxy) -> some View {
+        if !crosshairManager.isActive,
+           gestureState.markerPlacementGuide.isActive,
+           let _ = gestureState.markerPlacementGuide.timestamp {
             Path { path in
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x, y: geometry.size.height))
+                path.move(to: CGPoint(x: gestureState.markerPlacementGuide.x, y: 0))
+                path.addLine(to: CGPoint(x: gestureState.markerPlacementGuide.x, y: geometry.size.height))
             }
             .stroke(style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
             .foregroundColor(.blue.opacity(0.6))
             .allowsHitTesting(false)
-            
-            MarkerXAxisTimeIndicator(
-                timestamp: candle.timestamp,
-                xPosition: x,
-                chartHeight: geometry.size.height
-            )
         }
     }
     
@@ -1241,7 +1299,7 @@ struct TradingChartView: View {
         let markerY = markerDragPosition?.y ?? snapPosition.y
         
         if markerX >= -50 && markerX <= geometry.size.width + 50 {
-            previewMarkerContent(candle: candle, x: markerX, y: markerY, coordinateSystem: coordinateSystem)
+            previewMarkerContent(x: markerX, y: markerY, coordinateSystem: coordinateSystem)
         }
     }
     
@@ -1251,7 +1309,7 @@ struct TradingChartView: View {
     }
 
     @ViewBuilder
-    private func previewMarkerContent(candle: RLCandleDTO, x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
+    private func previewMarkerContent(x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
         ZStack {
             Circle()
                 .fill(Color.clear)
@@ -1282,7 +1340,7 @@ struct TradingChartView: View {
                     }
                 )
             
-            previewMarkerInfoBox(candle: candle)
+            previewMarkerInfoBox
         }
         .position(x: x, y: y)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isMarkerBeingDragged)
@@ -1290,21 +1348,65 @@ struct TradingChartView: View {
     }
     
     @ViewBuilder
-    private func previewMarkerInfoBox(candle: RLCandleDTO) -> some View {
-        VStack(spacing: 2) {
-            Text(candle.timestamp.chartTimeLabel)
-                .font(.caption2)
-                .foregroundColor(.white)
-            Text(chartData.formatPrice(candle.close))
-                .font(.caption)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-        }
+    private var previewMarkerInfoBox: some View {
+        Text((effectiveMarkerType ?? .note).rawValue)
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundColor(effectivePreviewColor)
+            .lineLimit(1)
         .padding(4)
-        .background(Color.blue)
+        .background(Color.black.opacity(0.82))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(effectivePreviewColor.opacity(0.7), lineWidth: 1)
+        )
         .cornerRadius(4)
         .offset(y: 40)
         .allowsHitTesting(false)
+    }
+
+    private func updatePlacementGuideState(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) {
+        guard effectiveCandleIndex >= 0,
+              effectiveCandleIndex < chartData.candles.count,
+              let markerType = effectiveMarkerType else {
+            gestureState.markerPlacementGuide = MarkerPlacementGuideState()
+            return
+        }
+
+        let candle = chartData.candles[effectiveCandleIndex]
+        let x = coordinateSystem.xCenterPosition(forCandleIndex: effectiveCandleIndex)
+        let isVisible = x >= -50 && x <= geometry.size.width + 50
+
+        gestureState.markerPlacementGuide = MarkerPlacementGuideState(
+            isActive: isVisible,
+            x: x,
+            timestamp: candle.timestamp,
+            markerType: markerType,
+            source: .placement
+        )
+    }
+
+    private func syncSelectedMarkerGuideState(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) {
+        guard !isMarkerPlacementMode else { return }
+
+        guard let selectedMarker = markerManager.selectedMarker,
+              chartData.candles.indices.contains(selectedMarker.candleIndex) else {
+            if gestureState.markerPlacementGuide.source == .selected {
+                gestureState.markerPlacementGuide = MarkerPlacementGuideState()
+            }
+            return
+        }
+
+        let candle = chartData.candles[selectedMarker.candleIndex]
+        let x = coordinateSystem.xCenterPosition(forCandleIndex: selectedMarker.candleIndex)
+        let isVisible = x >= -50 && x <= geometry.size.width + 50
+        gestureState.markerPlacementGuide = MarkerPlacementGuideState(
+            isActive: isVisible,
+            x: x,
+            timestamp: candle.timestamp,
+            markerType: selectedMarker.type,
+            source: .selected
+        )
     }
     
     private func previewMarkerDragGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
@@ -1424,6 +1526,9 @@ struct TradingChartView: View {
             isDraggingPlacementLine = false
             predictionPlacement = nil
             draggingPredictionLine = nil
+            if gestureState.markerPlacementGuide.source == .placement {
+                gestureState.markerPlacementGuide = MarkerPlacementGuideState()
+            }
         }
     }
     
@@ -1461,6 +1566,9 @@ struct TradingChartView: View {
                 self.isDraggingPlacementLine = false
                 self.predictionPlacement = nil
                 self.draggingPredictionLine = nil
+                if self.gestureState.markerPlacementGuide.source == .placement {
+                    self.gestureState.markerPlacementGuide = MarkerPlacementGuideState()
+                }
             }
         }
     }
@@ -1468,6 +1576,7 @@ struct TradingChartView: View {
     // MARK: - Lifecycle Handlers
     
     private func handleOnAppear() {
+        syncMarkerContext()
         setupControlActions()
         chartViewModel.markerManager = markerManager
         markerManager.configureRealTime(dataManager: chartData)
@@ -1503,7 +1612,18 @@ struct TradingChartView: View {
         } else if oldValue && !newValue {
             // Exiting placement mode - reset to invalid index
             previewCandleIndex = -1
+            if gestureState.markerPlacementGuide.source == .placement {
+                gestureState.markerPlacementGuide = MarkerPlacementGuideState()
+            }
         }
+    }
+
+    private func syncMarkerContext() {
+        markerManager.updateContext(
+            userId: currentUserId,
+            guildId: currentGuildId,
+            currentUserMember: currentUserMember
+        )
     }
 
     /// Initialize the prediction placement 3-line system (Entry + TP + SL)
@@ -1983,21 +2103,33 @@ struct TradingChartView: View {
     @ViewBuilder
     func xAxisOverlay(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.11
-        
-        // Hide x-axis labels when RSI panel is active (RSI panel has its own)
-        let rsiPanelActive = chartViewModel.indicatorManager.shouldShowRSIPanel
-        
-        VStack(spacing: 0) {
-            Spacer()
-            
-            if !rsiPanelActive {
-                xAxisLabelsCanvas(geometry: geometry)
+        let hasIndicatorPanels = chartViewModel.indicatorManager.shouldShowAnyPanel
+
+        ZStack {
+            VStack(spacing: 0) {
+                Spacer()
+
+                if !hasIndicatorPanels {
+                    xAxisLabelsCanvas(geometry: geometry)
+                }
+
+                Rectangle()
+                    .fill(Color.black)
+                    .frame(height: bottomAreaHeight)
+                    .edgesIgnoringSafeArea(.bottom)
             }
-            
-            Rectangle()
-                .fill(Color.black)
-                .frame(height: bottomAreaHeight)
-                .edgesIgnoringSafeArea(.bottom)
+
+            if !hasIndicatorPanels,
+               !crosshairManager.isActive,
+               gestureState.markerPlacementGuide.isActive,
+               let timestamp = gestureState.markerPlacementGuide.timestamp {
+                MarkerXAxisTimeIndicator(
+                    timestamp: timestamp,
+                    xPosition: gestureState.markerPlacementGuide.x,
+                    chartHeight: geometry.size.height,
+                    timeframe: chartViewModel.currentTimeframe
+                )
+            }
         }
         .allowsHitTesting(false)
     }
@@ -2013,374 +2145,22 @@ struct TradingChartView: View {
     }
     
     private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {
-        let totalOffset = gestureState.panOffset.width
-        let timeframe = chartViewModel.currentTimeframe
-        
-        guard !chartData.candles.isEmpty else { return }
-        
-        // Use same visible range as candlestick drawing so labels align exactly with candles.
-        // No uniform timePerCandle — each label is drawn at a real candle's x using that candle's timestamp,
-        // so ingestion gaps don't break alignment.
-        let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth) - 1)
-        let visibleEndIndex = Swift.min(
-            chartData.candles.count,
-            Swift.max(visibleStartIndex, visibleStartIndex + Int(size.width / totalCandleWidth) + 3)
+        ChartXAxisLabelEngine.drawLabels(
+            context: context,
+            size: size,
+            input: .init(
+                candles: chartData.candles,
+                timeframe: chartViewModel.currentTimeframe,
+                totalOffset: gestureState.panOffset.width,
+                totalCandleWidth: totalCandleWidth,
+                actualCandleWidth: actualCandleWidth,
+                width: size.width,
+                timeZone: .current,
+                locale: Locale(identifier: "en_US_POSIX"),
+                minSpacing: 46
+            ),
+            style: .mainChart
         )
-        guard visibleStartIndex < visibleEndIndex else { return }
-        
-        let niceInterval = getNiceTimeInterval(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
-        var lastDrawnX: CGFloat = -200
-        let minSpacing: CGFloat = getMinLabelSpacing(for: timeframe)
-        let lastCandleIndex = chartData.candles.count - 1
-        
-        for i in visibleStartIndex..<visibleEndIndex {
-            let candle = chartData.candles[i]
-            let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
-            
-            let inVisibleArea = x >= -50 && x <= size.width + 50
-            let isFirstVisible = (i == visibleStartIndex)
-            let isLastCandle = (i == lastCandleIndex)
-            let hasSpacing = (x - lastDrawnX) >= minSpacing
-            let isNiceBoundary = isNiceTimeBoundary(candle.timestamp, interval: niceInterval, timeframe: timeframe)
-            
-            // Always label first visible and last candle (exact edges). Otherwise label at nice boundaries with spacing.
-            let shouldLabel = inVisibleArea && (isFirstVisible || isLastCandle || (isNiceBoundary && hasSpacing))
-            guard shouldLabel else { continue }
-            
-            let isMidnight = isAtMidnight(candle.timestamp, timeframe: timeframe)
-            if isMidnight {
-                let text = formatDateLabel(candle.timestamp, timeframe: timeframe)
-                context.draw(
-                    Text(text)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white),
-                    at: CGPoint(x: x, y: 10)
-                )
-            } else {
-                let text = formatTimeLabel(candle.timestamp, timeframe: timeframe)
-                context.draw(
-                    Text(text)
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray),
-                    at: CGPoint(x: x, y: 10)
-                )
-            }
-            lastDrawnX = x
-        }
-    }
-    
-    /// Get nice time step in seconds based on timeframe and zoom
-    /// UPDATED: Targets 4-6 labels on screen at all zoom levels
-    private func getNiceTimeStep(timeframe: RLChartTimeframe, zoomScale: CGFloat) -> Double {
-        // Calculate approximate visible candles based on screen width and zoom
-        let screenWidth: CGFloat = UIScreen.main.bounds.width
-        let visibleCandles = screenWidth / totalCandleWidth
-        
-        // Get seconds per candle for this timeframe
-        let secondsPerCandle: Double
-        switch timeframe {
-        case .m1: secondsPerCandle = 60
-        case .m5: secondsPerCandle = 300
-        case .m15: secondsPerCandle = 900
-        case .m30: secondsPerCandle = 1800
-        case .h1: secondsPerCandle = 3600
-        case .h4: secondsPerCandle = 14400
-        case .d1: secondsPerCandle = 86400
-        case .w1: secondsPerCandle = 604800
-        case .mn: secondsPerCandle = 2592000
-        }
-        
-        // Calculate total visible time span
-        let visibleTimeSpan = Double(visibleCandles) * secondsPerCandle
-        
-        // Target 5 labels on screen (4-6 range)
-        let targetLabels: Double = 5.0
-        let roughStep = visibleTimeSpan / targetLabels
-        
-        // Round to "nice" time intervals
-        let niceStep = roundToNiceTimeInterval(roughStep, timeframe: timeframe)
-        
-        return niceStep
-    }
-    
-    /// Round a rough time step to a "nice" interval (e.g., 5min, 15min, 1h, 4h, etc.)
-    private func roundToNiceTimeInterval(_ roughStep: Double, timeframe: RLChartTimeframe) -> Double {
-        // Define nice intervals in seconds
-        let niceIntervals: [Double] = [
-            60,        // 1 min
-            120,       // 2 min
-            300,       // 5 min
-            600,       // 10 min
-            900,       // 15 min
-            1800,      // 30 min
-            3600,      // 1 hour
-            7200,      // 2 hours
-            14400,     // 4 hours
-            21600,     // 6 hours
-            28800,     // 8 hours
-            43200,     // 12 hours
-            86400,     // 1 day
-            172800,    // 2 days
-            259200,    // 3 days
-            432000,    // 5 days
-            604800,    // 1 week
-            1209600,   // 2 weeks
-            2592000,   // 30 days
-            5184000    // 60 days
-        ]
-        
-        // Find the closest nice interval that's >= roughStep
-        for interval in niceIntervals {
-            if interval >= roughStep * 0.7 {  // Allow some flexibility
-                return interval
-            }
-        }
-        
-        return niceIntervals.last!
-    }
-    
-    private func getMinLabelSpacing(for timeframe: RLChartTimeframe) -> CGFloat {
-        // Minimal spacing - the adaptive getNiceTimeStep already handles density
-        return 30
-    }
-    
-    // MARK: - X-Axis Time Helpers
-    
-    private func getNiceTimeInterval(timeframe: RLChartTimeframe, zoomScale: CGFloat) -> Int {
-        switch timeframe {
-        case .m1:
-            if zoomScale >= 2.5 { return 1 }
-            else if zoomScale >= 1.8 { return 2 }
-            else if zoomScale >= 1.2 { return 3 }
-            else if zoomScale >= 0.8 { return 5 }
-            else if zoomScale >= 0.5 { return 10 }
-            else if zoomScale >= 0.35 { return 15 }
-            else { return 30 }
-            
-        case .m5:
-            if zoomScale >= 2.5 { return 5 }
-            else if zoomScale >= 1.8 { return 10 }
-            else if zoomScale >= 0.8 { return 15 }
-            else if zoomScale >= 0.5 { return 30 }
-            else if zoomScale >= 0.35 { return 60 }
-            else { return 120 }
-            
-        case .m15:
-            if zoomScale >= 2.0 { return 15 }
-            else if zoomScale >= 1.2 { return 30 }
-            else if zoomScale >= 0.6 { return 60 }
-            else { return 120 }
-            
-        case .m30:
-            if zoomScale >= 2.0 { return 30 }
-            else if zoomScale >= 1.2 { return 60 }
-            else if zoomScale >= 0.6 { return 120 }
-            else { return 240 }
-            
-        case .h1:
-            if zoomScale >= 2.0 { return 60 }
-            else if zoomScale >= 1.2 { return 120 }
-            else if zoomScale >= 0.6 { return 240 }
-            else { return 480 }
-            
-        case .h4:
-            if zoomScale >= 2.0 { return 240 }
-            else if zoomScale >= 1.2 { return 480 }
-            else if zoomScale >= 0.6 { return 720 }
-            else { return 1440 }
-            
-        case .d1:
-            if zoomScale >= 2.0 { return 1440 * 2 }
-            else if zoomScale >= 1.2 { return 1440 * 5 }
-            else if zoomScale >= 0.6 { return 1440 * 7 }
-            else { return 1440 * 14 }
-            
-        case .w1:
-            if zoomScale >= 1.2 { return 1440 * 7 }
-            else if zoomScale >= 0.6 { return 1440 * 14 }
-            else { return 1440 * 28 }
-            
-        case .mn:
-            if zoomScale >= 1.0 { return 1440 * 30 }
-            else { return 1440 * 90 }
-        }
-    }
-    
-    private func isNiceTimeBoundary(_ timestamp: Date, interval: Int, timeframe: RLChartTimeframe) -> Bool {
-        let calendar = Calendar.current
-        let hour = calendar.component(.hour, from: timestamp)
-        let minute = calendar.component(.minute, from: timestamp)
-        
-        switch timeframe {
-        case .m1:
-            return checkM1Boundary(interval: interval, hour: hour, minute: minute)
-        case .m5:
-            return checkM5Boundary(interval: interval, hour: hour, minute: minute)
-        case .m15:
-            return checkM15Boundary(interval: interval, hour: hour, minute: minute)
-        case .m30:
-            return checkM30Boundary(interval: interval, hour: hour, minute: minute)
-        case .h1:
-            return checkH1Boundary(interval: interval, hour: hour, minute: minute)
-        case .h4:
-            return checkH4Boundary(interval: interval, hour: hour, minute: minute)
-        case .d1:
-            return checkD1Boundary(interval: interval, timestamp: timestamp)
-        case .w1:
-            return checkW1Boundary(interval: interval, timestamp: timestamp)
-        case .mn:
-            return checkMNBoundary(interval: interval, timestamp: timestamp)
-        }
-    }
-    
-    private func checkM1Boundary(interval: Int, hour: Int, minute: Int) -> Bool {
-        if interval <= 1 { return true }
-        else if interval < 60 { return minute % interval == 0 }
-        else {
-            let intervalHours = interval / 60
-            return minute == 0 && hour % intervalHours == 0
-        }
-    }
-    
-    private func checkM5Boundary(interval: Int, hour: Int, minute: Int) -> Bool {
-        if interval <= 5 { return minute % 5 == 0 }
-        else if interval < 60 { return minute % interval == 0 }
-        else {
-            let intervalHours = interval / 60
-            return minute == 0 && hour % intervalHours == 0
-        }
-    }
-    
-    private func checkM15Boundary(interval: Int, hour: Int, minute: Int) -> Bool {
-        if interval <= 15 { return minute % 15 == 0 }
-        else if interval < 60 { return minute % interval == 0 }
-        else {
-            let intervalHours = interval / 60
-            return minute == 0 && hour % intervalHours == 0
-        }
-    }
-    
-    private func checkM30Boundary(interval: Int, hour: Int, minute: Int) -> Bool {
-        if interval <= 30 { return minute % 30 == 0 }
-        else {
-            let intervalHours = interval / 60
-            return minute == 0 && hour % intervalHours == 0
-        }
-    }
-    
-    private func checkH1Boundary(interval: Int, hour: Int, minute: Int) -> Bool {
-        let intervalHours = max(1, interval / 60)
-        return minute == 0 && hour % intervalHours == 0
-    }
-    
-    private func checkH4Boundary(interval: Int, hour: Int, minute: Int) -> Bool {
-        let validH4Hours = [0, 4, 8, 12, 16, 20]
-        guard validH4Hours.contains(hour) && minute == 0 else { return false }
-        
-        let intervalHours = max(4, interval / 60)
-        if intervalHours <= 4 { return true }
-        else if intervalHours <= 8 { return [0, 8, 16].contains(hour) }
-        else if intervalHours <= 12 { return [0, 12].contains(hour) }
-        else { return hour == 0 }
-    }
-    
-    private func checkD1Boundary(interval: Int, timestamp: Date) -> Bool {
-        let calendar = Calendar.current
-        let intervalDays = interval / 1440
-        if intervalDays <= 2 {
-            let day = calendar.component(.day, from: timestamp)
-            return intervalDays <= 1 || day % 2 == 1
-        } else if intervalDays <= 5 {
-            let weekday = calendar.component(.weekday, from: timestamp)
-            return weekday == 2 || weekday == 5
-        } else if intervalDays <= 7 {
-            let weekday = calendar.component(.weekday, from: timestamp)
-            return weekday == 2
-        } else {
-            let day = calendar.component(.day, from: timestamp)
-            return day == 1 || day == 15
-        }
-    }
-    
-    private func checkW1Boundary(interval: Int, timestamp: Date) -> Bool {
-        let calendar = Calendar.current
-        let day = calendar.component(.day, from: timestamp)
-        let intervalWeeks = interval / (1440 * 7)
-        if intervalWeeks <= 1 { return true }
-        else if intervalWeeks <= 2 { return day <= 7 || (day >= 15 && day <= 21) }
-        else { return day <= 7 }
-    }
-    
-    private func checkMNBoundary(interval: Int, timestamp: Date) -> Bool {
-        let calendar = Calendar.current
-        let month = calendar.component(.month, from: timestamp)
-        let intervalMonths = interval / (1440 * 30)
-        if intervalMonths <= 1 { return true }
-        else { return [1, 4, 7, 10].contains(month) }
-    }
-    
-    private func isAtMidnight(_ timestamp: Date, timeframe: RLChartTimeframe) -> Bool {
-        let calendar = Calendar.current
-        let hour = calendar.component(.hour, from: timestamp)
-        let minute = calendar.component(.minute, from: timestamp)
-        
-        switch timeframe {
-        case .m1:
-            return hour == 0 && minute == 0
-        case .m5:
-            return hour == 0 && minute <= 5
-        case .m15, .m30:
-            return hour == 0 && minute == 0
-        case .h1, .h4:
-            return hour == 0
-        case .d1:
-            let day = calendar.component(.day, from: timestamp)
-            return day == 1
-        case .w1:
-            let day = calendar.component(.day, from: timestamp)
-            return day <= 7
-        case .mn:
-            let month = calendar.component(.month, from: timestamp)
-            return [1, 4, 7, 10].contains(month)
-        }
-    }
-    
-    private func formatDateLabel(_ timestamp: Date, timeframe: RLChartTimeframe) -> String {
-        let formatter = DateFormatter()
-        
-        switch timeframe {
-        case .m1, .m5, .m15, .m30, .h1, .h4:
-            formatter.dateFormat = "dd/MM"
-        case .d1:
-            formatter.dateFormat = "MMM"
-        case .w1:
-            formatter.dateFormat = "MMM yy"
-        case .mn:
-            let calendar = Calendar.current
-            let month = calendar.component(.month, from: timestamp)
-            let year = calendar.component(.year, from: timestamp)
-            let quarter = (month - 1) / 3 + 1
-            return "Q\(quarter) '\(year % 100)"
-        }
-        
-        return formatter.string(from: timestamp)
-    }
-    
-    private func formatTimeLabel(_ timestamp: Date, timeframe: RLChartTimeframe) -> String {
-        let formatter = DateFormatter()
-        
-        switch timeframe {
-        case .m1, .m5, .m15, .m30, .h1, .h4:
-            formatter.dateFormat = "HH:mm"
-        case .d1:
-            formatter.dateFormat = "dd"
-        case .w1:
-            formatter.dateFormat = "dd MMM"
-        case .mn:
-            formatter.dateFormat = "MMM yy"
-        }
-        
-        return formatter.string(from: timestamp)
     }
     
     // MARK: - Y-Axis Overlay
@@ -2522,41 +2302,123 @@ struct TradingChartView: View {
     func chartControlsBox(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.11 + 40
         let yaxisOverlayWidth = yAxisWidth + 10
-        
-        // UPDATED: Use indicatorPanelBottomPadding from MainView
-        // This accounts for ALL active indicator panels (RSI, MACD, Stochastic)
-        // not just RSI panel. MainView calculates this dynamically.
         let panelPadding: CGFloat = indicatorPanelBottomPadding > 0 ? indicatorPanelBottomPadding - 30 : 0
-        
+
         VStack {
             Spacer()
-            HStack(spacing: 10) {
-                Spacer()
-                
-                // Marker visibility toggle
-                ChartBottomControlButton(
-                    title: markerManager.markersHidden ? "Show" : "Hide",
-                    icon: markerManager.markersHidden ? "eye" : "eye.slash",
-                    color: markerManager.markersHidden ? .orange : .white.opacity(0.5)
-                ) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        markerManager.markersHidden.toggle()
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 10) {
+                    ChartBottomControlButton(
+                        title: isMarkerVisibilityPanelExpanded ? "Close" : "Marker Visibility",
+                        icon: isMarkerVisibilityPanelExpanded ? "xmark.circle" : "eye",
+                        color: .white.opacity(0.8),
+                        isActive: isMarkerVisibilityPanelExpanded
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isMarkerVisibilityPanelExpanded.toggle()
+                        }
                     }
+                    .allowsHitTesting(true)
+
+                    ChartBottomControlButton(
+                        title: "Latest",
+                        icon: "arrow.right.to.line",
+                        color: .white.opacity(0.5)
+                    ) {
+                        controlViewModel.jumpToLatest()
+                    }
+                    .allowsHitTesting(true)
                 }
-                .allowsHitTesting(true)
-                
-                ChartBottomControlButton(
-                    title: "Latest",
-                    icon: "arrow.right.to.line",
-                    color: .white.opacity(0.5)
-                ) {
-                    controlViewModel.jumpToLatest()
+
+                if isMarkerVisibilityPanelExpanded {
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Picker("Visibility", selection: $markerManager.visibilityMode) {
+                            ForEach(MarkerVisibilityMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+
+                        Button {
+                            showMarkerTypeFilterSheet = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(markerTypeFilterSummary)
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundColor(AppColors.whiteText.opacity(0.9))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .allowsHitTesting(true)
             }
             .padding(.bottom, bottomAreaHeight + panelPadding)
             .padding(.trailing, yaxisOverlayWidth)
+            .animation(.easeInOut(duration: 0.2), value: isMarkerVisibilityPanelExpanded)
         }
+        .allowsHitTesting(true)
+    }
+
+    private var markerTypeFilterSummary: String {
+        let selectedCount = markerManager.visibleTypes.count
+        let total = RLMarkerType.allCases.count
+        if selectedCount == total {
+            return "Types: All"
+        }
+        return "Types: \(selectedCount)"
+    }
+
+    @ViewBuilder
+    private var markerTypeFilterSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(RLMarkerType.allCases, id: \.self) { type in
+                    Toggle(isOn: Binding(
+                        get: { markerManager.visibleTypes.contains(type) },
+                        set: { isOn in
+                            if isOn {
+                                markerManager.visibleTypes.insert(type)
+                            } else {
+                                markerManager.visibleTypes.remove(type)
+                            }
+                        }
+                    )) {
+                        HStack(spacing: 10) {
+                            Image(systemName: type.icon)
+                                .foregroundColor(type.color)
+                                .frame(width: 16)
+                            Text(type.rawValue)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Marker Types")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("All") {
+                        markerManager.visibleTypes = Set(RLMarkerType.allCases)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        showMarkerTypeFilterSheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.fraction(0.55), .large])
     }
     
     // MARK: - Chart Drawing
@@ -2628,28 +2490,24 @@ struct TradingChartView: View {
     }
     
     private func drawVerticalGridLines(path: inout Path, size: CGSize, totalOffset: CGFloat, timeframe: RLChartTimeframe) {
-        let niceInterval = getNiceTimeInterval(timeframe: timeframe, zoomScale: gestureState.candleWidthScale)
-        
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 30)
-        let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 60)
-        
-        guard visibleStartIndex < visibleEndIndex else { return }
-        
-        for i in visibleStartIndex..<visibleEndIndex {
-            guard i >= 0 && i < chartData.candles.count else { continue }
-            
-            let candle = chartData.candles[i]
-            
-            let isMidnight = isAtMidnight(candle.timestamp, timeframe: timeframe)
-            let isNiceBoundary = isNiceTimeBoundary(candle.timestamp, interval: niceInterval, timeframe: timeframe)
-            
-            if isMidnight || isNiceBoundary {
-                let x = CGFloat(i) * totalCandleWidth + totalOffset + actualCandleWidth / 2
-                
-                if x >= -100 && x <= size.width + 100 {
-                    path.move(to: CGPoint(x: x, y: 0))
-                    path.addLine(to: CGPoint(x: x, y: size.height))
-                }
+        let labels = ChartXAxisLabelEngine.makeLabels(
+            input: .init(
+                candles: chartData.candles,
+                timeframe: timeframe,
+                totalOffset: totalOffset,
+                totalCandleWidth: totalCandleWidth,
+                actualCandleWidth: actualCandleWidth,
+                width: size.width,
+                timeZone: .current,
+                locale: Locale(identifier: "en_US_POSIX"),
+                minSpacing: 46
+            )
+        )
+
+        for label in labels {
+            if label.x >= -100 && label.x <= size.width + 100 {
+                path.move(to: CGPoint(x: label.x, y: 0))
+                path.addLine(to: CGPoint(x: label.x, y: size.height))
             }
         }
     }
@@ -2845,20 +2703,22 @@ struct ChartBottomControlButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(isActive ? .white : color)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 3)
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(isActive ? .white : color)
             }
-            .frame(height: 22)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .background(
                 isActive ?
                 color :
                 Color.white.opacity(0.08)
             )
-            .cornerRadius(2)
+            .cornerRadius(6)
         }
         .buttonStyle(.plain)
     }
@@ -3785,4 +3645,3 @@ struct StaticTargetLineOverlay: View {
         .allowsHitTesting(false)
     }
 }
-

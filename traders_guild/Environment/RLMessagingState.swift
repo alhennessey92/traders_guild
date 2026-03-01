@@ -498,7 +498,12 @@ struct RLMessagingSheet: View {
                         }
                     case .dmThread:
                         ForEach(dmMessages) { message in
-                            RLDMMessageView(message: message)
+                            RLDMMessageView(
+                                message: message,
+                                onAuthorTap: {
+                                    showUserProfile = true
+                                }
+                            )
                                 .id(message.id)
                         }
                     }
@@ -845,7 +850,8 @@ struct RLChatroomFooterView: View {
             isSending: isSending,
             onSend: { payload in
                 Task { await sendComposedMessage(payload) }
-            }
+            },
+            allowsMarkerLinkAttachment: true
         )
     }
 
@@ -860,7 +866,7 @@ struct RLChatroomFooterView: View {
             return
         }
 
-        guard !payload.text.isEmpty else { return }
+        guard payload.hasBodyContent else { return }
 
         isSending = true
         defer { isSending = false }
@@ -868,7 +874,7 @@ struct RLChatroomFooterView: View {
         do {
             let message = try await appState.sendChatroomMessage(
                 chatroomId: chatroom.id,
-                content: payload.text
+                content: payload.encodedContent()
             )
             onMessageSent(message)
         } catch {
@@ -899,7 +905,9 @@ struct RLChatroomFooterView: View {
                 )
                 let content: String
                 if isFirstMessage {
-                    content = payload.text.isEmpty ? attachment.filename : payload.text
+                    content = payload.encodedContent(
+                        fallback: payload.text.isEmpty ? attachment.filename : payload.text
+                    )
                 } else {
                     content = attachment.filename
                 }
@@ -935,7 +943,8 @@ struct RLDMFooterView: View {
             isSending: isSending,
             onSend: { payload in
                 Task { await sendComposedMessage(payload) }
-            }
+            },
+            allowsMarkerLinkAttachment: true
         )
     }
 
@@ -950,13 +959,16 @@ struct RLDMFooterView: View {
             return
         }
 
-        guard !payload.text.isEmpty else { return }
+        guard payload.hasBodyContent else { return }
 
         isSending = true
         defer { isSending = false }
 
         do {
-            let message = try await appState.sendDMMessage(threadId: thread.id, content: payload.text)
+            let message = try await appState.sendDMMessage(
+                threadId: thread.id,
+                content: payload.encodedContent()
+            )
             onMessageSent(message)
         } catch {
             messageText = payload.text
@@ -987,7 +999,9 @@ struct RLDMFooterView: View {
                 )
                 let content: String
                 if isFirstMessage {
-                    content = payload.text.isEmpty ? attachment.filename : payload.text
+                    content = payload.encodedContent(
+                        fallback: payload.text.isEmpty ? attachment.filename : payload.text
+                    )
                 } else {
                     content = attachment.filename
                 }
@@ -1022,6 +1036,7 @@ struct RLChatroomMessageView: View {
             message: message,
             context: .guildChatroom,
             onAvatarTap: onAvatarTap,
+            onAuthorTap: onAvatarTap,
             onEdit: message.canEdit ? { showEditSheet = true } : nil,
             onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
             onReport: !message.isCurrentUserMessage ? { showReportReasonSheet = true } : nil,
@@ -1092,17 +1107,24 @@ struct RLChatroomMessageView: View {
 // MARK: - DM Message View (Using RLChatMessageBubble)
 struct RLDMMessageView: View {
     let message: RLDMMessageDTO
+    let onAuthorTap: (() -> Void)?
 
     @EnvironmentObject var appState: RLAppState
     @EnvironmentObject var rlMessagingManager: RLMessagingManager
     @State private var showEditSheet = false
     @State private var showReportReasonSheet = false
 
+    init(message: RLDMMessageDTO, onAuthorTap: (() -> Void)? = nil) {
+        self.message = message
+        self.onAuthorTap = onAuthorTap
+    }
+
     var body: some View {
         RLChatMessageBubble(
             message: message,
             context: .directMessage,
             isRead: message.isRead,
+            onAuthorTap: onAuthorTap,
             onEdit: message.canEdit ? { showEditSheet = true } : nil,
             onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
             onReport: !message.isCurrentUserMessage ? { showReportReasonSheet = true } : nil,

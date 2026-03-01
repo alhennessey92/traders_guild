@@ -86,7 +86,7 @@
          <EnvironmentVariable
             key = "TG_GATEWAY_BASE_URL_DEV_DEVICE"
             value = "http://YOUR_MAC_LAN_IP:30081/api/v1"
-            isEnabled = "NO">
+            isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>
    </LaunchAction>
