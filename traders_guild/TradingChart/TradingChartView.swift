@@ -2478,14 +2478,15 @@ struct TradingChartView: View {
     }
 
     private var visibleDayLabelText: String {
-        ChartXAxisLabelEngine.visibleDayLabel(
+        let effectiveWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
+        return ChartXAxisLabelEngine.visibleDayLabel(
             input: .init(
                 candles: chartData.candles,
                 timeframe: chartViewModel.currentTimeframe,
                 totalOffset: gestureState.panOffset.width,
                 totalCandleWidth: totalCandleWidth,
                 actualCandleWidth: actualCandleWidth,
-                width: 400,
+                width: effectiveWidth,
                 timeZone: axisTimeZone,
                 locale: Locale(identifier: "en_US_POSIX")
             )

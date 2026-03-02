@@ -190,6 +190,7 @@ class ChartViewModel: ObservableObject {
 
             // Sync symbol to dataManager so MarkerCreationSheet can access it
             dataManager.currentSymbol = chartData.symbol
+            dataManager.currentTimeframe = timeframe
 
             // Update candles
             dataManager.updateWithMarketData(chartData.candles)
@@ -293,6 +294,7 @@ class ChartViewModel: ObservableObject {
         guard currentTimeframe != timeframe else { return }
         
         currentTimeframe = timeframe
+        dataManager.currentTimeframe = timeframe
         handleTimeframeChange()
     }
     
@@ -439,7 +441,7 @@ class ChartViewModel: ObservableObject {
             dataManager.processRealTick(
                 price: tickData.price,
                 volume: tickData.volume ?? 0,
-                timestamp: nil
+                timestamp: tickData.timestamp
             )
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
         }
@@ -526,7 +528,7 @@ struct MarketTickPayload: Codable {
     let bid: Double?
     let ask: Double?
     let volume: Double?
-    let timestamp: String?
+    let timestamp: Date?
 }
 
 /// Payload for completed candle messages from market-ingestion-service

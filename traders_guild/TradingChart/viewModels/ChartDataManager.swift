@@ -76,10 +76,10 @@ class ChartDataManager: ObservableObject {
     /// - Parameters:
     ///   - tickPrice: The new tick price
     ///   - tickVolume: Volume for this tick (required for real data)
-    private func updateCurrentCandle(withTick tickPrice: Double, tickVolume: Double) {
-        guard !candles.isEmpty else { return }
-        
-        let lastCandle = candles[candles.count - 1]
+    private func updateCurrentCandle(at index: Int, withTick tickPrice: Double, tickVolume: Double) {
+        guard index >= 0 && index < candles.count else { return }
+
+        let lastCandle = candles[index]
         
         // Calculate new volume (use provided tick volume)
         let newVolume = (lastCandle.volume ?? 0) + tickVolume
@@ -96,7 +96,7 @@ class ChartDataManager: ObservableObject {
             volumeFormatted: formatVolume(newVolume)
         )
         
-        candles[candles.count - 1] = updatedCandle
+        candles[index] = updatedCandle
         
         // Update price range if needed
         if tickPrice > priceRange.max || tickPrice < priceRange.min {
@@ -116,9 +116,79 @@ class ChartDataManager: ObservableObject {
         // Update current price display immediately
         currentPrice = price
         basePrice = price
-        
-        // Update the current candle
-        updateCurrentCandle(withTick: price, tickVolume: volume)
+
+        guard !candles.isEmpty else { return }
+
+        let tickTime = timestamp ?? Date()
+        let bucketTimestamp = alignedCandleTimestamp(for: tickTime)
+
+        if let lastCandle = candles.last {
+            if bucketTimestamp > lastCandle.timestamp {
+                // Start a new in-progress candle bucket.
+                let newCandle = RLCandleDTO(
+                    timestamp: bucketTimestamp,
+                    timestampFormatted: nil,
+                    open: price,
+                    high: price,
+                    low: price,
+                    close: price,
+                    volume: volume,
+                    volumeFormatted: formatVolume(volume)
+                )
+                candles.append(newCandle)
+                if candles.count > maxCandles {
+                    candles.removeFirst(candles.count - maxCandles)
+                }
+                updatePriceRange()
+            } else if bucketTimestamp == lastCandle.timestamp {
+                updateCurrentCandle(at: candles.count - 1, withTick: price, tickVolume: volume)
+            } else {
+                // Ignore stale tick for an older bucket.
+                return
+            }
+        }
+    }
+
+    /// Align tick timestamps to the current timeframe bucket boundary.
+    private func alignedCandleTimestamp(for timestamp: Date) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: timestamp)
+        components.second = 0
+
+        switch currentTimeframe {
+        case .m1:
+            break
+        case .m5:
+            if let minute = components.minute { components.minute = (minute / 5) * 5 }
+        case .m15:
+            if let minute = components.minute { components.minute = (minute / 15) * 15 }
+        case .m30:
+            if let minute = components.minute { components.minute = (minute / 30) * 30 }
+        case .h1:
+            components.minute = 0
+        case .h4:
+            if let hour = components.hour { components.hour = (hour / 4) * 4 }
+            components.minute = 0
+        case .d1:
+            components.hour = 0
+            components.minute = 0
+        case .w1:
+            components.hour = 0
+            components.minute = 0
+            if let dayStart = calendar.date(from: components) {
+                let weekday = calendar.component(.weekday, from: dayStart)
+                let daysFromMonday = (weekday + 5) % 7
+                return calendar.date(byAdding: .day, value: -daysFromMonday, to: dayStart) ?? dayStart
+            }
+        case .mn:
+            components.day = 1
+            components.hour = 0
+            components.minute = 0
+        }
+
+        return calendar.date(from: components) ?? timestamp
     }
     
     /// Process a complete candle from a data feed

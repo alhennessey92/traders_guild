@@ -339,10 +339,16 @@ enum ChartXAxisLabelEngine {
     static func visibleDayLabel(input: Input) -> String {
         guard !input.candles.isEmpty, input.totalCandleWidth > 0 else { return "" }
 
-        let leftmostIndex = max(0, Int(-input.totalOffset / input.totalCandleWidth))
-        guard leftmostIndex < input.candles.count else { return "" }
+        let leftmostIndex = max(0, Int(floor(-input.totalOffset / input.totalCandleWidth)))
+        let visibleCandleCount = max(1, Int(ceil(input.width / input.totalCandleWidth)))
+        let rightmostIndex = min(
+            input.candles.count - 1,
+            max(leftmostIndex, leftmostIndex + visibleCandleCount - 1)
+        )
+        guard rightmostIndex < input.candles.count else { return "" }
 
-        let timestamp = input.candles[leftmostIndex].timestamp
+        // Use the most-recent visible candle day, not the oldest visible candle.
+        let timestamp = input.candles[rightmostIndex].timestamp
         var calendar = Calendar.current
         calendar.timeZone = input.timeZone
 

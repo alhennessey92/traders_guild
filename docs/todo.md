@@ -60,12 +60,14 @@
 
 31. For production market ingestion, will need to seed possibly 2-3 years of symbols beforehand so user when viewing monthly have initial data
 
-32. Full audit of x axis timing labels and vertical lines for grid, need to make sure they are consistent with timeframe, are of good pattern so for 1 min should be every 5 mins or 10 mins we display a time, and this needs to take into account zoom amount, it needs to adapt. Also where relevant display the current date or day so users know what day they are looking at etc... and this needs to be done to every timeframe we offer. Sometimes when panning in a specific zoom the times jump around a bit and appear quite sharply on left
+32. [FIXED] Full audit of x axis timing labels and vertical lines for grid, need to make sure they are consistent with timeframe, are of good pattern so for 1 min should be every 5 mins or 10 mins we display a time, and this needs to take into account zoom amount, it needs to adapt. Also where relevant display the current date or day so users know what day they are looking at etc... and this needs to be done to every timeframe we offer. Sometimes when panning in a specific zoom the times jump around a bit and appear quite sharply on left
 
-33. Regarding symbol data in top left of chart it should be - symbol name   timeframe   open/closed icon
+33. [FIXED] Regarding symbol data in top left of chart it should be - symbol name   timeframe   open/closed icon
                                                               Provider name
                                                               current price with variation   
 
-34. Change the bottom sheet symbol button - remove the open/closed icon and provider name, replace with symbol category like Forex or Commodity or Stock etc...
+34. [FIXED] Change the bottom sheet symbol button - remove the open/closed icon and provider name, replace with symbol category like Forex or Commodity or Stock etc...
 
 35. Have a brief look at the the black background showing behind the bottom sheet tab, it starts from the x axis and should go to bottom of screen but stops towards the bottom of the bottom sheet tab, so there is a small section at very bottom that has no black and shows chart background behind, this black should extend to very bottom
+
+36. should have day date on x axis at change from one day to next
