@@ -1303,6 +1303,72 @@ struct UnifiedIconBadge: View {
     }
 }
 
+// MARK: - UNIFIED MARKER BADGE (chart-style marker icon)
+
+/// Chart-style marker badge: midnight gradient, gradient border (opposite direction), colored icon
+/// Use anywhere markers are displayed (top markers, profiles, chats, detail sheets)
+/// borderBrightness / borderOpacity enable future glow and pulse effects
+struct UnifiedMarkerBadge: View {
+    let type: RLMarkerType
+    let displayColor: Color
+    var size: CGFloat = 32
+    var emoji: String? = nil
+    var isSelected: Bool = false
+    var borderBrightness: CGFloat = 1.0
+    var borderOpacity: CGFloat = 1.0
+
+    private var gradient: (start: Color, end: Color) {
+        type.markerBackgroundGradient(displayColor: displayColor)
+    }
+
+    private var borderGradient: (start: Color, end: Color) {
+        type.markerBorderGradient(
+            displayColor: displayColor,
+            brightness: borderBrightness,
+            opacity: borderOpacity
+        )
+    }
+
+    private var borderWidth: CGFloat {
+        isSelected ? AppColors.markerSelectedBorderWidth : AppColors.markerUnselectedBorderWidth
+    }
+
+    private var iconColor: Color { AppColors.markerIconLight }
+    private var iconSize: CGFloat { size * 0.44 }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(colors: [gradient.start, gradient.end], startPoint: .top, endPoint: .bottom))
+                .frame(width: size, height: size)
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [borderGradient.start, borderGradient.end],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    ),
+                    lineWidth: borderWidth
+                )
+                .frame(width: size, height: size)
+            if type == .emoji, let emoji = emoji {
+                Text(emoji)
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(iconColor)
+            } else if let label = type.shortLabel {
+                Text(label)
+                    .font(.system(size: iconSize * 0.9, weight: .bold))
+                    .foregroundColor(iconColor)
+            } else {
+                Image(systemName: type.icon)
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(iconColor)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 // MARK: - ================================================================================================
 // MARK: - UNIFIED IMPORTANCE BADGE
 // MARK: - ================================================================================================

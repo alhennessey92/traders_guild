@@ -423,7 +423,8 @@ struct MarkerShareSheet: View {
             symbolId: marker.symbolId,
             symbolTicker: symbolTicker,
             timeframe: marker.timeframe,
-            candleTimestamp: marker.candleTimestamp
+            candleTimestamp: marker.candleTimestamp,
+            markerType: marker.type.rawValue
         )
         let content = MarkerShareCodec.buildMessage(note: note, payload: payload)
 
@@ -897,19 +898,12 @@ struct MarkerDetailHeaderView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Marker icon + marker name on one line
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(marker.displayColor.opacity(0.2))
-                        .frame(width: 50, height: 50)
-                    
-                    Circle()
-                        .stroke(marker.displayColor.opacity(0.4), lineWidth: 2)
-                        .frame(width: 50, height: 50)
-                    
-                    Image(systemName: marker.type.icon)
-                        .font(.system(size: 21, weight: .semibold))
-                        .foregroundColor(marker.displayColor)
-                }
+                UnifiedMarkerBadge(
+                    type: marker.type,
+                    displayColor: marker.displayColor,
+                    size: 50,
+                    emoji: marker.type == .emoji ? marker.selectedEmoji : nil
+                )
                 
                 Text(marker.type.rawValue)
                     .font(.title3)

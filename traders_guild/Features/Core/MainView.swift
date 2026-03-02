@@ -1455,11 +1455,8 @@ struct ChartBottomSheet: View {
         }
         .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { _, newId in
             if newId != nil {
-                // Auto-expand sheet when marker is selected
-                if selectedDetent == .fraction(0.11) {
-                    selectedDetent = .fraction(0.5)
-                }
                 markerDetailTab = .details
+                // Keep sheet at closed state (0.11) — user drags up to expand
             }
         }
         .sheet(isPresented: $showMarkerActivitySheet) {
@@ -1807,17 +1804,12 @@ struct ChartBottomSheet: View {
                             }
                         } label: {
                             HStack(spacing: 10) {
-                                ZStack {
-                                    Circle()
-                                        .fill(marker.displayColor.opacity(0.2))
-                                        .frame(width: 40, height: 40)
-                                    Circle()
-                                        .stroke(marker.displayColor.opacity(0.4), lineWidth: 1.5)
-                                        .frame(width: 40, height: 40)
-                                    Image(systemName: marker.type.icon)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(marker.displayColor)
-                                }
+                                UnifiedMarkerBadge(
+                                    type: marker.type,
+                                    displayColor: marker.displayColor,
+                                    size: 40,
+                                    emoji: marker.type == .emoji ? marker.selectedEmoji : nil
+                                )
 
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(marker.type.rawValue)

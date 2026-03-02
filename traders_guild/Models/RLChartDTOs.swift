@@ -134,6 +134,15 @@ enum RLMarkerType: String, Codable, CaseIterable {
         }
     }
     
+    /// Short text label for SL/TP (nil = use icon)
+    var shortLabel: String? {
+        switch self {
+        case .stopLoss: return "SL"
+        case .takeProfit: return "TP"
+        default: return nil
+        }
+    }
+    
     /// Short label for display on chart lines
     var lineLabel: String {
         switch self {

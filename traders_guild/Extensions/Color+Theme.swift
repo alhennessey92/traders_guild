@@ -35,4 +35,18 @@ enum AppColors {
     static let markerHeartBackground = markerHeartTint.opacity(0.22)
     static let markerHeartBorder = markerHeartTint.opacity(0.42)
     
+    // Marker shell tokens (weather-app–inspired neutral look)
+    static let markerShellBorderLight = Color(white: 0.72)
+    static let markerShellBorderDark = Color(white: 0.22)
+    static let markerShellFillLight = Color(white: 0.92)
+    static let markerShellFillDark = Color(white: 0.18)
+    static let markerIconOnDark = Color(white: 0.95)
+    static let markerIconOnLight = Color(white: 0.12)
+    static let markerSelectedBorder = Color(white: 0.5)
+    static let markerSelectedBorderWidth: CGFloat = 3.0
+    static let markerUnselectedBorderWidth: CGFloat = 1.8
+    /// Light grey icon for all markers (prediction-style)
+    static let markerIconLight = Color(white: 0.72)
+    /// Darker grey border for all markers
+    static let markerBorderGrey = Color(white: 0.20)
 }

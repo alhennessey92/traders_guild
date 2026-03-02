@@ -517,15 +517,11 @@ struct ProfileMarkerCard: View {
             HStack(alignment: .top, spacing: 10) {
                 // Marker type icon
                 VStack(spacing: 4) {
-                    ZStack {
-                        Circle()
-                            .fill(marker.markerTypeEnum.color.opacity(0.2))
-                            .frame(width: 36, height: 36)
-                        
-                        Image(systemName: marker.markerTypeEnum.icon)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(marker.markerTypeEnum.color)
-                    }
+                    UnifiedMarkerBadge(
+                        type: marker.markerTypeEnum,
+                        displayColor: marker.markerTypeEnum.color,
+                        size: 36
+                    )
                     
                     Text(marker.markerTypeEnum.rawValue)
                         .font(.system(size: 8, weight: .medium))

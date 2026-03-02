@@ -58,11 +58,22 @@ class ChartGestureState: ObservableObject {
     /// Marker placement guide state shared with indicator panels.
     @Published var markerPlacementGuide = MarkerPlacementGuideState()
     
+    // MARK: - Smooth Centering State
+
+    /// Display link for smooth animated centering
+    private var centeringDisplayLink: CADisplayLink?
+    private var centeringStartPanX: CGFloat = 0
+    private var centeringStartVertical: CGFloat = 0
+    private var centeringTargetPanX: CGFloat = 0
+    private var centeringTargetVertical: CGFloat = 0
+    private var centeringStartTime: CFTimeInterval = 0
+    private var centeringDuration: CFTimeInterval = 0.9
+
     // MARK: - Momentum State
-    
+
     /// Current velocity for momentum scrolling (points per second)
     private var velocity: CGSize = .zero
-    
+
     /// Display link for momentum animation
     private var displayLink: CADisplayLink?
     
@@ -99,6 +110,7 @@ class ChartGestureState: ObservableObject {
     
     deinit {
         stopMomentum()
+        stopCenteringAnimation()
     }
     
     // MARK: - Pan Methods
@@ -315,7 +327,7 @@ class ChartGestureState: ObservableObject {
         panOffset.width = centerOffset - targetX - (candleWidth / 2)
     }
 
-    /// Center chart on a specific candle and price level (horizontal + vertical)
+    /// Center chart on a specific candle and price level (instant, no animation)
     func centerOnMarker(
         at index: Int,
         chartWidth: CGFloat,
@@ -325,6 +337,7 @@ class ChartGestureState: ObservableObject {
         priceRange: (min: Double, max: Double)
     ) {
         stopMomentum()
+        stopCenteringAnimation()
 
         // Horizontal: same as centerOnCandle
         let targetX = CGFloat(index) * candleWidth
@@ -332,13 +345,78 @@ class ChartGestureState: ObservableObject {
         panOffset.width = centerOffset - targetX - (candleWidth / 2)
 
         // Vertical: calculate offset to center this price on screen
-        // Y formula: y = chartHeight - (normalizedPrice * scaledHeight) - verticalPanOffset
-        // To place price at chartHeight/2: verticalPanOffset = chartHeight/2 - normalizedPrice * scaledHeight
         let range = priceRange.max - priceRange.min
         guard range > 0 else { return }
         let normalizedPrice = CGFloat((price - priceRange.min) / range)
         let scaledHeight = chartHeight * priceScale
         verticalPanOffset = chartHeight / 2 - normalizedPrice * scaledHeight
+    }
+
+    /// Smoothly animate chart centering on a marker over time using display link
+    func animateCenterOnMarker(
+        at index: Int,
+        chartWidth: CGFloat,
+        candleWidth: CGFloat,
+        price: Double,
+        chartHeight: CGFloat,
+        priceRange: (min: Double, max: Double),
+        duration: CFTimeInterval = 0.9
+    ) {
+        stopMomentum()
+        stopCenteringAnimation()
+
+        // Calculate target offsets
+        let targetX = CGFloat(index) * candleWidth
+        let centerOffset = chartWidth / 2
+        let targetPanX = centerOffset - targetX - (candleWidth / 2)
+
+        let range = priceRange.max - priceRange.min
+        guard range > 0 else {
+            panOffset.width = targetPanX
+            return
+        }
+        let normalizedPrice = CGFloat((price - priceRange.min) / range)
+        let scaledHeight = chartHeight * priceScale
+        let targetVertical = chartHeight / 2 - normalizedPrice * scaledHeight
+
+        // Store animation state
+        centeringStartPanX = panOffset.width
+        centeringStartVertical = verticalPanOffset
+        centeringTargetPanX = targetPanX
+        centeringTargetVertical = targetVertical
+        centeringDuration = duration
+        centeringStartTime = CACurrentMediaTime()
+
+        // Start display link
+        centeringDisplayLink = CADisplayLink(target: self, selector: #selector(centeringTick))
+        centeringDisplayLink?.add(to: .main, forMode: .common)
+    }
+
+    @objc private func centeringTick(_ link: CADisplayLink) {
+        let elapsed = CACurrentMediaTime() - centeringStartTime
+        var t = elapsed / centeringDuration
+
+        if t >= 1.0 {
+            t = 1.0
+            stopCenteringAnimation()
+        }
+
+        // Ease-in-out cubic: smooth acceleration and deceleration
+        let eased: CGFloat
+        if t < 0.5 {
+            eased = CGFloat(4 * t * t * t)
+        } else {
+            let f = (2 * t - 2)
+            eased = CGFloat(0.5 * f * f * f + 1)
+        }
+
+        panOffset.width = centeringStartPanX + (centeringTargetPanX - centeringStartPanX) * eased
+        verticalPanOffset = centeringStartVertical + (centeringTargetVertical - centeringStartVertical) * eased
+    }
+
+    func stopCenteringAnimation() {
+        centeringDisplayLink?.invalidate()
+        centeringDisplayLink = nil
     }
     
     /// Zoom to fit a specific number of candles

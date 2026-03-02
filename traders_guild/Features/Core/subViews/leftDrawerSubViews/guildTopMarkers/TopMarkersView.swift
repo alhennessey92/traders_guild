@@ -366,11 +366,10 @@ struct TopMarkerCard: View {
                 HStack(alignment: .top, spacing: 8) {
                     // Icon with type label underneath - pushed down with top padding
                     VStack(spacing: 1) {
-                        UnifiedIconBadge(
-                            icon: marker.markerTypeEnum.icon,
-                            color: marker.markerTypeEnum.color,
-                            size: 26,
-                            iconSize: 11
+                        UnifiedMarkerBadge(
+                            type: marker.markerTypeEnum,
+                            displayColor: marker.markerTypeEnum.color,
+                            size: 26
                         )
                         Text(shortTypeName)
                             .font(.system(size: 7, weight: .medium))

@@ -721,55 +721,53 @@ struct MarkerCreationSheet: View {
 
 // MARK: - Marker View (Chart Overlay)
 
+private struct WiggleKeyframe {
+    var rotation: Double = 0
+    var scaleBoost: Double = 0
+}
+
 struct MarkerView: View {
     let marker: ChartMarkerUI
     let isSelected: Bool
     let hideUsername: Bool
     let onTap: () -> Void
-    
+
     private let markerSize: CGFloat = 32
-    
+    @State private var wiggleTrigger: Bool = false
+
     var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 2) {
-                if !marker.positionedBelow && !hideUsername {
-                    usernameLabel
+        Button(action: {
+            onTap()
+            wiggleTrigger.toggle()
+        }) {
+            UnifiedMarkerBadge(
+                type: marker.type,
+                displayColor: marker.displayColor,
+                size: markerSize,
+                emoji: marker.type == .emoji ? marker.selectedEmoji : nil,
+                isSelected: isSelected
+            )
+            .keyframeAnimator(initialValue: WiggleKeyframe(), trigger: wiggleTrigger) { content, value in
+                content
+                    .rotationEffect(.degrees(value.rotation))
+                    .scaleEffect(1.0 + value.scaleBoost)
+            } keyframes: { _ in
+                KeyframeTrack(\.rotation) {
+                    SpringKeyframe(8, duration: 0.14, spring: .bouncy)
+                    SpringKeyframe(-6, duration: 0.14, spring: .bouncy)
+                    SpringKeyframe(4, duration: 0.14, spring: .bouncy)
+                    SpringKeyframe(-2, duration: 0.14, spring: .bouncy)
+                    SpringKeyframe(0, duration: 0.18, spring: .smooth)
                 }
-                
-                markerIcon
-                
-                if marker.positionedBelow && !hideUsername {
-                    usernameLabel
+                KeyframeTrack(\.scaleBoost) {
+                    SpringKeyframe(0.12, duration: 0.14, spring: .bouncy)
+                    SpringKeyframe(0, duration: 0.4, spring: .smooth)
                 }
             }
+            .scaleEffect(isSelected ? 1.15 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
         }
         .buttonStyle(PlainButtonStyle())
-    }
-    
-    private var markerIcon: some View {
-        ZStack {
-            Circle()
-                .fill(marker.type.color.opacity(0.2))
-                .frame(width: markerSize, height: markerSize)
-            
-            Circle()
-                .stroke(marker.type.color, lineWidth: isSelected ? 3 : 2)
-                .frame(width: markerSize, height: markerSize)
-            
-            Image(systemName: marker.type.icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(marker.type.color)
-        }
-        .scaleEffect(isSelected ? 1.15 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
-    }
-    
-    private var usernameLabel: some View {
-        Text(marker.author.username)
-            .font(.system(size: 9, weight: .medium))
-            .foregroundColor(.white.opacity(0.8))
-            .lineLimit(1)
-            .frame(maxWidth: 60)
     }
 }
 

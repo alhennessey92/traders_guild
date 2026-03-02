@@ -269,8 +269,10 @@ struct TradingChartView: View {
     /// Track the marker ID that was just tapped (for animation)
     @State private var tappedMarkerId: UUID? = nil
     
-    /// Haptic feedback generator for marker interactions
-    private let markerHaptic = UIImpactFeedbackGenerator(style: .medium)
+    /// Animated scale for selected marker (1.0 -> 1.3 with spring for selection feedback)
+    @State private var selectionScale: CGFloat = 1.0
+    /// Animated rotation for selected marker wiggle effect (degrees)
+    @State private var selectionRotation: CGFloat = 0
 
     // MARK: - Chart Configuration
     
@@ -659,8 +661,18 @@ struct TradingChartView: View {
                 updateChartSize(geometry.size)
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
             }
-            .onChange(of: markerManager.selectedMarker?.id) { _, _ in
+            .onChange(of: markerManager.selectedMarker?.id) { _, newId in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                if newId == nil {
+                    withAnimation(.easeOut(duration: 0.3)) { selectionScale = 1.0 }
+                    selectionRotation = 0
+                } else {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { selectionScale = 1.5 }
+                    // Delay wiggle so centering pan settles first
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        triggerChartMarkerWiggle()
+                    }
+                }
             }
             .onChange(of: markerManager.selectedMarker?.candleIndex) { _, _ in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
@@ -694,9 +706,6 @@ struct TradingChartView: View {
             Color.black.ignoresSafeArea().opacity(0.2)
 
             mainChartCanvas(geometry: geometry)
-
-            markerGuideOverlay(geometry: geometry)
-                .zIndex(8)
 
             if shouldShowMarkerPlacementOverlay {
                 markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
@@ -1285,21 +1294,6 @@ struct TradingChartView: View {
     }
 
     @ViewBuilder
-    private func markerGuideOverlay(geometry: GeometryProxy) -> some View {
-        if !crosshairManager.isActive,
-           gestureState.markerPlacementGuide.isActive,
-           let _ = gestureState.markerPlacementGuide.timestamp {
-            Path { path in
-                path.move(to: CGPoint(x: gestureState.markerPlacementGuide.x, y: 0))
-                path.addLine(to: CGPoint(x: gestureState.markerPlacementGuide.x, y: geometry.size.height))
-            }
-            .stroke(style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
-            .foregroundColor(.blue.opacity(0.6))
-            .allowsHitTesting(false)
-        }
-    }
-    
-    @ViewBuilder
     private func previewMarkerView(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         let candle = chartData.candles[effectiveCandleIndex]
         let snapX = coordinateSystem.xCenterPosition(forCandleIndex: effectiveCandleIndex)
@@ -1324,43 +1318,25 @@ struct TradingChartView: View {
         }
     }
     
-    private var effectivePreviewColor: Color {
-        if effectiveMarkerType == .alert, let severity = placementAlertSeverity { return severity.color }
-        return effectiveMarkerType?.color ?? .blue
-    }
-
     @ViewBuilder
     private func previewMarkerContent(x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
-        ZStack {
+        let markerType = effectiveMarkerType ?? .note
+        let displayColor = markerType == .alert && placementAlertSeverity != nil
+            ? (placementAlertSeverity?.color ?? markerType.color)
+            : markerType.color
+        return ZStack {
             Circle()
                 .fill(Color.clear)
                 .frame(width: 80, height: 80)
                 .contentShape(Circle())
-            
-            Circle()
-                .fill(Color.black.opacity(0.85))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Circle()
-                        .stroke(effectivePreviewColor, lineWidth: 3)
-                )
-            
-            Circle()
-                .fill(effectivePreviewColor)
-                .frame(width: 24, height: 24)
-                .overlay(
-                    Group {
-                        if effectiveMarkerType == .emoji {
-                            Text(placementSelectedEmoji ?? "🎯")
-                                .font(.system(size: 14))
-                        } else {
-                            Image(systemName: effectiveMarkerType?.icon ?? "mappin")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                )
-            
+
+            UnifiedMarkerBadge(
+                type: markerType,
+                displayColor: displayColor,
+                size: 36,
+                emoji: effectiveMarkerType == .emoji ? (placementSelectedEmoji ?? "🎯") : nil
+            )
+
             previewMarkerInfoBox
         }
         .position(x: x, y: y)
@@ -1370,20 +1346,34 @@ struct TradingChartView: View {
     
     @ViewBuilder
     private var previewMarkerInfoBox: some View {
-        Text((effectiveMarkerType ?? .note).rawValue)
+        let markerType = effectiveMarkerType ?? .note
+        let displayColor = markerType == .alert && placementAlertSeverity != nil
+            ? (placementAlertSeverity?.color ?? markerType.color)
+            : markerType.color
+        let gradient = markerType.markerBackgroundGradient(displayColor: displayColor)
+        return Text(markerType.rawValue)
             .font(.caption)
             .fontWeight(.semibold)
-            .foregroundColor(effectivePreviewColor)
+            .foregroundColor(AppColors.markerIconLight)
             .lineLimit(1)
-        .padding(4)
-        .background(Color.black.opacity(0.82))
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(effectivePreviewColor.opacity(0.7), lineWidth: 1)
-        )
-        .cornerRadius(4)
-        .offset(y: 40)
-        .allowsHitTesting(false)
+            .padding(4)
+            .background(
+                LinearGradient(colors: [gradient.start, gradient.end], startPoint: .top, endPoint: .bottom)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(
+                        LinearGradient(
+                            colors: [displayColor.markerBorderGradientStart(), displayColor.markerBorderGradientEnd()],
+                            startPoint: .bottom,
+                            endPoint: .top
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .cornerRadius(4)
+            .offset(y: 28)
+            .allowsHitTesting(false)
     }
 
     private func updatePlacementGuideState(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) {
@@ -1405,6 +1395,22 @@ struct TradingChartView: View {
             markerType: markerType,
             source: .placement
         )
+    }
+
+    private func triggerChartMarkerWiggle() {
+        withAnimation(.spring(response: 0.1, dampingFraction: 0.3)) { selectionRotation = 8 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring(response: 0.1, dampingFraction: 0.3)) { selectionRotation = -6 }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.1, dampingFraction: 0.3)) { selectionRotation = 4 }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.spring(response: 0.12, dampingFraction: 0.5)) { selectionRotation = -2 }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            withAnimation(.spring(response: 0.14, dampingFraction: 0.6)) { selectionRotation = 0 }
+        }
     }
 
     private func syncSelectedMarkerGuideState(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) {
@@ -1429,7 +1435,7 @@ struct TradingChartView: View {
             source: .selected
         )
     }
-    
+
     private func previewMarkerDragGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
@@ -1665,16 +1671,14 @@ struct TradingChartView: View {
         )
 
         // Auto-scroll to latest candle with smooth animation
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            gestureState.centerOnMarker(
-                at: lastIndex,
-                chartWidth: chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width,
-                candleWidth: totalCandleWidth,
-                price: entryPrice,
-                chartHeight: chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.6,
-                priceRange: chartData.priceRange
-            )
-        }
+        gestureState.animateCenterOnMarker(
+            at: lastIndex,
+            chartWidth: chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width,
+            candleWidth: totalCandleWidth,
+            price: entryPrice,
+            chartHeight: chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.6,
+            priceRange: chartData.priceRange
+        )
     }
     
     private func handleSymbolChange(oldValue: RLTradingSymbolDTO?, newValue: RLTradingSymbolDTO?) {
@@ -1867,16 +1871,14 @@ struct TradingChartView: View {
         let candleWidth = totalCandleWidth
         let focusPrice = matchingMarker?.price ?? chartData.candles[resolvedIndex].close
 
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            gestureState.centerOnMarker(
-                at: resolvedIndex,
-                chartWidth: chartWidth,
-                candleWidth: candleWidth,
-                price: focusPrice,
-                chartHeight: chartHeight,
-                priceRange: chartData.priceRange
-            )
-        }
+        gestureState.animateCenterOnMarker(
+            at: resolvedIndex,
+            chartWidth: chartWidth,
+            candleWidth: candleWidth,
+            price: focusPrice,
+            chartHeight: chartHeight,
+            priceRange: chartData.priceRange
+        )
     }
     
     private func tapGestureForMarkers(geometry: GeometryProxy) -> some Gesture {
@@ -1913,7 +1915,7 @@ struct TradingChartView: View {
                     actualCandleWidth: actualCandleWidth,
                     totalOffset: totalOffset
                 ) {
-                    markerHaptic.impactOccurred()
+                    HapticFeedback.selection.trigger()
                     tappedMarkerId = marker.id
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         tappedMarkerId = nil
@@ -1928,16 +1930,14 @@ struct TradingChartView: View {
                     let width = totalCandleWidth
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         let index = Self.findCandleIndexForTimestamp(timestamp, in: candles) ?? max(0, candles.count - 50)
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                            gestureState.centerOnMarker(
-                                at: index,
-                                chartWidth: chartWidth,
-                                candleWidth: width,
-                                price: markerPrice,
-                                chartHeight: chartHeight,
-                                priceRange: priceRange
-                            )
-                        }
+                        gestureState.animateCenterOnMarker(
+                            at: index,
+                            chartWidth: chartWidth,
+                            candleWidth: width,
+                            price: markerPrice,
+                            chartHeight: chartHeight,
+                            priceRange: priceRange
+                        )
                     }
                 }
             }
@@ -2550,6 +2550,22 @@ struct TradingChartView: View {
             totalOffset: gestureState.panOffset.width
         )
 
+        // Guide line drawn BEFORE markers so markers occlude it (todo 38 — no dashes inside marker body)
+        if !crosshairManager.isActive,
+           gestureState.markerPlacementGuide.isActive,
+           gestureState.markerPlacementGuide.timestamp != nil {
+            let guideX = gestureState.markerPlacementGuide.x
+            let guidePath = Path { path in
+                path.move(to: CGPoint(x: guideX, y: 0))
+                path.addLine(to: CGPoint(x: guideX, y: size.height))
+            }
+            drawingContext.stroke(
+                guidePath,
+                with: .color(.blue.opacity(0.5)),
+                style: StrokeStyle(lineWidth: 2, dash: [5, 5])
+            )
+        }
+
         // Reset opacity for markers — they have their own dimming via the dimmed parameter
         if chartDimmed {
             drawingContext.opacity = 1.0
@@ -2568,6 +2584,8 @@ struct TradingChartView: View {
             totalOffset: totalOffset,
             markerManager: markerManager,
             selectedMarkerId: markerManager.selectedMarker?.id ?? tappedMarkerId,
+            selectedMarkerScale: selectionScale,
+            selectedMarkerRotation: selectionRotation,
             dimmed: controlViewModel.isMarkerPlacementMode
         )
     }

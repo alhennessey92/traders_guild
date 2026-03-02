@@ -193,7 +193,8 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable {
             symbolId: symbolId,
             symbolTicker: symbolTicker,
             timeframe: timeframe,
-            candleTimestamp: candleTimestamp
+            candleTimestamp: candleTimestamp,
+            markerType: markerType
         )
     }
 
@@ -241,19 +242,29 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
     let symbolTicker: String?
     let timeframe: String
     let candleTimestamp: Date
+    let markerType: String?
+
+    /// Resolved marker type (falls back to .note for old messages without markerType)
+    var markerTypeEnum: RLMarkerType {
+        markerType.flatMap { RLMarkerType.fromBackendString($0) }
+            ?? markerType.flatMap { RLMarkerType(rawValue: $0) }
+            ?? .note
+    }
 
     init(
         markerId: UUID,
         symbolId: UUID,
         symbolTicker: String?,
         timeframe: String,
-        candleTimestamp: Date
+        candleTimestamp: Date,
+        markerType: String? = nil
     ) {
         self.markerId = markerId
         self.symbolId = symbolId
         self.symbolTicker = symbolTicker
         self.timeframe = timeframe
         self.candleTimestamp = candleTimestamp
+        self.markerType = markerType
     }
 
     var notificationUserInfo: [String: Any] {
@@ -265,6 +276,9 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         ]
         if let symbolTicker {
             info["symbolTicker"] = symbolTicker
+        }
+        if let markerType {
+            info["markerType"] = markerType
         }
         return info
     }
@@ -302,6 +316,7 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         self.symbolTicker = userInfo["symbolTicker"] as? String
         self.timeframe = timeframe
         self.candleTimestamp = candleTimestamp
+        self.markerType = userInfo["markerType"] as? String
     }
 }
 
@@ -834,12 +849,11 @@ struct ChatInputFooter: View {
     private func markerPreviewChip(for marker: ChatMarkerLinkDraft) -> some View {
         ZStack(alignment: .topTrailing) {
             HStack(spacing: 8) {
-                Image(systemName: marker.markerTypeEnum.icon)
-                    .font(.caption)
-                    .foregroundColor(marker.markerTypeEnum.color)
-                    .frame(width: 22, height: 22)
-                    .background(marker.markerTypeEnum.color.opacity(0.15))
-                    .clipShape(Circle())
+                UnifiedMarkerBadge(
+                    type: marker.markerTypeEnum,
+                    displayColor: marker.markerTypeEnum.color,
+                    size: 22
+                )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Linked Marker")
@@ -985,14 +999,11 @@ private struct ChatMarkerPickerSheet: View {
                             dismiss()
                         } label: {
                             HStack(spacing: 10) {
-                                Circle()
-                                    .fill(marker.markerTypeEnum.color.opacity(0.18))
-                                    .frame(width: 30, height: 30)
-                                    .overlay(
-                                        Image(systemName: marker.markerTypeEnum.icon)
-                                            .font(.caption)
-                                            .foregroundColor(marker.markerTypeEnum.color)
-                                    )
+                                UnifiedMarkerBadge(
+                                    type: marker.markerTypeEnum,
+                                    displayColor: marker.markerTypeEnum.color,
+                                    size: 30
+                                )
 
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text("\(marker.symbolTicker) • \(marker.timeframe.uppercased())")
@@ -1750,17 +1761,14 @@ private struct MarkerShareCard: View {
     var body: some View {
         Button(action: onTap) {
             HStack(alignment: .center, spacing: 10) {
-                Circle()
-                    .fill(isCurrentUserMessage ? Color.white.opacity(0.22) : AppColors.accentColor.opacity(0.22))
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(.caption)
-                            .foregroundColor(isCurrentUserMessage ? .white : AppColors.accentColor)
-                    )
+                UnifiedMarkerBadge(
+                    type: payload.markerTypeEnum,
+                    displayColor: payload.markerTypeEnum.color,
+                    size: 32
+                )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Marker Share")
+                    Text(payload.markerTypeEnum.rawValue)
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(isCurrentUserMessage ? .white.opacity(0.8) : AppColors.greyText)

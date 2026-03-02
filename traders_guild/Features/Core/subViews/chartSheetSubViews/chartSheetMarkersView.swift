@@ -254,9 +254,17 @@ struct MarkerButton: View {
             }
         } label: {
             VStack(spacing: 8) {
-                Image(systemName: isActive ? "xmark.circle" : type.icon)
-                    .font(.system(size: 32))
-                    .foregroundColor(isActive ? .white : type.color)
+                if isActive {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 32))
+                        .foregroundColor(.white)
+                } else {
+                    UnifiedMarkerBadge(
+                        type: type,
+                        displayColor: type.color,
+                        size: 40
+                    )
+                }
                 
                 Text(isActive ? "Cancel" : type.rawValue)
                     .font(.caption)

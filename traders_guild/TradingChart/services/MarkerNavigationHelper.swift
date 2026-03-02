@@ -152,23 +152,21 @@ class MarkerNavigationHelper {
             let priceRange = capturedChartViewModel.dataManager.priceRange
             let chartHeight = UIScreen.main.bounds.height * 0.6 // Approximate chart height
 
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                if let candle = candle, priceRange.max > priceRange.min {
-                    capturedGestureState.centerOnMarker(
-                        at: targetCandleIndex,
-                        chartWidth: width,
-                        candleWidth: totalCandleWidth,
-                        price: candle.close,
-                        chartHeight: chartHeight,
-                        priceRange: priceRange
-                    )
-                } else {
-                    capturedGestureState.centerOnCandle(
-                        at: targetCandleIndex,
-                        chartWidth: width,
-                        candleWidth: totalCandleWidth
-                    )
-                }
+            if let candle = candle, priceRange.max > priceRange.min {
+                capturedGestureState.animateCenterOnMarker(
+                    at: targetCandleIndex,
+                    chartWidth: width,
+                    candleWidth: totalCandleWidth,
+                    price: candle.close,
+                    chartHeight: chartHeight,
+                    priceRange: priceRange
+                )
+            } else {
+                capturedGestureState.centerOnCandle(
+                    at: targetCandleIndex,
+                    chartWidth: width,
+                    candleWidth: totalCandleWidth
+                )
             }
 
             print("🎯 Current panOffset after: \(capturedGestureState.panOffset.width)")
@@ -267,7 +265,7 @@ class MarkerNavigationHelper {
         print("🎯 Current panOffset before: \(gestureState.panOffset.width)")
         
         // Use the gestureState's built-in method with animation
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+        withAnimation(.easeInOut(duration: 0.8)) {
             gestureState.centerOnCandle(
                 at: index,
                 chartWidth: chartWidth,

@@ -36,6 +36,98 @@ enum MarkerVisibilityMode: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Marker Appearance Model
+
+extension Color {
+    /// Darker variant for borders (reduce luminance)
+    func markerBorderVariant() -> Color {
+        let u = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard u.getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let factor: CGFloat = 0.28
+        return Color(red: r * factor, green: g * factor, blue: b * factor)
+    }
+    /// Slightly lighter variant for icons (boost toward white, but darker than before)
+    func markerIconVariant() -> Color {
+        let u = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard u.getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let blend: CGFloat = 0.35
+        return Color(red: r * (1 - blend) + blend, green: g * (1 - blend) + blend, blue: b * (1 - blend) + blend)
+    }
+    /// Dark gradient start for marker background
+    func markerGradientStart() -> Color {
+        let u = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard u.getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let factor: CGFloat = 0.1
+        return Color(red: r * factor, green: g * factor, blue: b * factor)
+    }
+    /// Dark gradient end for marker background
+    func markerGradientEnd() -> Color {
+        let u = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard u.getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let factor: CGFloat = 0.18
+        return Color(red: r * factor, green: g * factor, blue: b * factor)
+    }
+    /// Border gradient bright end (sits at bottom, opposite to fill) — type color at ~55%
+    func markerBorderGradientStart() -> Color {
+        let u = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard u.getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let factor: CGFloat = 0.55
+        return Color(red: r * factor, green: g * factor, blue: b * factor)
+    }
+    /// Border gradient dim end (sits at top, opposite to fill) — type color at ~25%
+    func markerBorderGradientEnd() -> Color {
+        let u = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard u.getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let factor: CGFloat = 0.25
+        return Color(red: r * factor, green: g * factor, blue: b * factor)
+    }
+    /// Blend toward white for glow/activity effects
+    func blendedForGlow(brightness: CGFloat) -> Color {
+        let u = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard u.getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let blend = min(max((brightness - 1.0) * 0.5, 0), 1.0)
+        return Color(
+            red: r + (1.0 - r) * blend,
+            green: g + (1.0 - g) * blend,
+            blue: b + (1.0 - b) * blend
+        )
+    }
+}
+
+extension RLMarkerType {
+    /// Per-type dark gradient: red for stop loss, blue for take profit, etc.
+    /// Same darkness level for all — uses displayColor scaled down
+    func markerBackgroundGradient(displayColor: Color) -> (start: Color, end: Color) {
+        (displayColor.markerGradientStart(), displayColor.markerGradientEnd())
+    }
+    /// Border gradient: reverse direction from fill, brighter colors for contrast.
+    /// brightness/opacity params enable future glow and pulse effects.
+    func markerBorderGradient(
+        displayColor: Color,
+        brightness: CGFloat = 1.0,
+        opacity: CGFloat = 1.0
+    ) -> (start: Color, end: Color) {
+        var start = displayColor.markerBorderGradientStart()
+        var end = displayColor.markerBorderGradientEnd()
+        if brightness != 1.0 {
+            start = start.blendedForGlow(brightness: brightness)
+            end = end.blendedForGlow(brightness: brightness)
+        }
+        if opacity != 1.0 {
+            start = start.opacity(Double(opacity))
+            end = end.opacity(Double(opacity))
+        }
+        return (start, end)
+    }
+}
+
 // MARK: - Marker Manager
 
 @MainActor
@@ -1291,6 +1383,7 @@ struct ChartMarkerSystem {
         let isSelected: Bool
         let scale: CGFloat
         let sortKey: Int
+        let rotation: CGFloat
     }
 
     static func visibleUsernameMarkerIDs(from candidates: [UsernameLabelCandidate]) -> Set<UUID> {
@@ -1331,6 +1424,8 @@ struct ChartMarkerSystem {
         totalOffset: CGFloat,
         markerManager: MarkerManager? = nil,
         selectedMarkerId: UUID? = nil,
+        selectedMarkerScale: CGFloat = 1.5,
+        selectedMarkerRotation: CGFloat = 0,
         chartData: ChartDataManager? = nil,
         dimmed: Bool = false
     ) {
@@ -1375,6 +1470,26 @@ struct ChartMarkerSystem {
                 )
                 markerPositions.append((marker, position))
             }
+
+            // Nudge non-selected markers away when one is selected (todo 38 — stack safety)
+            if let selId = selectedMarkerId,
+               let selIdx = markerPositions.firstIndex(where: { $0.marker.id == selId }),
+               selectedMarkerScale > 1.0 {
+                let sel = markerPositions[selIdx]
+                let nudgeAmount: CGFloat = 10
+                let stackDir: CGFloat = sel.marker.positionedBelow ? 1.0 : -1.0
+                for i in markerPositions.indices where i != selIdx {
+                    let other = markerPositions[i]
+                    guard other.marker.positionedBelow == sel.marker.positionedBelow else { continue }
+                    let otherStack = other.marker.stackIndex
+                    let selStack = sel.marker.stackIndex
+                    if otherStack == selStack - 1 {
+                        markerPositions[i].position.y -= stackDir * nudgeAmount
+                    } else if otherStack == selStack + 1 {
+                        markerPositions[i].position.y += stackDir * nudgeAmount
+                    }
+                }
+            }
             
             let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
             let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
@@ -1385,7 +1500,7 @@ struct ChartMarkerSystem {
                 let marker = markerAndPosition.marker
                 let position = markerAndPosition.position
                 let isSelected = selectedMarkerId == marker.id
-                let scale: CGFloat = isSelected ? 1.3 : 1.0
+                let scale: CGFloat = isSelected ? selectedMarkerScale : 1.0
 
                 renderQueue.append(
                     RenderedMarker(
@@ -1393,27 +1508,14 @@ struct ChartMarkerSystem {
                         position: position,
                         isSelected: isSelected,
                         scale: scale,
-                        sortKey: candleIndex * 10_000 + markerOrder
+                        sortKey: candleIndex * 10_000 + markerOrder,
+                        rotation: isSelected ? selectedMarkerRotation : 0
                     )
                 )
             }
         }
 
-        let usernameCandidates = renderQueue.compactMap { rendered in
-            usernameLabelCandidate(for: rendered.marker, position: rendered.position, scale: rendered.scale, sortKey: rendered.sortKey)
-        }
-        let visibleUsernameIds = visibleUsernameMarkerIDs(from: usernameCandidates)
-
-        for rendered in renderQueue {
-            guard visibleUsernameIds.contains(rendered.marker.id) else { continue }
-            drawUsernameLabel(
-                context: markerContext,
-                marker: rendered.marker,
-                position: rendered.position,
-                isBelow: rendered.marker.positionedBelow,
-                scale: rendered.scale
-            )
-        }
+        // Username labels removed per todo 38 — author visible in marker detail view
 
         let glyphQueue = renderQueue.sorted {
             if $0.isSelected != $1.isSelected {
@@ -1432,7 +1534,8 @@ struct ChartMarkerSystem {
                 position: rendered.position,
                 isBelow: rendered.marker.positionedBelow,
                 scale: rendered.scale,
-                isSelected: rendered.isSelected
+                isSelected: rendered.isSelected,
+                rotation: rendered.rotation
             )
         }
     }
@@ -1473,32 +1576,21 @@ struct ChartMarkerSystem {
         position: CGPoint,
         isBelow: Bool,
         scale: CGFloat = 1.0,
-        isSelected: Bool = false
+        isSelected: Bool = false,
+        rotation: CGFloat = 0
     ) {
+        // Apply rotation around marker center for wiggle effect
+        var drawContext = context
+        if rotation != 0 {
+            let radians = rotation * .pi / 180
+            drawContext.translateBy(x: position.x, y: position.y)
+            drawContext.rotate(by: Angle(radians: Double(radians)))
+            drawContext.translateBy(x: -position.x, y: -position.y)
+        }
+
         let baseRadius: CGFloat = 16
         let scaledRadius = baseRadius * scale
-        
-        // Selection glow effect
-        if isSelected {
-            let glowRect = CGRect(
-                x: position.x - scaledRadius - 4,
-                y: position.y - scaledRadius - 4,
-                width: (scaledRadius + 4) * 2,
-                height: (scaledRadius + 4) * 2
-            )
-            context.fill(Path(ellipseIn: glowRect), with: .color(marker.displayColor.opacity(0.3)))
-        }
-        
-        // Shadow
-        let shadowRect = CGRect(
-            x: position.x - scaledRadius + 1.5,
-            y: position.y - scaledRadius + 1.5,
-            width: scaledRadius * 2,
-            height: scaledRadius * 2
-        )
-        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.35)))
-        
-        // Custom circle (we draw the circle ourselves; icon is symbol-only e.g. pencil, r, s)
+
         let circleRect = CGRect(
             x: position.x - scaledRadius,
             y: position.y - scaledRadius,
@@ -1506,78 +1598,75 @@ struct ChartMarkerSystem {
             height: scaledRadius * 2
         )
         let circlePath = Path(ellipseIn: circleRect)
-        
-        // Tint circle — marker color at low opacity (visible inner circle)
-        let circleTintOpacity: CGFloat = 0.12
-        context.fill(circlePath, with: .color(marker.displayColor.opacity(circleTintOpacity)))
-        
-        // Dark translucent material on top (slightly reduced so tint shows through)
-        let materialFill = Color(red: 25/255, green: 25/255, blue: 33/255).opacity(0.4)
-        context.fill(circlePath, with: .color(materialFill))
-        
-        // Inner circle stroke — makes the circle boundary read clearly
-        let innerRadius = scaledRadius * 0.82
-        let innerCircleRect = CGRect(
-            x: position.x - innerRadius,
-            y: position.y - innerRadius,
-            width: innerRadius * 2,
-            height: innerRadius * 2
-        )
-        if marker.type == .predictionTarget {
-            // TODO: Change Color to a dynamic color changeable in assets and maybe color is representative of direction
-            context.stroke(Path(ellipseIn: innerCircleRect), with: .color(.blue.opacity(0.35)), lineWidth: 2)
-        }
-        else{
-            context.stroke(Path(ellipseIn: innerCircleRect), with: .color(marker.displayColor.opacity(0.15)), lineWidth: 2)
-        }
-        
 
-        // Outer border — dim border in icon color for all markers, brighter when selected
-        if isSelected {
-            context.stroke(circlePath, with: .color(marker.displayColor.opacity(0.6)), lineWidth: 2)
-        } else {
-            context.stroke(circlePath, with: .color(.white.opacity(0.25)), lineWidth: 1)
-        }
-        
-        // Icon: symbol-only (e.g. pencil, r, s) — kept smaller so circle is visible
-        let fontSize: CGFloat = 12 * scale
+        // 1. Shadow
+        let shadowRect = CGRect(
+            x: position.x - scaledRadius + 1.2,
+            y: position.y - scaledRadius + 1.2,
+            width: scaledRadius * 2,
+            height: scaledRadius * 2
+        )
+        drawContext.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.28)))
+
+        // 2. Midnight blue gradient background (top → bottom)
+        let gradient = marker.type.markerBackgroundGradient(displayColor: marker.displayColor)
+        let grad = Gradient(colors: [gradient.start, gradient.end])
+        let startPt = CGPoint(x: position.x, y: position.y - scaledRadius)
+        let endPt = CGPoint(x: position.x, y: position.y + scaledRadius)
+        drawContext.fill(circlePath, with: .linearGradient(grad, startPoint: startPt, endPoint: endPt))
+
+        // 3. Border — gradient (bottom bright → top dim, opposite of fill)
+        let borderWidth = isSelected ? AppColors.markerSelectedBorderWidth : AppColors.markerUnselectedBorderWidth
+        let borderStart = marker.displayColor.markerBorderGradientStart()
+        let borderEnd = marker.displayColor.markerBorderGradientEnd()
+        let borderGrad = Gradient(colors: [borderStart, borderEnd])
+        let borderStartPt = CGPoint(x: position.x, y: position.y + scaledRadius)  // bottom (bright)
+        let borderEndPt = CGPoint(x: position.x, y: position.y - scaledRadius)    // top (dim)
+        drawContext.stroke(circlePath, with: .linearGradient(borderGrad, startPoint: borderStartPt, endPoint: borderEndPt), lineWidth: borderWidth)
+
+        // 4. Icon — light grey, bolder sizing (50% of badge diameter)
+        let iconColor = AppColors.markerIconLight
+        let fontSize: CGFloat = scaledRadius * 1.0
         if marker.type == .emoji {
             let iconChar = marker.selectedEmoji ?? "🎯"
-            context.draw(
+            drawContext.draw(
                 Text(iconChar)
                     .font(.system(size: fontSize, weight: .bold))
-                    .foregroundColor(marker.displayColor),
+                    .foregroundColor(iconColor),
+                at: position
+            )
+        } else if let label = marker.type.shortLabel {
+            drawContext.draw(
+                Text(label)
+                    .font(.system(size: fontSize * 0.9, weight: .bold))
+                    .foregroundColor(iconColor),
                 at: position
             )
         } else {
-            let iconSize = scaledRadius * 0.88
-            let iconRect = CGRect(
-                x: position.x - iconSize / 2,
-                y: position.y - iconSize / 2,
-                width: iconSize,
-                height: iconSize
-            )
-            // resolve() only accepts plain Image; use single color (palette not supported in Canvas)
+            let maxIconSize = scaledRadius * 1.0
             let iconImage = Image(systemName: marker.type.icon)
-            var resolvedIcon = context.resolve(iconImage)
-            resolvedIcon.shading = .color(marker.displayColor)
-            context.draw(resolvedIcon, in: iconRect)
+            var resolvedIcon = drawContext.resolve(iconImage)
+            resolvedIcon.shading = GraphicsContext.Shading.color(iconColor)
+            let imgSize = resolvedIcon.size
+            guard imgSize.width > 0, imgSize.height > 0 else {
+                let fallbackRect = CGRect(x: position.x - maxIconSize / 2, y: position.y - maxIconSize / 2, width: maxIconSize, height: maxIconSize)
+                drawContext.draw(resolvedIcon, in: fallbackRect)
+                return
+            }
+            // Aspect-fit: preserve icon proportions (avoids vertical squash from draw-in-rect)
+            let iconScale = min(maxIconSize / imgSize.width, maxIconSize / imgSize.height)
+            let drawW = imgSize.width * iconScale
+            let drawH = imgSize.height * iconScale
+            let iconRect = CGRect(
+                x: position.x - drawW / 2,
+                y: position.y - drawH / 2,
+                width: drawW,
+                height: drawH
+            )
+            drawContext.draw(resolvedIcon, in: iconRect)
         }
-//        let fontSize: CGFloat = 18 * scale
-//        let iconChar: String
-//        if marker.type == .emoji {
-//            iconChar = marker.selectedEmoji ?? "🎯"
-//        } else {
-//            iconChar = Image(systemName: marker.type.icon).foregroundColor(marker.displayColor) //getIconCharacter(for: marker.type)
-//        }
-//        context.draw(
-//            Text(iconChar)
-//                .font(.system(size: fontSize, weight: .bold))
-//                .foregroundColor(marker.displayColor),
-//            at: position
-//        )
-        
-        // Like count badge
+
+        // 5. Like count badge
         if marker.likeCount > 0 {
             let badgeOffset: CGFloat = isBelow ? -17 : 5
             let badgeRect = CGRect(
@@ -1586,8 +1675,8 @@ struct ChartMarkerSystem {
                 width: 14,
                 height: 14
             )
-            context.fill(Path(roundedRect: badgeRect, cornerRadius: 7), with: .color(AppColors.markerHeartBadge))
-            context.draw(
+            drawContext.fill(Path(roundedRect: badgeRect, cornerRadius: 7), with: .color(AppColors.markerHeartBadge))
+            drawContext.draw(
                 Text("\(marker.likeCount)")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white),
