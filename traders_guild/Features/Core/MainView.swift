@@ -1343,7 +1343,8 @@ struct ChartBottomSheet: View {
     @State private var chatMessageText: String = ""
     @State private var isSendingChartMessage = false
     @State private var showMarkerActivitySheet = false
-    
+    @State private var markerDetailTab: MarkerDetailTab = .details
+
     init(
         controlViewModel: ChartControlViewModel,
         chartViewModel: ChartViewModel,
@@ -1381,12 +1382,21 @@ struct ChartBottomSheet: View {
     private var isExpanded: Bool {
         selectedDetent != .fraction(0.11)
     }
-    
+
+    private var isMarkerDetailActive: Bool {
+        chartViewModel.selectedMarkerForSheet != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Content Area
             if isExpanded {
-                if selectedView == .chat {
+                if isMarkerDetailActive, let marker = chartViewModel.selectedMarkerForSheet,
+                   let markerManager = chartViewModel.markerManager {
+                    // Marker detail mode - replaces all tab content
+                    markerDetailContent(marker: marker, markerManager: markerManager)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if selectedView == .chat {
                     // Chat view - manages its own scroll and keyboard
                     chatContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1415,9 +1425,11 @@ struct ChartBottomSheet: View {
             } else {
                 Spacer()
             }
-            
-            // Conditional Footer: Tab Bar OR Chat Input
-            if selectedView == .chat && isExpanded {
+
+            // Conditional Footer: Marker Detail Tab Bar, Chat Input, or Standard Tab Bar
+            if isMarkerDetailActive {
+                markerDetailTabBar
+            } else if selectedView == .chat && isExpanded {
                 // Chat Input Footer (replaces tab bar)
                 chatInputFooter
             } else {
@@ -1426,6 +1438,7 @@ struct ChartBottomSheet: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: selectedView)
+        .animation(.easeInOut(duration: 0.3), value: isMarkerDetailActive)
         .onAppear {
             chartChatManager.configure(with: rlAppState)
         }
@@ -1438,6 +1451,15 @@ struct ChartBottomSheet: View {
         .onChange(of: selectedView) { newView in
             if newView == .chat {
                 loadChatForCurrentSymbol()
+            }
+        }
+        .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { _, newId in
+            if newId != nil {
+                // Auto-expand sheet when marker is selected
+                if selectedDetent == .fraction(0.11) {
+                    selectedDetent = .fraction(0.5)
+                }
+                markerDetailTab = .details
             }
         }
         .sheet(isPresented: $showMarkerActivitySheet) {
@@ -1697,6 +1719,157 @@ struct ChartBottomSheet: View {
             messageText: $chatMessageText
         )
         .environmentObject(rlAppState)
+    }
+
+    // MARK: - Marker Detail Mode
+
+    @ViewBuilder
+    private func markerDetailContent(marker: ChartMarkerUI, markerManager: MarkerManager) -> some View {
+        switch markerDetailTab {
+        case .details:
+            EmbeddedMarkerDetailView(
+                marker: marker,
+                markerManager: markerManager,
+                onClose: clearSelectedMarker
+            )
+            .environmentObject(rlAppState)
+        case .chat:
+            EmbeddedMarkerChatTabView(
+                marker: marker,
+                markerManager: markerManager,
+                selectedDetent: $selectedDetent
+            )
+            .environmentObject(rlAppState)
+        case .analysis:
+            markerDetailPlaceholder(
+                icon: "chart.bar.xaxis",
+                title: "Marker Analysis",
+                subtitle: "Marker analysis and linked indicators"
+            )
+        }
+    }
+
+    private func markerDetailPlaceholder(icon: String, title: String, subtitle: String) -> some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: icon)
+                .font(.system(size: 40))
+                .foregroundColor(AppColors.greyText.opacity(0.5))
+            Text(title)
+                .font(.headline)
+                .foregroundColor(AppColors.whiteText)
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundColor(AppColors.greyText)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 32)
+    }
+
+    private func clearSelectedMarker() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            chartViewModel.markerManager?.selectedMarker = nil
+        }
+    }
+
+    // MARK: - Marker Detail Tab Bar
+
+    private var markerDetailTabBar: some View {
+        VStack(spacing: 0) {
+            if isExpanded {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 0.5)
+            }
+
+            HStack(spacing: 8) {
+                // Close button - returns to normal bottom sheet tabs
+                Button(action: clearSelectedMarker) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.9))
+                        .frame(width: 50, height: 50)
+                        .background(AppColors.gradientBackgroundDark)
+                        .clipShape(Circle())
+                        .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 8) {
+                    // Details capsule - marker type + author name
+                    if let marker = chartViewModel.selectedMarkerForSheet {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                markerDetailTab = .details
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                ZStack {
+                                    Circle()
+                                        .fill(marker.displayColor.opacity(0.2))
+                                        .frame(width: 40, height: 40)
+                                    Circle()
+                                        .stroke(marker.displayColor.opacity(0.4), lineWidth: 1.5)
+                                        .frame(width: 40, height: 40)
+                                    Image(systemName: marker.type.icon)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(marker.displayColor)
+                                }
+
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(marker.type.rawValue)
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(markerDetailTab == .details ? .white : AppColors.whiteText.opacity(0.8))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                    Text(marker.author.username)
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundColor(markerDetailTab == .details ? .white.opacity(0.75) : AppColors.whiteText.opacity(0.5))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                }
+                                .padding(.trailing, 4)
+                            }
+                            .padding(.vertical, 5)
+                            .padding(.leading, 5)
+                            .padding(.trailing, 12)
+                            .frame(height: 50)
+                            .background(markerDetailTab == .details ?
+                                AppColors.gradientBackgroundDark :
+                                AppColors.gradientBackgroundMid.opacity(0.9))
+                            .clipShape(Capsule())
+                            .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+                        }
+                    }
+
+                    // Chat & Analysis icon buttons
+                    ForEach([MarkerDetailTab.chat, MarkerDetailTab.analysis], id: \.self) { tab in
+                        RootBottomBarIconButton(
+                            systemName: tab.icon,
+                            fontSize: 20,
+                            backgroundColor: markerDetailTab == tab ?
+                                AppColors.gradientBackgroundDark :
+                                AppColors.gradientBackgroundMid.opacity(0.9),
+                            foregroundColor: markerDetailTab == tab ?
+                                .white :
+                                AppColors.whiteText.opacity(0.8)
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                markerDetailTab = tab
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, isExpanded ? 16 : 0)
+            .padding(.bottom, 2)
+        }
+        .frame(height: isExpanded ? 70 : 68)
+        .ignoresSafeArea(.keyboard)
     }
 }
 

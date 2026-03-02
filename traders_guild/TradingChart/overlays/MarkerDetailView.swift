@@ -26,7 +26,6 @@ struct MarkerDetailView: View {
     @State private var isLiked: Bool = false
     @State private var likeCount: Int = 0
     @State private var comments: [RLMarkerCommentDTO] = []
-    @State private var showComments: Bool = false
     @State private var showDeleteMarkerConfirmation: Bool = false
     @State private var showReportReasonSheet: Bool = false
     @State private var showShareSheet: Bool = false
@@ -52,9 +51,15 @@ struct MarkerDetailView: View {
                         isLiked: isLiked,
                         likeCount: likeCount,
                         commentCount: comments.count,
+                        isOwner: marker.isCurrentUserMarker,
+                        showsActionRow: true,
                         onAuthorTap: {
                             selectedAuthorProfileMember = marker.author
-                        }
+                        },
+                        onLike: handleLike,
+                        onShare: handleShare,
+                        onReport: { showReportReasonSheet = true },
+                        onDelete: { showDeleteMarkerConfirmation = true }
                     )
                     
                     // Info content
@@ -63,21 +68,6 @@ struct MarkerDetailView: View {
                             .padding(.horizontal, 25)
                             .padding(.vertical, 20)
                     }
-                    
-                    Divider()
-                    
-                    // Footer
-                    MarkerDetailFooterView(
-                        marker: marker,
-                        isLiked: $isLiked,
-                        likeCount: $likeCount,
-                        isOwner: marker.isCurrentUserMarker,
-                        showComments: $showComments,
-                        onLike: handleLike,
-                        onShare: handleShare,
-                        onReport: { showReportReasonSheet = true },
-                        onDelete: { showDeleteMarkerConfirmation = true }
-                    )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background(
@@ -121,16 +111,6 @@ struct MarkerDetailView: View {
                 GuildUserDetailViewRL(member: member)
                     .environmentObject(rlAppState)
             }
-            .navigationDestination(isPresented: $showComments) {
-                CommentsView(
-                    marker: marker,
-                    comments: $comments,
-                    markerManager: markerManager,
-                    selectedDetent: $selectedDetent
-                )
-                .navigationTitle("Comments")
-                .navigationBarTitleDisplayMode(.inline)
-            }
             .onReceive(markerManager.$markers) { updatedMarkers in
                 guard let updated = updatedMarkers.first(where: { $0.id == marker.id }) else { return }
                 if updated.comments != comments {
@@ -142,6 +122,9 @@ struct MarkerDetailView: View {
                 if updated.isLikedByCurrentUser != isLiked {
                     isLiked = updated.isLikedByCurrentUser
                 }
+            }
+            .onAppear {
+                syncStateWithLatestMarker()
             }
         }
     }
@@ -192,9 +175,16 @@ struct MarkerDetailView: View {
             dismiss()
         }
     }
+
+    private func syncStateWithLatestMarker() {
+        guard let updated = markerManager.markers.first(where: { $0.id == marker.id }) else { return }
+        comments = updated.comments
+        likeCount = updated.likeCount
+        isLiked = updated.isLikedByCurrentUser
+    }
 }
 
-private struct MarkerShareSheet: View {
+struct MarkerShareSheet: View {
     enum DestinationMode: String, CaseIterable, Identifiable {
         case chatroom = "Chatroom"
         case dm = "DM"
@@ -452,6 +442,46 @@ private struct MarkerShareSheet: View {
         } catch {
             rlAppState.showError(error, title: "Failed to Share Marker", style: .toast)
         }
+    }
+}
+
+// MARK: - Embedded Marker Chat Tab
+
+struct EmbeddedMarkerChatTabView: View {
+    let marker: ChartMarkerUI
+    @ObservedObject var markerManager: MarkerManager
+    @Binding var selectedDetent: PresentationDetent
+
+    @State private var comments: [RLMarkerCommentDTO] = []
+
+    init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
+        self.marker = marker
+        self.markerManager = markerManager
+        self._selectedDetent = selectedDetent
+        _comments = State(initialValue: marker.comments)
+    }
+
+    var body: some View {
+        CommentsView(
+            marker: marker,
+            comments: $comments,
+            markerManager: markerManager,
+            selectedDetent: $selectedDetent
+        )
+        .onReceive(markerManager.$markers) { updatedMarkers in
+            guard let updated = updatedMarkers.first(where: { $0.id == marker.id }) else { return }
+            if updated.comments != comments {
+                comments = updated.comments
+            }
+        }
+        .onAppear {
+            syncStateWithLatestMarker()
+        }
+    }
+
+    private func syncStateWithLatestMarker() {
+        guard let updated = markerManager.markers.first(where: { $0.id == marker.id }) else { return }
+        comments = updated.comments
     }
 }
 
@@ -855,7 +885,13 @@ struct MarkerDetailHeaderView: View {
     let isLiked: Bool
     let likeCount: Int
     let commentCount: Int
+    let isOwner: Bool
+    var showsActionRow: Bool = false
     var onAuthorTap: (() -> Void)? = nil
+    var onLike: (() -> Void)? = nil
+    var onShare: (() -> Void)? = nil
+    var onReport: (() -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -939,6 +975,19 @@ struct MarkerDetailHeaderView: View {
                     .background(marker.displayColor.opacity(0.15))
                     .clipShape(Capsule())
             }
+
+            if showsActionRow {
+                MarkerGeneralActionsRow(
+                    isLiked: isLiked,
+                    likeCount: likeCount,
+                    isOwner: isOwner,
+                    onLike: { onLike?() },
+                    onShare: { onShare?() },
+                    onReport: { onReport?() },
+                    onDelete: { onDelete?() }
+                )
+                .padding(.top, 2)
+            }
             
             Divider()
         }
@@ -1005,6 +1054,89 @@ struct MarkerDetailHeaderView: View {
                 .foregroundColor(AppColors.greyText)
         }
         .padding(.vertical, 2)
+    }
+}
+
+struct MarkerGeneralActionsRow: View {
+    let isLiked: Bool
+    let likeCount: Int
+    let isOwner: Bool
+    let onLike: () -> Void
+    let onShare: () -> Void
+    let onReport: () -> Void
+    let onDelete: () -> Void
+
+    @State private var likeScale: CGFloat = 1.0
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                    likeScale = 1.22
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                        likeScale = 1.0
+                    }
+                }
+                onLike()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.whiteText.opacity(0.9))
+                        .scaleEffect(likeScale)
+                    Text("\(likeCount)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.whiteText.opacity(0.9))
+                }
+                .frame(height: 36)
+                .padding(.horizontal, 14)
+                .background(
+                    Capsule()
+                        .fill(isLiked ? AppColors.markerHeartBackground : AppColors.gradientBackgroundDark.opacity(0.3))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isLiked ? AppColors.markerHeartBorder : AppColors.whiteText.opacity(0.2),
+                            lineWidth: 1
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Spacer()
+
+            DrawerActionButton(
+                imageName: "square.and.arrow.up",
+                backgroundColor: AppColors.gradientBackgroundDark.opacity(0.3),
+                foregroundColor: AppColors.whiteText.opacity(0.9),
+                strokeColor: AppColors.whiteText.opacity(0.2),
+                strokeWidth: 1,
+                action: onShare
+            )
+
+            if isOwner {
+                DrawerActionButton(
+                    imageName: "trash",
+                    backgroundColor: AppColors.bearCandleRed.opacity(0.15),
+                    foregroundColor: AppColors.bearCandleRed,
+                    strokeColor: AppColors.bearCandleRed.opacity(0.4),
+                    strokeWidth: 1,
+                    action: onDelete
+                )
+            } else {
+                DrawerActionButton(
+                    imageName: "flag",
+                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.3),
+                    foregroundColor: AppColors.whiteText.opacity(0.9),
+                    strokeColor: AppColors.whiteText.opacity(0.2),
+                    strokeWidth: 1,
+                    action: onReport
+                )
+            }
+        }
     }
 }
 

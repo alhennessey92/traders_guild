@@ -271,10 +271,7 @@ struct TradingChartView: View {
     
     /// Haptic feedback generator for marker interactions
     private let markerHaptic = UIImpactFeedbackGenerator(style: .medium)
-    
-    /// Marker detail sheet presentation detent (controls sheet size); starts small so sheet opens compact
-    @State private var markerDetailDetent: PresentationDetent = .fraction(0.35)
-    
+
     // MARK: - Chart Configuration
     
     /// Base width of each candle before any scaling is applied
@@ -603,31 +600,8 @@ struct TradingChartView: View {
             .presentationDragIndicator(.visible)
             .onDisappear(perform: handleMarkerSheetDismiss)
         }
-        .sheet(item: $markerManager.selectedMarker) { marker in
-            MarkerDetailView(
-                marker: marker,
-                markerManager: markerManager,
-                selectedDetent: $markerDetailDetent
-            )
-            .presentationDetents([.fraction(0.35), .fraction(0.5), .large], selection: $markerDetailDetent)
-            .presentationDragIndicator(.visible)
-            .presentationBackground {
-                ZStack {
-                    Color.clear
-                        .background(.ultraThinMaterial)
-                    AppColors.sheetBackground
-                }
-            }
-            .presentationCornerRadius(33)
-            .presentationBackgroundInteraction(.enabled(upThrough: .large))
-        }
         .sheet(isPresented: $showMarkerTypeFilterSheet) {
             markerTypeFilterSheet
-        }
-        .onChange(of: markerManager.selectedMarker) { _, new in
-            if new != nil {
-                markerDetailDetent = .fraction(0.35)
-            }
         }
         .onAppear(perform: handleOnAppear)
         .onChange(of: currentGuildId) { _, _ in
@@ -1626,6 +1600,7 @@ struct TradingChartView: View {
         syncMarkerContext()
         setupControlActions()
         chartViewModel.markerManager = markerManager
+        chartViewModel.observeMarkerSelection()
         markerManager.configureRealTime(dataManager: chartData)
         isChartLoading = chartViewModel.currentSymbol == nil || chartData.candles.isEmpty
         

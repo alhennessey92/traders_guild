@@ -32,7 +32,22 @@ class ChartViewModel: ObservableObject {
     }
     
     weak var markerManager: MarkerManager?
-    
+
+    // MARK: - Marker Detail Bridge
+
+    /// Mirrors markerManager.selectedMarker so ChartBottomSheet can react to marker selection
+    @Published var selectedMarkerForSheet: ChartMarkerUI?
+    private var markerSelectionCancellable: AnyCancellable?
+
+    /// Call after markerManager is assigned to bridge selectedMarker into @Published for bottom sheet reactivity
+    func observeMarkerSelection() {
+        markerSelectionCancellable = markerManager?.$selectedMarker
+            .receive(on: RunLoop.main)
+            .sink { [weak self] marker in
+                self?.selectedMarkerForSheet = marker
+            }
+    }
+
     // MARK: - Published State
     
     @Published var currentSymbol: RLTradingSymbolDTO?

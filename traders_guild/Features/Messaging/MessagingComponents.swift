@@ -496,23 +496,23 @@ struct ChatInputFooter: View {
                 .frame(height: 44)
                 .background(AppColors.whiteText.opacity(0.08))
                 .cornerRadius(25)
+                .overlay {
+                    if let detent = selectedDetent, detent.wrappedValue != .large {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                detent.wrappedValue = .large
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    isInputFocused = true
+                                }
+                            }
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
         .background(AppColors.sheetBackground)
-        .overlay {
-            if let detent = selectedDetent, detent.wrappedValue != .large {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        detent.wrappedValue = .large
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            isInputFocused = true
-                        }
-                    }
-            }
-        }
         .compositingGroup()
         .onChange(of: speechService.transcribedText) { _, newValue in
             if !newValue.isEmpty {

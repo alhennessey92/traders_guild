@@ -89,6 +89,24 @@ enum ChartPattern: String, Codable, CaseIterable {
 
 // MARK: - Color Hex Helper
 
+// MARK: - Marker Detail Tabs (Bottom Sheet Takeover)
+
+enum MarkerDetailTab: String, CaseIterable {
+    case details = "Details"
+    case chat = "Chat"
+    case analysis = "Analysis"
+
+    var icon: String {
+        switch self {
+        case .details: return "info.circle.fill"
+        case .chat: return "bubble.left.fill"
+        case .analysis: return "chart.bar.xaxis"
+        }
+    }
+}
+
+// MARK: - Color Hex Helper
+
 extension Color {
     init?(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
