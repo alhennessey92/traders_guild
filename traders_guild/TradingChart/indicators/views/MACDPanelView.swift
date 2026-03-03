@@ -63,9 +63,9 @@ struct MACDPanelView: View {
                 xAxisLabels
             }
         }
-        .background(Color.black)
+        .background(Color.black.opacity(0.85))
     }
-    
+
     // MARK: - Pan Gesture
     
     private var panGesture: some Gesture {
@@ -147,7 +147,7 @@ struct MACDPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            Color.black.opacity(0.95)
+            Color.black.opacity(0.8)
             
             Canvas { context, size in
                 drawMACDPanel(context: context, size: size)
@@ -167,13 +167,20 @@ struct MACDPanelView: View {
     // MARK: - Canvas Drawing
     
     private func drawMACDPanel(context: GraphicsContext, size: CGSize) {
+        PanelGridHelper.drawVerticalGridLines(
+            context: context, size: size,
+            candles: chartData.candles, timeframe: timeframe,
+            totalOffset: totalOffset, totalCandleWidth: totalCandleWidth,
+            actualCandleWidth: actualCandleWidth
+        )
+
         guard let config = macdConfig else { return }
-        
+
         let drawableHeight = size.height - 20
         let topPadding: CGFloat = 18
         let dataRange = macdDataRange
         guard dataRange.max > dataRange.min else { return }
-        
+
         // Draw zero line
         drawZeroLine(context: context, size: size, dataRange: dataRange, drawableHeight: drawableHeight, topPadding: topPadding)
         

@@ -91,9 +91,9 @@ struct GenericIndicatorPanelView: View {
                 xAxisLabels
             }
         }
-        .background(Color.black)
+        .background(Color.black.opacity(0.85))
     }
-    
+
     // MARK: - Pan Gesture
     
     private var panGesture: some Gesture {
@@ -178,7 +178,7 @@ struct GenericIndicatorPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            Color.black.opacity(0.95)
+            Color.black.opacity(0.8)
             
             Canvas { context, size in
                 drawPanel(context: context, size: size)
@@ -398,6 +398,13 @@ struct GenericIndicatorPanelView: View {
     // MARK: - Drawing
     
     private func drawPanel(context: GraphicsContext, size: CGSize) {
+        PanelGridHelper.drawVerticalGridLines(
+            context: context, size: size,
+            candles: chartData.candles, timeframe: timeframe,
+            totalOffset: totalOffset, totalCandleWidth: totalCandleWidth,
+            actualCandleWidth: actualCandleWidth
+        )
+
         switch panelType {
         case .cci:
             drawCCI(context: context, size: size)

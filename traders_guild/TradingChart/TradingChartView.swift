@@ -253,6 +253,10 @@ struct TradingChartView: View {
     /// Marker visibility type-filter sheet state.
     @State private var showMarkerTypeFilterSheet = false
     @State private var isMarkerVisibilityPanelExpanded = false
+
+    /// Chart display settings (grid, candle colors).
+    @ObservedObject private var chartSettings = ChartSettings.shared
+    @State private var showChartSettingsSheet = false
     
 
     
@@ -605,6 +609,9 @@ struct TradingChartView: View {
         .sheet(isPresented: $showMarkerTypeFilterSheet) {
             markerTypeFilterSheet
         }
+        .sheet(isPresented: $showChartSettingsSheet) {
+            ChartSettingsView(settings: chartSettings)
+        }
         .onAppear(perform: handleOnAppear)
         .onChange(of: currentGuildId) { _, _ in
             syncMarkerContext()
@@ -712,8 +719,6 @@ struct TradingChartView: View {
                     .zIndex(18)
             }
 
-            yAxisOverlay(geometry: geometry)
-
             if let markerType = linePlacementMarkerType {
                 linePlacementOverlay(
                     markerType: markerType,
@@ -732,6 +737,9 @@ struct TradingChartView: View {
                     chartData: chartData
                 )
             }
+
+            // Keep Y-axis above chart drawing but below price/placement overlays and x-axis layer.
+            yAxisOverlay(geometry: geometry)
 
             priceIndicatorView(geometry: geometry)
             xAxisOverlay(geometry: geometry)
@@ -2355,75 +2363,95 @@ struct TradingChartView: View {
 
         VStack {
             Spacer()
+
+            // Expanded marker visibility panel (above buttons)
+            if isMarkerVisibilityPanelExpanded {
+                HStack {
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Picker("Visibility", selection: $markerManager.visibilityMode) {
+                            ForEach(MarkerVisibilityMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+
+                        Button {
+                            showMarkerTypeFilterSheet = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(markerTypeFilterSummary)
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundColor(AppColors.whiteText.opacity(0.9))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.trailing, yAxisTrailingInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                .padding(.bottom, 6)
+            }
+
+            // Button row (always anchored just above x-axis)
             HStack(alignment: .bottom) {
                 dayDatePill
                     .padding(.leading, 6)
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 8) {
-                    HStack(spacing: 10) {
-                        ChartBottomControlButton(
-                            title: isMarkerVisibilityPanelExpanded ? "Close" : "Marker Visibility",
-                            icon: isMarkerVisibilityPanelExpanded ? "xmark.circle" : "eye",
-                            color: .white.opacity(0.8),
-                            isActive: isMarkerVisibilityPanelExpanded
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isMarkerVisibilityPanelExpanded.toggle()
-                            }
+                HStack(spacing: 6) {
+                    ChartBottomControlButton(
+                        title: isMarkerVisibilityPanelExpanded ? "Close" : "Markers",
+                        icon: isMarkerVisibilityPanelExpanded ? "xmark.circle" : "eye",
+                        color: .white.opacity(0.8),
+                        isActive: isMarkerVisibilityPanelExpanded
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isMarkerVisibilityPanelExpanded.toggle()
                         }
-                        .allowsHitTesting(true)
-
-                        ChartBottomControlButton(
-                            title: "Latest",
-                            icon: "arrow.right.to.line",
-                            color: .white.opacity(0.5)
-                        ) {
-                            controlViewModel.jumpToLatest()
-                        }
-                        .allowsHitTesting(true)
                     }
+                    .allowsHitTesting(true)
 
-                    if isMarkerVisibilityPanelExpanded {
-                        VStack(alignment: .trailing, spacing: 8) {
-                            Picker("Visibility", selection: $markerManager.visibilityMode) {
-                                ForEach(MarkerVisibilityMode.allCases) { mode in
-                                    Text(mode.title).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .frame(width: 260)
-
-                            Button {
-                                showMarkerTypeFilterSheet = true
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "line.3.horizontal.decrease.circle")
-                                        .font(.system(size: 11, weight: .semibold))
-                                    Text(markerTypeFilterSummary)
-                                        .font(.system(size: 10, weight: .semibold))
-                                }
-                                .foregroundColor(AppColors.whiteText.opacity(0.9))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.12))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    ChartBottomControlButton(
+                        title: "Latest",
+                        icon: "arrow.right.to.line",
+                        color: .white.opacity(0.5)
+                    ) {
+                        controlViewModel.jumpToLatest()
                     }
+                    .allowsHitTesting(true)
+
+                    // Chart settings (icon-only)
+                    Button {
+                        showChartSettingsSheet = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.5))
+                            .padding(6)
+                            .background(Color.white.opacity(0.08))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .allowsHitTesting(true)
                 }
                 .padding(.trailing, yAxisTrailingInset)
-                .animation(.easeInOut(duration: 0.2), value: isMarkerVisibilityPanelExpanded)
             }
             .padding(.bottom, bottomAreaHeight + panelPadding)
         }
+        .animation(.easeInOut(duration: 0.2), value: isMarkerVisibilityPanelExpanded)
         .allowsHitTesting(true)
     }
 
@@ -2443,7 +2471,9 @@ struct TradingChartView: View {
                 Text(labelText)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
             }
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(Color.white.opacity(0.08))
@@ -2591,20 +2621,23 @@ struct TradingChartView: View {
     }
     
     private func drawGrid(context: GraphicsContext, size: CGSize) {
+        guard chartSettings.showGridLines else { return }
+
         let priceRange = chartData.priceRange
         let scaledHeight = size.height * gestureState.priceScale
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
         let totalOffset = gestureState.panOffset.width
         let timeframe = chartViewModel.currentTimeframe
+        let opacity = chartSettings.gridOpacity
 
         let verticalGrid = verticalGridPaths(size: size, totalOffset: totalOffset, timeframe: timeframe)
         let horizontalPath = Path { path in
             drawHorizontalGridLines(path: &path, size: size, priceRange: priceRange, scaledHeight: scaledHeight, totalVerticalOffset: totalVerticalOffset)
         }
 
-        context.stroke(horizontalPath, with: .color(.gray.opacity(0.18)), lineWidth: 0.5)
-        context.stroke(verticalGrid.minor, with: .color(.gray.opacity(0.16)), lineWidth: 0.45)
-        context.stroke(verticalGrid.major, with: .color(.gray.opacity(0.3)), lineWidth: 0.6)
+        context.stroke(horizontalPath, with: .color(.gray.opacity(opacity)), lineWidth: 0.5)
+        context.stroke(verticalGrid.minor, with: .color(.gray.opacity(opacity * 0.9)), lineWidth: 0.45)
+        context.stroke(verticalGrid.major, with: .color(.gray.opacity(min(opacity * 1.7, 1.0))), lineWidth: 0.6)
     }
 
     private func verticalGridPaths(size: CGSize, totalOffset: CGFloat, timeframe: RLChartTimeframe) -> (major: Path, minor: Path) {
@@ -2711,7 +2744,7 @@ struct TradingChartView: View {
             (CGFloat(candle.close - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) *
             scaledHeight - totalVerticalOffset
         
-        let candleColor = candle.close >= candle.open ? Color.green : Color.red
+        let candleColor = candle.close >= candle.open ? chartSettings.bullishCandleColor : chartSettings.bearishCandleColor
         
         // Draw wick
         let wickPath = Path { path in
@@ -2837,7 +2870,9 @@ struct ChartBottomControlButton: View {
                 Text(title)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(isActive ? AppColors.gradientBackgroundDark : color)
+                    .lineLimit(1)
             }
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(

@@ -17,14 +17,16 @@ import UIKit
 enum WatchlistTab: String, CaseIterable, UnifiedTabItem {
     case personal = "Personal"
     case guild = "Guild"
+    case global = "Global"
     case search = "Search"
-    
+
     var title: String { rawValue }
-    
+
     var icon: String {
         switch self {
         case .personal: return "star.fill"
         case .guild: return "person.3.fill"
+        case .global: return "globe"
         case .search: return "magnifyingglass"
         }
     }
@@ -90,6 +92,8 @@ struct WatchlistView: View {
                         personalWatchlistContent
                     case .guild:
                         guildWatchlistContent
+                    case .global:
+                        globalWatchlistContent
                     case .search:
                         searchContent
                     }
@@ -121,6 +125,18 @@ struct WatchlistView: View {
                 await refreshWatchlist()
             }
         }
+        .task {
+            // Load global symbols on first appearance if not already loaded
+            if leftDrawerViewModel.globalTradingSymbols.isEmpty,
+               let guildId = rlAppState.currentGuild?.id {
+                do {
+                    let globalResponse = try await rlAppState.realApi.getGlobalSymbols(guildId: guildId, limit: 100)
+                    leftDrawerViewModel.globalTradingSymbols = globalResponse.symbols
+                } catch {
+                    // Errors are surfaced through RLAppState toasts.
+                }
+            }
+        }
     }
     
     // MARK: - Refresh
@@ -130,10 +146,12 @@ struct WatchlistView: View {
         do {
             async let guildTask = rlAppState.fetchGuildWatchlist(guildId: guildId)
             async let personalTask = rlAppState.fetchPersonalWatchlist()
-            let (guildResponse, personalResponse) = try await (guildTask, personalTask)
+            async let globalTask = rlAppState.realApi.getGlobalSymbols(guildId: guildId, limit: 100)
+            let (guildResponse, personalResponse, globalResponse) = try await (guildTask, personalTask, globalTask)
             await MainActor.run {
                 leftDrawerViewModel.guildTradingWatchlist = guildResponse.symbols.map { $0.symbol }
                 leftDrawerViewModel.personalTradingWatchlist = personalResponse.symbols.map { $0.symbol }
+                leftDrawerViewModel.globalTradingSymbols = globalResponse.symbols
             }
         } catch {
             // Errors are surfaced through RLAppState toasts.
@@ -149,6 +167,8 @@ struct WatchlistView: View {
             return leftDrawerViewModel.personalTradingWatchlist.count
         case .guild:
             return leftDrawerViewModel.guildTradingWatchlist.count
+        case .global:
+            return leftDrawerViewModel.globalTradingSymbols.count
         case .search:
             return searchResults.count
         }
@@ -204,7 +224,61 @@ struct WatchlistView: View {
             }
         }
     }
-    
+
+    // MARK: - Global Watchlist Content
+
+    private var globalWatchlistContent: some View {
+        Group {
+            if leftDrawerViewModel.globalTradingSymbols.isEmpty {
+                UnifiedEmptyState(
+                    icon: "globe",
+                    title: "No Global Symbols",
+                    subtitle: "No active symbols are available right now"
+                )
+                .padding(.top, 40)
+            } else {
+                globalSymbolsList(
+                    symbols: leftDrawerViewModel.globalTradingSymbols
+                )
+            }
+        }
+    }
+
+    // MARK: - Global Symbols List (grouped by asset class)
+
+    private func globalSymbolsList(symbols: [RLTradingSymbolDTO]) -> some View {
+        let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
+            RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
+        }
+        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+
+        return VStack(spacing: 10) {
+            ForEach(orderedClasses, id: \.self) { assetClass in
+                if let classSymbols = grouped[assetClass], !classSymbols.isEmpty {
+                    UnifiedDisclosureGroup(
+                        title: assetClass.rawValue,
+                        count: classSymbols.count,
+                        icon: assetClass.icon,
+                        iconColor: colorForAssetClass(assetClass),
+                        isExpandedByDefault: true
+                    ) {
+                        VStack(spacing: 6) {
+                            ForEach(classSymbols) { symbol in
+                                GuildWatchlistRow(
+                                    symbol: symbol,
+                                    isCurrentSymbol: symbol.id == currentSymbolId,
+                                    isJustSelected: symbol.id == justSelectedSymbolId,
+                                    onTap: { selectSymbol(symbol) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
     // MARK: - Personal Watchlist Symbols List (grouped by asset class)
     
     private func personalWatchlistSymbolsList(symbols: [RLTradingSymbolDTO]) -> some View {
@@ -535,7 +609,7 @@ struct PersonalWatchlistRow: View {
                         .foregroundColor(.gray)
                         .lineLimit(1)
 
-                    HStack(spacing: 6) {
+                    FlowLayout(spacing: 6) {
                         if let provider = symbol.activeProviderDisplayName {
                             SymbolProviderBadge(provider: provider)
                         }
@@ -544,15 +618,15 @@ struct PersonalWatchlistRow: View {
                         }
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Price info
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(symbol.priceFormatted ?? "--")
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
-                    
+
                     HStack(spacing: 2) {
                         Image(systemName: (symbol.isUp ?? false) ? "arrow.up.right" : "arrow.down.right")
                             .font(.system(size: 10, weight: .bold))
@@ -561,7 +635,7 @@ struct PersonalWatchlistRow: View {
                     }
                     .foregroundColor(symbol.changeColor)
                 }
-                
+
                 // Remove indicator when removing
                 if isRemoving {
                     ProgressView()
@@ -618,7 +692,7 @@ struct GuildWatchlistRow: View {
                         .foregroundColor(.gray)
                         .lineLimit(1)
 
-                    HStack(spacing: 6) {
+                    FlowLayout(spacing: 6) {
                         if let provider = symbol.activeProviderDisplayName {
                             SymbolProviderBadge(provider: provider)
                         }
@@ -627,15 +701,15 @@ struct GuildWatchlistRow: View {
                         }
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Price info
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(symbol.priceFormatted ?? "--")
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
-                    
+
                     HStack(spacing: 2) {
                         Image(systemName: (symbol.isUp ?? false) ? "arrow.up.right" : "arrow.down.right")
                             .font(.system(size: 10, weight: .bold))
@@ -689,7 +763,7 @@ struct SearchResultSymbolRow: View {
                         .foregroundColor(.gray)
                         .lineLimit(1)
 
-                    HStack(spacing: 6) {
+                    FlowLayout(spacing: 6) {
                         if let provider = symbol.activeProviderDisplayName {
                             SymbolProviderBadge(provider: provider)
                         }
@@ -698,7 +772,7 @@ struct SearchResultSymbolRow: View {
                         }
                     }
                 }
-                
+
                 Spacer()
                 
                 // Personal watchlist button only

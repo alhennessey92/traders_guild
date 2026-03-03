@@ -63,9 +63,9 @@ struct StochasticPanelView: View {
                 xAxisLabels
             }
         }
-        .background(Color.black)
+        .background(Color.black.opacity(0.85))
     }
-    
+
     // MARK: - Pan Gesture
     
     private var panGesture: some Gesture {
@@ -147,7 +147,7 @@ struct StochasticPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            Color.black.opacity(0.95)
+            Color.black.opacity(0.8)
             
             Canvas { context, size in
                 drawStochasticPanel(context: context, size: size)
@@ -167,11 +167,18 @@ struct StochasticPanelView: View {
     // MARK: - Canvas Drawing
     
     private func drawStochasticPanel(context: GraphicsContext, size: CGSize) {
+        PanelGridHelper.drawVerticalGridLines(
+            context: context, size: size,
+            candles: chartData.candles, timeframe: timeframe,
+            totalOffset: totalOffset, totalCandleWidth: totalCandleWidth,
+            actualCandleWidth: actualCandleWidth
+        )
+
         guard let config = stochConfig else { return }
-        
+
         let drawableHeight = size.height - 20
         let topPadding: CGFloat = 18
-        
+
         drawZones(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
         drawReferenceLevels(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
         drawDLine(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)

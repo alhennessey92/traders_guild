@@ -134,6 +134,29 @@ enum RLMarkerType: String, Codable, CaseIterable {
         }
     }
     
+    /// Short description for marker selection UI
+    var subtitle: String {
+        switch self {
+        case .note:             return "Add a note or comment"
+        case .question:         return "Ask your guild a question"
+        case .alert:            return "Flag something important"
+        case .entry:            return "Mark a trade entry level"
+        case .exit:             return "Mark a trade exit level"
+        case .stopLoss:         return "Set a stop-loss level"
+        case .takeProfit:       return "Set a take-profit target"
+        case .support:          return "Identify a support zone"
+        case .resistance:       return "Identify a resistance zone"
+        case .indicator:        return "Highlight an indicator signal"
+        case .trendline:        return "Mark a trendline"
+        case .pattern:          return "Identify a chart pattern"
+        case .volumeSpike:      return "Flag unusual volume"
+        case .predictionTarget: return "Make a price prediction"
+        case .emoji:            return "React with an emoji"
+        case .poll:             return "Create a poll"
+        case .personal:         return "Private marker (only you)"
+        }
+    }
+
     /// Short text label for SL/TP (nil = use icon)
     var shortLabel: String? {
         switch self {

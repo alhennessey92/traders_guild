@@ -162,11 +162,11 @@ struct ChartSheetSymbolView: View {
                                 .minimumScaleFactor(0.85)
                                 .fixedSize(horizontal: false, vertical: true)
                             
-                            HStack(spacing: 5) {
+                            FlowLayout(spacing: 5) {
                                 Text(symbol.ticker)
                                     .font(.system(size: 11))
                                     .foregroundColor(.white.opacity(0.6))
-                                
+
                                 // Market status
                                 SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
 
@@ -179,11 +179,11 @@ struct ChartSheetSymbolView: View {
                                 ForEach(symbol.activityBadgeValues, id: \.self) { badge in
                                     SymbolActivityBadge(label: badge)
                                 }
-                                
+
                                 Text("•")
                                     .font(.system(size: 9))
                                     .foregroundColor(.white.opacity(0.4))
-                                
+
                                 Text(symbol.assetClass.capitalized)
                                     .font(.system(size: 11))
                                     .foregroundColor(.white.opacity(0.6))
@@ -237,7 +237,7 @@ struct ChartSheetSymbolView: View {
             if let symbol = currentSymbolDTO {
                 VStack(spacing: 10) {
                     Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             isSymbolDetailsExpanded.toggle()
                         }
                     } label: {
@@ -252,16 +252,21 @@ struct ChartSheetSymbolView: View {
 
                             Spacer()
 
-                            Image(systemName: isSymbolDetailsExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.65))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.5))
+                                .rotationEffect(.degrees(isSymbolDetailsExpanded ? 90 : 0))
                         }
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 11)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.06))
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
+                        .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
 
@@ -304,9 +309,10 @@ struct ChartSheetSymbolView: View {
                                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                                 )
                         )
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .transition(.opacity)
                     }
                 }
+                .clipped()
             }
         }
     }
@@ -1175,7 +1181,7 @@ struct GlobalSymbolListRow: View {
                             .foregroundColor(.gray)
                             .lineLimit(1)
 
-                        HStack(spacing: 6) {
+                        FlowLayout(spacing: 6) {
                             SymbolProviderBadge(provider: symbol.providerDisplayLabel)
                             ForEach(symbol.activityBadgeValues, id: \.self) { badge in
                                 SymbolActivityBadge(label: badge)

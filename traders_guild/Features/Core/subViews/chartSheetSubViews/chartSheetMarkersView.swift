@@ -20,212 +20,106 @@ struct chartSheetMarkersView: View {
 
     
     var body: some View {
-        VStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack{
-                    Text("Add a Marker")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 15)
-                    
-                    Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            // MARK: - Header
+            HStack {
+                Text("Add a Marker")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
 
-                    HStack(spacing: 10) {
-                        if let onShowMarkerActivity {
-                            Button(action: onShowMarkerActivity) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.85))
-                                    .frame(width: 34, height: 34)
-                                    .background(Color.white.opacity(0.08))
-                                    .clipShape(Circle())
-                            }
+                Spacer()
+
+                HStack(spacing: 10) {
+                    if let onShowMarkerActivity {
+                        Button(action: onShowMarkerActivity) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white.opacity(0.85))
+                                .frame(width: 34, height: 34)
+                                .background(Color.white.opacity(0.08))
+                                .clipShape(Circle())
                         }
-
-                        MarkerSettingsButton()
                     }
-                    .padding(.trailing, 15)
-                    .padding(.top, 15)
-                    
-                }
-                
-                
-                Text("Place markers on the chart to share insights with your guild. Each candle can have one of each marker type.")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .padding(.bottom, 8)
-                
-                VStack(spacing: 8) {
-                    
-                    // MARK: - Prediction Trade (reputation-affecting, no heading)
-                    HStack(alignment: .top, spacing: 12) {
-                        Text("Reputation-affecting trade prediction. You must set SL and TP; marker is placed at the most recent candle as entry.")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        MarkerButton(
-                            type: .predictionTarget,
-                            isActive: isMarkerPlacementActive(for: .predictionTarget),
-                            controlViewModel: controlViewModel
-                        )
-                        .frame(width: 90)
-                    }
-                    .padding(.top, 4)
-                    .padding(.bottom, 4)
-                    
-                    // MARK: - Trade Ideas
-                    Text("Trade Ideas")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 4)
-                        .padding(.bottom, 4)
-                    
-                    HStack(spacing: 10) {
-                        MarkerButton(
-                            type: .entry,
-                            isActive: isMarkerPlacementActive(for: .entry),
-                            controlViewModel: controlViewModel
-                        )
-                        MarkerButton(
-                            type: .takeProfit,
-                            isActive: isMarkerPlacementActive(for: .takeProfit),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    HStack(spacing: 10) {
-                        MarkerButton(
-                            type: .stopLoss,
-                            isActive: isMarkerPlacementActive(for: .stopLoss),
-                            controlViewModel: controlViewModel
-                        )
-                        MarkerButton(
-                            type: .exit,
-                            isActive: isMarkerPlacementActive(for: .exit),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    
-                    // MARK: - Analysis
-                    Text("Analysis")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 12)
-                        .padding(.bottom, 4)
-                    
-                    HStack(spacing: 10) {
-                        MarkerButton(
-                            type: .support,
-                            isActive: isMarkerPlacementActive(for: .support),
-                            controlViewModel: controlViewModel
-                        )
-                        MarkerButton(
-                            type: .resistance,
-                            isActive: isMarkerPlacementActive(for: .resistance),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    HStack(spacing: 10) {
-                        MarkerButton(
-                            type: .trendline,
-                            isActive: isMarkerPlacementActive(for: .trendline),
-                            controlViewModel: controlViewModel
-                        )
-                        MarkerButton(
-                            type: .pattern,
-                            isActive: isMarkerPlacementActive(for: .pattern),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    
-                    // MARK: - Signals & Observations
-                    Text("Signals & Observations")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 12)
-                        .padding(.bottom, 4)
-                    
-                    HStack(spacing: 10) {
-                        MarkerButton(
-                            type: .indicator,
-                            isActive: isMarkerPlacementActive(for: .indicator),
-                            controlViewModel: controlViewModel
-                        )
-                        MarkerButton(
-                            type: .volumeSpike,
-                            isActive: isMarkerPlacementActive(for: .volumeSpike),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    HStack(spacing: 10) {
-                        MarkerButton(
-                            type: .alert,
-                            isActive: isMarkerPlacementActive(for: .alert),
-                            controlViewModel: controlViewModel
-                        )
-                        MarkerButton(
-                            type: .question,
-                            isActive: isMarkerPlacementActive(for: .question),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    
-                    // MARK: - Notes & Social
-                    Text("Notes & Social")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 12)
-                        .padding(.bottom, 4)
-                    
-                    HStack(spacing: 10) {
-                        MarkerButton(
-                            type: .note,
-                            isActive: isMarkerPlacementActive(for: .note),
-                            controlViewModel: controlViewModel
-                        )
-                        MarkerButton(
-                            type: .poll,
-                            isActive: isMarkerPlacementActive(for: .poll),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    HStack(spacing: 10) {
-                        MarkerButton(
-                            type: .emoji,
-                            isActive: isMarkerPlacementActive(for: .emoji),
-                            controlViewModel: controlViewModel
-                        )
-                        MarkerButton(
-                            type: .personal,
-                            isActive: isMarkerPlacementActive(for: .personal),
-                            controlViewModel: controlViewModel
-                        )
-                    }
-                    
-//                    // MARK: - Marker Settings Section
-//                    Divider()
-//                        .background(Color.white.opacity(0.2))
-//                        .padding(.top, 16)
-//                    
-//                    HStack {
-//                        Text("Marker Display Settings")
-//                            .font(.subheadline)
-//                            .foregroundColor(.gray)
-//                        
-////                        Spacer()
-////                        
-////                        MarkerSettingsButton()
-//                    }
-//                    .padding(.top, 8)
-//                    .padding(.bottom, 20)
+                    MarkerSettingsButton()
                 }
             }
+            .padding(.top, 15)
+            .padding(.bottom, 6)
+
+            Text("Place markers on the chart to share insights with your guild.")
+                .font(.caption)
+                .foregroundColor(.gray)
+                .padding(.bottom, 14)
+
+            // MARK: - Prediction (reputation-affecting, full-width)
+            MarkerButton(
+                type: .predictionTarget,
+                isActive: isMarkerPlacementActive(for: .predictionTarget),
+                controlViewModel: controlViewModel
+            )
+            .padding(.bottom, 2)
+            Text("Affects your reputation score. SL and TP are required.")
+                .font(.caption2)
+                .foregroundColor(.gray.opacity(0.7))
+                .padding(.leading, 4)
+                .padding(.bottom, 14)
+
+            // MARK: - Trade Ideas
+            markerSectionHeader("Trade Ideas", subtitle: "Entry and exit levels")
+            markerRow(.entry, .takeProfit)
+            markerRow(.stopLoss, .exit)
+
+            // MARK: - Analysis
+            markerSectionHeader("Analysis", subtitle: "Technical chart marks")
+            markerRow(.support, .resistance)
+            markerRow(.trendline, .pattern)
+
+            // MARK: - Signals & Observations
+            markerSectionHeader("Signals", subtitle: "Alerts and observations")
+            markerRow(.indicator, .volumeSpike)
+            markerRow(.alert, .question)
+
+            // MARK: - Notes & Social
+            markerSectionHeader("Notes & Social", subtitle: "Communication and expression")
+            markerRow(.note, .poll)
+            markerRow(.emoji, .personal)
         }
+    }
+
+    // MARK: - Helpers
+
+    private func markerSectionHeader(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Divider()
+                .background(Color.white.opacity(0.08))
+                .padding(.bottom, 8)
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundColor(.gray)
+        }
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+    }
+
+    private func markerRow(_ left: RLMarkerType, _ right: RLMarkerType) -> some View {
+        HStack(spacing: 8) {
+            MarkerButton(
+                type: left,
+                isActive: isMarkerPlacementActive(for: left),
+                controlViewModel: controlViewModel
+            )
+            MarkerButton(
+                type: right,
+                isActive: isMarkerPlacementActive(for: right),
+                controlViewModel: controlViewModel
+            )
+        }
+        .padding(.bottom, 4)
     }
     
     /// Check if marker placement is active for a specific type
@@ -242,45 +136,65 @@ struct MarkerButton: View {
     let type: RLMarkerType
     let isActive: Bool
     @ObservedObject var controlViewModel: ChartControlViewModel
-    
+
     var body: some View {
         Button {
             if isActive {
-                // Currently placing this type - cancel
                 controlViewModel.cancelMarkerPlacement()
             } else {
-                // Start placing this type
                 controlViewModel.startMarkerPlacement(type: type)
             }
         } label: {
-            VStack(spacing: 8) {
+            HStack(spacing: 10) {
                 if isActive {
-                    Image(systemName: "xmark.circle")
-                        .font(.system(size: 32))
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28))
                         .foregroundColor(.white)
+                        .frame(width: 34, height: 34)
                 } else {
                     UnifiedMarkerBadge(
                         type: type,
                         displayColor: type.color,
-                        size: 40
+                        size: 34
                     )
                 }
-                
-                Text(isActive ? "Cancel" : type.rawValue)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isActive ? "Cancel" : type.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    if !isActive {
+                        Text(type.subtitle)
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 90)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                isActive ?
-                Color.red :
-                Color.white.opacity(0.05)
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isActive ? Color.red : type.color.opacity(0.06))
+                    if !isActive {
+                        // Type-colored leading accent bar
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(type.color.opacity(0.25))
+                            .frame(width: 3)
+                            .padding(.vertical, 6)
+                    }
+                }
             )
-            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(isActive ? Color.clear : Color.white.opacity(0.06), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }

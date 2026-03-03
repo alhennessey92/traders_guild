@@ -100,8 +100,8 @@ struct MainView: View {
                 totalHeight += volumePanelHeight + 22
             }
         }
-        
-        // Add X-axis labels height
+
+        // Add X-axis labels height from bottom indicator panel
         totalHeight += 22
         
         return totalHeight
@@ -112,7 +112,7 @@ struct MainView: View {
         // Base padding for minimized bottom sheet + indicator panels
         return indicatorPanelsTotalHeight + 100
     }
-    
+
     // MARK: - Initialization
     init() {
         let dataManager = ChartDataManager()
@@ -137,10 +137,13 @@ struct MainView: View {
                 
                 // MARK: - Indicator Panels Overlay
                 // Positioned ABOVE main content, BELOW bottom sheet
+                // allowsHitTesting only on panels themselves (not the spacer above)
+                // so chart controls beneath remain tappable
                 if chartViewModel.indicatorManager.shouldShowAnyPanel {
                     VStack {
                         Spacer()
-                        
+                            .allowsHitTesting(false)
+
                         IndicatorPanelContainer(
                             indicatorManager: chartViewModel.indicatorManager,
                             chartData: chartViewModel.dataManager,
@@ -156,8 +159,7 @@ struct MainView: View {
                             atrPanelHeight: $atrPanelHeight,
                             volumePanelHeight: $volumePanelHeight
                         )
-                        
-                        // DYNAMIC bottom padding - accounts for minimized bottom sheet
+                        // Keep bottom sheet clearance while allowing panels to run down to x-axis area.
                         Color.clear
                             .frame(height: 100)
                     }
@@ -384,9 +386,12 @@ struct MainView: View {
                     guard let guildId = rlAppState.currentGuild?.id else { return }
                     Task {
                         do {
-                            let guildWatchlist = try await rlAppState.fetchGuildWatchlist(guildId: guildId)
+                            async let guildTask = rlAppState.fetchGuildWatchlist(guildId: guildId)
+                            async let globalTask = rlAppState.realApi.getGlobalSymbols(guildId: guildId, limit: 100)
+                            let (guildWatchlist, globalSymbols) = try await (guildTask, globalTask)
                             await MainActor.run {
                                 leftDrawerViewModel.guildTradingWatchlist = guildWatchlist.symbols.map { $0.symbol }
+                                leftDrawerViewModel.globalTradingSymbols = globalSymbols.symbols
                             }
                         } catch {
                             // Errors are surfaced via RLAppState.

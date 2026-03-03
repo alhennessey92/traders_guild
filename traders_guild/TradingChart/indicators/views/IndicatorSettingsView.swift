@@ -62,6 +62,24 @@ struct IndicatorSettingsContent: View {
     
     var body: some View {
         VStack(spacing: 16) {
+            // MARK: - Header
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Indicators")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.bottom, 6)
+
+                Text("Add indicators to analyse chart data.")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+
             // Use UnifiedCategoryTabBar for consistent tab styling
             categoryTabs
             
@@ -83,7 +101,7 @@ struct IndicatorSettingsContent: View {
                 errorBanner(error)
             }
         }
-        .padding(.top, 16)
+        .padding(.top, 15)
         .sheet(item: $addingIndicatorType) { type in
             AddMASheet(indicatorType: type, indicatorManager: indicatorManager, onRecalculate: onRecalculate)
         }

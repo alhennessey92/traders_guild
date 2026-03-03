@@ -192,12 +192,11 @@ struct IndicatorPanelContainer: View {
                 total += volumePanelHeight + 22
             }
         }
-        
+
         if hasActivePanels {
-            total += 22 // X-axis labels
+            total += 22 // X-axis labels on bottom indicator panel
         }
         
         return total
     }
 }
-

@@ -57,6 +57,7 @@ class LeftDrawerViewModel: ObservableObject {
 
     @Published var guildTradingWatchlist: [RLTradingSymbolDTO] = []
     @Published var personalTradingWatchlist: [RLTradingSymbolDTO] = []
+    @Published var globalTradingSymbols: [RLTradingSymbolDTO] = []
     
     @Published var isLoading: Bool = false
     @Published var lastRefresh: Date?
