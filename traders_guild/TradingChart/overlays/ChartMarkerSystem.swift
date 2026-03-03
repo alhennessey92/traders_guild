@@ -1549,7 +1549,7 @@ struct ChartMarkerSystem {
     ) {
         guard !markers.isEmpty else { return }
         
-        let baseRadius: CGFloat = 14
+        let baseRadius: CGFloat = 13
         var previousY = anchorY
         
         for (marker, position) in markers {
@@ -1588,7 +1588,7 @@ struct ChartMarkerSystem {
             drawContext.translateBy(x: -position.x, y: -position.y)
         }
 
-        let baseRadius: CGFloat = 16
+        let baseRadius: CGFloat = 15
         let scaledRadius = baseRadius * scale
 
         let circleRect = CGRect(
@@ -1608,24 +1608,21 @@ struct ChartMarkerSystem {
         )
         drawContext.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.28)))
 
-        // 2. Midnight blue gradient background (top → bottom)
-        let gradient = marker.type.markerBackgroundGradient(displayColor: marker.displayColor)
-        let grad = Gradient(colors: [gradient.start, gradient.end])
+        // 2. Dark neutral gradient background (top → bottom)
+        let grad = Gradient(colors: [
+            AppColors.markerNeutralFillTop,
+            AppColors.markerNeutralFillBottom
+        ])
         let startPt = CGPoint(x: position.x, y: position.y - scaledRadius)
         let endPt = CGPoint(x: position.x, y: position.y + scaledRadius)
         drawContext.fill(circlePath, with: .linearGradient(grad, startPoint: startPt, endPoint: endPt))
 
-        // 3. Border — gradient (bottom bright → top dim, opposite of fill)
+        // 3. Border — solid marker color
         let borderWidth = isSelected ? AppColors.markerSelectedBorderWidth : AppColors.markerUnselectedBorderWidth
-        let borderStart = marker.displayColor.markerBorderGradientStart()
-        let borderEnd = marker.displayColor.markerBorderGradientEnd()
-        let borderGrad = Gradient(colors: [borderStart, borderEnd])
-        let borderStartPt = CGPoint(x: position.x, y: position.y + scaledRadius)  // bottom (bright)
-        let borderEndPt = CGPoint(x: position.x, y: position.y - scaledRadius)    // top (dim)
-        drawContext.stroke(circlePath, with: .linearGradient(borderGrad, startPoint: borderStartPt, endPoint: borderEndPt), lineWidth: borderWidth)
+        drawContext.stroke(circlePath, with: .color(marker.displayColor), lineWidth: borderWidth)
 
-        // 4. Icon — light grey, bolder sizing (50% of badge diameter)
-        let iconColor = AppColors.markerIconLight
+        // 4. Icon — same color as border
+        let iconColor = marker.displayColor
         let fontSize: CGFloat = scaledRadius * 1.0
         if marker.type == .emoji {
             let iconChar = marker.selectedEmoji ?? "🎯"
@@ -1694,7 +1691,7 @@ struct ChartMarkerSystem {
         let username = marker.author.username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !username.isEmpty else { return nil }
 
-        let scaledRadius = 16 * scale
+        let scaledRadius = 15 * scale
         let labelY = marker.positionedBelow ? position.y + scaledRadius + 10 : position.y - scaledRadius - 10
         let estimatedWidth = min(140, max(24, CGFloat(username.count) * 5.2 + 10))
         let rect = CGRect(

@@ -108,21 +108,13 @@ struct MarkerCreationSheet: View {
 
     private var headerView: some View {
         HStack(spacing: 15) {
-            // Marker Icon (emoji type shows chosen emoji; alert uses severity color)
-            ZStack {
-                Circle()
-                    .fill(headerColor.opacity(0.3))
-                    .frame(width: 50, height: 50)
-                
-                if markerType == .emoji {
-                    Text(selectedEmoji)
-                        .font(.system(size: 28))
-                } else {
-                    Image(systemName: markerType.icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(headerColor)
-                }
-            }
+            // Marker icon matches chart marker styling
+            UnifiedMarkerBadge(
+                type: markerType,
+                displayColor: headerColor,
+                size: 50,
+                emoji: markerType == .emoji ? selectedEmoji : nil
+            )
             
             VStack(alignment: .leading, spacing: 4) {
                 Text("Add \(markerType.rawValue)")

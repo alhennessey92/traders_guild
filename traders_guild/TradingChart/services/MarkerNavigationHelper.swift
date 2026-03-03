@@ -109,6 +109,7 @@ class MarkerNavigationHelper {
         print("🎯 Waiting \(scrollDelay)s for data to load...")
         
         // Capture values directly to avoid weak self issues
+        let targetMarker = marker
         let markerTimestamp = marker.candleTimestamp
         let capturedGestureState = gestureState
         let capturedChartViewModel = chartViewModel
@@ -169,6 +170,9 @@ class MarkerNavigationHelper {
                 )
             }
 
+            // Select the marker after navigation so the bottom-sheet marker detail view opens.
+            Self.selectMarkerForDetail(targetMarker, in: capturedChartViewModel, attemptsRemaining: 6)
+
             print("🎯 Current panOffset after: \(capturedGestureState.panOffset.width)")
             print("🎯 === MARKER NAVIGATION COMPLETE ===")
             
@@ -214,6 +218,39 @@ class MarkerNavigationHelper {
         }
         
         return nil
+    }
+
+    /// Try to select a marker on chart after symbol/timeframe navigation completes.
+    /// Retries because marker arrays can populate shortly after candles.
+    private static func selectMarkerForDetail(
+        _ target: RLTopMarkerDTO,
+        in chartViewModel: ChartViewModel,
+        attemptsRemaining: Int
+    ) {
+        guard let markerManager = chartViewModel.markerManager else { return }
+
+        if let exactMatch = markerManager.markers.first(where: { $0.id == target.id }) {
+            markerManager.selectedMarker = exactMatch
+            return
+        }
+
+        let closeTimeAndTypeMatches = markerManager.markers.filter { marker in
+            let timestampDiff = abs(marker.candleTimestamp.timeIntervalSince(target.candleTimestamp))
+            return timestampDiff < 1 && marker.type == target.markerTypeEnum
+        }
+
+        if let fallbackMatch = closeTimeAndTypeMatches.min(by: { lhs, rhs in
+            abs(lhs.price - target.price) < abs(rhs.price - target.price)
+        }) {
+            markerManager.selectedMarker = fallbackMatch
+            return
+        }
+
+        guard attemptsRemaining > 0 else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            selectMarkerForDetail(target, in: chartViewModel, attemptsRemaining: attemptsRemaining - 1)
+        }
     }
     
     // MARK: - Private Methods

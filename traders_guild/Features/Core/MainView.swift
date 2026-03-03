@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - Constants
 enum LayoutConstants {
@@ -427,7 +428,7 @@ struct MainView: View {
                     Text("TG")
                         .font(.largeTitle)
                         .fontWeight(.heavy)
-                        .foregroundColor(AppColors.fadedBackground)
+                        .foregroundColor(AppColors.chartLogo)
                 }
                 
                 // Right Drawer Button - with unread badge
@@ -510,6 +511,9 @@ struct MainView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .tint(.white)
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                configureNavigationBarAppearance()
+            }
         }
     }
     
@@ -552,6 +556,18 @@ struct MainView: View {
             rsiPanelHeight: $rsiPanelHeight,
             indicatorPanelBottomPadding: indicatorPanelsTotalHeight
         )
+    }
+
+    private func configureNavigationBarAppearance() {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundColor = .clear
+        appearance.shadowColor = nil
+
+        let navigationBar = UINavigationBar.appearance()
+        navigationBar.standardAppearance = appearance
+        navigationBar.scrollEdgeAppearance = appearance
+        navigationBar.compactAppearance = appearance
     }
     
     private var overlayView: some View {
@@ -1347,7 +1363,6 @@ struct ChartBottomSheet: View {
     @StateObject private var chartChatManager: ChartChatManager
     @State private var chatMessageText: String = ""
     @State private var isSendingChartMessage = false
-    @State private var showMarkerActivitySheet = false
     @State private var markerDetailTab: MarkerDetailTab = .details
 
     init(
@@ -1463,16 +1478,6 @@ struct ChartBottomSheet: View {
                 markerDetailTab = .details
                 // Keep sheet at closed state (0.11) — user drags up to expand
             }
-        }
-        .sheet(isPresented: $showMarkerActivitySheet) {
-            MarkerActivitySheet { marker in
-                if let onNavigateToMarker {
-                    onNavigateToMarker(marker)
-                }
-            }
-            .environmentObject(rlAppState)
-            .presentationDetents([.fraction(0.6), .large])
-            .presentationDragIndicator(.visible)
         }
     }
     
@@ -1706,8 +1711,11 @@ struct ChartBottomSheet: View {
         chartSheetMarkersView(
             chartViewModel: chartViewModel,
             controlViewModel: controlViewModel,
-            onShowMarkerActivity: {
-                showMarkerActivitySheet = true
+            onNavigateToMarker: onNavigateToMarker,
+            onMarkerSelection: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedDetent = .fraction(0.11)
+                }
             }
         )
     }
@@ -1808,11 +1816,11 @@ struct ChartBottomSheet: View {
                                 markerDetailTab = .details
                             }
                         } label: {
-                            HStack(spacing: 10) {
+                            HStack(spacing: 8) {
                                 UnifiedMarkerBadge(
                                     type: marker.type,
                                     displayColor: marker.displayColor,
-                                    size: 40,
+                                    size: 34,
                                     emoji: marker.type == .emoji ? marker.selectedEmoji : nil
                                 )
 
@@ -1830,10 +1838,10 @@ struct ChartBottomSheet: View {
                                 }
                                 .padding(.trailing, 4)
                             }
-                            .padding(.vertical, 5)
+                            .padding(.vertical, 4)
                             .padding(.leading, 5)
                             .padding(.trailing, 12)
-                            .frame(height: 50)
+                            .frame(height: 48)
                             .background(markerDetailTab == .details ?
                                 AppColors.gradientBackgroundDark :
                                 AppColors.gradientBackgroundMid.opacity(0.9))

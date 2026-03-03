@@ -584,6 +584,7 @@ struct TradingChartView: View {
                 chartContent(geometry: geometry)
             }
         }
+        .ignoresSafeArea(edges: .top)
         // FIXED: Use sheet(item:) instead of sheet(isPresented:) for more robust presentation
         // This ensures the sheet content always has valid data when shown
         .sheet(item: $pendingMarkerInfo) { info in
@@ -710,14 +711,38 @@ struct TradingChartView: View {
         predictionPlacementActive: Bool
     ) -> some View {
         ZStack {
-            Color.black.ignoresSafeArea().opacity(0.2)
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(0.04),
+                    Color.white.opacity(0.015)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
 
             mainChartCanvas(geometry: geometry)
+                .mask(topFadeMask(geometry: geometry))
 
             if shouldShowMarkerPlacementOverlay {
                 markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
                     .zIndex(18)
             }
+
+            // Keep Y-axis above chart drawing but below price/placement overlays and x-axis layer.
+            yAxisOverlay(geometry: geometry)
+
+            priceIndicatorView(geometry: geometry)
+                .mask(topFadeMask(geometry: geometry))
+            xAxisOverlay(geometry: geometry)
+            chartInfoBox(geometry: geometry)
+            markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                .mask(topFadeMask(geometry: geometry))
+            draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                .mask(topFadeMask(geometry: geometry))
+            draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                .mask(topFadeMask(geometry: geometry))
+            targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
+                .mask(topFadeMask(geometry: geometry))
 
             if let markerType = linePlacementMarkerType {
                 linePlacementOverlay(
@@ -725,6 +750,7 @@ struct TradingChartView: View {
                     geometry: geometry,
                     coordinateSystem: coordinateSystem
                 )
+                .zIndex(40)
             }
 
             if predictionPlacementActive {
@@ -736,18 +762,8 @@ struct TradingChartView: View {
                     chartHeight: geometry.size.height,
                     chartData: chartData
                 )
+                .zIndex(40)
             }
-
-            // Keep Y-axis above chart drawing but below price/placement overlays and x-axis layer.
-            yAxisOverlay(geometry: geometry)
-
-            priceIndicatorView(geometry: geometry)
-            xAxisOverlay(geometry: geometry)
-            chartInfoBox(geometry: geometry)
-            markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-            draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-            draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-            targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
 
             CrosshairView(
                 crosshairManager: crosshairManager,
@@ -1358,26 +1374,22 @@ struct TradingChartView: View {
         let displayColor = markerType == .alert && placementAlertSeverity != nil
             ? (placementAlertSeverity?.color ?? markerType.color)
             : markerType.color
-        let gradient = markerType.markerBackgroundGradient(displayColor: displayColor)
         return Text(markerType.rawValue)
             .font(.caption)
             .fontWeight(.semibold)
-            .foregroundColor(AppColors.markerIconLight)
+            .foregroundColor(displayColor)
             .lineLimit(1)
             .padding(4)
             .background(
-                LinearGradient(colors: [gradient.start, gradient.end], startPoint: .top, endPoint: .bottom)
+                LinearGradient(
+                    colors: [AppColors.markerNeutralFillTop, AppColors.markerNeutralFillBottom],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(
-                        LinearGradient(
-                            colors: [displayColor.markerBorderGradientStart(), displayColor.markerBorderGradientEnd()],
-                            startPoint: .bottom,
-                            endPoint: .top
-                        ),
-                        lineWidth: 1
-                    )
+                    .stroke(displayColor, lineWidth: 1)
             )
             .cornerRadius(4)
             .offset(y: 28)
@@ -2129,10 +2141,14 @@ struct TradingChartView: View {
     }
     
     // MARK: - Axis Overlays
+
+    private var axisPanelBackground: Color {
+        Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 12.0 / 255.0)
+    }
     
     @ViewBuilder
     func xAxisOverlay(geometry: GeometryProxy) -> some View {
-        let bottomAreaHeight = geometry.size.height * 0.11
+        let bottomAreaHeight = geometry.size.height * 0.085
         let hasIndicatorPanels = chartViewModel.indicatorManager.shouldShowAnyPanel
 
         ZStack {
@@ -2144,7 +2160,7 @@ struct TradingChartView: View {
                 }
 
                 Rectangle()
-                    .fill(Color.black)
+                    .fill(axisPanelBackground)
                     .frame(height: bottomAreaHeight)
                     .edgesIgnoringSafeArea(.bottom)
             }
@@ -2171,8 +2187,8 @@ struct TradingChartView: View {
             drawXAxisLabels(context: context, size: size)
         }
         .frame(height: 22)
-        .padding(.top, 10)
-        .background(Color.black)
+        .padding(.top, 6)
+        .background(axisPanelBackground)
     }
     
     private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {
@@ -2194,8 +2210,27 @@ struct TradingChartView: View {
         )
     }
     
+    // MARK: - Top Fade Mask
+
+    /// Reusable mask that hides content behind the toolbar then fades in near the info box.
+    private func topFadeMask(geometry: GeometryProxy) -> some View {
+        let topInset = geometry.safeAreaInsets.top
+        let fadeHeight = topInset > 0 ? topInset + 42 : 104
+        return VStack(spacing: 0) {
+            Color.clear
+                .frame(height: fadeHeight)
+            LinearGradient(
+                colors: [.clear, .white],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 60)
+            Color.white
+        }
+    }
+
     // MARK: - Y-Axis Overlay
-    
+
     @ViewBuilder
     func yAxisOverlay(geometry: GeometryProxy) -> some View {
         HStack {
@@ -2204,8 +2239,9 @@ struct TradingChartView: View {
                 drawYAxisLabels(context: context, size: size, geometry: geometry)
             }
             .frame(width: yAxisWidth)
-            .background(Color.black.opacity(0.8))
+            .background(axisPanelBackground.opacity(0.92))
         }
+        .mask(topFadeMask(geometry: geometry))
         .allowsHitTesting(false)
     }
     
@@ -2240,7 +2276,7 @@ struct TradingChartView: View {
                 context.draw(
                     Text(priceText)
                         .font(.system(size: 11))
-                        .foregroundColor(.gray),
+                        .foregroundColor(.white.opacity(0.84)),
                     at: CGPoint(x: 30, y: y)
                 )
                 labelCount += 1
@@ -2254,13 +2290,16 @@ struct TradingChartView: View {
     
     @ViewBuilder
     func chartInfoBox(geometry: GeometryProxy) -> some View {
+        let topInset = geometry.safeAreaInsets.top
+        let topPadding = topInset > 0 ? topInset + 62 : 124
+
         VStack {
             HStack {
                 chartInfoContent
                 Spacer()
             }
             .padding(.leading, 8)
-            .padding(.top, 8)
+            .padding(.top, topPadding)
             
             Spacer()
         }
@@ -2278,7 +2317,7 @@ struct TradingChartView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.black.opacity(0.7))
+        .background(Color.black.opacity(0.28))
         .cornerRadius(8)
     }
     
@@ -2357,7 +2396,7 @@ struct TradingChartView: View {
     
     @ViewBuilder
     func chartControlsBox(geometry: GeometryProxy) -> some View {
-        let bottomAreaHeight = geometry.size.height * 0.11 + 40
+        let bottomAreaHeight = geometry.size.height * 0.085 + 34
         let yAxisTrailingInset: CGFloat = yAxisWidth + 4
         let panelPadding: CGFloat = indicatorPanelBottomPadding > 0 ? indicatorPanelBottomPadding - 30 : 0
 
@@ -2415,7 +2454,7 @@ struct TradingChartView: View {
                     ChartBottomControlButton(
                         title: isMarkerVisibilityPanelExpanded ? "Close" : "Markers",
                         icon: isMarkerVisibilityPanelExpanded ? "xmark.circle" : "eye",
-                        color: .white.opacity(0.8),
+                        color: .white.opacity(0.66),
                         isActive: isMarkerVisibilityPanelExpanded
                     ) {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -2427,24 +2466,19 @@ struct TradingChartView: View {
                     ChartBottomControlButton(
                         title: "Latest",
                         icon: "arrow.right.to.line",
-                        color: .white.opacity(0.5)
+                        color: .white.opacity(0.66)
                     ) {
                         controlViewModel.jumpToLatest()
                     }
                     .allowsHitTesting(true)
 
                     // Chart settings (icon-only)
-                    Button {
+                    ChartBottomIconControlButton(
+                        icon: "gearshape",
+                        color: .white.opacity(0.66)
+                    ) {
                         showChartSettingsSheet = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.5))
-                            .padding(6)
-                            .background(Color.white.opacity(0.08))
-                            .cornerRadius(6)
                     }
-                    .buttonStyle(.plain)
                     .allowsHitTesting(true)
                 }
                 .padding(.trailing, yAxisTrailingInset)
@@ -2467,17 +2501,21 @@ struct TradingChartView: View {
             HStack(spacing: 5) {
                 Image(systemName: "calendar")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(.white.opacity(0.66))
                 Text(labelText)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(.white.opacity(0.66))
                     .lineLimit(1)
             }
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.08))
-            .cornerRadius(6)
+            .background(ChartBottomControlButton.inactiveBackground)
+            .cornerRadius(ChartBottomControlButton.cornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: ChartBottomControlButton.cornerRadius)
+                    .stroke(ChartBottomControlButton.inactiveBorder, lineWidth: 1)
+            )
             .allowsHitTesting(false)
         }
     }
@@ -2860,6 +2898,12 @@ struct ChartBottomControlButton: View {
     let color: Color
     var isActive: Bool = false
     let action: () -> Void
+
+    static let cornerRadius: CGFloat = 8
+    static let inactiveBackground: Color = Color(red: 20.0 / 255.0, green: 20.0 / 255.0, blue: 26.0 / 255.0).opacity(0.96)
+    static let inactiveBorder: Color = Color.white.opacity(0.14)
+    static let activeBackground: Color = Color.white.opacity(0.68)
+    static let activeBorder: Color = Color.white.opacity(0.24)
     
     var body: some View {
         Button(action: action) {
@@ -2877,14 +2921,50 @@ struct ChartBottomControlButton: View {
             .padding(.vertical, 5)
             .background(
                 isActive ?
-                Color.white.opacity(0.85) :
-                Color.white.opacity(0.08)
+                Self.activeBackground :
+                Self.inactiveBackground
             )
-            .cornerRadius(6)
+            .cornerRadius(Self.cornerRadius)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isActive ? Color.white.opacity(0.4) : Color.clear, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Self.cornerRadius)
+                    .stroke(
+                        isActive ? Self.activeBorder : Self.inactiveBorder,
+                        lineWidth: 1
+                    )
             )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct ChartBottomIconControlButton: View {
+    let icon: String
+    let color: Color
+    var isActive: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(isActive ? AppColors.gradientBackgroundDark : color)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    isActive ?
+                    ChartBottomControlButton.activeBackground :
+                    ChartBottomControlButton.inactiveBackground
+                )
+                .cornerRadius(ChartBottomControlButton.cornerRadius)
+                .overlay(
+                    RoundedRectangle(cornerRadius: ChartBottomControlButton.cornerRadius)
+                        .stroke(
+                            isActive ?
+                            ChartBottomControlButton.activeBorder :
+                            ChartBottomControlButton.inactiveBorder,
+                            lineWidth: 1
+                        )
+                )
         }
         .buttonStyle(.plain)
     }

@@ -1305,51 +1305,39 @@ struct UnifiedIconBadge: View {
 
 // MARK: - UNIFIED MARKER BADGE (chart-style marker icon)
 
-/// Chart-style marker badge: midnight gradient, gradient border (opposite direction), colored icon
-/// Use anywhere markers are displayed (top markers, profiles, chats, detail sheets)
-/// borderBrightness / borderOpacity enable future glow and pulse effects
+/// Chart-style marker badge matching in-chart markers:
+/// dark neutral fill, solid marker-color border, and same-color icon.
 struct UnifiedMarkerBadge: View {
     let type: RLMarkerType
     let displayColor: Color
     var size: CGFloat = 32
     var emoji: String? = nil
     var isSelected: Bool = false
-    var borderBrightness: CGFloat = 1.0
-    var borderOpacity: CGFloat = 1.0
-
-    private var gradient: (start: Color, end: Color) {
-        type.markerBackgroundGradient(displayColor: displayColor)
-    }
-
-    private var borderGradient: (start: Color, end: Color) {
-        type.markerBorderGradient(
-            displayColor: displayColor,
-            brightness: borderBrightness,
-            opacity: borderOpacity
-        )
-    }
 
     private var borderWidth: CGFloat {
         isSelected ? AppColors.markerSelectedBorderWidth : AppColors.markerUnselectedBorderWidth
     }
 
-    private var iconColor: Color { AppColors.markerIconLight }
-    private var iconSize: CGFloat { size * 0.44 }
+    private var iconColor: Color { displayColor }
+    private var iconSize: CGFloat { size * 0.5 }
 
     var body: some View {
         ZStack {
             Circle()
-                .fill(LinearGradient(colors: [gradient.start, gradient.end], startPoint: .top, endPoint: .bottom))
+                .fill(Color.black.opacity(0.28))
+                .offset(x: 1.0, y: 1.0)
                 .frame(width: size, height: size)
             Circle()
-                .stroke(
+                .fill(
                     LinearGradient(
-                        colors: [borderGradient.start, borderGradient.end],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    ),
-                    lineWidth: borderWidth
+                        colors: [AppColors.markerNeutralFillTop, AppColors.markerNeutralFillBottom],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
+                .frame(width: size, height: size)
+            Circle()
+                .stroke(displayColor, lineWidth: borderWidth)
                 .frame(width: size, height: size)
             if type == .emoji, let emoji = emoji {
                 Text(emoji)

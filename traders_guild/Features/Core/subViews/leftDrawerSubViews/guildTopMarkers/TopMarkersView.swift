@@ -457,9 +457,10 @@ struct MarkerTypeIcon: View {
     let type: RLMarkerType
     
     var body: some View {
-        UnifiedIconBadge(
-            icon: type.icon,
-            color: type.color
+        UnifiedMarkerBadge(
+            type: type,
+            displayColor: type.color,
+            size: 32
         )
     }
 }

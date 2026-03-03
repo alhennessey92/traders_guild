@@ -26,7 +26,7 @@ struct StaticBackgroundView: View {
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = 0.02
+                patternOpacity = 0.012
             }
         }
     }

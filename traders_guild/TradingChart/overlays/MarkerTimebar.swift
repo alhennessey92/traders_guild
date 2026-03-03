@@ -88,7 +88,13 @@ enum ChartXAxisLabelEngine {
             } else {
                 weight = .medium
             }
-            let color: Color = label.kind == .primary ? .white : .gray
+            let color: Color
+            switch style {
+            case .mainChart:
+                color = label.kind == .primary ? .white.opacity(0.96) : .white.opacity(0.82)
+            case .indicatorPanel:
+                color = label.kind == .primary ? .white.opacity(0.9) : .gray.opacity(0.95)
+            }
 
             ctx.draw(
                 Text(label.text)
@@ -449,8 +455,8 @@ struct MarkerXAxisTimeIndicator: View {
     var timeZone: TimeZone = .current
 
     private var timeLabelY: CGFloat {
-        let bottomAreaHeight = chartHeight * 0.11
-        return chartHeight - bottomAreaHeight - 21
+        let bottomAreaHeight = chartHeight * 0.085
+        return chartHeight - bottomAreaHeight - 12
     }
 
     var body: some View {

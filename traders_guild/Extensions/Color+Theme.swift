@@ -14,6 +14,7 @@ enum AppColors {
     static let whiteText = Color("TGWhiteText") // #ECECEC
     static let unhighlightedTextBoxBackground = Color("TGButtonSearchBackground") // #191921
     static let fadedBackground = Color("TGFadedBackground") // #2F303A
+    static let chartLogo = Color("TGChartLogo") // #2F303A
     static let greyText = Color("TGMidGrey") // #7A7878
     static let accentColor = Color("TGAccent") //#0F9EB4
     static let accentDarkColor = Color("TGAccentDark") //026675
@@ -45,6 +46,8 @@ enum AppColors {
     static let markerSelectedBorder = Color(white: 0.5)
     static let markerSelectedBorderWidth: CGFloat = 3.0
     static let markerUnselectedBorderWidth: CGFloat = 1.8
+    static let markerNeutralFillTop = Color(red: 34.0 / 255.0, green: 34.0 / 255.0, blue: 37.0 / 255.0)
+    static let markerNeutralFillBottom = Color(red: 12.0 / 255.0, green: 12.0 / 255.0, blue: 14.0 / 255.0)
     /// Light grey icon for all markers (prediction-style)
     static let markerIconLight = Color(white: 0.72)
     /// Darker grey border for all markers
