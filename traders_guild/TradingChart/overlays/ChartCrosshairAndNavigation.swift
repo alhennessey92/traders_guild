@@ -399,137 +399,143 @@ struct CrosshairInfoPopupCompact: View {
                     Text(formatTimeForHeader(candle.timestamp))
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundColor(.white.opacity(0.7))
-                    
-                    // OHLC in ultra-compact format
-                    HStack(spacing: 6) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            PriceRow(label: "O", value: chartData.formatPrice(candle.open), color: .white)
-                            PriceRow(label: "L", value: chartData.formatPrice(candle.low), color: .red)
+
+                    if candle.isGapFill {
+                        Text("No data")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.75))
+                    } else {
+                        // OHLC in ultra-compact format
+                        HStack(spacing: 6) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                PriceRow(label: "O", value: chartData.formatPrice(candle.open), color: .white)
+                                PriceRow(label: "L", value: chartData.formatPrice(candle.low), color: .red)
+                            }
+                            VStack(alignment: .leading, spacing: 0) {
+                                PriceRow(label: "H", value: chartData.formatPrice(candle.high), color: .green)
+                                PriceRow(label: "C", value: chartData.formatPrice(candle.close), color: candle.isBullish ? .green : .red)
+                            }
                         }
-                        VStack(alignment: .leading, spacing: 0) {
-                            PriceRow(label: "H", value: chartData.formatPrice(candle.high), color: .green)
-                            PriceRow(label: "C", value: chartData.formatPrice(candle.close), color: candle.isBullish ? .green : .red)
+
+                        // Volume if available - more compact
+                        if let volume = candle.volume {
+                            Text("V:\(volume.formattedVolume)")
+                                .font(.system(size: 7))
+                                .foregroundColor(.white.opacity(0.4))
                         }
-                    }
-                    
-                    // Volume if available - more compact
-                    if let volume = candle.volume {
-                        Text("V:\(volume.formattedVolume)")
-                            .font(.system(size: 7))
-                            .foregroundColor(.white.opacity(0.4))
-                    }
-                    
-                    // Indicator values section - more compact
-                    if hasAnyIndicatorValues {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.15))
-                            .frame(height: 0.5)
-                            .padding(.vertical, 1)
-                        
-                        // EMA values - inline format
-                        if let emas = emaValues {
-                            ForEach(emas, id: \.period) { ema in
-                                HStack(spacing: 3) {
-                                    Circle()
-                                        .fill(ema.color)
-                                        .frame(width: 5, height: 5)
-                                    Text("\(ema.period)")
-                                        .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.5))
-                                    Text(chartData.formatPrice(ema.value))
-                                        .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                        .foregroundColor(ema.color)
+
+                        // Indicator values section - more compact
+                        if hasAnyIndicatorValues {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.15))
+                                .frame(height: 0.5)
+                                .padding(.vertical, 1)
+
+                            // EMA values - inline format
+                            if let emas = emaValues {
+                                ForEach(emas, id: \.period) { ema in
+                                    HStack(spacing: 3) {
+                                        Circle()
+                                            .fill(ema.color)
+                                            .frame(width: 5, height: 5)
+                                        Text("\(ema.period)")
+                                            .font(.system(size: 7, weight: .medium))
+                                            .foregroundColor(.white.opacity(0.5))
+                                        Text(chartData.formatPrice(ema.value))
+                                            .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                            .foregroundColor(ema.color)
+                                    }
                                 }
                             }
-                        }
-                        
-                        // RSI value
-                        if let rsi = rsiValue {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(rsiColor(for: rsi))
-                                    .frame(width: 5, height: 5)
-                                Text("RSI")
-                                    .font(.system(size: 7, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.5))
-                                Text(String(format: "%.0f", rsi))
-                                    .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                    .foregroundColor(rsiColor(for: rsi))
+
+                            // RSI value
+                            if let rsi = rsiValue {
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(rsiColor(for: rsi))
+                                        .frame(width: 5, height: 5)
+                                    Text("RSI")
+                                        .font(.system(size: 7, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text(String(format: "%.0f", rsi))
+                                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                        .foregroundColor(rsiColor(for: rsi))
+                                }
                             }
-                        }
-                        
-                        // MACD values
-                        if let macd = macdValues {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(Color.cyan)
-                                    .frame(width: 5, height: 5)
-                                Text("MACD")
-                                    .font(.system(size: 7, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.5))
-                                Text(String(format: "%.4f", macd.macd))
-                                    .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.cyan)
+
+                            // MACD values
+                            if let macd = macdValues {
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(Color.cyan)
+                                        .frame(width: 5, height: 5)
+                                    Text("MACD")
+                                        .font(.system(size: 7, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text(String(format: "%.4f", macd.macd))
+                                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.cyan)
+                                }
                             }
-                        }
-                        
-                        // Stochastic values
-                        if let stoch = stochasticValues {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(stochColor(for: stoch.k))
-                                    .frame(width: 5, height: 5)
-                                Text("Stoch")
-                                    .font(.system(size: 7, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.5))
-                                Text(String(format: "%.0f/%.0f", stoch.k, stoch.d))
-                                    .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                    .foregroundColor(stochColor(for: stoch.k))
+
+                            // Stochastic values
+                            if let stoch = stochasticValues {
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(stochColor(for: stoch.k))
+                                        .frame(width: 5, height: 5)
+                                    Text("Stoch")
+                                        .font(.system(size: 7, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text(String(format: "%.0f/%.0f", stoch.k, stoch.d))
+                                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                        .foregroundColor(stochColor(for: stoch.k))
+                                }
                             }
-                        }
-                        
-                        // CCI value
-                        if let cci = cciValue {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(cciColor(for: cci))
-                                    .frame(width: 5, height: 5)
-                                Text("CCI")
-                                    .font(.system(size: 7, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.5))
-                                Text(String(format: "%.0f", cci))
-                                    .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                    .foregroundColor(cciColor(for: cci))
+
+                            // CCI value
+                            if let cci = cciValue {
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(cciColor(for: cci))
+                                        .frame(width: 5, height: 5)
+                                    Text("CCI")
+                                        .font(.system(size: 7, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text(String(format: "%.0f", cci))
+                                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                        .foregroundColor(cciColor(for: cci))
+                                }
                             }
-                        }
-                        
-                        // Williams %R value
-                        if let wr = williamsRValue {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(williamsRColor(for: wr))
-                                    .frame(width: 5, height: 5)
-                                Text("%R")
-                                    .font(.system(size: 7, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.5))
-                                Text(String(format: "%.0f", wr))
-                                    .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                    .foregroundColor(williamsRColor(for: wr))
+
+                            // Williams %R value
+                            if let wr = williamsRValue {
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(williamsRColor(for: wr))
+                                        .frame(width: 5, height: 5)
+                                    Text("%R")
+                                        .font(.system(size: 7, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text(String(format: "%.0f", wr))
+                                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                        .foregroundColor(williamsRColor(for: wr))
+                                }
                             }
-                        }
-                        
-                        // ATR value
-                        if let atr = atrValue {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 5, height: 5)
-                                Text("ATR")
-                                    .font(.system(size: 7, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.5))
-                                Text(String(format: "%.4f", atr))
-                                    .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.red)
+
+                            // ATR value
+                            if let atr = atrValue {
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(Color.red)
+                                        .frame(width: 5, height: 5)
+                                    Text("ATR")
+                                        .font(.system(size: 7, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text(String(format: "%.4f", atr))
+                                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.red)
+                                }
                             }
                         }
                     }
@@ -827,7 +833,6 @@ struct ZoomControls: View {
         }
     }
 }
-
 
 
 

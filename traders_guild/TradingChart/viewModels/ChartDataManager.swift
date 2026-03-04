@@ -60,6 +60,7 @@ class ChartDataManager: ObservableObject {
     private var timer: Timer?
     private var basePrice: Double = 100.0
     private let maxCandles = 500
+    private let maxRealtimeFallbackInsert = 120
     
     // MARK: - Initialization
     
@@ -93,7 +94,8 @@ class ChartDataManager: ObservableObject {
             low: min(lastCandle.low, tickPrice),
             close: tickPrice,
             volume: newVolume,
-            volumeFormatted: formatVolume(newVolume)
+            volumeFormatted: formatVolume(newVolume),
+            isGapFill: false
         )
         
         candles[index] = updatedCandle
@@ -124,6 +126,11 @@ class ChartDataManager: ObservableObject {
 
         if let lastCandle = candles.last {
             if bucketTimestamp > lastCandle.timestamp {
+                let fallbackCandles = fillRealtimeGap(from: lastCandle, to: bucketTimestamp)
+                if !fallbackCandles.isEmpty {
+                    candles.append(contentsOf: fallbackCandles)
+                }
+
                 // Start a new in-progress candle bucket.
                 let newCandle = RLCandleDTO(
                     timestamp: bucketTimestamp,
@@ -133,7 +140,8 @@ class ChartDataManager: ObservableObject {
                     low: price,
                     close: price,
                     volume: volume,
-                    volumeFormatted: formatVolume(volume)
+                    volumeFormatted: formatVolume(volume),
+                    isGapFill: false
                 )
                 candles.append(newCandle)
                 if candles.count > maxCandles {
@@ -143,10 +151,74 @@ class ChartDataManager: ObservableObject {
             } else if bucketTimestamp == lastCandle.timestamp {
                 updateCurrentCandle(at: candles.count - 1, withTick: price, tickVolume: volume)
             } else {
-                // Ignore stale tick for an older bucket.
+                if let existingIndex = indexOfCandle(with: bucketTimestamp),
+                   candles[existingIndex].isGapFill {
+                    candles[existingIndex] = RLCandleDTO(
+                        timestamp: bucketTimestamp,
+                        timestampFormatted: candles[existingIndex].timestampFormatted,
+                        open: price,
+                        high: price,
+                        low: price,
+                        close: price,
+                        volume: volume,
+                        volumeFormatted: formatVolume(volume),
+                        isGapFill: false
+                    )
+                    updatePriceRange()
+                    return
+                }
+                // Ignore stale tick for an older bucket unless replacing a placeholder.
                 return
             }
         }
+    }
+
+    private func fillRealtimeGap(from lastCandle: RLCandleDTO, to newTimestamp: Date) -> [RLCandleDTO] {
+        let step = max(1, currentTimeframe.seconds)
+        var nextTimestamp = lastCandle.timestamp.addingTimeInterval(step)
+        var generated: [RLCandleDTO] = []
+
+        while nextTimestamp < newTimestamp && generated.count < maxRealtimeFallbackInsert {
+            let close = generated.last?.close ?? lastCandle.close
+            generated.append(
+                RLCandleDTO(
+                    timestamp: nextTimestamp,
+                    timestampFormatted: nil,
+                    open: close,
+                    high: close,
+                    low: close,
+                    close: close,
+                    volume: 0,
+                    volumeFormatted: formatVolume(0),
+                    isGapFill: true
+                )
+            )
+            nextTimestamp = nextTimestamp.addingTimeInterval(step)
+        }
+
+        return generated
+    }
+
+    private func indexOfCandle(with timestamp: Date) -> Int? {
+        var left = 0
+        var right = candles.count - 1
+
+        while left <= right {
+            let middle = (left + right) / 2
+            let currentTimestamp = candles[middle].timestamp
+
+            if currentTimestamp == timestamp {
+                return middle
+            }
+
+            if currentTimestamp < timestamp {
+                left = middle + 1
+            } else {
+                right = middle - 1
+            }
+        }
+
+        return nil
     }
 
     /// Align tick timestamps to the current timeframe bucket boundary.
@@ -197,21 +269,22 @@ class ChartDataManager: ObservableObject {
     @discardableResult
     func processRealCandle(_ candle: RLCandleDTO) -> Int {
         var trimmedCount = 0
-        // Check if this candle should update the last one or be appended
-        if let lastCandle = candles.last {
-            if candle.timestamp == lastCandle.timestamp {
-                // Same timestamp - update existing candle
-                candles[candles.count - 1] = candle
-            } else if candle.timestamp > lastCandle.timestamp {
-                // New candle - append
+        if let existingIndex = indexOfCandle(with: candle.timestamp) {
+            candles[existingIndex] = candle
+        } else if let lastCandle = candles.last {
+            if candle.timestamp > lastCandle.timestamp {
+                let fallbackCandles = fillRealtimeGap(from: lastCandle, to: candle.timestamp)
+                if !fallbackCandles.isEmpty {
+                    candles.append(contentsOf: fallbackCandles)
+                }
                 candles.append(candle)
-                
+
                 if candles.count > maxCandles {
                     trimmedCount = candles.count - maxCandles
                     candles.removeFirst(trimmedCount)
                 }
             }
-            // Older candles are ignored (historical data should use updateWithMarketData)
+            // Older candles are ignored unless they match an existing placeholder timestamp.
         } else {
             candles.append(candle)
         }

@@ -2690,13 +2690,17 @@ extension RealAPIService {
         symbolId: UUID,
         timeframe: String = "1m",
         limit: Int = 200,
-        endTime: Date? = nil
+        endTime: Date? = nil,
+        continuousTime: Bool = false
     ) async throws -> RLCandleListDTO {
         var path = "/chart/symbols/\(symbolId.uuidString)/candles?timeframe=\(timeframe)&limit=\(limit)"
         if let endTime = endTime {
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             path += "&end_time=\(formatter.string(from: endTime))"
+        }
+        if continuousTime {
+            path += "&continuous_time=true"
         }
         return try await request(
             path,
@@ -3224,10 +3228,15 @@ extension RealAPIService {
         guildId: UUID,
         symbolId: UUID,
         timeframe: String = "1m",
-        candleLimit: Int = 200
+        candleLimit: Int = 200,
+        continuousTime: Bool = false
     ) async throws -> RLChartDataDTO {
+        var path = "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/chart-data?timeframe=\(timeframe)&candle_limit=\(candleLimit)"
+        if continuousTime {
+            path += "&continuous_time=true"
+        }
         return try await request(
-            "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/chart-data?timeframe=\(timeframe)&candle_limit=\(candleLimit)",
+            path,
             service: .chart,
             method: "GET",
             auth: true

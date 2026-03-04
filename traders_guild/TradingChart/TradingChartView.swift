@@ -547,17 +547,18 @@ struct TradingChartView: View {
         if let pending = pendingMarkerInfo {
             return pending.candleIndex
         }
+        guard !chartData.candles.isEmpty else { return -1 }
         if isMarkerPlacementMode {
             // Prediction: always use latest candle (entry pinned to most recent)
             if controlViewModel.currentMarkerType == .predictionTarget {
-                return max(0, chartData.candles.count - 1)
+                return snappedMarkerCandleIndex(from: chartData.candles.count - 1) ?? -1
             }
             if previewCandleIndex < 0 {
-                return calculateCenterCandleIndex()
+                return snappedMarkerCandleIndex(from: calculateCenterCandleIndex()) ?? -1
             }
-            return max(0, min(chartData.candles.count - 1, previewCandleIndex))
+            return snappedMarkerCandleIndex(from: previewCandleIndex) ?? -1
         }
-        return max(0, previewCandleIndex)
+        return snappedMarkerCandleIndex(from: previewCandleIndex) ?? -1
     }
     
     /// Effective marker type for preview (from pending or placement mode)
@@ -1466,8 +1467,7 @@ struct TradingChartView: View {
                 markerDragPosition = value.location
                 
                 if let index = coordinateSystem.candleIndex(atXPosition: value.location.x) {
-                    let clampedIndex = max(0, min(chartData.candles.count - 1, index))
-                    previewCandleIndex = clampedIndex
+                    previewCandleIndex = snappedMarkerCandleIndex(from: index) ?? -1
                 }
             }
             .onEnded { value in
@@ -1678,7 +1678,7 @@ struct TradingChartView: View {
     /// Auto-scrolls to the latest candle and sets default TP/SL offsets
     private func initializePredictionPlacement() {
         guard !chartData.candles.isEmpty else { return }
-        let lastIndex = chartData.candles.count - 1
+        guard let lastIndex = snappedMarkerCandleIndex(from: chartData.candles.count - 1) else { return }
         let lastCandle = chartData.candles[lastIndex]
         let entryPrice = lastCandle.close
         let priceRange = chartData.priceRange.max - chartData.priceRange.min
@@ -1752,7 +1752,10 @@ struct TradingChartView: View {
         if var state = predictionPlacement,
            controlViewModel.currentMarkerType == .predictionTarget,
            newCount > 0 {
-            let lastIndex = max(0, chartData.candles.count - 1)
+            guard let lastIndex = snappedMarkerCandleIndex(from: chartData.candles.count - 1) else {
+                predictionPlacement = nil
+                return
+            }
             let lastCandle = chartData.candles[lastIndex]
             state.candleIndex = lastIndex
             state.entryPrice = lastCandle.close
@@ -1776,6 +1779,36 @@ struct TradingChartView: View {
         )
         let middleIndex = (visibleStartIndex + visibleEndIndex) / 2
         return max(0, min(chartData.candles.count - 1, middleIndex))
+    }
+
+    static func nearestNonGapCandleIndex(for targetIndex: Int, candles: [RLCandleDTO]) -> Int? {
+        guard candles.indices.contains(targetIndex) else { return nil }
+        if !candles[targetIndex].isGapFill {
+            return targetIndex
+        }
+
+        var distance = 1
+        while targetIndex - distance >= 0 || targetIndex + distance < candles.count {
+            let previousIndex = targetIndex - distance
+            if previousIndex >= 0, !candles[previousIndex].isGapFill {
+                return previousIndex
+            }
+
+            let nextIndex = targetIndex + distance
+            if nextIndex < candles.count, !candles[nextIndex].isGapFill {
+                return nextIndex
+            }
+
+            distance += 1
+        }
+
+        return nil
+    }
+
+    private func snappedMarkerCandleIndex(from rawIndex: Int?) -> Int? {
+        guard let rawIndex, !chartData.candles.isEmpty else { return nil }
+        let clampedIndex = max(0, min(chartData.candles.count - 1, rawIndex))
+        return Self.nearestNonGapCandleIndex(for: clampedIndex, candles: chartData.candles)
     }
     
     // MARK: - Crosshair Gestures
@@ -2612,7 +2645,7 @@ struct TradingChartView: View {
             drawingData: indicatorDrawingData,
             priceRange: chartData.priceRange,
             priceScale: gestureState.priceScale,
-            verticalOffset: clampedVerticalOffset(chartHeight: size.height),
+            verticalOffset: totalVerticalOffset,
             totalCandleWidth: totalCandleWidth,
             actualCandleWidth: actualCandleWidth,
             totalOffset: gestureState.panOffset.width
@@ -2745,6 +2778,7 @@ struct TradingChartView: View {
         let priceRange = chartData.priceRange
         let scaledHeight = size.height * gestureState.priceScale
         let totalOffset = gestureState.panOffset.width
+        let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
         
         let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth) - 1)
         let visibleEndIndex = Swift.min(
@@ -2756,19 +2790,35 @@ struct TradingChartView: View {
 
         for i in visibleStartIndex..<visibleEndIndex {
             guard i < chartData.candles.count else { continue }
-            drawSingleCandle(context: context, size: size, index: i, priceRange: priceRange, scaledHeight: scaledHeight, totalOffset: totalOffset)
+            drawSingleCandle(
+                context: context,
+                size: size,
+                index: i,
+                priceRange: priceRange,
+                scaledHeight: scaledHeight,
+                totalOffset: totalOffset,
+                totalVerticalOffset: totalVerticalOffset
+            )
         }
     }
     
-    private func drawSingleCandle(context: GraphicsContext, size: CGSize, index: Int, priceRange: (min: Double, max: Double), scaledHeight: CGFloat, totalOffset: CGFloat) {
+    private func drawSingleCandle(
+        context: GraphicsContext,
+        size: CGSize,
+        index: Int,
+        priceRange: (min: Double, max: Double),
+        scaledHeight: CGFloat,
+        totalOffset: CGFloat,
+        totalVerticalOffset: CGFloat
+    ) {
         let candle = chartData.candles[index]
+        guard !candle.isGapFill else { return }
         let x = CGFloat(index) * totalCandleWidth + totalOffset
         
         if x < -totalCandleWidth || x > size.width + totalCandleWidth {
             return
         }
-        
-        let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
+
         let highY = size.height -
             (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) *
             scaledHeight - totalVerticalOffset

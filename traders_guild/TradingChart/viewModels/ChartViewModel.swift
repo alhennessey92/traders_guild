@@ -194,7 +194,8 @@ class ChartViewModel: ObservableObject {
                 guildId: guildId,
                 symbolId: symbolId,
                 timeframe: timeframeString,
-                candleLimit: timeframe.initialCandlesCount
+                candleLimit: timeframe.initialCandlesCount,
+                continuousTime: true
             )
 
             // Update current symbol if it changed

@@ -6,6 +6,7 @@
 //  Styled to match price indicator (yellow) but in blue
 //
 
+import Foundation
 import SwiftUI
 
 enum MarkerPlacementLabelFormatter {
@@ -24,6 +25,7 @@ struct ChartXAxisLabel: Equatable {
     let x: CGFloat
     let kind: Kind
     let isTodayBoundary: Bool
+    let isHourBoundary: Bool
 }
 
 enum ChartXAxisLabelStyle {
@@ -33,7 +35,7 @@ enum ChartXAxisLabelStyle {
     var primaryFontSize: CGFloat {
         switch self {
         case .mainChart:
-            return 12.5
+            return 13
         case .indicatorPanel:
             return 10
         }
@@ -42,7 +44,7 @@ enum ChartXAxisLabelStyle {
     var secondaryFontSize: CGFloat {
         switch self {
         case .mainChart:
-            return 11.5
+            return 11
         case .indicatorPanel:
             return 9
         }
@@ -50,6 +52,80 @@ enum ChartXAxisLabelStyle {
 }
 
 enum ChartXAxisLabelEngine {
+    private final class LabelsCacheKey: NSObject {
+        private let timeframeRawValue: String
+        private let candlesCount: Int
+        private let firstTimestampBits: UInt64
+        private let lastTimestampBits: UInt64
+        private let totalOffsetBits: UInt64
+        private let totalCandleWidthBits: UInt64
+        private let actualCandleWidthBits: UInt64
+        private let widthBits: UInt64
+        private let minSpacingBits: UInt64
+        private let timeZoneIdentifier: String
+        private let localeIdentifier: String
+        private let nowDayEpoch: Int64
+
+        init(input: Input) {
+            self.timeframeRawValue = input.timeframe.rawValue
+            self.candlesCount = input.candles.count
+            self.firstTimestampBits = input.candles.first?.timestamp.timeIntervalSince1970.bitPattern ?? 0
+            self.lastTimestampBits = input.candles.last?.timestamp.timeIntervalSince1970.bitPattern ?? 0
+            self.totalOffsetBits = Double(input.totalOffset).bitPattern
+            self.totalCandleWidthBits = Double(input.totalCandleWidth).bitPattern
+            self.actualCandleWidthBits = Double(input.actualCandleWidth).bitPattern
+            self.widthBits = Double(input.width).bitPattern
+            self.minSpacingBits = Double(input.minSpacing).bitPattern
+            self.timeZoneIdentifier = input.timeZone.identifier
+            self.localeIdentifier = input.locale.identifier
+
+            var calendar = Calendar.current
+            calendar.timeZone = input.timeZone
+            self.nowDayEpoch = Int64(calendar.startOfDay(for: input.now).timeIntervalSince1970)
+        }
+
+        override var hash: Int {
+            var hasher = Hasher()
+            hasher.combine(timeframeRawValue)
+            hasher.combine(candlesCount)
+            hasher.combine(firstTimestampBits)
+            hasher.combine(lastTimestampBits)
+            hasher.combine(totalOffsetBits)
+            hasher.combine(totalCandleWidthBits)
+            hasher.combine(actualCandleWidthBits)
+            hasher.combine(widthBits)
+            hasher.combine(minSpacingBits)
+            hasher.combine(timeZoneIdentifier)
+            hasher.combine(localeIdentifier)
+            hasher.combine(nowDayEpoch)
+            return hasher.finalize()
+        }
+
+        override func isEqual(_ object: Any?) -> Bool {
+            guard let other = object as? LabelsCacheKey else { return false }
+            return timeframeRawValue == other.timeframeRawValue &&
+                candlesCount == other.candlesCount &&
+                firstTimestampBits == other.firstTimestampBits &&
+                lastTimestampBits == other.lastTimestampBits &&
+                totalOffsetBits == other.totalOffsetBits &&
+                totalCandleWidthBits == other.totalCandleWidthBits &&
+                actualCandleWidthBits == other.actualCandleWidthBits &&
+                widthBits == other.widthBits &&
+                minSpacingBits == other.minSpacingBits &&
+                timeZoneIdentifier == other.timeZoneIdentifier &&
+                localeIdentifier == other.localeIdentifier &&
+                nowDayEpoch == other.nowDayEpoch
+        }
+    }
+
+    private final class LabelsCacheValue: NSObject {
+        let labels: [ChartXAxisLabel]
+
+        init(_ labels: [ChartXAxisLabel]) {
+            self.labels = labels
+        }
+    }
+
     private struct AxisPolicy {
         let preferredIntervals: [TimeInterval]
         let boundarySpacingBoost: CGFloat
@@ -68,6 +144,12 @@ enum ChartXAxisLabelEngine {
         var now: Date = Date()
     }
 
+    private static let labelsCache: NSCache<LabelsCacheKey, LabelsCacheValue> = {
+        let cache = NSCache<LabelsCacheKey, LabelsCacheValue>()
+        cache.countLimit = 64
+        return cache
+    }()
+
     static func drawLabels(
         context: GraphicsContext,
         size: CGSize,
@@ -81,12 +163,20 @@ enum ChartXAxisLabelEngine {
 
         let labels = makeLabels(input: input)
         for label in labels {
-            let fontSize = label.kind == .primary ? style.primaryFontSize : style.secondaryFontSize
             let weight: Font.Weight
-            if label.kind == .primary {
-                weight = label.isTodayBoundary ? .semibold : .medium
-            } else {
-                weight = .medium
+            let fontSize: CGFloat
+            switch label.kind {
+            case .primary:
+                weight = .bold
+                fontSize = style == .mainChart ? 13 : style.primaryFontSize
+            case .secondary:
+                if style == .mainChart {
+                    weight = label.isHourBoundary ? .semibold : .medium
+                    fontSize = label.isHourBoundary ? 12 : 11
+                } else {
+                    weight = label.isHourBoundary ? .semibold : .medium
+                    fontSize = style.secondaryFontSize
+                }
             }
             let color: Color
             switch style {
@@ -107,6 +197,11 @@ enum ChartXAxisLabelEngine {
 
     static func makeLabels(input: Input) -> [ChartXAxisLabel] {
         guard !input.candles.isEmpty, input.totalCandleWidth > 0, input.width > 0 else { return [] }
+
+        let cacheKey = LabelsCacheKey(input: input)
+        if let cached = labelsCache.object(forKey: cacheKey) {
+            return cached.labels
+        }
 
         let visibleStartIndex = max(0, Int(-input.totalOffset / input.totalCandleWidth) - 2)
         let visibleEndIndex = min(
@@ -135,7 +230,13 @@ enum ChartXAxisLabelEngine {
             let x = xPosition(for: index, input: input)
             guard x >= -50 && x <= input.width + 50 else { continue }
 
-            let boundary = isPrimaryBoundary(candle.timestamp, timeframe: input.timeframe, calendar: calendar)
+            let previousTimestamp = index > 0 ? input.candles[index - 1].timestamp : nil
+            let boundary = isPrimaryBoundary(
+                candle.timestamp,
+                previousTimestamp: previousTimestamp,
+                timeframe: input.timeframe,
+                calendar: calendar
+            )
 
             if boundary {
                 let dayKey = dayKeyForDate(candle.timestamp, calendar: calendar)
@@ -156,7 +257,8 @@ enum ChartXAxisLabelEngine {
                                 timeframe: input.timeframe,
                                 calendar: calendar,
                                 now: input.now
-                            )
+                            ),
+                            isHourBoundary: false
                         )
                     )
                     seenPrimaryDays.insert(dayKey)
@@ -180,13 +282,20 @@ enum ChartXAxisLabelEngine {
                     ),
                     x: x,
                     kind: .secondary,
-                    isTodayBoundary: false
+                    isTodayBoundary: false,
+                    isHourBoundary: isHourBoundary(
+                        candle.timestamp,
+                        timeframe: input.timeframe,
+                        calendar: calendar
+                    )
                 )
             )
             seenBuckets.insert(bucket)
         }
 
-        return labels.sorted { $0.x < $1.x }
+        let sorted = labels.sorted { $0.x < $1.x }
+        labelsCache.setObject(LabelsCacheValue(sorted), forKey: cacheKey)
+        return sorted
     }
 
     static func formatCrosshairTimestamp(
@@ -195,15 +304,13 @@ enum ChartXAxisLabelEngine {
         timeZone: TimeZone = .current,
         locale: Locale = Locale(identifier: "en_US_POSIX")
     ) -> String {
-        let formatter = DateFormatter()
-        formatter.timeZone = timeZone
-        formatter.locale = locale
+        let formatter: DateFormatter
 
         switch timeframe {
         case .d1, .w1, .mn:
-            formatter.dateFormat = "dd MMM yyyy"
+            formatter = cachedFormatter(format: "dd MMM yyyy", timeZone: timeZone, locale: locale)
         case .h4, .h1, .m30, .m15, .m5, .m1:
-            formatter.dateFormat = "dd MMM HH:mm"
+            formatter = cachedFormatter(format: "dd MMM HH:mm", timeZone: timeZone, locale: locale)
         }
 
         return formatter.string(from: timestamp)
@@ -215,7 +322,13 @@ enum ChartXAxisLabelEngine {
         calendar: Calendar
     ) -> ChartXAxisLabel {
         let candle = input.candles[candleIndex]
-        let boundary = isPrimaryBoundary(candle.timestamp, timeframe: input.timeframe, calendar: calendar)
+        let previousTimestamp = candleIndex > 0 ? input.candles[candleIndex - 1].timestamp : nil
+        let boundary = isPrimaryBoundary(
+            candle.timestamp,
+            previousTimestamp: previousTimestamp,
+            timeframe: input.timeframe,
+            calendar: calendar
+        )
         let kind: ChartXAxisLabel.Kind = boundary ? .primary : .secondary
         return ChartXAxisLabel(
             text: formatLabel(
@@ -227,7 +340,8 @@ enum ChartXAxisLabelEngine {
             ),
             x: xPosition(for: candleIndex, input: input),
             kind: kind,
-            isTodayBoundary: false
+            isTodayBoundary: false,
+            isHourBoundary: isHourBoundary(candle.timestamp, timeframe: input.timeframe, calendar: calendar)
         )
     }
 
@@ -252,29 +366,28 @@ enum ChartXAxisLabelEngine {
         timeZone: TimeZone,
         locale: Locale
     ) -> String {
-        let formatter = DateFormatter()
-        formatter.timeZone = timeZone
-        formatter.locale = locale
+        let format: String
 
         switch (timeframe, kind) {
         case (.m1, .secondary), (.m5, .secondary), (.m15, .secondary), (.m30, .secondary), (.h1, .secondary), (.h4, .secondary):
-            formatter.dateFormat = "HH:mm"
+            format = "HH:mm"
         case (.m1, .primary), (.m5, .primary), (.m15, .primary), (.m30, .primary), (.h1, .primary), (.h4, .primary):
-            formatter.dateFormat = "dd MMM"
+            format = "dd MMM"
         case (.d1, .secondary):
-            formatter.dateFormat = "dd MMM"
+            format = "dd MMM"
         case (.d1, .primary):
-            formatter.dateFormat = "MMM yyyy"
+            format = "MMM yyyy"
         case (.w1, .secondary):
-            formatter.dateFormat = "dd MMM"
+            format = "dd MMM"
         case (.w1, .primary):
-            formatter.dateFormat = "MMM yyyy"
+            format = "MMM yyyy"
         case (.mn, .secondary):
-            formatter.dateFormat = "MMM yy"
+            format = "MMM yy"
         case (.mn, .primary):
-            formatter.dateFormat = "yyyy"
+            format = "yyyy"
         }
 
+        let formatter = cachedFormatter(format: format, timeZone: timeZone, locale: locale)
         return formatter.string(from: timestamp)
     }
 
@@ -296,18 +409,39 @@ enum ChartXAxisLabelEngine {
         return policy.preferredIntervals.last ?? timeframe.seconds
     }
 
-    private static func isPrimaryBoundary(_ timestamp: Date, timeframe: RLChartTimeframe, calendar: Calendar) -> Bool {
+    private static func isPrimaryBoundary(
+        _ timestamp: Date,
+        previousTimestamp: Date?,
+        timeframe: RLChartTimeframe,
+        calendar: Calendar
+    ) -> Bool {
         let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: timestamp)
+        let isMidnight = components.hour == 0 && components.minute == 0
+        let crossedDayBoundary: Bool
+        if let previousTimestamp {
+            crossedDayBoundary = !calendar.isDate(previousTimestamp, equalTo: timestamp, toGranularity: .day)
+        } else {
+            crossedDayBoundary = false
+        }
 
         switch timeframe {
         case .m1, .m5, .m15, .m30, .h1, .h4:
-            return components.hour == 0 && components.minute == 0
+            return isMidnight || crossedDayBoundary
         case .d1:
             return components.day == 1
         case .w1:
             return components.day == 1
         case .mn:
             return components.month == 1
+        }
+    }
+
+    private static func isHourBoundary(_ timestamp: Date, timeframe: RLChartTimeframe, calendar: Calendar) -> Bool {
+        switch timeframe {
+        case .m1, .m5, .m15, .m30, .h1, .h4:
+            return calendar.component(.minute, from: timestamp) == 0
+        case .d1, .w1, .mn:
+            return false
         }
     }
 
@@ -360,10 +494,7 @@ enum ChartXAxisLabelEngine {
 
         switch input.timeframe {
         case .d1, .w1, .mn:
-            let formatter = DateFormatter()
-            formatter.timeZone = input.timeZone
-            formatter.locale = input.locale
-            formatter.dateFormat = "dd MMM"
+            let formatter = cachedFormatter(format: "dd MMM", timeZone: input.timeZone, locale: input.locale)
             return formatter.string(from: timestamp)
         default:
             break
@@ -377,19 +508,28 @@ enum ChartXAxisLabelEngine {
         } else {
             let daysAgo = calendar.dateComponents([.day], from: timestamp, to: now).day ?? 999
             if daysAgo >= 2 && daysAgo <= 6 {
-                let formatter = DateFormatter()
-                formatter.timeZone = input.timeZone
-                formatter.locale = input.locale
-                formatter.dateFormat = "EEEE"
+                let formatter = cachedFormatter(format: "EEEE", timeZone: input.timeZone, locale: input.locale)
                 return formatter.string(from: timestamp)
             } else {
-                let formatter = DateFormatter()
-                formatter.timeZone = input.timeZone
-                formatter.locale = input.locale
-                formatter.dateFormat = "dd MMM"
+                let formatter = cachedFormatter(format: "dd MMM", timeZone: input.timeZone, locale: input.locale)
                 return formatter.string(from: timestamp)
             }
         }
+    }
+
+    private static func cachedFormatter(format: String, timeZone: TimeZone, locale: Locale) -> DateFormatter {
+        let key = "chart.xaxis.df.\(format)|\(timeZone.identifier)|\(locale.identifier)"
+        let threadDict = Thread.current.threadDictionary
+        if let formatter = threadDict[key] as? DateFormatter {
+            return formatter
+        }
+
+        let formatter = DateFormatter()
+        formatter.timeZone = timeZone
+        formatter.locale = locale
+        formatter.dateFormat = format
+        threadDict[key] = formatter
+        return formatter
     }
 
     private static func axisPolicy(for timeframe: RLChartTimeframe) -> AxisPolicy {

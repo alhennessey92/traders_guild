@@ -2893,7 +2893,8 @@ class RLAppState: ObservableObject {
                 guildId: guildId,
                 symbolId: symbolId,
                 timeframe: timeframe,
-                candleLimit: candleLimit
+                candleLimit: candleLimit,
+                continuousTime: true
             )
         } catch {
             showError(error, title: "Failed to Load Chart Data", style: .toast)

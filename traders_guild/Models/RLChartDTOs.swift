@@ -428,6 +428,54 @@ struct RLCandleDTO: Codable, Equatable {
     let close: Double
     let volume: Double?
     let volumeFormatted: String?
+    var isGapFill: Bool = false
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp
+        case timestampFormatted
+        case open
+        case high
+        case low
+        case close
+        case volume
+        case volumeFormatted
+        case isGapFill
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        timestampFormatted = try container.decodeIfPresent(String.self, forKey: .timestampFormatted)
+        open = try container.decode(Double.self, forKey: .open)
+        high = try container.decode(Double.self, forKey: .high)
+        low = try container.decode(Double.self, forKey: .low)
+        close = try container.decode(Double.self, forKey: .close)
+        volume = try container.decodeIfPresent(Double.self, forKey: .volume)
+        volumeFormatted = try container.decodeIfPresent(String.self, forKey: .volumeFormatted)
+        isGapFill = try container.decodeIfPresent(Bool.self, forKey: .isGapFill) ?? false
+    }
+
+    init(
+        timestamp: Date,
+        timestampFormatted: String?,
+        open: Double,
+        high: Double,
+        low: Double,
+        close: Double,
+        volume: Double?,
+        volumeFormatted: String?,
+        isGapFill: Bool = false
+    ) {
+        self.timestamp = timestamp
+        self.timestampFormatted = timestampFormatted
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.volume = volume
+        self.volumeFormatted = volumeFormatted
+        self.isGapFill = isGapFill
+    }
     
     // MARK: - Convenience
     
