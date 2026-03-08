@@ -89,18 +89,40 @@ enum ChartPattern: String, Codable, CaseIterable {
 
 // MARK: - Color Hex Helper
 
-// MARK: - Marker Detail Tabs (Bottom Sheet Takeover)
+// MARK: - Marker Placement Tabs
 
-enum MarkerDetailTab: String, CaseIterable {
-    case details = "Details"
-    case chat = "Chat"
-    case analysis = "Analysis"
+enum MarkerPlacementTab: String, CaseIterable, UnifiedTabItem {
+    case general = "General"
+    case indicators = "Indicators"
+    case drawings = "Drawings"
+    case timeframes = "Timeframes"
+
+    var title: String { rawValue }
 
     var icon: String {
         switch self {
-        case .details: return "info.circle.fill"
+        case .general: return "slider.horizontal.3"
+        case .indicators: return "waveform.path.ecg"
+        case .drawings: return "pencil.and.ruler"
+        case .timeframes: return "clock.fill"
+        }
+    }
+}
+
+// MARK: - Marker Viewing Tabs
+
+enum MarkerViewingTab: String, CaseIterable, UnifiedTabItem {
+    case general = "General"
+    case components = "Components"
+    case chat = "Chat"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .general: return "info.circle.fill"
+        case .components: return "square.stack.3d.up.fill"
         case .chat: return "bubble.left.fill"
-        case .analysis: return "chart.bar.xaxis"
         }
     }
 }
@@ -132,4 +154,3 @@ extension Color {
         )
     }
 }
-

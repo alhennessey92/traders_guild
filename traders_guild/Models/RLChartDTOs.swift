@@ -57,165 +57,433 @@ enum RLAssetClass: String, Codable, CaseIterable {
 }
 
 // =============================================================================
-// MARK: - Marker Type (UI Helper)
+// MARK: - Marker Intent (V2)
 // =============================================================================
 
-enum RLMarkerType: String, Codable, CaseIterable {
-    case note = "Note"
-    case question = "Question"
-    case alert = "Alert"
-    case entry = "Entry"
-    case exit = "Exit"
-    case stopLoss = "Stop Loss"
-    case takeProfit = "Take Profit"
-    case support = "Support"
-    case resistance = "Resistance"
-    case indicator = "Indicator"
-    case trendline = "Trendline"
-    case pattern = "Pattern"
-    case volumeSpike = "Volume Spike"
-    case predictionTarget = "Prediction"
-    case emoji = "Emoji"
-    case poll = "Poll"
-    case personal = "Personal"
-    
-    /// SF Symbol name only (no .circle) — chart draws its own circle; add custom symbols here for new marker types
-    var icon: String {
-        switch self {   
-        case .note: return "pencil"
-        case .question: return "questionmark"
-        case .alert: return "exclamationmark.triangle"
-        case .entry: return "arrow.right.circle.dotted"
-        case .exit: return "arrow.left.circle.dotted"
-        case .stopLoss: return "xmark"
-        case .takeProfit: return "checkmark"
-        case .support: return "arrow.down.to.line"
-        case .resistance: return "arrow.up.to.line"
-        case .indicator: return "star"
-        case .trendline: return "chart.line.uptrend.xyaxis"
-        case .pattern: return "circle.hexagongrid.fill"
-        case .volumeSpike: return "chart.line.downtrend.xyaxis"
-        case .predictionTarget: return "target"
-        case .emoji: return "face.smiling.inverse"
-        case .poll: return "newspaper.fill"
-        case .personal: return "person.fill"
-        }
-    }
-    
-    var color: Color {
+enum RLMarkerIntent: String, Codable, CaseIterable {
+    case analysis
+    case setup
+    case alert
+    case question
+    case poll
+    case news
+    case reaction
+    case personal
+
+    var displayName: String {
         switch self {
-        case .note: return .gray
-        case .question: return .blue
-        case .alert: return .yellow
-        case .entry: return .green
-        case .exit: return AppColors.bearCandleRed
-        case .stopLoss: return .red
-        case .takeProfit: return .blue
-        case .support: return .purple
-        case .resistance: return .pink
-        case .indicator: return .teal
-        case .trendline: return .indigo
-        case .pattern: return .cyan
-        case .volumeSpike: return .mint
-        case .predictionTarget: return .white
-        case .emoji: return .white
-        case .poll: return .blue
-        case .personal: return .cyan
+        case .analysis: return "Analysis"
+        case .setup: return "Setup"
+        case .alert: return "Alert"
+        case .question: return "Question"
+        case .poll: return "Poll"
+        case .news: return "News"
+        case .reaction: return "Reaction"
+        case .personal: return "Personal"
         }
     }
-    
-    /// Whether this marker displays a horizontal line
-    var hasHorizontalLine: Bool {
-        switch self {
-        case .entry, .exit, .stopLoss, .takeProfit, .support, .resistance, .predictionTarget:
-            return true
-        default:
-            return false
-        }
-    }
-    
-    /// Short description for marker selection UI
+
     var subtitle: String {
         switch self {
-        case .note:             return "Add a note or comment"
-        case .question:         return "Ask your guild a question"
-        case .alert:            return "Flag something important"
-        case .entry:            return "Mark a trade entry level"
-        case .exit:             return "Mark a trade exit level"
-        case .stopLoss:         return "Set a stop-loss level"
-        case .takeProfit:       return "Set a take-profit target"
-        case .support:          return "Identify a support zone"
-        case .resistance:       return "Identify a resistance zone"
-        case .indicator:        return "Highlight an indicator signal"
-        case .trendline:        return "Mark a trendline"
-        case .pattern:          return "Identify a chart pattern"
-        case .volumeSpike:      return "Flag unusual volume"
-        case .predictionTarget: return "Make a price prediction"
-        case .emoji:            return "React with an emoji"
-        case .poll:             return "Create a poll"
-        case .personal:         return "Private marker (only you)"
+        case .analysis: return "Share chart analysis"
+        case .setup: return "Entry, SL, and TP setup"
+        case .alert: return "Flag urgent context"
+        case .question: return "Ask your guild"
+        case .poll: return "Collect quick votes"
+        case .news: return "Share market headlines"
+        case .reaction: return "React with emoji"
+        case .personal: return "Private marker for you"
         }
     }
 
-    /// Short text label for SL/TP (nil = use icon)
-    var shortLabel: String? {
+    var icon: String {
         switch self {
-        case .stopLoss: return "SL"
-        case .takeProfit: return "TP"
-        default: return nil
-        }
-    }
-    
-    /// Short label for display on chart lines
-    var lineLabel: String {
-        switch self {
-        case .entry: return "Entry"
-        case .exit: return "Exit"
-        case .stopLoss: return "SL"
-        case .takeProfit: return "TP"
-        case .support: return "Support"
-        case .resistance: return "Resist"
-        case .predictionTarget: return "Entry"
-        default: return ""
+        case .analysis: return "chart.line.uptrend.xyaxis"
+        case .setup: return "target"
+        case .alert: return "exclamationmark.triangle.fill"
+        case .question: return "questionmark.bubble.fill"
+        case .poll: return "chart.bar.fill"
+        case .news: return "newspaper.fill"
+        case .reaction: return "face.smiling.inverse"
+        case .personal: return "lock.fill"
         }
     }
 
-    /// Price source for horizontal line (UI)
-    var lineSource: LinePriceSource {
+    var color: Color {
         switch self {
-        case .entry: return .candleOpen
-        case .exit: return .candleClose
-        case .stopLoss: return .candleOpen
-        case .takeProfit: return .candleClose
-        case .support: return .candleLow
-        case .resistance: return .candleHigh
-        case .predictionTarget: return .custom
-        default: return .none
+        case .analysis: return Color(hex: "#0F9EB4") ?? .teal
+        case .setup: return Color(hex: "#0E854D") ?? .green
+        case .alert: return Color(hex: "#D4A017") ?? .orange
+        case .question: return Color(hex: "#5B7FFF") ?? .blue
+        case .poll: return Color(hex: "#8B5CF6") ?? .purple
+        case .news: return Color(hex: "#EC4899") ?? .pink
+        case .reaction: return Color(hex: "#F59E0B") ?? .orange
+        case .personal: return Color(hex: "#6B7280") ?? .gray
         }
     }
-    
-    static func fromBackendString(_ string: String) -> RLMarkerType? {
-        switch string.lowercased() {
-        case "entry": return .entry
-        case "exit": return .exit
-        case "stop_loss": return .stopLoss
-        case "take_profit": return .takeProfit
-        case "prediction": return .predictionTarget
-        case "analysis": return .note
-        case "alert": return .alert
-        case "support": return .support
-        case "resistance": return .resistance
-        case "trendline": return .trendline
-        case "pattern": return .pattern
-        case "indicator": return .indicator
-        case "emoji": return .emoji
-        case "poll": return .poll
-        case "note": return .note
-        case "question": return .question
-        case "volume_spike": return .volumeSpike
-        case "personal": return .personal
+}
+
+enum RLTrackingState: String, Codable, CaseIterable {
+    case draft = "DRAFT"
+    case armed = "ARMED"
+    case active = "ACTIVE"
+    case tpHit = "TP_HIT"
+    case slHit = "SL_HIT"
+    case expired = "EXPIRED"
+
+    var displayName: String {
+        switch self {
+        case .draft: return "Draft"
+        case .armed: return "Armed"
+        case .active: return "Active"
+        case .tpHit: return "TP Hit"
+        case .slHit: return "SL Hit"
+        case .expired: return "Expired"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .draft: return .gray
+        case .armed: return Color(hex: "#0F9EB4") ?? .teal
+        case .active: return .green
+        case .tpHit: return .green
+        case .slHit: return .red
+        case .expired: return .gray
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .draft: return "square.and.pencil"
+        case .armed: return "dot.radiowaves.left.and.right"
+        case .active: return "bolt.fill"
+        case .tpHit: return "checkmark.circle.fill"
+        case .slHit: return "xmark.circle.fill"
+        case .expired: return "clock.badge.xmark.fill"
+        }
+    }
+
+    var isLive: Bool {
+        self == .armed || self == .active
+    }
+
+    var isResolved: Bool {
+        self == .tpHit || self == .slHit || self == .expired
+    }
+
+    var timelinePosition: Int {
+        switch self {
+        case .draft: return 0
+        case .armed: return 1
+        case .active: return 2
+        case .tpHit, .slHit, .expired: return 3
+        }
+    }
+}
+
+enum RLComponentType: String, Codable, CaseIterable {
+    case anchor = "anchor"
+    case levelEntry = "level.entry"
+    case levelSl = "level.sl"
+    case levelTp = "level.tp"
+    case levelSupport = "level.support"
+    case levelResistance = "level.resistance"
+    case drawingTrendline = "drawing.trendline"
+    case drawingZone = "drawing.zone"
+    case indicator = "indicator"
+    case linkURL = "link.url"
+    case textNote = "text.note"
+    case reactionEmoji = "reaction.emoji"
+    case timeframeLink = "timeframe_link"
+
+    var displayName: String {
+        switch self {
+        case .anchor: return "Anchor"
+        case .levelEntry: return "Entry"
+        case .levelSl: return "Stop Loss"
+        case .levelTp: return "Take Profit"
+        case .levelSupport: return "Support"
+        case .levelResistance: return "Resistance"
+        case .drawingTrendline: return "Trendline"
+        case .drawingZone: return "Zone"
+        case .indicator: return "Indicator"
+        case .linkURL: return "Link"
+        case .textNote: return "Note"
+        case .reactionEmoji: return "Emoji"
+        case .timeframeLink: return "Timeframe"
+        }
+    }
+
+    /// Short label for on-chart ghost preview price tags (2-4 chars).
+    var shortLabel: String {
+        switch self {
+        case .anchor: return "⚓"
+        case .levelEntry: return "ENT"
+        case .levelSl: return "SL"
+        case .levelTp: return "TP"
+        case .levelSupport: return "SUP"
+        case .levelResistance: return "RES"
+        case .drawingTrendline: return "TL"
+        case .drawingZone: return "ZN"
+        case .indicator: return "IND"
+        case .linkURL: return "URL"
+        case .textNote: return "TXT"
+        case .reactionEmoji: return "EMJ"
+        case .timeframeLink: return "TF"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .anchor: return "scope"
+        case .levelEntry, .levelSl, .levelTp, .levelSupport, .levelResistance:
+            return "line.3.horizontal"
+        case .drawingTrendline, .drawingZone:
+            return "pencil.and.ruler"
+        case .indicator:
+            return "waveform.path.ecg"
+        case .linkURL:
+            return "link"
+        case .textNote:
+            return "text.bubble"
+        case .reactionEmoji:
+            return "face.smiling"
+        case .timeframeLink:
+            return "clock"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .anchor: return Color(hex: "#5B7FFF") ?? .blue
+        case .levelEntry: return Color(hex: "#0E854D") ?? .green
+        case .levelSl: return Color(hex: "#DC2626") ?? .red
+        case .levelTp: return Color(hex: "#0EA5E9") ?? .cyan
+        case .levelSupport: return Color(hex: "#7C3AED") ?? .purple
+        case .levelResistance: return Color(hex: "#DB2777") ?? .pink
+        case .drawingTrendline: return Color(hex: "#14B8A6") ?? .teal
+        case .drawingZone: return Color(hex: "#22C55E") ?? .green
+        case .indicator: return Color(hex: "#F59E0B") ?? .orange
+        case .linkURL: return Color(hex: "#EC4899") ?? .pink
+        case .textNote: return Color(hex: "#6B7280") ?? .gray
+        case .reactionEmoji: return Color(hex: "#F59E0B") ?? .orange
+        case .timeframeLink: return Color(hex: "#38BDF8") ?? .cyan
+        }
+    }
+
+    var isLevel: Bool { rawValue.hasPrefix("level.") }
+    var isDrawing: Bool { rawValue.hasPrefix("drawing.") }
+}
+
+struct AnchorPayload: Codable {
+    let time: Date
+    let price: Double
+}
+
+struct LevelPayload: Codable {
+    let price: Double
+    let label: String?
+}
+
+struct TrendlinePayload: Codable {
+    let startTime: Date
+    let startPrice: Double
+    let endTime: Date
+    let endPrice: Double
+}
+
+struct ZonePayload: Codable {
+    let topPrice: Double
+    let bottomPrice: Double
+    let startTime: Date?
+    let endTime: Date?
+}
+
+struct IndicatorPayload: Codable {
+    let name: String
+    let settings: [String: AnyCodable]?
+    let isPrimary: Bool?
+}
+
+struct NotePayload: Codable {
+    let text: String
+    let offsetX: Double?
+    let offsetY: Double?
+
+    init(text: String, offsetX: Double? = nil, offsetY: Double? = nil) {
+        self.text = text
+        self.offsetX = offsetX
+        self.offsetY = offsetY
+    }
+}
+
+struct LinkPayload: Codable {
+    let url: String
+    let title: String?
+    let previewImage: String?
+}
+
+struct EmojiPayload: Codable {
+    let emoji: String
+    let offsetX: Double?
+    let offsetY: Double?
+
+    init(emoji: String, offsetX: Double? = nil, offsetY: Double? = nil) {
+        self.emoji = emoji
+        self.offsetX = offsetX
+        self.offsetY = offsetY
+    }
+}
+
+struct TimeframeLinkPayload: Codable {
+    let timeframe: String
+    let note: String?
+}
+
+enum MarkerComponentPayload: Codable {
+    case anchor(AnchorPayload)
+    case levelEntry(LevelPayload)
+    case levelSl(LevelPayload)
+    case levelTp(LevelPayload)
+    case levelSupport(LevelPayload)
+    case levelResistance(LevelPayload)
+    case drawingTrendline(TrendlinePayload)
+    case drawingZone(ZonePayload)
+    case indicator(IndicatorPayload)
+    case note(NotePayload)
+    case link(LinkPayload)
+    case reactionEmoji(EmojiPayload)
+    case timeframeLink(TimeframeLinkPayload)
+    case unknown(type: String, rawPayload: [String: AnyCodable])
+
+    static func decode(componentType: String, rawPayload: [String: AnyCodable]) -> MarkerComponentPayload {
+        func decodePayload<T: Decodable>(_ type: T.Type) -> T? {
+            guard let data = try? JSONEncoder().encode(rawPayload) else { return nil }
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateString = try container.decode(String.self)
+
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+
+                formatter.formatOptions = [.withInternetDateTime]
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid date string: \(dateString)"
+                )
+            }
+            return try? decoder.decode(type, from: data)
+        }
+
+        switch componentType {
+        case RLComponentType.anchor.rawValue:
+            if let payload = decodePayload(AnchorPayload.self) { return .anchor(payload) }
+        case RLComponentType.levelEntry.rawValue:
+            if let payload = decodePayload(LevelPayload.self) { return .levelEntry(payload) }
+        case RLComponentType.levelSl.rawValue:
+            if let payload = decodePayload(LevelPayload.self) { return .levelSl(payload) }
+        case RLComponentType.levelTp.rawValue:
+            if let payload = decodePayload(LevelPayload.self) { return .levelTp(payload) }
+        case RLComponentType.levelSupport.rawValue:
+            if let payload = decodePayload(LevelPayload.self) { return .levelSupport(payload) }
+        case RLComponentType.levelResistance.rawValue:
+            if let payload = decodePayload(LevelPayload.self) { return .levelResistance(payload) }
+        case RLComponentType.drawingTrendline.rawValue:
+            if let payload = decodePayload(TrendlinePayload.self) { return .drawingTrendline(payload) }
+        case RLComponentType.drawingZone.rawValue:
+            if let payload = decodePayload(ZonePayload.self) { return .drawingZone(payload) }
+        case RLComponentType.indicator.rawValue:
+            if let payload = decodePayload(IndicatorPayload.self) { return .indicator(payload) }
+        case RLComponentType.textNote.rawValue:
+            if let payload = decodePayload(NotePayload.self) { return .note(payload) }
+        case RLComponentType.linkURL.rawValue:
+            if let payload = decodePayload(LinkPayload.self) { return .link(payload) }
+        case RLComponentType.reactionEmoji.rawValue:
+            if let payload = decodePayload(EmojiPayload.self) { return .reactionEmoji(payload) }
+        case RLComponentType.timeframeLink.rawValue:
+            if let payload = decodePayload(TimeframeLinkPayload.self) { return .timeframeLink(payload) }
+        default:
+            break
+        }
+
+        return .unknown(type: componentType, rawPayload: rawPayload)
+    }
+
+    var rawPayload: [String: AnyCodable] {
+        func encodePayload<T: Encodable>(_ value: T) -> [String: AnyCodable] {
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            encoder.dateEncodingStrategy = .iso8601
+            guard
+                let data = try? encoder.encode(value),
+                let encoded = try? JSONDecoder().decode([String: AnyCodable].self, from: data)
+            else {
+                return [:]
+            }
+            return encoded
+        }
+
+        switch self {
+        case .anchor(let payload): return encodePayload(payload)
+        case .levelEntry(let payload): return encodePayload(payload)
+        case .levelSl(let payload): return encodePayload(payload)
+        case .levelTp(let payload): return encodePayload(payload)
+        case .levelSupport(let payload): return encodePayload(payload)
+        case .levelResistance(let payload): return encodePayload(payload)
+        case .drawingTrendline(let payload): return encodePayload(payload)
+        case .drawingZone(let payload): return encodePayload(payload)
+        case .indicator(let payload): return encodePayload(payload)
+        case .note(let payload): return encodePayload(payload)
+        case .link(let payload): return encodePayload(payload)
+        case .reactionEmoji(let payload): return encodePayload(payload)
+        case .timeframeLink(let payload): return encodePayload(payload)
+        case .unknown(_, let rawPayload): return rawPayload
+        }
+    }
+}
+
+extension MarkerComponentPayload {
+    var levelPrice: Double? {
+        switch self {
+        case .levelEntry(let payload): return payload.price
+        case .levelSl(let payload): return payload.price
+        case .levelTp(let payload): return payload.price
+        case .levelSupport(let payload): return payload.price
+        case .levelResistance(let payload): return payload.price
+        case .anchor(let payload): return payload.price
         default: return nil
         }
+    }
+
+    var anchorTime: Date? {
+        if case let .anchor(payload) = self {
+            return payload.time
+        }
+        return nil
+    }
+
+    var indicatorName: String? {
+        if case let .indicator(payload) = self {
+            return payload.name
+        }
+        return nil
+    }
+
+    var emojiValue: String? {
+        if case let .reactionEmoji(payload) = self {
+            return payload.emoji
+        }
+        return nil
     }
 }
 
@@ -652,8 +920,14 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let price: Double
     
     // Marker data
-    let markerType: String                      // analysis, alert, emoji, poll, etc.
+    let intent: String
+    let title: String?
     let note: String?
+    let visibility: String
+    let confidence: Int?
+    let trackingEnabled: Bool
+    let trackingState: String?
+    let alertSeverity: String?
     let createdAt: Date
     let createdAtFormatted: String
     let isVisible: Bool
@@ -669,15 +943,11 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let canEdit: Bool
     let canDelete: Bool
     
-    // Type-specific (exploded from JSONB metadata)
-    let horizontalLinePrice: Double?
-    let targetPrice: Double?
-    let stopLossPrice: Double?
-    let alertSeverity: String?                  // low, medium, high, critical
-    let trendlineDirection: String?             // up, down, sideways
-    let selectedIndicator: String?
-    let chartPattern: String?
-    let selectedEmoji: String?
+    // Components
+    let components: [RLMarkerComponentDTO]
+    let primaryComponentId: UUID?
+
+    // Poll
     let pollQuestion: String?
     let pollOptions: [RLPollOptionDTO]?
     let userPollVote: UUID?
@@ -692,19 +962,130 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.id == rhs.id &&
         lhs.likeCount == rhs.likeCount &&
         lhs.commentCount == rhs.commentCount &&
-        lhs.isVisible == rhs.isVisible
+        lhs.isVisible == rhs.isVisible &&
+        lhs.trackingState == rhs.trackingState
     }
     
     // MARK: - Convenience
     
     /// Whether this marker has a horizontal price line
     var hasHorizontalLine: Bool {
-        horizontalLinePrice != nil
+        !levelComponents.isEmpty
     }
     
     /// Whether this is a poll marker
     var isPoll: Bool {
-        markerType == "poll"
+        intent == RLMarkerIntent.poll.rawValue
+    }
+
+    var intentEnum: RLMarkerIntent {
+        RLMarkerIntent(rawValue: intent) ?? .analysis
+    }
+
+    var trackingStateEnum: RLTrackingState? {
+        trackingState.flatMap { RLTrackingState(rawValue: $0) }
+    }
+
+    var levelComponents: [RLMarkerComponentDTO] {
+        components.filter { $0.componentTypeEnum?.isLevel == true }
+    }
+
+    var anchorComponent: RLMarkerComponentDTO? {
+        components.first { $0.componentType == RLComponentType.anchor.rawValue }
+    }
+
+    var horizontalLinePrice: Double? {
+        levelComponents.first?.payload.levelPrice
+    }
+
+    var entryPrice: Double? {
+        components.first { $0.componentType == RLComponentType.levelEntry.rawValue }?.payload.levelPrice
+    }
+
+    var stopLossPrice: Double? {
+        components.first { $0.componentType == RLComponentType.levelSl.rawValue }?.payload.levelPrice
+    }
+
+    var targetPrice: Double? {
+        components.first { $0.componentType == RLComponentType.levelTp.rawValue }?.payload.levelPrice
+    }
+
+    var selectedEmoji: String? {
+        components.first { $0.componentType == RLComponentType.reactionEmoji.rawValue }?.payload.emojiValue
+    }
+
+    var selectedIndicator: String? {
+        components.first { $0.componentType == RLComponentType.indicator.rawValue }?.payload.indicatorName
+    }
+    var trendlineDirection: String? { nil }
+    var chartPattern: String? { nil }
+}
+
+struct RLMarkerComponentDTO: Codable, Identifiable, Hashable {
+    let id: UUID
+    let componentType: String
+    let payload: MarkerComponentPayload
+    let ordering: Int
+
+    var componentTypeEnum: RLComponentType? {
+        RLComponentType(rawValue: componentType)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case componentType
+        case payload
+        case ordering
+    }
+
+    init(id: UUID, componentType: String, payload: MarkerComponentPayload, ordering: Int) {
+        self.id = id
+        self.componentType = componentType
+        self.payload = payload
+        self.ordering = ordering
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        componentType = try container.decode(String.self, forKey: .componentType)
+        ordering = try container.decode(Int.self, forKey: .ordering)
+        let rawPayload = try container.decode([String: AnyCodable].self, forKey: .payload)
+        payload = MarkerComponentPayload.decode(componentType: componentType, rawPayload: rawPayload)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(componentType, forKey: .componentType)
+        try container.encode(ordering, forKey: .ordering)
+        try container.encode(payload.rawPayload, forKey: .payload)
+    }
+
+    static func == (lhs: RLMarkerComponentDTO, rhs: RLMarkerComponentDTO) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.componentType == rhs.componentType &&
+        lhs.ordering == rhs.ordering &&
+        payloadFingerprint(lhs.payload) == payloadFingerprint(rhs.payload)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(componentType)
+        hasher.combine(ordering)
+        hasher.combine(Self.payloadFingerprint(payload))
+    }
+
+    private static func payloadFingerprint(_ payload: MarkerComponentPayload) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard
+            let data = try? encoder.encode(payload.rawPayload),
+            let value = String(data: data, encoding: .utf8)
+        else {
+            return ""
+        }
+        return value
     }
 }
 
@@ -734,7 +1115,8 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let authorRole: String
     
     // Marker
-    let markerType: String
+    let intent: String
+    let title: String?
     let notePreview: String?
     let createdAt: Date
     let createdAtFormatted: String
@@ -743,8 +1125,7 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let candleTimestamp: Date
     let timeframe: String
     let price: Double
-    let targetPrice: Double?
-    let stopLossPrice: Double?
+    let setupSummary: RLSetupSummaryDTO?
     
     // Engagement
     var likeCount: Int
@@ -774,6 +1155,15 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.id == rhs.id &&
         lhs.likeCount == rhs.likeCount
     }
+
+    var intentEnum: RLMarkerIntent { RLMarkerIntent(rawValue: intent) ?? .analysis }
+}
+
+struct RLSetupSummaryDTO: Codable, Hashable {
+    let entryPrice: Double?
+    let slPrice: Double?
+    let tpPrice: Double?
+    let trackingState: String?
 }
 
 /// Categorized top markers list
@@ -1143,40 +1533,27 @@ struct RLWatchlistReorderRequest: Codable {
 /// Backend: CreateMarkerRequest
 struct RLCreateMarkerRequest: Codable {
     let symbolId: UUID
-    let guildId: UUID
-    let candleTimestamp: Date
     let timeframe: String
-    let price: Double
-    let markerType: String
+    let intent: String
+    let title: String?
     let note: String?
-    
-    // Type-specific
-    let horizontalLinePrice: Double?
-    let targetPrice: Double?
-    let stopLossPrice: Double?
-    let alertSeverity: String?
-    let trendlineDirection: String?
-    let selectedIndicator: String?
-    let chartPattern: String?
-    let selectedEmoji: String?
+    let visibility: String
+    let confidence: Int?
+    let trackingEnabled: Bool
+    let components: [RLMarkerComponentRequest]
     let pollQuestion: String?
     let pollOptions: [String]?
 
     enum CodingKeys: String, CodingKey {
         case symbolId = "symbol_id"
-        case guildId = "guild_id"
-        case candleTimestamp = "candle_timestamp"
-        case timeframe, price
-        case markerType = "marker_type"
+        case timeframe
+        case intent
+        case title
         case note
-        case horizontalLinePrice = "horizontal_line_price"
-        case targetPrice = "target_price"
-        case stopLossPrice = "stop_loss_price"
-        case alertSeverity = "alert_severity"
-        case trendlineDirection = "trendline_direction"
-        case selectedIndicator = "selected_indicator"
-        case chartPattern = "chart_pattern"
-        case selectedEmoji = "selected_emoji"
+        case visibility
+        case confidence
+        case trackingEnabled = "tracking_enabled"
+        case components
         case pollQuestion = "poll_question"
         case pollOptions = "poll_options"
     }
@@ -1185,27 +1562,32 @@ struct RLCreateMarkerRequest: Codable {
 /// Update a chart marker
 /// Backend: UpdateMarkerRequest
 struct RLUpdateMarkerRequest: Codable {
+    let intent: String?
+    let title: String?
     let note: String?
-    let price: Double?
-    let isVisible: Bool?
-    let horizontalLinePrice: Double?
-    let targetPrice: Double?
-    let alertSeverity: String?
-    let trendlineDirection: String?
-    let selectedIndicator: String?
-    let chartPattern: String?
-    let selectedEmoji: String?
+    let visibility: String?
+    let confidence: Int?
+    let trackingEnabled: Bool?
+    let components: [RLMarkerComponentRequest]?
     
     enum CodingKeys: String, CodingKey {
-        case note, price
-        case isVisible = "is_visible"
-        case horizontalLinePrice = "horizontal_line_price"
-        case targetPrice = "target_price"
-        case alertSeverity = "alert_severity"
-        case trendlineDirection = "trendline_direction"
-        case selectedIndicator = "selected_indicator"
-        case chartPattern = "chart_pattern"
-        case selectedEmoji = "selected_emoji"
+        case intent
+        case title
+        case note
+        case visibility
+        case confidence
+        case trackingEnabled = "tracking_enabled"
+        case components
+    }
+}
+
+struct RLMarkerComponentRequest: Codable {
+    let componentType: String
+    let payload: [String: AnyCodable]
+
+    enum CodingKeys: String, CodingKey {
+        case componentType = "component_type"
+        case payload
     }
 }
 
@@ -1336,14 +1718,24 @@ struct RLCandleUpdateDTO: Codable {
 /// Marker event (real-time marker activity)
 /// Backend: MarkerEventPayload
 struct RLMarkerEventDTO: Codable {
-    let eventType: String                       // created, updated, deleted, liked, commented
+    let eventType: String
     let guildId: UUID
     let symbolId: UUID
     let marker: RLChartMarkerDTO?
     let markerId: UUID?
     let likeCount: Int?
     let commentCount: Int?
-    let actorId: UUID
+    let actorId: UUID?
+    let oldTrackingState: String?
+    let newTrackingState: String?
+}
+
+struct MarkerTrackingStateChangedPayload: Codable {
+    let markerId: String
+    let oldState: String?
+    let newState: String?
+    let guildId: String
+    let symbolId: String
 }
 
 

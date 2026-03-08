@@ -39,6 +39,8 @@ struct MainView: View {
     @StateObject private var chartDataManager = ChartDataManager()
     @StateObject private var chartViewModel: ChartViewModel
     @StateObject private var chartGestureState = ChartGestureState()
+    @StateObject private var placementState = MarkerPlacementState()
+    @StateObject private var markerOverlayState = MarkerOverlayState()
     
     @State private var fadeIn: Bool = false
     
@@ -140,6 +142,7 @@ struct MainView: View {
                 // Positioned ABOVE main content, BELOW bottom sheet
                 // allowsHitTesting only on panels themselves (not the spacer above)
                 // so chart controls beneath remain tappable
+                // Visible in placement/viewing so linked panel indicators remain visible.
                 if chartViewModel.indicatorManager.shouldShowAnyPanel {
                     VStack {
                         Spacer()
@@ -166,7 +169,7 @@ struct MainView: View {
                     }
                     .ignoresSafeArea(edges: .bottom)
                 }
-                
+
                 // MARK: - Overlay Layer
                 if showOverlay {
                     overlayView
@@ -222,17 +225,23 @@ struct MainView: View {
             )
             
             // MARK: - Bottom Sheet
+            // Bottom sheet — stays visible during placement mode with swapped content
             .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition)) {
                 ChartBottomSheet(
                     controlViewModel: chartControlVM,
                     chartViewModel: chartViewModel,
+                    placementState: placementState,
+                    markerOverlayState: markerOverlayState,
                     selectedDetent: $selectedDetent,
                     onNavigateToMarker: { marker in
                         leftDrawerViewModel.requestNavigationToMarker(marker)
+                    },
+                    onPlaceMarker: {
+                        NotificationCenter.default.post(name: .placeMarkerRequested, object: nil)
                     }
                 )
                 .environmentObject(rlAppState)
-                .presentationDetents([.fraction(0.11), .fraction(0.5), .fraction(0.9)],
+                .presentationDetents([.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)],
                                       selection: $selectedDetent)
                 .presentationDragIndicator(.visible)
                 .presentationBackgroundInteraction(.enabled)
@@ -310,11 +319,16 @@ struct MainView: View {
                 }
             }
             .onChange(of: chartControlVM.isMarkerPlacementMode) { _, isPlacing in
-                if isPlacing {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        selectedDetent = .fraction(0.11)
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    if isPlacing {
+                        // Show placement panel at compact height — maximize chart space
+                        selectedDetent = .fraction(0.35)
                     }
                 }
+            }
+            .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { oldId, newId in
+                chartControlVM.isMarkerViewingMode = (newId != nil)
+                handleMarkerViewingSelectionChange(oldId: oldId, newId: newId)
             }
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {
@@ -402,108 +416,104 @@ struct MainView: View {
                 }
             }
             .toolbar {
-                // Left Drawer Button
+                // Leading Toolbar Item
                 ToolbarItem(placement: .topBarLeading) {
-                    ToolbarIconButton(
-                        systemName: "shield.pattern.checkered",
-                        backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                        fontType: .headline,
-                        symbolRenderingMode: .monochrome,
-                        foregroundStyle: AppColors.whiteText,
-                        padding: 8
-                    ) {
-                        
-                        withAnimation(AnimationConstants.standard) {
-                            dismissKeyboard()
-                            selectedDetent = .fraction(0.11)
-                            showLeftDrawer.toggle()
-                            showRightDrawer = false
-                            showOverlay = showLeftDrawer
+                    if chartControlVM.isMarkerPlacementMode {
+                        markerToolbarCloseButton(
+                            iconColor: .white,
+                            tintColor: .red.opacity(0.55)
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                chartControlVM.cancelMarkerPlacement()
+                            }
+                        }
+                    } else if chartControlVM.isMarkerViewingMode {
+                        markerToolbarCloseButton(
+                            iconColor: AppColors.whiteText.opacity(0.95),
+                            tintColor: Color.white.opacity(0.18)
+                        ) {
+                            closeMarkerViewingMode()
+                        }
+                    } else {
+                        ToolbarIconButton(
+                            systemName: "shield.pattern.checkered",
+                            backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                            fontType: .headline,
+                            symbolRenderingMode: .monochrome,
+                            foregroundStyle: AppColors.whiteText,
+                            padding: 8
+                        ) {
+                            withAnimation(AnimationConstants.standard) {
+                                dismissKeyboard()
+                                selectedDetent = .fraction(0.11)
+                                showLeftDrawer.toggle()
+                                showRightDrawer = false
+                                showOverlay = showLeftDrawer
+                            }
                         }
                     }
                 }
-                
-                // App Title
+
+                // Principal Toolbar Title
                 ToolbarItem(placement: .principal) {
-                    Text("TG")
-                        .font(.largeTitle)
-                        .fontWeight(.heavy)
-                        .foregroundColor(AppColors.chartLogo)
+                    if chartControlVM.isMarkerPlacementMode {
+                        Text("Place a Marker")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    } else if chartControlVM.isMarkerViewingMode {
+                        Text("Viewing Marker")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    } else {
+                        Text("TG")
+                            .font(.largeTitle)
+                            .fontWeight(.heavy)
+                            .foregroundColor(AppColors.chartLogo)
+                    }
                 }
                 
-                // Right Drawer Button - with unread badge
-                ToolbarItem(placement: .topBarTrailing) {
-                    ZStack(alignment: .topTrailing) {
-                        if rightDrawerViewModel.totalUnreadCount > 0 {
-
-                            ToolbarIconButton(
-                                // Unread badge
-                                systemName: "message.badge.filled.fill",
-                                backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                                fontType: .subheadline,
-                                symbolRenderingMode: .palette,
-                                foregroundStyles: [AppColors.accentColor, AppColors.whiteText],
-                                padding: 8
-                            ) {
-                                withAnimation(AnimationConstants.standard) {
-                                    dismissKeyboard()
-                                    selectedDetent = .fraction(0.11)
-                                    showRightDrawer.toggle()
-                                    showLeftDrawer = false
-                                    showOverlay = showRightDrawer
+                // Right Drawer Button — never render in placement/viewing to avoid ghost toolbar icon.
+                if !chartControlVM.isMarkerPlacementMode && !chartControlVM.isMarkerViewingMode {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ZStack(alignment: .topTrailing) {
+                            if rightDrawerViewModel.totalUnreadCount > 0 {
+                                ToolbarIconButton(
+                                    systemName: "message.badge.filled.fill",
+                                    backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                                    fontType: .subheadline,
+                                    symbolRenderingMode: .palette,
+                                    foregroundStyles: [AppColors.accentColor, AppColors.whiteText],
+                                    padding: 8
+                                ) {
+                                    withAnimation(AnimationConstants.standard) {
+                                        dismissKeyboard()
+                                        selectedDetent = .fraction(0.11)
+                                        showRightDrawer.toggle()
+                                        showLeftDrawer = false
+                                        showOverlay = showRightDrawer
+                                    }
+                                }
+                            } else {
+                                ToolbarIconButton(
+                                    systemName: "message.badge.filled.fill",
+                                    backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                                    fontType: .subheadline,
+                                    symbolRenderingMode: .monochrome,
+                                    foregroundStyle: AppColors.whiteText,
+                                    padding: 8
+                                ) {
+                                    withAnimation(AnimationConstants.standard) {
+                                        dismissKeyboard()
+                                        selectedDetent = .fraction(0.11)
+                                        showRightDrawer.toggle()
+                                        showLeftDrawer = false
+                                        showOverlay = showRightDrawer
+                                    }
                                 }
                             }
-
-                        }else{
-                            ToolbarIconButton(
-                                // Unread badge
-                                systemName: "message.badge.filled.fill",
-                                backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                                fontType: .subheadline,
-                                symbolRenderingMode: .monochrome,
-                                foregroundStyle: AppColors.whiteText,
-                                padding: 8
-                            ) {
-                                withAnimation(AnimationConstants.standard) {
-                                    dismissKeyboard()
-                                    selectedDetent = .fraction(0.11)
-                                    showRightDrawer.toggle()
-                                    showLeftDrawer = false
-                                    showOverlay = showRightDrawer
-                                }
-                            }
-                            
                         }
-                        // ToolbarIconButton(
-                        //     // Unread badge
-                        //     systemName: "message.badge.filled.fill",
-                        //     backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                        //     fontType: .subheadline,
-                        //     symbolRenderingMode: .monochrome,
-                        //     foregroundStyle: AppColors.whiteText,
-                        //     padding: 8
-                        // ) {
-                        //     withAnimation(AnimationConstants.standard) {
-                        //         dismissKeyboard()
-                        //         selectedDetent = .fraction(0.11)
-                        //         showRightDrawer.toggle()
-                        //         showLeftDrawer = false
-                        //         showOverlay = showRightDrawer
-                        //     }
-                        // }
-                        
-                        // // Unread badge
-                        // if rightDrawerViewModel.totalUnreadCount > 0 {
-                        //     Text("\(min(rightDrawerViewModel.totalUnreadCount, 99))")
-                        //         .font(.caption2)
-                        //         .fontWeight(.bold)
-                        //         .foregroundColor(.white)
-                        //         .padding(.horizontal, 5)
-                        //         .padding(.vertical, 2)
-                        //         .background(AppColors.bearCandleRed)
-                        //         .clipShape(Capsule())
-                        //         .offset(x: 8, y: -4)
-                        // }
                     }
                 }
             }
@@ -553,6 +563,7 @@ struct MainView: View {
             controlViewModel: controlViewModel,
             chartViewModel: chartViewModel,
             gestureState: chartGestureState,
+            placementState: placementState,
             rsiPanelHeight: $rsiPanelHeight,
             indicatorPanelBottomPadding: indicatorPanelsTotalHeight
         )
@@ -711,6 +722,56 @@ struct MainView: View {
                 }
             }
         }
+    }
+    
+    private func markerToolbarCloseButton(
+        iconColor: Color,
+        tintColor: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(iconColor)
+                .frame(width: 36, height: 36)
+                .background(
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                        Circle()
+                            .fill(tintColor)
+                        Circle()
+                            .stroke(Color.white.opacity(0.24), lineWidth: 0.8)
+                    }
+                )
+                .clipShape(Circle())
+                .shadow(color: tintColor.opacity(0.35), radius: 2, x: 0, y: 1)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func closeMarkerViewingMode() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            chartViewModel.markerManager?.selectedMarker = nil
+            chartControlVM.isMarkerViewingMode = false
+        }
+    }
+
+    private func handleMarkerViewingSelectionChange(oldId: UUID?, newId: UUID?) {
+        guard oldId != newId else { return }
+        guard let marker = chartViewModel.selectedMarkerForSheet else {
+            markerOverlayState.deactivateViewing(
+                indicatorManager: chartViewModel.indicatorManager,
+                candles: chartDataManager.candles
+            )
+            return
+        }
+
+        markerOverlayState.activateViewing(
+            marker: marker,
+            indicatorManager: chartViewModel.indicatorManager,
+            candles: chartDataManager.candles
+        )
     }
     
     
@@ -1355,26 +1416,36 @@ struct ChartBottomSheet: View {
     @State private var selectedView: ChartView = .symbol
     @ObservedObject var controlViewModel: ChartControlViewModel
     @ObservedObject var chartViewModel: ChartViewModel
+    @ObservedObject var placementState: MarkerPlacementState
+    @ObservedObject var markerOverlayState: MarkerOverlayState
     @Binding var selectedDetent: PresentationDetent
     @EnvironmentObject var rlAppState: RLAppState
     let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
-    
+    let onPlaceMarker: (() -> Void)?
+
     // Chat state - managed here since parent handles input
     @StateObject private var chartChatManager: ChartChatManager
     @State private var chatMessageText: String = ""
     @State private var isSendingChartMessage = false
-    @State private var markerDetailTab: MarkerDetailTab = .details
+    @State private var markerDetailTab: MarkerViewingTab = .general
+    @State private var capturedPlacementIndicatorSnapshot = false
 
     init(
         controlViewModel: ChartControlViewModel,
         chartViewModel: ChartViewModel,
+        placementState: MarkerPlacementState,
+        markerOverlayState: MarkerOverlayState,
         selectedDetent: Binding<PresentationDetent>,
-        onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
+        onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil,
+        onPlaceMarker: (() -> Void)? = nil
     ) {
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
+        self.placementState = placementState
+        self.markerOverlayState = markerOverlayState
         self._selectedDetent = selectedDetent
         self.onNavigateToMarker = onNavigateToMarker
+        self.onPlaceMarker = onPlaceMarker
         // Initialize ChartChatManager with RealAPIService
         // We'll configure it with rlAppState in onAppear
         _chartChatManager = StateObject(wrappedValue: ChartChatManager(
@@ -1411,7 +1482,11 @@ struct ChartBottomSheet: View {
         VStack(spacing: 0) {
             // Content Area
             if isExpanded {
-                if isMarkerDetailActive, let marker = chartViewModel.selectedMarkerForSheet,
+                if controlViewModel.isMarkerPlacementMode {
+                    // PLACEMENT MODE: show MarkerPlacementPanel instead of normal tabs
+                    placementModeContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if isMarkerDetailActive, let marker = chartViewModel.selectedMarkerForSheet,
                    let markerManager = chartViewModel.markerManager {
                     // Marker detail mode - replaces all tab content
                     markerDetailContent(marker: marker, markerManager: markerManager)
@@ -1447,7 +1522,9 @@ struct ChartBottomSheet: View {
             }
 
             // Conditional Footer: Marker Detail Tab Bar, Chat Input, or Standard Tab Bar
-            if isMarkerDetailActive {
+            if controlViewModel.isMarkerPlacementMode {
+                placementTabBar
+            } else if isMarkerDetailActive {
                 markerDetailTabBar
             } else if selectedView == .chat && isExpanded {
                 // Chat Input Footer (replaces tab bar)
@@ -1475,9 +1552,19 @@ struct ChartBottomSheet: View {
         }
         .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { _, newId in
             if newId != nil {
-                markerDetailTab = .details
+                markerDetailTab = .general
                 // Keep sheet at closed state (0.11) — user drags up to expand
             }
+        }
+        .onChange(of: controlViewModel.isMarkerPlacementMode) { _, isPlacing in
+            handlePlacementIndicatorLifecycle(isPlacing: isPlacing)
+        }
+        .onChange(of: placementIndicatorFingerprint) { _, _ in
+            guard controlViewModel.isMarkerPlacementMode else { return }
+            applyPlacementIndicatorsToChart()
+        }
+        .onChange(of: viewingIndicatorFingerprint) { _, _ in
+            refreshViewingIndicatorsIfNeeded()
         }
     }
     
@@ -1687,6 +1774,97 @@ struct ChartBottomSheet: View {
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard)
     }
+
+    // MARK: - Placement Tab Bar
+
+    private var bottomBarSelectedBackground: Color {
+        AppColors.gradientBackgroundDark
+    }
+
+    private var bottomBarUnselectedBackground: Color {
+        AppColors.gradientBackgroundMid.opacity(0.9)
+    }
+
+    private var bottomBarSelectedForeground: Color {
+        .white
+    }
+
+    private var bottomBarUnselectedForeground: Color {
+        AppColors.whiteText.opacity(0.8)
+    }
+
+    private var placementTabBar: some View {
+        VStack(spacing: 0) {
+            if isExpanded {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 0.5)
+            }
+
+            HStack(spacing: 4) {
+                HStack(spacing: 6) {
+                    ForEach(MarkerPlacementTab.allCases, id: \.self) { tab in
+                        RootBottomBarIconButton(
+                            systemName: tab == .general ? placementState.intent.icon : tab.icon,
+                            fontSize: 20,
+                            backgroundColor: placementState.selectedPlacementTab == tab ?
+                                bottomBarSelectedBackground :
+                                bottomBarUnselectedBackground,
+                            foregroundColor: tab == .general ?
+                                placementState.intent.color :
+                                (placementState.selectedPlacementTab == tab ? bottomBarSelectedForeground : bottomBarUnselectedForeground)
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                placementState.selectedPlacementTab = tab
+                            }
+                        }
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    onPlaceMarker?()
+                } label: {
+                    Text("Place Marker")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .frame(height: 50)
+                        .background(
+                            placementState.isValid ?
+                            AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [Color.green.opacity(0.95), Color.green.opacity(0.72)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            ) :
+                            AnyShapeStyle(AppColors.gradientBackgroundMid.opacity(0.9))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    placementState.isValid
+                                        ? placementState.intent.color.opacity(0.55)
+                                        : AppColors.whiteText.opacity(0.12),
+                                    lineWidth: 1
+                                )
+                        )
+                        .clipShape(Capsule())
+                        .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+                }
+                .buttonStyle(.plain)
+                .disabled(!placementState.isValid)
+                .opacity(placementState.isValid ? 1.0 : 0.55)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, isExpanded ? 16 : 0)
+            .padding(.bottom, 2)
+        }
+        .frame(height: isExpanded ? 70 : 68)
+        .ignoresSafeArea(.keyboard)
+    }
     
     
     // MARK: - Symbol Tab Content
@@ -1720,6 +1898,24 @@ struct ChartBottomSheet: View {
         )
     }
     
+    // MARK: - Placement Mode Content
+    private var placementModeContent: some View {
+        MarkerPlacementPanel(
+            placementState: placementState,
+            activeChartIndicators: MarkerPlacementIndicatorFactory.activePayloads(
+                from: chartViewModel.indicatorManager.activeIndicators
+            ),
+            currentChartTimeframe: chartViewModel.currentTimeframe,
+            onSelectTimeframe: { timeframe in
+                if chartViewModel.currentTimeframe != timeframe {
+                    chartViewModel.setTimeframe(timeframe)
+                }
+            }
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+
     // MARK: - Chat Tab Content
     private var chatContent: some View {
         ImprovedChartSheetChatView(
@@ -1736,8 +1932,8 @@ struct ChartBottomSheet: View {
     @ViewBuilder
     private func markerDetailContent(marker: ChartMarkerUI, markerManager: MarkerManager) -> some View {
         switch markerDetailTab {
-        case .details:
-            EmbeddedMarkerDetailView(
+        case .general:
+            MarkerViewingGeneralTab(
                 marker: marker,
                 markerManager: markerManager,
                 onClose: clearSelectedMarker
@@ -1750,38 +1946,96 @@ struct ChartBottomSheet: View {
                 selectedDetent: $selectedDetent
             )
             .environmentObject(rlAppState)
-        case .analysis:
-            markerDetailPlaceholder(
-                icon: "chart.bar.xaxis",
-                title: "Marker Analysis",
-                subtitle: "Marker analysis and linked indicators"
-            )
+        case .components:
+            MarkerViewingComponentsTab(marker: marker)
         }
-    }
-
-    private func markerDetailPlaceholder(icon: String, title: String, subtitle: String) -> some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: icon)
-                .font(.system(size: 40))
-                .foregroundColor(AppColors.greyText.opacity(0.5))
-            Text(title)
-                .font(.headline)
-                .foregroundColor(AppColors.whiteText)
-            Text(subtitle)
-                .font(.subheadline)
-                .foregroundColor(AppColors.greyText)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 32)
     }
 
     private func clearSelectedMarker() {
         withAnimation(.easeInOut(duration: 0.25)) {
             chartViewModel.markerManager?.selectedMarker = nil
         }
+    }
+
+    private func toggleSelectedMarkerLike() {
+        guard let marker = chartViewModel.selectedMarkerForSheet else { return }
+        Task {
+            await chartViewModel.markerManager?.toggleLike(markerId: marker.id)
+        }
+    }
+
+    private var placementIndicatorFingerprint: String {
+        placementState.indicatorDrafts
+            .map { draft in
+                switch draft.payload {
+                case .indicator(let payload):
+                    return "\(payload.name)|\(payload.isPrimary == true)"
+                default:
+                    return draft.id.uuidString
+                }
+            }
+            .joined(separator: "||")
+    }
+
+    private var viewingIndicatorFingerprint: String {
+        guard let marker = chartViewModel.selectedMarkerForSheet else { return "" }
+        return marker.components
+            .filter { $0.componentTypeEnum == .indicator }
+            .sorted { lhs, rhs in
+                if lhs.ordering != rhs.ordering { return lhs.ordering < rhs.ordering }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            .map { component in
+                guard case let .indicator(payload) = component.payload else {
+                    return component.id.uuidString
+                }
+                return "\(component.id.uuidString)|\(payload.name)|\(payload.isPrimary == true)"
+            }
+            .joined(separator: "||")
+    }
+
+    private var placementIndicatorComponents: [RLMarkerComponentDTO] {
+        placementState.indicatorDrafts.compactMap { draft in
+            guard case let .indicator(payload) = draft.payload else { return nil }
+            return RLMarkerComponentDTO(
+                id: draft.id,
+                componentType: RLComponentType.indicator.rawValue,
+                payload: .indicator(payload),
+                ordering: 0
+            )
+        }
+    }
+
+    private func handlePlacementIndicatorLifecycle(isPlacing: Bool) {
+        if isPlacing {
+            if !capturedPlacementIndicatorSnapshot {
+                chartViewModel.indicatorManager.saveSnapshot()
+                capturedPlacementIndicatorSnapshot = true
+            }
+            applyPlacementIndicatorsToChart()
+        } else if capturedPlacementIndicatorSnapshot {
+            chartViewModel.indicatorManager.restoreSnapshot()
+            chartViewModel.indicatorManager.recalculateIndicators(candles: chartViewModel.dataManager.candles)
+            capturedPlacementIndicatorSnapshot = false
+        }
+    }
+
+    private func applyPlacementIndicatorsToChart() {
+        chartViewModel.indicatorManager.applyMarkerIndicators(placementIndicatorComponents)
+        chartViewModel.indicatorManager.recalculateIndicators(candles: chartViewModel.dataManager.candles)
+    }
+
+    private func refreshViewingIndicatorsIfNeeded() {
+        guard controlViewModel.isMarkerViewingMode,
+              let marker = chartViewModel.selectedMarkerForSheet else {
+            return
+        }
+
+        markerOverlayState.activateViewing(
+            marker: marker,
+            indicatorManager: chartViewModel.indicatorManager,
+            candles: chartViewModel.dataManager.candles
+        )
     }
 
     // MARK: - Marker Detail Tab Bar
@@ -1794,76 +2048,37 @@ struct ChartBottomSheet: View {
                     .frame(height: 0.5)
             }
 
-            HStack(spacing: 8) {
-                // Close button - returns to normal bottom sheet tabs
-                Button(action: clearSelectedMarker) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(AppColors.whiteText.opacity(0.9))
-                        .frame(width: 50, height: 50)
-                        .background(AppColors.gradientBackgroundDark)
-                        .clipShape(Circle())
-                        .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
-                }
+            HStack(spacing: 4) {
+                markerLikeCapsuleButton
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 8) {
-                    // Details capsule - marker type + author name
-                    if let marker = chartViewModel.selectedMarkerForSheet {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                markerDetailTab = .details
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                UnifiedMarkerBadge(
-                                    type: marker.type,
-                                    displayColor: marker.displayColor,
-                                    size: 34,
-                                    emoji: marker.type == .emoji ? marker.selectedEmoji : nil
-                                )
-
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(marker.type.rawValue)
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(markerDetailTab == .details ? .white : AppColors.whiteText.opacity(0.8))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.7)
-                                    Text(marker.author.username)
-                                        .font(.system(size: 9, weight: .semibold))
-                                        .foregroundColor(markerDetailTab == .details ? .white.opacity(0.75) : AppColors.whiteText.opacity(0.5))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.8)
+                HStack(spacing: 6) {
+                    ForEach(MarkerViewingTab.allCases, id: \.self) { tab in
+                        if tab == .general,
+                           let marker = chartViewModel.selectedMarkerForSheet {
+                            markerDetailGeneralTabButton(
+                                marker: marker,
+                                isSelected: markerDetailTab == tab
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    markerDetailTab = tab
                                 }
-                                .padding(.trailing, 4)
                             }
-                            .padding(.vertical, 4)
-                            .padding(.leading, 5)
-                            .padding(.trailing, 12)
-                            .frame(height: 48)
-                            .background(markerDetailTab == .details ?
-                                AppColors.gradientBackgroundDark :
-                                AppColors.gradientBackgroundMid.opacity(0.9))
-                            .clipShape(Capsule())
-                            .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
-                        }
-                    }
-
-                    // Chat & Analysis icon buttons
-                    ForEach([MarkerDetailTab.chat, MarkerDetailTab.analysis], id: \.self) { tab in
-                        RootBottomBarIconButton(
-                            systemName: tab.icon,
-                            fontSize: 20,
-                            backgroundColor: markerDetailTab == tab ?
-                                AppColors.gradientBackgroundDark :
-                                AppColors.gradientBackgroundMid.opacity(0.9),
-                            foregroundColor: markerDetailTab == tab ?
-                                .white :
-                                AppColors.whiteText.opacity(0.8)
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                markerDetailTab = tab
+                        } else {
+                            RootBottomBarIconButton(
+                                systemName: tab.icon,
+                                fontSize: 20,
+                                backgroundColor: markerDetailTab == tab ?
+                                    bottomBarSelectedBackground :
+                                    bottomBarUnselectedBackground,
+                                foregroundColor: markerDetailTab == tab ?
+                                    bottomBarSelectedForeground :
+                                    bottomBarUnselectedForeground
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    markerDetailTab = tab
+                                }
                             }
                         }
                     }
@@ -1875,6 +2090,90 @@ struct ChartBottomSheet: View {
         }
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard)
+    }
+
+    private var markerLikeCapsuleButton: some View {
+        let isLiked = chartViewModel.selectedMarkerForSheet?.isLikedByCurrentUser ?? false
+        let likeCount = chartViewModel.selectedMarkerForSheet?.likeCount ?? 0
+
+        return Button(action: toggleSelectedMarkerLike) {
+            HStack(spacing: 7) {
+                Image(systemName: isLiked ? "heart.fill" : "heart")
+                    .font(.system(size: 15, weight: .bold))
+
+                Text("\(likeCount)")
+                    .font(.caption.weight(.bold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 50)
+            .background(
+                Capsule()
+                    .fill(Color.red.opacity(0.85))
+            )
+            .shadow(color: Color.white.opacity(0.25), radius: 1, x: 0, y: 0)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func markerDetailGeneralTabButton(
+        marker: ChartMarkerUI,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(marker.intent.color.opacity(0.24))
+                    .frame(width: 20, height: 20)
+                    .overlay(
+                        Circle()
+                            .stroke(marker.intent.color.opacity(0.55), lineWidth: 1)
+                    )
+                    .overlay(
+                        Image(systemName: marker.intent.icon)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(marker.intent.displayName)
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(markerAuthorHandle(marker))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.82))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 50)
+            .background(
+                Capsule()
+                    .fill(
+                        isSelected
+                            ? bottomBarSelectedBackground
+                            : bottomBarUnselectedBackground
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                marker.intent.color.opacity(isSelected ? 0.55 : 0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .shadow(color: Color.white.opacity(0.25), radius: 1, x: 0, y: 0)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func markerAuthorHandle(_ marker: ChartMarkerUI) -> String {
+        let username = marker.author.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !username.isEmpty else { return "@unknown" }
+        return username.hasPrefix("@") ? username : "@\(username)"
     }
 }
 

@@ -1308,11 +1308,28 @@ struct UnifiedIconBadge: View {
 /// Chart-style marker badge matching in-chart markers:
 /// dark neutral fill, solid marker-color border, and same-color icon.
 struct UnifiedMarkerBadge: View {
-    let type: RLMarkerType
+    let intent: RLMarkerIntent
     let displayColor: Color
     var size: CGFloat = 32
     var emoji: String? = nil
+    var textLabel: String? = nil
     var isSelected: Bool = false
+
+    init(
+        intent: RLMarkerIntent,
+        displayColor: Color? = nil,
+        size: CGFloat = 32,
+        emoji: String? = nil,
+        textLabel: String? = nil,
+        isSelected: Bool = false
+    ) {
+        self.intent = intent
+        self.displayColor = displayColor ?? intent.color
+        self.size = size
+        self.emoji = emoji
+        self.textLabel = textLabel
+        self.isSelected = isSelected
+    }
 
     private var borderWidth: CGFloat {
         isSelected ? AppColors.markerSelectedBorderWidth : AppColors.markerUnselectedBorderWidth
@@ -1339,16 +1356,16 @@ struct UnifiedMarkerBadge: View {
             Circle()
                 .stroke(displayColor, lineWidth: borderWidth)
                 .frame(width: size, height: size)
-            if type == .emoji, let emoji = emoji {
+            if intent == .reaction, let emoji = emoji {
                 Text(emoji)
                     .font(.system(size: iconSize, weight: .bold))
                     .foregroundColor(iconColor)
-            } else if let label = type.shortLabel {
+            } else if let label = textLabel, !label.isEmpty {
                 Text(label)
                     .font(.system(size: iconSize * 0.9, weight: .bold))
                     .foregroundColor(iconColor)
             } else {
-                Image(systemName: type.icon)
+                Image(systemName: intent.icon)
                     .font(.system(size: iconSize, weight: .bold))
                     .foregroundColor(iconColor)
             }

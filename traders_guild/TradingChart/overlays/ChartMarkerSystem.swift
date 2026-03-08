@@ -101,40 +101,13 @@ extension Color {
     }
 }
 
-extension RLMarkerType {
-    /// Per-type dark gradient: red for stop loss, blue for take profit, etc.
-    /// Same darkness level for all — uses displayColor scaled down
-    func markerBackgroundGradient(displayColor: Color) -> (start: Color, end: Color) {
-        (displayColor.markerGradientStart(), displayColor.markerGradientEnd())
-    }
-    /// Border gradient: reverse direction from fill, brighter colors for contrast.
-    /// brightness/opacity params enable future glow and pulse effects.
-    func markerBorderGradient(
-        displayColor: Color,
-        brightness: CGFloat = 1.0,
-        opacity: CGFloat = 1.0
-    ) -> (start: Color, end: Color) {
-        var start = displayColor.markerBorderGradientStart()
-        var end = displayColor.markerBorderGradientEnd()
-        if brightness != 1.0 {
-            start = start.blendedForGlow(brightness: brightness)
-            end = end.blendedForGlow(brightness: brightness)
-        }
-        if opacity != 1.0 {
-            start = start.opacity(Double(opacity))
-            end = end.opacity(Double(opacity))
-        }
-        return (start, end)
-    }
-}
-
 // MARK: - Marker Manager
 
 @MainActor
 class MarkerManager: ObservableObject {
     @Published var markers: [ChartMarkerUI] = []
     @Published var selectedMarker: ChartMarkerUI?
-    @Published var visibleTypes: Set<RLMarkerType> = Set(RLMarkerType.allCases)
+    @Published var visibleIntents: Set<RLMarkerIntent> = Set(RLMarkerIntent.allCases)
     @Published var visibilityMode: MarkerVisibilityMode = .all
     
     /// Tracks if we should show a "like existing marker" prompt
@@ -364,6 +337,8 @@ class MarkerManager: ObservableObject {
             handleMarkerLiked(message)
         case "marker_commented":
             handleMarkerCommented(message)
+        case "tracking_state_changed":
+            handleTrackingStateChanged(message)
         default:
             break
         }
@@ -451,6 +426,35 @@ class MarkerManager: ObservableObject {
         )
     }
 
+    private func handleTrackingStateChanged(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: MarkerTrackingStateChangedPayload.self),
+              let markerId = UUID(uuidString: payload.markerId) else { return }
+
+        if let index = markers.firstIndex(where: { $0.id == markerId }) {
+            let updated = markers[index].withMarker(
+                markers[index].marker.updating(trackingState: payload.newState)
+            )
+            markers[index] = updated
+            syncSelectedMarker(updated)
+            return
+        }
+
+        // Marker may not be loaded in current window; refresh when possible.
+        if let api, let symbolId = currentSymbolId, let timeframe = currentTimeframe, let candles = dataManager?.candles {
+            Task { [weak self] in
+                guard let self else { return }
+                await self.loadMarkersFromAPI(
+                    api: api,
+                    symbolId: symbolId,
+                    symbol: "",
+                    guildId: self.currentGuildId,
+                    timeframe: timeframe,
+                    candles: candles
+                )
+            }
+        }
+    }
+
     // MARK: - Position Recalculation
 
     private func recalculateAllPositions() {
@@ -483,100 +487,61 @@ class MarkerManager: ObservableObject {
     
     // MARK: - Duplicate Type Check
     
-    func existingMarkerOfType(_ type: RLMarkerType, atCandleIndex candleIndex: Int) -> ChartMarkerUI? {
+    func existingMarkerOfIntent(_ intent: RLMarkerIntent, atCandleIndex candleIndex: Int) -> ChartMarkerUI? {
         return markers.first { marker in
-            marker.candleIndex == candleIndex && marker.type == type
+            marker.candleIndex == candleIndex && marker.intent == intent
         }
     }
     
-    /// Find marker by backend marker type string (for RLChartMarkerUI compatibility)
-    func existingMarkerOfBackendType(_ backendType: String, atCandleIndex candleIndex: Int) -> ChartMarkerUI? {
-        guard let markerType = RLMarkerType.fromBackendString(backendType) else { return nil }
-        return existingMarkerOfType(markerType, atCandleIndex: candleIndex)
-    }
-    
-    func canAddMarker(type: RLMarkerType, atCandleIndex candleIndex: Int) -> Bool {
-        return existingMarkerOfType(type, atCandleIndex: candleIndex) == nil
+    func canAddMarker(intent: RLMarkerIntent, atCandleIndex candleIndex: Int) -> Bool {
+        return existingMarkerOfIntent(intent, atCandleIndex: candleIndex) == nil
     }
     
     // MARK: - Marker CRUD
     
     @discardableResult
-    func addMarker(
-        symbolId: UUID,
+    func addMarkerV2(
+        request: RLCreateMarkerRequest,
         candleIndex: Int,
-        timestamp: Date,
-        price: Double,
-        type: RLMarkerType,
-        note: String? = nil,
-        candles: [RLCandleDTO],
-        horizontalLinePrice: Double? = nil,
-        targetPrice: Double? = nil,
-        stopLossPrice: Double? = nil,
-        alertSeverity: MarkerAlertSeverity? = nil,
-        trendlineDirection: TrendlineDirection? = nil,
-        selectedIndicator: String? = nil,
-        chartPattern: ChartPattern? = nil,
-        selectedEmoji: String? = nil,
-        pollQuestion: String? = nil,
-        pollOptions: [String]? = nil
+        candles: [RLCandleDTO]
     ) async -> Bool {
-        // Validate candle index
-        guard candleIndex >= 0 && candleIndex < candles.count else {
-            return false
-        }
-        
-        // Check for duplicate type on same candle
-        if let existingMarker = existingMarkerOfType(type, atCandleIndex: candleIndex) {
-            duplicateMarkerToLike = existingMarker
-            showDuplicateAlert = true
-            return false
-        }
-        
-        // Calculate line price based on marker type
-        var linePrice = horizontalLinePrice
-        if type.hasHorizontalLine && linePrice == nil {
-            guard candleIndex >= 0 && candleIndex < candles.count else {
-                return false
-            }
-            let candle = candles[candleIndex]
-            
-            if type == .predictionTarget {
-                linePrice = targetPrice ?? candle.close
-            } else {
-                switch type {
-                case .entry, .stopLoss:
-                    linePrice = candle.open
-                case .exit, .takeProfit:
-                    linePrice = candle.close
-                case .support:
-                    linePrice = candle.low
-                case .resistance:
-                    linePrice = candle.high
-                default:
-                    break
-                }
-            }
-        }
-        
-        let now = Date()
         let tempId = UUID()
-        
-        let pollOptionsDTO = pollOptions?.map {
-            RLPollOptionDTO(id: UUID(), text: $0, voteCount: 0, hasVoted: false)
+        let now = Date()
+
+        guard let anchorRequest = request.components.first(where: { $0.componentType == RLComponentType.anchor.rawValue }) else {
+            return false
         }
-        
-        let timeframeString = currentTimeframe?.toBackendString() ?? RLChartTimeframe.h1.toBackendString()
+        let anchorPayload = MarkerComponentPayload.decode(componentType: RLComponentType.anchor.rawValue, rawPayload: anchorRequest.payload)
+        let anchorPrice = anchorPayload.levelPrice ?? 0
+        let anchorTime = anchorPayload.anchorTime ?? now
+
+        let tempComponents = request.components.enumerated().map { idx, component in
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: component.componentType,
+                payload: MarkerComponentPayload.decode(componentType: component.componentType, rawPayload: component.payload),
+                ordering: idx
+            )
+        }
+
         let tempMarkerDTO = RLChartMarkerDTO(
             id: tempId,
-            symbolId: symbolId,
+            symbolId: request.symbolId,
             guildId: currentGuildId,
             author: currentUserMember,
-            candleTimestamp: timestamp,
-            timeframe: timeframeString,
-            price: price,
-            markerType: type.toBackendString(),
-            note: note,
+            candleTimestamp: anchorTime,
+            timeframe: request.timeframe,
+            price: anchorPrice,
+            intent: request.intent,
+            title: request.title,
+            note: request.note,
+            visibility: request.visibility,
+            confidence: request.confidence,
+            trackingEnabled: request.trackingEnabled,
+            trackingState: request.intent == RLMarkerIntent.setup.rawValue
+                ? (request.trackingEnabled ? RLTrackingState.armed.rawValue : RLTrackingState.draft.rawValue)
+                : nil,
+            alertSeverity: nil,
             createdAt: now,
             createdAtFormatted: "Just now",
             isVisible: true,
@@ -587,84 +552,46 @@ class MarkerManager: ObservableObject {
             isCurrentUserMarker: true,
             canEdit: true,
             canDelete: true,
-            horizontalLinePrice: linePrice,
-            targetPrice: targetPrice,
-            stopLossPrice: stopLossPrice,
-            alertSeverity: alertSeverity?.toBackendString(),
-            trendlineDirection: trendlineDirection?.rawValue,
-            selectedIndicator: selectedIndicator,
-            chartPattern: chartPattern?.rawValue,
-            selectedEmoji: selectedEmoji,
-            pollQuestion: pollQuestion,
-            pollOptions: pollOptionsDTO,
+            components: tempComponents,
+            primaryComponentId: tempComponents.first(where: { $0.componentType == RLComponentType.anchor.rawValue })?.id,
+            pollQuestion: request.pollQuestion,
+            pollOptions: request.pollOptions?.map { RLPollOptionDTO(id: UUID(), text: $0, voteCount: 0, hasVoted: false) },
             userPollVote: nil
         )
-        
+
         var marker = ChartMarkerUI(marker: tempMarkerDTO, candleIndex: candleIndex)
-        
-        // Calculate position
         let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
             marker: marker,
             existingMarkers: markers,
             candles: candles
         )
-        
         marker.positionedBelow = positioning.isBelow
         marker.proximityTier = positioning.tier
         marker.stackIndex = positioning.stackIndex
-        
-        // Optimistic update - add marker immediately
         markers.append(marker)
-        
-        // Persist to backend
-        guard let api = api,
-              let timeframe = currentTimeframe else {
-            // If no API configured, marker is already added optimistically
+
+        guard let api else {
             return true
         }
-        
+
         do {
-            // Create marker via API
-            let createdMarker = try await api.createMarker(
-                guildId: currentGuildId,
-                symbolId: symbolId,
-                candleTimestamp: timestamp,
-                timeframe: timeframe.toBackendString(),
-                price: price,
-                markerType: type.toBackendString(),
-                note: note,
-                horizontalLinePrice: linePrice,
-                targetPrice: targetPrice,
-                stopLossPrice: stopLossPrice,
-                alertSeverity: alertSeverity?.toBackendString(),
-                trendlineDirection: trendlineDirection?.rawValue,
-                selectedIndicator: selectedIndicator,
-                chartPattern: chartPattern?.rawValue,
-                selectedEmoji: selectedEmoji,
-                pollQuestion: pollQuestion,
-                pollOptions: pollOptions
-            )
-            
-            // Replace optimistic marker with real one from backend
-            if let index = markers.firstIndex(where: { $0.id == tempId }) {
-                if let candleIndex = findCandleIndex(timestamp: createdMarker.candleTimestamp, in: candles) {
-                    var updatedMarker = ChartMarkerUI(marker: createdMarker, candleIndex: candleIndex)
-                    updatedMarker.positionedBelow = marker.positionedBelow
-                    updatedMarker.proximityTier = marker.proximityTier
-                    updatedMarker.stackIndex = marker.stackIndex
-                    markers[index] = updatedMarker
-                }
+            let created = try await api.createMarkerV2(guildId: currentGuildId, request: request)
+            if let idx = markers.firstIndex(where: { $0.id == tempId }),
+               let newCandleIndex = findCandleIndex(timestamp: created.candleTimestamp, in: candles) {
+                var updated = ChartMarkerUI(marker: created, candleIndex: newCandleIndex)
+                updated.positionedBelow = marker.positionedBelow
+                updated.proximityTier = marker.proximityTier
+                updated.stackIndex = marker.stackIndex
+                markers[idx] = updated
             }
-            
             return true
         } catch {
-            // Revert optimistic update on error
             markers.removeAll { $0.id == tempId }
-            print("Failed to create marker: \(error)")
+            print("Failed to create marker v2: \(error)")
             return false
         }
     }
-    
+
     func deleteMarker(id: UUID) async {
         // Optimistic update - remove immediately
         let markerToDelete = markers.first { $0.id == id }
@@ -728,7 +655,9 @@ class MarkerManager: ObservableObject {
         price: Double? = nil,
         isVisible: Bool? = nil,
         horizontalLinePrice: Double? = nil,
+        horizontalLineType: RLComponentType? = nil,
         targetPrice: Double? = nil,
+        stopLossPrice: Double? = nil,
         alertSeverity: String? = nil,
         trendlineDirection: String? = nil,
         selectedIndicator: String? = nil,
@@ -740,25 +669,135 @@ class MarkerManager: ObservableObject {
 
         let originalMarker = markers[index]
         let originalSnapshot = snapshotLayout(for: originalMarker)
+        let originalDTO = originalMarker.marker
+
+        var updatedComponents = originalDTO.components
+        var didMutateComponents = false
+
+        func upsertComponent(_ componentType: String, payload: MarkerComponentPayload) {
+            if let idx = updatedComponents.firstIndex(where: { $0.componentType == componentType }) {
+                let existing = updatedComponents[idx]
+                updatedComponents[idx] = RLMarkerComponentDTO(
+                    id: existing.id,
+                    componentType: existing.componentType,
+                    payload: payload,
+                    ordering: existing.ordering
+                )
+            } else {
+                updatedComponents.append(
+                    RLMarkerComponentDTO(
+                        id: UUID(),
+                        componentType: componentType,
+                        payload: payload,
+                        ordering: updatedComponents.count
+                    )
+                )
+            }
+            didMutateComponents = true
+        }
+
+        if let price {
+            if let anchorIndex = updatedComponents.firstIndex(where: { $0.componentType == RLComponentType.anchor.rawValue }),
+               case let .anchor(anchorPayload) = updatedComponents[anchorIndex].payload {
+                let updatedAnchor = AnchorPayload(time: anchorPayload.time, price: price)
+                let current = updatedComponents[anchorIndex]
+                updatedComponents[anchorIndex] = RLMarkerComponentDTO(
+                    id: current.id,
+                    componentType: current.componentType,
+                    payload: .anchor(updatedAnchor),
+                    ordering: current.ordering
+                )
+                didMutateComponents = true
+            }
+        }
+
+        if let horizontalLinePrice {
+            let candidateOrder: [RLComponentType] = [
+                .levelEntry, .levelSl, .levelTp, .levelSupport, .levelResistance,
+            ]
+            let componentType = horizontalLineType ?? (
+                candidateOrder.first { candidate in
+                    updatedComponents.contains(where: { $0.componentType == candidate.rawValue })
+                } ?? (originalDTO.intentEnum == .setup ? .levelEntry : .levelSupport)
+            )
+            let payload: MarkerComponentPayload = {
+                switch componentType {
+                case .levelEntry:
+                    return .levelEntry(LevelPayload(price: horizontalLinePrice, label: nil))
+                case .levelSl:
+                    return .levelSl(LevelPayload(price: horizontalLinePrice, label: nil))
+                case .levelTp:
+                    return .levelTp(LevelPayload(price: horizontalLinePrice, label: nil))
+                case .levelSupport:
+                    return .levelSupport(LevelPayload(price: horizontalLinePrice, label: nil))
+                case .levelResistance:
+                    return .levelResistance(LevelPayload(price: horizontalLinePrice, label: nil))
+                default:
+                    return .levelEntry(LevelPayload(price: horizontalLinePrice, label: nil))
+                }
+            }()
+            upsertComponent(componentType.rawValue, payload: payload)
+        }
+
+        if let targetPrice {
+            upsertComponent(
+                RLComponentType.levelTp.rawValue,
+                payload: .levelTp(LevelPayload(price: targetPrice, label: nil))
+            )
+        }
+
+        if let stopLossPrice {
+            upsertComponent(
+                RLComponentType.levelSl.rawValue,
+                payload: .levelSl(LevelPayload(price: stopLossPrice, label: nil))
+            )
+        }
+
+        if let selectedIndicator {
+            upsertComponent(
+                RLComponentType.indicator.rawValue,
+                payload: .indicator(IndicatorPayload(name: selectedIndicator, settings: nil, isPrimary: nil))
+            )
+        }
+
+        if let selectedEmoji {
+            upsertComponent(
+                RLComponentType.reactionEmoji.rawValue,
+                payload: .reactionEmoji(EmojiPayload(emoji: selectedEmoji))
+            )
+        }
+
         if let note = note {
-            markers[index] = originalMarker.withMarker(originalMarker.marker.updating(note: note))
+            markers[index] = originalMarker.withMarker(originalDTO.updating(note: note))
             syncSelectedMarker(markers[index])
+        }
+        if didMutateComponents {
+            let optimistic = markers[index].withMarker(
+                markers[index].marker.updating(
+                    trackingState: markers[index].marker.trackingState,
+                    components: updatedComponents
+                )
+            )
+            markers[index] = optimistic
+            syncSelectedMarker(optimistic)
         }
 
         do {
-            let updatedMarker = try await api.updateMarker(
+            let updateRequest = RLUpdateMarkerRequest(
+                intent: nil,
+                title: nil,
+                note: note,
+                visibility: nil,
+                confidence: nil,
+                trackingEnabled: nil,
+                components: didMutateComponents
+                    ? updatedComponents.map { RLMarkerComponentRequest(componentType: $0.componentType, payload: $0.payload.rawPayload) }
+                    : nil
+            )
+            let updatedMarker = try await api.updateMarkerV2(
                 guildId: currentGuildId,
                 markerId: id,
-                note: note,
-                price: price,
-                isVisible: isVisible,
-                horizontalLinePrice: horizontalLinePrice,
-                targetPrice: targetPrice,
-                alertSeverity: alertSeverity,
-                trendlineDirection: trendlineDirection,
-                selectedIndicator: selectedIndicator,
-                chartPattern: chartPattern,
-                selectedEmoji: selectedEmoji
+                request: updateRequest
             )
             guard let latestIndex = markerIndex(for: id) else { return }
 
@@ -772,7 +811,7 @@ class MarkerManager: ObservableObject {
         } catch {
             guard let latestIndex = markerIndex(for: id) else { return }
 
-            if note != nil {
+            if note != nil || didMutateComponents {
                 let rolledBack = applyingLayout(
                     originalSnapshot,
                     to: ChartMarkerUI(marker: originalMarker.marker, candleIndex: originalSnapshot.candleIndex)
@@ -959,10 +998,11 @@ class MarkerManager: ObservableObject {
     
     var filteredMarkers: [ChartMarkerUI] {
         if visibilityMode == .off { return [] }
+        let effectiveIntents = visibleIntents
 
         return markers.filter { marker in
             guard marker.isVisible else { return false }
-            guard visibleTypes.contains(marker.type) else { return false }
+            guard effectiveIntents.contains(marker.intent) else { return false }
             switch visibilityMode {
             case .off:
                 return false
@@ -1624,24 +1664,23 @@ struct ChartMarkerSystem {
         // 4. Icon — same color as border
         let iconColor = marker.displayColor
         let fontSize: CGFloat = scaledRadius * 1.0
-        if marker.type == .emoji {
-            let iconChar = marker.selectedEmoji ?? "🎯"
+        if marker.intent == .reaction, let iconChar = marker.selectedEmoji {
             drawContext.draw(
                 Text(iconChar)
                     .font(.system(size: fontSize, weight: .bold))
                     .foregroundColor(iconColor),
                 at: position
             )
-        } else if let label = marker.type.shortLabel {
+        } else if marker.intent == .setup, !marker.horizontalLineLabel.isEmpty {
             drawContext.draw(
-                Text(label)
+                Text(marker.horizontalLineLabel)
                     .font(.system(size: fontSize * 0.9, weight: .bold))
                     .foregroundColor(iconColor),
                 at: position
             )
         } else {
             let maxIconSize = scaledRadius * 1.0
-            let iconImage = Image(systemName: marker.type.icon)
+            let iconImage = Image(systemName: marker.displayIcon)
             var resolvedIcon = drawContext.resolve(iconImage)
             resolvedIcon.shading = GraphicsContext.Shading.color(iconColor)
             let imgSize = resolvedIcon.size
@@ -1719,28 +1758,6 @@ struct ChartMarkerSystem {
                 .foregroundColor(usernameColor.opacity(0.95)),
             at: CGPoint(x: position.x, y: labelY)
         )
-    }
-    
-    private static func getIconCharacter(for type: RLMarkerType) -> String {
-        switch type {
-        case .note: return "✎"
-        case .question: return "?"
-        case .alert: return "!"
-        case .entry: return "↑"
-        case .exit: return "↓"
-        case .stopLoss: return "✕"
-        case .takeProfit: return "✓"
-        case .support: return "S"
-        case .resistance: return "R"
-        case .indicator: return "★"
-        case .trendline: return "⤴"
-        case .pattern: return "◇"
-        case .volumeSpike: return "⚡"
-        case .predictionTarget: return "⊛"
-        case .emoji: return "☺"
-        case .poll: return "☰"
-        case .personal: return "●"
-        }
     }
     
     // MARK: - Hit Detection

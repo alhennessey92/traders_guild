@@ -138,7 +138,7 @@ struct MarkerActivitySheet: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(spacing: 0) {
                     Circle()
-                        .fill(marker.markerTypeEnum.color)
+                        .fill(marker.intentEnum.color)
                         .frame(width: 9, height: 9)
 
                     if !isLast {
@@ -151,11 +151,7 @@ struct MarkerActivitySheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        UnifiedMarkerBadge(
-                            type: marker.markerTypeEnum,
-                            displayColor: marker.markerTypeEnum.color,
-                            size: 20
-                        )
+                        UnifiedMarkerBadge(intent: marker.intentEnum, size: 20)
                         if let symbolColor = marker.symbolBrandColor {
                             Circle()
                                 .fill(Color(hex: symbolColor) ?? .blue)
@@ -165,12 +161,23 @@ struct MarkerActivitySheet: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(AppColors.whiteText)
 
-                        Text(marker.markerTypeEnum.rawValue)
+                        Text(marker.intentEnum.displayName)
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(marker.markerTypeEnum.color)
+                            .foregroundColor(marker.intentEnum.color)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
-                            .background(marker.markerTypeEnum.color.opacity(0.18))
+                            .background(marker.intentEnum.color.opacity(0.18))
+                            .clipShape(Capsule())
+                    }
+
+                    if let trackingStateRaw = marker.setupSummary?.trackingState,
+                       let trackingState = RLTrackingState(rawValue: trackingStateRaw) {
+                        Text(trackingState.displayName)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(trackingState.color)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(trackingState.color.opacity(0.18))
                             .clipShape(Capsule())
                     }
 
@@ -202,13 +209,13 @@ struct MarkerActivitySheet: View {
     }
 
     private func predictionStatus(for marker: RLTopMarkerDTO) -> MarkerPredictionProgressStatus? {
-        guard marker.markerTypeEnum == .predictionTarget else { return nil }
+        guard marker.intentEnum == .setup else { return nil }
         let currentPrice = symbolCache[marker.symbolId]?.currentPrice
         return MarkerPredictionProgress.status(
-            entryPrice: marker.price,
+            entryPrice: marker.setupSummary?.entryPrice ?? marker.price,
             currentPrice: currentPrice,
-            targetPrice: marker.targetPrice,
-            stopLossPrice: marker.stopLossPrice
+            targetPrice: marker.setupSummary?.tpPrice,
+            stopLossPrice: marker.setupSummary?.slPrice
         )
     }
 

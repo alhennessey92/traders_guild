@@ -30,6 +30,7 @@ struct MarkerDetailView: View {
     @State private var showReportReasonSheet: Bool = false
     @State private var showShareSheet: Bool = false
     @State private var selectedAuthorProfileMember: RLGuildMemberDTO? = nil
+    @StateObject private var overlayState = MarkerOverlayState()
     
     init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
         self.marker = marker
@@ -45,28 +46,24 @@ struct MarkerDetailView: View {
         NavigationStack {
             ZStack(alignment: .topTrailing) {
                 VStack(spacing: 0) {
-                    // Header with gradient
+                    // Hero header with gradient
                     MarkerDetailHeaderView(
                         marker: marker,
                         isLiked: isLiked,
                         likeCount: likeCount,
                         commentCount: comments.count,
                         isOwner: marker.isCurrentUserMarker,
-                        showsActionRow: true,
                         onAuthorTap: {
                             selectedAuthorProfileMember = marker.author
-                        },
-                        onLike: handleLike,
-                        onShare: handleShare,
-                        onReport: { showReportReasonSheet = true },
-                        onDelete: { showDeleteMarkerConfirmation = true }
+                        }
                     )
-                    
+
                     // Info content
                     ScrollView(.vertical, showsIndicators: false) {
                         MarkerInfoContent(marker: marker)
-                            .padding(.horizontal, 25)
-                            .padding(.vertical, 20)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                            .padding(.bottom, 80) // space for floating engagement bar
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -78,11 +75,27 @@ struct MarkerDetailView: View {
                         StaticPatternView()
                     }
                 )
-                
+
                 // Floating dismiss button
                 ChatDismissButton { dismiss() }
-                    .padding(.top, 20)
-                    .padding(.trailing, 20)
+                    .padding(.top, 16)
+                    .padding(.trailing, 16)
+
+                // Floating engagement bar at bottom
+                VStack {
+                    Spacer()
+                    FloatingEngagementBar(
+                        isLiked: isLiked,
+                        likeCount: likeCount,
+                        commentCount: comments.count,
+                        isOwner: marker.isCurrentUserMarker,
+                        intentColor: marker.intent.color,
+                        onLike: handleLike,
+                        onShare: handleShare,
+                        onReport: { showReportReasonSheet = true },
+                        onDelete: { showDeleteMarkerConfirmation = true }
+                    )
+                }
             }
             .alert("Delete Marker", isPresented: $showDeleteMarkerConfirmation) {
                 Button("Cancel", role: .cancel) { }
@@ -124,7 +137,11 @@ struct MarkerDetailView: View {
                 }
             }
             .onAppear {
+                overlayState.apply(marker: marker)
                 syncStateWithLatestMarker()
+            }
+            .onDisappear {
+                overlayState.clear()
             }
         }
     }
@@ -424,7 +441,8 @@ struct MarkerShareSheet: View {
             symbolTicker: symbolTicker,
             timeframe: marker.timeframe,
             candleTimestamp: marker.candleTimestamp,
-            markerType: marker.type.rawValue
+            markerType: marker.intent.rawValue,
+            intent: marker.intent.rawValue
         )
         let content = MarkerShareCodec.buildMessage(note: note, payload: payload)
 
@@ -893,111 +911,112 @@ struct MarkerDetailHeaderView: View {
     var onShare: (() -> Void)? = nil
     var onReport: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
-    
+
+    @State private var glowPulse: Bool = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Marker icon + marker name on one line
-            HStack(spacing: 12) {
-                UnifiedMarkerBadge(
-                    type: marker.type,
-                    displayColor: marker.displayColor,
-                    size: 50,
-                    emoji: marker.type == .emoji ? marker.selectedEmoji : nil
+        VStack(alignment: .leading, spacing: 0) {
+            // Hero gradient zone
+            ZStack(alignment: .bottomLeading) {
+                // Multi-stop gradient background
+                LinearGradient(
+                    stops: [
+                        .init(color: marker.intent.color.opacity(0.28), location: 0.0),
+                        .init(color: marker.intent.color.opacity(0.12), location: 0.45),
+                        .init(color: AppColors.sheetBackground, location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
-                
-                Text(marker.type.rawValue)
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.whiteText)
-                
-                Spacer()
-            }
+                .frame(height: 190)
 
-            // User row styled like profile header
-            if let onAuthorTap {
-                Button(action: onAuthorTap) {
-                    authorRowContent
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
-            } else {
-                authorRowContent
-            }
-            
-            // Note (if present)
-            if let note = marker.note, !note.isEmpty {
-                Text(note)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.whiteText.opacity(0.85))
-                    .lineLimit(3)
-                    .padding(.top, 4)
-            }
-            
-            // Stats row
-            HStack(spacing: 16) {
-                // Likes
-                HStack(spacing: 4) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.caption)
-                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.markerHeartMuted)
-                    Text("\(likeCount)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.greyText)
-                }
-                
-                // Comments
-                HStack(spacing: 4) {
-                    Image(systemName: "bubble.left")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                    Text("\(commentCount)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.greyText)
-                }
-                
-                Spacer()
-                
-                // Price badge
-                Text(String(format: "%.5f", marker.price))
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(marker.displayColor)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(marker.displayColor.opacity(0.15))
-                    .clipShape(Capsule())
-            }
+                // Hero content overlaid on gradient
+                VStack(alignment: .leading, spacing: 10) {
+                    // Intent icon in glowing circle
+                    HStack(spacing: 14) {
+                        ZStack {
+                            // Glow ring
+                            Circle()
+                                .fill(marker.intent.color.opacity(0.15))
+                                .frame(width: 52, height: 52)
+                                .blur(radius: 8)
+                                .scaleEffect(glowPulse ? 1.15 : 1.0)
 
-            if showsActionRow {
-                MarkerGeneralActionsRow(
-                    isLiked: isLiked,
-                    likeCount: likeCount,
-                    isOwner: isOwner,
-                    onLike: { onLike?() },
-                    onShare: { onShare?() },
-                    onReport: { onReport?() },
-                    onDelete: { onDelete?() }
-                )
-                .padding(.top, 2)
+                            Circle()
+                                .fill(marker.intent.color.opacity(0.25))
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Image(systemName: marker.intent.icon)
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.white)
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(marker.intent.color.opacity(0.5), lineWidth: 1.5)
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            // Intent label
+                            Text(marker.intent.displayName.uppercased())
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(marker.intent.color)
+                                .tracking(1.5)
+
+                            // Title
+                            Text(marker.title ?? marker.intent.displayName)
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+
+                        // Tracking state pill
+                        if let trackingState = marker.trackingState {
+                            TrackingStatePill(state: trackingState)
+                        }
+                    }
+
+                    // Confidence stars (if applicable)
+                    if let confidence = marker.confidence, confidence > 0 {
+                        HStack(spacing: 3) {
+                            ForEach(1...5, id: \.self) { star in
+                                Image(systemName: star <= confidence ? "star.fill" : "star")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(star <= confidence ? Color(hex: "#FBBF24") ?? .yellow : AppColors.greyText.opacity(0.4))
+                            }
+                        }
+                    }
+
+                    // Author row
+                    if let onAuthorTap {
+                        Button(action: onAuthorTap) {
+                            authorRowContent
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        authorRowContent
+                    }
+
+                    // Note (if present)
+                    if let note = marker.note, !note.isEmpty {
+                        Text(note)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.whiteText.opacity(0.85))
+                            .lineLimit(3)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
             }
-            
-            Divider()
         }
-        .padding(.horizontal, 25)
-        .padding(.top, 25)
-        .padding(.bottom, 8)
-        .background(
-            LinearGradient(
-                colors: [
-                    marker.displayColor.opacity(0.15),
-                    AppColors.sheetBackground
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                glowPulse = true
+            }
+        }
     }
 
     private var authorRowContent: some View {
@@ -1048,6 +1067,67 @@ struct MarkerDetailHeaderView: View {
                 .foregroundColor(AppColors.greyText)
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Tracking State Pill
+
+/// Capsule badge showing the tracking state with a pulsing dot for live states
+/// or a terminal icon for resolved states (TP Hit, SL Hit, Expired).
+struct TrackingStatePill: View {
+    let state: RLTrackingState
+
+    @State private var dotPulse: Bool = false
+
+    private var isLive: Bool {
+        state == .armed || state == .active
+    }
+
+    private var terminalIcon: String? {
+        switch state {
+        case .tpHit: return "checkmark.circle.fill"
+        case .slHit: return "xmark.circle.fill"
+        case .expired: return "clock.badge.exclamationmark"
+        default: return nil
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if isLive {
+                // Pulsing dot for live states
+                Circle()
+                    .fill(state.color)
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(dotPulse ? 1.3 : 0.8)
+                    .opacity(dotPulse ? 1.0 : 0.6)
+            } else if let icon = terminalIcon {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(state.color)
+            }
+
+            Text(state.displayName.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(state.color)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(state.color.opacity(0.15))
+                .overlay(
+                    Capsule()
+                        .stroke(state.color.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .onAppear {
+            if isLive {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    dotPulse = true
+                }
+            }
+        }
     }
 }
 
@@ -1243,6 +1323,15 @@ struct MarkerDetailFooterView: View {
 
 // MARK: - Marker Info Content (Using ChartMarkerUI)
 
+/// Timeline node model for setup tracker — extracted from ViewBuilder scope.
+private struct SetupTimelineNode: Identifiable {
+    let id = UUID()
+    let state: RLTrackingState
+    let icon: String
+    var overrideLabel: String? = nil
+    var overrideColor: Color? = nil
+}
+
 struct MarkerInfoContent: View {
     let marker: ChartMarkerUI
     
@@ -1253,9 +1342,9 @@ struct MarkerInfoContent: View {
                 VStack(spacing: 12) {
                     infoRow(
                         icon: "chart.line.uptrend.xyaxis",
-                        label: marker.type == .predictionTarget ? "Entry Price" : "Price Level",
-                        value: String(format: "%.5f", marker.type == .predictionTarget ? (marker.horizontalLinePrice ?? marker.price) : marker.price),
-                        valueColor: marker.type == .predictionTarget ? .green : marker.displayColor
+                        label: marker.intent == .setup ? "Entry Price" : "Price Level",
+                        value: String(format: "%.5f", marker.intent == .setup ? (marker.entryPrice ?? marker.price) : marker.price),
+                        valueColor: marker.intent == .setup ? .green : marker.displayColor
                     )
 
                     Divider()
@@ -1267,57 +1356,207 @@ struct MarkerInfoContent: View {
                         value: marker.createdAt.formatted(date: .abbreviated, time: .shortened)
                     )
 
-                    // Show line price for non-prediction markers
-                    if marker.type != .predictionTarget,
-                       marker.type.hasHorizontalLine,
+                    // Show representative level price for non-setup markers.
+                    if marker.intent != .setup,
                        let linePrice = marker.horizontalLinePrice {
                         Divider()
                             .background(AppColors.whiteText.opacity(0.1))
 
                         infoRow(
-                            icon: "minus",
-                            label: marker.type.lineLabel.isEmpty ? "Line Price" : marker.type.lineLabel,
+                            icon: "line.3.horizontal",
+                            label: "Level Price",
                             value: String(format: "%.5f", linePrice),
                             valueColor: marker.displayColor
                         )
                     }
                 }
             }
+
+            componentSummarySection
             
             // Type-specific content
             typeSpecificSection
         }
     }
-    
+
     @ViewBuilder
-    private var typeSpecificSection: some View {
-        switch marker.type {
-        case .predictionTarget:
-            predictionSection
-        case .alert:
-            alertSection
-        case .support, .resistance:
-            levelSection
-        case .trendline:
-            trendlineSection
-        case .pattern:
-            patternSection
-        case .indicator:
-            indicatorSection
-        case .emoji:
-            emojiSection
-        case .poll:
-            pollSection
-        case .entry, .exit, .stopLoss, .takeProfit:
-            tradeSection
-        default:
-            EmptyView()
+    private var componentSummarySection: some View {
+        let levelRows = marker.components.filter { $0.componentTypeEnum?.isLevel == true }
+        let drawingRows = marker.components.filter { $0.componentTypeEnum?.isDrawing == true }
+        let indicatorRows = marker.components.filter { $0.componentTypeEnum == .indicator }
+        let linkRows = marker.components.filter { $0.componentTypeEnum == .linkURL }
+
+        if !levelRows.isEmpty || !drawingRows.isEmpty || !indicatorRows.isEmpty || !linkRows.isEmpty {
+            infoCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Components")
+                        .font(.headline)
+                        .foregroundColor(AppColors.whiteText)
+
+                    ForEach(levelRows, id: \.id) { component in
+                        componentRow(
+                            icon: "line.3.horizontal",
+                            title: component.componentTypeEnum?.displayName ?? component.componentType,
+                            value: formatPrice(component.payload.levelPrice)
+                        )
+                    }
+                    ForEach(drawingRows, id: \.id) { component in
+                        componentRow(
+                            icon: "pencil.and.ruler",
+                            title: component.componentTypeEnum?.displayName ?? component.componentType,
+                            value: nil
+                        )
+                    }
+                    ForEach(indicatorRows, id: \.id) { component in
+                        componentRow(
+                            icon: "waveform.path.ecg",
+                            title: component.componentTypeEnum?.displayName ?? component.componentType,
+                            value: component.payload.indicatorName
+                        )
+                    }
+                    ForEach(linkRows, id: \.id) { component in
+                        componentRow(
+                            icon: "link",
+                            title: component.componentTypeEnum?.displayName ?? component.componentType,
+                            value: nil
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func formatPrice(_ price: Double?) -> String? {
+        guard let price else { return nil }
+        return String(format: "%.5f", price)
+    }
+
+    private func componentRow(icon: String, title: String, value: String?) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(marker.intent.color.opacity(0.95))
+            Text(title)
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+            Spacer()
+            if let value {
+                Text(value)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText)
+            }
         }
     }
     
     @ViewBuilder
+    private var typeSpecificSection: some View {
+        switch marker.intent {
+        case .setup:
+            VStack(spacing: 16) {
+                // Level Ladder Card (replaces old prediction section for cleaner UX)
+                LevelLadderCard(
+                    entryPrice: marker.entryPrice ?? marker.horizontalLinePrice ?? marker.price,
+                    tpPrice: marker.targetPrice,
+                    slPrice: marker.stopLossPrice,
+                    intentColor: marker.intent.color
+                )
+                setupTrackerTimeline
+            }
+        case .alert:
+            alertSection
+        case .reaction:
+            emojiSection
+        case .poll:
+            pollSection
+        default:
+            EmptyView()
+        }
+    }
+
+    /// Redesigned setup tracker timeline — horizontal 4-node progression with 28px circles,
+    /// SF Symbol icons, 2px connecting lines, dimmed past/future nodes.
+    @ViewBuilder
+    private var setupTrackerTimeline: some View {
+        let current = marker.trackingState ?? (marker.trackingEnabled ? .armed : .draft)
+
+        let baseNodes: [SetupTimelineNode] = [
+            SetupTimelineNode(state: .draft, icon: "doc.text"),
+            SetupTimelineNode(state: .armed, icon: "bolt.fill"),
+            SetupTimelineNode(state: .active, icon: "chart.line.uptrend.xyaxis"),
+        ]
+
+        // Resolved node shows actual terminal state
+        let resolvedNode: SetupTimelineNode? = {
+            switch current {
+            case .tpHit:
+                return SetupTimelineNode(state: .tpHit, icon: "checkmark.circle.fill", overrideLabel: "TP Hit", overrideColor: .green)
+            case .slHit:
+                return SetupTimelineNode(state: .slHit, icon: "xmark.circle.fill", overrideLabel: "SL Hit", overrideColor: .red)
+            case .expired:
+                return SetupTimelineNode(state: .expired, icon: "clock.badge.exclamationmark", overrideLabel: "Expired", overrideColor: .gray)
+            default:
+                return SetupTimelineNode(state: .tpHit, icon: "questionmark.circle", overrideLabel: "Resolved", overrideColor: AppColors.greyText)
+            }
+        }()
+
+        let allNodes = baseNodes + (resolvedNode.map { [$0] } ?? [])
+
+        infoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Setup Timeline")
+                    .font(.headline)
+                    .foregroundColor(.white)
+
+                HStack(spacing: 0) {
+                    ForEach(Array(allNodes.enumerated()), id: \.element.id) { index, node in
+                        let nodeState = node.state
+                        let isCurrent = nodeState == current
+                        let isPast = nodeOrderIndex(nodeState) < nodeOrderIndex(current)
+                        let nodeColor = node.overrideColor ?? nodeState.color
+                        let nodeLabel = node.overrideLabel ?? nodeState.displayName
+
+                        VStack(spacing: 6) {
+                            ZStack {
+                                Circle()
+                                    .fill(isCurrent ? nodeColor : isPast ? nodeColor.opacity(0.4) : AppColors.whiteText.opacity(0.1))
+                                    .frame(width: 28, height: 28)
+                                Image(systemName: node.icon)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(isCurrent ? .white : isPast ? .white.opacity(0.7) : AppColors.greyText.opacity(0.5))
+                            }
+                            Text(nodeLabel)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(isCurrent ? nodeColor : isPast ? nodeColor.opacity(0.6) : AppColors.greyText.opacity(0.5))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        if index < allNodes.count - 1 {
+                            Rectangle()
+                                .fill(isPast ? nodeColor.opacity(0.4) : AppColors.whiteText.opacity(0.1))
+                                .frame(height: 2)
+                                .frame(maxWidth: .infinity)
+                                .offset(y: -10) // align with circle center
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Maps tracking states to a numeric order for timeline comparison.
+    private func nodeOrderIndex(_ state: RLTrackingState) -> Int {
+        switch state {
+        case .draft: return 0
+        case .armed: return 1
+        case .active: return 2
+        case .tpHit, .slHit, .expired: return 3
+        }
+    }
+
+    @ViewBuilder
     private var predictionSection: some View {
-        let entryPrice = marker.horizontalLinePrice ?? marker.price
+        let entryPrice = marker.entryPrice ?? marker.horizontalLinePrice ?? marker.price
         let tpPrice = marker.targetPrice
         let slPrice = marker.stopLossPrice
         let isLong = (tpPrice ?? entryPrice) > entryPrice
@@ -1415,14 +1654,32 @@ struct MarkerInfoContent: View {
     
     @ViewBuilder
     private var levelSection: some View {
+        let primaryLevelType = marker.levelComponents.first?.componentTypeEnum
+        let isSupport = primaryLevelType == .levelSupport
+        let isResistance = primaryLevelType == .levelResistance
+        let title: String = {
+            if isSupport { return "Support Level" }
+            if isResistance { return "Resistance Level" }
+            return "Price Level"
+        }()
+        let subtitle: String = {
+            if isSupport { return "Price may bounce up at this level" }
+            if isResistance { return "Price may reverse down at this level" }
+            return "Shared level from this marker"
+        }()
+        let iconName: String = {
+            if isSupport { return "arrow.down.to.line" }
+            if isResistance { return "arrow.up.to.line" }
+            return "line.3.horizontal"
+        }()
         infoCard {
             HStack {
-                Image(systemName: marker.type == .support ? "arrow.down.to.line" : "arrow.up.to.line")
+                Image(systemName: iconName)
                     .font(.title3).foregroundColor(marker.displayColor)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(marker.type == .support ? "Support Level" : "Resistance Level")
+                    Text(title)
                         .font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
-                    Text("Price may \(marker.type == .support ? "bounce up" : "reverse down") at this level")
+                    Text(subtitle)
                         .font(.caption).foregroundColor(AppColors.greyText)
                 }
                 Spacer()
@@ -1501,13 +1758,14 @@ struct MarkerInfoContent: View {
     
     @ViewBuilder
     private var tradeSection: some View {
-        let isEntry = marker.type == .entry || marker.type == .takeProfit
+        let isEntry = marker.entryPrice != nil || marker.intent == .setup
+        let heading = marker.horizontalLineLabel.isEmpty ? marker.intent.displayName : marker.horizontalLineLabel
         infoCard {
             HStack {
                 Image(systemName: isEntry ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
                     .font(.title3).foregroundColor(isEntry ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(marker.type.rawValue).font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
+                    Text(heading).font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)
                     if let linePrice = marker.horizontalLinePrice {
                         Text(String(format: "%.5f", linePrice)).font(.caption).foregroundColor(AppColors.greyText)
                     }
@@ -1533,6 +1791,239 @@ struct MarkerInfoContent: View {
             Spacer()
             Text(value).font(.subheadline).fontWeight(.medium).foregroundColor(valueColor)
         }
+    }
+}
+
+// MARK: - Floating Engagement Bar
+
+/// Floating capsule bar at the bottom of the marker detail view.
+/// Contains like, comment count, share, and more menu actions.
+struct FloatingEngagementBar: View {
+    let isLiked: Bool
+    let likeCount: Int
+    let commentCount: Int
+    let isOwner: Bool
+    let intentColor: Color
+    let onLike: () -> Void
+    let onShare: () -> Void
+    let onReport: () -> Void
+    let onDelete: () -> Void
+
+    @State private var likeScale: CGFloat = 1.0
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Like button
+            Button {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                    likeScale = 1.3
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                        likeScale = 1.0
+                    }
+                }
+                onLike()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : .white.opacity(0.85))
+                        .scaleEffect(likeScale)
+                    Text("\(likeCount)")
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : .white.opacity(0.85))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(isLiked ? AppColors.markerHeartBackground : Color.white.opacity(0.08))
+                )
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            // Comment count
+            HStack(spacing: 5) {
+                Image(systemName: "bubble.left.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.6))
+                Text("\(commentCount)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+
+            Spacer()
+
+            // Share button
+            Button(action: onShare) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.08)))
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 8)
+
+            // More menu
+            Menu {
+                if isOwner {
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete Marker", systemImage: "trash")
+                    }
+                } else {
+                    Button(action: onReport) {
+                        Label("Report", systemImage: "exclamationmark.triangle")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.08)))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(Color(red: 18/255, green: 18/255, blue: 28/255).opacity(0.95))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.4), radius: 12, y: -4)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+    }
+}
+
+// MARK: - Level Ladder Card
+
+/// Visual mini price ladder showing Entry, TP, and SL levels for setup markers.
+/// Includes proportional vertical positioning and R:R ratio badge.
+struct LevelLadderCard: View {
+    let entryPrice: Double
+    let tpPrice: Double?
+    let slPrice: Double?
+    let intentColor: Color
+
+    private var rrRatio: Double? {
+        guard let tp = tpPrice, let sl = slPrice else { return nil }
+        let reward = abs(tp - entryPrice)
+        let risk = abs(sl - entryPrice)
+        guard risk > 0 else { return nil }
+        return reward / risk
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Price Levels")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                if let rr = rrRatio {
+                    Text(String(format: "R:R %.2f", rr))
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(0.1))
+                                .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                        )
+                }
+            }
+
+            // Mini price ladder
+            VStack(spacing: 8) {
+                if let tp = tpPrice {
+                    ladderRow(
+                        label: "Take Profit",
+                        shortLabel: "TP",
+                        price: tp,
+                        color: RLComponentType.levelTp.color,
+                        percentFromEntry: abs(tp - entryPrice) / entryPrice * 100,
+                        isProfit: true
+                    )
+                }
+
+                ladderRow(
+                    label: "Entry",
+                    shortLabel: "ENT",
+                    price: entryPrice,
+                    color: RLComponentType.levelEntry.color,
+                    percentFromEntry: nil,
+                    isProfit: nil
+                )
+
+                if let sl = slPrice {
+                    ladderRow(
+                        label: "Stop Loss",
+                        shortLabel: "SL",
+                        price: sl,
+                        color: RLComponentType.levelSl.color,
+                        percentFromEntry: abs(sl - entryPrice) / entryPrice * 100,
+                        isProfit: false
+                    )
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private func ladderRow(label: String, shortLabel: String, price: Double, color: Color, percentFromEntry: Double?, isProfit: Bool?) -> some View {
+        HStack(spacing: 10) {
+            // Colored dot
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+
+            // Label
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(AppColors.greyText)
+
+            Spacer()
+
+            // Percentage badge
+            if let pct = percentFromEntry, let profit = isProfit {
+                Text(String(format: "%@%.2f%%", profit ? "+" : "-", pct))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(profit ? .green.opacity(0.8) : .red.opacity(0.8))
+                    .padding(.trailing, 4)
+            }
+
+            // Price
+            Text(String(format: "%.5f", price))
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(color)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(color.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(color.opacity(0.2), lineWidth: 1)
+                )
+        )
     }
 }
 

@@ -103,13 +103,13 @@ struct chartSheetMarkersView: View {
         chartViewModel.currentSymbol?.ticker ?? "Symbol"
     }
 
-    private var markerCategoryMap: [MarkerAddCategoryTab: [RLMarkerType]] {
+    private var markerCategoryMap: [MarkerAddCategoryTab: [RLMarkerIntent]] {
         [
-            .prediction: [.predictionTarget],
-            .trade: [.entry, .takeProfit, .stopLoss, .exit],
-            .analysis: [.support, .resistance, .trendline, .pattern],
-            .signals: [.indicator, .volumeSpike, .alert, .question],
-            .social: [.note, .poll, .emoji, .personal]
+            .prediction: [.setup],
+            .trade: [.setup, .alert],
+            .analysis: [.analysis, .news],
+            .signals: [.alert, .question],
+            .social: [.poll, .reaction, .personal]
         ]
     }
 
@@ -154,7 +154,7 @@ struct chartSheetMarkersView: View {
                     selectedTab: $selectedAddCategory,
                     size: .compact,
                     theme: .blue,
-                    countForTab: { markerTypes(for: $0).count },
+                    countForTab: { markerIntents(for: $0).count },
                     spacing: 6
                 )
             } else {
@@ -270,12 +270,12 @@ struct chartSheetMarkersView: View {
                 .padding(.bottom, 4)
             }
 
-            ForEach(markerTypes(for: selectedAddCategory), id: \.self) { type in
+            ForEach(markerIntents(for: selectedAddCategory), id: \.self) { intent in
                 MarkerPlacementOptionRow(
-                    type: type,
-                    isActive: isMarkerPlacementActive(for: type),
+                    intent: intent,
+                    isActive: isMarkerPlacementActive(for: intent),
                     onToggle: {
-                        togglePlacement(for: type)
+                        togglePlacement(for: intent)
                     }
                 )
             }
@@ -373,7 +373,7 @@ struct chartSheetMarkersView: View {
     // MARK: - Analysis Computed
 
     private var markerTypeBreakdown: [(key: String, value: Int)] {
-        let counts = Dictionary(grouping: scopedMarkers) { $0.markerTypeEnum.rawValue }
+        let counts = Dictionary(grouping: scopedMarkers) { $0.intentEnum.displayName }
             .mapValues(\.count)
         return counts.sorted { lhs, rhs in
             if lhs.value == rhs.value {
@@ -401,7 +401,7 @@ struct chartSheetMarkersView: View {
         let total = scopedMarkers.count
         let uniqueTimeframes = Set(scopedMarkers.map { timeframeLabel($0.timeframe) }).count
         let stackedCandles = scopedTimelineGroups.filter { $0.markers.count > 1 }.count
-        let predictionCount = scopedMarkers.filter { $0.markerTypeEnum == .predictionTarget }.count
+        let predictionCount = scopedMarkers.filter { $0.intentEnum == .setup }.count
 
         return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
             AnalysisMetricCard(title: "Total", value: "\(total)", subtitle: "markers")
@@ -476,14 +476,14 @@ struct chartSheetMarkersView: View {
 
     // MARK: - Actions
 
-    private func markerTypes(for category: MarkerAddCategoryTab) -> [RLMarkerType] {
+    private func markerIntents(for category: MarkerAddCategoryTab) -> [RLMarkerIntent] {
         markerCategoryMap[category] ?? []
     }
 
     private func count(for tab: MarkerSheetPrimaryTab) -> Int {
         switch tab {
         case .add:
-            return markerCategoryMap.values.flatMap { $0 }.count
+            return Set(markerCategoryMap.values.flatMap { $0 }).count
         case .active, .analysis:
             return scopedMarkers.count
         }
@@ -493,17 +493,17 @@ struct chartSheetMarkersView: View {
         markerCacheByScope[scope] ?? []
     }
 
-    private func isMarkerPlacementActive(for type: RLMarkerType) -> Bool {
-        controlViewModel.isMarkerPlacementMode && controlViewModel.currentMarkerType == type
+    private func isMarkerPlacementActive(for intent: RLMarkerIntent) -> Bool {
+        controlViewModel.isMarkerPlacementMode && controlViewModel.currentMarkerIntent == intent
     }
 
-    private func togglePlacement(for type: RLMarkerType) {
-        if isMarkerPlacementActive(for: type) {
+    private func togglePlacement(for intent: RLMarkerIntent) {
+        if isMarkerPlacementActive(for: intent) {
             controlViewModel.cancelMarkerPlacement()
             return
         }
 
-        controlViewModel.startMarkerPlacement(type: type)
+        controlViewModel.startMarkerPlacement(intent: intent)
         onMarkerSelection?()
     }
 
@@ -594,7 +594,7 @@ struct chartSheetMarkersView: View {
 }
 
 private struct MarkerPlacementOptionRow: View {
-    let type: RLMarkerType
+    let intent: RLMarkerIntent
     let isActive: Bool
     let onToggle: () -> Void
 
@@ -608,20 +608,19 @@ private struct MarkerPlacementOptionRow: View {
                         .frame(width: 30, height: 30)
                 } else {
                     UnifiedMarkerBadge(
-                        type: type,
-                        displayColor: type.color,
+                        intent: intent,
                         size: 30
                     )
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isActive ? "Cancel Placement" : type.rawValue)
+                    Text(isActive ? "Cancel Placement" : intent.displayName)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
                         .lineLimit(1)
                     if !isActive {
-                        Text(type.subtitle)
+                        Text(intent.subtitle)
                             .font(.caption2)
                             .foregroundColor(.gray)
                             .lineLimit(1)
@@ -638,7 +637,7 @@ private struct MarkerPlacementOptionRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isActive ? Color.red.opacity(0.35) : type.color.opacity(0.12))
+                    .fill(isActive ? Color.red.opacity(0.35) : intent.color.opacity(0.12))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -646,6 +645,24 @@ private struct MarkerPlacementOptionRow: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct MarkerSettingsButton: View {
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        Button {
+            action?()
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white.opacity(0.85))
+                .frame(width: 34, height: 34)
+                .background(Color.white.opacity(0.08))
+                .clipShape(Circle())
+        }
+        .accessibilityLabel("Marker settings")
     }
 }
 
@@ -714,12 +731,12 @@ private struct ActiveMarkerRow: View {
     let onOpen: () -> Void
 
     private var status: MarkerPredictionProgressStatus? {
-        guard marker.markerTypeEnum == .predictionTarget else { return nil }
+        guard marker.intentEnum == .setup else { return nil }
         return MarkerPredictionProgress.status(
-            entryPrice: marker.price,
+            entryPrice: marker.setupSummary?.entryPrice ?? marker.price,
             currentPrice: symbolPrice,
-            targetPrice: marker.targetPrice,
-            stopLossPrice: marker.stopLossPrice
+            targetPrice: marker.setupSummary?.tpPrice,
+            stopLossPrice: marker.setupSummary?.slPrice
         )
     }
 
@@ -730,24 +747,20 @@ private struct ActiveMarkerRow: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(alignment: .top, spacing: 10) {
-                UnifiedMarkerBadge(
-                    type: marker.markerTypeEnum,
-                    displayColor: marker.markerTypeEnum.color,
-                    size: 24
-                )
+                UnifiedMarkerBadge(intent: marker.intentEnum, size: 24)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(marker.markerTypeEnum.rawValue)
+                        Text(marker.intentEnum.displayName)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.white)
 
                         Text(timeframeText)
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(marker.markerTypeEnum.color)
+                            .foregroundColor(marker.intentEnum.color)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(marker.markerTypeEnum.color.opacity(0.2))
+                            .background(marker.intentEnum.color.opacity(0.2))
                             .clipShape(Capsule())
 
                         Spacer(minLength: 0)
@@ -918,14 +931,10 @@ private struct QuickLinkRow: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(spacing: 8) {
-                UnifiedMarkerBadge(
-                    type: marker.markerTypeEnum,
-                    displayColor: marker.markerTypeEnum.color,
-                    size: 20
-                )
+                UnifiedMarkerBadge(intent: marker.intentEnum, size: 20)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("\(marker.markerTypeEnum.rawValue) • \(marker.symbolTicker)")
+                    Text("\(marker.intentEnum.displayName) • \(marker.symbolTicker)")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)

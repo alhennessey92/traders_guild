@@ -177,14 +177,16 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable {
     let symbolTicker: String
     let timeframe: String
     let candleTimestamp: Date
-    let markerType: String
+    let intent: String
     let createdAt: Date
     let notePreview: String?
 
     var id: UUID { markerId }
 
-    var markerTypeEnum: RLMarkerType {
-        RLMarkerType.fromBackendString(markerType) ?? .note
+    var markerType: String { intent }
+
+    var intentEnum: RLMarkerIntent {
+        RLMarkerIntent(rawValue: intent) ?? .analysis
     }
 
     var payload: MarkerSharePayloadV1 {
@@ -194,7 +196,8 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable {
             symbolTicker: symbolTicker,
             timeframe: timeframe,
             candleTimestamp: candleTimestamp,
-            markerType: markerType
+            markerType: intent,
+            intent: intent
         )
     }
 
@@ -204,7 +207,7 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable {
         self.symbolTicker = marker.symbolTicker
         self.timeframe = marker.timeframe
         self.candleTimestamp = marker.candleTimestamp
-        self.markerType = marker.markerType
+        self.intent = marker.intent
         self.createdAt = marker.createdAt
         self.notePreview = marker.notePreview
     }
@@ -243,12 +246,39 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
     let timeframe: String
     let candleTimestamp: Date
     let markerType: String?
+    let intent: String?
 
-    /// Resolved marker type (falls back to .note for old messages without markerType)
-    var markerTypeEnum: RLMarkerType {
-        markerType.flatMap { RLMarkerType.fromBackendString($0) }
-            ?? markerType.flatMap { RLMarkerType(rawValue: $0) }
-            ?? .note
+    var intentEnum: RLMarkerIntent {
+        if let intent, let intentEnum = RLMarkerIntent(rawValue: intent) {
+            return intentEnum
+        }
+        if let markerType, let legacyIntent = Self.legacyIntent(from: markerType) {
+            return legacyIntent
+        }
+        return .analysis
+    }
+
+    private static func legacyIntent(from markerType: String) -> RLMarkerIntent? {
+        switch markerType.lowercased() {
+        case "entry", "exit", "stop_loss", "take_profit", "prediction", "setup":
+            return .setup
+        case "alert":
+            return .alert
+        case "question":
+            return .question
+        case "poll":
+            return .poll
+        case "emoji", "reaction":
+            return .reaction
+        case "personal":
+            return .personal
+        case "news":
+            return .news
+        case "note", "analysis", "support", "resistance", "trendline", "pattern", "indicator", "volume_spike":
+            return .analysis
+        default:
+            return nil
+        }
     }
 
     init(
@@ -257,7 +287,8 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         symbolTicker: String?,
         timeframe: String,
         candleTimestamp: Date,
-        markerType: String? = nil
+        markerType: String? = nil,
+        intent: String? = nil
     ) {
         self.markerId = markerId
         self.symbolId = symbolId
@@ -265,6 +296,7 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         self.timeframe = timeframe
         self.candleTimestamp = candleTimestamp
         self.markerType = markerType
+        self.intent = intent
     }
 
     var notificationUserInfo: [String: Any] {
@@ -279,6 +311,9 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         }
         if let markerType {
             info["markerType"] = markerType
+        }
+        if let intent {
+            info["intent"] = intent
         }
         return info
     }
@@ -317,6 +352,7 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         self.timeframe = timeframe
         self.candleTimestamp = candleTimestamp
         self.markerType = userInfo["markerType"] as? String
+        self.intent = userInfo["intent"] as? String
     }
 }
 
@@ -850,8 +886,7 @@ struct ChatInputFooter: View {
         ZStack(alignment: .topTrailing) {
             HStack(spacing: 8) {
                 UnifiedMarkerBadge(
-                    type: marker.markerTypeEnum,
-                    displayColor: marker.markerTypeEnum.color,
+                    intent: marker.intentEnum,
                     size: 22
                 )
 
@@ -1000,8 +1035,7 @@ private struct ChatMarkerPickerSheet: View {
                         } label: {
                             HStack(spacing: 10) {
                                 UnifiedMarkerBadge(
-                                    type: marker.markerTypeEnum,
-                                    displayColor: marker.markerTypeEnum.color,
+                                    intent: marker.intentEnum,
                                     size: 30
                                 )
 
@@ -1009,9 +1043,9 @@ private struct ChatMarkerPickerSheet: View {
                                     Text("\(marker.symbolTicker) • \(marker.timeframe.uppercased())")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundColor(AppColors.whiteText)
-                                    Text(marker.markerTypeEnum.rawValue)
+                                    Text(marker.intentEnum.displayName)
                                         .font(.caption2.weight(.semibold))
-                                        .foregroundColor(marker.markerTypeEnum.color.opacity(0.9))
+                                        .foregroundColor(marker.intentEnum.color.opacity(0.9))
                                     Text(marker.candleTimestamp.formatted(date: .abbreviated, time: .shortened))
                                         .font(.caption2)
                                         .foregroundColor(AppColors.greyText)
@@ -1762,13 +1796,12 @@ private struct MarkerShareCard: View {
         Button(action: onTap) {
             HStack(alignment: .center, spacing: 10) {
                 UnifiedMarkerBadge(
-                    type: payload.markerTypeEnum,
-                    displayColor: payload.markerTypeEnum.color,
+                    intent: payload.intentEnum,
                     size: 32
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(payload.markerTypeEnum.rawValue)
+                    Text(payload.intentEnum.displayName)
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(isCurrentUserMessage ? .white.opacity(0.8) : AppColors.greyText)

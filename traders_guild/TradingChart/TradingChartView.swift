@@ -5,7 +5,7 @@ import SwiftUI
 // MARK: - Prediction Placement State
 
 /// Tracks the state of the prediction marker placement flow (3-line system)
-struct PredictionPlacementState {
+struct PredictionPlacementState: Equatable {
     var entryPrice: Double
     var takeProfitPrice: Double
     var stopLossPrice: Double
@@ -34,6 +34,7 @@ struct PredictionPlacementState {
 
 /// Which prediction line is currently being dragged
 enum PredictionLineType {
+    case entry
     case takeProfit
     case stopLoss
 }
@@ -47,20 +48,28 @@ struct PendingMarkerInfo: Identifiable {
     let candleIndex: Int
     let timestamp: Date
     let price: Double
-    let markerType: RLMarkerType
+    let markerIntent: RLMarkerIntent
     let targetPrice: Double?
     let horizontalLinePrice: Double?
     let stopLossPrice: Double?
 
-    init(candleIndex: Int, timestamp: Date, price: Double, markerType: RLMarkerType, targetPrice: Double? = nil, horizontalLinePrice: Double? = nil, stopLossPrice: Double? = nil) {
+    init(candleIndex: Int, timestamp: Date, price: Double, markerIntent: RLMarkerIntent, targetPrice: Double? = nil, horizontalLinePrice: Double? = nil, stopLossPrice: Double? = nil) {
         self.candleIndex = candleIndex
         self.timestamp = timestamp
         self.price = price
-        self.markerType = markerType
+        self.markerIntent = markerIntent
         self.targetPrice = targetPrice
         self.horizontalLinePrice = horizontalLinePrice
         self.stopLossPrice = stopLossPrice
     }
+}
+
+struct PreviewPriceLine {
+    let candle: RLCandleDTO
+    let intent: RLMarkerIntent
+    let color: Color
+    let label: String?
+    let explicitPrice: Double?
 }
 
 /// Main trading chart view that handles all chart rendering and interactions
@@ -149,6 +158,11 @@ struct TradingChartView: View {
     
     /// Track the previous drag translation for incremental updates
     @State private var lastDragTranslation: CGSize = .zero
+
+    /// Per-drag pan arbitration state for drawing interactions.
+    /// When true, chart panning is suppressed so drawing interactions stay precise.
+    @State private var isDrawingPanLockActive = false
+    @State private var didEvaluateDrawingPanLockForCurrentDrag = false
     
     /// Y-axis pinch scale for vertical price range scaling (not used but kept for reference)
     @GestureState private var yAxisPinchScale: CGFloat = 1.0
@@ -224,6 +238,7 @@ struct TradingChartView: View {
     /// NEW PREDICTION PLACEMENT STATE (3-line system: Entry + TP + SL)
     @State private var predictionPlacement: PredictionPlacementState? = nil
     @State private var draggingPredictionLine: PredictionLineType? = nil
+    @State private var isSyncingSetupPlacementState = false
 
     /// Price for the interactive placement line (for Entry/Exit/TP/SL markers during placement)
     @State private var placementLinePrice: Double? = nil
@@ -260,9 +275,13 @@ struct TradingChartView: View {
     
 
     
-    /// Placement options written by MarkerCreationSheet for preview (alert severity color, selected emoji)
-    @State private var placementAlertSeverity: MarkerAlertSeverity? = nil
-    @State private var placementSelectedEmoji: String? = nil
+    /// Components from the selected marker to render as temporary chart overlays.
+    @State private var markerOverlayComponents: [RLMarkerComponentDTO] = []
+
+    /// Shared placement state for the on-chart marker placement UI.
+    /// Drives MarkerPlacementPanel and GhostPreviewLayer.
+    /// Owned by MainView and passed down so ChartBottomSheet can also access it.
+    @ObservedObject var placementState: MarkerPlacementState
 
     /// Track if chart has been initialized with proper position
     @State private var hasInitializedPosition = false
@@ -413,6 +432,7 @@ struct TradingChartView: View {
         controlViewModel: ChartControlViewModel,
         chartViewModel: ChartViewModel,
         gestureState: ChartGestureState,
+        placementState: MarkerPlacementState,
         rsiPanelHeight: Binding<CGFloat> = .constant(120),
         indicatorPanelBottomPadding: CGFloat = 0
     ) {
@@ -449,6 +469,7 @@ struct TradingChartView: View {
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
         self.gestureState = gestureState
+        self.placementState = placementState
         self._rsiPanelHeight = rsiPanelHeight
         self.indicatorPanelBottomPadding = indicatorPanelBottomPadding
     }
@@ -457,8 +478,7 @@ struct TradingChartView: View {
     
     /// Whether to show interactive target line during selection
     private var shouldShowInteractiveTargetLine: Bool {
-        guard let markerType = controlViewModel.currentMarkerType else { return false }
-        guard markerType == .predictionTarget else { return false }
+        guard controlViewModel.currentMarkerIntent == .setup else { return false }
         guard previewCandleIndex >= 0 && previewCandleIndex < chartData.candles.count else { return false }
         guard predictionTargetPrice != nil else { return false }
         return true
@@ -484,25 +504,24 @@ struct TradingChartView: View {
     }
     
     /// Get preview marker data for price line display
-    private var previewMarkerForPriceLine: (candle: RLCandleDTO, type: RLMarkerType)? {
+    private var previewMarkerForPriceLine: PreviewPriceLine? {
         // When sheet is open (pendingMarkerInfo exists), use that data
         if let pending = pendingMarkerInfo,
            pending.candleIndex >= 0,
-           pending.candleIndex < chartData.candles.count,
-           pending.markerType.hasHorizontalLine {
-            return (chartData.candles[pending.candleIndex], pending.markerType)
-        }
-
-        // Suppress preview line when PlacementLineDragOverlay is active (avoids double line)
-        if isMarkerPlacementMode,
-           let markerType = controlViewModel.currentMarkerType,
-           [RLMarkerType.entry, .exit, .takeProfit, .stopLoss, .support, .resistance].contains(markerType) {
-            return nil
+           pending.candleIndex < chartData.candles.count {
+            let label = pending.markerIntent == .setup ? "Entry" : nil
+            return PreviewPriceLine(
+                candle: chartData.candles[pending.candleIndex],
+                intent: pending.markerIntent,
+                color: pending.markerIntent == .setup ? .green : pending.markerIntent.color,
+                label: label,
+                explicitPrice: pending.horizontalLinePrice ?? pending.price
+            )
         }
 
         // Suppress preview line when prediction overlay is active
         if isMarkerPlacementMode,
-           controlViewModel.currentMarkerType == .predictionTarget,
+           controlViewModel.currentMarkerIntent == .setup,
            predictionPlacement != nil {
             return nil
         }
@@ -511,9 +530,20 @@ struct TradingChartView: View {
         if isMarkerPlacementMode,
            previewCandleIndex >= 0,
            previewCandleIndex < chartData.candles.count,
-           let markerType = controlViewModel.currentMarkerType,
-           markerType.hasHorizontalLine {
-            return (chartData.candles[previewCandleIndex], markerType)
+           let markerIntent = controlViewModel.currentMarkerIntent {
+            let explicitPrice: Double?
+            if markerIntent == .setup {
+                explicitPrice = predictionPlacement?.entryPrice
+            } else {
+                explicitPrice = placementLinePrice
+            }
+            return PreviewPriceLine(
+                candle: chartData.candles[previewCandleIndex],
+                intent: markerIntent,
+                color: markerIntent.color,
+                label: markerIntent == .setup ? "Entry" : nil,
+                explicitPrice: explicitPrice
+            )
         }
 
         return nil
@@ -550,7 +580,7 @@ struct TradingChartView: View {
         guard !chartData.candles.isEmpty else { return -1 }
         if isMarkerPlacementMode {
             // Prediction: always use latest candle (entry pinned to most recent)
-            if controlViewModel.currentMarkerType == .predictionTarget {
+            if controlViewModel.currentMarkerIntent == .setup {
                 return snappedMarkerCandleIndex(from: chartData.candles.count - 1) ?? -1
             }
             if previewCandleIndex < 0 {
@@ -561,86 +591,117 @@ struct TradingChartView: View {
         return snappedMarkerCandleIndex(from: previewCandleIndex) ?? -1
     }
     
-    /// Effective marker type for preview (from pending or placement mode)
-    private var effectiveMarkerType: RLMarkerType? {
-        pendingMarkerInfo?.markerType ?? controlViewModel.currentMarkerType
+    /// Effective marker intent for preview (from pending or placement mode).
+    private var effectiveMarkerIntent: RLMarkerIntent? {
+        pendingMarkerInfo?.markerIntent ?? controlViewModel.currentMarkerIntent
     }
-    
+
     /// Whether marker placement overlay should be shown
     private var shouldShowMarkerPlacementOverlay: Bool {
         isMarkerPlacementMode || pendingMarkerInfo != nil
     }
     
     /// Whether instruction banner should be shown
+    /// Disabled — replaced by inline MarkerPlacementPanel during placement mode
     private var shouldShowInstructionBanner: Bool {
-        // FIXED: Check pendingMarkerInfo instead of showMarkerSheet/isShowingSheet
-        isMarkerPlacementMode && pendingMarkerInfo == nil
+        false
     }
     
     // MARK: - Body
     
     var body: some View {
+        withNotificationHandlers(
+            withPlacementAndChartObservers(
+                withSheetPresentations(rootChartContainer)
+            )
+        )
+    }
+
+    private var rootChartContainer: some View {
         ZStack {
             GeometryReader { geometry in
                 chartContent(geometry: geometry)
             }
         }
         .ignoresSafeArea(edges: .top)
-        // FIXED: Use sheet(item:) instead of sheet(isPresented:) for more robust presentation
-        // This ensures the sheet content always has valid data when shown
-        .sheet(item: $pendingMarkerInfo) { info in
-            MarkerCreationSheet(
-                markerManager: markerManager,
-                candleIndex: info.candleIndex,
-                timestamp: info.timestamp,
-                price: info.price,
-                username: currentUsername,
-                chartData: chartData,
-                candles: chartData.candles,
-                markerType: info.markerType,
-                initialTargetPrice: info.targetPrice,
-                initialHorizontalLinePrice: info.horizontalLinePrice,
-                initialStopLossPrice: info.stopLossPrice,
-                placementAlertSeverity: $placementAlertSeverity,
-                placementSelectedEmoji: $placementSelectedEmoji
-            )
-            .presentationDetents([.fraction(0.5), .large])
-            .presentationDragIndicator(.visible)
-            .onDisappear(perform: handleMarkerSheetDismiss)
-        }
-        .sheet(isPresented: $showMarkerTypeFilterSheet) {
-            markerTypeFilterSheet
-        }
-        .sheet(isPresented: $showChartSettingsSheet) {
-            ChartSettingsView(settings: chartSettings)
-        }
-        .onAppear(perform: handleOnAppear)
-        .onChange(of: currentGuildId) { _, _ in
-            syncMarkerContext()
-        }
-        .onChange(of: currentUserId) { _, _ in
-            syncMarkerContext()
-        }
-        .onChange(of: controlViewModel.isMarkerPlacementMode) { oldValue, newValue in
-            handleMarkerPlacementModeChange(oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: chartViewModel.currentSymbol) { oldValue, newValue in
-            handleSymbolChange(oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: chartViewModel.currentSymbol?.ticker) { oldValue, newValue in
-            handleSymbolStringChange(oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: chartViewModel.currentTimeframe) { oldValue, newValue in
-            handleTimeframeChange(oldValue: oldValue, newValue: newValue)
-        }
-        .onChange(of: chartData.candles.count) { oldCount, newCount in
-            handleCandleCountChange(oldCount: oldCount, newCount: newCount)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .focusSharedMarker)) { notification in
-            guard let userInfo = notification.userInfo,
-                  let payload = MarkerSharePayloadV1(userInfo) else { return }
-            focusSharedMarker(payload)
-        }
+    }
+
+    private func withSheetPresentations<Content: View>(_ content: Content) -> some View {
+        // Modal MarkerComposerSheet removed — placement UI is now inline on the chart
+        // (MarkerPlacementPanel bottom + GhostPreviewLayer on canvas)
+        return content
+            .sheet(isPresented: $showMarkerTypeFilterSheet) {
+                markerTypeFilterSheet
+            }
+            .sheet(isPresented: $showChartSettingsSheet) {
+                ChartSettingsView(settings: chartSettings)
+            }
+    }
+
+    private func withPlacementAndChartObservers<Content: View>(_ content: Content) -> some View {
+        content
+            .onAppear(perform: handleOnAppear)
+            .onChange(of: currentGuildId) { _, _ in
+                syncMarkerContext()
+            }
+            .onChange(of: currentUserId) { _, _ in
+                syncMarkerContext()
+            }
+            .onChange(of: controlViewModel.isMarkerPlacementMode) { oldValue, newValue in
+                handleMarkerPlacementModeChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: placementState.intent) { oldValue, newValue in
+                handlePlacementIntentChange(oldIntent: oldValue, newIntent: newValue)
+            }
+            .onChange(of: placementState.activeTool) { _, _ in
+                reconcileDrawingInteractionState()
+            }
+            .onChange(of: placementState.activeSubTool) { _, _ in
+                reconcileDrawingInteractionState()
+            }
+            .onChange(of: placementState.selectedPlacementTab) { _, _ in
+                reconcileDrawingInteractionState()
+            }
+            .onChange(of: predictionPlacement) { _, _ in
+                syncSetupComponentsFromPredictionPlacement()
+            }
+            .onChange(of: placementState.componentPrice(.levelTp)) { _, _ in
+                syncPredictionPlacementFromSetupComponents()
+            }
+            .onChange(of: placementState.componentPrice(.levelSl)) { _, _ in
+                syncPredictionPlacementFromSetupComponents()
+            }
+            .onChange(of: chartViewModel.currentSymbol) { oldValue, newValue in
+                handleSymbolChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: chartViewModel.currentSymbol?.ticker) { oldValue, newValue in
+                handleSymbolStringChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: chartViewModel.currentTimeframe) { oldValue, newValue in
+                handleTimeframeChange(oldValue: oldValue, newValue: newValue)
+            }
+            .onChange(of: chartData.candles.count) { oldCount, newCount in
+                handleCandleCountChange(oldCount: oldCount, newCount: newCount)
+            }
+    }
+
+    private func withNotificationHandlers<Content: View>(_ content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .focusSharedMarker)) { notification in
+                guard let userInfo = notification.userInfo,
+                      let payload = MarkerSharePayloadV1(userInfo) else { return }
+                focusSharedMarker(payload)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .markerOverlayApply)) { notification in
+                guard let marker = notification.userInfo?["marker"] as? ChartMarkerUI else { return }
+                applyMarkerOverlay(marker)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .markerOverlayClear)) { _ in
+                clearMarkerOverlay()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .placeMarkerRequested)) { _ in
+                placeMarkerFromState()
+            }
     }
     
     // MARK: - Main Chart Content
@@ -648,19 +709,18 @@ struct TradingChartView: View {
     @ViewBuilder
     private func chartContent(geometry: GeometryProxy) -> some View {
         let coordinateSystem = createCoordinateSystem(geometry: geometry)
-        let linePlacementMarkerType = linePlacementOverlayMarkerType
         let predictionPlacementActive = isPredictionPlacementOverlayActive
 
         ZStack {
             interactiveChartLayer(
                 geometry: geometry,
                 coordinateSystem: coordinateSystem,
-                linePlacementMarkerType: linePlacementMarkerType,
                 predictionPlacementActive: predictionPlacementActive
             )
             .gesture(crosshairDismissTapGesture())
             .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
             .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
+            .simultaneousGesture(placementToolTapGesture(coordinateSystem: coordinateSystem))
             .simultaneousGesture(dragGesture(in: geometry.size, coordinateSystem: coordinateSystem))
             .simultaneousGesture(pinchGesture(in: geometry.size))
             .overlay(yAxisGestureOverlay)
@@ -699,8 +759,55 @@ struct TradingChartView: View {
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
             }
 
-            chartControlsBox(geometry: geometry)
-                .zIndex(60)
+            // MARK: - On-Chart Placement Mode UI
+            if isMarkerPlacementMode {
+                // Ghost preview: render placement components (levels, trendlines, zones)
+                // on the actual chart canvas using real coordinate mapping
+                GhostPreviewLayer(
+                    placementState: placementState,
+                    yForPrice: { price in coordinateSystem.yPosition(forPrice: price) },
+                    width: geometry.size.width,
+                    topSafeAreaInset: geometry.safeAreaInsets.top,
+                    xForTime: { time in
+                        guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
+                        return coordinateSystem.xCenterPosition(forCandleIndex: index)
+                    },
+                    guidePoint: currentDrawingGuidePoint,
+                    drawingInteractionPhase: placementState.drawingInteractionPhase,
+                    editingDrawingId: placementState.editingDrawingId,
+                    formatPrice: { price in chartData.formatPrice(price) }
+                )
+                .zIndex(30)
+
+                drawingControlHandlesOverlay(
+                    geometry: geometry,
+                    coordinateSystem: coordinateSystem
+                )
+                .zIndex(32)
+            }
+
+            // Marker overlay: render selected marker's components as temporary overlays
+            if !markerOverlayComponents.isEmpty {
+                MarkerComponentOverlayLayer(
+                    components: markerOverlayComponents,
+                    yForPrice: { price in coordinateSystem.yPosition(forPrice: price) },
+                    width: geometry.size.width,
+                    xForTime: { time in
+                        guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
+                        return coordinateSystem.xCenterPosition(forCandleIndex: index)
+                    },
+                    formatPrice: { price in chartData.formatPrice(price) }
+                )
+                .allowsHitTesting(false)
+                .zIndex(28)
+                .transition(.opacity)
+            }
+
+            // Standard chart controls — hidden during placement and marker viewing modes
+            if !isMarkerPlacementMode && !controlViewModel.isMarkerViewingMode {
+                chartControlsBox(geometry: geometry)
+                    .zIndex(60)
+            }
         }
     }
 
@@ -708,7 +815,6 @@ struct TradingChartView: View {
     private func interactiveChartLayer(
         geometry: GeometryProxy,
         coordinateSystem: ChartCoordinateSystem,
-        linePlacementMarkerType: RLMarkerType?,
         predictionPlacementActive: Bool
     ) -> some View {
         ZStack {
@@ -734,8 +840,9 @@ struct TradingChartView: View {
 
             priceIndicatorView(geometry: geometry)
                 .mask(topFadeMask(geometry: geometry))
-            xAxisOverlay(geometry: geometry)
             chartInfoBox(geometry: geometry)
+            markerDrawingOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                .mask(topFadeMask(geometry: geometry))
             markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
                 .mask(topFadeMask(geometry: geometry))
             draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
@@ -744,10 +851,11 @@ struct TradingChartView: View {
                 .mask(topFadeMask(geometry: geometry))
             targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
                 .mask(topFadeMask(geometry: geometry))
+            xAxisOverlay(geometry: geometry)
 
-            if let markerType = linePlacementMarkerType {
+            if let markerIntent = linePlacementOverlayIntent {
                 linePlacementOverlay(
-                    markerType: markerType,
+                    markerIntent: markerIntent,
                     geometry: geometry,
                     coordinateSystem: coordinateSystem
                 )
@@ -783,37 +891,34 @@ struct TradingChartView: View {
         }
     }
 
-    private var linePlacementOverlayMarkerType: RLMarkerType? {
+    private var linePlacementOverlayIntent: RLMarkerIntent? {
         guard controlViewModel.isMarkerPlacementMode,
-              let markerType = controlViewModel.currentMarkerType,
-              markerType != .predictionTarget,
+              let markerIntent = controlViewModel.currentMarkerIntent,
+              markerIntent != .setup,
               effectiveCandleIndex >= 0,
-              effectiveCandleIndex < chartData.candles.count
-        else {
+              effectiveCandleIndex < chartData.candles.count else {
             return nil
         }
-
-        let supportedTypes: Set<RLMarkerType> = [.entry, .exit, .takeProfit, .stopLoss, .support, .resistance]
-        return supportedTypes.contains(markerType) ? markerType : nil
+        return markerIntent
     }
 
     private var isPredictionPlacementOverlayActive: Bool {
         controlViewModel.isMarkerPlacementMode &&
-        controlViewModel.currentMarkerType == .predictionTarget &&
+        controlViewModel.currentMarkerIntent == .setup &&
         predictionPlacement != nil
     }
 
     @ViewBuilder
     private func linePlacementOverlay(
-        markerType: RLMarkerType,
+        markerIntent: RLMarkerIntent,
         geometry: GeometryProxy,
         coordinateSystem: ChartCoordinateSystem
     ) -> some View {
         let candle = chartData.candles[effectiveCandleIndex]
-        let defaultPrice = markerType.lineSource.priceFromCandle(candle)
+        let defaultPrice = placementLinePrice ?? candle.close
 
         PlacementLineDragOverlay(
-            markerType: markerType,
+            markerIntent: markerIntent,
             defaultPrice: defaultPrice,
             linePrice: $placementLinePrice,
             isDragging: $isDraggingPlacementLine,
@@ -901,26 +1006,30 @@ struct TradingChartView: View {
     @ViewBuilder
     private func draggableMarkerLineOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         if let marker = activeSelectedMarker,
-           (marker.type == .entry || marker.type == .exit || marker.type == .takeProfit || marker.type == .stopLoss),
-           marker.type.hasHorizontalLine,
-           let candle = chartData.candles.indices.contains(marker.candleIndex) ? chartData.candles[marker.candleIndex] : nil,
-           let linePrice = marker.horizontalLinePrice ?? marker.linePrice(for: candle) {
-            DraggableMarkerLineOverlay(
-                marker: marker,
-                currentPrice: linePrice,
-                markerManager: markerManager,
-                coordinateSystem: coordinateSystem,
-                chartWidth: geometry.size.width,
-                chartHeight: geometry.size.height,
-                chartData: chartData
-            )
+           marker.intent != .setup,
+           !marker.levelComponents.isEmpty {
+            ForEach(marker.levelComponents) { component in
+                if let levelType = component.componentTypeEnum,
+                   let price = component.payload.levelPrice {
+                    DraggableMarkerLineOverlay(
+                        marker: marker,
+                        currentPrice: price,
+                        levelType: levelType,
+                        markerManager: markerManager,
+                        coordinateSystem: coordinateSystem,
+                        chartWidth: geometry.size.width,
+                        chartHeight: geometry.size.height,
+                        chartData: chartData
+                    )
+                }
+            }
         }
     }
 
     @ViewBuilder
     private func draggablePredictionLinesOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         if let marker = activeSelectedMarker,
-           marker.type == .predictionTarget,
+           marker.intent == .setup,
            marker.candleIndex >= 0,
            marker.candleIndex < chartData.candles.count {
             let candle = chartData.candles[marker.candleIndex]
@@ -929,6 +1038,7 @@ struct TradingChartView: View {
                 marker: marker,
                 entryPrice: entryPrice,
                 targetPrice: marker.targetPrice,
+                stopLossPrice: marker.stopLossPrice,
                 markerManager: markerManager,
                 coordinateSystem: coordinateSystem,
                 chartWidth: geometry.size.width,
@@ -950,6 +1060,16 @@ struct TradingChartView: View {
             chartWidth: geometry.size.width,
             chartHeight: geometry.size.height,
             chartData: chartData
+        )
+    }
+
+    @ViewBuilder
+    private func markerDrawingOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
+        MarkerDrawingOverlay(
+            selectedMarker: activeSelectedMarker,
+            coordinateSystem: coordinateSystem,
+            chartWidth: geometry.size.width,
+            chartHeight: geometry.size.height
         )
     }
     
@@ -1100,7 +1220,7 @@ struct TradingChartView: View {
                     .font(.title2)
                     .fontWeight(.bold)
                 
-                Text("A \(markerManager.duplicateMarkerToLike?.type.rawValue ?? "marker") already exists on this candle. Would you like to like it instead?")
+                Text("A \(markerManager.duplicateMarkerToLike?.intent.displayName.lowercased() ?? "marker") already exists on this candle. Would you like to like it instead?")
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundColor(.secondary)
@@ -1175,7 +1295,7 @@ struct TradingChartView: View {
 
             // Prediction info box (right-aligned)
             if let state = predictionPlacement,
-               controlViewModel.currentMarkerType == .predictionTarget {
+               controlViewModel.currentMarkerIntent == .setup {
                 predictionInfoBox(state: state)
             }
         }
@@ -1278,13 +1398,15 @@ struct TradingChartView: View {
     @ViewBuilder
     private func placeMarkerButton(coordinateSystem: ChartCoordinateSystem) -> some View {
         Button(action: { handlePlaceMarkerPress(coordinateSystem: coordinateSystem) }) {
-            Image(systemName: "checkmark")
+            Image(systemName: "arrow.down.circle.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
-                .background(Color.green.opacity(0.7))
+                .background(placementState.intent.color.opacity(0.85))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
+        .disabled(!placementState.isValid)
+        .opacity(placementState.isValid ? 1.0 : 0.5)
     }
     
     // MARK: - Marker Placement Overlay
@@ -1302,7 +1424,7 @@ struct TradingChartView: View {
         .onChange(of: effectiveCandleIndex) { _, _ in
             updatePlacementGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
         }
-        .onChange(of: controlViewModel.currentMarkerType) { _, _ in
+        .onChange(of: controlViewModel.currentMarkerIntent) { _, _ in
             updatePlacementGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
         }
         .onChange(of: gestureState.panOffset.width) { _, _ in
@@ -1345,10 +1467,8 @@ struct TradingChartView: View {
     
     @ViewBuilder
     private func previewMarkerContent(x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
-        let markerType = effectiveMarkerType ?? .note
-        let displayColor = markerType == .alert && placementAlertSeverity != nil
-            ? (placementAlertSeverity?.color ?? markerType.color)
-            : markerType.color
+        let markerIntent = effectiveMarkerIntent ?? .analysis
+        let displayColor = markerPreviewDisplayColor(for: markerIntent)
         return ZStack {
             Circle()
                 .fill(Color.clear)
@@ -1356,10 +1476,10 @@ struct TradingChartView: View {
                 .contentShape(Circle())
 
             UnifiedMarkerBadge(
-                type: markerType,
+                intent: markerIntent,
                 displayColor: displayColor,
                 size: 36,
-                emoji: effectiveMarkerType == .emoji ? (placementSelectedEmoji ?? "🎯") : nil
+                emoji: markerIntent == .reaction ? placementPreviewReactionEmoji : nil
             )
 
             previewMarkerInfoBox
@@ -1371,11 +1491,9 @@ struct TradingChartView: View {
     
     @ViewBuilder
     private var previewMarkerInfoBox: some View {
-        let markerType = effectiveMarkerType ?? .note
-        let displayColor = markerType == .alert && placementAlertSeverity != nil
-            ? (placementAlertSeverity?.color ?? markerType.color)
-            : markerType.color
-        return Text(markerType.rawValue)
+        let markerIntent = effectiveMarkerIntent ?? .analysis
+        let displayColor = markerPreviewDisplayColor(for: markerIntent)
+        return Text(markerIntent.displayName)
             .font(.caption)
             .fontWeight(.semibold)
             .foregroundColor(displayColor)
@@ -1397,10 +1515,38 @@ struct TradingChartView: View {
             .allowsHitTesting(false)
     }
 
+    private func markerPreviewDisplayColor(for intent: RLMarkerIntent) -> Color {
+        guard intent == .alert else { return intent.color }
+        return placementPreviewAlertSeverity?.color ?? intent.color
+    }
+
+    private var placementPreviewAlertSeverity: MarkerAlertSeverity? {
+        if let selected = placementState.alertSeverity {
+            return selected
+        }
+
+        let trimmedNote = placementState.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedNote.hasPrefix("[Critical] ") { return .critical }
+        if trimmedNote.hasPrefix("[Severe] ") { return .severe }
+        if trimmedNote.hasPrefix("[Warning] ") { return .moderate }
+        if trimmedNote.hasPrefix("[Informational] ") { return .mild }
+        return nil
+    }
+
+    private var placementPreviewReactionEmoji: String {
+        if case let .reactionEmoji(payload)? = placementState.component(.reactionEmoji)?.payload {
+            let emoji = payload.emoji.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !emoji.isEmpty {
+                return emoji
+            }
+        }
+        return "🎯"
+    }
+
     private func updatePlacementGuideState(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) {
         guard effectiveCandleIndex >= 0,
               effectiveCandleIndex < chartData.candles.count,
-              let markerType = effectiveMarkerType else {
+              let markerIntent = effectiveMarkerIntent else {
             gestureState.markerPlacementGuide = MarkerPlacementGuideState()
             return
         }
@@ -1413,7 +1559,7 @@ struct TradingChartView: View {
             isActive: isVisible,
             x: x,
             timestamp: candle.timestamp,
-            markerType: markerType,
+            markerIntent: markerIntent,
             source: .placement
         )
     }
@@ -1452,7 +1598,7 @@ struct TradingChartView: View {
             isActive: isVisible,
             x: x,
             timestamp: candle.timestamp,
-            markerType: selectedMarker.type,
+            markerIntent: selectedMarker.intent,
             source: .selected
         )
     }
@@ -1481,84 +1627,21 @@ struct TradingChartView: View {
     // MARK: - Button Action Handlers
     
     private func handleConfirmTargetPress(coordinateSystem: ChartCoordinateSystem) {
-        guard pendingMarkerInfo == nil else { return }
-        
-        let candleIdx = effectiveCandleIndex
-        guard let timestamp = coordinateSystem.timestamp(forCandleIndex: candleIdx),
-              candleIdx >= 0,
-              candleIdx < chartData.candles.count,
-              let markerType = controlViewModel.currentMarkerType,
-              let targetPrice = predictionTargetPrice else {
-            return
-        }
-        
-        let candle = chartData.candles[candleIdx]
-        markerManager.selectedMarker = nil
-        
-        // FIXED: Setting pendingMarkerInfo automatically presents the sheet via sheet(item:)
-        pendingMarkerInfo = PendingMarkerInfo(
-            candleIndex: candleIdx,
-            timestamp: timestamp,
-            price: candle.close,
-            markerType: markerType,
-            targetPrice: targetPrice
+        // With inline placement mode, confirming a target price now updates the
+        // placementState's TP component rather than opening a modal sheet.
+        guard let targetPrice = predictionTargetPrice else { return }
+        placementState.upsertComponent(
+            .levelTp,
+            payload: .levelTp(LevelPayload(price: targetPrice, label: "TP"))
         )
-        
         isAwaitingTargetSelection = false
         impactFeedback.impactOccurred()
     }
     
     private func handlePlaceMarkerPress(coordinateSystem: ChartCoordinateSystem) {
-        guard pendingMarkerInfo == nil else { return }
-        
-        let candleIdx = effectiveCandleIndex
-        guard let timestamp = coordinateSystem.timestamp(forCandleIndex: candleIdx),
-              candleIdx >= 0,
-              candleIdx < chartData.candles.count,
-              let markerType = controlViewModel.currentMarkerType else {
-            return
-        }
-        
-        if let existingMarker = markerManager.existingMarkerOfType(markerType, atCandleIndex: candleIdx) {
-            controlViewModel.cancelMarkerPlacement()
-            markerManager.duplicateMarkerToLike = existingMarker
-            markerManager.showDuplicateAlert = true
-            return
-        }
-        
-        let candle = chartData.candles[candleIdx]
-        
-        if markerType == .predictionTarget, let state = predictionPlacement {
-            // New unified prediction flow: use the 3-line state directly
-            markerManager.selectedMarker = nil
-            pendingMarkerInfo = PendingMarkerInfo(
-                candleIndex: state.candleIndex,
-                timestamp: timestamp,
-                price: state.entryPrice,
-                markerType: .predictionTarget,
-                targetPrice: state.takeProfitPrice,
-                horizontalLinePrice: state.entryPrice,
-                stopLossPrice: state.stopLossPrice
-            )
-            impactFeedback.impactOccurred()
-            return
-        } else if markerType == .predictionTarget {
-            // Fallback if predictionPlacement wasn't initialized
-            impactFeedback.impactOccurred()
-            return
-        } else {
-            markerManager.selectedMarker = nil
-
-            pendingMarkerInfo = PendingMarkerInfo(
-                candleIndex: candleIdx,
-                timestamp: timestamp,
-                price: candle.close,
-                markerType: markerType,
-                horizontalLinePrice: placementLinePrice
-            )
-
-            impactFeedback.impactOccurred()
-        }
+        // With inline placement mode, this now delegates to placeMarkerFromState().
+        // The user finalizes via the on-chart MarkerPlacementPanel "Place Marker" button.
+        placeMarkerFromState()
     }
     
     private func handleCancelPlacement() {
@@ -1573,12 +1656,42 @@ struct TradingChartView: View {
             isDraggingPlacementLine = false
             predictionPlacement = nil
             draggingPredictionLine = nil
+            isDrawingPanLockActive = false
+            didEvaluateDrawingPanLockForCurrentDrag = false
             if gestureState.markerPlacementGuide.source == .placement {
                 gestureState.markerPlacementGuide = MarkerPlacementGuideState()
             }
         }
     }
     
+    /// Place a marker using the on-chart placement state.
+    /// Builds an RLCreateMarkerRequest from placementState and calls the API.
+    private func placeMarkerFromState() {
+        guard placementState.isValid,
+              let symbolId = chartData.currentSymbol?.id else { return }
+
+        let candleIdx = effectiveCandleIndex
+        let request = placementState.buildCreateRequest(
+            symbolId: symbolId,
+            timeframe: chartViewModel.currentTimeframe.toBackendString()
+        )
+
+        Task {
+            let success = await markerManager.addMarkerV2(
+                request: request,
+                candleIndex: candleIdx,
+                candles: chartData.candles
+            )
+
+            if success {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    controlViewModel.cancelMarkerPlacement()
+                }
+                impactFeedback.impactOccurred()
+            }
+        }
+    }
+
     private func handleLikeExistingMarker() {
         if let marker = markerManager.duplicateMarkerToLike {
             Task {
@@ -1607,8 +1720,6 @@ struct TradingChartView: View {
                 self.isAwaitingTargetSelection = false
                 self.predictionTargetPrice = nil
                 self.isDraggingTarget = false
-                self.placementAlertSeverity = nil
-                self.placementSelectedEmoji = nil
                 self.placementLinePrice = nil
                 self.isDraggingPlacementLine = false
                 self.predictionPlacement = nil
@@ -1618,6 +1729,15 @@ struct TradingChartView: View {
                 }
             }
         }
+    }
+
+    private func applyMarkerOverlay(_ marker: ChartMarkerUI) {
+        // Store the marker's components for on-chart overlay rendering
+        markerOverlayComponents = marker.components
+    }
+
+    private func clearMarkerOverlay() {
+        markerOverlayComponents = []
     }
     
     // MARK: - Lifecycle Handlers
@@ -1652,17 +1772,92 @@ struct TradingChartView: View {
             // effectiveCandleIndex will calculate center dynamically until user drags
             // This ensures we always use the current visible center, not a stale value
             previewCandleIndex = -1
+            isDrawingPanLockActive = false
+            didEvaluateDrawingPanLockForCurrentDrag = false
+
+            // Initialize the on-chart placement state with anchor at current center candle
+            initializePlacementState()
 
             // For prediction markers: immediately initialize 3-line system
-            if controlViewModel.currentMarkerType == .predictionTarget {
+            if controlViewModel.currentMarkerIntent == .setup {
                 initializePredictionPlacement()
             }
         } else if oldValue && !newValue {
             // Exiting placement mode - reset to invalid index
             previewCandleIndex = -1
+            placementState.resetDrawingInteraction()
+            zoneFirstTap = nil
+            liveDrawingGuidePoint = nil
+            isDrawingPanLockActive = false
+            didEvaluateDrawingPanLockForCurrentDrag = false
             if gestureState.markerPlacementGuide.source == .placement {
                 gestureState.markerPlacementGuide = MarkerPlacementGuideState()
             }
+        }
+    }
+
+    private func handlePlacementIntentChange(oldIntent: RLMarkerIntent, newIntent: RLMarkerIntent) {
+        guard oldIntent != newIntent else { return }
+        guard controlViewModel.isMarkerPlacementMode else { return }
+
+        if controlViewModel.currentMarkerIntent != newIntent {
+            controlViewModel.currentMarkerIntent = newIntent
+        }
+
+        if newIntent == .setup {
+            if predictionPlacement == nil {
+                initializePredictionPlacement()
+            }
+            return
+        }
+
+        predictionPlacement = nil
+        draggingPredictionLine = nil
+        isAwaitingTargetSelection = false
+        predictionTargetPrice = nil
+        isDraggingTarget = false
+    }
+
+    /// Initialize the on-chart placement state from the current chart context.
+    /// Sets the anchor at the visible center candle with current close price.
+    private func initializePlacementState() {
+        let intent = controlViewModel.currentMarkerIntent ?? .analysis
+        let centerIdx = effectiveCandleIndex
+        let candles = chartData.candles
+
+        let anchorTime: Date
+        let anchorPrice: Double
+        if centerIdx >= 0 && centerIdx < candles.count {
+            let candle = candles[centerIdx]
+            anchorTime = candle.timestamp
+            anchorPrice = candle.close
+        } else if let lastCandle = candles.last {
+            anchorTime = lastCandle.timestamp
+            anchorPrice = lastCandle.close
+        } else {
+            anchorTime = Date()
+            anchorPrice = 0
+        }
+
+        placementState.reset(to: intent, anchorTime: anchorTime, anchorPrice: anchorPrice)
+
+        // For setup markers, pre-populate Entry/TP/SL levels
+        if intent == .setup {
+            placementState.upsertComponent(
+                .levelEntry,
+                payload: .levelEntry(LevelPayload(price: anchorPrice, label: "Entry"))
+            )
+            let tpPrice = anchorPrice * 1.01
+            let slPrice = anchorPrice * 0.99
+            placementState.upsertComponent(
+                .levelTp,
+                payload: .levelTp(LevelPayload(price: tpPrice, label: "TP"))
+            )
+            placementState.upsertComponent(
+                .levelSl,
+                payload: .levelSl(LevelPayload(price: slPrice, label: "SL"))
+            )
+            placementState.trackingEnabled = true
         }
     }
 
@@ -1690,6 +1885,8 @@ struct TradingChartView: View {
             candleIndex: lastIndex
         )
 
+        syncSetupComponentsFromPredictionPlacement()
+
         // Auto-scroll to latest candle with smooth animation
         gestureState.animateCenterOnMarker(
             at: lastIndex,
@@ -1699,6 +1896,68 @@ struct TradingChartView: View {
             chartHeight: chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.6,
             priceRange: chartData.priceRange
         )
+    }
+
+    private func syncSetupComponentsFromPredictionPlacement() {
+        guard controlViewModel.isMarkerPlacementMode,
+              placementState.intent == .setup,
+              let prediction = predictionPlacement,
+              !isSyncingSetupPlacementState else {
+            return
+        }
+
+        let epsilon = 0.0000001
+        isSyncingSetupPlacementState = true
+        defer { isSyncingSetupPlacementState = false }
+
+        let entry = placementState.componentPrice(.levelEntry)
+            ?? placementState.setupEntryPrice
+            ?? .zero
+        if abs(entry - prediction.entryPrice) > epsilon {
+            placementState.upsertComponent(
+                .levelEntry,
+                payload: .levelEntry(LevelPayload(price: prediction.entryPrice, label: "Entry"))
+            )
+        }
+
+        let tp = placementState.componentPrice(.levelTp) ?? .zero
+        if abs(tp - prediction.takeProfitPrice) > epsilon {
+            placementState.upsertComponent(
+                .levelTp,
+                payload: .levelTp(LevelPayload(price: prediction.takeProfitPrice, label: "TP"))
+            )
+        }
+
+        let sl = placementState.componentPrice(.levelSl) ?? .zero
+        if abs(sl - prediction.stopLossPrice) > epsilon {
+            placementState.upsertComponent(
+                .levelSl,
+                payload: .levelSl(LevelPayload(price: prediction.stopLossPrice, label: "SL"))
+            )
+        }
+    }
+
+    private func syncPredictionPlacementFromSetupComponents() {
+        guard controlViewModel.isMarkerPlacementMode,
+              placementState.intent == .setup,
+              !isSyncingSetupPlacementState,
+              var prediction = predictionPlacement else {
+            return
+        }
+
+        let targetTP = placementState.componentPrice(.levelTp) ?? prediction.takeProfitPrice
+        let targetSL = placementState.componentPrice(.levelSl) ?? prediction.stopLossPrice
+        let epsilon = 0.0000001
+        let tpChanged = abs(targetTP - prediction.takeProfitPrice) > epsilon
+        let slChanged = abs(targetSL - prediction.stopLossPrice) > epsilon
+
+        guard tpChanged || slChanged else { return }
+
+        isSyncingSetupPlacementState = true
+        prediction.takeProfitPrice = targetTP
+        prediction.stopLossPrice = targetSL
+        predictionPlacement = prediction
+        isSyncingSetupPlacementState = false
     }
     
     private func handleSymbolChange(oldValue: RLTradingSymbolDTO?, newValue: RLTradingSymbolDTO?) {
@@ -1750,7 +2009,7 @@ struct TradingChartView: View {
 
         // Keep prediction placement pinned to latest candle
         if var state = predictionPlacement,
-           controlViewModel.currentMarkerType == .predictionTarget,
+           controlViewModel.currentMarkerIntent == .setup,
            newCount > 0 {
             guard let lastIndex = snappedMarkerCandleIndex(from: chartData.candles.count - 1) else {
                 predictionPlacement = nil
@@ -1996,14 +2255,828 @@ struct TradingChartView: View {
             }
     }
     
+    // MARK: - Placement Tool Tap Gesture
+
+    /// During placement mode, tapping the chart interacts with the placement state
+    /// based on the currently active placement action state.
+    private func placementToolTapGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard isMarkerPlacementMode else { return }
+                updateLiveDrawingGuidePoint(location: value.location, coordinateSystem: coordinateSystem)
+            }
+            .onEnded { value in
+                guard isMarkerPlacementMode else { return }
+
+                // Must be a tap (not a drag)
+                let dragDistance = sqrt(
+                    pow(value.translation.width, 2) +
+                    pow(value.translation.height, 2)
+                )
+                guard dragDistance < 15 else { return }
+
+                let location = value.location
+                let tappedPrice = coordinateSystem.price(atYPosition: location.y)
+                let tappedCandleIndex = coordinateSystem.candleIndex(atXPosition: location.x)
+                let tappedTime: Date = tappedCandleIndex.flatMap {
+                    coordinateSystem.timestamp(forCandleIndex: $0)
+                } ?? Date()
+
+                handlePlacementToolTap(
+                    price: tappedPrice,
+                    time: tappedTime,
+                    candleIndex: tappedCandleIndex,
+                    location: location,
+                    coordinateSystem: coordinateSystem
+                )
+            }
+    }
+
+    /// Process a tap on the chart during placement mode.
+    /// The action depends on the currently selected tool group and sub-tool.
+    private func handlePlacementToolTap(
+        price: Double,
+        time: Date,
+        candleIndex: Int?,
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
+        let drawingTapContextEnabled =
+            placementState.selectedPlacementTab == .drawings || placementState.activeTool == .draw
+
+        if drawingTapContextEnabled,
+           let target = hitTestEditableDrawing(at: location, coordinateSystem: coordinateSystem) {
+            beginEditing(target: target)
+            return
+        }
+
+        if drawingTapContextEnabled,
+           placementState.drawingInteractionPhase == .editing {
+            lockCurrentDrawingEdits()
+            return
+        }
+
+        guard let activeTool = placementState.activeTool else { return }
+
+        impactFeedback.impactOccurred(intensity: 0.6)
+
+        switch activeTool {
+        case .anchor:
+            // Move anchor to tapped position
+            placementState.upsertComponent(
+                .anchor,
+                payload: .anchor(AnchorPayload(time: time, price: price))
+            )
+
+        case .levels:
+            // Set the active level sub-tool's price to the tapped position
+            if let subTool = placementState.activeSubTool {
+                switch subTool {
+                case MarkerToolOption.levelEntry.rawValue:
+                    // Setup entry is fixed to anchor; ignore chart taps for entry edits.
+                    if placementState.intent != .setup {
+                        placementState.upsertComponent(
+                            .levelEntry,
+                            payload: .levelEntry(LevelPayload(price: price, label: "Entry"))
+                        )
+                    }
+                case MarkerToolOption.levelSl.rawValue:
+                    placementState.upsertComponent(
+                        .levelSl,
+                        payload: .levelSl(LevelPayload(price: price, label: "SL"))
+                    )
+                case MarkerToolOption.levelTp.rawValue:
+                    placementState.upsertComponent(
+                        .levelTp,
+                        payload: .levelTp(LevelPayload(price: price, label: "TP"))
+                    )
+                case MarkerToolOption.levelSupport.rawValue:
+                    placementState.upsertComponent(
+                        .levelSupport,
+                        payload: .levelSupport(LevelPayload(price: price, label: "Support"))
+                    )
+                case MarkerToolOption.levelResistance.rawValue:
+                    placementState.upsertComponent(
+                        .levelResistance,
+                        payload: .levelResistance(LevelPayload(price: price, label: "Resistance"))
+                    )
+                default:
+                    break
+                }
+            }
+
+        case .draw:
+            // For trendline: first tap = start, second tap = end
+            if let subTool = placementState.activeSubTool,
+               subTool == MarkerToolOption.drawTrendline.rawValue {
+                handleTrendlineTap(price: price, time: time)
+            } else if let subTool = placementState.activeSubTool,
+                      subTool == MarkerToolOption.drawZone.rawValue {
+                handleZoneTap(price: price, time: time)
+            }
+
+        default:
+            // Other tools (indicators, note, link, etc.) don't need chart taps
+            break
+        }
+    }
+
+    /// State for zone two-tap placement.
+    @State private var zoneFirstTap: (price: Double, time: Date)?
+    @State private var liveDrawingGuidePoint: (time: Date, price: Double)?
+
+    private enum EditableDrawingHitTarget {
+        case trendline(UUID)
+        case zone(UUID)
+        case note(UUID)
+        case emoji(UUID)
+
+        var draftId: UUID {
+            switch self {
+            case .trendline(let id), .zone(let id), .note(let id), .emoji(let id):
+                return id
+            }
+        }
+    }
+
+    private func beginEditing(target: EditableDrawingHitTarget) {
+        switch target {
+        case .trendline(let draftId):
+            placementState.activeTool = .draw
+            placementState.activeSubTool = MarkerToolOption.drawTrendline.rawValue
+            placementState.beginEditingDrawing(draftId)
+        case .zone(let draftId):
+            placementState.activeTool = .draw
+            placementState.activeSubTool = MarkerToolOption.drawZone.rawValue
+            placementState.beginEditingDrawing(draftId)
+        case .note(let draftId), .emoji(let draftId):
+            placementState.activeTool = .draw
+            placementState.activeSubTool = nil
+            placementState.pendingDrawingFirstPoint = nil
+            placementState.drawingInteractionPhase = .editing
+            placementState.editingDrawingId = draftId
+        }
+        zoneFirstTap = nil
+        liveDrawingGuidePoint = nil
+        impactFeedback.impactOccurred(intensity: 0.6)
+    }
+
+    private func lockCurrentDrawingEdits() {
+        placementState.resetDrawingInteraction()
+        zoneFirstTap = nil
+        liveDrawingGuidePoint = nil
+        isDrawingPanLockActive = false
+        didEvaluateDrawingPanLockForCurrentDrag = false
+    }
+
+    /// Ensures unfinished drawing interaction state is cleaned up when tools/tabs change.
+    private func reconcileDrawingInteractionState() {
+        guard isMarkerPlacementMode else {
+            placementState.resetDrawingInteraction()
+            zoneFirstTap = nil
+            liveDrawingGuidePoint = nil
+            return
+        }
+
+        let isDrawTool = placementState.activeTool == .draw
+        let isTrendlineTool = isDrawTool && placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue
+        let isZoneTool = isDrawTool && placementState.activeSubTool == MarkerToolOption.drawZone.rawValue
+
+        if !isTrendlineTool {
+            if placementState.drawingInteractionPhase != .editing {
+                placementState.resetDrawingInteraction()
+            }
+            liveDrawingGuidePoint = nil
+        } else if placementState.drawingInteractionPhase == .idle {
+            placementState.drawingInteractionPhase = .placingFirstPoint
+        }
+
+        if !isZoneTool {
+            zoneFirstTap = nil
+        }
+    }
+
+    /// Handle a trendline tap: first tap sets start, second tap sets end.
+    private func handleTrendlineTap(price: Double, time: Date) {
+        switch placementState.drawingInteractionPhase {
+        case .editing:
+            return
+        case .placingSecondPoint:
+            guard let firstTap = placementState.pendingDrawingFirstPoint else {
+                placementState.drawingInteractionPhase = .placingFirstPoint
+                return
+            }
+            let finalPayload = MarkerComponentPayload.drawingTrendline(
+                TrendlinePayload(
+                    startTime: firstTap.time,
+                    startPrice: firstTap.price,
+                    endTime: time,
+                    endPrice: price
+                )
+            )
+            guard let draftId = placementState.addDrawingOverlayComponent(.drawingTrendline, payload: finalPayload) else {
+                HapticFeedback.light.trigger()
+                return
+            }
+            beginEditing(target: .trendline(draftId))
+        case .placingFirstPoint, .idle:
+            placementState.pendingDrawingFirstPoint = (time: time, price: price)
+            placementState.drawingInteractionPhase = .placingSecondPoint
+            liveDrawingGuidePoint = (time: time, price: price)
+        }
+    }
+
+    /// Handle a zone tap: first tap sets one corner, second tap completes.
+    private func handleZoneTap(price: Double, time: Date) {
+        if let firstTap = zoneFirstTap {
+            guard let draftId = placementState.addDrawingOverlayComponent(
+                .drawingZone,
+                payload: .drawingZone(ZonePayload(
+                    topPrice: max(firstTap.price, price),
+                    bottomPrice: min(firstTap.price, price),
+                    startTime: firstTap.time,
+                    endTime: time
+                ))
+            ) else {
+                HapticFeedback.light.trigger()
+                return
+            }
+            beginEditing(target: .zone(draftId))
+        } else {
+            zoneFirstTap = (price: price, time: time)
+            liveDrawingGuidePoint = (time: time, price: price)
+        }
+    }
+
+    private func updateLiveDrawingGuidePoint(
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
+        guard placementState.activeTool == .draw else { return }
+        guard let candleIndex = coordinateSystem.candleIndex(atXPosition: location.x),
+              let timestamp = coordinateSystem.timestamp(forCandleIndex: candleIndex) else {
+            return
+        }
+        let price = coordinateSystem.price(atYPosition: location.y)
+
+        if placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue,
+           (placementState.drawingInteractionPhase == .placingFirstPoint ||
+            placementState.drawingInteractionPhase == .placingSecondPoint) {
+            liveDrawingGuidePoint = (time: timestamp, price: price)
+        } else if placementState.activeSubTool == MarkerToolOption.drawZone.rawValue,
+                  zoneFirstTap != nil {
+            liveDrawingGuidePoint = (time: timestamp, price: price)
+        }
+    }
+
+    private var currentDrawingGuidePoint: (time: Date, price: Double)? {
+        if placementState.activeTool == .draw,
+           placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue {
+            if placementState.drawingInteractionPhase == .placingSecondPoint {
+                return liveDrawingGuidePoint ?? placementState.pendingDrawingFirstPoint
+            }
+            if placementState.drawingInteractionPhase == .placingFirstPoint {
+                return liveDrawingGuidePoint
+            }
+        }
+        if placementState.activeTool == .draw,
+           placementState.activeSubTool == MarkerToolOption.drawZone.rawValue,
+           let firstTap = zoneFirstTap {
+            return liveDrawingGuidePoint ?? (firstTap.time, firstTap.price)
+        }
+        return nil
+    }
+
+    @ViewBuilder
+    private func drawingControlHandlesOverlay(
+        geometry: GeometryProxy,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> some View {
+        if placementState.activeTool == .draw,
+           placementState.drawingInteractionPhase == .editing,
+           let editingDraftId = placementState.editingDrawingId {
+            ZStack {
+                ForEach(placementState.drawingOverlayDrafts) { draft in
+                    if draft.id == editingDraftId {
+                        switch draft.payload {
+                        case .drawingTrendline(let payload):
+                            if let startPoint = drawingHandlePoint(
+                                time: payload.startTime,
+                                price: payload.startPrice,
+                                coordinateSystem: coordinateSystem
+                            ) {
+                                drawingHandleView(
+                                    at: startPoint,
+                                    color: RLComponentType.drawingTrendline.color,
+                                    size: 24
+                                ) { location in
+                                    updateTrendlineHandle(
+                                        draftId: draft.id,
+                                        isStart: true,
+                                        location: location,
+                                        coordinateSystem: coordinateSystem
+                                    )
+                                }
+                            }
+                            if let endPoint = drawingHandlePoint(
+                                time: payload.endTime,
+                                price: payload.endPrice,
+                                coordinateSystem: coordinateSystem
+                            ) {
+                                drawingHandleView(
+                                    at: endPoint,
+                                    color: RLComponentType.drawingTrendline.color,
+                                    size: 24
+                                ) { location in
+                                    updateTrendlineHandle(
+                                        draftId: draft.id,
+                                        isStart: false,
+                                        location: location,
+                                        coordinateSystem: coordinateSystem
+                                    )
+                                }
+                            }
+                        case .drawingZone(let payload):
+                            if let startTime = payload.startTime,
+                               let topLeft = drawingHandlePoint(
+                                   time: startTime,
+                                   price: payload.topPrice,
+                                   coordinateSystem: coordinateSystem
+                               ) {
+                                drawingHandleView(
+                                    at: topLeft,
+                                    color: RLComponentType.drawingZone.color,
+                                    size: 24
+                                ) { location in
+                                    updateZoneHandle(
+                                        draftId: draft.id,
+                                        isStart: true,
+                                        location: location,
+                                        coordinateSystem: coordinateSystem
+                                    )
+                                }
+                            }
+                            if let endTime = payload.endTime,
+                               let bottomRight = drawingHandlePoint(
+                                   time: endTime,
+                                   price: payload.bottomPrice,
+                                   coordinateSystem: coordinateSystem
+                               ) {
+                                drawingHandleView(
+                                    at: bottomRight,
+                                    color: RLComponentType.drawingZone.color,
+                                    size: 24
+                                ) { location in
+                                    updateZoneHandle(
+                                        draftId: draft.id,
+                                        isStart: false,
+                                        location: location,
+                                        coordinateSystem: coordinateSystem
+                                    )
+                                }
+                            }
+                        default:
+                            EmptyView()
+                        }
+                    }
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func drawingHandlePoint(
+        time: Date,
+        price: Double,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> CGPoint? {
+        guard let index = coordinateSystem.candleIndex(forTimestamp: time) else {
+            return nil
+        }
+        let y = coordinateSystem.yPosition(forPrice: price)
+        return CGPoint(
+            x: coordinateSystem.xCenterPosition(forCandleIndex: index),
+            y: y
+        )
+    }
+
+    private func drawingHandleView(
+        at point: CGPoint,
+        color: Color,
+        size: CGFloat,
+        onChanged: @escaping (CGPoint) -> Void
+    ) -> some View {
+        Circle()
+            .fill(Color.black.opacity(0.85))
+            .overlay(
+                Circle()
+                    .stroke(color.opacity(0.9), lineWidth: 1.4)
+            )
+            .frame(width: size, height: size)
+            .position(point)
+            .contentShape(Circle())
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        onChanged(value.location)
+                    }
+            )
+    }
+
+    private func updateTrendlineHandle(
+        draftId: UUID,
+        isStart: Bool,
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
+        guard let draft = placementState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
+              case let .drawingTrendline(payload) = draft.payload else {
+            return
+        }
+
+        let fallbackTime = isStart ? payload.startTime : payload.endTime
+        let resolvedTime = resolveHandleTime(
+            locationX: location.x,
+            coordinateSystem: coordinateSystem,
+            fallback: fallbackTime
+        )
+        let resolvedPrice = coordinateSystem.price(atYPosition: location.y)
+
+        let updatedPayload: TrendlinePayload
+        if isStart {
+            updatedPayload = TrendlinePayload(
+                startTime: resolvedTime,
+                startPrice: resolvedPrice,
+                endTime: payload.endTime,
+                endPrice: payload.endPrice
+            )
+        } else {
+            updatedPayload = TrendlinePayload(
+                startTime: payload.startTime,
+                startPrice: payload.startPrice,
+                endTime: resolvedTime,
+                endPrice: resolvedPrice
+            )
+        }
+
+        placementState.updateComponent(id: draftId, payload: .drawingTrendline(updatedPayload))
+    }
+
+    private func updateZoneHandle(
+        draftId: UUID,
+        isStart: Bool,
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
+        guard let draft = placementState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
+              case let .drawingZone(payload) = draft.payload else {
+            return
+        }
+
+        let resolvedPrice = coordinateSystem.price(atYPosition: location.y)
+        let fallbackTime = isStart ? payload.startTime : payload.endTime
+        let resolvedTime = resolveHandleTime(
+            locationX: location.x,
+            coordinateSystem: coordinateSystem,
+            fallback: fallbackTime ?? Date()
+        )
+
+        let updatedPayload: ZonePayload
+        if isStart {
+            updatedPayload = ZonePayload(
+                topPrice: max(resolvedPrice, payload.bottomPrice),
+                bottomPrice: min(resolvedPrice, payload.bottomPrice),
+                startTime: resolvedTime,
+                endTime: payload.endTime
+            )
+        } else {
+            updatedPayload = ZonePayload(
+                topPrice: max(payload.topPrice, resolvedPrice),
+                bottomPrice: min(payload.topPrice, resolvedPrice),
+                startTime: payload.startTime,
+                endTime: resolvedTime
+            )
+        }
+
+        placementState.updateComponent(id: draftId, payload: .drawingZone(updatedPayload))
+    }
+
+    private func resolveHandleTime(
+        locationX: CGFloat,
+        coordinateSystem: ChartCoordinateSystem,
+        fallback: Date
+    ) -> Date {
+        guard let candleIndex = coordinateSystem.candleIndex(atXPosition: locationX),
+              let timestamp = coordinateSystem.timestamp(forCandleIndex: candleIndex) else {
+            return fallback
+        }
+        return timestamp
+    }
+
+    private func isTapOnActiveDrawingHandle(
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> Bool {
+        guard placementState.drawingInteractionPhase == .editing,
+              let editingId = placementState.editingDrawingId,
+              let draft = placementState.drawingOverlayDrafts.first(where: { $0.id == editingId }) else {
+            return false
+        }
+
+        let hitRadius: CGFloat = 20
+
+        switch draft.payload {
+        case .drawingTrendline(let payload):
+            let points = [
+                drawingHandlePoint(
+                    time: payload.startTime,
+                    price: payload.startPrice,
+                    coordinateSystem: coordinateSystem
+                ),
+                drawingHandlePoint(
+                    time: payload.endTime,
+                    price: payload.endPrice,
+                    coordinateSystem: coordinateSystem
+                ),
+            ]
+            return points.compactMap { $0 }.contains { point in
+                hypot(location.x - point.x, location.y - point.y) <= hitRadius
+            }
+
+        case .drawingZone(let payload):
+            let startPoint: CGPoint? = payload.startTime.flatMap { startTime in
+                drawingHandlePoint(
+                    time: startTime,
+                    price: payload.topPrice,
+                    coordinateSystem: coordinateSystem
+                )
+            }
+            let endPoint: CGPoint? = payload.endTime.flatMap { endTime in
+                drawingHandlePoint(
+                    time: endTime,
+                    price: payload.bottomPrice,
+                    coordinateSystem: coordinateSystem
+                )
+            }
+            return [startPoint, endPoint].compactMap { $0 }.contains { point in
+                hypot(location.x - point.x, location.y - point.y) <= hitRadius
+            }
+
+        default:
+            return false
+        }
+    }
+
+    private func hitTestEditableDrawing(
+        at location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> EditableDrawingHitTarget? {
+        let handleHitRadius: CGFloat = 26
+        let lineHitThreshold: CGFloat = 18
+
+        if placementState.drawingInteractionPhase == .editing,
+           isTapOnActiveDrawingHandle(location: location, coordinateSystem: coordinateSystem),
+           let editingId = placementState.editingDrawingId,
+           let editingDraft = placementState.components.first(where: { $0.id == editingId }) {
+            switch editingDraft.payload {
+            case .drawingTrendline:
+                return .trendline(editingId)
+            case .drawingZone:
+                return .zone(editingId)
+            case .note:
+                return .note(editingId)
+            case .reactionEmoji:
+                return .emoji(editingId)
+            default:
+                break
+            }
+        }
+
+        for draft in placementState.components.reversed() {
+            switch draft.payload {
+            case .drawingTrendline(let payload):
+                guard
+                    let startPoint = drawingHandlePoint(
+                        time: payload.startTime,
+                        price: payload.startPrice,
+                        coordinateSystem: coordinateSystem
+                    ),
+                    let endPoint = drawingHandlePoint(
+                        time: payload.endTime,
+                        price: payload.endPrice,
+                        coordinateSystem: coordinateSystem
+                    )
+                else {
+                    continue
+                }
+
+                let nearStart = hypot(location.x - startPoint.x, location.y - startPoint.y) <= handleHitRadius
+                let nearEnd = hypot(location.x - endPoint.x, location.y - endPoint.y) <= handleHitRadius
+                let lineDistance = distanceFromPoint(location, toSegmentStart: startPoint, end: endPoint)
+                if nearStart || nearEnd || lineDistance <= lineHitThreshold {
+                    return .trendline(draft.id)
+                }
+
+            case .drawingZone(let payload):
+                guard let zoneRect = zoneHitRect(payload: payload, coordinateSystem: coordinateSystem) else {
+                    continue
+                }
+                if zoneRect.insetBy(dx: -18, dy: -18).contains(location) {
+                    return .zone(draft.id)
+                }
+
+            case .note(let payload):
+                guard
+                    let center = annotationCenter(
+                        for: .note(payload),
+                        coordinateSystem: coordinateSystem
+                    )
+                else {
+                    continue
+                }
+                if hypot(location.x - center.x, location.y - center.y) <= 44 {
+                    return .note(draft.id)
+                }
+
+            case .reactionEmoji(let payload):
+                guard
+                    let center = annotationCenter(
+                        for: .reactionEmoji(payload),
+                        coordinateSystem: coordinateSystem
+                    )
+                else {
+                    continue
+                }
+                if hypot(location.x - center.x, location.y - center.y) <= 38 {
+                    return .emoji(draft.id)
+                }
+
+            default:
+                continue
+            }
+        }
+
+        return nil
+    }
+
+    private func shouldLockChartPanForDrawingGesture(
+        at startLocation: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> Bool {
+        guard isMarkerPlacementMode else { return false }
+        let drawingContextEnabled =
+            placementState.selectedPlacementTab == .drawings || placementState.activeTool == .draw
+        guard drawingContextEnabled else { return false }
+
+        if placementState.drawingInteractionPhase == .editing,
+           isTapOnActiveDrawingHandle(location: startLocation, coordinateSystem: coordinateSystem) {
+            return true
+        }
+
+        if let guidePoint = currentDrawingGuidePoint,
+           let guideHandlePoint = drawingHandlePoint(
+               time: guidePoint.time,
+               price: guidePoint.price,
+               coordinateSystem: coordinateSystem
+           ),
+           hypot(startLocation.x - guideHandlePoint.x, startLocation.y - guideHandlePoint.y) <= 30 {
+            return true
+        }
+
+        return hitTestEditableDrawing(at: startLocation, coordinateSystem: coordinateSystem) != nil
+    }
+
+    private func zoneHitRect(
+        payload: ZonePayload,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> CGRect? {
+        let topY = coordinateSystem.yPosition(forPrice: payload.topPrice)
+        let bottomY = coordinateSystem.yPosition(forPrice: payload.bottomPrice)
+
+        let fallbackX: CGFloat = {
+            if let anchor = annotationAnchorPoint(coordinateSystem: coordinateSystem) {
+                return anchor.x
+            }
+            if effectiveCandleIndex >= 0 && effectiveCandleIndex < chartData.candles.count {
+                return coordinateSystem.xCenterPosition(forCandleIndex: effectiveCandleIndex)
+            }
+            if let lastIndex = chartData.candles.indices.last {
+                return coordinateSystem.xCenterPosition(forCandleIndex: lastIndex)
+            }
+            return UIScreen.main.bounds.width * 0.5
+        }()
+
+        let startX = payload.startTime
+            .flatMap { time in
+                coordinateSystem.candleIndex(forTimestamp: time)
+                    .map { coordinateSystem.xCenterPosition(forCandleIndex: $0) }
+            }
+            ?? (fallbackX - 42)
+        let endX = payload.endTime
+            .flatMap { time in
+                coordinateSystem.candleIndex(forTimestamp: time)
+                    .map { coordinateSystem.xCenterPosition(forCandleIndex: $0) }
+            }
+            ?? (fallbackX + 42)
+
+        return CGRect(
+            x: min(startX, endX),
+            y: min(topY, bottomY),
+            width: max(2, abs(endX - startX)),
+            height: max(2, abs(bottomY - topY))
+        )
+    }
+
+    private func annotationCenter(
+        for payload: MarkerComponentPayload,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> CGPoint? {
+        guard let anchorPoint = annotationAnchorPoint(coordinateSystem: coordinateSystem) else {
+            return nil
+        }
+        let offset = annotationOffset(for: payload)
+        return CGPoint(x: anchorPoint.x + offset.x, y: anchorPoint.y + offset.y)
+    }
+
+    private func annotationAnchorPoint(
+        coordinateSystem: ChartCoordinateSystem
+    ) -> CGPoint? {
+        guard
+            let anchor = placementState.anchorDraft,
+            let anchorPrice = anchor.payload.levelPrice
+        else {
+            return nil
+        }
+
+        let anchorY = coordinateSystem.yPosition(forPrice: anchorPrice)
+        let anchorX: CGFloat
+        if let anchorTime = anchor.payload.anchorTime,
+           let anchorIndex = coordinateSystem.candleIndex(forTimestamp: anchorTime) {
+            anchorX = coordinateSystem.xCenterPosition(forCandleIndex: anchorIndex)
+        } else if effectiveCandleIndex >= 0 && effectiveCandleIndex < chartData.candles.count {
+            anchorX = coordinateSystem.xCenterPosition(forCandleIndex: effectiveCandleIndex)
+        } else if let lastIndex = chartData.candles.indices.last {
+            anchorX = coordinateSystem.xCenterPosition(forCandleIndex: lastIndex)
+        } else {
+            return nil
+        }
+
+        return CGPoint(x: anchorX, y: anchorY)
+    }
+
+    private func annotationOffset(for payload: MarkerComponentPayload) -> CGPoint {
+        switch payload {
+        case let .note(note):
+            return CGPoint(x: note.offsetX ?? 0, y: note.offsetY ?? -36)
+        case let .reactionEmoji(emoji):
+            return CGPoint(x: emoji.offsetX ?? 0, y: emoji.offsetY ?? -68)
+        default:
+            return .zero
+        }
+    }
+
+    private func distanceFromPoint(
+        _ point: CGPoint,
+        toSegmentStart start: CGPoint,
+        end: CGPoint
+    ) -> CGFloat {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+        if lengthSquared <= .ulpOfOne {
+            return hypot(point.x - start.x, point.y - start.y)
+        }
+
+        let projection = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared
+        let t = max(0, min(1, projection))
+        let closest = CGPoint(x: start.x + t * dx, y: start.y + t * dy)
+        return hypot(point.x - closest.x, point.y - closest.y)
+    }
+
     // MARK: - Pan Gesture
-    
+
     private func dragGesture(in size: CGSize, coordinateSystem: ChartCoordinateSystem) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
                 if crosshairManager.isActive {
                     handleCrosshairDrag(value: value, size: size, coordinateSystem: coordinateSystem)
                     return
+                }
+
+                if isMarkerPlacementMode {
+                    if !didEvaluateDrawingPanLockForCurrentDrag {
+                        didEvaluateDrawingPanLockForCurrentDrag = true
+                        isDrawingPanLockActive = shouldLockChartPanForDrawingGesture(
+                            at: value.startLocation,
+                            coordinateSystem: coordinateSystem
+                        )
+                    }
+
+                    if isDrawingPanLockActive {
+                        return
+                    }
                 }
                 
                 if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged && !isDraggingTarget && !isDraggingPlacementLine && draggingPredictionLine == nil {
@@ -2031,7 +3104,13 @@ struct TradingChartView: View {
             .onEnded { value in
                 if crosshairManager.isActive {
                     crosshairDragStartPosition = nil
-                } else if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged && !isDraggingTarget && !isDraggingPlacementLine && draggingPredictionLine == nil {
+                } else if !isDrawingPanLockActive &&
+                            !isDraggingOnYAxis &&
+                            !isPinchingOnYAxis &&
+                            !isMarkerBeingDragged &&
+                            !isDraggingTarget &&
+                            !isDraggingPlacementLine &&
+                            draggingPredictionLine == nil {
                     // Trigger momentum scrolling
                     gestureState.endDrag(
                         chartWidth: size.width,
@@ -2044,6 +3123,8 @@ struct TradingChartView: View {
                 
                 lastDragTranslation = .zero
                 dragState = .zero
+                isDrawingPanLockActive = false
+                didEvaluateDrawingPanLockForCurrentDrag = false
             }
     }
     
@@ -2570,44 +3651,44 @@ struct TradingChartView: View {
     }
 
     private var markerTypeFilterSummary: String {
-        let selectedCount = markerManager.visibleTypes.count
-        let total = RLMarkerType.allCases.count
+        let selectedCount = markerManager.visibleIntents.count
+        let total = RLMarkerIntent.allCases.count
         if selectedCount == total {
-            return "Types: All"
+            return "Intents: All"
         }
-        return "Types: \(selectedCount)"
+        return "Intents: \(selectedCount)"
     }
 
     @ViewBuilder
     private var markerTypeFilterSheet: some View {
         NavigationStack {
             List {
-                ForEach(RLMarkerType.allCases, id: \.self) { type in
+                ForEach(RLMarkerIntent.allCases, id: \.self) { intent in
                     Toggle(isOn: Binding(
-                        get: { markerManager.visibleTypes.contains(type) },
+                        get: { markerManager.visibleIntents.contains(intent) },
                         set: { isOn in
                             if isOn {
-                                markerManager.visibleTypes.insert(type)
+                                markerManager.visibleIntents.insert(intent)
                             } else {
-                                markerManager.visibleTypes.remove(type)
+                                markerManager.visibleIntents.remove(intent)
                             }
                         }
                     )) {
                         HStack(spacing: 10) {
-                            Image(systemName: type.icon)
-                                .foregroundColor(type.color)
+                            Image(systemName: intent.icon)
+                                .foregroundColor(intent.color)
                                 .frame(width: 16)
-                            Text(type.rawValue)
+                            Text(intent.displayName)
                         }
                     }
                     .tint(AppColors.accentColor)
                 }
             }
-            .navigationTitle("Marker Types")
+            .navigationTitle("Marker Intents")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("All") {
-                        markerManager.visibleTypes = Set(RLMarkerType.allCases)
+                        markerManager.visibleIntents = Set(RLMarkerIntent.allCases)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -3023,7 +4104,7 @@ struct ChartBottomIconControlButton: View {
 // MARK: - Placement Line Drag Overlay (Interactive line during marker placement)
 
 struct PlacementLineDragOverlay: View {
-    let markerType: RLMarkerType
+    let markerIntent: RLMarkerIntent
     let defaultPrice: Double
     @Binding var linePrice: Double?
     @Binding var isDragging: Bool
@@ -3048,12 +4129,12 @@ struct PlacementLineDragOverlay: View {
                 path.move(to: CGPoint(x: 0, y: lineY))
                 path.addLine(to: CGPoint(x: chartWidth - 60, y: lineY))
             }
-            .stroke(markerType.color, style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
+            .stroke(markerIntent.color, style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
             .allowsHitTesting(false)
 
             // Drag handle centered
             RoundedRectangle(cornerRadius: 4)
-                .fill(markerType.color.opacity(isDragging ? 0.5 : 0.35))
+                .fill(markerIntent.color.opacity(isDragging ? 0.5 : 0.35))
                 .frame(width: 40, height: 20)
                 .overlay(
                     VStack(spacing: 2) {
@@ -3069,7 +4150,7 @@ struct PlacementLineDragOverlay: View {
 
             // Price + type label near Y-axis
             HStack(spacing: 3) {
-                Text(markerType.lineLabel)
+                Text(markerIntent == .setup ? "Entry" : markerIntent.displayName)
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                 Text(chartData.formatPrice(effectivePrice))
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
@@ -3077,7 +4158,7 @@ struct PlacementLineDragOverlay: View {
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(markerType.color.opacity(0.85))
+            .background(markerIntent.color.opacity(0.85))
             .cornerRadius(4)
             .position(x: chartWidth - 45, y: lineY)
             .allowsHitTesting(false)
@@ -3129,7 +4210,7 @@ struct PredictionPlacementOverlay: View {
                 // Fill regions between lines
                 fillRegions(state: state)
 
-                // Entry line (green, solid, NOT draggable)
+                // Entry line (green, solid, fixed to latest close in setup mode)
                 priceLine(
                     price: state.entryPrice,
                     color: .green,
@@ -3285,6 +4366,8 @@ struct PredictionPlacementOverlay: View {
                             let wasLong = p.takeProfitPrice > entry
 
                             switch lineType {
+                            case .entry:
+                                break
                             case .takeProfit:
                                 p.takeProfitPrice = newPrice
                                 let nowLong = newPrice > entry
@@ -3313,57 +4396,12 @@ struct PredictionPlacementOverlay: View {
     }
 }
 
-// MARK: - Horizontal Line Preview Helper View
-
-struct MarkerHorizontalLinePreview: View {
-    let candle: RLCandleDTO
-    let markerType: RLMarkerType
-    let coordinateSystem: ChartCoordinateSystem
-    let chartWidth: CGFloat
-    let chartData: ChartDataManager
-    
-    private var linePrice: Double {
-        switch markerType.lineSource {
-        case .candleOpen: return candle.open
-        case .candleClose: return candle.close
-        case .candleHigh: return candle.high
-        case .candleLow: return candle.low
-        case .custom, .none: return candle.close
-        }
-    }
-    
-    private var lineY: CGFloat {
-        coordinateSystem.yPosition(forPrice: linePrice)
-    }
-    
-    var body: some View {
-        ZStack {
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: lineY))
-                path.addLine(to: CGPoint(x: chartWidth - 65, y: lineY))
-            }
-            .stroke(style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
-            .foregroundColor(markerType.color.opacity(0.7))
-            .allowsHitTesting(false)
-            
-            Text(chartData.formatPrice(linePrice))
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(markerType.color)
-                .cornerRadius(4)
-                .position(x: 40, y: lineY)
-                .allowsHitTesting(false)
-        }
-    }
-}
-
 // MARK: - Draggable Marker Line Overlay (Entry / Exit / TP / SL)
 
 struct DraggableMarkerLineOverlay: View {
     let marker: ChartMarkerUI
     let currentPrice: Double
+    let levelType: RLComponentType
     @ObservedObject var markerManager: MarkerManager
     let coordinateSystem: ChartCoordinateSystem
     let chartWidth: CGFloat
@@ -3405,7 +4443,8 @@ struct DraggableMarkerLineOverlay: View {
                                 Task {
                                     await markerManager.updateMarker(
                                         id: marker.id,
-                                        horizontalLinePrice: newPrice
+                                        horizontalLinePrice: newPrice,
+                                        horizontalLineType: levelType
                                     )
                                 }
                                 dragPrice = nil
@@ -3416,12 +4455,19 @@ struct DraggableMarkerLineOverlay: View {
     }
 }
 
-// MARK: - Draggable Prediction Lines (Entry + Target)
+// MARK: - Draggable Prediction Lines (Entry + TP + SL)
 
 struct DraggablePredictionLinesOverlay: View {
+    private enum DragLineKind {
+        case entry
+        case takeProfit
+        case stopLoss
+    }
+
     let marker: ChartMarkerUI
     let entryPrice: Double
     let targetPrice: Double?
+    let stopLossPrice: Double?
     @ObservedObject var markerManager: MarkerManager
     let coordinateSystem: ChartCoordinateSystem
     let chartWidth: CGFloat
@@ -3429,24 +4475,34 @@ struct DraggablePredictionLinesOverlay: View {
     let chartData: ChartDataManager
 
     @State private var dragEntryPrice: Double? = nil
-    @State private var dragTargetPrice: Double? = nil
+    @State private var dragTakeProfitPrice: Double? = nil
+    @State private var dragStopLossPrice: Double? = nil
     @State private var entryDragStartY: CGFloat = 0
-    @State private var targetDragStartY: CGFloat = 0
+    @State private var takeProfitDragStartY: CGFloat = 0
+    @State private var stopLossDragStartY: CGFloat = 0
 
     private var effectiveEntryPrice: Double { dragEntryPrice ?? entryPrice }
-    private var effectiveTargetPrice: Double? { targetPrice.map { dragTargetPrice ?? $0 } ?? dragTargetPrice }
+    private var effectiveTakeProfitPrice: Double? {
+        targetPrice.map { dragTakeProfitPrice ?? $0 } ?? dragTakeProfitPrice
+    }
+    private var effectiveStopLossPrice: Double? {
+        stopLossPrice.map { dragStopLossPrice ?? $0 } ?? dragStopLossPrice
+    }
 
     var body: some View {
         ZStack {
-            if let target = effectiveTargetPrice {
-                draggableStrip(price: target, isTarget: true)
+            if let target = effectiveTakeProfitPrice {
+                draggableStrip(price: target, lineKind: .takeProfit)
             }
-            draggableStrip(price: effectiveEntryPrice, isTarget: false)
+            if let stopLoss = effectiveStopLossPrice {
+                draggableStrip(price: stopLoss, lineKind: .stopLoss)
+            }
+            draggableStrip(price: effectiveEntryPrice, lineKind: .entry)
         }
         .frame(width: chartWidth, height: chartHeight)
     }
 
-    private func draggableStrip(price: Double, isTarget: Bool) -> some View {
+    private func draggableStrip(price: Double, lineKind: DragLineKind) -> some View {
         let y = coordinateSystem.yPosition(forPrice: price)
         return Color.clear
             .contentShape(Rectangle())
@@ -3455,12 +4511,18 @@ struct DraggablePredictionLinesOverlay: View {
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        if isTarget {
-                            if dragTargetPrice == nil { targetDragStartY = y }
-                            let newY = targetDragStartY + value.translation.height
+                        switch lineKind {
+                        case .takeProfit:
+                            if dragTakeProfitPrice == nil { takeProfitDragStartY = y }
+                            let newY = takeProfitDragStartY + value.translation.height
                             let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            dragTargetPrice = newPrice
-                        } else {
+                            dragTakeProfitPrice = newPrice
+                        case .stopLoss:
+                            if dragStopLossPrice == nil { stopLossDragStartY = y }
+                            let newY = stopLossDragStartY + value.translation.height
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            dragStopLossPrice = newPrice
+                        case .entry:
                             if dragEntryPrice == nil { entryDragStartY = y }
                             let newY = entryDragStartY + value.translation.height
                             let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
@@ -3468,12 +4530,18 @@ struct DraggablePredictionLinesOverlay: View {
                         }
                     }
                     .onEnded { value in
-                        if isTarget {
-                            let newY = targetDragStartY + value.translation.height
+                        switch lineKind {
+                        case .takeProfit:
+                            let newY = takeProfitDragStartY + value.translation.height
                             let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
                             Task { await markerManager.updateMarker(id: marker.id, targetPrice: newPrice) }
-                            dragTargetPrice = nil
-                        } else {
+                            dragTakeProfitPrice = nil
+                        case .stopLoss:
+                            let newY = stopLossDragStartY + value.translation.height
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            Task { await markerManager.updateMarker(id: marker.id, stopLossPrice: newPrice) }
+                            dragStopLossPrice = nil
+                        case .entry:
                             let newY = entryDragStartY + value.translation.height
                             let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
                             Task { await markerManager.updateMarker(id: marker.id, horizontalLinePrice: newPrice) }
@@ -3488,7 +4556,7 @@ struct DraggablePredictionLinesOverlay: View {
 
 struct MarkerPriceLinesOverlay: View {
     let selectedMarker: ChartMarkerUI?
-    let previewMarker: (candle: RLCandleDTO, type: RLMarkerType)?
+    let previewMarker: PreviewPriceLine?
     let pendingInfo: PendingMarkerInfo?
     let coordinateSystem: ChartCoordinateSystem
     let chartWidth: CGFloat
@@ -3506,33 +4574,35 @@ struct MarkerPriceLinesOverlay: View {
     }
     
     private func drawSelectedMarkerLine(context: GraphicsContext, size: CGSize) {
-        guard let marker = selectedMarker,
-              marker.type.hasHorizontalLine,
-              let candle = getCandleForMarker(marker) else { return }
+        guard let marker = selectedMarker else { return }
 
         // Prediction markers: show Entry (green) + TP (blue) + SL (red) with fill regions
-        if marker.type == .predictionTarget {
-            drawPredictionMarkerLines(context: context, size: size, marker: marker, candle: candle)
+        if marker.intent == .setup {
+            drawPredictionMarkerLines(context: context, size: size, marker: marker)
+            drawSupplementalSetupLevels(context: context, size: size, marker: marker)
             return
         }
 
-        // Non-prediction: use stored horizontal line price or derive from candle
-        let linePrice: Double? = marker.horizontalLinePrice ?? marker.linePrice(for: candle)
+        drawNonSetupLevels(context: context, size: size, marker: marker)
+    }
 
-        if let price = linePrice {
+    private func drawNonSetupLevels(context: GraphicsContext, size: CGSize, marker: ChartMarkerUI) {
+        for component in marker.levelComponents {
+            guard let price = component.payload.levelPrice else { continue }
+            let style = levelStyle(for: component.componentTypeEnum)
             drawPriceLine(
                 context: context,
                 size: size,
                 price: price,
-                color: marker.displayColor,
-                isDashed: false,
-                label: marker.type.lineLabel
+                color: style.color,
+                isDashed: style.isDashed,
+                label: style.label
             )
         }
     }
 
-    private func drawPredictionMarkerLines(context: GraphicsContext, size: CGSize, marker: ChartMarkerUI, candle: RLCandleDTO) {
-        let entryPrice = marker.horizontalLinePrice ?? marker.price
+    private func drawPredictionMarkerLines(context: GraphicsContext, size: CGSize, marker: ChartMarkerUI) {
+        let entryPrice = marker.entryPrice ?? marker.price
         let tpPrice = marker.targetPrice
         let slPrice = marker.stopLossPrice
         let lineEndX = size.width - 60
@@ -3593,6 +4663,47 @@ struct MarkerPriceLinesOverlay: View {
         }
     }
 
+    private func drawSupplementalSetupLevels(context: GraphicsContext, size: CGSize, marker: ChartMarkerUI) {
+        for component in marker.levelComponents {
+            guard
+                let type = component.componentTypeEnum,
+                type != .levelEntry,
+                type != .levelSl,
+                type != .levelTp,
+                let price = component.payload.levelPrice
+            else {
+                continue
+            }
+
+            let style = levelStyle(for: type)
+            drawPriceLine(
+                context: context,
+                size: size,
+                price: price,
+                color: style.color,
+                isDashed: style.isDashed,
+                label: style.label
+            )
+        }
+    }
+
+    private func levelStyle(for type: RLComponentType?) -> (color: Color, label: String?, isDashed: Bool) {
+        switch type {
+        case .levelEntry:
+            return (.green, "Entry", false)
+        case .levelTp:
+            return (.blue, "TP", true)
+        case .levelSl:
+            return (.red, "SL", true)
+        case .levelSupport:
+            return (RLComponentType.levelSupport.color, "Support", true)
+        case .levelResistance:
+            return (RLComponentType.levelResistance.color, "Resistance", true)
+        default:
+            return (.white.opacity(0.75), nil, true)
+        }
+    }
+
     private func drawPriceLabel(context: GraphicsContext, size: CGSize, y: CGFloat, price: Double, color: Color, label: String) {
         let labelX = size.width - 35
         let priceText = chartData.formatPrice(price)
@@ -3618,9 +4729,9 @@ struct MarkerPriceLinesOverlay: View {
         guard let preview = previewMarker else { return }
 
         // Prediction: draw full 3-line system using pending info
-        if preview.type == .predictionTarget,
+        if preview.intent == .setup,
            let pending = pendingInfo,
-           pending.markerType == .predictionTarget {
+           pending.markerIntent == .setup {
             let entryPrice = pending.horizontalLinePrice ?? pending.price
             let lineEndX = size.width - 60
 
@@ -3674,35 +4785,23 @@ struct MarkerPriceLinesOverlay: View {
         }
 
         // Non-prediction: single static line
-        // Use dragged price from pending info if available, otherwise default to candle price
         let linePrice: Double
         if let pending = pendingInfo, let draggedPrice = pending.horizontalLinePrice {
             linePrice = draggedPrice
+        } else if let explicitPrice = preview.explicitPrice {
+            linePrice = explicitPrice
         } else {
-            switch preview.type.lineSource {
-            case .candleOpen: linePrice = preview.candle.open
-            case .candleClose: linePrice = preview.candle.close
-            case .candleHigh: linePrice = preview.candle.high
-            case .candleLow: linePrice = preview.candle.low
-            case .custom, .none: linePrice = preview.candle.close
-            }
+            linePrice = preview.candle.close
         }
 
         drawPriceLine(
             context: context,
             size: size,
             price: linePrice,
-            color: preview.type.color,
+            color: preview.color,
             isDashed: true,
-            label: preview.type.lineLabel.isEmpty ? nil : preview.type.lineLabel
+            label: preview.label
         )
-    }
-    
-    private func getCandleForMarker(_ marker: ChartMarkerUI) -> RLCandleDTO? {
-        guard marker.candleIndex >= 0 && marker.candleIndex < chartData.candles.count else {
-            return nil
-        }
-        return chartData.candles[marker.candleIndex]
     }
     
     private func drawPriceLine(
@@ -3757,6 +4856,115 @@ struct MarkerPriceLinesOverlay: View {
                 .foregroundColor(.white),
             at: CGPoint(x: labelX, y: y)
         )
+    }
+}
+
+// MARK: - Marker Drawing Overlay
+
+struct MarkerDrawingOverlay: View {
+    let selectedMarker: ChartMarkerUI?
+    let coordinateSystem: ChartCoordinateSystem
+    let chartWidth: CGFloat
+    let chartHeight: CGFloat
+
+    var body: some View {
+        GeometryReader { _ in
+            Canvas { context, size in
+                drawSelectedMarkerDrawings(context: context, size: size)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func drawSelectedMarkerDrawings(context: GraphicsContext, size: CGSize) {
+        guard let marker = selectedMarker else { return }
+
+        for component in marker.drawingComponents {
+            switch component.payload {
+            case .drawingTrendline(let payload):
+                drawTrendline(context: context, payload: payload)
+            case .drawingZone(let payload):
+                drawZone(context: context, payload: payload, marker: marker)
+            default:
+                continue
+            }
+        }
+    }
+
+    private func drawTrendline(context: GraphicsContext, payload: TrendlinePayload) {
+        guard
+            let startX = xPosition(for: payload.startTime),
+            let endX = xPosition(for: payload.endTime)
+        else {
+            return
+        }
+
+        let startY = coordinateSystem.yPosition(forPrice: payload.startPrice)
+        let endY = coordinateSystem.yPosition(forPrice: payload.endPrice)
+
+        guard
+            startY.isFinite, endY.isFinite,
+            startY >= -30, startY <= chartHeight + 30,
+            endY >= -30, endY <= chartHeight + 30
+        else {
+            return
+        }
+
+        var path = Path()
+        path.move(to: CGPoint(x: startX, y: startY))
+        path.addLine(to: CGPoint(x: endX, y: endY))
+
+        context.stroke(
+            path,
+            with: .color(RLComponentType.drawingTrendline.color.opacity(0.68)),
+            style: StrokeStyle(lineWidth: 2.0, dash: [8, 5])
+        )
+    }
+
+    private func drawZone(context: GraphicsContext, payload: ZonePayload, marker: ChartMarkerUI) {
+        let candlesCount = coordinateSystem.chartData.candles.count
+        guard candlesCount > 0 else { return }
+
+        let fallbackStartIndex = max(0, min(candlesCount - 1, marker.candleIndex - 8))
+        let fallbackEndIndex = max(0, min(candlesCount - 1, marker.candleIndex + 8))
+
+        let startX = payload.startTime.flatMap(xPosition(for:))
+            ?? coordinateSystem.xCenterPosition(forCandleIndex: fallbackStartIndex)
+        let endX = payload.endTime.flatMap(xPosition(for:))
+            ?? coordinateSystem.xCenterPosition(forCandleIndex: fallbackEndIndex)
+
+        let topY = coordinateSystem.yPosition(forPrice: payload.topPrice)
+        let bottomY = coordinateSystem.yPosition(forPrice: payload.bottomPrice)
+
+        guard
+            topY.isFinite, bottomY.isFinite,
+            topY >= -40, topY <= chartHeight + 40,
+            bottomY >= -40, bottomY <= chartHeight + 40
+        else {
+            return
+        }
+
+        let rect = CGRect(
+            x: min(startX, endX),
+            y: min(topY, bottomY),
+            width: max(2, abs(endX - startX)),
+            height: max(2, abs(bottomY - topY))
+        )
+
+        context.fill(
+            Path(rect),
+            with: .color(RLComponentType.drawingZone.color.opacity(0.16))
+        )
+        context.stroke(
+            Path(rect),
+            with: .color(RLComponentType.drawingZone.color.opacity(0.55)),
+            style: StrokeStyle(lineWidth: 1.4, dash: [6, 4])
+        )
+    }
+
+    private func xPosition(for timestamp: Date) -> CGFloat? {
+        guard let index = coordinateSystem.candleIndex(forTimestamp: timestamp) else { return nil }
+        return coordinateSystem.xCenterPosition(forCandleIndex: index)
     }
 }
 

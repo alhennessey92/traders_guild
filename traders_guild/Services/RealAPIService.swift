@@ -2887,44 +2887,10 @@ extension RealAPIService {
     
     /// Create a new chart marker
     /// POST /chart/guilds/{guild_id}/markers
-    func createMarker(
+    func createMarkerV2(
         guildId: UUID,
-        symbolId: UUID,
-        candleTimestamp: Date,
-        timeframe: String,
-        price: Double,
-        markerType: String,
-        note: String? = nil,
-        horizontalLinePrice: Double? = nil,
-        targetPrice: Double? = nil,
-        stopLossPrice: Double? = nil,
-        alertSeverity: String? = nil,
-        trendlineDirection: String? = nil,
-        selectedIndicator: String? = nil,
-        chartPattern: String? = nil,
-        selectedEmoji: String? = nil,
-        pollQuestion: String? = nil,
-        pollOptions: [String]? = nil
+        request body: RLCreateMarkerRequest
     ) async throws -> RLChartMarkerDTO {
-        let body = RLCreateMarkerRequest(
-            symbolId: symbolId,
-            guildId: guildId,
-            candleTimestamp: candleTimestamp,
-            timeframe: timeframe,
-            price: price,
-            markerType: markerType,
-            note: note,
-            horizontalLinePrice: horizontalLinePrice,
-            targetPrice: targetPrice,
-            stopLossPrice: stopLossPrice,
-            alertSeverity: alertSeverity,
-            trendlineDirection: trendlineDirection,
-            selectedIndicator: selectedIndicator,
-            chartPattern: chartPattern,
-            selectedEmoji: selectedEmoji,
-            pollQuestion: pollQuestion,
-            pollOptions: pollOptions
-        )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers",
             service: .chart,
@@ -2933,35 +2899,14 @@ extension RealAPIService {
             auth: true
         )
     }
-    
+
     /// Update a chart marker (owner only)
     /// PUT /chart/guilds/{guild_id}/markers/{marker_id}
-    func updateMarker(
+    func updateMarkerV2(
         guildId: UUID,
         markerId: UUID,
-        note: String? = nil,
-        price: Double? = nil,
-        isVisible: Bool? = nil,
-        horizontalLinePrice: Double? = nil,
-        targetPrice: Double? = nil,
-        alertSeverity: String? = nil,
-        trendlineDirection: String? = nil,
-        selectedIndicator: String? = nil,
-        chartPattern: String? = nil,
-        selectedEmoji: String? = nil
+        request body: RLUpdateMarkerRequest
     ) async throws -> RLChartMarkerDTO {
-        let body = RLUpdateMarkerRequest(
-            note: note,
-            price: price,
-            isVisible: isVisible,
-            horizontalLinePrice: horizontalLinePrice,
-            targetPrice: targetPrice,
-            alertSeverity: alertSeverity,
-            trendlineDirection: trendlineDirection,
-            selectedIndicator: selectedIndicator,
-            chartPattern: chartPattern,
-            selectedEmoji: selectedEmoji
-        )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)",
             service: .chart,
@@ -2970,7 +2915,7 @@ extension RealAPIService {
             auth: true
         )
     }
-    
+
     /// Delete a chart marker
     /// DELETE /chart/guilds/{guild_id}/markers/{marker_id}
     func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
@@ -3019,8 +2964,7 @@ extension RealAPIService {
             auth: true
         )
     }
-    
-    
+
     // =============================================================================================
     // MARK: - Marker Comments
     // =============================================================================================

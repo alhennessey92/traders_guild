@@ -352,10 +352,15 @@ struct TopMarkerCard: View {
     
     /// Shortened marker type name for display
     private var shortTypeName: String {
-        switch marker.markerTypeEnum {
-        case .resistance: return "Resist"
-        case .predictionTarget: return "Predict"
-        default: return marker.markerTypeEnum.rawValue
+        switch marker.intentEnum {
+        case .analysis: return "Analysis"
+        case .setup: return "Setup"
+        case .alert: return "Alert"
+        case .question: return "Question"
+        case .poll: return "Poll"
+        case .news: return "News"
+        case .reaction: return "React"
+        case .personal: return "Private"
         }
     }
     
@@ -366,14 +371,10 @@ struct TopMarkerCard: View {
                 HStack(alignment: .top, spacing: 8) {
                     // Icon with type label underneath - pushed down with top padding
                     VStack(spacing: 1) {
-                        UnifiedMarkerBadge(
-                            type: marker.markerTypeEnum,
-                            displayColor: marker.markerTypeEnum.color,
-                            size: 26
-                        )
+                        UnifiedMarkerBadge(intent: marker.intentEnum, size: 26)
                         Text(shortTypeName)
                             .font(.system(size: 7, weight: .medium))
-                            .foregroundColor(marker.markerTypeEnum.color.opacity(0.9))
+                            .foregroundColor(marker.intentEnum.color.opacity(0.9))
                             .lineLimit(1)
                     }
                     .frame(width: 34)
@@ -426,6 +427,28 @@ struct TopMarkerCard: View {
                                 .multilineTextAlignment(.leading)
                                 .padding(.top, 4)
                         }
+
+                        if let setup = marker.setupSummary, marker.intentEnum == .setup {
+                            HStack(spacing: 6) {
+                                if let entry = setup.entryPrice {
+                                    Text("E \(String(format: "%.2f", entry))")
+                                }
+                                if let sl = setup.slPrice {
+                                    Text("SL \(String(format: "%.2f", sl))")
+                                }
+                                if let tp = setup.tpPrice {
+                                    Text("TP \(String(format: "%.2f", tp))")
+                                }
+                                if let state = setup.trackingState,
+                                   let tracking = RLTrackingState(rawValue: state) {
+                                    Text(tracking.displayName.uppercased())
+                                        .foregroundColor(tracking.color)
+                                }
+                            }
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(AppColors.greyText)
+                            .padding(.top, 2)
+                        }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -454,12 +477,11 @@ struct TopMarkerCard: View {
 // MARK: - Marker Type Icon (kept for backwards compatibility)
 
 struct MarkerTypeIcon: View {
-    let type: RLMarkerType
+    let intent: RLMarkerIntent
     
     var body: some View {
         UnifiedMarkerBadge(
-            type: type,
-            displayColor: type.color,
+            intent: intent,
             size: 32
         )
     }

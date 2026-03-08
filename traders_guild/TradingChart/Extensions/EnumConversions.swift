@@ -23,44 +23,14 @@ extension RLChartTimeframe {
     }
 }
 
-// =============================================================================
-// MARK: - RLMarkerType Conversions
-// =============================================================================
-
-extension RLMarkerType {
-    /// Convert to backend string format
-    /// Maps iOS enum values to backend marker type strings
+extension RLMarkerIntent {
     func toBackendString() -> String {
-        switch self {
-        // Core markers
-        case .note: return "analysis"
-        case .question: return "question"
-        case .alert: return "alert"
-        case .entry: return "entry"
-        case .exit: return "exit"
-        
-        // Trading markers (distinct types so they round-trip correctly)
-        case .stopLoss: return "stop_loss"
-        case .takeProfit: return "take_profit"
-        
-        // Analysis markers
-        case .support: return "support"
-        case .resistance: return "resistance"
-        case .indicator: return "indicator"
-        case .trendline: return "trendline"
-        case .pattern: return "pattern"
-        case .volumeSpike: return "volume_spike"
-        
-        // Prediction markers
-        case .predictionTarget: return "prediction"
-        
-        // Social markers
-        case .emoji: return "emoji"
-        case .poll: return "poll"
-        case .personal: return "personal"
-        }
+        rawValue
     }
-    
+
+    static func fromBackendString(_ string: String) -> RLMarkerIntent? {
+        RLMarkerIntent(rawValue: string)
+    }
 }
 
 // =============================================================================

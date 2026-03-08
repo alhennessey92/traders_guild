@@ -8,7 +8,8 @@
 import Foundation
 
 extension RLTopMarkerDTO {
-    var markerTypeEnum: RLMarkerType {
-        RLMarkerType.fromBackendString(markerType) ?? .note
+    var trackingStateEnum: RLTrackingState? {
+        guard let rawState = setupSummary?.trackingState else { return nil }
+        return RLTrackingState(rawValue: rawState)
     }
 }

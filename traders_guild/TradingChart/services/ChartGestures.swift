@@ -21,7 +21,7 @@ struct MarkerPlacementGuideState: Equatable {
     var isActive: Bool = false
     var x: CGFloat = 0
     var timestamp: Date?
-    var markerType: RLMarkerType?
+    var markerIntent: RLMarkerIntent?
     var source: MarkerPlacementGuideSource = .placement
 }
 
@@ -476,7 +476,5 @@ extension View {
         )
     }
 }
-
-
 
 

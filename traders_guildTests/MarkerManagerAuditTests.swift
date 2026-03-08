@@ -32,7 +32,7 @@ struct MarkerManagerAuditTests {
             makeMarker(
                 id: UUID(),
                 author: me,
-                type: .entry,
+                intent: .setup,
                 isCurrentUserMarker: true,
                 isLikedByCurrentUser: false,
                 likeCount: 0
@@ -40,7 +40,7 @@ struct MarkerManagerAuditTests {
             makeMarker(
                 id: UUID(),
                 author: friend,
-                type: .note,
+                intent: .analysis,
                 isCurrentUserMarker: false,
                 isLikedByCurrentUser: false,
                 likeCount: 0
@@ -48,7 +48,7 @@ struct MarkerManagerAuditTests {
             makeMarker(
                 id: UUID(),
                 author: stranger,
-                type: .alert,
+                intent: .alert,
                 isCurrentUserMarker: false,
                 isLikedByCurrentUser: false,
                 likeCount: 0
@@ -56,7 +56,7 @@ struct MarkerManagerAuditTests {
         ]
 
         manager.visibilityMode = .all
-        manager.visibleTypes = Set(RLMarkerType.allCases)
+        manager.visibleIntents = Set(RLMarkerIntent.allCases)
         #expect(manager.filteredMarkers.count == 3)
 
         manager.visibilityMode = .mine
@@ -68,11 +68,44 @@ struct MarkerManagerAuditTests {
         #expect(manager.filteredMarkers.first?.author.username == "friend")
 
         manager.visibilityMode = .all
-        manager.visibleTypes = [.entry, .note]
+        manager.visibleIntents = [.setup, .analysis]
         #expect(manager.filteredMarkers.count == 2)
 
         manager.visibilityMode = .off
         #expect(manager.filteredMarkers.isEmpty)
+    }
+
+    @Test
+    func intentFilteringAppliesWhenConfigured() {
+        let me = makeMember(
+            userId: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            username: "me",
+            isFriend: false
+        )
+        let manager = MarkerManager(userId: me.userId, guildId: guildId, currentUserMember: me)
+
+        manager.markers = [
+            makeMarker(
+                id: UUID(),
+                author: me,
+                intent: .analysis,
+                isCurrentUserMarker: true,
+                isLikedByCurrentUser: false,
+                likeCount: 0
+            ),
+            makeMarker(
+                id: UUID(),
+                author: me,
+                intent: .setup,
+                isCurrentUserMarker: true,
+                isLikedByCurrentUser: false,
+                likeCount: 0
+            )
+        ]
+
+        manager.visibleIntents = [.analysis]
+        #expect(manager.filteredMarkers.count == 1)
+        #expect(manager.filteredMarkers.first?.intent == .analysis)
     }
 
     @Test
@@ -85,7 +118,7 @@ struct MarkerManagerAuditTests {
             makeMarker(
                 id: markerId,
                 author: me,
-                type: .entry,
+                intent: .setup,
                 isCurrentUserMarker: true,
                 isLikedByCurrentUser: false,
                 likeCount: 1
@@ -115,7 +148,7 @@ struct MarkerManagerAuditTests {
             makeMarker(
                 id: markerId,
                 author: me,
-                type: .note,
+                intent: .analysis,
                 isCurrentUserMarker: true,
                 isLikedByCurrentUser: false,
                 likeCount: 0
@@ -150,7 +183,7 @@ struct MarkerManagerAuditTests {
             makeMarker(
                 id: markerId,
                 author: me,
-                type: .note,
+                intent: .analysis,
                 isCurrentUserMarker: true,
                 isLikedByCurrentUser: false,
                 likeCount: 0,
@@ -166,6 +199,101 @@ struct MarkerManagerAuditTests {
         #expect(!success)
         #expect(manager.markers.first?.comments.count == 1)
         #expect(manager.markers.first?.comments.first?.id == comment.id)
+    }
+
+    @Test
+    func trackingStateChangedRealtimeEventPatchesExistingMarker() async throws {
+        let me = makeMember(userId: UUID(), username: "me", isFriend: false)
+        let markerId = UUID()
+        let timestamp = Date()
+
+        let manager = MarkerManager(userId: me.userId, guildId: guildId, currentUserMember: me)
+        let api = MarkerAuditFakeAPI()
+
+        let markerDTO = RLChartMarkerDTO(
+            id: markerId,
+            symbolId: symbolId,
+            guildId: guildId,
+            author: me,
+            candleTimestamp: timestamp,
+            timeframe: RLChartTimeframe.h1.toBackendString(),
+            price: 1.2345,
+            intent: RLMarkerIntent.setup.rawValue,
+            title: "Setup",
+            note: nil,
+            visibility: "guild",
+            confidence: nil,
+            trackingEnabled: true,
+            trackingState: RLTrackingState.armed.rawValue,
+            createdAt: timestamp,
+            createdAtFormatted: "now",
+            isVisible: true,
+            likeCount: 0,
+            isLikedByCurrentUser: false,
+            commentCount: 0,
+            comments: [],
+            isCurrentUserMarker: true,
+            canEdit: true,
+            canDelete: true,
+            components: [
+                RLMarkerComponentDTO(
+                    id: UUID(),
+                    componentType: RLComponentType.anchor.rawValue,
+                    payload: .anchor(AnchorPayload(time: timestamp, price: 1.2345)),
+                    ordering: 0
+                ),
+            ],
+            primaryComponentId: nil,
+            pollQuestion: nil,
+            pollOptions: nil,
+            userPollVote: nil
+        )
+        api.markersResponse = RLMarkersListDTO(markers: [markerDTO], totalCount: 1, hasMore: false, nextCursor: nil)
+
+        let dataManager = ChartDataManager()
+        dataManager.candles = [
+            RLCandleDTO(
+                timestamp: timestamp,
+                timestampFormatted: nil,
+                open: 1.2,
+                high: 1.25,
+                low: 1.19,
+                close: 1.24,
+                volume: nil,
+                volumeFormatted: nil
+            ),
+        ]
+        manager.configureRealTime(dataManager: dataManager)
+        await manager.loadMarkersFromAPI(
+            api: api,
+            symbolId: symbolId,
+            symbol: "BTCUSD",
+            guildId: guildId,
+            timeframe: .h1,
+            candles: dataManager.candles
+        )
+
+        let payload = AnyCodable([
+            "marker_id": AnyCodable(markerId.uuidString),
+            "old_state": AnyCodable(RLTrackingState.armed.rawValue),
+            "new_state": AnyCodable(RLTrackingState.active.rawValue),
+            "guild_id": AnyCodable(guildId.uuidString),
+            "symbol_id": AnyCodable(symbolId.uuidString),
+        ])
+        let channel = "guild:\(guildId.uuidString.lowercased()):markers"
+        RealTimeService.shared.messageSubject.send(
+            WSIncomingMessage(
+                type: "tracking_state_changed",
+                channel: channel,
+                payload: payload,
+                userId: nil,
+                isTyping: nil,
+                message: nil,
+                channels: nil
+            )
+        )
+
+        #expect(manager.markers.first?.trackingState == .active)
     }
 }
 
@@ -214,9 +342,9 @@ struct MessagingMarkerShareTests {
         let oldest = try #require(ISO8601DateFormatter().date(from: "2026-01-30T10:00:00Z"))
 
         let markers = [
-            makeTopMarker(id: UUID(), createdAt: older, timeframe: "h1", markerType: "entry"),
-            makeTopMarker(id: UUID(), createdAt: now, timeframe: "m5", markerType: "prediction"),
-            makeTopMarker(id: UUID(), createdAt: oldest, timeframe: "d1", markerType: "support")
+            makeTopMarker(id: UUID(), createdAt: older, timeframe: "h1", intent: "setup"),
+            makeTopMarker(id: UUID(), createdAt: now, timeframe: "m5", intent: "setup"),
+            makeTopMarker(id: UUID(), createdAt: oldest, timeframe: "d1", intent: "analysis")
         ]
 
         let mapped = markers
@@ -255,7 +383,7 @@ struct MessagingMarkerShareTests {
                 id: UUID(uuidString: "CCCCCCCC-0000-0000-0000-000000000001")!,
                 createdAt: Date(timeIntervalSince1970: 1_706_100_000),
                 timeframe: "m15",
-                markerType: "note"
+                intent: "analysis"
             )
         )
 
@@ -360,6 +488,7 @@ private final class MarkerAuditFakeAPI: RealAPIService {
     var shouldFailDeleteComment = false
 
     var toggleLikeResult = RLLikeMarkerDTO(markerId: UUID(), likeCount: 0, isLiked: false)
+    var markersResponse = RLMarkersListDTO(markers: [], totalCount: 0, hasMore: false, nextCursor: nil)
     var addCommentResult = RLMarkerCommentDTO(
         id: UUID(),
         markerId: UUID(),
@@ -419,6 +548,18 @@ private final class MarkerAuditFakeAPI: RealAPIService {
         }
         return RLDetailResponseDTO(detail: "ok")
     }
+
+    override func getMarkers(
+        guildId: UUID,
+        symbolId: UUID,
+        timeframe: String = "1m",
+        limit: Int = 50,
+        cursor: String? = nil,
+        startTime: Date? = nil,
+        endTime: Date? = nil
+    ) async throws -> RLMarkersListDTO {
+        markersResponse
+    }
 }
 
 private enum MarkerAuditError: Error {
@@ -466,12 +607,29 @@ private func makeComment(markerId: UUID, author: RLGuildMemberDTO, content: Stri
 private func makeMarker(
     id: UUID,
     author: RLGuildMemberDTO,
-    type: RLMarkerType,
+    intent: RLMarkerIntent,
     isCurrentUserMarker: Bool,
     isLikedByCurrentUser: Bool,
     likeCount: Int,
     comments: [RLMarkerCommentDTO] = []
 ) -> ChartMarkerUI {
+    let anchorComponent = RLMarkerComponentDTO(
+        id: UUID(),
+        componentType: RLComponentType.anchor.rawValue,
+        payload: .anchor(AnchorPayload(time: Date(), price: 1.2345)),
+        ordering: 0
+    )
+    var components: [RLMarkerComponentDTO] = [anchorComponent]
+    if intent == .setup {
+        components.append(
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.levelEntry.rawValue,
+                payload: .levelEntry(LevelPayload(price: 1.2345, label: nil)),
+                ordering: 1
+            )
+        )
+    }
     let dto = RLChartMarkerDTO(
         id: id,
         symbolId: UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!,
@@ -480,8 +638,13 @@ private func makeMarker(
         candleTimestamp: Date(),
         timeframe: RLChartTimeframe.h1.toBackendString(),
         price: 1.2345,
-        markerType: type.toBackendString(),
+        intent: intent.rawValue,
+        title: nil,
         note: "test",
+        visibility: "guild",
+        confidence: nil,
+        trackingEnabled: intent == .setup,
+        trackingState: intent == .setup ? RLTrackingState.armed.rawValue : nil,
         createdAt: Date(),
         createdAtFormatted: "now",
         isVisible: true,
@@ -492,14 +655,8 @@ private func makeMarker(
         isCurrentUserMarker: isCurrentUserMarker,
         canEdit: true,
         canDelete: true,
-        horizontalLinePrice: nil,
-        targetPrice: nil,
-        stopLossPrice: nil,
-        alertSeverity: nil,
-        trendlineDirection: nil,
-        selectedIndicator: nil,
-        chartPattern: nil,
-        selectedEmoji: nil,
+        components: components,
+        primaryComponentId: anchorComponent.id,
         pollQuestion: nil,
         pollOptions: nil,
         userPollVote: nil
@@ -512,7 +669,7 @@ private func makeTopMarker(
     id: UUID,
     createdAt: Date,
     timeframe: String,
-    markerType: String
+    intent: String
 ) -> RLTopMarkerDTO {
     RLTopMarkerDTO(
         id: id,
@@ -529,15 +686,15 @@ private func makeTopMarker(
         authorReputation: 100,
         authorAccuracyRate: 0.62,
         authorRole: "member",
-        markerType: markerType,
+        intent: intent,
+        title: nil,
         notePreview: "preview",
         createdAt: createdAt,
         createdAtFormatted: "now",
         candleTimestamp: createdAt,
         timeframe: timeframe,
         price: 50000,
-        targetPrice: nil,
-        stopLossPrice: nil,
+        setupSummary: nil,
         likeCount: 0,
         isLikedByCurrentUser: false,
         commentCount: 0,

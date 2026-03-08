@@ -85,6 +85,7 @@ final class IndicatorManager: ObservableObject {
     
     private var lastCandleCount: Int = 0
     private var lastClosePrice: Double = 0
+    private var markerIndicatorSnapshot: ActiveIndicators?
     
     // MARK: - Initialization
     
@@ -290,6 +291,170 @@ final class IndicatorManager: ObservableObject {
         volumeData = []
         lastCandleCount = 0
         lastClosePrice = 0
+    }
+
+    // MARK: - Marker Viewing Snapshot
+
+    /// Save current indicator state before temporary marker-view application.
+    func saveSnapshot() {
+        guard markerIndicatorSnapshot == nil else { return }
+        markerIndicatorSnapshot = activeIndicators
+    }
+
+    /// Apply indicator state from marker components (all linked indicators).
+    func applyMarkerIndicators(_ components: [RLMarkerComponentDTO]) {
+        let indicatorComponents = components.filter { $0.componentTypeEnum == .indicator }
+        guard !indicatorComponents.isEmpty else {
+            activeIndicators = ActiveIndicators()
+            return
+        }
+
+        var config = ActiveIndicators()
+        let sortedComponents = indicatorComponents.sorted { lhs, rhs in
+            let lhsPrimary: Bool = {
+                if case let .indicator(payload) = lhs.payload { return payload.isPrimary ?? false }
+                return false
+            }()
+            let rhsPrimary: Bool = {
+                if case let .indicator(payload) = rhs.payload { return payload.isPrimary ?? false }
+                return false
+            }()
+            return lhsPrimary && !rhsPrimary
+        }
+
+        for component in sortedComponents {
+            guard case let .indicator(payload) = component.payload else { continue }
+            mergeIndicator(payload, into: &config)
+        }
+
+        activeIndicators = config
+    }
+
+    /// Restore indicator state saved by `saveSnapshot()`.
+    func restoreSnapshot() {
+        guard let snapshot = markerIndicatorSnapshot else { return }
+        activeIndicators = snapshot
+        markerIndicatorSnapshot = nil
+    }
+
+    private func activeIndicators(for payload: IndicatorPayload) -> ActiveIndicators {
+        var config = ActiveIndicators()
+        let indicatorName = payload.name.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+
+        if indicatorName.contains("RSI") {
+            config.rsi = RSIConfig()
+            return config
+        }
+        if indicatorName.contains("MACD") {
+            config.macd = MACDConfig()
+            return config
+        }
+        if indicatorName.contains("VWAP") {
+            config.vwap = VWAPConfig()
+            return config
+        }
+        if indicatorName.contains("SAR") {
+            config.parabolicSAR = ParabolicSARConfig()
+            return config
+        }
+        if indicatorName.contains("BOLL") {
+            config.bollingerBands = BollingerBandsConfig()
+            return config
+        }
+        if indicatorName.contains("DONCHIAN") {
+            config.donchianChannels = DonchianChannelsConfig()
+            return config
+        }
+        if indicatorName.contains("KELTNER") {
+            config.keltnerChannels = KeltnerChannelsConfig()
+            return config
+        }
+        if indicatorName.contains("STOCH") {
+            config.stochastic = StochasticConfig()
+            return config
+        }
+        if indicatorName.contains("CCI") {
+            config.cci = CCIConfig()
+            return config
+        }
+        if indicatorName.contains("WILLIAMS") {
+            config.williamsR = WilliamsRConfig()
+            return config
+        }
+        if indicatorName.contains("ATR") {
+            config.atr = ATRConfig()
+            return config
+        }
+        if indicatorName.contains("VOLUME") {
+            config.volume = VolumeConfig()
+            return config
+        }
+
+        if indicatorName.contains("EMA") || indicatorName.contains("SMA") || indicatorName.contains("WMA") || indicatorName.contains("HMA") {
+            let type: IndicatorType
+            if indicatorName.contains("SMA") {
+                type = .sma
+            } else if indicatorName.contains("WMA") {
+                type = .wma
+            } else if indicatorName.contains("HMA") {
+                type = .hma
+            } else {
+                type = .ema
+            }
+
+            let period = intSetting(
+                payload.settings,
+                keys: ["period", "length"],
+                fallback: 20
+            )
+            config.movingAverages = [
+                MovingAverageConfig(
+                    type: type,
+                    isEnabled: true,
+                    color: CodableColor(type.defaultColor),
+                    period: period
+                ),
+            ]
+            return config
+        }
+
+        return config
+    }
+
+    private func mergeIndicator(_ payload: IndicatorPayload, into config: inout ActiveIndicators) {
+        let single = activeIndicators(for: payload)
+
+        config.movingAverages.append(contentsOf: single.enabledMovingAverages)
+
+        if single.vwap?.isEnabled == true { config.vwap = single.vwap }
+        if single.parabolicSAR?.isEnabled == true { config.parabolicSAR = single.parabolicSAR }
+        if single.bollingerBands?.isEnabled == true { config.bollingerBands = single.bollingerBands }
+        if single.donchianChannels?.isEnabled == true { config.donchianChannels = single.donchianChannels }
+        if single.keltnerChannels?.isEnabled == true { config.keltnerChannels = single.keltnerChannels }
+        if single.rsi?.isEnabled == true { config.rsi = single.rsi }
+        if single.macd?.isEnabled == true { config.macd = single.macd }
+        if single.stochastic?.isEnabled == true { config.stochastic = single.stochastic }
+        if single.cci?.isEnabled == true { config.cci = single.cci }
+        if single.williamsR?.isEnabled == true { config.williamsR = single.williamsR }
+        if single.atr?.isEnabled == true { config.atr = single.atr }
+        if single.volume?.isEnabled == true { config.volume = single.volume }
+    }
+
+    private func intSetting(_ settings: [String: AnyCodable]?, keys: [String], fallback: Int) -> Int {
+        guard let settings else { return fallback }
+
+        for key in keys {
+            if let value = settings[key]?.value as? Int {
+                return value
+            }
+            if let value = settings[key]?.value as? Double {
+                return Int(value)
+            }
+            if let value = settings[key]?.value as? String, let parsed = Int(value) {
+                return parsed
+            }
+        }
+        return fallback
     }
     
     // MARK: - Moving Average Management (EMA, SMA, WMA, HMA)
@@ -890,6 +1055,7 @@ final class IndicatorManager: ObservableObject {
     
     func resetToDefaults() {
         activeIndicators = ActiveIndicators()
+        markerIndicatorSnapshot = nil
         clearAllData()
         UserDefaults.standard.removeObject(forKey: configKey)
         UserDefaults.standard.removeObject(forKey: "indicatorConfiguration_v2")
@@ -996,8 +1162,6 @@ extension IndicatorManager {
         print("==============================")
     }
 }
-
-
 
 
 

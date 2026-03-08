@@ -15,15 +15,12 @@ class ChartControlViewModel: ObservableObject {
     
     /// Whether marker placement mode is currently active
     @Published var isMarkerPlacementMode: Bool = false
+
+    /// Whether marker viewing mode is currently active.
+    @Published var isMarkerViewingMode: Bool = false
     
-    /// The type of marker currently being placed (nil when not in placement mode)
-    @Published var currentRLMarkerType: RLMarkerType?
-    
-    /// Backwards-compatible alias for marker type
-    var currentMarkerType: RLMarkerType? {
-        get { currentRLMarkerType }
-        set { currentRLMarkerType = newValue }
-    }
+    /// Marker intent currently being placed (nil when not in placement mode).
+    @Published var currentMarkerIntent: RLMarkerIntent?
     
     /// Whether auto-scroll is currently enabled
     @Published var isAutoScrolling: Bool = false
@@ -68,17 +65,17 @@ class ChartControlViewModel: ObservableObject {
         isAutoScrolling.toggle()
     }
     
-    /// Start marker placement mode with a specific type
-    /// - Parameter type: The marker type to place
-    func startMarkerPlacement(type: RLMarkerType) {
-        currentRLMarkerType = type
+    /// Start marker placement mode with intent.
+    func startMarkerPlacement(intent: RLMarkerIntent) {
+        currentMarkerIntent = intent
         isMarkerPlacementMode = true
+        isMarkerViewingMode = false
     }
     
     /// Cancel marker placement mode
     func cancelMarkerPlacement() {
         isMarkerPlacementMode = false
-        currentRLMarkerType = nil
+        currentMarkerIntent = nil
     }
     
     /// Toggle marker placement mode (legacy method for compatibility)
@@ -86,8 +83,8 @@ class ChartControlViewModel: ObservableObject {
         if isMarkerPlacementMode {
             cancelMarkerPlacement()
         } else {
-            // Default to note type if no type specified
-            startMarkerPlacement(type: .note)
+            // Default to analysis intent if no intent specified
+            startMarkerPlacement(intent: .analysis)
         }
     }
     
@@ -123,4 +120,3 @@ class ChartControlViewModel: ObservableObject {
         setVerticalZoom(verticalZoom / 1.2)
     }
 }
-

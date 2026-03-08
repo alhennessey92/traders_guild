@@ -15,6 +15,22 @@ enum MarkerPredictionProgressStatus: String, Equatable {
 }
 
 enum MarkerPredictionProgress {
+    static func statusFromComponents(
+        components: [RLMarkerComponentDTO],
+        fallbackEntryPrice: Double,
+        currentPrice: Double?
+    ) -> MarkerPredictionProgressStatus {
+        let entryPrice = components.first { $0.componentType == RLComponentType.levelEntry.rawValue }?.payload.levelPrice ?? fallbackEntryPrice
+        let targetPrice = components.first { $0.componentType == RLComponentType.levelTp.rawValue }?.payload.levelPrice
+        let stopLossPrice = components.first { $0.componentType == RLComponentType.levelSl.rawValue }?.payload.levelPrice
+        return status(
+            entryPrice: entryPrice,
+            currentPrice: currentPrice,
+            targetPrice: targetPrice,
+            stopLossPrice: stopLossPrice
+        )
+    }
+
     static func status(
         entryPrice: Double,
         currentPrice: Double?,
@@ -58,5 +74,20 @@ enum MarkerPredictionProgress {
         }
 
         return .inProgress
+    }
+
+    static func status(
+        marker: RLChartMarkerDTO,
+        currentPrice: Double?
+    ) -> MarkerPredictionProgressStatus {
+        statusFromComponents(
+            components: marker.components,
+            fallbackEntryPrice: marker.price,
+            currentPrice: currentPrice
+        )
+    }
+
+    static func trackingState(for marker: RLChartMarkerDTO) -> RLTrackingState? {
+        marker.trackingStateEnum
     }
 }

@@ -236,7 +236,7 @@ class MarkerNavigationHelper {
 
         let closeTimeAndTypeMatches = markerManager.markers.filter { marker in
             let timestampDiff = abs(marker.candleTimestamp.timeIntervalSince(target.candleTimestamp))
-            return timestampDiff < 1 && marker.type == target.markerTypeEnum
+            return timestampDiff < 1 && marker.intent == target.intentEnum
         }
 
         if let fallbackMatch = closeTimeAndTypeMatches.min(by: { lhs, rhs in
