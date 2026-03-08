@@ -91,6 +91,7 @@ struct chartSheetMarkersView: View {
     @State private var isLoadingActive = false
     @State private var isRefreshingActive = false
     @State private var activeLoadError: String?
+    @State private var showMarkerSettingsSheet = false
 
     private var reloadKey: String {
         let symbol = chartViewModel.currentSymbol?.id.uuidString ?? "none"
@@ -182,6 +183,42 @@ struct chartSheetMarkersView: View {
         .task(id: reloadKey) {
             await loadActiveMarkers(forceRefresh: false)
         }
+        .sheet(isPresented: $showMarkerSettingsSheet) {
+            if let markerManager = chartViewModel.markerManager {
+                MarkerFilterSettingsSheet(
+                    markerManager: markerManager,
+                    isPresented: $showMarkerSettingsSheet
+                )
+            } else {
+                NavigationStack {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.circle")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(.orange.opacity(0.9))
+
+                        Text("Marker settings are unavailable right now.")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+
+                        Text("Try again after the chart marker manager is ready.")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .background(Color.black.ignoresSafeArea())
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Done") {
+                                showMarkerSettingsSheet = false
+                            }
+                        }
+                    }
+                }
+                .presentationDetents([.fraction(0.35)])
+            }
+        }
     }
 
     private var header: some View {
@@ -218,7 +255,11 @@ struct chartSheetMarkersView: View {
                         .disabled(isRefreshingActive || isLoadingActive)
                     }
 
-                    MarkerSettingsButton()
+                    MarkerSettingsButton {
+                        showMarkerSettingsSheet = true
+                    }
+                    .disabled(chartViewModel.markerManager == nil)
+                    .opacity(chartViewModel.markerManager == nil ? 0.45 : 1)
                 }
             }
             .padding(.bottom, 6)
@@ -663,6 +704,82 @@ private struct MarkerSettingsButton: View {
                 .clipShape(Circle())
         }
         .accessibilityLabel("Marker settings")
+    }
+}
+
+private struct MarkerFilterSettingsSheet: View {
+    @ObservedObject var markerManager: MarkerManager
+    @Binding var isPresented: Bool
+
+    private var selectedIntentCount: Int {
+        markerManager.visibleIntents.count
+    }
+
+    private var totalIntentCount: Int {
+        RLMarkerIntent.allCases.count
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Visibility") {
+                    Picker("Visibility", selection: $markerManager.visibilityMode) {
+                        ForEach(MarkerVisibilityMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("Intent Filters (\(selectedIntentCount)/\(totalIntentCount))") {
+                    ForEach(RLMarkerIntent.allCases, id: \.self) { intent in
+                        Toggle(isOn: binding(for: intent)) {
+                            HStack(spacing: 10) {
+                                Image(systemName: intent.icon)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(intent.color)
+                                    .frame(width: 16)
+
+                                Text(intent.displayName)
+                                    .font(.subheadline)
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .tint(AppColors.accentColor)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color.black)
+            .navigationTitle("Marker Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("All") {
+                        markerManager.visibleIntents = Set(RLMarkerIntent.allCases)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        isPresented = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.fraction(0.55), .large])
+    }
+
+    private func binding(for intent: RLMarkerIntent) -> Binding<Bool> {
+        Binding(
+            get: { markerManager.visibleIntents.contains(intent) },
+            set: { isOn in
+                if isOn {
+                    markerManager.visibleIntents.insert(intent)
+                } else {
+                    markerManager.visibleIntents.remove(intent)
+                }
+            }
+        )
     }
 }
 

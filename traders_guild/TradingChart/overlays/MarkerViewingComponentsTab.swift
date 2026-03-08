@@ -23,6 +23,14 @@ struct MarkerViewingComponentsTab: View {
         orderedComponents.filter { $0.componentTypeEnum == .timeframeLink }
     }
 
+    private var displayedComponentCount: Int {
+        indicatorComponents.count + drawingComponents.count + timeframeComponents.count
+    }
+
+    private var hiddenComponentCount: Int {
+        max(0, orderedComponents.count - displayedComponentCount)
+    }
+
     private var indicatorPanelCount: Int {
         indicatorComponents.reduce(0) { partial, component in
             guard case let .indicator(payload) = component.payload else { return partial }
@@ -56,10 +64,16 @@ struct MarkerViewingComponentsTab: View {
                 .foregroundColor(.white)
 
             HStack(spacing: 8) {
-                overviewBadge(title: "Total", value: "\(orderedComponents.count)")
+                overviewBadge(title: "Total", value: "\(displayedComponentCount)")
                 overviewBadge(title: "Indicators", value: "\(indicatorComponents.count)")
                 overviewBadge(title: "Drawings", value: "\(drawingComponents.count)")
                 overviewBadge(title: "Timeframes", value: "\(timeframeComponents.count)")
+            }
+
+            if hiddenComponentCount > 0 {
+                Text("\(hiddenComponentCount) additional component(s) shown in General tab details")
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText)
             }
         }
         .padding(.horizontal, 12)

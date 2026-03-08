@@ -163,6 +163,7 @@ struct TradingChartView: View {
     /// When true, chart panning is suppressed so drawing interactions stay precise.
     @State private var isDrawingPanLockActive = false
     @State private var didEvaluateDrawingPanLockForCurrentDrag = false
+    @State private var isDraggingDrawingControlHandle = false
     
     /// Y-axis pinch scale for vertical price range scaling (not used but kept for reference)
     @GestureState private var yAxisPinchScale: CGFloat = 1.0
@@ -244,6 +245,8 @@ struct TradingChartView: View {
     @State private var placementLinePrice: Double? = nil
     /// Whether the placement line is actively being dragged
     @State private var isDraggingPlacementLine: Bool = false
+    /// Active placement-level drag kind for support/resistance lines.
+    @State private var draggingPlacementLevelType: RLComponentType?
 
     /// Current candle index where the preview marker is positioned
     /// Updates in real-time as user drags during placement mode
@@ -272,6 +275,8 @@ struct TradingChartView: View {
     /// Chart display settings (grid, candle colors).
     @ObservedObject private var chartSettings = ChartSettings.shared
     @State private var showChartSettingsSheet = false
+    @State private var isSubmittingViewingPollVote = false
+    @State private var viewingPollVoteOptionId: UUID?
     
 
     
@@ -342,6 +347,8 @@ struct TradingChartView: View {
     /// 0.15 = controlled (original), 0.25 = moderate, 0.35 = responsive, 0.5 = very sensitive
     /// Higher values = faster scaling response, but may feel too jumpy
     private let yAxisSensitivity: CGFloat = 0.7
+    private let drawingSecondPointGuideTapRadius: CGFloat = 26
+    private let drawingGuideDragActivationDistance: CGFloat = 6
     
     // MARK: - Scale Limits Configuration
     
@@ -509,6 +516,7 @@ struct TradingChartView: View {
         if let pending = pendingMarkerInfo,
            pending.candleIndex >= 0,
            pending.candleIndex < chartData.candles.count {
+            guard pending.markerIntent == .setup else { return nil }
             let label = pending.markerIntent == .setup ? "Entry" : nil
             return PreviewPriceLine(
                 candle: chartData.candles[pending.candleIndex],
@@ -531,6 +539,7 @@ struct TradingChartView: View {
            previewCandleIndex >= 0,
            previewCandleIndex < chartData.candles.count,
            let markerIntent = controlViewModel.currentMarkerIntent {
+            guard markerIntent == .setup else { return nil }
             let explicitPrice: Double?
             if markerIntent == .setup {
                 explicitPrice = predictionPlacement?.entryPrice
@@ -779,6 +788,16 @@ struct TradingChartView: View {
                 )
                 .zIndex(30)
 
+                PlacementSupportResistanceOverlay(
+                    placementState: placementState,
+                    draggingLineType: $draggingPlacementLevelType,
+                    coordinateSystem: coordinateSystem,
+                    chartWidth: geometry.size.width,
+                    chartHeight: geometry.size.height,
+                    chartData: chartData
+                )
+                .zIndex(31)
+
                 drawingControlHandlesOverlay(
                     geometry: geometry,
                     coordinateSystem: coordinateSystem
@@ -838,8 +857,10 @@ struct TradingChartView: View {
             // Keep Y-axis above chart drawing but below price/placement overlays and x-axis layer.
             yAxisOverlay(geometry: geometry)
 
-            priceIndicatorView(geometry: geometry)
-                .mask(topFadeMask(geometry: geometry))
+            if !shouldHideCurrentPriceIndicator {
+                priceIndicatorView(geometry: geometry)
+                    .mask(topFadeMask(geometry: geometry))
+            }
             chartInfoBox(geometry: geometry)
             markerDrawingOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
                 .mask(topFadeMask(geometry: geometry))
@@ -891,21 +912,16 @@ struct TradingChartView: View {
         }
     }
 
-    private var linePlacementOverlayIntent: RLMarkerIntent? {
-        guard controlViewModel.isMarkerPlacementMode,
-              let markerIntent = controlViewModel.currentMarkerIntent,
-              markerIntent != .setup,
-              effectiveCandleIndex >= 0,
-              effectiveCandleIndex < chartData.candles.count else {
-            return nil
-        }
-        return markerIntent
-    }
+    private var linePlacementOverlayIntent: RLMarkerIntent? { nil }
 
     private var isPredictionPlacementOverlayActive: Bool {
         controlViewModel.isMarkerPlacementMode &&
         controlViewModel.currentMarkerIntent == .setup &&
         predictionPlacement != nil
+    }
+
+    private var shouldHideCurrentPriceIndicator: Bool {
+        controlViewModel.isMarkerPlacementMode && controlViewModel.currentMarkerIntent == .setup
     }
 
     @ViewBuilder
@@ -1133,12 +1149,19 @@ struct TradingChartView: View {
                 .gesture(yAxisDragGesture)
                 .simultaneousGesture(yAxisPinchGesture)
         }
-        // Disable Y-axis gestures during marker placement so buttons aren't blocked
-        .allowsHitTesting(!isMarkerPlacementMode)
+        .allowsHitTesting(yAxisGesturesEnabled)
         .onDisappear {
             isDraggingOnYAxis = false
             isPinchingOnYAxis = false
         }
+    }
+
+    private var yAxisGesturesEnabled: Bool {
+        if isDraggingDrawingControlHandle { return false }
+        if isDraggingPlacementLine || draggingPredictionLine != nil || draggingPlacementLevelType != nil {
+            return false
+        }
+        return true
     }
     
     // MARK: - Loading Overlay
@@ -1398,12 +1421,36 @@ struct TradingChartView: View {
     @ViewBuilder
     private func placeMarkerButton(coordinateSystem: ChartCoordinateSystem) -> some View {
         Button(action: { handlePlaceMarkerPress(coordinateSystem: coordinateSystem) }) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
+            Image(systemName: "target")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(placementState.isValid ? .white : AppColors.whiteText.opacity(0.55))
                 .frame(width: 36, height: 36)
-                .background(placementState.intent.color.opacity(0.85))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .background(
+                    Circle()
+                        .fill(
+                            placementState.isValid
+                                ? AnyShapeStyle(
+                                    LinearGradient(
+                                        colors: [
+                                            placementState.intent.color.opacity(0.96),
+                                            placementState.intent.color.opacity(0.74),
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                : AnyShapeStyle(AppColors.gradientBackgroundMid.opacity(0.9))
+                        )
+                )
+                .overlay(
+                    Circle()
+                        .stroke(
+                            placementState.isValid
+                                ? placementState.intent.color.opacity(0.72)
+                                : AppColors.whiteText.opacity(0.16),
+                            lineWidth: 1
+                        )
+                )
         }
         .disabled(!placementState.isValid)
         .opacity(placementState.isValid ? 1.0 : 0.5)
@@ -1738,6 +1785,26 @@ struct TradingChartView: View {
 
     private func clearMarkerOverlay() {
         markerOverlayComponents = []
+    }
+
+    private func handleViewingPollVote(markerId: UUID, optionId: UUID) {
+        guard !isSubmittingViewingPollVote else { return }
+        isSubmittingViewingPollVote = true
+        viewingPollVoteOptionId = optionId
+
+        Task {
+            defer {
+                isSubmittingViewingPollVote = false
+                viewingPollVoteOptionId = nil
+            }
+
+            do {
+                try await markerManager.voteOnPoll(markerId: markerId, optionId: optionId)
+                HapticFeedback.light.trigger()
+            } catch {
+                print("Failed to vote on poll marker: \(error)")
+            }
+        }
     }
     
     // MARK: - Lifecycle Handlers
@@ -2263,6 +2330,7 @@ struct TradingChartView: View {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard isMarkerPlacementMode else { return }
+                guard shouldUpdateLiveDrawingGuidePoint(with: value) else { return }
                 updateLiveDrawingGuidePoint(location: value.location, coordinateSystem: coordinateSystem)
             }
             .onEnded { value in
@@ -2369,10 +2437,20 @@ struct TradingChartView: View {
             // For trendline: first tap = start, second tap = end
             if let subTool = placementState.activeSubTool,
                subTool == MarkerToolOption.drawTrendline.rawValue {
-                handleTrendlineTap(price: price, time: time)
+                handleTrendlineTap(
+                    price: price,
+                    time: time,
+                    tapLocation: location,
+                    coordinateSystem: coordinateSystem
+                )
             } else if let subTool = placementState.activeSubTool,
                       subTool == MarkerToolOption.drawZone.rawValue {
-                handleZoneTap(price: price, time: time)
+                handleZoneTap(
+                    price: price,
+                    time: time,
+                    tapLocation: location,
+                    coordinateSystem: coordinateSystem
+                )
             }
 
         default:
@@ -2427,6 +2505,44 @@ struct TradingChartView: View {
         liveDrawingGuidePoint = nil
         isDrawingPanLockActive = false
         didEvaluateDrawingPanLockForCurrentDrag = false
+        isDraggingDrawingControlHandle = false
+    }
+
+    private func cancelPendingSecondPointPlacement() {
+        placementState.resetDrawingInteraction()
+        zoneFirstTap = nil
+        liveDrawingGuidePoint = nil
+        isDrawingPanLockActive = false
+        didEvaluateDrawingPanLockForCurrentDrag = false
+        isDraggingDrawingControlHandle = false
+    }
+
+    private func shouldUpdateLiveDrawingGuidePoint(with value: DragGesture.Value) -> Bool {
+        guard placementState.activeTool == .draw else { return false }
+
+        let dragDistance = hypot(value.translation.width, value.translation.height)
+        switch placementState.drawingInteractionPhase {
+        case .placingFirstPoint, .placingSecondPoint:
+            return dragDistance >= drawingGuideDragActivationDistance
+        case .idle, .editing:
+            return false
+        }
+    }
+
+    private func isTapNearCurrentDrawingGuideHandle(
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> Bool {
+        guard let guide = currentDrawingGuidePoint,
+              let guidePoint = drawingHandlePoint(
+                time: guide.time,
+                price: guide.price,
+                coordinateSystem: coordinateSystem
+              ) else {
+            return false
+        }
+
+        return hypot(location.x - guidePoint.x, location.y - guidePoint.y) <= drawingSecondPointGuideTapRadius
     }
 
     /// Ensures unfinished drawing interaction state is cleaned up when tools/tabs change.
@@ -2435,6 +2551,7 @@ struct TradingChartView: View {
             placementState.resetDrawingInteraction()
             zoneFirstTap = nil
             liveDrawingGuidePoint = nil
+            isDraggingDrawingControlHandle = false
             return
         }
 
@@ -2454,10 +2571,19 @@ struct TradingChartView: View {
         if !isZoneTool {
             zoneFirstTap = nil
         }
+
+        if placementState.drawingInteractionPhase != .editing {
+            isDraggingDrawingControlHandle = false
+        }
     }
 
-    /// Handle a trendline tap: first tap sets start, second tap sets end.
-    private func handleTrendlineTap(price: Double, time: Date) {
+    /// Handle a trendline tap: first tap sets start, second tap confirms near guide-handle.
+    private func handleTrendlineTap(
+        price: Double,
+        time: Date,
+        tapLocation: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
         switch placementState.drawingInteractionPhase {
         case .editing:
             return
@@ -2466,12 +2592,18 @@ struct TradingChartView: View {
                 placementState.drawingInteractionPhase = .placingFirstPoint
                 return
             }
+            guard isTapNearCurrentDrawingGuideHandle(location: tapLocation, coordinateSystem: coordinateSystem) else {
+                cancelPendingSecondPointPlacement()
+                HapticFeedback.light.trigger()
+                return
+            }
+            let finalPoint = liveDrawingGuidePoint ?? (time: time, price: price)
             let finalPayload = MarkerComponentPayload.drawingTrendline(
                 TrendlinePayload(
                     startTime: firstTap.time,
                     startPrice: firstTap.price,
-                    endTime: time,
-                    endPrice: price
+                    endTime: finalPoint.time,
+                    endPrice: finalPoint.price
                 )
             )
             guard let draftId = placementState.addDrawingOverlayComponent(.drawingTrendline, payload: finalPayload) else {
@@ -2486,16 +2618,27 @@ struct TradingChartView: View {
         }
     }
 
-    /// Handle a zone tap: first tap sets one corner, second tap completes.
-    private func handleZoneTap(price: Double, time: Date) {
+    /// Handle a zone tap: first tap sets one corner, second tap confirms near guide-handle.
+    private func handleZoneTap(
+        price: Double,
+        time: Date,
+        tapLocation: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
         if let firstTap = zoneFirstTap {
+            guard isTapNearCurrentDrawingGuideHandle(location: tapLocation, coordinateSystem: coordinateSystem) else {
+                cancelPendingSecondPointPlacement()
+                HapticFeedback.light.trigger()
+                return
+            }
+            let finalPoint = liveDrawingGuidePoint ?? (time: time, price: price)
             guard let draftId = placementState.addDrawingOverlayComponent(
                 .drawingZone,
                 payload: .drawingZone(ZonePayload(
-                    topPrice: max(firstTap.price, price),
-                    bottomPrice: min(firstTap.price, price),
+                    topPrice: max(firstTap.price, finalPoint.price),
+                    bottomPrice: min(firstTap.price, finalPoint.price),
                     startTime: firstTap.time,
-                    endTime: time
+                    endTime: finalPoint.time
                 ))
             ) else {
                 HapticFeedback.light.trigger()
@@ -2560,6 +2703,10 @@ struct TradingChartView: View {
                     if draft.id == editingDraftId {
                         switch draft.payload {
                         case .drawingTrendline(let payload):
+                            let trendlineColor = placementState.drawingColor(
+                                for: draft.id,
+                                fallback: RLComponentType.drawingTrendline.color
+                            )
                             if let startPoint = drawingHandlePoint(
                                 time: payload.startTime,
                                 price: payload.startPrice,
@@ -2567,7 +2714,7 @@ struct TradingChartView: View {
                             ) {
                                 drawingHandleView(
                                     at: startPoint,
-                                    color: RLComponentType.drawingTrendline.color,
+                                    color: trendlineColor,
                                     size: 24
                                 ) { location in
                                     updateTrendlineHandle(
@@ -2585,7 +2732,7 @@ struct TradingChartView: View {
                             ) {
                                 drawingHandleView(
                                     at: endPoint,
-                                    color: RLComponentType.drawingTrendline.color,
+                                    color: trendlineColor,
                                     size: 24
                                 ) { location in
                                     updateTrendlineHandle(
@@ -2597,6 +2744,10 @@ struct TradingChartView: View {
                                 }
                             }
                         case .drawingZone(let payload):
+                            let zoneColor = placementState.drawingColor(
+                                for: draft.id,
+                                fallback: RLComponentType.drawingZone.color
+                            )
                             if let startTime = payload.startTime,
                                let topLeft = drawingHandlePoint(
                                    time: startTime,
@@ -2605,7 +2756,7 @@ struct TradingChartView: View {
                                ) {
                                 drawingHandleView(
                                     at: topLeft,
-                                    color: RLComponentType.drawingZone.color,
+                                    color: zoneColor,
                                     size: 24
                                 ) { location in
                                     updateZoneHandle(
@@ -2624,7 +2775,7 @@ struct TradingChartView: View {
                                ) {
                                 drawingHandleView(
                                     at: bottomRight,
-                                    color: RLComponentType.drawingZone.color,
+                                    color: zoneColor,
                                     size: 24
                                 ) { location in
                                     updateZoneHandle(
@@ -2680,7 +2831,11 @@ struct TradingChartView: View {
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        isDraggingDrawingControlHandle = true
                         onChanged(value.location)
+                    }
+                    .onEnded { _ in
+                        isDraggingDrawingControlHandle = false
                     }
             )
     }
@@ -2710,14 +2865,16 @@ struct TradingChartView: View {
                 startTime: resolvedTime,
                 startPrice: resolvedPrice,
                 endTime: payload.endTime,
-                endPrice: payload.endPrice
+                endPrice: payload.endPrice,
+                colorHex: payload.colorHex
             )
         } else {
             updatedPayload = TrendlinePayload(
                 startTime: payload.startTime,
                 startPrice: payload.startPrice,
                 endTime: resolvedTime,
-                endPrice: resolvedPrice
+                endPrice: resolvedPrice,
+                colorHex: payload.colorHex
             )
         }
 
@@ -2749,14 +2906,16 @@ struct TradingChartView: View {
                 topPrice: max(resolvedPrice, payload.bottomPrice),
                 bottomPrice: min(resolvedPrice, payload.bottomPrice),
                 startTime: resolvedTime,
-                endTime: payload.endTime
+                endTime: payload.endTime,
+                colorHex: payload.colorHex
             )
         } else {
             updatedPayload = ZonePayload(
                 topPrice: max(payload.topPrice, resolvedPrice),
                 bottomPrice: min(payload.topPrice, resolvedPrice),
                 startTime: payload.startTime,
-                endTime: resolvedTime
+                endTime: resolvedTime,
+                colorHex: payload.colorHex
             )
         }
 
@@ -2848,13 +3007,18 @@ struct TradingChartView: View {
             case .note:
                 return .note(editingId)
             case .reactionEmoji:
-                return .emoji(editingId)
+                if !isStyleOnlyReactionEmojiDraft(editingDraft) {
+                    return .emoji(editingId)
+                }
             default:
                 break
             }
         }
 
         for draft in placementState.components.reversed() {
+            if isStyleOnlyReactionEmojiDraft(draft) {
+                continue
+            }
             switch draft.payload {
             case .drawingTrendline(let payload):
                 guard
@@ -2919,6 +3083,10 @@ struct TradingChartView: View {
         }
 
         return nil
+    }
+
+    private func isStyleOnlyReactionEmojiDraft(_ draft: MarkerComponentDraft) -> Bool {
+        placementState.intent == .reaction && draft.componentType == .reactionEmoji
     }
 
     private func shouldLockChartPanForDrawingGesture(
@@ -3193,6 +3361,7 @@ struct TradingChartView: View {
     private var yAxisDragGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                guard !isDraggingDrawingControlHandle else { return }
                 if !isDraggingOnYAxis {
                     if isPinchingOnYAxis {
                         isPinchingOnYAxis = false
@@ -3226,6 +3395,7 @@ struct TradingChartView: View {
     private var yAxisPinchGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
+                guard !isDraggingDrawingControlHandle else { return }
                 if !isPinchingOnYAxis {
                     if isDraggingOnYAxis {
                         isDraggingOnYAxis = false
@@ -3406,10 +3576,18 @@ struct TradingChartView: View {
     func chartInfoBox(geometry: GeometryProxy) -> some View {
         let topInset = geometry.safeAreaInsets.top
         let topPadding = topInset > 0 ? topInset + 62 : 124
+        let sidePanelWidth = min(236, max(182, geometry.size.width * 0.46))
 
         VStack {
             HStack {
-                chartInfoContent
+                VStack(alignment: .leading, spacing: 8) {
+                    chartInfoContent
+                        .allowsHitTesting(false)
+
+                    if let marker = viewingInfoMarker {
+                        markerViewingInfoPanel(marker: marker, panelWidth: sidePanelWidth)
+                    }
+                }
                 Spacer()
             }
             .padding(.leading, 8)
@@ -3417,7 +3595,6 @@ struct TradingChartView: View {
             
             Spacer()
         }
-        .allowsHitTesting(false)
     }
     
     @ViewBuilder
@@ -3431,8 +3608,282 @@ struct TradingChartView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.black.opacity(0.28))
-        .cornerRadius(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.28))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private var viewingInfoMarker: ChartMarkerUI? {
+        guard controlViewModel.isMarkerViewingMode,
+              let selected = markerManager.selectedMarker else {
+            return nil
+        }
+        return markerManager.markers.first(where: { $0.id == selected.id }) ?? selected
+    }
+
+    @ViewBuilder
+    private func markerViewingInfoPanel(marker: ChartMarkerUI, panelWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(marker.intent.color.opacity(0.22))
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        Image(systemName: marker.intent.icon)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white)
+                    )
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(marker.intent.displayName)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("@\(marker.author.username)")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundColor(.white.opacity(0.72))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            markerViewingInfoContent(marker: marker)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(width: panelWidth, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.28))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .allowsHitTesting(marker.intent == .poll)
+    }
+
+    @ViewBuilder
+    private func markerViewingInfoContent(marker: ChartMarkerUI) -> some View {
+        switch marker.intent {
+        case .setup:
+            VStack(alignment: .leading, spacing: 5) {
+                markerViewingPriceRow(
+                    title: "Entry",
+                    price: marker.entryPrice ?? marker.price,
+                    color: RLComponentType.levelEntry.color
+                )
+                if let tp = marker.targetPrice {
+                    markerViewingPriceRow(
+                        title: "TP",
+                        price: tp,
+                        color: RLComponentType.levelTp.color
+                    )
+                }
+                if let sl = marker.stopLossPrice {
+                    markerViewingPriceRow(
+                        title: "SL",
+                        price: sl,
+                        color: RLComponentType.levelSl.color
+                    )
+                }
+            }
+
+        case .analysis:
+            markerViewingText(marker.note, placeholder: "No analysis text")
+
+        case .alert:
+            if let severity = marker.alertSeverity {
+                HStack(spacing: 6) {
+                    Image(systemName: markerAlertSeveritySymbol(severity))
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(severity.rawValue)
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(severity.color.opacity(0.46))
+                        .overlay(Capsule().stroke(severity.color.opacity(0.7), lineWidth: 1))
+                )
+            }
+            markerViewingText(marker.note, placeholder: "No alert note")
+
+        case .question:
+            markerViewingText(marker.note, placeholder: "No question text")
+
+        case .poll:
+            markerViewingPollContent(marker: marker)
+
+        case .news:
+            markerViewingText(markerNewsURL(marker) ?? marker.note, placeholder: "No link provided")
+
+        case .reaction:
+            let emoji = marker.selectedEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if emoji.isEmpty {
+                markerViewingText(nil, placeholder: "No reaction set")
+            } else {
+                HStack(spacing: 8) {
+                    Text(emoji)
+                        .font(.system(size: 18))
+                    Text("Reaction")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.78))
+                    Spacer(minLength: 0)
+                }
+            }
+
+        case .personal:
+            markerViewingText(marker.note, placeholder: "Private marker")
+        }
+    }
+
+    private func markerViewingPriceRow(title: String, price: Double, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color.opacity(0.95))
+                .frame(width: 6, height: 6)
+            Text(title)
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundColor(.white.opacity(0.78))
+            Spacer(minLength: 0)
+            Text(chartData.formatPrice(price))
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+        }
+    }
+
+    private func markerViewingText(_ text: String?, placeholder: String) -> some View {
+        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return Text(trimmed.isEmpty ? placeholder : trimmed)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(trimmed.isEmpty ? .white.opacity(0.58) : .white.opacity(0.86))
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func markerAlertSeveritySymbol(_ severity: MarkerAlertSeverity) -> String {
+        switch severity {
+        case .critical:
+            return "exclamationmark.octagon.fill"
+        case .severe:
+            return "exclamationmark.triangle.fill"
+        case .moderate:
+            return "exclamationmark.circle.fill"
+        case .mild:
+            return "info.circle.fill"
+        }
+    }
+
+    @ViewBuilder
+    private func markerViewingPollContent(marker: ChartMarkerUI) -> some View {
+        let question = marker.pollQuestion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let options = marker.pollOptions ?? []
+        let totalVotes = max(0, options.reduce(0) { $0 + $1.voteCount })
+
+        if !question.isEmpty {
+            Text(question)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.88))
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        if options.isEmpty {
+            markerViewingText(nil, placeholder: "No poll options")
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(options) { option in
+                    markerViewingPollOptionButton(
+                        markerId: marker.id,
+                        option: option,
+                        totalVotes: totalVotes,
+                        selectedOptionId: marker.userPollVote
+                    )
+                }
+            }
+        }
+    }
+
+    private func markerViewingPollOptionButton(
+        markerId: UUID,
+        option: RLPollOptionDTO,
+        totalVotes: Int,
+        selectedOptionId: UUID?
+    ) -> some View {
+        let isSelected = selectedOptionId == option.id || option.hasVoted
+        let isSubmitting = isSubmittingViewingPollVote && viewingPollVoteOptionId == option.id
+        let percentage = totalVotes > 0 ? Double(option.voteCount) / Double(totalVotes) : 0
+
+        return Button {
+            handleViewingPollVote(markerId: markerId, optionId: option.id)
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(option.text)
+                        .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 0)
+
+                    if isSubmitting {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .tint(.white.opacity(0.8))
+                    } else {
+                        Text("\(option.voteCount)")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.74))
+                    }
+                }
+
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.1))
+                        Capsule()
+                            .fill(isSelected ? AppColors.accentColor.opacity(0.9) : Color.white.opacity(0.32))
+                            .frame(width: max(2, geometry.size.width * percentage))
+                    }
+                }
+                .frame(height: 5)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? AppColors.accentColor.opacity(0.18) : Color.white.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isSelected ? AppColors.accentColor.opacity(0.42) : Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isSubmittingViewingPollVote)
+    }
+
+    private func markerNewsURL(_ marker: ChartMarkerUI) -> String? {
+        for component in marker.components {
+            guard component.componentTypeEnum == .linkURL,
+                  case let .link(payload) = component.payload else {
+                continue
+            }
+
+            let value = payload.url.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty {
+                return value
+            }
+        }
+        return nil
     }
     
     @ViewBuilder
@@ -4190,6 +4641,153 @@ struct PlacementLineDragOverlay: View {
     }
 }
 
+// MARK: - Placement Support/Resistance Overlay (TP/SL-style draggables)
+
+struct PlacementSupportResistanceOverlay: View {
+    @ObservedObject var placementState: MarkerPlacementState
+    @Binding var draggingLineType: RLComponentType?
+    let coordinateSystem: ChartCoordinateSystem
+    let chartWidth: CGFloat
+    let chartHeight: CGFloat
+    let chartData: ChartDataManager
+
+    @State private var dragStartYByType: [RLComponentType: CGFloat] = [:]
+    private let haptic = UIImpactFeedbackGenerator(style: .medium)
+
+    private var supportPrice: Double? {
+        placementState.componentPrice(.levelSupport)
+    }
+
+    private var resistancePrice: Double? {
+        placementState.componentPrice(.levelResistance)
+    }
+
+    private var hasVisiblePlacementLevels: Bool {
+        supportPrice != nil || resistancePrice != nil
+    }
+
+    var body: some View {
+        if hasVisiblePlacementLevels {
+            ZStack {
+                if let price = supportPrice {
+                    draggableLine(
+                        price: price,
+                        componentType: .levelSupport,
+                        color: RLComponentType.levelSupport.color,
+                        label: "Support"
+                    )
+                }
+
+                if let price = resistancePrice {
+                    draggableLine(
+                        price: price,
+                        componentType: .levelResistance,
+                        color: RLComponentType.levelResistance.color,
+                        label: "Resistance"
+                    )
+                }
+            }
+            .frame(width: chartWidth, height: chartHeight)
+        }
+    }
+
+    @ViewBuilder
+    private func draggableLine(
+        price: Double,
+        componentType: RLComponentType,
+        color: Color,
+        label: String
+    ) -> some View {
+        let y = coordinateSystem.yPosition(forPrice: price)
+        let isActive = draggingLineType == componentType
+
+        Path { path in
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: chartWidth - 60, y: y))
+        }
+        .stroke(
+            color.opacity(0.82),
+            style: StrokeStyle(
+                lineWidth: isActive ? 2.5 : 1.5,
+                dash: [6, 3]
+            )
+        )
+        .allowsHitTesting(false)
+
+        HStack(spacing: 3) {
+            Text(label)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+            Text(chartData.formatPrice(price))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.88))
+        .cornerRadius(4)
+        .position(x: chartWidth - 40, y: y)
+        .allowsHitTesting(false)
+
+        RoundedRectangle(cornerRadius: 4)
+            .fill(color.opacity(isActive ? 0.5 : 0.3))
+            .frame(width: 40, height: 20)
+            .overlay(
+                VStack(spacing: 2) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Rectangle()
+                            .fill(Color.white.opacity(0.6))
+                            .frame(width: 20, height: 1)
+                    }
+                }
+            )
+            .position(x: chartWidth / 2, y: y)
+            .allowsHitTesting(false)
+
+        Color.clear
+            .contentShape(Rectangle())
+            .frame(width: chartWidth, height: 44)
+            .position(x: chartWidth / 2, y: y)
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if draggingLineType != componentType {
+                            draggingLineType = componentType
+                            dragStartYByType[componentType] = coordinateSystem.yPosition(forPrice: price)
+                            haptic.impactOccurred()
+                        }
+
+                        let startY = dragStartYByType[componentType] ?? coordinateSystem.yPosition(forPrice: price)
+                        let newY = startY + value.translation.height
+                        let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                        upsertPlacementLevel(componentType, price: newPrice)
+                    }
+                    .onEnded { _ in
+                        dragStartYByType.removeValue(forKey: componentType)
+                        if draggingLineType == componentType {
+                            draggingLineType = nil
+                        }
+                    }
+            )
+    }
+
+    private func upsertPlacementLevel(_ componentType: RLComponentType, price: Double) {
+        switch componentType {
+        case .levelSupport:
+            placementState.upsertComponent(
+                .levelSupport,
+                payload: .levelSupport(LevelPayload(price: price, label: "Support"))
+            )
+        case .levelResistance:
+            placementState.upsertComponent(
+                .levelResistance,
+                payload: .levelResistance(LevelPayload(price: price, label: "Resistance"))
+            )
+        default:
+            break
+        }
+    }
+}
+
 // MARK: - Prediction Placement Overlay (3-line system: Entry + TP + SL)
 
 struct PredictionPlacementOverlay: View {
@@ -4913,10 +5511,11 @@ struct MarkerDrawingOverlay: View {
         var path = Path()
         path.move(to: CGPoint(x: startX, y: startY))
         path.addLine(to: CGPoint(x: endX, y: endY))
+        let trendlineColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingTrendline.color
 
         context.stroke(
             path,
-            with: .color(RLComponentType.drawingTrendline.color.opacity(0.68)),
+            with: .color(trendlineColor.opacity(0.68)),
             style: StrokeStyle(lineWidth: 2.0, dash: [8, 5])
         )
     }
@@ -4950,14 +5549,15 @@ struct MarkerDrawingOverlay: View {
             width: max(2, abs(endX - startX)),
             height: max(2, abs(bottomY - topY))
         )
+        let zoneColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingZone.color
 
         context.fill(
             Path(rect),
-            with: .color(RLComponentType.drawingZone.color.opacity(0.16))
+            with: .color(zoneColor.opacity(0.16))
         )
         context.stroke(
             Path(rect),
-            with: .color(RLComponentType.drawingZone.color.opacity(0.55)),
+            with: .color(zoneColor.opacity(0.55)),
             style: StrokeStyle(lineWidth: 1.4, dash: [6, 4])
         )
     }

@@ -149,6 +149,13 @@ enum DrawingInteractionPhase: String {
     case editing
 }
 
+struct MarkerPlacementChecklistItem: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let isRequired: Bool
+    let isComplete: Bool
+}
+
 @MainActor
 final class MarkerPlacementState: ObservableObject {
     @Published var intent: RLMarkerIntent = .analysis
@@ -165,6 +172,9 @@ final class MarkerPlacementState: ObservableObject {
     @Published var pollOptions: [String] = ["", ""]
     @Published var alertSeverity: MarkerAlertSeverity?
     @Published var newsURL: String = ""
+    /// Placement-local color overrides for drawing drafts (trendline/zone).
+    /// Phase 3 persists these into payload/back-end fields.
+    @Published var drawingColorOverrides: [UUID: String] = [:]
     @Published var drawingInteractionPhase: DrawingInteractionPhase = .idle
     @Published var pendingDrawingFirstPoint: (time: Date, price: Double)?
     @Published var editingDrawingId: UUID?
@@ -219,6 +229,239 @@ final class MarkerPlacementState: ObservableObject {
         let risk = abs(sl - entry)
         guard risk > .ulpOfOne else { return nil }
         return reward / risk
+    }
+
+    var setupRiskPips: Double? {
+        guard
+            intent == .setup,
+            let entry = setupEntryPrice,
+            let sl = componentPrice(.levelSl)
+        else {
+            return nil
+        }
+        let pipStep = inferredSetupPipStep(entryPrice: entry)
+        guard pipStep > 0 else { return nil }
+        return abs(sl - entry) / pipStep
+    }
+
+    var setupRewardPips: Double? {
+        guard
+            intent == .setup,
+            let entry = setupEntryPrice,
+            let tp = componentPrice(.levelTp)
+        else {
+            return nil
+        }
+        let pipStep = inferredSetupPipStep(entryPrice: entry)
+        guard pipStep > 0 else { return nil }
+        return abs(tp - entry) / pipStep
+    }
+
+    var estimatedTrackingRepLoss: Int? {
+        guard trackingEnabled, let riskPips = setupRiskPips else { return nil }
+        return clampedRepEstimate(Int(riskPips.rounded()), minimum: 5, maximum: 60)
+    }
+
+    var estimatedTrackingRepGain: Int? {
+        guard trackingEnabled, let rewardPips = setupRewardPips else { return nil }
+        return clampedRepEstimate(Int(rewardPips.rounded()), minimum: 5, maximum: 120)
+    }
+
+    var placementChecklistItems: [MarkerPlacementChecklistItem] {
+        var items: [MarkerPlacementChecklistItem] = [
+            checklistItem(
+                id: "anchor",
+                title: "Anchor placed on chart",
+                isRequired: true,
+                isComplete: anchorDraft != nil
+            ),
+        ]
+
+        switch intent {
+        case .setup:
+            let hasTpSl = componentPrice(.levelTp) != nil && componentPrice(.levelSl) != nil
+            let setupDirectionValid = isSetupDirectionValid
+            if trackingEnabled {
+                items.append(
+                    checklistItem(
+                        id: "setup_levels_required",
+                        title: "TP and SL configured",
+                        isRequired: true,
+                        isComplete: hasTpSl
+                    )
+                )
+                items.append(
+                    checklistItem(
+                        id: "setup_direction_required",
+                        title: "TP/SL direction is valid",
+                        isRequired: true,
+                        isComplete: setupDirectionValid
+                    )
+                )
+            } else {
+                items.append(
+                    checklistItem(
+                        id: "setup_levels_recommended",
+                        title: "Set TP and SL levels",
+                        isRequired: false,
+                        isComplete: hasTpSl
+                    )
+                )
+            }
+            items.append(
+                checklistItem(
+                    id: "setup_tracking_recommended",
+                    title: "Enable tracking for reputation impact",
+                    isRequired: false,
+                    isComplete: trackingEnabled
+                )
+            )
+
+        case .analysis:
+            items.append(
+                checklistItem(
+                    id: "analysis_note",
+                    title: "Add analysis context",
+                    isRequired: false,
+                    isComplete: !trimmedNote.isEmpty
+                )
+            )
+            items.append(
+                checklistItem(
+                    id: "analysis_structure",
+                    title: "Add support/resistance or drawing",
+                    isRequired: false,
+                    isComplete: hasStructuredAnalysisComponents
+                )
+            )
+
+        case .alert:
+            items.append(
+                checklistItem(
+                    id: "alert_severity",
+                    title: "Select alert severity",
+                    isRequired: false,
+                    isComplete: alertSeverity != nil
+                )
+            )
+            items.append(
+                checklistItem(
+                    id: "alert_context",
+                    title: "Add alert context",
+                    isRequired: false,
+                    isComplete: !trimmedNote.isEmpty
+                )
+            )
+
+        case .question:
+            items.append(
+                checklistItem(
+                    id: "question_required",
+                    title: "Question text provided",
+                    isRequired: true,
+                    isComplete: !trimmedNote.isEmpty
+                )
+            )
+            items.append(
+                checklistItem(
+                    id: "question_recommendation",
+                    title: "Add a drawing for context",
+                    isRequired: false,
+                    isComplete: drawingOverlayCount > 0
+                )
+            )
+
+        case .poll:
+            items.append(
+                checklistItem(
+                    id: "poll_question",
+                    title: "Poll question provided",
+                    isRequired: true,
+                    isComplete: !trimmedPollQuestion.isEmpty
+                )
+            )
+            items.append(
+                checklistItem(
+                    id: "poll_options_required",
+                    title: "At least 2 poll options",
+                    isRequired: true,
+                    isComplete: validPollOptions.count >= 2
+                )
+            )
+            items.append(
+                checklistItem(
+                    id: "poll_options_recommended",
+                    title: "Add a 3rd option",
+                    isRequired: false,
+                    isComplete: validPollOptions.count >= 3
+                )
+            )
+
+        case .news:
+            items.append(
+                checklistItem(
+                    id: "news_url",
+                    title: "Attach source URL",
+                    isRequired: false,
+                    isComplete: hasNewsSourceURL
+                )
+            )
+            items.append(
+                checklistItem(
+                    id: "news_summary",
+                    title: "Add brief summary note",
+                    isRequired: false,
+                    isComplete: !trimmedNote.isEmpty
+                )
+            )
+
+        case .reaction:
+            items.append(
+                checklistItem(
+                    id: "reaction_emoji",
+                    title: "Choose reaction emoji",
+                    isRequired: true,
+                    isComplete: hasSelectedReactionEmoji
+                )
+            )
+            items.append(
+                checklistItem(
+                    id: "reaction_context",
+                    title: "Add optional context note",
+                    isRequired: false,
+                    isComplete: !trimmedNote.isEmpty
+                )
+            )
+
+        case .personal:
+            items.append(
+                checklistItem(
+                    id: "personal_note",
+                    title: "Add personal note",
+                    isRequired: false,
+                    isComplete: !trimmedNote.isEmpty
+                )
+            )
+            items.append(
+                checklistItem(
+                    id: "personal_timeframe",
+                    title: "Link a timeframe",
+                    isRequired: false,
+                    isComplete: timeframeLinkCount > 0
+                )
+            )
+        }
+
+        items.append(
+            checklistItem(
+                id: "validity",
+                title: "Placement requirements met",
+                isRequired: true,
+                isComplete: isValid
+            )
+        )
+
+        return items
     }
 
     private let maxIndicatorPanels = 2
@@ -343,6 +586,7 @@ final class MarkerPlacementState: ObservableObject {
         self.pollOptions = ["", ""]
         self.alertSeverity = nil
         self.newsURL = ""
+        self.drawingColorOverrides = [:]
         resetDrawingInteraction()
     }
 
@@ -388,6 +632,9 @@ final class MarkerPlacementState: ObservableObject {
         }
 
         purgeIncompatibleComponents(for: newIntent)
+        drawingColorOverrides = drawingColorOverrides.filter { draftId, _ in
+            components.contains(where: { $0.id == draftId })
+        }
 
         if newIntent == .setup, let anchorPrice = anchorDraft?.payload.levelPrice {
             upsertComponent(
@@ -602,7 +849,13 @@ final class MarkerPlacementState: ObservableObject {
 
     func removeComponent(_ componentType: RLComponentType) {
         guard componentType != .anchor else { return }
+        let removedIDs = components
+            .filter { $0.componentType == componentType }
+            .map(\.id)
         components.removeAll { $0.componentType == componentType }
+        for id in removedIDs {
+            drawingColorOverrides.removeValue(forKey: id)
+        }
     }
 
     func removeComponent(id: UUID) {
@@ -611,11 +864,68 @@ final class MarkerPlacementState: ObservableObject {
             return
         }
         components.removeAll { $0.id == id }
+        drawingColorOverrides.removeValue(forKey: id)
     }
 
     func updateComponent(id: UUID, payload: MarkerComponentPayload) {
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         components[index].payload = payload
+        if let normalized = normalizedDrawingColorHex(from: payload) {
+            drawingColorOverrides[id] = normalized
+        } else if components[index].componentType.isDrawing {
+            drawingColorOverrides.removeValue(forKey: id)
+        }
+    }
+
+    func setDrawingColorHex(_ hex: String?, for draftId: UUID) {
+        guard let index = components.firstIndex(where: { $0.id == draftId }) else { return }
+        let normalized = normalizedHexColor(hex)
+        if let normalized {
+            drawingColorOverrides[draftId] = normalized
+        } else {
+            drawingColorOverrides.removeValue(forKey: draftId)
+        }
+
+        switch components[index].payload {
+        case let .drawingTrendline(payload):
+            components[index].payload = .drawingTrendline(
+                TrendlinePayload(
+                    startTime: payload.startTime,
+                    startPrice: payload.startPrice,
+                    endTime: payload.endTime,
+                    endPrice: payload.endPrice,
+                    colorHex: normalized
+                )
+            )
+        case let .drawingZone(payload):
+            components[index].payload = .drawingZone(
+                ZonePayload(
+                    topPrice: payload.topPrice,
+                    bottomPrice: payload.bottomPrice,
+                    startTime: payload.startTime,
+                    endTime: payload.endTime,
+                    colorHex: normalized
+                )
+            )
+        default:
+            break
+        }
+    }
+
+    func drawingColorHex(for draftId: UUID) -> String? {
+        if let overrideHex = drawingColorOverrides[draftId] {
+            return overrideHex
+        }
+        guard let draft = components.first(where: { $0.id == draftId }) else { return nil }
+        return normalizedDrawingColorHex(from: draft.payload)
+    }
+
+    func drawingColor(for draftId: UUID, fallback: Color) -> Color {
+        guard let hex = drawingColorHex(for: draftId),
+              let resolved = Color(hex: hex) else {
+            return fallback
+        }
+        return resolved
     }
 
     @discardableResult
@@ -625,6 +935,9 @@ final class MarkerPlacementState: ObservableObject {
 
         let draft = MarkerComponentDraft(componentType: componentType, payload: payload)
         components.append(draft)
+        if let normalized = normalizedDrawingColorHex(from: payload) {
+            drawingColorOverrides[draft.id] = normalized
+        }
         return draft.id
     }
 
@@ -952,8 +1265,70 @@ final class MarkerPlacementState: ObservableObject {
         timeframe.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func clampedRepEstimate(_ value: Int, minimum: Int, maximum: Int) -> Int {
+        min(maximum, max(minimum, value))
+    }
+
+    private var trimmedNote: String {
+        note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedPollQuestion: String {
+        pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var validPollOptions: [String] {
+        pollOptions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var hasSelectedReactionEmoji: Bool {
+        guard case let .reactionEmoji(payload)? = component(.reactionEmoji)?.payload else {
+            return false
+        }
+        return !payload.emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var hasNewsSourceURL: Bool {
+        if !newsURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return true
+        }
+        guard case let .link(payload)? = component(.linkURL)?.payload else {
+            return false
+        }
+        return !payload.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var hasStructuredAnalysisComponents: Bool {
+        component(.levelSupport) != nil
+            || component(.levelResistance) != nil
+            || drawingOverlayCount > 0
+            || indicatorPanelCount > 0
+    }
+
+    private var isSetupDirectionValid: Bool {
+        guard
+            let entry = setupEntryPrice,
+            let sl = componentPrice(.levelSl),
+            let tp = componentPrice(.levelTp)
+        else {
+            return false
+        }
+        let isLong = tp > entry && sl < entry
+        let isShort = tp < entry && sl > entry
+        return isLong || isShort
+    }
+
+    private func checklistItem(id: String, title: String, isRequired: Bool, isComplete: Bool) -> MarkerPlacementChecklistItem {
+        MarkerPlacementChecklistItem(id: id, title: title, isRequired: isRequired, isComplete: isComplete)
+    }
+
     private func isDrawingOverlayComponent(_ componentType: RLComponentType) -> Bool {
-        componentType.isDrawing || componentType == .textNote || componentType == .reactionEmoji
+        if componentType == .reactionEmoji {
+            return intent != .reaction
+        }
+        return componentType.isDrawing || componentType == .textNote
     }
 
     private func mergedDrawingAnnotationPayload(
@@ -961,6 +1336,26 @@ final class MarkerPlacementState: ObservableObject {
         incoming: MarkerComponentPayload
     ) -> MarkerComponentPayload {
         switch (existing, incoming) {
+        case let (.drawingTrendline(existingPayload), .drawingTrendline(incomingPayload)):
+            return .drawingTrendline(
+                TrendlinePayload(
+                    startTime: incomingPayload.startTime,
+                    startPrice: incomingPayload.startPrice,
+                    endTime: incomingPayload.endTime,
+                    endPrice: incomingPayload.endPrice,
+                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex
+                )
+            )
+        case let (.drawingZone(existingPayload), .drawingZone(incomingPayload)):
+            return .drawingZone(
+                ZonePayload(
+                    topPrice: incomingPayload.topPrice,
+                    bottomPrice: incomingPayload.bottomPrice,
+                    startTime: incomingPayload.startTime,
+                    endTime: incomingPayload.endTime,
+                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex
+                )
+            )
         case let (.note(existingPayload), .note(incomingPayload)):
             return .note(
                 NotePayload(
@@ -986,6 +1381,34 @@ final class MarkerPlacementState: ObservableObject {
         let allowed = allowedComponentTypes(for: intent)
         components.removeAll { draft in
             draft.componentType != .anchor && !allowed.contains(draft.componentType)
+        }
+        drawingColorOverrides = drawingColorOverrides.filter { draftId, _ in
+            components.contains(where: { $0.id == draftId })
+        }
+    }
+
+    private func normalizedHexColor(_ hex: String?) -> String? {
+        guard var raw = hex?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else {
+            return nil
+        }
+
+        if !raw.hasPrefix("#") {
+            raw = "#\(raw)"
+        }
+
+        guard Color(hex: raw) != nil else { return nil }
+        return raw.uppercased()
+    }
+
+    private func normalizedDrawingColorHex(from payload: MarkerComponentPayload) -> String? {
+        switch payload {
+        case let .drawingTrendline(value):
+            return normalizedHexColor(value.colorHex)
+        case let .drawingZone(value):
+            return normalizedHexColor(value.colorHex)
+        default:
+            return nil
         }
     }
 

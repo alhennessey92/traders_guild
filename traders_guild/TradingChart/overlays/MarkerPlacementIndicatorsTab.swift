@@ -61,7 +61,7 @@ struct MarkerPlacementIndicatorsTab: View {
 
                 UnifiedTabBar(
                     selectedTab: $selectedSubTab,
-                    size: .standard,
+                    size: .compact,
                     theme: .blue,
                     spacing: 6
                 )
@@ -237,7 +237,7 @@ struct MarkerPlacementIndicatorsTab: View {
                     Text(subtitle)
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
-                        .lineLimit(1)
+                        .lineLimit(2)
 
                     indicatorModeBadge(isPanel: isPanel)
 
@@ -304,6 +304,12 @@ struct MarkerPlacementIndicatorsTab: View {
                         )
                 )
         )
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onTapGesture {
+            if let item {
+                openSettingsEditor(item: item, payload: attached.payload)
+            }
+        }
     }
 
     private func catalogIndicatorRow(_ item: IndicatorCatalogItem) -> some View {
@@ -390,6 +396,16 @@ struct MarkerPlacementIndicatorsTab: View {
                         )
                 )
         )
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onTapGesture {
+            if let attached {
+                openSettingsEditor(item: item, payload: attached.payload)
+                return
+            }
+            if canAttach {
+                toggleIndicator(item)
+            }
+        }
     }
 
     private func indicatorModeBadge(isPanel: Bool) -> some View {

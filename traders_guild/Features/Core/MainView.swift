@@ -1536,6 +1536,7 @@ struct ChartBottomSheet: View {
         }
         .animation(.easeInOut(duration: 0.3), value: selectedView)
         .animation(.easeInOut(duration: 0.3), value: isMarkerDetailActive)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .onAppear {
             chartChatManager.configure(with: rlAppState)
         }
@@ -1804,18 +1805,28 @@ struct ChartBottomSheet: View {
             HStack(spacing: 4) {
                 HStack(spacing: 6) {
                     ForEach(MarkerPlacementTab.allCases, id: \.self) { tab in
-                        RootBottomBarIconButton(
-                            systemName: tab == .general ? placementState.intent.icon : tab.icon,
-                            fontSize: 20,
-                            backgroundColor: placementState.selectedPlacementTab == tab ?
-                                bottomBarSelectedBackground :
-                                bottomBarUnselectedBackground,
-                            foregroundColor: tab == .general ?
-                                placementState.intent.color :
-                                (placementState.selectedPlacementTab == tab ? bottomBarSelectedForeground : bottomBarUnselectedForeground)
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                placementState.selectedPlacementTab = tab
+                        if tab == .general {
+                            placementGeneralTabButton(
+                                isSelected: placementState.selectedPlacementTab == tab
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    placementState.selectedPlacementTab = tab
+                                }
+                            }
+                        } else {
+                            RootBottomBarIconButton(
+                                systemName: tab.icon,
+                                fontSize: 20,
+                                backgroundColor: placementState.selectedPlacementTab == tab ?
+                                    bottomBarSelectedBackground :
+                                    bottomBarUnselectedBackground,
+                                foregroundColor: placementState.selectedPlacementTab == tab ?
+                                    bottomBarSelectedForeground :
+                                    bottomBarUnselectedForeground
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    placementState.selectedPlacementTab = tab
+                                }
                             }
                         }
                     }
@@ -1826,33 +1837,44 @@ struct ChartBottomSheet: View {
                 Button {
                     onPlaceMarker?()
                 } label: {
-                    Text("Place Marker")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .frame(height: 50)
+                    Image(systemName: "target")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(placementState.isValid ? .white : AppColors.whiteText.opacity(0.55))
+                        .frame(width: 50, height: 50)
                         .background(
-                            placementState.isValid ?
-                            AnyShapeStyle(
-                                LinearGradient(
-                                    colors: [Color.green.opacity(0.95), Color.green.opacity(0.72)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                            Circle()
+                                .fill(
+                                    placementState.isValid
+                                        ? AnyShapeStyle(
+                                            LinearGradient(
+                                                colors: [
+                                                    placementState.intent.color.opacity(0.96),
+                                                    placementState.intent.color.opacity(0.74),
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        : AnyShapeStyle(bottomBarUnselectedBackground)
                                 )
-                            ) :
-                            AnyShapeStyle(AppColors.gradientBackgroundMid.opacity(0.9))
                         )
                         .overlay(
-                            Capsule()
+                            Circle()
                                 .stroke(
                                     placementState.isValid
-                                        ? placementState.intent.color.opacity(0.55)
-                                        : AppColors.whiteText.opacity(0.12),
+                                        ? placementState.intent.color.opacity(0.72)
+                                        : AppColors.whiteText.opacity(0.16),
                                     lineWidth: 1
                                 )
                         )
-                        .clipShape(Capsule())
-                        .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+                        .shadow(
+                            color: placementState.isValid
+                                ? placementState.intent.color.opacity(0.22)
+                                : .clear,
+                            radius: 6,
+                            x: 0,
+                            y: 1
+                        )
                 }
                 .buttonStyle(.plain)
                 .disabled(!placementState.isValid)
@@ -2117,6 +2139,58 @@ struct ChartBottomSheet: View {
         .buttonStyle(.plain)
     }
 
+    private func placementGeneralTabButton(
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(placementState.intent.color.opacity(0.24))
+                    .frame(width: 26, height: 26)
+                    .overlay(
+                        Circle()
+                            .stroke(placementState.intent.color.opacity(0.58), lineWidth: 1)
+                    )
+                    .overlay(
+                        Image(systemName: placementState.intent.icon)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(placementState.intent.displayName)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(placementAuthorHandle)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.82))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 50)
+            .background(
+                Capsule()
+                    .fill(
+                        isSelected
+                            ? bottomBarSelectedBackground
+                            : bottomBarUnselectedBackground
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                placementState.intent.color.opacity(isSelected ? 0.55 : 0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .shadow(color: Color.white.opacity(0.25), radius: 1, x: 0, y: 0)
+        }
+        .buttonStyle(.plain)
+    }
+
     private func markerDetailGeneralTabButton(
         marker: ChartMarkerUI,
         isSelected: Bool,
@@ -2173,6 +2247,13 @@ struct ChartBottomSheet: View {
     private func markerAuthorHandle(_ marker: ChartMarkerUI) -> String {
         let username = marker.author.username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !username.isEmpty else { return "@unknown" }
+        return username.hasPrefix("@") ? username : "@\(username)"
+    }
+
+    private var placementAuthorHandle: String {
+        let username = rlAppState.currentUser?.username
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !username.isEmpty else { return "@you" }
         return username.hasPrefix("@") ? username : "@\(username)"
     }
 }

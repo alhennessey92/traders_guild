@@ -49,7 +49,9 @@ struct GhostPreviewLayer: View {
 
             // SwiftUI overlay for price labels (crisp text rendering)
             ForEach(placementState.components.filter { $0.componentType.isLevel }, id: \.id) { draft in
-                if let price = draft.payload.levelPrice, let y = yForPrice(price) {
+                if shouldRenderLevelLabel(for: draft.componentType),
+                   let price = draft.payload.levelPrice,
+                   let y = yForPrice(price) {
                     let isFixedSetupEntry = placementState.intent == .setup && draft.componentType == .levelEntry
                     priceLabelView(
                         label: draft.componentType.shortLabel,
@@ -61,10 +63,10 @@ struct GhostPreviewLayer: View {
                 }
             }
 
-            if shouldShowSetupInfoPanel {
-                setupInfoPanel
+            if shouldShowInfoPanels {
+                infoPanelsStack
                     .padding(.leading, 8)
-                    .padding(.top, setupInfoTopPadding)
+                    .padding(.top, infoPanelsTopPadding)
                     .allowsHitTesting(false)
             }
 
@@ -107,6 +109,7 @@ struct GhostPreviewLayer: View {
 
     private func drawLevels(context: GraphicsContext) {
         for draft in placementState.components where draft.componentType.isLevel {
+            guard shouldRenderSetupCoreLevelLine(for: draft.componentType) else { continue }
             guard let price = draft.payload.levelPrice, let y = yForPrice(price) else { continue }
             let isFixedSetupEntry = placementState.intent == .setup && draft.componentType == .levelEntry
 
@@ -128,6 +131,10 @@ struct GhostPreviewLayer: View {
         for trendline in placementState.components where trendline.componentType == .drawingTrendline {
             guard case let .drawingTrendline(payload) = trendline.payload else { continue }
             guard let startY = yForPrice(payload.startPrice), let endY = yForPrice(payload.endPrice) else { continue }
+            let trendlineColor = placementState.drawingColor(
+                for: trendline.id,
+                fallback: RLComponentType.drawingTrendline.color
+            )
 
             let startX = xForTime?(payload.startTime) ?? width * 0.24
             let endX = xForTime?(payload.endTime) ?? width * 0.76
@@ -137,26 +144,26 @@ struct GhostPreviewLayer: View {
             path.addLine(to: CGPoint(x: endX, y: endY))
             context.stroke(
                 path,
-                with: .color(RLComponentType.drawingTrendline.color.opacity(0.64)),
+                with: .color(trendlineColor.opacity(0.64)),
                 style: StrokeStyle(lineWidth: 2.0, dash: [10, 6])
             )
 
             if drawingInteractionPhase == .editing, editingDrawingId == trendline.id {
                 context.stroke(
                     path,
-                    with: .color(RLComponentType.drawingTrendline.color.opacity(0.92)),
+                    with: .color(trendlineColor.opacity(0.92)),
                     style: StrokeStyle(lineWidth: 2.8)
                 )
                 drawControlHandle(
                     context: context,
                     center: CGPoint(x: startX, y: startY),
-                    color: RLComponentType.drawingTrendline.color,
+                    color: trendlineColor,
                     size: 20
                 )
                 drawControlHandle(
                     context: context,
                     center: CGPoint(x: endX, y: endY),
-                    color: RLComponentType.drawingTrendline.color,
+                    color: trendlineColor,
                     size: 20
                 )
             }
@@ -167,6 +174,10 @@ struct GhostPreviewLayer: View {
         for zone in placementState.components where zone.componentType == .drawingZone {
             guard case let .drawingZone(payload) = zone.payload else { continue }
             guard let topY = yForPrice(payload.topPrice), let bottomY = yForPrice(payload.bottomPrice) else { continue }
+            let zoneColor = placementState.drawingColor(
+                for: zone.id,
+                fallback: RLComponentType.drawingZone.color
+            )
 
             let startX = (payload.startTime.flatMap { xForTime?($0) }) ?? width * 0.22
             let endX = (payload.endTime.flatMap { xForTime?($0) }) ?? width * 0.78
@@ -177,29 +188,29 @@ struct GhostPreviewLayer: View {
                 height: max(2, abs(bottomY - topY))
             )
 
-            context.fill(Path(rect), with: .color(RLComponentType.drawingZone.color.opacity(0.18)))
+            context.fill(Path(rect), with: .color(zoneColor.opacity(0.18)))
             context.stroke(
                 Path(rect),
-                with: .color(RLComponentType.drawingZone.color.opacity(0.55)),
+                with: .color(zoneColor.opacity(0.55)),
                 style: StrokeStyle(lineWidth: 1.4, dash: [6, 5])
             )
 
             if drawingInteractionPhase == .editing, editingDrawingId == zone.id {
                 context.stroke(
                     Path(rect),
-                    with: .color(RLComponentType.drawingZone.color.opacity(0.9)),
+                    with: .color(zoneColor.opacity(0.9)),
                     style: StrokeStyle(lineWidth: 2.2)
                 )
                 drawControlHandle(
                     context: context,
                     center: CGPoint(x: startX, y: topY),
-                    color: RLComponentType.drawingZone.color,
+                    color: zoneColor,
                     size: 20
                 )
                 drawControlHandle(
                     context: context,
                     center: CGPoint(x: endX, y: bottomY),
-                    color: RLComponentType.drawingZone.color,
+                    color: zoneColor,
                     size: 20
                 )
             }
@@ -304,8 +315,24 @@ struct GhostPreviewLayer: View {
 
     private var annotationDrafts: [MarkerComponentDraft] {
         placementState.components.filter {
-            $0.componentType == .textNote || $0.componentType == .reactionEmoji
+            if $0.componentType == .textNote { return true }
+            if $0.componentType == .reactionEmoji {
+                return placementState.intent != .reaction
+            }
+            return false
         }
+    }
+
+    private func shouldRenderLevelLabel(for componentType: RLComponentType) -> Bool {
+        if componentType == .levelSupport || componentType == .levelResistance {
+            return false
+        }
+        return shouldRenderSetupCoreLevelLine(for: componentType)
+    }
+
+    private func shouldRenderSetupCoreLevelLine(for componentType: RLComponentType) -> Bool {
+        if placementState.intent != .setup { return true }
+        return componentType != .levelEntry && componentType != .levelTp && componentType != .levelSl
     }
 
     @ViewBuilder
@@ -481,61 +508,90 @@ struct GhostPreviewLayer: View {
         }
     }
 
-    private var setupInfoTopPadding: CGFloat {
+    private var infoPanelsTopPadding: CGFloat {
         let chartInfoTop = topSafeAreaInset > 0 ? topSafeAreaInset + 62 : 124
         return chartInfoTop + 98
     }
 
-    private var setupInfoPanel: some View {
+    private var infoPanelsStack: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if shouldShowChecklistPanel {
+                checklistPanel
+            }
+        }
+    }
+
+    private var infoPanelWidth: CGFloat {
+        min(228, max(176, width * 0.45))
+    }
+
+    private var shouldShowInfoPanels: Bool {
+        shouldShowChecklistPanel
+    }
+
+    private var shouldShowChecklistPanel: Bool {
+        !placementState.placementChecklistItems.isEmpty
+    }
+
+    private var checklistPanel: some View {
         VStack(alignment: .leading, spacing: 6) {
-            setupMetricRow(
-                label: "Entry",
-                value: placementState.setupEntryPrice.map(formattedPrice) ?? "—",
-                valueColor: .white
-            )
-            setupMetricRow(
-                label: "TP",
-                value: componentPriceText(.levelTp),
-                valueColor: .green
-            )
-            setupMetricRow(
-                label: "SL",
-                value: componentPriceText(.levelSl),
-                valueColor: .red
-            )
-            setupMetricRow(
-                label: "Pip Range",
-                value: placementState.setupPnLPips.map(formattedPips) ?? "—",
-                valueColor: .white.opacity(0.9)
-            )
-            setupMetricRow(
-                label: "R:R",
-                value: placementState.setupRiskReward.map { String(format: "%.2f", $0) } ?? "—",
-                valueColor: .white.opacity(0.9)
-            )
+            HStack(spacing: 6) {
+                Image(systemName: "checklist")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(placementState.intent.color.opacity(0.9))
+                Text("Checklist")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                Spacer(minLength: 0)
+                Text("\(completedChecklistItemCount)/\(placementState.placementChecklistItems.count)")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.72))
+            }
+
+            ForEach(placementState.placementChecklistItems) { item in
+                checklistRow(item)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(width: 178, alignment: .leading)
-        .background(Color.black.opacity(0.28))
-        .cornerRadius(8)
+        .frame(width: infoPanelWidth, alignment: .leading)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(0.5))
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 
-    private func setupMetricRow(label: String, value: String, valueColor: Color) -> some View {
-        HStack(spacing: 8) {
-            Text(label)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(.white.opacity(0.72))
-            Spacer(minLength: 12)
-            Text(value)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(valueColor)
+    private var completedChecklistItemCount: Int {
+        placementState.placementChecklistItems.filter { $0.isComplete }.count
+    }
+
+    private func checklistRow(_ item: MarkerPlacementChecklistItem) -> some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(item.isComplete ? .green.opacity(0.95) : .white.opacity(0.5))
+
+            Text(item.title)
+                .font(.system(size: 9.5, weight: item.isRequired ? .semibold : .regular))
+                .foregroundColor(item.isComplete ? .white.opacity(0.88) : .white.opacity(0.72))
+                .multilineTextAlignment(.leading)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 6)
+
+            Text(item.isRequired ? "REQ" : "TIP")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(item.isRequired ? .orange.opacity(0.95) : AppColors.greyText)
         }
-    }
-
-    private func componentPriceText(_ componentType: RLComponentType) -> String {
-        guard let price = placementState.componentPrice(componentType) else { return "—" }
-        return formattedPrice(price)
     }
 
     private func formattedPrice(_ price: Double) -> String {
@@ -552,10 +608,4 @@ struct GhostPreviewLayer: View {
         }
     }
 
-    private func formattedPips(_ pips: Double) -> String {
-        if pips >= 1000 {
-            return String(format: "%.0f", pips)
-        }
-        return String(format: "%.1f", pips)
-    }
 }

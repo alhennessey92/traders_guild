@@ -185,7 +185,9 @@ struct MarkerPlacementGeneralTab: View {
                 title: "Requirements",
                 subtitle: "Intent-specific fields",
                 icon: "list.bullet.clipboard",
-                tint: placementState.intent.color
+                tint: placementState.intent == .setup && placementState.trackingEnabled
+                    ? .green
+                    : placementState.intent.color
             )
             requirementsContent
         }
@@ -198,7 +200,7 @@ struct MarkerPlacementGeneralTab: View {
     private var requirementsContent: some View {
         switch placementState.intent {
         case .setup:
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 levelInputRow(
                     title: "Take Profit",
                     componentType: .levelTp,
@@ -219,7 +221,12 @@ struct MarkerPlacementGeneralTab: View {
                             .font(.caption)
                     }
                 }
-                .tint(placementState.intent.color)
+                .tint(placementState.trackingEnabled ? .green : placementState.intent.color)
+
+                if placementState.trackingEnabled {
+                    trackedSetupBanner
+                    trackedSetupRepChips
+                }
             }
 
         case .analysis:
@@ -389,6 +396,70 @@ struct MarkerPlacementGeneralTab: View {
                 )
                 .frame(width: 132)
         }
+    }
+
+    private var trackedSetupBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "scope")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.green.opacity(0.95))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Tracking Mode Active")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white)
+                Text("Estimated reputation impact now shown")
+                    .font(.caption2)
+                    .foregroundColor(.green.opacity(0.85))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.green.opacity(0.14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.green.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+
+    private var trackedSetupRepChips: some View {
+        HStack(spacing: 8) {
+            trackedRepChip(
+                title: "Rep + (est)",
+                value: placementState.estimatedTrackingRepGain.map { "+\($0)" } ?? "—",
+                tint: .green
+            )
+            trackedRepChip(
+                title: "Rep - (est)",
+                value: placementState.estimatedTrackingRepLoss.map { "-\($0)" } ?? "—",
+                tint: .red
+            )
+        }
+    }
+
+    private func trackedRepChip(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(AppColors.greyText)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(tint.opacity(0.95))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(tint.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(tint.opacity(0.32), lineWidth: 1)
+                )
+        )
     }
 
     private func levelValueBinding(for type: RLComponentType) -> Binding<Double> {

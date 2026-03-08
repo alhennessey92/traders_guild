@@ -764,15 +764,99 @@ I want you to try and keep the UI similar to the ChartSheetSymbolView.swift
 
 
 
-30. Ok, very good so far, a couple of things, in setup mode the values in the requirements box dont seem to change when moving the price bars, also the values in the setup chart info box dont seem to change
-31. in setup marker the marker chart info box stretches the entire screen, it should be constrianed to the same width as the main chart info box, with the same style (opacity, colors etc...)
-32. In setup marker the entry price line can still be moved, it needs to remain fixed to the close price of latest candle
-33. remove options for guild visibility and confidence for the minute, all markers are guild wide visible except personal ones
-34. in placement mode need to add a indicator, drawing and timeframe title header in their respective tabs
-35. When changing severity in alert marker it needs to update marker on screen and have different colors for each severity
-36. When switching marker type in general tab need a better ui of marker options, ideally showing marker avatar look, in a grid format
-37. When placing lines/drawings on first tap of first point the chart is still panning around, so cant drag to next point, it needs to remain fixed, when adding lines, unless user tries to drag outside of the point
-38. Need to review the drawings tab and sections, for each component to make sure they are easy to add, some components feel a bit clunky when adding, there should be a simple process of selecting the tool, clicking the chart to place it and be able to drag it around. When tapping outside it it locks in place. when tapping again it becomes movable. This needs a full audit
-39. when in viewing mode the general marker tab that displays marker avatar, title and user placing it need to be in a capsule shape not a rectangular.
-40. Need to make sure all tab buttons in bottom bar conform to ui looks like in rest of the app
-41. See if you can make the sub tabs in indicator and drawing section show the relative text in their tab at all times, rather than collapsing to their icons
+30. [FIXED] Ok, very good so far, a couple of things, in setup mode the values in the requirements box dont seem to change when moving the price bars, also the values in the setup chart info box dont seem to change
+31. [FIXED] in setup marker the marker chart info box stretches the entire screen, it should be constrianed to the same width as the main chart info box, with the same style (opacity, colors etc...)
+32. [FIXED] In setup marker the entry price line can still be moved, it needs to remain fixed to the close price of latest candle
+33. [FIXED] remove options for guild visibility and confidence for the minute, all markers are guild wide visible except personal ones
+34. [FIXED] in placement mode need to add a indicator, drawing and timeframe title header in their respective tabs
+35. [FIXED] When changing severity in alert marker it needs to update marker on screen and have different colors for each severity
+36. [FIXED] When switching marker type in general tab need a better ui of marker options, ideally showing marker avatar look, in a grid format
+37. [FIXED] When placing lines/drawings on first tap of first point the chart is still panning around, so cant drag to next point, it needs to remain fixed, when adding lines, unless user tries to drag outside of the point
+38. [FIXED] Need to review the drawings tab and sections, for each component to make sure they are easy to add, some components feel a bit clunky when adding, there should be a simple process of selecting the tool, clicking the chart to place it and be able to drag it around. When tapping outside it it locks in place. when tapping again it becomes movable. This needs a full audit
+39. [FIXED] when in viewing mode the general marker tab that displays marker avatar, title and user placing it need to be in a capsule shape not a rectangular.
+40. [FIXED] Need to make sure all tab buttons in bottom bar conform to ui looks like in rest of the app
+41. [FIXED] See if you can make the sub tabs in indicator and drawing section show the relative text in their tab at all times, rather than collapsing to their icons
+
+
+42. [FIXED]When drawing lines, its impossible to get out of the drawing phase, the second anchor dot is permanently attached. Need to be able to get out of it by tapping outside the anchor dot radius, anywhere in the chart, anchor dots only movable by dragging them. When outside of movement if click a anchor dot it becomes movable again
+43. [FIXED]In placmeent mode the place marker button needs to be a icon only, preferably the target icon, happy for you to play around with colors in paletter mode to make it look better.
+44. [FIXED]Only marker that needs a required horizontal price indicator is setup marker all others dont need a preset horizontal marker.
+45. [FIXED]when changing reaction marker image, it adds a seperate image on chart of the same image. It should only change the image in the actual marker
+46. [FIXED]when viewing drawing tab in placement mode the content expand past screen in both directions a bit, making it unusable
+47. [FIXED]when in placement mode anywhere user enters text and the keyboard is shown, the bottom bar tabs are also moved up above the keyboard, they dont need to, they can remain where they are, user doesnt need to see them
+48. [FIXED]in placement mode the setup marker info box on chart is too wide. And when in tracking mode need to show reputation gain/loss in info box.
+49. [FIXED]in placement mode when tracking is active in setup marker, need to make more of a thing about it, showing gain/loss reputation in the general tab, maybe changing a few colors so user knows they are in a different marker mode
+50. [FIXED]in placement mode when adding a setup marker there are ent, sl and tp text views on the horizontal lines for prices, there are already these price indicators showing behind so we now have two sets, remove the ones with the black abckground, keeping the original one. Also because the entry price indicator is same as the current yellow price indicator there is now an overlay, to combat this, i suggest we either hide the default yellow price indicator while its showing and give the entry price indicator a yellow border or increase size of the entry price indicator and give yellow border to hide it.
+51. [FIXED]When in placement mode, unable to resize chart by pinching on y axis, x axis pinching works 
+
+52. [FIXED] Thinking about adding a small todo for each marker, so user knows what they need to add before placing marker, this could be done in the same place the setup info box is located under the chart info box, could use same UI, and show a simple checklist that updates as user adds the required options - question for question amrker, poll options for poll etc... could also recommend say a support or resistance lines for analysis, etc... make it a useful box
+
+
+
+
+
+
+
+53. [FIXED] I think there is too much info for setup marker on chart, so will remove the setup info box, just leaving the checklist box
+
+54. [FIXED] Checklist box needs higher opacity or blur background can see the horizontal lines behind which is off putting, also in some circumstance the text is being cut off and therefore unreadable, either shorten the text or make it wrap underneath more
+
+55. [FIXED] Review the indicatorsettingview used in default bottom bar for default chart, want to mirror that UI for the placement mode indicator addition, this goes for all indicators and the views presented when adding such as picking indicator values and colors. It needs to mirror exactly as users will be used to using it in default chart and so needs to carry onto this mode. This means when selecting an indicator from list it needs to look exactly the same
+
+56. [FIXED] Looking at point 55 carry this on for the placement mode drawing tab, similar UI and make it easy to edit colors etc... and other options, drawings should be selectable from clicking entire list item box, not text label activate or add etc... TYhis goes for same functionality in indicator tab and timeframe tab
+
+57. [FIXED] when adding support and resistance lines from drawing needs to mirror the current lines we use for take profit and stop loss, same price indicator box and drag handles etc... except with different color
+
+58. [FIXED] When adding patterns such as trendlines it works well making the two points but should be able to jump from point to point by tapping to remove it, and when clicking outside of it the line disappears rather than remaining. Also should have edit button for color changing.
+
+59. [FIXED] in placement mode the bottom bar general tab icon needs bigger marker avatar and larger marker name, can have smaller username. Also still need to remove confidence section
+
+60. [FIXED] In placement mode need to change bottom bar chat tab icon to same icon used in chart chat bottom bar tab icon - circular not rectangularchat bubble
+
+61. [FIXED] Have a look at all sub tab sections in the app, not the bottom bar tabs, the sections within them that have collapsible tabs for text and icons. In the placement marker mode you have made these sub tabs non collapsible so the text always shows as well as the icon. I prefer this look so convert all other tab sections in the app like this conform to same rule, always show text and icon
+
+62. [FIXED]  Noticed when adding a analysis marker, i didnt add any horizontal lines, but when placed and went to viewing mode a support and a resistance line appeared, also in components tab showed 3 total but 0 for indicators, drawings and timeframes
+
+63. [FIXED] Look at the chat section in main chart symbol, i like the UI on that so want to carry that forward for the marker chat and make it the same. Obviously the header section to it could be adapted to maybe the marker name, avatar and posting user details etc...
+
+64. [FIXED] I think in marker viewing mode we could add a info box on left similar to the info box for marker checklist in placement mode, except we could display the absolute relevant information for that marker, for instance with a poll marker show the question and options and allow user to select from there. With a question marker display the question, for alert display the description/reasoning etc... dont need it for reaction, setup could display vital information, analysis could display main indicator or a list of active indicators/patterns etc... News could say a brief description of the news alert - either a title of news story or similar. Whatever looks and works best
+
+65. [FIXED] Noticed the marker settings button in main chart bottom bar marker selection sheet doesnt work. When tapping it it does nothing
+
+
+66. Want to change the icons for markers to a better selection, these will come from sf symbols and want to user them in palette mode, so we can use multiple colors, need to make sure we setup a color paletter for each marker intent so the icons run with multiple colors to match the marker theme, here is the list
+	Setup - gearshape.arrow.trianglehead.2.clockwise.rotate.90
+	Analysis - waveform.path.ecg.magnifyingglass
+	Alert - 
+		Critical - exclamationmark.octagan.fill	
+		Severe - info.triangle.fill
+		Warning - exclamationmark.shield.fill
+		Informational - info.circle.fill
+	News - news.fill
+	Question - questionmark.message
+	Poll - chart.bar.fill
+	Reaction - face.smiling
+	Personal - person.badge.shield.checkmark.fill
+
+
+67. Want to change the look/UI of the markers, this is critical to get right as they are vital, not feeling the look of them at the moment. Really like the look of the markers in the apple ios weather app, has a nice unique but generic look allowing for subtle color differences by using the palette color feature of the icons, so we can match the unique marker color subtlely in the marker. Ideally i want the marker to have a thicker white border, then the background can be a set/fixed gradient color of #000127 and #111111, which are both set in the assets, this gradient needs to be in a diagonal angle, not vertical or horizontal. The icon needs to be a good size filling most of the space in the marker, ideally white and where available in the sfsymbol icon having accent of the marker unique color. Im happy for certain markers the border to be the unique color, maybe give that a go to see how it looks, but it needs to be a dark color not bright. If possible i want the border to move to a point in the direction towards the chart, so if marker is below the chart the point is on top and visa versa. This is only for the first marker in the candle stack, if there are others in the stack on the same side the other markers are just plain circles. Very important to get this to look good, needs to be professional but also easy to look at if that makes sense, this will be viewed a lot
+
+68. Still showing confidence rating in viewing marker mode, need to remove
+
+69. for poll marker if answer selected in chart need to make sure answer turns blue in general marker tab
+
+70. in placement mode the indicators are still not showing the same settings sheet when adding, for instance when adding ema in default chart it shows a sheet to choose ema value and to choose colors, we dont do this in marker placement mode
+
+71. Remove the main indicator star icon/feature, dont need that, user adds what they like doesnt matter one being more important than the other, better to simplify
+
+72. Tab button in bottom bar need adjusting, again like markers would be good to use sfsymbols and the palette feature to mix colors
+	indicator tab - chart.line.uptrend.xyaxis.circle
+	drawing tab - pencil.circle
+	timeframe tab - clock.circle
+	place marker button - target (Need to increase size)
+
+73. Need to make the checklist box thinner, its too wide going into the chart, wondering if we should set at bottom left of chart. Maybe add a small handle to collapse to just icons and be abel to reopen
+
+74. in relation to point 67, need to remove the text label below marker when placing them, dont need that, also marker needs to scale up to its viewing mode size when placing it
+
+75. In relation to point 67, need to make sure any part of the app that displays a marker as a avatar etc... now shows this new marker look and to the correct scale

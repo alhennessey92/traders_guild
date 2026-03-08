@@ -42,9 +42,10 @@ struct MarkerComponentOverlayLayer: View {
             var path = Path()
             path.move(to: CGPoint(x: startX, y: startY))
             path.addLine(to: CGPoint(x: endX, y: endY))
+            let trendlineColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingTrendline.color
             context.stroke(
                 path,
-                with: .color(RLComponentType.drawingTrendline.color.opacity(0.7)),
+                with: .color(trendlineColor.opacity(0.7)),
                 style: StrokeStyle(lineWidth: 1.8)
             )
         }
@@ -64,11 +65,12 @@ struct MarkerComponentOverlayLayer: View {
                 width: abs(endX - startX),
                 height: max(2, abs(bottomY - topY))
             )
+            let zoneColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingZone.color
 
-            context.fill(Path(rect), with: .color(RLComponentType.drawingZone.color.opacity(0.15)))
+            context.fill(Path(rect), with: .color(zoneColor.opacity(0.15)))
             context.stroke(
                 Path(rect),
-                with: .color(RLComponentType.drawingZone.color.opacity(0.5)),
+                with: .color(zoneColor.opacity(0.5)),
                 style: StrokeStyle(lineWidth: 1.2)
             )
         }

@@ -108,70 +108,53 @@ struct MarkerPlacementTimeframesTab: View {
         let isLinked = placementState.isTimeframeLinked(backendValue)
         let canAttach = placementState.canAddTimeframe || isLinked
         let isActive = timeframe == currentChartTimeframe
+        let canToggle = isLinked || canAttach
 
         return HStack(spacing: 10) {
-            Button {
-                onSelectTimeframe?(timeframe)
-                contextInfoMessage = "Switched chart to \(timeframe.shortName)."
-                limitWarning = nil
-            } label: {
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(timeframe.shortName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
-                        Text(timeframe.displayName)
-                            .font(.caption2)
-                            .foregroundColor(AppColors.greyText)
-                    }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(timeframe.shortName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                    Text(timeframe.displayName)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
 
+                HStack(spacing: 6) {
+                    Text(isLinked ? "Tap row to unlink" : "Tap row to link")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
                     if isActive {
-                        Text("ACTIVE")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.green.opacity(0.95))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(.green.opacity(0.2)))
+                        statusBadge(
+                            title: "ACTIVE",
+                            textColor: .green.opacity(0.95),
+                            fillColor: .green.opacity(0.2)
+                        )
                     }
-
-                    Spacer(minLength: 0)
                 }
             }
-            .buttonStyle(.plain)
 
-            Button {
-                toggleTimeframeLink(timeframe)
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: isLinked ? "link.circle.fill" : "link.circle")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text(isLinked ? "Linked" : "Link")
-                        .font(.caption2.weight(.semibold))
+            Spacer(minLength: 0)
+
+            if !isActive {
+                Button {
+                    selectTimeframe(timeframe)
+                } label: {
+                    Image(systemName: "arrow.up.right.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(placementState.intent.color.opacity(0.95))
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(
-                            isLinked
-                                ? placementState.intent.color.opacity(0.42)
-                                : AppColors.whiteText.opacity(0.09)
-                        )
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            isLinked
-                                ? placementState.intent.color.opacity(0.6)
-                                : AppColors.whiteText.opacity(0.08),
-                            lineWidth: 1
-                        )
-                )
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .disabled(!isLinked && !canAttach)
-            .opacity((!isLinked && !canAttach) ? 0.45 : 1)
+
+            statusBadge(
+                title: isLinked ? "LINKED" : "UNLINKED",
+                textColor: isLinked ? .white : AppColors.greyText,
+                fillColor: isLinked
+                    ? placementState.intent.color.opacity(0.42)
+                    : AppColors.whiteText.opacity(0.09)
+            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -188,6 +171,12 @@ struct MarkerPlacementTimeframesTab: View {
                         )
                 )
         )
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onTapGesture {
+            guard canToggle else { return }
+            toggleTimeframeLink(timeframe)
+        }
+        .opacity(canToggle ? 1 : 0.45)
     }
 
     @ViewBuilder
@@ -208,25 +197,24 @@ struct MarkerPlacementTimeframesTab: View {
                         .foregroundColor(AppColors.greyText)
                 }
 
-                if isActive {
-                    Text("ACTIVE")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.green.opacity(0.95))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.green.opacity(0.2)))
-                }
-
                 Spacer(minLength: 0)
 
-                if let timeframe {
-                    Button("Open") {
-                        onSelectTimeframe?(timeframe)
-                        contextInfoMessage = "Switched chart to \(timeframe.shortName)."
-                        limitWarning = nil
+                if isActive {
+                    statusBadge(
+                        title: "ACTIVE",
+                        textColor: .green.opacity(0.95),
+                        fillColor: .green.opacity(0.2)
+                    )
+                }
+
+                if let timeframe, !isActive {
+                    Button {
+                        selectTimeframe(timeframe)
+                    } label: {
+                        Image(systemName: "arrow.up.right.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(placementState.intent.color.opacity(0.95))
                     }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(placementState.intent.color)
                     .buttonStyle(.plain)
                 }
 
@@ -249,9 +237,29 @@ struct MarkerPlacementTimeframesTab: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                    )
+                )
             )
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .onTapGesture {
+                guard let timeframe else { return }
+                selectTimeframe(timeframe)
+            }
         }
+    }
+
+    private func statusBadge(title: String, textColor: Color, fillColor: Color) -> some View {
+        Text(title)
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(textColor)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(fillColor))
+    }
+
+    private func selectTimeframe(_ timeframe: RLChartTimeframe) {
+        onSelectTimeframe?(timeframe)
+        contextInfoMessage = "Switched chart to \(timeframe.shortName)."
+        limitWarning = nil
     }
 
     private func toggleTimeframeLink(_ timeframe: RLChartTimeframe) {

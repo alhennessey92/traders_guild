@@ -105,6 +105,26 @@ extension Color {
 
 @MainActor
 class MarkerManager: ObservableObject {
+    enum PollVoteError: LocalizedError {
+        case markerNotFound
+        case invalidPoll
+        case optionNotFound
+        case apiUnavailable
+
+        var errorDescription: String? {
+            switch self {
+            case .markerNotFound:
+                return "Marker not found."
+            case .invalidPoll:
+                return "This marker is not a poll."
+            case .optionNotFound:
+                return "Selected poll option no longer exists."
+            case .apiUnavailable:
+                return "Poll voting is unavailable right now."
+            }
+        }
+    }
+
     @Published var markers: [ChartMarkerUI] = []
     @Published var selectedMarker: ChartMarkerUI?
     @Published var visibleIntents: Set<RLMarkerIntent> = Set(RLMarkerIntent.allCases)
@@ -715,28 +735,57 @@ class MarkerManager: ObservableObject {
             let candidateOrder: [RLComponentType] = [
                 .levelEntry, .levelSl, .levelTp, .levelSupport, .levelResistance,
             ]
-            let componentType = horizontalLineType ?? (
+            let resolvedType = horizontalLineType ?? (
                 candidateOrder.first { candidate in
                     updatedComponents.contains(where: { $0.componentType == candidate.rawValue })
-                } ?? (originalDTO.intentEnum == .setup ? .levelEntry : .levelSupport)
+                } ?? (originalDTO.intentEnum == .setup ? .levelEntry : nil)
             )
-            let payload: MarkerComponentPayload = {
-                switch componentType {
-                case .levelEntry:
-                    return .levelEntry(LevelPayload(price: horizontalLinePrice, label: nil))
-                case .levelSl:
-                    return .levelSl(LevelPayload(price: horizontalLinePrice, label: nil))
-                case .levelTp:
-                    return .levelTp(LevelPayload(price: horizontalLinePrice, label: nil))
-                case .levelSupport:
-                    return .levelSupport(LevelPayload(price: horizontalLinePrice, label: nil))
-                case .levelResistance:
-                    return .levelResistance(LevelPayload(price: horizontalLinePrice, label: nil))
-                default:
-                    return .levelEntry(LevelPayload(price: horizontalLinePrice, label: nil))
-                }
-            }()
-            upsertComponent(componentType.rawValue, payload: payload)
+            // Ignore generic horizontal-line updates for non-setup markers that
+            // do not already have an explicit level component.
+            if let componentType = resolvedType {
+                let existingLabel: String? = {
+                    guard let existing = updatedComponents.first(where: { $0.componentType == componentType.rawValue }) else {
+                        return nil
+                    }
+                    switch existing.payload {
+                    case .levelEntry(let payload),
+                         .levelSl(let payload),
+                         .levelTp(let payload),
+                         .levelSupport(let payload),
+                         .levelResistance(let payload):
+                        return payload.label
+                    default:
+                        return nil
+                    }
+                }()
+                let fallbackLabel: String = {
+                    switch componentType {
+                    case .levelEntry: return "Entry"
+                    case .levelSl: return "SL"
+                    case .levelTp: return "TP"
+                    case .levelSupport: return "Support"
+                    case .levelResistance: return "Resistance"
+                    default: return "Level"
+                    }
+                }()
+                let payload: MarkerComponentPayload = {
+                    switch componentType {
+                    case .levelEntry:
+                        return .levelEntry(LevelPayload(price: horizontalLinePrice, label: existingLabel ?? fallbackLabel))
+                    case .levelSl:
+                        return .levelSl(LevelPayload(price: horizontalLinePrice, label: existingLabel ?? fallbackLabel))
+                    case .levelTp:
+                        return .levelTp(LevelPayload(price: horizontalLinePrice, label: existingLabel ?? fallbackLabel))
+                    case .levelSupport:
+                        return .levelSupport(LevelPayload(price: horizontalLinePrice, label: existingLabel ?? fallbackLabel))
+                    case .levelResistance:
+                        return .levelResistance(LevelPayload(price: horizontalLinePrice, label: existingLabel ?? fallbackLabel))
+                    default:
+                        return .levelEntry(LevelPayload(price: horizontalLinePrice, label: existingLabel ?? fallbackLabel))
+                    }
+                }()
+                upsertComponent(componentType.rawValue, payload: payload)
+            }
         }
 
         if let targetPrice {
@@ -868,6 +917,81 @@ class MarkerManager: ObservableObject {
             markers[latestIndex] = rolledBack
             syncSelectedMarker(rolledBack)
             print("Failed to toggle like: \(error)")
+        }
+    }
+
+    func voteOnPoll(markerId: UUID, optionId: UUID) async throws {
+        guard let index = markerIndex(for: markerId) else {
+            throw PollVoteError.markerNotFound
+        }
+
+        let originalMarker = markers[index]
+        guard let originalOptions = originalMarker.pollOptions, !originalOptions.isEmpty else {
+            throw PollVoteError.invalidPoll
+        }
+        guard originalOptions.contains(where: { $0.id == optionId }) else {
+            throw PollVoteError.optionNotFound
+        }
+
+        let previousVoteId = originalMarker.userPollVote
+        let optimisticOptions = originalOptions.map { option in
+            let wasSelectedBefore = previousVoteId == option.id
+            let isSelectedNow = option.id == optionId
+
+            var adjustedVoteCount = option.voteCount
+            if wasSelectedBefore && !isSelectedNow {
+                adjustedVoteCount = max(0, adjustedVoteCount - 1)
+            } else if !wasSelectedBefore && isSelectedNow {
+                adjustedVoteCount += 1
+            }
+
+            return RLPollOptionDTO(
+                id: option.id,
+                text: option.text,
+                voteCount: adjustedVoteCount,
+                hasVoted: isSelectedNow
+            )
+        }
+
+        let optimistic = originalMarker.withMarker(
+            originalMarker.marker.updating(
+                pollOptions: optimisticOptions,
+                userPollVote: optionId
+            )
+        )
+        markers[index] = optimistic
+        syncSelectedMarker(optimistic)
+
+        guard let api else {
+            throw PollVoteError.apiUnavailable
+        }
+
+        do {
+            let response = try await api.voteOnPoll(
+                guildId: currentGuildId,
+                markerId: markerId,
+                optionId: optionId
+            )
+
+            guard let latestIndex = markerIndex(for: markerId) else {
+                throw PollVoteError.markerNotFound
+            }
+
+            let reconciled = markers[latestIndex].withMarker(
+                markers[latestIndex].marker.updating(
+                    pollOptions: response.updatedOptions,
+                    userPollVote: response.optionId
+                )
+            )
+            markers[latestIndex] = reconciled
+            syncSelectedMarker(reconciled)
+        } catch {
+            if let latestIndex = markerIndex(for: markerId) {
+                let rolledBack = markers[latestIndex].withMarker(originalMarker.marker)
+                markers[latestIndex] = rolledBack
+                syncSelectedMarker(rolledBack)
+            }
+            throw error
         }
     }
     

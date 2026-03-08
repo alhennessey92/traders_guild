@@ -122,7 +122,7 @@ enum MarkerViewingTab: String, CaseIterable, UnifiedTabItem {
         switch self {
         case .general: return "info.circle.fill"
         case .components: return "square.stack.3d.up.fill"
-        case .chat: return "bubble.left.fill"
+        case .chat: return "message.fill"
         }
     }
 }

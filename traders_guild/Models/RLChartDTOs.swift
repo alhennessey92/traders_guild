@@ -291,6 +291,21 @@ struct TrendlinePayload: Codable {
     let startPrice: Double
     let endTime: Date
     let endPrice: Double
+    let colorHex: String?
+
+    init(
+        startTime: Date,
+        startPrice: Double,
+        endTime: Date,
+        endPrice: Double,
+        colorHex: String? = nil
+    ) {
+        self.startTime = startTime
+        self.startPrice = startPrice
+        self.endTime = endTime
+        self.endPrice = endPrice
+        self.colorHex = colorHex
+    }
 }
 
 struct ZonePayload: Codable {
@@ -298,6 +313,21 @@ struct ZonePayload: Codable {
     let bottomPrice: Double
     let startTime: Date?
     let endTime: Date?
+    let colorHex: String?
+
+    init(
+        topPrice: Double,
+        bottomPrice: Double,
+        startTime: Date?,
+        endTime: Date?,
+        colorHex: String? = nil
+    ) {
+        self.topPrice = topPrice
+        self.bottomPrice = bottomPrice
+        self.startTime = startTime
+        self.endTime = endTime
+        self.colorHex = colorHex
+    }
 }
 
 struct IndicatorPayload: Codable {

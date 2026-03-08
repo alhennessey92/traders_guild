@@ -172,7 +172,9 @@ extension RLChartMarkerDTO {
         likeCount: Int? = nil,
         isLikedByCurrentUser: Bool? = nil,
         comments: [RLMarkerCommentDTO]? = nil,
-        commentCount: Int? = nil
+        commentCount: Int? = nil,
+        pollOptions: [RLPollOptionDTO]? = nil,
+        userPollVote: UUID? = nil
     ) -> RLChartMarkerDTO {
         guard var dict = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self)) as? [String: Any] else {
             return self
@@ -198,6 +200,12 @@ extension RLChartMarkerDTO {
             dict["comments"] = commentsArray
         }
         if let commentCount = commentCount { dict["commentCount"] = commentCount }
+        if let pollOptions = pollOptions,
+           let pollOptionsData = try? JSONEncoder().encode(pollOptions),
+           let pollOptionsArray = try? JSONSerialization.jsonObject(with: pollOptionsData) {
+            dict["pollOptions"] = pollOptionsArray
+        }
+        if let userPollVote = userPollVote { dict["userPollVote"] = userPollVote.uuidString }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let updated = try? JSONDecoder().decode(RLChartMarkerDTO.self, from: data) else {
             return self

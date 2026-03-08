@@ -1870,6 +1870,18 @@ extension RLChartChatMessageDTO: RLChatMessageDisplayable {
     var authorIsBlocked: Bool { author.isBlocked }
 }
 
+extension RLMarkerCommentDTO: RLChatMessageDisplayable {
+    var authorUsername: String { author.username }
+    var authorInitials: String { author.initials }
+    var authorAvatarUrl: String? { author.avatarUrl }
+    var authorIsOnline: Bool { author.isOnline }
+    var authorRole: RLMemberRole { author.memberRole }
+    var authorReputation: Int { author.reputation }
+    var authorAccuracy: Double? { author.accuracyRate }
+    var authorIsFriend: Bool { author.isFriend }
+    var authorIsBlocked: Bool { author.isBlocked }
+}
+
 
 
 

@@ -20,16 +20,32 @@ private enum MarkerDrawingSubTab: String, CaseIterable, UnifiedTabItem {
     }
 }
 
+private struct DrawingColorOption: Identifiable {
+    let name: String
+    let hex: String
+
+    var id: String { hex }
+}
+
 struct MarkerPlacementDrawingsTab: View {
     @ObservedObject var placementState: MarkerPlacementState
 
     @State private var selectedSubTab: MarkerDrawingSubTab = .active
     @State private var limitWarning: String?
     @State private var infoMessage: String?
+    @State private var colorEditingDraftID: UUID?
 
     private let annotationEmojis: [String] = [
         "🎯", "🔥", "🐻", "🐂", "✅", "❌",
         "🚀", "⚡", "💡", "📉", "📈", "🧠",
+    ]
+    private let drawingColorOptions: [DrawingColorOption] = [
+        .init(name: "Mint", hex: "#10B981"),
+        .init(name: "Sky", hex: "#38BDF8"),
+        .init(name: "Amber", hex: "#F59E0B"),
+        .init(name: "Rose", hex: "#F43F5E"),
+        .init(name: "Violet", hex: "#8B5CF6"),
+        .init(name: "Slate", hex: "#94A3B8"),
     ]
 
     var body: some View {
@@ -39,7 +55,7 @@ struct MarkerPlacementDrawingsTab: View {
 
                 UnifiedTabBar(
                     selectedTab: $selectedSubTab,
-                    size: .standard,
+                    size: .compact,
                     theme: .blue,
                     spacing: 6
                 )
@@ -67,7 +83,34 @@ struct MarkerPlacementDrawingsTab: View {
                     patternsSubTab
                 }
             }
-            .padding(.trailing, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .confirmationDialog(
+            "Drawing Color",
+            isPresented: Binding(
+                get: { colorEditingDraftID != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        colorEditingDraftID = nil
+                    }
+                }
+            )
+        ) {
+            if let draftID = colorEditingDraftID {
+                ForEach(drawingColorOptions) { option in
+                    Button(option.name) {
+                        placementState.setDrawingColorHex(option.hex, for: draftID)
+                    }
+                }
+                Button("Clear Color", role: .destructive) {
+                    placementState.setDrawingColorHex(nil, for: draftID)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                colorEditingDraftID = nil
+            }
+        } message: {
+            Text("Choose a color for this drawing.")
         }
     }
 
@@ -134,10 +177,14 @@ struct MarkerPlacementDrawingsTab: View {
     private func activeOverlayRow(_ draft: MarkerComponentDraft) -> some View {
         switch draft.payload {
         case .drawingTrendline(let payload):
+            let trendlineColor = placementState.drawingColor(
+                for: draft.id,
+                fallback: RLComponentType.drawingTrendline.color
+            )
             HStack(spacing: 10) {
                 Image(systemName: "pencil.and.ruler")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(RLComponentType.drawingTrendline.color)
+                    .foregroundColor(trendlineColor)
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -145,22 +192,22 @@ struct MarkerPlacementDrawingsTab: View {
                     Text(isHorizontal ? "Horizontal Line" : "Trendline")
                         .font(.caption)
                         .foregroundColor(.white)
-                    Text("Tap Edit to continue adjusting on chart")
+                    Text("Tap row to edit on chart")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                 }
 
                 Spacer(minLength: 0)
 
-                Button("Edit") {
-                    placementState.activeTool = .draw
-                    placementState.activeSubTool = MarkerToolOption.drawTrendline.rawValue
-                    placementState.beginEditingDrawing(draft.id)
-                    selectedSubTab = .lines
-                    infoMessage = "Trendline edit mode active. Drag handles on chart."
+                Button {
+                    colorEditingDraftID = draft.id
+                } label: {
+                    Image(systemName: "paintpalette.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(trendlineColor)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(AppColors.whiteText.opacity(0.1)))
                 }
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(placementState.intent.color)
                 .buttonStyle(.plain)
 
                 removeDraftButton(draft.id)
@@ -168,34 +215,42 @@ struct MarkerPlacementDrawingsTab: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(overlayCardBackground)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .onTapGesture {
+                editTrendline(draft.id)
+            }
 
         case .drawingZone:
+            let zoneColor = placementState.drawingColor(
+                for: draft.id,
+                fallback: RLComponentType.drawingZone.color
+            )
             HStack(spacing: 10) {
                 Image(systemName: "square.dashed")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(RLComponentType.drawingZone.color)
+                    .foregroundColor(zoneColor)
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Zone")
                         .font(.caption)
                         .foregroundColor(.white)
-                    Text("Tap Edit to continue adjusting on chart")
+                    Text("Tap row to edit on chart")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                 }
 
                 Spacer(minLength: 0)
 
-                Button("Edit") {
-                    placementState.activeTool = .draw
-                    placementState.activeSubTool = MarkerToolOption.drawZone.rawValue
-                    placementState.beginEditingDrawing(draft.id)
-                    selectedSubTab = .zones
-                    infoMessage = "Zone edit mode active. Drag handles on chart."
+                Button {
+                    colorEditingDraftID = draft.id
+                } label: {
+                    Image(systemName: "paintpalette.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(zoneColor)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(AppColors.whiteText.opacity(0.1)))
                 }
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(placementState.intent.color)
                 .buttonStyle(.plain)
 
                 removeDraftButton(draft.id)
@@ -203,6 +258,10 @@ struct MarkerPlacementDrawingsTab: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(overlayCardBackground)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .onTapGesture {
+                editZone(draft.id)
+            }
 
         case .note(let payload):
             VStack(alignment: .leading, spacing: 6) {
@@ -255,7 +314,8 @@ struct MarkerPlacementDrawingsTab: View {
                     removeDraftButton(draft.id)
                 }
 
-                HStack(spacing: 6) {
+                let emojiColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
+                LazyVGrid(columns: emojiColumns, spacing: 6) {
                     ForEach(annotationEmojis, id: \.self) { emoji in
                         Button {
                             placementState.updateComponent(
@@ -271,9 +331,10 @@ struct MarkerPlacementDrawingsTab: View {
                         } label: {
                             Text(emoji)
                                 .font(.system(size: 16))
-                                .frame(width: 30, height: 26)
+                                .frame(height: 28)
+                                .frame(maxWidth: .infinity)
                                 .background(
-                                    Capsule()
+                                    RoundedRectangle(cornerRadius: 8)
                                         .fill(payload.emoji == emoji ? placementState.intent.color.opacity(0.35) : AppColors.whiteText.opacity(0.08))
                                 )
                         }
@@ -313,18 +374,31 @@ struct MarkerPlacementDrawingsTab: View {
                 subtitle: "Quick-add a neutral horizontal trendline.",
                 icon: "line.3.horizontal",
                 isActive: false,
-                actionTitle: "Add"
+                actionTitle: "Create"
             ) {
                 addHorizontalTrendline()
             }
 
-            HStack(spacing: 8) {
-                quickPillButton("Support", icon: "arrow.down.to.line") {
-                    selectHorizontalLevel(.levelSupport, label: "Support")
-                }
-                quickPillButton("Resistance", icon: "arrow.up.to.line") {
-                    selectHorizontalLevel(.levelResistance, label: "Resistance")
-                }
+            toolCard(
+                title: "Support Level",
+                subtitle: "Add and drag a support line directly on chart.",
+                icon: "arrow.down.to.line",
+                isActive: placementState.activeTool == .levels
+                    && placementState.activeSubTool == MarkerToolOption.levelSupport.rawValue,
+                actionTitle: "Activate"
+            ) {
+                selectHorizontalLevel(.levelSupport, label: "Support")
+            }
+
+            toolCard(
+                title: "Resistance Level",
+                subtitle: "Add and drag a resistance line directly on chart.",
+                icon: "arrow.up.to.line",
+                isActive: placementState.activeTool == .levels
+                    && placementState.activeSubTool == MarkerToolOption.levelResistance.rawValue,
+                actionTitle: "Activate"
+            ) {
+                selectHorizontalLevel(.levelResistance, label: "Resistance")
             }
         }
     }
@@ -547,57 +621,38 @@ struct MarkerPlacementDrawingsTab: View {
         actionTitle: String,
         action: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.88))
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundColor(AppColors.greyText)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-
-            Button(actionTitle, action: action)
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(isActive ? .white : placementState.intent.color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(isActive ? placementState.intent.color.opacity(0.45) : placementState.intent.color.opacity(0.15))
-                )
-                .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(overlayCardBackground)
-    }
-
-    private func quickPillButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.88))
+                    .frame(width: 18)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white)
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+
+                Text(actionTitle)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(isActive ? .white : placementState.intent.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(isActive ? placementState.intent.color.opacity(0.45) : placementState.intent.color.opacity(0.15))
+                    )
             }
-            .foregroundColor(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.whiteText.opacity(0.08))
-            )
+            .background(overlayCardBackground)
         }
         .buttonStyle(.plain)
     }
@@ -706,7 +761,23 @@ struct MarkerPlacementDrawingsTab: View {
             break
         }
 
-        infoMessage = "\(label) level ready. Tap chart to reposition."
+        infoMessage = "\(label) level ready. Drag the on-chart handle to reposition."
+        limitWarning = nil
+    }
+
+    private func editTrendline(_ draftID: UUID) {
+        placementState.activeTool = .draw
+        placementState.activeSubTool = MarkerToolOption.drawTrendline.rawValue
+        placementState.beginEditingDrawing(draftID)
+        infoMessage = "Trendline selected. Drag handles on chart to edit."
+        limitWarning = nil
+    }
+
+    private func editZone(_ draftID: UUID) {
+        placementState.activeTool = .draw
+        placementState.activeSubTool = MarkerToolOption.drawZone.rawValue
+        placementState.beginEditingDrawing(draftID)
+        infoMessage = "Zone selected. Drag corners on chart to edit."
         limitWarning = nil
     }
 

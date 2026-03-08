@@ -256,7 +256,7 @@ protocol UnifiedTabItem: Hashable, CaseIterable {
 
 /// Size variants for tab buttons
 enum UnifiedTabSize {
-    case compact     // Icon only when unselected, icon + label when selected
+    case compact     // Always icon + label with compact spacing
     case standard    // Always shows icon + label
     case iconOnly    // Always icon only
     
@@ -394,7 +394,7 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
                     .font(.system(size: size.iconSize, weight: .semibold))
                 
                 // Show label based on size variant
-                if size == .standard || (size == .compact && isSelected) {
+                if size != .iconOnly {
                     Text(tab.title)
                         .font(.system(size: size.labelSize, weight: .medium))
                 }

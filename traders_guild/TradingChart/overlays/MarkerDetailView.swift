@@ -527,16 +527,34 @@ struct CommentsView: View {
         self.markerManager = markerManager
         self._selectedDetent = selectedDetent
     }
+
+    private var liveMarker: ChartMarkerUI {
+        markerManager.markers.first(where: { $0.id == marker.id }) ?? marker
+    }
+
+    private var sortedComments: [RLMarkerCommentDTO] {
+        comments.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private var participantCount: Int {
+        let participantIds = Set(comments.map { $0.author.userId }).union([liveMarker.author.userId])
+        return max(1, participantIds.count)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
+            markerChatHeader
+
+            Divider()
+                .background(Color.gray.opacity(0.3))
+
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
-                    if comments.isEmpty {
+                    if sortedComments.isEmpty {
                         ChatEmptyStateView(
                             icon: "bubble.left.and.bubble.right",
-                            title: "No comments yet",
-                            subtitle: "Be the first to share your thoughts"
+                            title: "Start the marker chat",
+                            subtitle: "Be the first to comment on this \(liveMarker.intent.displayName.lowercased()) marker."
                         )
                         .padding(.top, 60)
                         Color.clear
@@ -544,7 +562,7 @@ struct CommentsView: View {
                             .id("bottom")
                     } else {
                         LazyVStack(spacing: 12) {
-                            ForEach(comments.sorted(by: { $0.timestamp < $1.timestamp })) { comment in
+                            ForEach(sortedComments) { comment in
                                 MarkerCommentRow(
                                     comment: comment,
                                     onAuthorTap: { member in
@@ -574,7 +592,7 @@ struct CommentsView: View {
                     isCommentInputFocused = false
                 }
                 .onChange(of: comments.count) { _ in
-                    if let lastComment = comments.last {
+                    if let lastComment = sortedComments.last {
                         withAnimation(.easeOut(duration: 0.2)) {
                             proxy.scrollTo(lastComment.id, anchor: UnitPoint.bottom)
                         }
@@ -590,7 +608,7 @@ struct CommentsView: View {
                     }
                 }
                 .onAppear {
-                    if !comments.isEmpty, let lastComment = comments.last {
+                    if !sortedComments.isEmpty, let lastComment = sortedComments.last {
                         proxy.scrollTo(lastComment.id, anchor: UnitPoint.bottom)
                     } else {
                         proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
@@ -634,6 +652,37 @@ struct CommentsView: View {
             GuildUserDetailViewRL(member: member)
                 .environmentObject(rlAppState)
         }
+    }
+
+    private var markerChatHeader: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(liveMarker.intent.color.opacity(0.2))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Image(systemName: liveMarker.intent.icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(liveMarker.intent.color)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(liveMarker.intent.displayName) Chat")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+
+                Text("@\(liveMarker.author.username) • \(liveMarker.timeframe.uppercased()) • \(comments.count) comments")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            ActiveUsersPill(count: participantCount)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+        .padding(.top, 20)
     }
     
     // MARK: - Actions
@@ -766,134 +815,17 @@ struct MarkerCommentRow: View {
     var onDelete: (() -> Void)? = nil
     
     @EnvironmentObject var rlAppState: RLAppState
-    @State private var showDeleteConfirmation = false
     
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            if comment.isCurrentUserMessage {
-                Spacer()
-            } else {
-                // Avatar using embedded author info
-                Button(action: {
-                    onAuthorTap?(comment.author)
-                }) {
-                    ChatAvatar(
-                        initials: comment.author.initials,
-                        avatarURL: comment.author.avatarUrl,
-                        isOnline: comment.author.isOnline,
-                        size: 32
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            
-            VStack(alignment: comment.isCurrentUserMessage ? .trailing : .leading, spacing: 4) {
-                // User info row (only for other users)
-                if !comment.isCurrentUserMessage {
-                    if let onAuthorTap {
-                        Button {
-                            onAuthorTap(comment.author)
-                        } label: {
-                            HStack(spacing: 2) {
-                                Text(comment.author.username)
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.9))
-
-                                UnifiedSeparatorDot(size: 3, opacity: 0.7)
-
-                                UnifiedRoleBadge(
-                                    member: comment.author,
-                                    showReputation: true
-                                )
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    } else {
-                        HStack(spacing: 2) {
-                            Text(comment.author.username)
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.whiteText.opacity(0.9))
-
-                            UnifiedSeparatorDot(size: 3, opacity: 0.7)
-
-                            UnifiedRoleBadge(
-                                member: comment.author,
-                                showReputation: true
-                            )
-                        }
-                    }
-                }
-                
-                // Message bubble
-                Text(comment.content)
-                    .font(.subheadline)
-                    .foregroundColor(comment.isCurrentUserMessage ? .white : .primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        comment.isCurrentUserMessage ?
-                        AppColors.accentDarkColor :
-                        Color.gray.opacity(0.2)
-                    )
-                    .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: comment.isCurrentUserMessage))
-                    .contextMenu {
-                        // Delete (own comments only)
-                        if let onDelete = onDelete {
-                            Button(role: .destructive) {
-                                showDeleteConfirmation = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                        
-                        // Copy
-                        Button {
-                            UIPasteboard.general.string = comment.content
-                            rlAppState.showSuccess("Copied to clipboard")
-                        } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
-                        }
-                        
-                        // Report (other users' comments)
-                        if !comment.isCurrentUserMessage {
-                            Divider()
-                            Button(role: .destructive) {
-                                onReport()
-                            } label: {
-                                Label("Report", systemImage: "exclamationmark.triangle")
-                            }
-                        }
-                    }
-                
-                // Timestamp
-                HStack(spacing: 4) {
-                    Text(comment.timestampFormatted)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    
-                    if comment.isEdited {
-                        Text("• edited")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            
-            if !comment.isCurrentUserMessage {
-                Spacer()
-            }
-        }
-        .alert("Delete Comment", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                onDelete?()
-            }
-        } message: {
-            Text("Are you sure you want to delete this comment? This cannot be undone.")
-        }
+        RLChatMessageBubble(
+            message: comment,
+            context: .markerComment,
+            onAvatarTap: { onAuthorTap?(comment.author) },
+            onAuthorTap: { onAuthorTap?(comment.author) },
+            onDelete: onDelete,
+            onReport: !comment.isCurrentUserMessage ? onReport : nil,
+            onCopy: { rlAppState.showSuccess("Copied to clipboard") }
+        )
     }
 }
 
