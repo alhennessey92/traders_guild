@@ -172,6 +172,7 @@ final class MarkerPlacementState: ObservableObject {
     @Published var pollOptions: [String] = ["", ""]
     @Published var alertSeverity: MarkerAlertSeverity?
     @Published var newsURL: String = ""
+    @Published var isChecklistCollapsed: Bool = false
     /// Placement-local color overrides for drawing drafts (trendline/zone).
     /// Phase 3 persists these into payload/back-end fields.
     @Published var drawingColorOverrides: [UUID: String] = [:]
@@ -586,6 +587,7 @@ final class MarkerPlacementState: ObservableObject {
         self.pollOptions = ["", ""]
         self.alertSeverity = nil
         self.newsURL = ""
+        self.isChecklistCollapsed = false
         self.drawingColorOverrides = [:]
         resetDrawingInteraction()
     }
@@ -650,14 +652,6 @@ final class MarkerPlacementState: ObservableObject {
         indicatorComponent(named: name) != nil
     }
 
-    func isIndicatorPrimary(named name: String) -> Bool {
-        guard let draft = indicatorComponent(named: name),
-              case let .indicator(payload) = draft.payload else {
-            return false
-        }
-        return payload.isPrimary ?? false
-    }
-
     func canAttachIndicator(named name: String) -> Bool {
         if isIndicatorAttached(named: name) {
             return true
@@ -671,8 +665,7 @@ final class MarkerPlacementState: ObservableObject {
     @discardableResult
     func upsertIndicator(
         name: String,
-        settings: [String: AnyCodable]?,
-        isPrimary: Bool? = nil
+        settings: [String: AnyCodable]?
     ) -> Bool {
         let normalizedName = normalizedIndicatorName(name)
         let existingIndex = components.firstIndex { draft in
@@ -688,19 +681,10 @@ final class MarkerPlacementState: ObservableObject {
             return false
         }
 
-        let resolvedPrimary: Bool
-        if let isPrimary {
-            resolvedPrimary = isPrimary
-        } else if let index = existingIndex, case let .indicator(existingPayload) = components[index].payload {
-            resolvedPrimary = existingPayload.isPrimary ?? false
-        } else {
-            resolvedPrimary = !hasPrimaryIndicator()
-        }
-
         let payload = IndicatorPayload(
             name: name,
             settings: settings,
-            isPrimary: resolvedPrimary
+            isPrimary: nil
         )
 
         if let index = existingIndex {
@@ -709,10 +693,6 @@ final class MarkerPlacementState: ObservableObject {
             components.append(
                 MarkerComponentDraft(componentType: .indicator, payload: .indicator(payload))
             )
-        }
-
-        if resolvedPrimary {
-            enforceSinglePrimaryIndicator(named: name)
         }
 
         return true
@@ -730,20 +710,7 @@ final class MarkerPlacementState: ObservableObject {
             return
         }
 
-        let removedWasPrimary: Bool
-        if case let .indicator(payload) = components[index].payload {
-            removedWasPrimary = payload.isPrimary ?? false
-        } else {
-            removedWasPrimary = false
-        }
-
         components.remove(at: index)
-
-        if removedWasPrimary,
-           let fallback = indicatorDrafts.first,
-           case let .indicator(payload) = fallback.payload {
-            setPrimaryIndicator(named: payload.name)
-        }
     }
 
     func isTimeframeLinked(_ timeframe: String) -> Bool {
@@ -793,11 +760,6 @@ final class MarkerPlacementState: ObservableObject {
         }
     }
 
-    func setPrimaryIndicator(named name: String) {
-        guard isIndicatorAttached(named: name) else { return }
-        enforceSinglePrimaryIndicator(named: name)
-    }
-
     @discardableResult
     func attachActiveChartIndicators(_ payloads: [IndicatorPayload]) -> (added: Int, blockedByLimit: Bool) {
         var added = 0
@@ -805,7 +767,7 @@ final class MarkerPlacementState: ObservableObject {
 
         for payload in payloads {
             let hadIndicator = isIndicatorAttached(named: payload.name)
-            if !upsertIndicator(name: payload.name, settings: payload.settings, isPrimary: payload.isPrimary) {
+            if !upsertIndicator(name: payload.name, settings: payload.settings) {
                 blockedByLimit = true
                 continue
             }
@@ -822,8 +784,7 @@ final class MarkerPlacementState: ObservableObject {
             guard case let .indicator(indicatorPayload) = payload else { return }
             _ = upsertIndicator(
                 name: indicatorPayload.name,
-                settings: indicatorPayload.settings,
-                isPrimary: indicatorPayload.isPrimary
+                settings: indicatorPayload.settings
             )
             return
         }
@@ -1201,32 +1162,6 @@ final class MarkerPlacementState: ObservableObject {
         }
     }
 
-    private func hasPrimaryIndicator() -> Bool {
-        indicatorDrafts.contains { draft in
-            guard case let .indicator(payload) = draft.payload else { return false }
-            return payload.isPrimary ?? false
-        }
-    }
-
-    private func enforceSinglePrimaryIndicator(named name: String) {
-        let normalizedName = normalizedIndicatorName(name)
-        for index in components.indices {
-            guard components[index].componentType == .indicator,
-                  case let .indicator(payload) = components[index].payload else {
-                continue
-            }
-
-            let isPrimary = normalizedIndicatorName(payload.name) == normalizedName
-            components[index].payload = .indicator(
-                IndicatorPayload(
-                    name: payload.name,
-                    settings: payload.settings,
-                    isPrimary: isPrimary
-                )
-            )
-        }
-    }
-
     private func isPanelIndicator(_ name: String) -> Bool {
         let normalized = normalizedIndicatorName(name)
         if normalized.contains("VWAP") || normalized.contains("WEIGHTED AVERAGE PRICE") {
@@ -1457,14 +1392,11 @@ struct MarkerPlacementMode: View {
                     .font(.headline)
                     .foregroundColor(.white)
                 Spacer()
-                Circle()
-                    .fill(placementState.intent.color.opacity(0.3))
-                    .frame(width: 30, height: 30)
-                    .overlay(
-                        Image(systemName: placementState.intent.icon)
-                            .font(.caption)
-                            .foregroundColor(.white)
-                    )
+                UnifiedMarkerBadge(
+                    intent: placementState.intent,
+                    alertSeverity: placementState.intent == .alert ? placementState.alertSeverity : nil,
+                    sizeToken: .small
+                )
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)

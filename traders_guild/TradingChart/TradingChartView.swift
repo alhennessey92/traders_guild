@@ -90,6 +90,7 @@ struct TradingChartView: View {
     
     // MARK: - Chart Control ViewModel
     @ObservedObject var controlViewModel: ChartControlViewModel
+    @EnvironmentObject private var rlAppState: RLAppState
     
     /// Gesture state manager that handles all pan/zoom transformations
     /// This is the single source of truth for chart positioning
@@ -277,6 +278,8 @@ struct TradingChartView: View {
     @State private var showChartSettingsSheet = false
     @State private var isSubmittingViewingPollVote = false
     @State private var viewingPollVoteOptionId: UUID?
+    @State private var selectedViewingInfoProfileMember: RLGuildMemberDTO?
+    @State private var isViewingInfoPanelCollapsed = false
     
 
     
@@ -645,9 +648,21 @@ struct TradingChartView: View {
             .sheet(isPresented: $showChartSettingsSheet) {
                 ChartSettingsView(settings: chartSettings)
             }
+            .sheet(item: $selectedViewingInfoProfileMember) { member in
+                GuildUserDetailViewRL(member: member)
+                    .environmentObject(rlAppState)
+            }
     }
 
     private func withPlacementAndChartObservers<Content: View>(_ content: Content) -> some View {
+        withMarketObservers(
+            withPlacementObservers(
+                withContextObservers(content)
+            )
+        )
+    }
+
+    private func withContextObservers<Content: View>(_ content: Content) -> some View {
         content
             .onAppear(perform: handleOnAppear)
             .onChange(of: currentGuildId) { _, _ in
@@ -659,6 +674,17 @@ struct TradingChartView: View {
             .onChange(of: controlViewModel.isMarkerPlacementMode) { oldValue, newValue in
                 handleMarkerPlacementModeChange(oldValue: oldValue, newValue: newValue)
             }
+            .onChange(of: controlViewModel.isMarkerViewingMode) { _, isViewing in
+                if isViewing {
+                    isViewingInfoPanelCollapsed = false
+                } else {
+                    selectedViewingInfoProfileMember = nil
+                }
+            }
+    }
+
+    private func withPlacementObservers<Content: View>(_ content: Content) -> some View {
+        content
             .onChange(of: placementState.intent) { oldValue, newValue in
                 handlePlacementIntentChange(oldIntent: oldValue, newIntent: newValue)
             }
@@ -680,6 +706,10 @@ struct TradingChartView: View {
             .onChange(of: placementState.componentPrice(.levelSl)) { _, _ in
                 syncPredictionPlacementFromSetupComponents()
             }
+    }
+
+    private func withMarketObservers<Content: View>(_ content: Content) -> some View {
+        content
             .onChange(of: chartViewModel.currentSymbol) { oldValue, newValue in
                 handleSymbolChange(oldValue: oldValue, newValue: newValue)
             }
@@ -777,6 +807,7 @@ struct TradingChartView: View {
                     yForPrice: { price in coordinateSystem.yPosition(forPrice: price) },
                     width: geometry.size.width,
                     topSafeAreaInset: geometry.safeAreaInsets.top,
+                    bottomPanelPadding: bottomInfoPanelsPadding(geometry: geometry),
                     xForTime: { time in
                         guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
                         return coordinateSystem.xCenterPosition(forCandleIndex: index)
@@ -820,6 +851,14 @@ struct TradingChartView: View {
                 .allowsHitTesting(false)
                 .zIndex(28)
                 .transition(.opacity)
+            }
+
+            markerTopPriorityOverlay(geometry: geometry)
+                .zIndex(58)
+
+            if let marker = viewingInfoMarker {
+                viewingMarkerInfoOverlay(marker: marker, geometry: geometry)
+                    .zIndex(54)
             }
 
             // Standard chart controls — hidden during placement and marker viewing modes
@@ -1000,9 +1039,18 @@ struct TradingChartView: View {
     @ViewBuilder
     private func mainChartCanvas(geometry: GeometryProxy) -> some View {
         Canvas { context, size in
-            drawChart(context: context, size: size, geometry: geometry)
+            drawChart(context: context, size: size)
         }
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func markerTopPriorityOverlay(geometry: GeometryProxy) -> some View {
+        Canvas { context, size in
+            drawTopPriorityMarkers(context: context, size: size)
+        }
+        .allowsHitTesting(false)
+        .mask(topFadeMask(geometry: geometry))
     }
     
     // MARK: - Price Indicator View
@@ -1422,9 +1470,9 @@ struct TradingChartView: View {
     private func placeMarkerButton(coordinateSystem: ChartCoordinateSystem) -> some View {
         Button(action: { handlePlaceMarkerPress(coordinateSystem: coordinateSystem) }) {
             Image(systemName: "target")
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 20, weight: .bold))
                 .foregroundColor(placementState.isValid ? .white : AppColors.whiteText.opacity(0.55))
-                .frame(width: 36, height: 36)
+                .frame(width: 40, height: 40)
                 .background(
                     Circle()
                         .fill(
@@ -1519,47 +1567,21 @@ struct TradingChartView: View {
         return ZStack {
             Circle()
                 .fill(Color.clear)
-                .frame(width: 80, height: 80)
+                .frame(width: 92, height: 92)
                 .contentShape(Circle())
 
             UnifiedMarkerBadge(
                 intent: markerIntent,
                 displayColor: displayColor,
-                size: 36,
-                emoji: markerIntent == .reaction ? placementPreviewReactionEmoji : nil
+                alertSeverity: markerIntent == .alert ? placementPreviewAlertSeverity : nil,
+                sizeToken: .large,
+                emoji: markerIntent == .reaction ? placementPreviewReactionEmoji : nil,
+                isSelected: true
             )
-
-            previewMarkerInfoBox
         }
         .position(x: x, y: y)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isMarkerBeingDragged)
         .gesture(previewMarkerDragGesture(coordinateSystem: coordinateSystem))
-    }
-    
-    @ViewBuilder
-    private var previewMarkerInfoBox: some View {
-        let markerIntent = effectiveMarkerIntent ?? .analysis
-        let displayColor = markerPreviewDisplayColor(for: markerIntent)
-        return Text(markerIntent.displayName)
-            .font(.caption)
-            .fontWeight(.semibold)
-            .foregroundColor(displayColor)
-            .lineLimit(1)
-            .padding(4)
-            .background(
-                LinearGradient(
-                    colors: [AppColors.markerNeutralFillTop, AppColors.markerNeutralFillBottom],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(displayColor, lineWidth: 1)
-            )
-            .cornerRadius(4)
-            .offset(y: 28)
-            .allowsHitTesting(false)
     }
 
     private func markerPreviewDisplayColor(for intent: RLMarkerIntent) -> Color {
@@ -3576,18 +3598,11 @@ struct TradingChartView: View {
     func chartInfoBox(geometry: GeometryProxy) -> some View {
         let topInset = geometry.safeAreaInsets.top
         let topPadding = topInset > 0 ? topInset + 62 : 124
-        let sidePanelWidth = min(236, max(182, geometry.size.width * 0.46))
 
         VStack {
             HStack {
-                VStack(alignment: .leading, spacing: 8) {
-                    chartInfoContent
-                        .allowsHitTesting(false)
-
-                    if let marker = viewingInfoMarker {
-                        markerViewingInfoPanel(marker: marker, panelWidth: sidePanelWidth)
-                    }
-                }
+                chartInfoContent
+                    .allowsHitTesting(false)
                 Spacer()
             }
             .padding(.leading, 8)
@@ -3627,35 +3642,78 @@ struct TradingChartView: View {
     }
 
     @ViewBuilder
+    private func viewingMarkerInfoOverlay(marker: ChartMarkerUI, geometry: GeometryProxy) -> some View {
+        let panelWidth = min(324, max(236, geometry.size.width * 0.62))
+
+        VStack {
+            Spacer(minLength: 0)
+            HStack(alignment: .bottom, spacing: 0) {
+                markerViewingInfoPanel(marker: marker, panelWidth: panelWidth)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 8)
+            .padding(.bottom, bottomInfoPanelsPadding(geometry: geometry))
+        }
+        .transition(.move(edge: .leading).combined(with: .opacity))
+    }
+
+    private func bottomInfoPanelsPadding(geometry: GeometryProxy) -> CGFloat {
+        let xAxisReserve = geometry.size.height * 0.085 + 20
+        let controlsReserve: CGFloat = (!isMarkerPlacementMode && !controlViewModel.isMarkerViewingMode)
+            ? (40 + (indicatorPanelBottomPadding > 0 ? indicatorPanelBottomPadding + 14 : 0))
+            : 0
+        return xAxisReserve + controlsReserve + geometry.safeAreaInsets.bottom + 6
+    }
+
+    @ViewBuilder
     private func markerViewingInfoPanel(marker: ChartMarkerUI, panelWidth: CGFloat) -> some View {
+        Group {
+            if isViewingInfoPanelCollapsed {
+                collapsedViewingInfoStrip(marker: marker)
+            } else {
+                expandedViewingInfoPanel(marker: marker, panelWidth: panelWidth)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isViewingInfoPanelCollapsed)
+    }
+
+    private func expandedViewingInfoPanel(marker: ChartMarkerUI, panelWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(marker.intent.color.opacity(0.22))
-                    .frame(width: 24, height: 24)
-                    .overlay(
-                        Image(systemName: marker.intent.icon)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.white)
-                    )
+                Text("Marker Info")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.88))
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(marker.intent.displayName)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
-                    Text("@\(marker.author.username)")
-                        .font(.system(size: 9.5, weight: .medium))
-                        .foregroundColor(.white.opacity(0.72))
-                        .lineLimit(1)
+                Spacer(minLength: 0)
+
+                Button(action: toggleViewingInfoPanelCollapse) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white.opacity(0.82))
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
                 }
+                .buttonStyle(.plain)
+            }
 
+            viewingInfoAuthorBlock(marker: marker)
+
+            HStack(spacing: 8) {
+                UnifiedMarkerBadge(
+                    intent: marker.intent,
+                    alertSeverity: marker.alertSeverity,
+                    sizeToken: .small
+                )
+                Text(marker.intent.displayName)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundColor(.white)
                 Spacer(minLength: 0)
             }
 
             markerViewingInfoContent(marker: marker)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
         .frame(width: panelWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8)
@@ -3665,7 +3723,102 @@ struct TradingChartView: View {
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
         )
-        .allowsHitTesting(marker.intent == .poll)
+    }
+
+    private func collapsedViewingInfoStrip(marker: ChartMarkerUI) -> some View {
+        VStack(spacing: 8) {
+            UnifiedMarkerBadge(
+                intent: marker.intent,
+                alertSeverity: marker.alertSeverity,
+                sizeToken: .tiny
+            )
+            Text("@\(marker.author.username.prefix(2))")
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.8))
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.white.opacity(0.82))
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 9)
+        .frame(width: 38)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.28))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+        .onTapGesture(perform: toggleViewingInfoPanelCollapse)
+    }
+
+    private func viewingInfoAuthorBlock(marker: ChartMarkerUI) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button {
+                selectedViewingInfoProfileMember = marker.author
+            } label: {
+                HStack(spacing: 8) {
+                    UnifiedMemberAvatar(
+                        username: marker.author.username,
+                        avatarURL: marker.author.avatarUrl,
+                        isOnline: marker.author.isOnline,
+                        size: 30,
+                        showOnlineIndicator: false
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(marker.author.displayUsername)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.92))
+                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Image(systemName: marker.author.memberRole.icon)
+                                .font(.system(size: 8, weight: .semibold))
+                            Text(marker.author.memberRole.displayName)
+                                .font(.system(size: 8.5, weight: .semibold))
+                        }
+                        .foregroundColor(marker.author.memberRole.color.opacity(0.92))
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                viewingAuthorStatPill(label: "Rep", value: "\(marker.author.reputation)")
+                viewingAuthorStatPill(label: "Acc", value: marker.author.accuracyFormatted ?? "—")
+            }
+        }
+    }
+
+    private func viewingAuthorStatPill(label: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.68))
+            Text(value)
+                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.92))
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(
+            Capsule()
+                .fill(Color.white.opacity(0.09))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.11), lineWidth: 1)
+                )
+        )
+    }
+
+    private func toggleViewingInfoPanelCollapse() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isViewingInfoPanelCollapsed.toggle()
+        }
     }
 
     @ViewBuilder
@@ -3770,16 +3923,7 @@ struct TradingChartView: View {
     }
 
     private func markerAlertSeveritySymbol(_ severity: MarkerAlertSeverity) -> String {
-        switch severity {
-        case .critical:
-            return "exclamationmark.octagon.fill"
-        case .severe:
-            return "exclamationmark.triangle.fill"
-        case .moderate:
-            return "exclamationmark.circle.fill"
-        case .mild:
-            return "info.circle.fill"
-        }
+        severity.markerIcon
     }
 
     @ViewBuilder
@@ -3963,7 +4107,10 @@ struct TradingChartView: View {
     func chartControlsBox(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.085 + 34
         let yAxisTrailingInset: CGFloat = yAxisWidth + 4
-        let panelPadding: CGFloat = indicatorPanelBottomPadding > 0 ? indicatorPanelBottomPadding - 30 : 0
+        let indicatorPanelGap: CGFloat = 14
+        let panelPadding: CGFloat = indicatorPanelBottomPadding > 0
+            ? indicatorPanelBottomPadding + indicatorPanelGap
+            : 0
 
         VStack {
             Spacer()
@@ -4126,9 +4273,10 @@ struct TradingChartView: View {
                         }
                     )) {
                         HStack(spacing: 10) {
-                            Image(systemName: intent.icon)
-                                .foregroundColor(intent.color)
-                                .frame(width: 16)
+                            UnifiedMarkerBadge(
+                                intent: intent,
+                                sizeToken: .tiny
+                            )
                             Text(intent.displayName)
                         }
                     }
@@ -4154,12 +4302,11 @@ struct TradingChartView: View {
     
     // MARK: - Chart Drawing
     
-    private func drawChart(context: GraphicsContext, size: CGSize, geometry: GeometryProxy) {
+    private func drawChart(context: GraphicsContext, size: CGSize) {
         var drawingContext = context
 
         drawingContext.clip(to: Path(CGRect(origin: .zero, size: size)))
 
-        let totalOffset = gestureState.panOffset.width
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
 
         // Dim candles/grid when actively dragging a placement line or prediction line
@@ -4199,13 +4346,21 @@ struct TradingChartView: View {
             )
         }
 
-        // Reset opacity for markers — they have their own dimming via the dimmed parameter
+        // Reset opacity after dimmed-base pass.
         if chartDimmed {
             drawingContext.opacity = 1.0
         }
+    }
+
+    private func drawTopPriorityMarkers(context: GraphicsContext, size: CGSize) {
+        var markerContext = context
+        markerContext.clip(to: Path(CGRect(origin: .zero, size: size)))
+
+        let totalOffset = gestureState.panOffset.width
+        let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
 
         ChartMarkerSystem.drawMarkers(
-            context: drawingContext,
+            context: markerContext,
             markers: markerManager.filteredMarkers,
             candles: chartData.candles,
             chartSize: size,

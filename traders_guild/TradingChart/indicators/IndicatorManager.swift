@@ -311,15 +311,10 @@ final class IndicatorManager: ObservableObject {
 
         var config = ActiveIndicators()
         let sortedComponents = indicatorComponents.sorted { lhs, rhs in
-            let lhsPrimary: Bool = {
-                if case let .indicator(payload) = lhs.payload { return payload.isPrimary ?? false }
-                return false
-            }()
-            let rhsPrimary: Bool = {
-                if case let .indicator(payload) = rhs.payload { return payload.isPrimary ?? false }
-                return false
-            }()
-            return lhsPrimary && !rhsPrimary
+            if lhs.ordering != rhs.ordering {
+                return lhs.ordering < rhs.ordering
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
         }
 
         for component in sortedComponents {
@@ -339,54 +334,187 @@ final class IndicatorManager: ObservableObject {
 
     private func activeIndicators(for payload: IndicatorPayload) -> ActiveIndicators {
         var config = ActiveIndicators()
+        let settings = payload.settings
         let indicatorName = payload.name.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
 
         if indicatorName.contains("RSI") {
-            config.rsi = RSIConfig()
+            let fallback = RSIConfig()
+            config.rsi = RSIConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                period: intSetting(settings, keys: ["period", "length"], fallback: fallback.period),
+                overboughtLevel: doubleSetting(settings, keys: ["overboughtLevel", "overbought"], fallback: fallback.overboughtLevel),
+                oversoldLevel: doubleSetting(settings, keys: ["oversoldLevel", "oversold"], fallback: fallback.oversoldLevel),
+                showLevels: boolSetting(settings, keys: ["showLevels"], fallback: fallback.showLevels),
+                overboughtColor: colorSetting(settings, keys: ["overboughtColor"], fallback: fallback.overboughtColor),
+                oversoldColor: colorSetting(settings, keys: ["oversoldColor"], fallback: fallback.oversoldColor)
+            )
             return config
         }
         if indicatorName.contains("MACD") {
-            config.macd = MACDConfig()
+            let fallback = MACDConfig()
+            config.macd = MACDConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                fastPeriod: intSetting(settings, keys: ["fastPeriod", "fast"], fallback: fallback.fastPeriod),
+                slowPeriod: intSetting(settings, keys: ["slowPeriod", "slow"], fallback: fallback.slowPeriod),
+                signalPeriod: intSetting(settings, keys: ["signalPeriod", "signal"], fallback: fallback.signalPeriod),
+                signalColor: colorSetting(settings, keys: ["signalColor"], fallback: fallback.signalColor),
+                histogramPositiveColor: colorSetting(settings, keys: ["histogramPositiveColor"], fallback: fallback.histogramPositiveColor),
+                histogramNegativeColor: colorSetting(settings, keys: ["histogramNegativeColor"], fallback: fallback.histogramNegativeColor),
+                showHistogram: boolSetting(settings, keys: ["showHistogram"], fallback: fallback.showHistogram),
+                showSignalLine: boolSetting(settings, keys: ["showSignalLine"], fallback: fallback.showSignalLine)
+            )
             return config
         }
         if indicatorName.contains("VWAP") {
-            config.vwap = VWAPConfig()
+            let fallback = VWAPConfig()
+            config.vwap = VWAPConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                showStandardDeviationBands: boolSetting(
+                    settings,
+                    keys: ["showStandardDeviationBands", "showBands"],
+                    fallback: fallback.showStandardDeviationBands
+                ),
+                upperBandColor: colorSetting(settings, keys: ["upperBandColor"], fallback: fallback.upperBandColor),
+                lowerBandColor: colorSetting(settings, keys: ["lowerBandColor"], fallback: fallback.lowerBandColor)
+            )
             return config
         }
         if indicatorName.contains("SAR") {
-            config.parabolicSAR = ParabolicSARConfig()
+            let fallback = ParabolicSARConfig()
+            config.parabolicSAR = ParabolicSARConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                accelerationStart: doubleSetting(settings, keys: ["accelerationStart", "start"], fallback: fallback.accelerationStart),
+                accelerationIncrement: doubleSetting(settings, keys: ["accelerationIncrement", "increment"], fallback: fallback.accelerationIncrement),
+                accelerationMax: doubleSetting(settings, keys: ["accelerationMax", "max"], fallback: fallback.accelerationMax),
+                bullishColor: colorSetting(settings, keys: ["bullishColor"], fallback: fallback.bullishColor),
+                bearishColor: colorSetting(settings, keys: ["bearishColor"], fallback: fallback.bearishColor)
+            )
             return config
         }
         if indicatorName.contains("BOLL") {
-            config.bollingerBands = BollingerBandsConfig()
+            let fallback = BollingerBandsConfig()
+            config.bollingerBands = BollingerBandsConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                period: intSetting(settings, keys: ["period", "length"], fallback: fallback.period),
+                standardDeviations: doubleSetting(settings, keys: ["standardDeviations", "stdDev"], fallback: fallback.standardDeviations),
+                upperBandColor: colorSetting(settings, keys: ["upperBandColor"], fallback: fallback.upperBandColor),
+                lowerBandColor: colorSetting(settings, keys: ["lowerBandColor"], fallback: fallback.lowerBandColor),
+                fillColor: colorSetting(settings, keys: ["fillColor"], fallback: fallback.fillColor),
+                showFill: boolSetting(settings, keys: ["showFill"], fallback: fallback.showFill)
+            )
             return config
         }
         if indicatorName.contains("DONCHIAN") {
-            config.donchianChannels = DonchianChannelsConfig()
+            let fallback = DonchianChannelsConfig()
+            config.donchianChannels = DonchianChannelsConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                period: intSetting(settings, keys: ["period", "length"], fallback: fallback.period),
+                upperBandColor: colorSetting(settings, keys: ["upperBandColor"], fallback: fallback.upperBandColor),
+                lowerBandColor: colorSetting(settings, keys: ["lowerBandColor"], fallback: fallback.lowerBandColor),
+                fillColor: colorSetting(settings, keys: ["fillColor"], fallback: fallback.fillColor),
+                showFill: boolSetting(settings, keys: ["showFill"], fallback: fallback.showFill),
+                showMiddleLine: boolSetting(settings, keys: ["showMiddleLine"], fallback: fallback.showMiddleLine)
+            )
             return config
         }
         if indicatorName.contains("KELTNER") {
-            config.keltnerChannels = KeltnerChannelsConfig()
+            let fallback = KeltnerChannelsConfig()
+            config.keltnerChannels = KeltnerChannelsConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                emaPeriod: intSetting(settings, keys: ["emaPeriod"], fallback: fallback.emaPeriod),
+                atrPeriod: intSetting(settings, keys: ["atrPeriod"], fallback: fallback.atrPeriod),
+                atrMultiplier: doubleSetting(settings, keys: ["atrMultiplier"], fallback: fallback.atrMultiplier),
+                upperBandColor: colorSetting(settings, keys: ["upperBandColor"], fallback: fallback.upperBandColor),
+                lowerBandColor: colorSetting(settings, keys: ["lowerBandColor"], fallback: fallback.lowerBandColor),
+                fillColor: colorSetting(settings, keys: ["fillColor"], fallback: fallback.fillColor),
+                showFill: boolSetting(settings, keys: ["showFill"], fallback: fallback.showFill)
+            )
             return config
         }
         if indicatorName.contains("STOCH") {
-            config.stochastic = StochasticConfig()
+            let fallback = StochasticConfig()
+            config.stochastic = StochasticConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                kPeriod: intSetting(settings, keys: ["kPeriod"], fallback: fallback.kPeriod),
+                dPeriod: intSetting(settings, keys: ["dPeriod"], fallback: fallback.dPeriod),
+                smoothK: intSetting(settings, keys: ["smoothK"], fallback: fallback.smoothK),
+                dColor: colorSetting(settings, keys: ["dColor"], fallback: fallback.dColor),
+                overboughtLevel: doubleSetting(settings, keys: ["overboughtLevel", "overbought"], fallback: fallback.overboughtLevel),
+                oversoldLevel: doubleSetting(settings, keys: ["oversoldLevel", "oversold"], fallback: fallback.oversoldLevel),
+                showLevels: boolSetting(settings, keys: ["showLevels"], fallback: fallback.showLevels),
+                overboughtColor: colorSetting(settings, keys: ["overboughtColor"], fallback: fallback.overboughtColor),
+                oversoldColor: colorSetting(settings, keys: ["oversoldColor"], fallback: fallback.oversoldColor)
+            )
             return config
         }
         if indicatorName.contains("CCI") {
-            config.cci = CCIConfig()
+            let fallback = CCIConfig()
+            config.cci = CCIConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                period: intSetting(settings, keys: ["period", "length"], fallback: fallback.period),
+                overboughtLevel: doubleSetting(settings, keys: ["overboughtLevel", "overbought"], fallback: fallback.overboughtLevel),
+                oversoldLevel: doubleSetting(settings, keys: ["oversoldLevel", "oversold"], fallback: fallback.oversoldLevel),
+                showLevels: boolSetting(settings, keys: ["showLevels"], fallback: fallback.showLevels),
+                overboughtColor: colorSetting(settings, keys: ["overboughtColor"], fallback: fallback.overboughtColor),
+                oversoldColor: colorSetting(settings, keys: ["oversoldColor"], fallback: fallback.oversoldColor)
+            )
             return config
         }
         if indicatorName.contains("WILLIAMS") {
-            config.williamsR = WilliamsRConfig()
+            let fallback = WilliamsRConfig()
+            config.williamsR = WilliamsRConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                period: intSetting(settings, keys: ["period", "length"], fallback: fallback.period),
+                overboughtLevel: doubleSetting(settings, keys: ["overboughtLevel", "overbought"], fallback: fallback.overboughtLevel),
+                oversoldLevel: doubleSetting(settings, keys: ["oversoldLevel", "oversold"], fallback: fallback.oversoldLevel),
+                showLevels: boolSetting(settings, keys: ["showLevels"], fallback: fallback.showLevels),
+                overboughtColor: colorSetting(settings, keys: ["overboughtColor"], fallback: fallback.overboughtColor),
+                oversoldColor: colorSetting(settings, keys: ["oversoldColor"], fallback: fallback.oversoldColor)
+            )
             return config
         }
         if indicatorName.contains("ATR") {
-            config.atr = ATRConfig()
+            let fallback = ATRConfig()
+            config.atr = ATRConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                period: intSetting(settings, keys: ["period", "length"], fallback: fallback.period)
+            )
             return config
         }
         if indicatorName.contains("VOLUME") {
-            config.volume = VolumeConfig()
+            let fallback = VolumeConfig()
+            config.volume = VolumeConfig(
+                isEnabled: true,
+                color: colorSetting(settings, keys: ["color"], fallback: fallback.color),
+                lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: Double(fallback.lineWidth))),
+                bullishColor: colorSetting(settings, keys: ["bullishColor"], fallback: fallback.bullishColor),
+                bearishColor: colorSetting(settings, keys: ["bearishColor"], fallback: fallback.bearishColor),
+                showMA: boolSetting(settings, keys: ["showMA"], fallback: fallback.showMA),
+                maPeriod: intSetting(settings, keys: ["maPeriod"], fallback: fallback.maPeriod),
+                maColor: colorSetting(settings, keys: ["maColor"], fallback: fallback.maColor)
+            )
             return config
         }
 
@@ -403,16 +531,23 @@ final class IndicatorManager: ObservableObject {
             }
 
             let period = intSetting(
-                payload.settings,
+                settings,
                 keys: ["period", "length"],
                 fallback: 20
+            )
+            let source = priceSourceSetting(
+                settings,
+                keys: ["source", "priceSource"],
+                fallback: .close
             )
             config.movingAverages = [
                 MovingAverageConfig(
                     type: type,
                     isEnabled: true,
-                    color: CodableColor(type.defaultColor),
-                    period: period
+                    color: colorSetting(settings, keys: ["color"], fallback: CodableColor(type.defaultColor)),
+                    lineWidth: CGFloat(doubleSetting(settings, keys: ["lineWidth"], fallback: 1.5)),
+                    period: period,
+                    priceSource: source
                 ),
             ]
             return config
@@ -455,6 +590,135 @@ final class IndicatorManager: ObservableObject {
             }
         }
         return fallback
+    }
+
+    private func doubleSetting(_ settings: [String: AnyCodable]?, keys: [String], fallback: Double) -> Double {
+        guard let settings else { return fallback }
+
+        for key in keys {
+            if let value = settings[key]?.value as? Double {
+                return value
+            }
+            if let value = settings[key]?.value as? Int {
+                return Double(value)
+            }
+            if let value = settings[key]?.value as? String, let parsed = Double(value) {
+                return parsed
+            }
+        }
+        return fallback
+    }
+
+    private func boolSetting(_ settings: [String: AnyCodable]?, keys: [String], fallback: Bool) -> Bool {
+        guard let settings else { return fallback }
+
+        for key in keys {
+            if let value = settings[key]?.value as? Bool {
+                return value
+            }
+            if let value = settings[key]?.value as? Int {
+                return value != 0
+            }
+            if let value = settings[key]?.value as? String {
+                let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if ["true", "1", "yes", "on"].contains(normalized) {
+                    return true
+                }
+                if ["false", "0", "no", "off"].contains(normalized) {
+                    return false
+                }
+            }
+        }
+        return fallback
+    }
+
+    private func stringSetting(_ settings: [String: AnyCodable]?, keys: [String]) -> String? {
+        guard let settings else { return nil }
+
+        for key in keys {
+            if let value = settings[key]?.value as? String {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func priceSourceSetting(_ settings: [String: AnyCodable]?, keys: [String], fallback: PriceSource) -> PriceSource {
+        guard let raw = stringSetting(settings, keys: keys) else {
+            return fallback
+        }
+        return normalizedPriceSource(raw) ?? fallback
+    }
+
+    private func normalizedPriceSource(_ raw: String) -> PriceSource? {
+        if let exact = PriceSource(rawValue: raw) {
+            return exact
+        }
+
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "open":
+            return .open
+        case "high":
+            return .high
+        case "low":
+            return .low
+        case "close":
+            return .close
+        case "hl2", "hl/2":
+            return .hl2
+        case "hlc3", "hlc/3":
+            return .hlc3
+        case "ohlc4", "ohlc/4":
+            return .ohlc4
+        default:
+            return nil
+        }
+    }
+
+    private func colorSetting(_ settings: [String: AnyCodable]?, keys: [String], fallback: CodableColor) -> CodableColor {
+        guard let settings else { return fallback }
+
+        for key in keys {
+            guard let value = settings[key]?.value else { continue }
+            if let color = parseCodableColor(from: value) {
+                return color
+            }
+        }
+
+        return fallback
+    }
+
+    private func parseCodableColor(from raw: Any) -> CodableColor? {
+        if let hex = raw as? String, let color = Color(hex: hex) {
+            return CodableColor(color)
+        }
+        if let dict = raw as? [String: Any] {
+            return codableColor(from: dict)
+        }
+        if let dict = raw as? [String: Double] {
+            return codableColor(from: dict.mapValues { $0 as Any })
+        }
+        if let dict = raw as? [String: Int] {
+            return codableColor(from: dict.mapValues { Double($0) as Any })
+        }
+        return nil
+    }
+
+    private func codableColor(from dict: [String: Any]) -> CodableColor? {
+        guard let red = numericValue(dict["red"]),
+              let green = numericValue(dict["green"]),
+              let blue = numericValue(dict["blue"]) else {
+            return nil
+        }
+        let opacity = numericValue(dict["opacity"]) ?? 1.0
+        return CodableColor(red: red, green: green, blue: blue, opacity: opacity)
+    }
+
+    private func numericValue(_ raw: Any?) -> Double? {
+        if let value = raw as? Double { return value }
+        if let value = raw as? Int { return Double(value) }
+        if let value = raw as? String, let parsed = Double(value) { return parsed }
+        return nil
     }
     
     // MARK: - Moving Average Management (EMA, SMA, WMA, HMA)
@@ -1162,7 +1426,6 @@ extension IndicatorManager {
         print("==============================")
     }
 }
-
 
 
 

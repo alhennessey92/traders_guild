@@ -650,7 +650,7 @@ private struct MarkerPlacementOptionRow: View {
                 } else {
                     UnifiedMarkerBadge(
                         intent: intent,
-                        size: 30
+                        sizeToken: .medium
                     )
                 }
 
@@ -735,10 +735,10 @@ private struct MarkerFilterSettingsSheet: View {
                     ForEach(RLMarkerIntent.allCases, id: \.self) { intent in
                         Toggle(isOn: binding(for: intent)) {
                             HStack(spacing: 10) {
-                                Image(systemName: intent.icon)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(intent.color)
-                                    .frame(width: 16)
+                                UnifiedMarkerBadge(
+                                    intent: intent,
+                                    sizeToken: .tiny
+                                )
 
                                 Text(intent.displayName)
                                     .font(.subheadline)
@@ -864,7 +864,7 @@ private struct ActiveMarkerRow: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(alignment: .top, spacing: 10) {
-                UnifiedMarkerBadge(intent: marker.intentEnum, size: 24)
+                UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .small)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -1048,7 +1048,7 @@ private struct QuickLinkRow: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(spacing: 8) {
-                UnifiedMarkerBadge(intent: marker.intentEnum, size: 20)
+                UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .tiny)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("\(marker.intentEnum.displayName) • \(marker.symbolTicker)")

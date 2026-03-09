@@ -29,7 +29,7 @@ struct MarkerPlacementGeneralTab: View {
         ),
         .init(
             label: "Warning",
-            icon: "exclamationmark.circle.fill",
+            icon: "exclamationmark.shield.fill",
             severity: .moderate,
             defaultMessage: "Warning alert"
         ),
@@ -91,18 +91,11 @@ struct MarkerPlacementGeneralTab: View {
         } label: {
             HStack(alignment: .center, spacing: 12) {
                 ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(placementState.intent.color.opacity(0.25))
-                        .frame(width: 44, height: 44)
-                        .overlay(
-                            Circle()
-                                .stroke(placementState.intent.color.opacity(0.5), lineWidth: 1)
-                        )
-                        .overlay(
-                            Image(systemName: placementState.intent.icon)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
-                        )
+                    UnifiedMarkerBadge(
+                        intent: placementState.intent,
+                        alertSeverity: placementState.intent == .alert ? placementState.alertSeverity : nil,
+                        sizeToken: .large
+                    )
 
                     Circle()
                         .fill(AppColors.sheetBackground.opacity(0.96))
@@ -326,18 +319,12 @@ struct MarkerPlacementGeneralTab: View {
             handleIntentSelection(intent)
         } label: {
             VStack(spacing: 6) {
-                Circle()
-                    .fill(intent.color.opacity(isSelected ? 0.38 : 0.24))
-                    .frame(width: 30, height: 30)
-                    .overlay(
-                        Circle()
-                            .stroke(intent.color.opacity(isSelected ? 0.7 : 0.4), lineWidth: 1)
-                    )
-                    .overlay(
-                        Image(systemName: intent.icon)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                    )
+                UnifiedMarkerBadge(
+                    intent: intent,
+                    alertSeverity: intent == .alert ? placementState.alertSeverity : nil,
+                    sizeToken: .small,
+                    isSelected: isSelected
+                )
 
                 Text(intent.displayName)
                     .font(.caption2.weight(.semibold))

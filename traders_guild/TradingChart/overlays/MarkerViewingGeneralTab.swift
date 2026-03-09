@@ -40,18 +40,11 @@ struct MarkerViewingGeneralTab: View {
 
     private var heroPanel: some View {
         HStack(alignment: .center, spacing: 12) {
-            Circle()
-                .fill(liveMarker.intent.color.opacity(0.25))
-                .frame(width: 44, height: 44)
-                .overlay(
-                    Circle()
-                        .stroke(liveMarker.intent.color.opacity(0.5), lineWidth: 1)
-                )
-                .overlay(
-                    Image(systemName: liveMarker.intent.icon)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                )
+            UnifiedMarkerBadge(
+                intent: liveMarker.intent,
+                alertSeverity: liveMarker.alertSeverity,
+                sizeToken: .large
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(liveMarker.intent.displayName)
@@ -168,9 +161,16 @@ struct MarkerViewingGeneralTab: View {
                     placeholderText("No poll options")
                 } else {
                     ForEach(pollOptions) { option in
+                        let isSelected = selectedPollOptionId == option.id || option.hasVoted
                         HStack(spacing: 8) {
+                            if isSelected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.blue.opacity(0.95))
+                            }
+
                             Text(option.text)
-                                .font(.caption)
+                                .font(.caption.weight(isSelected ? .semibold : .regular))
                                 .foregroundColor(.white)
                                 .lineLimit(2)
 
@@ -178,16 +178,19 @@ struct MarkerViewingGeneralTab: View {
 
                             Text("\(option.voteCount)")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundColor(AppColors.greyText)
+                                .foregroundColor(isSelected ? .blue.opacity(0.95) : AppColors.greyText)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(AppColors.whiteText.opacity(0.08))
+                                .fill(isSelected ? Color.blue.opacity(0.2) : AppColors.whiteText.opacity(0.08))
                                 .overlay(
                                     Capsule()
-                                        .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                                        .stroke(
+                                            isSelected ? Color.blue.opacity(0.52) : AppColors.whiteText.opacity(0.08),
+                                            lineWidth: 1
+                                        )
                                 )
                         )
                     }
@@ -279,38 +282,11 @@ struct MarkerViewingGeneralTab: View {
                     .background(Capsule().fill(visibilityColor.opacity(0.38)))
             }
 
-            confidenceReadOnlyRow
             statsRow
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .background(sectionCardBackground())
-    }
-
-    private var confidenceReadOnlyRow: some View {
-        HStack(spacing: 8) {
-            Text("Confidence")
-                .font(.caption)
-                .foregroundColor(AppColors.greyText)
-
-            HStack(spacing: 5) {
-                ForEach(1...5, id: \.self) { value in
-                    Image(systemName: value <= (liveMarker.confidence ?? 0) ? "star.fill" : "star")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(
-                            value <= (liveMarker.confidence ?? 0)
-                                ? (Color(hex: "#FBBF24") ?? .yellow)
-                                : AppColors.greyText.opacity(0.75)
-                        )
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            Text(liveMarker.confidence.map { "\($0)/5" } ?? "Not set")
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(AppColors.greyText)
-        }
     }
 
     private var statsRow: some View {
@@ -508,6 +484,10 @@ struct MarkerViewingGeneralTab: View {
         liveMarker.pollOptions ?? []
     }
 
+    private var selectedPollOptionId: UUID? {
+        liveMarker.userPollVote
+    }
+
     private var newsURL: String? {
         for component in orderedComponents where component.componentTypeEnum == .linkURL {
             guard case let .link(payload) = component.payload else { continue }
@@ -606,17 +586,14 @@ private struct AlertPresentation {
         switch severity {
         case .critical:
             title = "Critical"
-            icon = "exclamationmark.octagon.fill"
         case .severe:
             title = "Severe"
-            icon = "exclamationmark.triangle.fill"
         case .moderate:
             title = "Warning"
-            icon = "exclamationmark.circle.fill"
         case .mild:
             title = "Informational"
-            icon = "info.circle.fill"
         }
+        icon = severity.markerIcon
         color = severity.color
     }
 }

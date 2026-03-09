@@ -37,7 +37,7 @@ enum ChartXAxisLabelStyle {
         case .mainChart:
             return 13
         case .indicatorPanel:
-            return 10
+            return 11
         }
     }
 
@@ -46,7 +46,7 @@ enum ChartXAxisLabelStyle {
         case .mainChart:
             return 11
         case .indicatorPanel:
-            return 9
+            return 10
         }
     }
 }
@@ -183,7 +183,7 @@ enum ChartXAxisLabelEngine {
             case .mainChart:
                 color = label.kind == .primary ? .white.opacity(0.96) : .white.opacity(0.82)
             case .indicatorPanel:
-                color = label.kind == .primary ? .white.opacity(0.9) : .gray.opacity(0.95)
+                color = label.kind == .primary ? .white.opacity(0.93) : .white.opacity(0.78)
             }
 
             ctx.draw(

@@ -322,26 +322,26 @@ struct RSIPanelView: View {
             
             VStack {
                 Text(String(format: "%.0f", rsiConfig?.overboughtLevel ?? 70))
-                    .font(.system(size: 9))
-                    .foregroundColor(.red.opacity(0.7))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.red.opacity(0.85))
                 
                 Spacer()
                 
                 Text("50")
-                    .font(.system(size: 9))
-                    .foregroundColor(.gray.opacity(0.7))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.66))
                 
                 Spacer()
                 
                 Text(String(format: "%.0f", rsiConfig?.oversoldLevel ?? 30))
-                    .font(.system(size: 9))
-                    .foregroundColor(.green.opacity(0.7))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.green.opacity(0.85))
             }
-            .frame(width: 25)
+            .frame(width: 28)
             .padding(.top, 18)
             .padding(.bottom, 4)
-            .padding(.trailing, 4)
-            .background(Color.black.opacity(0.6))
+            .padding(.trailing, 5)
+            .background(Color.black.opacity(0.62))
         }
     }
     
@@ -473,7 +473,7 @@ struct RSIPanelView: View {
             Canvas { context, size in
                 drawXAxisLabels(context: context, size: size)
             }
-            .frame(height: 22)
+            .frame(height: 24)
             .background(Color.black)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
@@ -482,27 +482,27 @@ struct RSIPanelView: View {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.markerPlacementGuide.x)
             }
         }
-        .frame(height: 22)
+        .frame(height: 24)
     }
     
     @ViewBuilder
     private func crosshairTimeLabelOverlay(timestamp: Date, xPosition: CGFloat) -> some View {
         VStack(spacing: 1) {
             Image(systemName: "arrowtriangle.up.fill")
-                .font(.system(size: 5))
+                .font(.system(size: 6))
                 .foregroundColor(.cyan)
             
             Text(formatCrosshairTime(timestamp))
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: 4)
                         .fill(Color.cyan.opacity(0.9))
                 )
         }
-        .position(x: xPosition, y: 11)
+        .position(x: xPosition, y: 12)
     }
     
     private func formatCrosshairTime(_ date: Date) -> String {

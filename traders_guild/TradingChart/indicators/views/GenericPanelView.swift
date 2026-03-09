@@ -234,8 +234,8 @@ struct GenericIndicatorPanelView: View {
                 
                 if y >= 0 && y <= geometry.size.height {
                     Text(formatValue(value))
-                        .font(.system(size: 8))
-                        .foregroundColor(.gray)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.76))
                         .position(x: geometry.size.width - 20, y: y)
                 }
             }
@@ -260,9 +260,9 @@ struct GenericIndicatorPanelView: View {
                     
                     // Current value label
                     Text(formatValue(currentValue))
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(lineColor.opacity(0.8))
                         .cornerRadius(3)
@@ -336,7 +336,7 @@ struct GenericIndicatorPanelView: View {
             Canvas { context, size in
                 drawXAxisLabels(context: context, size: size)
             }
-            .frame(height: 22)
+            .frame(height: 24)
             .background(Color.black)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
@@ -345,27 +345,27 @@ struct GenericIndicatorPanelView: View {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.markerPlacementGuide.x)
             }
         }
-        .frame(height: 22)
+        .frame(height: 24)
     }
     
     @ViewBuilder
     private func crosshairTimeLabelOverlay(timestamp: Date, xPosition: CGFloat) -> some View {
         VStack(spacing: 1) {
             Image(systemName: "arrowtriangle.up.fill")
-                .font(.system(size: 5))
+                .font(.system(size: 6))
                 .foregroundColor(.cyan)
             
             Text(formatCrosshairTime(timestamp))
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: 4)
                         .fill(Color.cyan.opacity(0.9))
                 )
         }
-        .position(x: xPosition, y: 11)
+        .position(x: xPosition, y: 12)
     }
     
     private func formatCrosshairTime(_ date: Date) -> String {

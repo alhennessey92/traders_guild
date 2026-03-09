@@ -98,14 +98,14 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
 
     var icon: String {
         switch self {
-        case .analysis: return "chart.line.uptrend.xyaxis"
-        case .setup: return "target"
-        case .alert: return "exclamationmark.triangle.fill"
-        case .question: return "questionmark.bubble.fill"
+        case .analysis: return "waveform.path.ecg.magnifyingglass"
+        case .setup: return "gearshape.arrow.trianglehead.2.clockwise.rotate.90"
+        case .alert: return "exclamationmark.shield.fill"
+        case .question: return "questionmark.message"
         case .poll: return "chart.bar.fill"
-        case .news: return "newspaper.fill"
-        case .reaction: return "face.smiling.inverse"
-        case .personal: return "lock.fill"
+        case .news: return "news.fill"
+        case .reaction: return "face.smiling"
+        case .personal: return "person.badge.shield.checkmark.fill"
         }
     }
 
@@ -121,6 +121,84 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
         case .personal: return Color(hex: "#6B7280") ?? .gray
         }
     }
+
+    func markerSymbol(for severity: MarkerAlertSeverity? = nil) -> String {
+        if self == .alert, let severity {
+            return severity.markerIcon
+        }
+        return icon
+    }
+
+    func markerPalette(for severity: MarkerAlertSeverity? = nil) -> [Color] {
+        if self == .alert, let severity {
+            return severity.markerPalette
+        }
+
+        switch self {
+        case .setup:
+            return [
+                Color.white.opacity(0.96),
+                (Color(hex: "#0E854D") ?? .green).opacity(0.88),
+                (Color(hex: "#4ADE80") ?? .mint).opacity(0.66),
+            ]
+        case .analysis:
+            return [
+                Color.white.opacity(0.96),
+                (Color(hex: "#0F9EB4") ?? .teal).opacity(0.88),
+                (Color(hex: "#22D3EE") ?? .cyan).opacity(0.66),
+            ]
+        case .alert:
+            return [
+                Color.white.opacity(0.96),
+                (Color(hex: "#F59E0B") ?? .orange).opacity(0.9),
+                (Color(hex: "#FDE68A") ?? .yellow).opacity(0.66),
+            ]
+        case .question:
+            return [
+                Color.white.opacity(0.96),
+                (Color(hex: "#5B7FFF") ?? .blue).opacity(0.9),
+                (Color(hex: "#93C5FD") ?? .cyan).opacity(0.68),
+            ]
+        case .poll:
+            return [
+                Color.white.opacity(0.96),
+                (Color(hex: "#8B5CF6") ?? .purple).opacity(0.88),
+                (Color(hex: "#C4B5FD") ?? .indigo).opacity(0.66),
+            ]
+        case .news:
+            return [
+                Color.white.opacity(0.96),
+                (Color(hex: "#EC4899") ?? .pink).opacity(0.88),
+                (Color(hex: "#F9A8D4") ?? .pink).opacity(0.66),
+            ]
+        case .reaction:
+            return [
+                Color.white.opacity(0.96),
+                (Color(hex: "#F59E0B") ?? .orange).opacity(0.9),
+                (Color(hex: "#FCD34D") ?? .yellow).opacity(0.7),
+            ]
+        case .personal:
+            return [
+                Color.white.opacity(0.94),
+                (Color(hex: "#6B7280") ?? .gray).opacity(0.9),
+                (Color(hex: "#9CA3AF") ?? .gray).opacity(0.7),
+            ]
+        }
+    }
+
+    var markerBorderStyle: MarkerBorderStyle {
+        switch self {
+        case .alert, .news, .poll, .reaction:
+            return .intentDark
+        case .setup, .analysis, .question, .personal:
+            return .white
+        }
+    }
+}
+
+enum MarkerBorderStyle {
+    case white
+    case intentDark
 }
 
 enum RLTrackingState: String, Codable, CaseIterable {

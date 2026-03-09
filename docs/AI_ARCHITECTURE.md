@@ -824,7 +824,7 @@ I want you to try and keep the UI similar to the ChartSheetSymbolView.swift
 65. [FIXED] Noticed the marker settings button in main chart bottom bar marker selection sheet doesnt work. When tapping it it does nothing
 
 
-66. Want to change the icons for markers to a better selection, these will come from sf symbols and want to user them in palette mode, so we can use multiple colors, need to make sure we setup a color paletter for each marker intent so the icons run with multiple colors to match the marker theme, here is the list
+66. [FIXED] Want to change the icons for markers to a better selection, these will come from sf symbols and want to user them in palette mode, so we can use multiple colors, need to make sure we setup a color paletter for each marker intent so the icons run with multiple colors to match the marker theme, here is the list
 	Setup - gearshape.arrow.trianglehead.2.clockwise.rotate.90
 	Analysis - waveform.path.ecg.magnifyingglass
 	Alert - 
@@ -839,24 +839,58 @@ I want you to try and keep the UI similar to the ChartSheetSymbolView.swift
 	Personal - person.badge.shield.checkmark.fill
 
 
-67. Want to change the look/UI of the markers, this is critical to get right as they are vital, not feeling the look of them at the moment. Really like the look of the markers in the apple ios weather app, has a nice unique but generic look allowing for subtle color differences by using the palette color feature of the icons, so we can match the unique marker color subtlely in the marker. Ideally i want the marker to have a thicker white border, then the background can be a set/fixed gradient color of #000127 and #111111, which are both set in the assets, this gradient needs to be in a diagonal angle, not vertical or horizontal. The icon needs to be a good size filling most of the space in the marker, ideally white and where available in the sfsymbol icon having accent of the marker unique color. Im happy for certain markers the border to be the unique color, maybe give that a go to see how it looks, but it needs to be a dark color not bright. If possible i want the border to move to a point in the direction towards the chart, so if marker is below the chart the point is on top and visa versa. This is only for the first marker in the candle stack, if there are others in the stack on the same side the other markers are just plain circles. Very important to get this to look good, needs to be professional but also easy to look at if that makes sense, this will be viewed a lot
+67. [FIXED] Want to change the look/UI of the markers, this is critical to get right as they are vital, not feeling the look of them at the moment. Really like the look of the markers in the apple ios weather app, has a nice unique but generic look allowing for subtle color differences by using the palette color feature of the icons, so we can match the unique marker color subtlely in the marker. Ideally i want the marker to have a thicker white border, then the background can be a set/fixed gradient color of #000127 and #111111, which are both set in the assets, this gradient needs to be in a diagonal angle, not vertical or horizontal. The icon needs to be a good size filling most of the space in the marker, ideally white and where available in the sfsymbol icon having accent of the marker unique color. Im happy for certain markers the border to be the unique color, maybe give that a go to see how it looks, but it needs to be a dark color not bright. If possible i want the border to move to a point in the direction towards the chart, so if marker is below the chart the point is on top and visa versa. This is only for the first marker in the candle stack, if there are others in the stack on the same side the other markers are just plain circles. Very important to get this to look good, needs to be professional but also easy to look at if that makes sense, this will be viewed a lot
 
-68. Still showing confidence rating in viewing marker mode, need to remove
+68. [FIXED] Still showing confidence rating in viewing marker mode, need to remove
 
-69. for poll marker if answer selected in chart need to make sure answer turns blue in general marker tab
+69. [FIXED] for poll marker if answer selected in chart need to make sure answer turns blue in general marker tab
 
-70. in placement mode the indicators are still not showing the same settings sheet when adding, for instance when adding ema in default chart it shows a sheet to choose ema value and to choose colors, we dont do this in marker placement mode
+70. [FIXED] in placement mode the indicators are still not showing the same settings sheet when adding, for instance when adding ema in default chart it shows a sheet to choose ema value and to choose colors, we dont do this in marker placement mode
 
-71. Remove the main indicator star icon/feature, dont need that, user adds what they like doesnt matter one being more important than the other, better to simplify
+71. [FIXED] Remove the main indicator star icon/feature, dont need that, user adds what they like doesnt matter one being more important than the other, better to simplify
 
-72. Tab button in bottom bar need adjusting, again like markers would be good to use sfsymbols and the palette feature to mix colors
+72. [FIXED] Tab button in bottom bar need adjusting, again like markers would be good to use sfsymbols and the palette feature to mix colors
 	indicator tab - chart.line.uptrend.xyaxis.circle
 	drawing tab - pencil.circle
 	timeframe tab - clock.circle
 	place marker button - target (Need to increase size)
 
-73. Need to make the checklist box thinner, its too wide going into the chart, wondering if we should set at bottom left of chart. Maybe add a small handle to collapse to just icons and be abel to reopen
+73. [FIXED] Need to make the checklist box thinner, its too wide going into the chart, wondering if we should set at bottom left of chart. Maybe add a small handle to collapse to just icons and be abel to reopen
 
-74. in relation to point 67, need to remove the text label below marker when placing them, dont need that, also marker needs to scale up to its viewing mode size when placing it
+74. [FIXED] in relation to point 67, need to remove the text label below marker when placing them, dont need that, also marker needs to scale up to its viewing mode size when placing it
 
-75. In relation to point 67, need to make sure any part of the app that displays a marker as a avatar etc... now shows this new marker look and to the correct scale
+75. [FIXED] In relation to point 67, need to make sure any part of the app that displays a marker as a avatar etc... now shows this new marker look and to the correct scale
+
+
+
+
+
+76. Chart settings need to include marker distance and distance between them etc...
+
+77. Indicator panels in all views need to use default x axis style and conform better to y axis style, text is appearing too small
+
+78. Need to make sure all marker looks are consistent, different look from placing mode to viewing mode and placed in chart. For instance the analysis marker looks great in placement mode but when set on chart and in viewing mode look boring, needs to conform exactly to the placement mode, so all markers are FULLY consistent from placement mode -> chart -> viewing mode -> to all other references throughout the app, must always look identical
+
+79. Marker points need to be filled and borders need to be full opacity so maybe make colored darker if needed
+
+80. Marker viewing mode info box should be at bottom like checklist and can extend further out maybe even full width but make easy to collapse to the left not up and down, needs to be horizontal collapsible and make more emphasis on the marker info such as question for question marker, poll options for poll etc...
+
+81. Checklist info box needs to collapse horizontally not vertically like the marker info box 
+
+82. In marker viewing mode move like button to far right and general tab left
+
+83. In marker placement mode and viewing mode the general tab with marker avatar, name etc must conform to same style and ui look as symbol details tab in default chart bottom bar, keep it nice and clean
+
+84. In default chart mode the bottom chart buttons (day date, marker visibility, latest, settings) hug too close to indicator panel when active
+
+85. In marker placement mode the checklist box is too low, needs to sit above the x axis currently over it 
+
+86. In marker placement mode the icons in the bottom bar for indicators, drawing and timeframes need to be larger to fit the button, also think the colors of them three need to stay white as they are a generic option for them marker, all tab buttons in bottom bar need to conform to a single sizing and style, must all be consistent
+
+87. Make sure absolutely no lines, drawings, annotations or indicators or anything overlay markers, markers always have top z index priority
+
+88. Like button for markers needs to have better UI, a state for liked and not yet liked, look at ui for blocking a user, similar to that
+
+89. When viewing a marker need to adapt the ui for toolbar at the top, cancel button is fine but need to remove the viewing marker and show a ui displaying marker avatar same size as cancel button and name of marker next to it, in bold making it prominent
+
+90. When viewing a marker adapt the marker info box to show user details for who posted it including their avatar, username, basic details like role, reputation and accuracy like we normally do in other parts of the app, if possible when clicking users avatar or username open profile detail view. that way we show user details and then the marker relevant info underneath it, all being collapsible to the left (look at other points)

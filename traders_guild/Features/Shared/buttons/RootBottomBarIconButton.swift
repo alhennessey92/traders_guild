@@ -12,19 +12,46 @@ struct RootBottomBarIconButton: View {
     var fontSize: CGFloat = 20
     let backgroundColor: Color
     let foregroundColor: Color
+    var palettePrimary: Color? = nil
+    var paletteSecondary: Color? = nil
+    var paletteTertiary: Color? = nil
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: fontSize, weight: .semibold))
-                .foregroundColor(foregroundColor)
+            symbolView
                 .frame(width: 50, height: 50)
                 .background(backgroundColor)
                 .clipShape(Circle())
                 .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
         }
         .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder
+    private var symbolView: some View {
+        if let primary = palettePrimary {
+            if let secondary = paletteSecondary, let tertiary = paletteTertiary {
+                Image(systemName: systemName)
+                    .font(.system(size: fontSize, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(primary, secondary, tertiary)
+            } else if let secondary = paletteSecondary {
+                Image(systemName: systemName)
+                    .font(.system(size: fontSize, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(primary, secondary)
+            } else {
+                Image(systemName: systemName)
+                    .font(.system(size: fontSize, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(primary)
+            }
+        } else {
+            Image(systemName: systemName)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundColor(foregroundColor)
+        }
     }
 }
 

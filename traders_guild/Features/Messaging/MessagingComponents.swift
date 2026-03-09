@@ -887,7 +887,7 @@ struct ChatInputFooter: View {
             HStack(spacing: 8) {
                 UnifiedMarkerBadge(
                     intent: marker.intentEnum,
-                    size: 22
+                    sizeToken: .small
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -1036,7 +1036,7 @@ private struct ChatMarkerPickerSheet: View {
                             HStack(spacing: 10) {
                                 UnifiedMarkerBadge(
                                     intent: marker.intentEnum,
-                                    size: 30
+                                    sizeToken: .medium
                                 )
 
                                 VStack(alignment: .leading, spacing: 3) {
@@ -1797,7 +1797,7 @@ private struct MarkerShareCard: View {
             HStack(alignment: .center, spacing: 10) {
                 UnifiedMarkerBadge(
                     intent: payload.intentEnum,
-                    size: 32
+                    sizeToken: .medium
                 )
 
                 VStack(alignment: .leading, spacing: 2) {

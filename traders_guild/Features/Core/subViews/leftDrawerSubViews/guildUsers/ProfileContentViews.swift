@@ -517,7 +517,7 @@ struct ProfileMarkerCard: View {
             HStack(alignment: .top, spacing: 10) {
                 // Marker type icon
                 VStack(spacing: 4) {
-                    UnifiedMarkerBadge(intent: marker.intentEnum, size: 36)
+                    UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .medium)
                     
                     Text(marker.intentEnum.displayName)
                         .font(.system(size: 8, weight: .medium))

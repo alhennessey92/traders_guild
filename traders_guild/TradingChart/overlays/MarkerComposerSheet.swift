@@ -96,8 +96,11 @@ struct MarkerComposerSheet: View {
                     }
                 } label: {
                     VStack(alignment: .leading, spacing: 6) {
-                        Image(systemName: intent.icon)
-                            .font(.headline)
+                        UnifiedMarkerBadge(
+                            intent: intent,
+                            sizeToken: .small,
+                            isSelected: placementState.intent == intent
+                        )
                         Text(intent.displayName)
                             .font(.caption)
                             .fontWeight(.semibold)

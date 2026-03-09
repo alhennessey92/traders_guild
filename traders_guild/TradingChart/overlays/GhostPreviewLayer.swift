@@ -5,6 +5,7 @@ struct GhostPreviewLayer: View {
     let yForPrice: (Double) -> CGFloat?
     let width: CGFloat
     let topSafeAreaInset: CGFloat
+    let bottomPanelPadding: CGFloat
     let xForTime: ((Date) -> CGFloat?)?
     let guidePoint: (time: Date, price: Double)?
     let drawingInteractionPhase: DrawingInteractionPhase
@@ -18,6 +19,7 @@ struct GhostPreviewLayer: View {
         yForPrice: @escaping (Double) -> CGFloat?,
         width: CGFloat,
         topSafeAreaInset: CGFloat = 0,
+        bottomPanelPadding: CGFloat = 74,
         xForTime: ((Date) -> CGFloat?)? = nil,
         guidePoint: (time: Date, price: Double)? = nil,
         drawingInteractionPhase: DrawingInteractionPhase = .idle,
@@ -28,6 +30,7 @@ struct GhostPreviewLayer: View {
         self.yForPrice = yForPrice
         self.width = width
         self.topSafeAreaInset = topSafeAreaInset
+        self.bottomPanelPadding = bottomPanelPadding
         self.xForTime = xForTime
         self.guidePoint = guidePoint
         self.drawingInteractionPhase = drawingInteractionPhase
@@ -64,10 +67,16 @@ struct GhostPreviewLayer: View {
             }
 
             if shouldShowInfoPanels {
-                infoPanelsStack
+                VStack {
+                    Spacer(minLength: 0)
+                    HStack(alignment: .bottom, spacing: 0) {
+                        infoPanelsStack
+                        Spacer(minLength: 0)
+                    }
                     .padding(.leading, 8)
-                    .padding(.top, infoPanelsTopPadding)
-                    .allowsHitTesting(false)
+                    .padding(.bottom, infoPanelsBottomPadding)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             annotationOverlayLayer
@@ -508,9 +517,8 @@ struct GhostPreviewLayer: View {
         }
     }
 
-    private var infoPanelsTopPadding: CGFloat {
-        let chartInfoTop = topSafeAreaInset > 0 ? topSafeAreaInset + 62 : 124
-        return chartInfoTop + 98
+    private var infoPanelsBottomPadding: CGFloat {
+        bottomPanelPadding
     }
 
     private var infoPanelsStack: some View {
@@ -522,7 +530,7 @@ struct GhostPreviewLayer: View {
     }
 
     private var infoPanelWidth: CGFloat {
-        min(228, max(176, width * 0.45))
+        min(192, max(148, width * 0.34))
     }
 
     private var shouldShowInfoPanels: Bool {
@@ -534,38 +542,81 @@ struct GhostPreviewLayer: View {
     }
 
     private var checklistPanel: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        Group {
+            if placementState.isChecklistCollapsed {
+                collapsedChecklistStrip
+            } else {
+                expandedChecklistPanel
+            }
+        }
+    }
+
+    private var expandedChecklistPanel: some View {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 Image(systemName: "checklist")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(placementState.intent.color.opacity(0.9))
+                    .foregroundColor(placementState.intent.color.opacity(0.92))
                 Text("Checklist")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.white.opacity(0.94))
                 Spacer(minLength: 0)
                 Text("\(completedChecklistItemCount)/\(placementState.placementChecklistItems.count)")
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.72))
+                    .foregroundColor(.white.opacity(0.8))
+                Button(action: toggleChecklistPanel) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white.opacity(0.82))
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
             }
+
+            Divider()
+                .overlay(Color.white.opacity(0.12))
 
             ForEach(placementState.placementChecklistItems) { item in
                 checklistRow(item)
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
         .frame(width: infoPanelWidth, alignment: .leading)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.black.opacity(0.5))
-            }
-        )
+        .background(checklistPanelBackground(cornerRadius: 8))
+    }
+
+    private var collapsedChecklistStrip: some View {
+        VStack(spacing: 7) {
+            Image(systemName: "checklist")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(placementState.intent.color.opacity(0.92))
+            Text("\(completedChecklistItemCount)/\(placementState.placementChecklistItems.count)")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.9))
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.white.opacity(0.82))
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 9)
+        .frame(width: 38, alignment: .center)
+        .background(checklistPanelBackground(cornerRadius: 8))
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+        .onTapGesture(perform: toggleChecklistPanel)
+    }
+
+    private func checklistPanelBackground(cornerRadius: CGFloat) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(Color.black.opacity(0.62))
+        }
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
         )
     }
 
@@ -581,9 +632,9 @@ struct GhostPreviewLayer: View {
 
             Text(item.title)
                 .font(.system(size: 9.5, weight: item.isRequired ? .semibold : .regular))
-                .foregroundColor(item.isComplete ? .white.opacity(0.88) : .white.opacity(0.72))
+                .foregroundColor(item.isComplete ? .white.opacity(0.93) : .white.opacity(0.82))
                 .multilineTextAlignment(.leading)
-                .lineLimit(4)
+                .lineLimit(5)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 6)
@@ -591,6 +642,12 @@ struct GhostPreviewLayer: View {
             Text(item.isRequired ? "REQ" : "TIP")
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                 .foregroundColor(item.isRequired ? .orange.opacity(0.95) : AppColors.greyText)
+        }
+    }
+
+    private func toggleChecklistPanel() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            placementState.isChecklistCollapsed.toggle()
         }
     }
 

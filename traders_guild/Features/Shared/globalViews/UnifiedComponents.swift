@@ -1305,11 +1305,32 @@ struct UnifiedIconBadge: View {
 
 // MARK: - UNIFIED MARKER BADGE (chart-style marker icon)
 
+enum UnifiedMarkerBadgeSizeToken {
+    case tiny
+    case small
+    case medium
+    case large
+
+    var diameter: CGFloat {
+        switch self {
+        case .tiny:
+            return 20
+        case .small:
+            return 24
+        case .medium:
+            return 32
+        case .large:
+            return 44
+        }
+    }
+}
+
 /// Chart-style marker badge matching in-chart markers:
 /// dark neutral fill, solid marker-color border, and same-color icon.
 struct UnifiedMarkerBadge: View {
     let intent: RLMarkerIntent
     let displayColor: Color
+    var alertSeverity: MarkerAlertSeverity? = nil
     var size: CGFloat = 32
     var emoji: String? = nil
     var textLabel: String? = nil
@@ -1318,59 +1339,102 @@ struct UnifiedMarkerBadge: View {
     init(
         intent: RLMarkerIntent,
         displayColor: Color? = nil,
+        alertSeverity: MarkerAlertSeverity? = nil,
         size: CGFloat = 32,
+        sizeToken: UnifiedMarkerBadgeSizeToken? = nil,
         emoji: String? = nil,
         textLabel: String? = nil,
         isSelected: Bool = false
     ) {
         self.intent = intent
         self.displayColor = displayColor ?? intent.color
-        self.size = size
+        self.alertSeverity = alertSeverity
+        self.size = sizeToken?.diameter ?? size
         self.emoji = emoji
         self.textLabel = textLabel
         self.isSelected = isSelected
     }
 
     private var borderWidth: CGFloat {
-        isSelected ? AppColors.markerSelectedBorderWidth : AppColors.markerUnselectedBorderWidth
+        MarkerVisualSpec.borderWidth(isSelected: isSelected)
     }
 
-    private var iconColor: Color { displayColor }
-    private var iconSize: CGFloat { size * 0.5 }
+    private var resolvedDisplayColor: Color {
+        if intent == .alert, let severity = alertSeverity {
+            return severity.color
+        }
+        return displayColor
+    }
+
+    private var iconColor: Color {
+        MarkerVisualSpec.iconPrimaryColor(for: intent, severity: alertSeverity)
+    }
+
+    private var iconSize: CGFloat {
+        MarkerVisualSpec.iconSize(for: size)
+    }
+
+    private var resolvedSymbol: String {
+        MarkerVisualSpec.symbol(for: intent, severity: alertSeverity)
+    }
+
+    private var resolvedPalette: [Color] {
+        MarkerVisualSpec.palette(for: intent, severity: alertSeverity)
+    }
+
+    private var shellGradient: LinearGradient {
+        MarkerVisualSpec.shellGradient()
+    }
+
+    private var borderColor: Color {
+        MarkerVisualSpec.borderColor(for: intent, displayColor: resolvedDisplayColor, isSelected: isSelected)
+    }
 
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color.black.opacity(0.28))
+                .fill(Color.black.opacity(0.32))
                 .offset(x: 1.0, y: 1.0)
                 .frame(width: size, height: size)
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [AppColors.markerNeutralFillTop, AppColors.markerNeutralFillBottom],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .fill(shellGradient)
                 .frame(width: size, height: size)
             Circle()
-                .stroke(displayColor, lineWidth: borderWidth)
+                .stroke(borderColor, lineWidth: borderWidth)
                 .frame(width: size, height: size)
             if intent == .reaction, let emoji = emoji {
                 Text(emoji)
-                    .font(.system(size: iconSize, weight: .bold))
+                    .font(.system(size: iconSize, weight: .semibold))
                     .foregroundColor(iconColor)
             } else if let label = textLabel, !label.isEmpty {
                 Text(label)
-                    .font(.system(size: iconSize * 0.9, weight: .bold))
+                    .font(.system(size: iconSize * 0.88, weight: .bold))
                     .foregroundColor(iconColor)
             } else {
-                Image(systemName: intent.icon)
-                    .font(.system(size: iconSize, weight: .bold))
-                    .foregroundColor(iconColor)
+                paletteSymbol
             }
         }
         .frame(width: size, height: size)
+    }
+
+    @ViewBuilder
+    private var paletteSymbol: some View {
+        if resolvedPalette.count >= 3 {
+            Image(systemName: resolvedSymbol)
+                .symbolRenderingMode(.palette)
+                .font(.system(size: iconSize, weight: .bold))
+                .foregroundStyle(resolvedPalette[0], resolvedPalette[1], resolvedPalette[2])
+        } else if resolvedPalette.count == 2 {
+            Image(systemName: resolvedSymbol)
+                .symbolRenderingMode(.palette)
+                .font(.system(size: iconSize, weight: .bold))
+                .foregroundStyle(resolvedPalette[0], resolvedPalette[1])
+        } else {
+            Image(systemName: resolvedSymbol)
+                .symbolRenderingMode(.monochrome)
+                .font(.system(size: iconSize, weight: .bold))
+                .foregroundColor(iconColor)
+        }
     }
 }
 

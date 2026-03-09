@@ -57,6 +57,34 @@ enum MarkerAlertSeverity: String, Codable, CaseIterable {
         case .critical: return .red
         }
     }
+
+    /// SF Symbol used when rendering alert markers in marker-badge contexts.
+    var markerIcon: String {
+        switch self {
+        case .critical:
+            return "exclamationmark.octagon.fill"
+        case .severe:
+            return "exclamationmark.triangle.fill"
+        case .moderate:
+            return "exclamationmark.shield.fill"
+        case .mild:
+            return "info.circle.fill"
+        }
+    }
+
+    /// Multi-color palette for SF Symbol palette rendering.
+    var markerPalette: [Color] {
+        switch self {
+        case .critical:
+            return [Color.white.opacity(0.96), Color.red.opacity(0.92), Color.red.opacity(0.6)]
+        case .severe:
+            return [Color.white.opacity(0.96), Color.orange.opacity(0.92), Color.yellow.opacity(0.68)]
+        case .moderate:
+            return [Color.white.opacity(0.96), Color.yellow.opacity(0.9), Color.orange.opacity(0.62)]
+        case .mild:
+            return [Color.white.opacity(0.96), Color.blue.opacity(0.9), Color.cyan.opacity(0.66)]
+        }
+    }
 }
 
 // MARK: - Trendline Direction
@@ -102,9 +130,9 @@ enum MarkerPlacementTab: String, CaseIterable, UnifiedTabItem {
     var icon: String {
         switch self {
         case .general: return "slider.horizontal.3"
-        case .indicators: return "waveform.path.ecg"
-        case .drawings: return "pencil.and.ruler"
-        case .timeframes: return "clock.fill"
+        case .indicators: return "chart.line.uptrend.xyaxis.circle"
+        case .drawings: return "pencil.circle"
+        case .timeframes: return "clock.circle"
         }
     }
 }

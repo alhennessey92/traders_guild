@@ -105,7 +105,7 @@ struct MainView: View {
         }
 
         // Add X-axis labels height from bottom indicator panel
-        totalHeight += 22
+        totalHeight += 24
         
         return totalHeight
     }
@@ -462,10 +462,7 @@ struct MainView: View {
                             .fontWeight(.bold)
                             .foregroundColor(.white)
                     } else if chartControlVM.isMarkerViewingMode {
-                        Text("Viewing Marker")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
+                        markerViewingToolbarTitle
                     } else {
                         Text("TG")
                             .font(.largeTitle)
@@ -748,6 +745,36 @@ struct MainView: View {
                 .shadow(color: tintColor.opacity(0.35), radius: 2, x: 0, y: 1)
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var markerViewingToolbarTitle: some View {
+        if let marker = chartViewModel.selectedMarkerForSheet {
+            HStack(spacing: 8) {
+                UnifiedMarkerBadge(
+                    intent: marker.intent,
+                    alertSeverity: marker.alertSeverity,
+                    size: 22
+                )
+                Text(markerToolbarName(for: marker))
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+            }
+        } else {
+            Text("Viewing Marker")
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+        }
+    }
+
+    private func markerToolbarName(for marker: ChartMarkerUI) -> String {
+        let trimmedTitle = marker.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedTitle.isEmpty {
+            return trimmedTitle
+        }
+        return marker.intent.displayName
     }
 
     private func closeMarkerViewingMode() {
@@ -1816,7 +1843,7 @@ struct ChartBottomSheet: View {
                         } else {
                             RootBottomBarIconButton(
                                 systemName: tab.icon,
-                                fontSize: 20,
+                                fontSize: 21,
                                 backgroundColor: placementState.selectedPlacementTab == tab ?
                                     bottomBarSelectedBackground :
                                     bottomBarUnselectedBackground,
@@ -1838,9 +1865,9 @@ struct ChartBottomSheet: View {
                     onPlaceMarker?()
                 } label: {
                     Image(systemName: "target")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 26, weight: .bold))
                         .foregroundColor(placementState.isValid ? .white : AppColors.whiteText.opacity(0.55))
-                        .frame(width: 50, height: 50)
+                        .frame(width: 54, height: 54)
                         .background(
                             Circle()
                                 .fill(
@@ -1991,7 +2018,7 @@ struct ChartBottomSheet: View {
             .map { draft in
                 switch draft.payload {
                 case .indicator(let payload):
-                    return "\(payload.name)|\(payload.isPrimary == true)"
+                    return indicatorPayloadFingerprint(payload)
                 default:
                     return draft.id.uuidString
                 }
@@ -2011,9 +2038,25 @@ struct ChartBottomSheet: View {
                 guard case let .indicator(payload) = component.payload else {
                     return component.id.uuidString
                 }
-                return "\(component.id.uuidString)|\(payload.name)|\(payload.isPrimary == true)"
+                return "\(component.id.uuidString)|\(indicatorPayloadFingerprint(payload))"
             }
             .joined(separator: "||")
+    }
+
+    private func indicatorPayloadFingerprint(_ payload: IndicatorPayload) -> String {
+        "\(payload.name)|\(indicatorSettingsFingerprint(payload.settings))"
+    }
+
+    private func indicatorSettingsFingerprint(_ settings: [String: AnyCodable]?) -> String {
+        guard let settings, !settings.isEmpty else { return "no-settings" }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(settings),
+              let encoded = String(data: data, encoding: .utf8) else {
+            return "settings-encoding-failed"
+        }
+        return encoded
     }
 
     private var placementIndicatorComponents: [RLMarkerComponentDTO] {
@@ -2071,10 +2114,6 @@ struct ChartBottomSheet: View {
             }
 
             HStack(spacing: 4) {
-                markerLikeCapsuleButton
-
-                Spacer(minLength: 0)
-
                 HStack(spacing: 6) {
                     ForEach(MarkerViewingTab.allCases, id: \.self) { tab in
                         if tab == .general,
@@ -2089,7 +2128,7 @@ struct ChartBottomSheet: View {
                             }
                         } else {
                             RootBottomBarIconButton(
-                                systemName: tab.icon,
+                                systemName: tab == .chat ? "message.fill" : tab.icon,
                                 fontSize: 20,
                                 backgroundColor: markerDetailTab == tab ?
                                     bottomBarSelectedBackground :
@@ -2105,6 +2144,10 @@ struct ChartBottomSheet: View {
                         }
                     }
                 }
+
+                Spacer(minLength: 0)
+
+                markerLikeCapsuleButton
             }
             .padding(.horizontal, 16)
             .padding(.top, isExpanded ? 16 : 0)
@@ -2122,19 +2165,36 @@ struct ChartBottomSheet: View {
             HStack(spacing: 7) {
                 Image(systemName: isLiked ? "heart.fill" : "heart")
                     .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(isLiked ? .white : AppColors.markerHeartTint.opacity(0.95))
 
                 Text("\(likeCount)")
                     .font(.caption.weight(.bold))
                     .lineLimit(1)
+                    .foregroundColor(isLiked ? .white : AppColors.whiteText.opacity(0.9))
             }
-            .foregroundColor(.white)
             .padding(.horizontal, 12)
             .frame(height: 50)
             .background(
                 Capsule()
-                    .fill(Color.red.opacity(0.85))
+                    .fill(isLiked ? Color.red.opacity(0.86) : bottomBarUnselectedBackground)
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                isLiked
+                                    ? Color.white.opacity(0.18)
+                                    : AppColors.markerHeartTint.opacity(0.55),
+                                lineWidth: 1
+                            )
+                    )
             )
-            .shadow(color: Color.white.opacity(0.25), radius: 1, x: 0, y: 0)
+            .shadow(
+                color: isLiked
+                    ? AppColors.markerHeartTint.opacity(0.28)
+                    : Color.white.opacity(0.15),
+                radius: 3,
+                x: 0,
+                y: 1
+            )
         }
         .buttonStyle(.plain)
     }
@@ -2145,31 +2205,26 @@ struct ChartBottomSheet: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Circle()
-                    .fill(placementState.intent.color.opacity(0.24))
-                    .frame(width: 26, height: 26)
-                    .overlay(
-                        Circle()
-                            .stroke(placementState.intent.color.opacity(0.58), lineWidth: 1)
-                    )
-                    .overlay(
-                        Image(systemName: placementState.intent.icon)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+                UnifiedMarkerBadge(
+                    intent: placementState.intent,
+                    alertSeverity: placementState.intent == .alert ? placementState.alertSeverity : nil,
+                    sizeToken: .medium,
+                    isSelected: isSelected
+                )
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(placementState.intent.displayName)
-                        .font(.subheadline.weight(.bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                     Text(placementAuthorHandle)
-                        .font(.caption2.weight(.semibold))
+                        .font(.system(size: 9.5, weight: .semibold))
                         .foregroundColor(AppColors.whiteText.opacity(0.82))
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.leading, 6)
+            .padding(.trailing, 12)
             .frame(height: 50)
             .background(
                 Capsule()
@@ -2186,7 +2241,7 @@ struct ChartBottomSheet: View {
                             )
                     )
             )
-            .shadow(color: Color.white.opacity(0.25), radius: 1, x: 0, y: 0)
+            .shadow(color: Color.white.opacity(0.2), radius: 1, x: 0, y: 0)
         }
         .buttonStyle(.plain)
     }
@@ -2197,32 +2252,27 @@ struct ChartBottomSheet: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(marker.intent.color.opacity(0.24))
-                    .frame(width: 20, height: 20)
-                    .overlay(
-                        Circle()
-                            .stroke(marker.intent.color.opacity(0.55), lineWidth: 1)
-                    )
-                    .overlay(
-                        Image(systemName: marker.intent.icon)
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+            HStack(spacing: 10) {
+                UnifiedMarkerBadge(
+                    intent: marker.intent,
+                    alertSeverity: marker.alertSeverity,
+                    sizeToken: .small,
+                    isSelected: isSelected
+                )
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(marker.intent.displayName)
-                        .font(.caption2.weight(.bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                     Text(markerAuthorHandle(marker))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 9.5, weight: .semibold))
                         .foregroundColor(AppColors.whiteText.opacity(0.82))
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.leading, 6)
+            .padding(.trailing, 12)
             .frame(height: 50)
             .background(
                 Capsule()
@@ -2239,7 +2289,7 @@ struct ChartBottomSheet: View {
                             )
                     )
             )
-            .shadow(color: Color.white.opacity(0.25), radius: 1, x: 0, y: 0)
+            .shadow(color: Color.white.opacity(0.2), radius: 1, x: 0, y: 0)
         }
         .buttonStyle(.plain)
     }

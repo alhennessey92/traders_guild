@@ -656,14 +656,11 @@ struct CommentsView: View {
 
     private var markerChatHeader: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(liveMarker.intent.color.opacity(0.2))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Image(systemName: liveMarker.intent.icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(liveMarker.intent.color)
-                )
+            UnifiedMarkerBadge(
+                intent: liveMarker.intent,
+                alertSeverity: liveMarker.alertSeverity,
+                sizeToken: .medium
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(liveMarker.intent.displayName) Chat")
@@ -874,18 +871,12 @@ struct MarkerDetailHeaderView: View {
                                 .blur(radius: 8)
                                 .scaleEffect(glowPulse ? 1.15 : 1.0)
 
-                            Circle()
-                                .fill(marker.intent.color.opacity(0.25))
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    Image(systemName: marker.intent.icon)
-                                        .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.white)
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(marker.intent.color.opacity(0.5), lineWidth: 1.5)
-                                )
+                            UnifiedMarkerBadge(
+                                intent: marker.intent,
+                                alertSeverity: marker.alertSeverity,
+                                sizeToken: .large,
+                                isSelected: true
+                            )
                         }
 
                         VStack(alignment: .leading, spacing: 3) {

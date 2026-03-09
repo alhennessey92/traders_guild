@@ -194,7 +194,7 @@ struct IndicatorPanelContainer: View {
         }
 
         if hasActivePanels {
-            total += 22 // X-axis labels on bottom indicator panel
+            total += 24 // X-axis labels on bottom indicator panel
         }
         
         return total

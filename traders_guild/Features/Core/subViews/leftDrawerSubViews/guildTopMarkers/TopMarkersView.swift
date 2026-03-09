@@ -371,7 +371,7 @@ struct TopMarkerCard: View {
                 HStack(alignment: .top, spacing: 8) {
                     // Icon with type label underneath - pushed down with top padding
                     VStack(spacing: 1) {
-                        UnifiedMarkerBadge(intent: marker.intentEnum, size: 26)
+                        UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .small)
                         Text(shortTypeName)
                             .font(.system(size: 7, weight: .medium))
                             .foregroundColor(marker.intentEnum.color.opacity(0.9))
@@ -482,7 +482,7 @@ struct MarkerTypeIcon: View {
     var body: some View {
         UnifiedMarkerBadge(
             intent: intent,
-            size: 32
+            sizeToken: .medium
         )
     }
 }

@@ -38,6 +38,7 @@ struct MarkerPlacementIndicatorsTab: View {
     @State private var limitWarning: String?
     @State private var infoMessage: String?
     @State private var editingContext: IndicatorEditingContext?
+    @State private var pendingAddItem: IndicatorCatalogItem?
 
     private let indicatorCatalog = IndicatorCatalogItem.all
 
@@ -46,12 +47,7 @@ struct MarkerPlacementIndicatorsTab: View {
             guard case let .indicator(payload) = draft.payload else { return nil }
             return AttachedIndicator(draftID: draft.id, payload: payload)
         }
-        .sorted { lhs, rhs in
-            let lhsPrimary = lhs.payload.isPrimary ?? false
-            let rhsPrimary = rhs.payload.isPrimary ?? false
-            if lhsPrimary != rhsPrimary { return lhsPrimary && !rhsPrimary }
-            return lhs.payload.name < rhs.payload.name
-        }
+        .sorted { $0.payload.name < $1.payload.name }
     }
 
     var body: some View {
@@ -96,6 +92,28 @@ struct MarkerPlacementIndicatorsTab: View {
                         settings: updatedSettings
                     )
                     infoMessage = "Updated \(context.item.title) settings."
+                    pendingAddItem = nil
+                }
+            )
+        }
+        .sheet(item: $pendingAddItem) { item in
+            IndicatorSettingsEditorSheet(
+                context: IndicatorEditingContext(
+                    item: item,
+                    indicatorName: item.payloadName,
+                    existingSettings: item.defaultSettings
+                ),
+                onSave: { updatedSettings in
+                    if placementState.upsertIndicator(
+                        name: item.payloadName,
+                        settings: updatedSettings
+                    ) {
+                        infoMessage = "Added \(item.title)."
+                        limitWarning = nil
+                    } else {
+                        limitWarning = placementState.limitMessage(for: .indicatorPanels)
+                        HapticFeedback.light.trigger()
+                    }
                 }
             )
         }
@@ -225,7 +243,6 @@ struct MarkerPlacementIndicatorsTab: View {
         let title = item?.title ?? attached.payload.name
         let subtitle = item?.description ?? "Custom indicator"
         let isPanel = item?.isPanelIndicator ?? isPanelIndicatorName(attached.payload.name)
-        let isPrimary = attached.payload.isPrimary ?? false
 
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
@@ -240,30 +257,10 @@ struct MarkerPlacementIndicatorsTab: View {
                         .lineLimit(2)
 
                     indicatorModeBadge(isPanel: isPanel)
-
-                    if isPrimary {
-                        Text("PRIMARY")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(Color(hex: "#FBBF24") ?? .yellow)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill((Color(hex: "#FBBF24") ?? .yellow).opacity(0.16)))
-                    }
                 }
             }
 
             Spacer(minLength: 0)
-
-            Button {
-                placementState.setPrimaryIndicator(named: attached.payload.name)
-            } label: {
-                Image(systemName: isPrimary ? "star.fill" : "star")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(isPrimary ? Color(hex: "#FBBF24") ?? .yellow : AppColors.greyText)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(AppColors.whiteText.opacity(0.12)))
-            }
-            .buttonStyle(.plain)
 
             Button {
                 openSettingsEditor(item: item, payload: attached.payload)
@@ -297,9 +294,7 @@ struct MarkerPlacementIndicatorsTab: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(
-                            isPrimary
-                                ? placementState.intent.color.opacity(0.45)
-                                : AppColors.whiteText.opacity(0.08),
+                            placementState.intent.color.opacity(0.45),
                             lineWidth: 1
                         )
                 )
@@ -315,7 +310,6 @@ struct MarkerPlacementIndicatorsTab: View {
     private func catalogIndicatorRow(_ item: IndicatorCatalogItem) -> some View {
         let attached = attachedIndicator(for: item)
         let isAttached = attached != nil
-        let isPrimary = attached?.payload.isPrimary ?? false
         let canAttach = placementState.canAttachIndicator(named: item.payloadName) || isAttached
 
         return HStack(spacing: 10) {
@@ -339,21 +333,6 @@ struct MarkerPlacementIndicatorsTab: View {
             }
 
             Spacer(minLength: 0)
-
-            Button {
-                if let attached {
-                    placementState.setPrimaryIndicator(named: attached.payload.name)
-                }
-            } label: {
-                Image(systemName: isPrimary ? "star.fill" : "star")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(isPrimary ? Color(hex: "#FBBF24") ?? .yellow : AppColors.greyText)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(AppColors.whiteText.opacity(isAttached ? 0.12 : 0.06)))
-            }
-            .buttonStyle(.plain)
-            .opacity(isAttached ? 1 : 0.45)
-            .disabled(!isAttached)
 
             Button {
                 if let attached {
@@ -452,13 +431,12 @@ struct MarkerPlacementIndicatorsTab: View {
             return
         }
 
-        if placementState.upsertIndicator(name: item.payloadName, settings: item.defaultSettings) {
-            limitWarning = nil
+        guard placementState.canAttachIndicator(named: item.payloadName) else {
+            limitWarning = placementState.limitMessage(for: .indicatorPanels)
+            HapticFeedback.light.trigger()
             return
         }
-
-        limitWarning = placementState.limitMessage(for: .indicatorPanels)
-        HapticFeedback.light.trigger()
+        pendingAddItem = item
     }
 
     private func openSettingsEditor(item: IndicatorCatalogItem?, payload: IndicatorPayload) {
@@ -557,54 +535,150 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
             return [
                 "period": AnyCodable(20),
                 "source": AnyCodable("close"),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(type.defaultColor),
             ]
         case .vwap:
-            return ["showStandardDeviationBands": AnyCodable(false)]
+            return [
+                "showStandardDeviationBands": AnyCodable(false),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(.orange),
+                "upperBandColor": Self.colorValue(.orange.opacity(0.5)),
+                "lowerBandColor": Self.colorValue(.orange.opacity(0.5)),
+            ]
         case .bollingerBands:
             return [
                 "period": AnyCodable(20),
                 "standardDeviations": AnyCodable(2.0),
+                "showFill": AnyCodable(true),
+                "lineWidth": AnyCodable(1.0),
+                "color": Self.colorValue(.gray),
+                "upperBandColor": Self.colorValue(.red.opacity(0.7)),
+                "lowerBandColor": Self.colorValue(.green.opacity(0.7)),
+                "fillColor": Self.colorValue(.blue.opacity(0.1)),
             ]
         case .donchianChannels:
-            return ["period": AnyCodable(20)]
+            return [
+                "period": AnyCodable(20),
+                "showFill": AnyCodable(true),
+                "showMiddleLine": AnyCodable(true),
+                "lineWidth": AnyCodable(1.0),
+                "color": Self.colorValue(.gray),
+                "upperBandColor": Self.colorValue(.blue.opacity(0.8)),
+                "lowerBandColor": Self.colorValue(.blue.opacity(0.8)),
+                "fillColor": Self.colorValue(.blue.opacity(0.1)),
+            ]
         case .keltnerChannels:
             return [
                 "emaPeriod": AnyCodable(20),
                 "atrPeriod": AnyCodable(14),
                 "atrMultiplier": AnyCodable(2.0),
+                "showFill": AnyCodable(true),
+                "lineWidth": AnyCodable(1.0),
+                "color": Self.colorValue(.purple),
+                "upperBandColor": Self.colorValue(.purple.opacity(0.7)),
+                "lowerBandColor": Self.colorValue(.purple.opacity(0.7)),
+                "fillColor": Self.colorValue(.purple.opacity(0.1)),
             ]
         case .parabolicSAR:
             return [
                 "accelerationStart": AnyCodable(0.02),
                 "accelerationIncrement": AnyCodable(0.02),
                 "accelerationMax": AnyCodable(0.2),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(.yellow),
+                "bullishColor": Self.colorValue(.green),
+                "bearishColor": Self.colorValue(.red),
             ]
         case .rsi:
-            return ["period": AnyCodable(14)]
+            return [
+                "period": AnyCodable(14),
+                "overboughtLevel": AnyCodable(70.0),
+                "oversoldLevel": AnyCodable(30.0),
+                "showLevels": AnyCodable(true),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(.purple),
+                "overboughtColor": Self.colorValue(.red.opacity(0.15)),
+                "oversoldColor": Self.colorValue(.green.opacity(0.15)),
+            ]
         case .macd:
             return [
                 "fastPeriod": AnyCodable(12),
                 "slowPeriod": AnyCodable(26),
                 "signalPeriod": AnyCodable(9),
+                "showHistogram": AnyCodable(true),
+                "showSignalLine": AnyCodable(true),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(.cyan),
+                "signalColor": Self.colorValue(.orange),
+                "histogramPositiveColor": Self.colorValue(.green.opacity(0.7)),
+                "histogramNegativeColor": Self.colorValue(.red.opacity(0.7)),
             ]
         case .stochastic:
             return [
                 "kPeriod": AnyCodable(14),
                 "dPeriod": AnyCodable(3),
                 "smoothK": AnyCodable(3),
+                "overboughtLevel": AnyCodable(80.0),
+                "oversoldLevel": AnyCodable(20.0),
+                "showLevels": AnyCodable(true),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(.yellow),
+                "dColor": Self.colorValue(.red),
+                "overboughtColor": Self.colorValue(.red.opacity(0.15)),
+                "oversoldColor": Self.colorValue(.green.opacity(0.15)),
             ]
         case .cci:
-            return ["period": AnyCodable(20)]
+            return [
+                "period": AnyCodable(20),
+                "overboughtLevel": AnyCodable(100.0),
+                "oversoldLevel": AnyCodable(-100.0),
+                "showLevels": AnyCodable(true),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(.orange),
+                "overboughtColor": Self.colorValue(.red.opacity(0.15)),
+                "oversoldColor": Self.colorValue(.green.opacity(0.15)),
+            ]
         case .williamsR:
-            return ["period": AnyCodable(14)]
+            return [
+                "period": AnyCodable(14),
+                "overboughtLevel": AnyCodable(-20.0),
+                "oversoldLevel": AnyCodable(-80.0),
+                "showLevels": AnyCodable(true),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(.pink),
+                "overboughtColor": Self.colorValue(.red.opacity(0.15)),
+                "oversoldColor": Self.colorValue(.green.opacity(0.15)),
+            ]
         case .atr:
-            return ["period": AnyCodable(14)]
+            return [
+                "period": AnyCodable(14),
+                "lineWidth": AnyCodable(1.5),
+                "color": Self.colorValue(.red),
+            ]
         case .volume:
             return [
                 "showMA": AnyCodable(false),
                 "maPeriod": AnyCodable(20),
+                "lineWidth": AnyCodable(1.0),
+                "color": Self.colorValue(.blue),
+                "bullishColor": Self.colorValue(.green.opacity(0.7)),
+                "bearishColor": Self.colorValue(.red.opacity(0.7)),
+                "maColor": Self.colorValue(.yellow),
             ]
         }
+    }
+
+    private static func colorValue(_ color: Color) -> AnyCodable {
+        let codable = CodableColor(color)
+        return AnyCodable(
+            [
+                "red": codable.red,
+                "green": codable.green,
+                "blue": codable.blue,
+                "opacity": codable.opacity,
+            ]
+        )
     }
 
     static let all: [IndicatorCatalogItem] = IndicatorType.allCases.map { IndicatorCatalogItem(type: $0) }
@@ -622,6 +696,7 @@ private struct IndicatorSettingField: Identifiable {
         case int
         case double
         case bool
+        case color
     }
 
     let key: String
@@ -636,64 +711,123 @@ private struct IndicatorSettingField: Identifiable {
         case .ema, .sma, .wma, .hma:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
+                .init(key: "color", label: "Color", valueType: .color, defaultValue: Color.cyan),
             ]
         case .vwap:
             return [
                 .init(key: "showStandardDeviationBands", label: "Show Std Dev Bands", valueType: .bool, defaultValue: false),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.orange),
+                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: Color.orange.opacity(0.5)),
+                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: Color.orange.opacity(0.5)),
             ]
         case .bollingerBands:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
                 .init(key: "standardDeviations", label: "Std Deviations", valueType: .double, defaultValue: 2.0),
+                .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
+                .init(key: "color", label: "Middle Line Color", valueType: .color, defaultValue: Color.gray),
+                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: Color.red.opacity(0.7)),
+                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: Color.green.opacity(0.7)),
+                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: Color.blue.opacity(0.1)),
             ]
         case .donchianChannels:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
+                .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
+                .init(key: "showMiddleLine", label: "Show Middle Line", valueType: .bool, defaultValue: true),
+                .init(key: "color", label: "Middle Line Color", valueType: .color, defaultValue: Color.gray),
+                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: Color.blue.opacity(0.8)),
+                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: Color.blue.opacity(0.8)),
+                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: Color.blue.opacity(0.1)),
             ]
         case .keltnerChannels:
             return [
                 .init(key: "emaPeriod", label: "EMA Period", valueType: .int, defaultValue: 20),
                 .init(key: "atrPeriod", label: "ATR Period", valueType: .int, defaultValue: 14),
                 .init(key: "atrMultiplier", label: "ATR Multiplier", valueType: .double, defaultValue: 2.0),
+                .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
+                .init(key: "color", label: "EMA Color", valueType: .color, defaultValue: Color.purple),
+                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: Color.purple.opacity(0.7)),
+                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: Color.purple.opacity(0.7)),
+                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: Color.purple.opacity(0.1)),
             ]
         case .parabolicSAR:
             return [
                 .init(key: "accelerationStart", label: "Acceleration Start", valueType: .double, defaultValue: 0.02),
                 .init(key: "accelerationIncrement", label: "Acceleration Increment", valueType: .double, defaultValue: 0.02),
                 .init(key: "accelerationMax", label: "Acceleration Max", valueType: .double, defaultValue: 0.2),
+                .init(key: "color", label: "Primary Color", valueType: .color, defaultValue: Color.yellow),
+                .init(key: "bullishColor", label: "Bullish Color", valueType: .color, defaultValue: Color.green),
+                .init(key: "bearishColor", label: "Bearish Color", valueType: .color, defaultValue: Color.red),
             ]
         case .rsi:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 14),
+                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 70.0),
+                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: 30.0),
+                .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.purple),
+                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: Color.red.opacity(0.15)),
+                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: Color.green.opacity(0.15)),
             ]
         case .macd:
             return [
                 .init(key: "fastPeriod", label: "Fast Period", valueType: .int, defaultValue: 12),
                 .init(key: "slowPeriod", label: "Slow Period", valueType: .int, defaultValue: 26),
                 .init(key: "signalPeriod", label: "Signal Period", valueType: .int, defaultValue: 9),
+                .init(key: "showHistogram", label: "Show Histogram", valueType: .bool, defaultValue: true),
+                .init(key: "showSignalLine", label: "Show Signal", valueType: .bool, defaultValue: true),
+                .init(key: "color", label: "MACD Color", valueType: .color, defaultValue: Color.cyan),
+                .init(key: "signalColor", label: "Signal Color", valueType: .color, defaultValue: Color.orange),
+                .init(key: "histogramPositiveColor", label: "Histogram + Color", valueType: .color, defaultValue: Color.green.opacity(0.7)),
+                .init(key: "histogramNegativeColor", label: "Histogram - Color", valueType: .color, defaultValue: Color.red.opacity(0.7)),
             ]
         case .stochastic:
             return [
                 .init(key: "kPeriod", label: "K Period", valueType: .int, defaultValue: 14),
                 .init(key: "dPeriod", label: "D Period", valueType: .int, defaultValue: 3),
                 .init(key: "smoothK", label: "Smooth K", valueType: .int, defaultValue: 3),
+                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 80.0),
+                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: 20.0),
+                .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
+                .init(key: "color", label: "K Color", valueType: .color, defaultValue: Color.yellow),
+                .init(key: "dColor", label: "D Color", valueType: .color, defaultValue: Color.red),
+                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: Color.red.opacity(0.15)),
+                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: Color.green.opacity(0.15)),
             ]
         case .cci:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
+                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 100.0),
+                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: -100.0),
+                .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.orange),
+                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: Color.red.opacity(0.15)),
+                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: Color.green.opacity(0.15)),
             ]
         case .williamsR:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 14),
+                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: -20.0),
+                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: -80.0),
+                .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.pink),
+                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: Color.red.opacity(0.15)),
+                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: Color.green.opacity(0.15)),
             ]
         case .atr:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 14),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.red),
             ]
         case .volume:
             return [
                 .init(key: "showMA", label: "Show MA", valueType: .bool, defaultValue: false),
                 .init(key: "maPeriod", label: "MA Period", valueType: .int, defaultValue: 20),
+                .init(key: "color", label: "Base Color", valueType: .color, defaultValue: Color.blue),
+                .init(key: "bullishColor", label: "Bullish Color", valueType: .color, defaultValue: Color.green.opacity(0.7)),
+                .init(key: "bearishColor", label: "Bearish Color", valueType: .color, defaultValue: Color.red.opacity(0.7)),
+                .init(key: "maColor", label: "MA Color", valueType: .color, defaultValue: Color.yellow),
             ]
         }
     }
@@ -708,6 +842,7 @@ private struct IndicatorSettingsEditorSheet: View {
     @State private var intValues: [String: String] = [:]
     @State private var doubleValues: [String: String] = [:]
     @State private var boolValues: [String: Bool] = [:]
+    @State private var colorValues: [String: Color] = [:]
 
     private var fields: [IndicatorSettingField] {
         IndicatorSettingField.fields(for: context.item.type)
@@ -793,6 +928,14 @@ private struct IndicatorSettingsEditorSheet: View {
                             .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
                     )
             )
+        case .color:
+            colorField(
+                label: field.label,
+                selection: Binding(
+                    get: { colorValues[field.key, default: field.defaultValue as? Color ?? .white] },
+                    set: { colorValues[field.key] = $0 }
+                )
+            )
         }
     }
 
@@ -820,6 +963,26 @@ private struct IndicatorSettingsEditorSheet: View {
         }
     }
 
+    private func colorField(label: String, selection: Binding<Color>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+
+            ColorPickerGrid(selectedColor: selection)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.whiteText.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                        )
+                )
+        }
+    }
+
     private func loadCurrentValues() {
         for field in fields {
             switch field.valueType {
@@ -832,6 +995,9 @@ private struct IndicatorSettingsEditorSheet: View {
             case .bool:
                 let value = boolValue(for: field.key, fallback: field.defaultValue as? Bool ?? false)
                 boolValues[field.key] = value
+            case .color:
+                let fallback = field.defaultValue as? Color ?? .white
+                colorValues[field.key] = colorValue(for: field.key, fallback: fallback)
             }
         }
     }
@@ -851,6 +1017,10 @@ private struct IndicatorSettingsEditorSheet: View {
                 merged[field.key] = AnyCodable(parsed)
             case .bool:
                 merged[field.key] = AnyCodable(boolValues[field.key] ?? false)
+            case .color:
+                let fallback = field.defaultValue as? Color ?? .white
+                let selected = colorValues[field.key] ?? fallback
+                merged[field.key] = encodedColor(selected)
             }
         }
 
@@ -882,6 +1052,62 @@ private struct IndicatorSettingsEditorSheet: View {
         if let int = value as? Int { return int != 0 }
         return fallback
     }
+
+    private func colorValue(for key: String, fallback: Color) -> Color {
+        guard let value = context.existingSettings?[key]?.value else { return fallback }
+
+        if let hex = value as? String, let color = Color(hex: hex) {
+            return color
+        }
+
+        if let codableColor = codableColor(from: value) {
+            return codableColor.color
+        }
+
+        return fallback
+    }
+
+    private func codableColor(from value: Any) -> CodableColor? {
+        if let dict = value as? [String: Any] {
+            return codableColor(from: dict)
+        }
+        if let dict = value as? [String: Double] {
+            return codableColor(from: dict.mapValues { $0 as Any })
+        }
+        if let dict = value as? [String: Int] {
+            return codableColor(from: dict.mapValues { Double($0) as Any })
+        }
+        return nil
+    }
+
+    private func codableColor(from dict: [String: Any]) -> CodableColor? {
+        guard let red = numberValue(dict["red"]),
+              let green = numberValue(dict["green"]),
+              let blue = numberValue(dict["blue"]) else {
+            return nil
+        }
+        let opacity = numberValue(dict["opacity"]) ?? 1.0
+        return CodableColor(red: red, green: green, blue: blue, opacity: opacity)
+    }
+
+    private func numberValue(_ raw: Any?) -> Double? {
+        if let value = raw as? Double { return value }
+        if let value = raw as? Int { return Double(value) }
+        if let value = raw as? String, let parsed = Double(value) { return parsed }
+        return nil
+    }
+
+    private func encodedColor(_ color: Color) -> AnyCodable {
+        let codable = CodableColor(color)
+        return AnyCodable(
+            [
+                "red": codable.red,
+                "green": codable.green,
+                "blue": codable.blue,
+                "opacity": codable.opacity,
+            ]
+        )
+    }
 }
 
 enum MarkerPlacementIndicatorFactory {
@@ -889,169 +1115,234 @@ enum MarkerPlacementIndicatorFactory {
         var payloads: [IndicatorPayload] = []
 
         for ma in active.enabledMovingAverages {
-            let settings: [String: AnyCodable] = [
-                "period": AnyCodable(ma.period),
-                "source": AnyCodable(ma.priceSource.rawValue),
-            ]
-            payloads.append(
-                IndicatorPayload(
-                    name: ma.type.rawValue,
-                    settings: settings,
-                    isPrimary: nil
-                )
-            )
+            payloads.append(payload(name: ma.type.rawValue, settings: movingAverageSettings(ma)))
         }
 
         if let vwap = active.vwap, vwap.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "VWAP",
-                    settings: [
-                        "showStandardDeviationBands": AnyCodable(vwap.showStandardDeviationBands),
-                    ],
-                    isPrimary: nil
-                )
-            )
+            payloads.append(payload(name: "VWAP", settings: vwapSettings(vwap)))
         }
 
         if let bollinger = active.bollingerBands, bollinger.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "Bollinger Bands",
-                    settings: [
-                        "period": AnyCodable(bollinger.period),
-                        "standardDeviations": AnyCodable(bollinger.standardDeviations),
-                    ],
-                    isPrimary: nil
-                )
-            )
+            payloads.append(payload(name: "Bollinger Bands", settings: bollingerSettings(bollinger)))
         }
 
         if let donchian = active.donchianChannels, donchian.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "Donchian Channels",
-                    settings: [
-                        "period": AnyCodable(donchian.period),
-                    ],
-                    isPrimary: nil
-                )
-            )
+            payloads.append(payload(name: "Donchian Channels", settings: donchianSettings(donchian)))
         }
 
         if let keltner = active.keltnerChannels, keltner.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "Keltner Channels",
-                    settings: [
-                        "emaPeriod": AnyCodable(keltner.emaPeriod),
-                        "atrPeriod": AnyCodable(keltner.atrPeriod),
-                        "atrMultiplier": AnyCodable(keltner.atrMultiplier),
-                    ],
-                    isPrimary: nil
-                )
-            )
+            payloads.append(payload(name: "Keltner Channels", settings: keltnerSettings(keltner)))
         }
 
         if let sar = active.parabolicSAR, sar.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "Parabolic SAR",
-                    settings: [
-                        "accelerationStart": AnyCodable(sar.accelerationStart),
-                        "accelerationIncrement": AnyCodable(sar.accelerationIncrement),
-                        "accelerationMax": AnyCodable(sar.accelerationMax),
-                    ],
-                    isPrimary: nil
-                )
-            )
+            payloads.append(payload(name: "Parabolic SAR", settings: sarSettings(sar)))
         }
 
         if let rsi = active.rsi, rsi.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "RSI",
-                    settings: ["period": AnyCodable(rsi.period)],
-                    isPrimary: nil
-                )
-            )
-        }
-
-        if let stochastic = active.stochastic, stochastic.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "Stochastic",
-                    settings: [
-                        "kPeriod": AnyCodable(stochastic.kPeriod),
-                        "dPeriod": AnyCodable(stochastic.dPeriod),
-                        "smoothK": AnyCodable(stochastic.smoothK),
-                    ],
-                    isPrimary: nil
-                )
-            )
-        }
-
-        if let cci = active.cci, cci.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "CCI",
-                    settings: [
-                        "period": AnyCodable(cci.period),
-                    ],
-                    isPrimary: nil
-                )
-            )
-        }
-
-        if let williamsR = active.williamsR, williamsR.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "Williams %R",
-                    settings: [
-                        "period": AnyCodable(williamsR.period),
-                    ],
-                    isPrimary: nil
-                )
-            )
-        }
-
-        if let atr = active.atr, atr.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "ATR",
-                    settings: [
-                        "period": AnyCodable(atr.period),
-                    ],
-                    isPrimary: nil
-                )
-            )
-        }
-
-        if let volume = active.volume, volume.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "Volume",
-                    settings: nil,
-                    isPrimary: nil
-                )
-            )
+            payloads.append(payload(name: "RSI", settings: rsiSettings(rsi)))
         }
 
         if let macd = active.macd, macd.isEnabled {
-            payloads.append(
-                IndicatorPayload(
-                    name: "MACD",
-                    settings: [
-                        "fastPeriod": AnyCodable(macd.fastPeriod),
-                        "slowPeriod": AnyCodable(macd.slowPeriod),
-                        "signalPeriod": AnyCodable(macd.signalPeriod),
-                    ],
-                    isPrimary: nil
-                )
-            )
+            payloads.append(payload(name: "MACD", settings: macdSettings(macd)))
+        }
+
+        if let stochastic = active.stochastic, stochastic.isEnabled {
+            payloads.append(payload(name: "Stochastic", settings: stochasticSettings(stochastic)))
+        }
+
+        if let cci = active.cci, cci.isEnabled {
+            payloads.append(payload(name: "CCI", settings: cciSettings(cci)))
+        }
+
+        if let williamsR = active.williamsR, williamsR.isEnabled {
+            payloads.append(payload(name: "Williams %R", settings: williamsRSettings(williamsR)))
+        }
+
+        if let atr = active.atr, atr.isEnabled {
+            payloads.append(payload(name: "ATR", settings: atrSettings(atr)))
+        }
+
+        if let volume = active.volume, volume.isEnabled {
+            payloads.append(payload(name: "Volume", settings: volumeSettings(volume)))
         }
 
         return deduplicated(payloads)
+    }
+
+    private static func payload(name: String, settings: [String: AnyCodable]?) -> IndicatorPayload {
+        IndicatorPayload(name: name, settings: settings, isPrimary: nil)
+    }
+
+    private static func movingAverageSettings(_ config: MovingAverageConfig) -> [String: AnyCodable] {
+        [
+            "period": AnyCodable(config.period),
+            "source": AnyCodable(config.priceSource.rawValue),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+        ]
+    }
+
+    private static func vwapSettings(_ config: VWAPConfig) -> [String: AnyCodable] {
+        [
+            "showStandardDeviationBands": AnyCodable(config.showStandardDeviationBands),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "upperBandColor": colorValue(config.upperBandColor),
+            "lowerBandColor": colorValue(config.lowerBandColor),
+        ]
+    }
+
+    private static func bollingerSettings(_ config: BollingerBandsConfig) -> [String: AnyCodable] {
+        [
+            "period": AnyCodable(config.period),
+            "standardDeviations": AnyCodable(config.standardDeviations),
+            "showFill": AnyCodable(config.showFill),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "upperBandColor": colorValue(config.upperBandColor),
+            "lowerBandColor": colorValue(config.lowerBandColor),
+            "fillColor": colorValue(config.fillColor),
+        ]
+    }
+
+    private static func donchianSettings(_ config: DonchianChannelsConfig) -> [String: AnyCodable] {
+        [
+            "period": AnyCodable(config.period),
+            "showFill": AnyCodable(config.showFill),
+            "showMiddleLine": AnyCodable(config.showMiddleLine),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "upperBandColor": colorValue(config.upperBandColor),
+            "lowerBandColor": colorValue(config.lowerBandColor),
+            "fillColor": colorValue(config.fillColor),
+        ]
+    }
+
+    private static func keltnerSettings(_ config: KeltnerChannelsConfig) -> [String: AnyCodable] {
+        [
+            "emaPeriod": AnyCodable(config.emaPeriod),
+            "atrPeriod": AnyCodable(config.atrPeriod),
+            "atrMultiplier": AnyCodable(config.atrMultiplier),
+            "showFill": AnyCodable(config.showFill),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "upperBandColor": colorValue(config.upperBandColor),
+            "lowerBandColor": colorValue(config.lowerBandColor),
+            "fillColor": colorValue(config.fillColor),
+        ]
+    }
+
+    private static func sarSettings(_ config: ParabolicSARConfig) -> [String: AnyCodable] {
+        [
+            "accelerationStart": AnyCodable(config.accelerationStart),
+            "accelerationIncrement": AnyCodable(config.accelerationIncrement),
+            "accelerationMax": AnyCodable(config.accelerationMax),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "bullishColor": colorValue(config.bullishColor),
+            "bearishColor": colorValue(config.bearishColor),
+        ]
+    }
+
+    private static func rsiSettings(_ config: RSIConfig) -> [String: AnyCodable] {
+        [
+            "period": AnyCodable(config.period),
+            "overboughtLevel": AnyCodable(config.overboughtLevel),
+            "oversoldLevel": AnyCodable(config.oversoldLevel),
+            "showLevels": AnyCodable(config.showLevels),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "overboughtColor": colorValue(config.overboughtColor),
+            "oversoldColor": colorValue(config.oversoldColor),
+        ]
+    }
+
+    private static func macdSettings(_ config: MACDConfig) -> [String: AnyCodable] {
+        [
+            "fastPeriod": AnyCodable(config.fastPeriod),
+            "slowPeriod": AnyCodable(config.slowPeriod),
+            "signalPeriod": AnyCodable(config.signalPeriod),
+            "showHistogram": AnyCodable(config.showHistogram),
+            "showSignalLine": AnyCodable(config.showSignalLine),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "signalColor": colorValue(config.signalColor),
+            "histogramPositiveColor": colorValue(config.histogramPositiveColor),
+            "histogramNegativeColor": colorValue(config.histogramNegativeColor),
+        ]
+    }
+
+    private static func stochasticSettings(_ config: StochasticConfig) -> [String: AnyCodable] {
+        [
+            "kPeriod": AnyCodable(config.kPeriod),
+            "dPeriod": AnyCodable(config.dPeriod),
+            "smoothK": AnyCodable(config.smoothK),
+            "overboughtLevel": AnyCodable(config.overboughtLevel),
+            "oversoldLevel": AnyCodable(config.oversoldLevel),
+            "showLevels": AnyCodable(config.showLevels),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "dColor": colorValue(config.dColor),
+            "overboughtColor": colorValue(config.overboughtColor),
+            "oversoldColor": colorValue(config.oversoldColor),
+        ]
+    }
+
+    private static func cciSettings(_ config: CCIConfig) -> [String: AnyCodable] {
+        [
+            "period": AnyCodable(config.period),
+            "overboughtLevel": AnyCodable(config.overboughtLevel),
+            "oversoldLevel": AnyCodable(config.oversoldLevel),
+            "showLevels": AnyCodable(config.showLevels),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "overboughtColor": colorValue(config.overboughtColor),
+            "oversoldColor": colorValue(config.oversoldColor),
+        ]
+    }
+
+    private static func williamsRSettings(_ config: WilliamsRConfig) -> [String: AnyCodable] {
+        [
+            "period": AnyCodable(config.period),
+            "overboughtLevel": AnyCodable(config.overboughtLevel),
+            "oversoldLevel": AnyCodable(config.oversoldLevel),
+            "showLevels": AnyCodable(config.showLevels),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "overboughtColor": colorValue(config.overboughtColor),
+            "oversoldColor": colorValue(config.oversoldColor),
+        ]
+    }
+
+    private static func atrSettings(_ config: ATRConfig) -> [String: AnyCodable] {
+        [
+            "period": AnyCodable(config.period),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+        ]
+    }
+
+    private static func volumeSettings(_ config: VolumeConfig) -> [String: AnyCodable] {
+        [
+            "showMA": AnyCodable(config.showMA),
+            "maPeriod": AnyCodable(config.maPeriod),
+            "lineWidth": AnyCodable(Double(config.lineWidth)),
+            "color": colorValue(config.color),
+            "bullishColor": colorValue(config.bullishColor),
+            "bearishColor": colorValue(config.bearishColor),
+            "maColor": colorValue(config.maColor),
+        ]
+    }
+
+    private static func colorValue(_ color: CodableColor) -> AnyCodable {
+        AnyCodable(
+            [
+                "red": color.red,
+                "green": color.green,
+                "blue": color.blue,
+                "opacity": color.opacity,
+            ]
+        )
     }
 
     private static func deduplicated(_ payloads: [IndicatorPayload]) -> [IndicatorPayload] {

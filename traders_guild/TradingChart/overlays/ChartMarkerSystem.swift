@@ -1762,6 +1762,13 @@ struct ChartMarkerSystem {
             height: scaledRadius * 2
         )
         let circlePath = Path(ellipseIn: circleRect)
+        let hasPointer = marker.stackIndex == 0
+        let pointerPath = markerPointerPath(
+            center: position,
+            radius: scaledRadius,
+            isBelow: isBelow,
+            includePointer: hasPointer
+        )
 
         // 1. Shadow
         let shadowRect = CGRect(
@@ -1771,59 +1778,62 @@ struct ChartMarkerSystem {
             height: scaledRadius * 2
         )
         drawContext.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.28)))
+        if hasPointer {
+            let shadowPointer = markerPointerPath(
+                center: CGPoint(x: position.x + 1.2, y: position.y + 1.2),
+                radius: scaledRadius,
+                isBelow: isBelow,
+                includePointer: true
+            )
+            drawContext.fill(shadowPointer, with: .color(.black.opacity(0.28)))
+        }
 
-        // 2. Dark neutral gradient background (top → bottom)
-        let grad = Gradient(colors: [
-            AppColors.markerNeutralFillTop,
-            AppColors.markerNeutralFillBottom
-        ])
-        let startPt = CGPoint(x: position.x, y: position.y - scaledRadius)
-        let endPt = CGPoint(x: position.x, y: position.y + scaledRadius)
+        // 2. Shared shell gradient
+        let grad = Gradient(colors: MarkerVisualSpec.shellGradientColors)
+        let startPt = CGPoint(x: position.x - scaledRadius, y: position.y - scaledRadius)
+        let endPt = CGPoint(x: position.x + scaledRadius, y: position.y + scaledRadius)
+        if hasPointer {
+            drawContext.fill(pointerPath, with: .linearGradient(grad, startPoint: startPt, endPoint: endPt))
+        }
         drawContext.fill(circlePath, with: .linearGradient(grad, startPoint: startPt, endPoint: endPt))
 
-        // 3. Border — solid marker color
-        let borderWidth = isSelected ? AppColors.markerSelectedBorderWidth : AppColors.markerUnselectedBorderWidth
-        drawContext.stroke(circlePath, with: .color(marker.displayColor), lineWidth: borderWidth)
+        // 3. Shared border treatment
+        let markerSeverity = marker.intent == .alert ? marker.alertSeverity : nil
+        let borderWidth = MarkerVisualSpec.borderWidth(isSelected: isSelected)
+        let borderColor = MarkerVisualSpec.borderColor(
+            for: marker.intent,
+            displayColor: marker.displayColor,
+            isSelected: isSelected
+        )
+        if hasPointer {
+            drawContext.stroke(
+                pointerPath,
+                with: .color(borderColor),
+                style: StrokeStyle(lineWidth: borderWidth, lineJoin: .round)
+            )
+        }
+        drawContext.stroke(circlePath, with: .color(borderColor), lineWidth: borderWidth)
 
-        // 4. Icon — same color as border
-        let iconColor = marker.displayColor
-        let fontSize: CGFloat = scaledRadius * 1.0
+        // 4. Shared symbol/palette sizing and rendering
+        let iconPalette = MarkerVisualSpec.palette(for: marker.intent, severity: markerSeverity)
+        let iconSymbol = MarkerVisualSpec.symbol(for: marker.intent, severity: markerSeverity)
+        let iconColor = MarkerVisualSpec.iconPrimaryColor(for: marker.intent, severity: markerSeverity)
+        let iconSize = MarkerVisualSpec.iconSize(for: scaledRadius * 2)
         if marker.intent == .reaction, let iconChar = marker.selectedEmoji {
             drawContext.draw(
                 Text(iconChar)
-                    .font(.system(size: fontSize, weight: .bold))
-                    .foregroundColor(iconColor),
-                at: position
-            )
-        } else if marker.intent == .setup, !marker.horizontalLineLabel.isEmpty {
-            drawContext.draw(
-                Text(marker.horizontalLineLabel)
-                    .font(.system(size: fontSize * 0.9, weight: .bold))
+                    .font(.system(size: iconSize, weight: .bold))
                     .foregroundColor(iconColor),
                 at: position
             )
         } else {
-            let maxIconSize = scaledRadius * 1.0
-            let iconImage = Image(systemName: marker.displayIcon)
-            var resolvedIcon = drawContext.resolve(iconImage)
-            resolvedIcon.shading = GraphicsContext.Shading.color(iconColor)
-            let imgSize = resolvedIcon.size
-            guard imgSize.width > 0, imgSize.height > 0 else {
-                let fallbackRect = CGRect(x: position.x - maxIconSize / 2, y: position.y - maxIconSize / 2, width: maxIconSize, height: maxIconSize)
-                drawContext.draw(resolvedIcon, in: fallbackRect)
-                return
-            }
-            // Aspect-fit: preserve icon proportions (avoids vertical squash from draw-in-rect)
-            let iconScale = min(maxIconSize / imgSize.width, maxIconSize / imgSize.height)
-            let drawW = imgSize.width * iconScale
-            let drawH = imgSize.height * iconScale
-            let iconRect = CGRect(
-                x: position.x - drawW / 2,
-                y: position.y - drawH / 2,
-                width: drawW,
-                height: drawH
+            drawPaletteSymbol(
+                context: &drawContext,
+                symbolName: iconSymbol,
+                palette: iconPalette,
+                at: position,
+                maxIconSize: iconSize
             )
-            drawContext.draw(resolvedIcon, in: iconRect)
         }
 
         // 5. Like count badge
@@ -1843,6 +1853,94 @@ struct ChartMarkerSystem {
                 at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 7)
             )
         }
+    }
+
+    private static func drawPaletteSymbol(
+        context: inout GraphicsContext,
+        symbolName: String,
+        palette: [Color],
+        at position: CGPoint,
+        maxIconSize: CGFloat
+    ) {
+        let primary = palette.first ?? Color.white.opacity(0.96)
+        let accent = palette.count > 1 ? palette[1] : nil
+
+        if let accent {
+            drawMonochromeSymbol(
+                context: &context,
+                symbolName: symbolName,
+                color: accent.opacity(0.9),
+                at: position,
+                maxIconSize: maxIconSize,
+                yOffset: 0.6
+            )
+        }
+
+        drawMonochromeSymbol(
+            context: &context,
+            symbolName: symbolName,
+            color: primary,
+            at: position,
+            maxIconSize: accent == nil ? maxIconSize : maxIconSize * 0.88,
+            yOffset: 0
+        )
+    }
+
+    private static func drawMonochromeSymbol(
+        context: inout GraphicsContext,
+        symbolName: String,
+        color: Color,
+        at position: CGPoint,
+        maxIconSize: CGFloat,
+        yOffset: CGFloat
+    ) {
+        let iconImage = Image(systemName: symbolName)
+        var resolvedIcon = context.resolve(iconImage)
+        resolvedIcon.shading = .color(color)
+        let imageSize = resolvedIcon.size
+
+        guard imageSize.width > 0, imageSize.height > 0 else {
+            let fallbackRect = CGRect(
+                x: position.x - maxIconSize / 2,
+                y: position.y - maxIconSize / 2 + yOffset,
+                width: maxIconSize,
+                height: maxIconSize
+            )
+            context.draw(resolvedIcon, in: fallbackRect)
+            return
+        }
+
+        let scale = min(maxIconSize / imageSize.width, maxIconSize / imageSize.height)
+        let drawWidth = imageSize.width * scale
+        let drawHeight = imageSize.height * scale
+        let iconRect = CGRect(
+            x: position.x - drawWidth / 2,
+            y: position.y - drawHeight / 2 + yOffset,
+            width: drawWidth,
+            height: drawHeight
+        )
+        context.draw(resolvedIcon, in: iconRect)
+    }
+
+    private static func markerPointerPath(
+        center: CGPoint,
+        radius: CGFloat,
+        isBelow: Bool,
+        includePointer: Bool
+    ) -> Path {
+        guard includePointer else { return Path() }
+
+        let pointerHeight = radius * 0.38
+        let pointerHalfWidth = radius * 0.34
+        let baseY = isBelow ? center.y - radius + 0.6 : center.y + radius - 0.6
+        let tipY = isBelow ? baseY - pointerHeight : baseY + pointerHeight
+
+        var path = Path()
+        path.move(to: CGPoint(x: center.x - pointerHalfWidth, y: baseY))
+        path.addLine(to: CGPoint(x: center.x + pointerHalfWidth, y: baseY))
+        path.addLine(to: CGPoint(x: center.x, y: tipY))
+        path.closeSubpath()
+        return path
     }
 
     private static func usernameLabelCandidate(

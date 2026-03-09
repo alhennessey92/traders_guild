@@ -151,7 +151,7 @@ struct MarkerActivitySheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        UnifiedMarkerBadge(intent: marker.intentEnum, size: 20)
+                        UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .tiny)
                         if let symbolColor = marker.symbolBrandColor {
                             Circle()
                                 .fill(Color(hex: symbolColor) ?? .blue)

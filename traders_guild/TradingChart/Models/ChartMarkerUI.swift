@@ -122,7 +122,7 @@ struct ChartMarkerUI: Identifiable, Hashable {
     }
 
     var displayIcon: String {
-        intent.icon
+        intent.markerSymbol(for: alertSeverity)
     }
     
     init(marker: RLChartMarkerDTO, candleIndex: Int) {
