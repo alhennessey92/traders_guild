@@ -798,7 +798,8 @@ struct MarkerCommentInputFooter: View {
             placeholder: "Add a comment...",
             isSending: isSending,
             onSend: onSend,
-            selectedDetent: $selectedDetent
+            selectedDetent: $selectedDetent,
+            expandedDetent: .fraction(0.9)
         )
     }
 }

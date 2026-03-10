@@ -438,6 +438,7 @@ struct ChatInputFooter: View {
 
     /// Optional: For sheet contexts where we need to expand to full height
     var selectedDetent: Binding<PresentationDetent>? = nil
+    var expandedDetent: PresentationDetent = .large
 
     /// Optional leading accessory view (e.g. back button in chart chat)
     var leadingAccessory: AnyView? = nil
@@ -514,6 +515,9 @@ struct ChatInputFooter: View {
                             }
                         }
                         .onTapGesture {
+                            if expandSheetIfNeeded() {
+                                return
+                            }
                             if showActionPanel {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                     showActionPanel = false
@@ -547,18 +551,6 @@ struct ChatInputFooter: View {
                 .frame(height: 44)
                 .background(AppColors.whiteText.opacity(0.08))
                 .cornerRadius(25)
-                .overlay {
-                    if let detent = selectedDetent, detent.wrappedValue != .large {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                detent.wrappedValue = .large
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    isInputFocused = true
-                                }
-                            }
-                    }
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -623,6 +615,19 @@ struct ChatInputFooter: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+    }
+
+    @discardableResult
+    private func expandSheetIfNeeded() -> Bool {
+        guard let detent = selectedDetent,
+              detent.wrappedValue != expandedDetent else {
+            return false
+        }
+        detent.wrappedValue = expandedDetent
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            isInputFocused = true
+        }
+        return true
     }
 
     // MARK: - Action Panel (WhatsApp-style)

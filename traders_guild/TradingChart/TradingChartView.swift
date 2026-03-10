@@ -278,7 +278,6 @@ struct TradingChartView: View {
     @State private var showChartSettingsSheet = false
     @State private var isSubmittingViewingPollVote = false
     @State private var viewingPollVoteOptionId: UUID?
-    @State private var selectedViewingInfoProfileMember: RLGuildMemberDTO?
     @State private var isViewingInfoPanelCollapsed = false
     
 
@@ -321,7 +320,7 @@ struct TradingChartView: View {
     
     /// Width of the Y-axis interaction area on the right side
     /// This area captures vertical drag/pinch gestures for price scaling
-    private let yAxisWidth: CGFloat = 60
+    private let yAxisWidth: CGFloat = 59
     
     // MARK: - Chart View Model
     
@@ -648,10 +647,6 @@ struct TradingChartView: View {
             .sheet(isPresented: $showChartSettingsSheet) {
                 ChartSettingsView(settings: chartSettings)
             }
-            .sheet(item: $selectedViewingInfoProfileMember) { member in
-                GuildUserDetailViewRL(member: member)
-                    .environmentObject(rlAppState)
-            }
     }
 
     private func withPlacementAndChartObservers<Content: View>(_ content: Content) -> some View {
@@ -677,8 +672,6 @@ struct TradingChartView: View {
             .onChange(of: controlViewModel.isMarkerViewingMode) { _, isViewing in
                 if isViewing {
                     isViewingInfoPanelCollapsed = false
-                } else {
-                    selectedViewingInfoProfileMember = nil
                 }
             }
     }
@@ -1675,18 +1668,20 @@ struct TradingChartView: View {
     private func previewMarkerDragGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                guard effectiveMarkerIntent != .setup else { return }
                 if !isMarkerBeingDragged {
                     isMarkerBeingDragged = true
                     impactFeedback.impactOccurred()
                 }
                 markerDragPosition = value.location
-                
-                if let index = coordinateSystem.candleIndex(atXPosition: value.location.x) {
-                    previewCandleIndex = snappedMarkerCandleIndex(from: index) ?? -1
+
+                if let index = nearestMarkerCandleIndex(atXPosition: value.location.x) {
+                    previewCandleIndex = index
                 }
             }
             .onEnded { value in
                 isMarkerBeingDragged = false
+                persistPreviewMarkerDragIfNeeded(location: value.location, coordinateSystem: coordinateSystem)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     markerDragPosition = nil
                 }
@@ -1739,11 +1734,12 @@ struct TradingChartView: View {
         guard placementState.isValid,
               let symbolId = chartData.currentSymbol?.id else { return }
 
-        let candleIdx = effectiveCandleIndex
         let request = placementState.buildCreateRequest(
             symbolId: symbolId,
             timeframe: chartViewModel.currentTimeframe.toBackendString()
         )
+        let fallbackCandleIndex = effectiveCandleIndex
+        let candleIdx = optimisticCandleIndex(from: request, fallback: fallbackCandleIndex)
 
         Task {
             let success = await markerManager.addMarkerV2(
@@ -2157,6 +2153,58 @@ struct TradingChartView: View {
         guard let rawIndex, !chartData.candles.isEmpty else { return nil }
         let clampedIndex = max(0, min(chartData.candles.count - 1, rawIndex))
         return Self.nearestNonGapCandleIndex(for: clampedIndex, candles: chartData.candles)
+    }
+
+    private func nearestMarkerCandleIndex(atXPosition x: CGFloat) -> Int? {
+        guard !chartData.candles.isEmpty else { return nil }
+        let scaledWidth = actualCandleWidth
+        let totalWidth = totalCandleWidth
+        guard totalWidth > 0 else { return nil }
+
+        let totalOffset = gestureState.panOffset.width + dragState.width
+        let centeredX = x - totalOffset - (scaledWidth / 2)
+        let roundedIndex = Int(round(centeredX / totalWidth))
+        let clampedIndex = max(0, min(chartData.candles.count - 1, roundedIndex))
+        return snappedMarkerCandleIndex(from: clampedIndex)
+    }
+
+    private func persistPreviewMarkerDragIfNeeded(
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
+        guard controlViewModel.isMarkerPlacementMode else { return }
+        guard placementState.intent != .setup else { return }
+        guard let candleIndex = nearestMarkerCandleIndex(atXPosition: location.x),
+              chartData.candles.indices.contains(candleIndex) else {
+            return
+        }
+
+        previewCandleIndex = candleIndex
+        let timestamp = chartData.candles[candleIndex].timestamp
+        let anchorPrice = coordinateSystem.price(atYPosition: location.y)
+        placementState.upsertComponent(
+            .anchor,
+            payload: .anchor(AnchorPayload(time: timestamp, price: anchorPrice))
+        )
+    }
+
+    private func optimisticCandleIndex(from request: RLCreateMarkerRequest, fallback: Int) -> Int {
+        guard let anchorRequest = request.components.first(where: { $0.componentType == RLComponentType.anchor.rawValue }) else {
+            return fallback
+        }
+
+        let anchorPayload = MarkerComponentPayload.decode(
+            componentType: RLComponentType.anchor.rawValue,
+            rawPayload: anchorRequest.payload
+        )
+
+        guard let anchorTime = anchorPayload.anchorTime,
+              let rawIndex = Self.findCandleIndexForTimestamp(anchorTime, in: chartData.candles),
+              let snapped = snappedMarkerCandleIndex(from: rawIndex) else {
+            return fallback
+        }
+
+        return snapped
     }
     
     // MARK: - Crosshair Gestures
@@ -3624,12 +3672,16 @@ struct TradingChartView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(AppColors.surfaceBlack28)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
-                )
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(AppColors.surfaceBlack80)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(AppColors.surfaceWhite18, lineWidth: 1)
+            )
         )
     }
 
@@ -3643,15 +3695,24 @@ struct TradingChartView: View {
 
     @ViewBuilder
     private func viewingMarkerInfoOverlay(marker: ChartMarkerUI, geometry: GeometryProxy) -> some View {
-        let panelWidth = min(324, max(236, geometry.size.width * 0.62))
-
         VStack {
             Spacer(minLength: 0)
             HStack(alignment: .bottom, spacing: 0) {
-                markerViewingInfoPanel(marker: marker, panelWidth: panelWidth)
+                MarkerViewingInfoBox(
+                    marker: marker,
+                    chartWidth: geometry.size.width,
+                    yAxisWidth: yAxisWidth,
+                    isCollapsed: $isViewingInfoPanelCollapsed,
+                    formatPrice: { price in chartData.formatPrice(price) },
+                    isSubmittingPollVote: isSubmittingViewingPollVote,
+                    submittingPollVoteOptionId: viewingPollVoteOptionId,
+                    onVote: { markerId, optionId in
+                        handleViewingPollVote(markerId: markerId, optionId: optionId)
+                    }
+                )
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 8)
+            .padding(.leading, 6)
             .padding(.bottom, bottomInfoPanelsPadding(geometry: geometry))
         }
         .transition(.move(edge: .leading).combined(with: .opacity))
@@ -3663,371 +3724,6 @@ struct TradingChartView: View {
             ? (40 + (indicatorPanelBottomPadding > 0 ? indicatorPanelBottomPadding + 14 : 0))
             : 0
         return xAxisReserve + controlsReserve + geometry.safeAreaInsets.bottom + 6
-    }
-
-    @ViewBuilder
-    private func markerViewingInfoPanel(marker: ChartMarkerUI, panelWidth: CGFloat) -> some View {
-        Group {
-            if isViewingInfoPanelCollapsed {
-                collapsedViewingInfoStrip(marker: marker)
-            } else {
-                expandedViewingInfoPanel(marker: marker, panelWidth: panelWidth)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: isViewingInfoPanelCollapsed)
-    }
-
-    private func expandedViewingInfoPanel(marker: ChartMarkerUI, panelWidth: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("Marker Info")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite88)
-
-                Spacer(minLength: 0)
-
-                Button(action: toggleViewingInfoPanelCollapse) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(AppColors.surfaceWhite82)
-                        .frame(width: 18, height: 18)
-                        .background(Circle().fill(AppColors.surfaceWhite08))
-                }
-                .buttonStyle(.plain)
-            }
-
-            viewingInfoAuthorBlock(marker: marker)
-
-            HStack(spacing: 8) {
-                UnifiedMarkerBadge(
-                    intent: marker.intent,
-                    alertSeverity: marker.alertSeverity,
-                    sizeToken: .small
-                )
-                Text(marker.intent.displayName)
-                    .font(.system(size: 10.5, weight: .bold))
-                    .foregroundColor(.white)
-                Spacer(minLength: 0)
-            }
-
-            markerViewingInfoContent(marker: marker)
-        }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 9)
-        .frame(width: panelWidth, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(AppColors.surfaceBlack28)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
-                )
-        )
-    }
-
-    private func collapsedViewingInfoStrip(marker: ChartMarkerUI) -> some View {
-        VStack(spacing: 8) {
-            UnifiedMarkerBadge(
-                intent: marker.intent,
-                alertSeverity: marker.alertSeverity,
-                sizeToken: .tiny
-            )
-            Text("@\(marker.author.username.prefix(2))")
-                .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                .foregroundColor(AppColors.surfaceWhite80)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundColor(AppColors.surfaceWhite82)
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 9)
-        .frame(width: 38)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(AppColors.surfaceBlack28)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
-                )
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 8))
-        .onTapGesture(perform: toggleViewingInfoPanelCollapse)
-    }
-
-    private func viewingInfoAuthorBlock(marker: ChartMarkerUI) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Button {
-                selectedViewingInfoProfileMember = marker.author
-            } label: {
-                HStack(spacing: 8) {
-                    UnifiedMemberAvatar(
-                        username: marker.author.username,
-                        avatarURL: marker.author.avatarUrl,
-                        isOnline: marker.author.isOnline,
-                        size: 30,
-                        showOnlineIndicator: false
-                    )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(marker.author.displayUsername)
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundColor(AppColors.surfaceWhite92)
-                            .lineLimit(1)
-                        HStack(spacing: 4) {
-                            Image(systemName: marker.author.memberRole.icon)
-                                .font(.system(size: 8, weight: .semibold))
-                            Text(marker.author.memberRole.displayName)
-                                .font(.system(size: 8.5, weight: .semibold))
-                        }
-                        .foregroundColor(marker.author.memberRole.color.opacity(0.92))
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-
-            Spacer(minLength: 0)
-
-            VStack(alignment: .trailing, spacing: 4) {
-                viewingAuthorStatPill(label: "Rep", value: "\(marker.author.reputation)")
-                viewingAuthorStatPill(label: "Acc", value: marker.author.accuracyFormatted ?? "—")
-            }
-        }
-    }
-
-    private func viewingAuthorStatPill(label: String, value: String) -> some View {
-        HStack(spacing: 4) {
-            Text(label)
-                .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                .foregroundColor(AppColors.surfaceWhite68)
-            Text(value)
-                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                .foregroundColor(AppColors.surfaceWhite92)
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(
-            Capsule()
-                .fill(AppColors.surfaceWhite09)
-                .overlay(
-                    Capsule()
-                        .stroke(AppColors.surfaceWhite11, lineWidth: 1)
-                )
-        )
-    }
-
-    private func toggleViewingInfoPanelCollapse() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            isViewingInfoPanelCollapsed.toggle()
-        }
-    }
-
-    @ViewBuilder
-    private func markerViewingInfoContent(marker: ChartMarkerUI) -> some View {
-        switch marker.intent {
-        case .setup:
-            VStack(alignment: .leading, spacing: 5) {
-                markerViewingPriceRow(
-                    title: "Entry",
-                    price: marker.entryPrice ?? marker.price,
-                    color: RLComponentType.levelEntry.color
-                )
-                if let tp = marker.targetPrice {
-                    markerViewingPriceRow(
-                        title: "TP",
-                        price: tp,
-                        color: RLComponentType.levelTp.color
-                    )
-                }
-                if let sl = marker.stopLossPrice {
-                    markerViewingPriceRow(
-                        title: "SL",
-                        price: sl,
-                        color: RLComponentType.levelSl.color
-                    )
-                }
-            }
-
-        case .analysis:
-            markerViewingText(marker.note, placeholder: "No analysis text")
-
-        case .alert:
-            if let severity = marker.alertSeverity {
-                HStack(spacing: 6) {
-                    Image(systemName: markerAlertSeveritySymbol(severity))
-                        .font(.system(size: 10, weight: .semibold))
-                    Text(severity.rawValue)
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(severity.color.opacity(0.46))
-                        .overlay(Capsule().stroke(severity.color.opacity(0.7), lineWidth: 1))
-                )
-            }
-            markerViewingText(marker.note, placeholder: "No alert note")
-
-        case .question:
-            markerViewingText(marker.note, placeholder: "No question text")
-
-        case .poll:
-            markerViewingPollContent(marker: marker)
-
-        case .news:
-            markerViewingText(markerNewsURL(marker) ?? marker.note, placeholder: "No link provided")
-
-        case .reaction:
-            let emoji = marker.selectedEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if emoji.isEmpty {
-                markerViewingText(nil, placeholder: "No reaction set")
-            } else {
-                HStack(spacing: 8) {
-                    Text(emoji)
-                        .font(.system(size: 18))
-                    Text("Reaction")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(AppColors.surfaceWhite78)
-                    Spacer(minLength: 0)
-                }
-            }
-
-        case .personal:
-            markerViewingText(marker.note, placeholder: "Private marker")
-        }
-    }
-
-    private func markerViewingPriceRow(title: String, price: Double, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(color.opacity(0.95))
-                .frame(width: 6, height: 6)
-            Text(title)
-                .font(.system(size: 9.5, weight: .semibold))
-                .foregroundColor(AppColors.surfaceWhite78)
-            Spacer(minLength: 0)
-            Text(chartData.formatPrice(price))
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-        }
-    }
-
-    private func markerViewingText(_ text: String?, placeholder: String) -> some View {
-        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return Text(trimmed.isEmpty ? placeholder : trimmed)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(trimmed.isEmpty ? AppColors.surfaceWhite58 : AppColors.surfaceWhite86)
-            .lineLimit(3)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func markerAlertSeveritySymbol(_ severity: MarkerAlertSeverity) -> String {
-        severity.markerIcon
-    }
-
-    @ViewBuilder
-    private func markerViewingPollContent(marker: ChartMarkerUI) -> some View {
-        let question = marker.pollQuestion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let options = marker.pollOptions ?? []
-        let totalVotes = max(0, options.reduce(0) { $0 + $1.voteCount })
-
-        if !question.isEmpty {
-            Text(question)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(AppColors.surfaceWhite88)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-
-        if options.isEmpty {
-            markerViewingText(nil, placeholder: "No poll options")
-        } else {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(options) { option in
-                    markerViewingPollOptionButton(
-                        markerId: marker.id,
-                        option: option,
-                        totalVotes: totalVotes,
-                        selectedOptionId: marker.userPollVote
-                    )
-                }
-            }
-        }
-    }
-
-    private func markerViewingPollOptionButton(
-        markerId: UUID,
-        option: RLPollOptionDTO,
-        totalVotes: Int,
-        selectedOptionId: UUID?
-    ) -> some View {
-        let isSelected = selectedOptionId == option.id || option.hasVoted
-        let isSubmitting = isSubmittingViewingPollVote && viewingPollVoteOptionId == option.id
-        let percentage = totalVotes > 0 ? Double(option.voteCount) / Double(totalVotes) : 0
-
-        return Button {
-            handleViewingPollVote(markerId: markerId, optionId: option.id)
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(option.text)
-                        .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-
-                    Spacer(minLength: 0)
-
-                    if isSubmitting {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                            .tint(AppColors.surfaceWhite80)
-                    } else {
-                        Text("\(option.voteCount)")
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(AppColors.surfaceWhite74)
-                    }
-                }
-
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(AppColors.surfaceWhite10)
-                        Capsule()
-                            .fill(isSelected ? AppColors.accentColor.opacity(0.9) : AppColors.surfaceWhite32)
-                            .frame(width: max(2, geometry.size.width * percentage))
-                    }
-                }
-                .frame(height: 5)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? AppColors.accentColor.opacity(0.18) : AppColors.surfaceWhite07)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? AppColors.accentColor.opacity(0.42) : AppColors.surfaceWhite08, lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(isSubmittingViewingPollVote)
-    }
-
-    private func markerNewsURL(_ marker: ChartMarkerUI) -> String? {
-        for component in marker.components {
-            guard component.componentTypeEnum == .linkURL,
-                  case let .link(payload) = component.payload else {
-                continue
-            }
-
-            let value = payload.url.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !value.isEmpty {
-                return value
-            }
-        }
-        return nil
     }
     
     @ViewBuilder
@@ -4354,7 +4050,14 @@ struct TradingChartView: View {
 
     private func drawTopPriorityMarkers(context: GraphicsContext, size: CGSize) {
         var markerContext = context
-        markerContext.clip(to: Path(CGRect(origin: .zero, size: size)))
+        let xAxisHeight = size.height * 0.085
+        let plotRect = CGRect(
+            x: 0,
+            y: 0,
+            width: max(0, size.width - yAxisWidth),
+            height: max(0, size.height - xAxisHeight)
+        )
+        markerContext.clip(to: Path(plotRect))
 
         let totalOffset = gestureState.panOffset.width
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)

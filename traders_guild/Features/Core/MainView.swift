@@ -68,6 +68,7 @@ struct MainView: View {
     @State private var williamsRPanelHeight: CGFloat = 120
     @State private var atrPanelHeight: CGFloat = 120
     @State private var volumePanelHeight: CGFloat = 120
+    @State private var selectedViewingMarkerAuthor: RLGuildMemberDTO?
     
     // MARK: - Computed Properties
     private var screenSize: CGSize {
@@ -471,8 +472,12 @@ struct MainView: View {
                     }
                 }
                 
-                // Right Drawer Button — never render in placement/viewing to avoid ghost toolbar icon.
-                if !chartControlVM.isMarkerPlacementMode && !chartControlVM.isMarkerViewingMode {
+                if chartControlVM.isMarkerViewingMode {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        markerViewingAuthorToolbarButton
+                    }
+                } else if !chartControlVM.isMarkerPlacementMode {
+                    // Right Drawer Button — never render in placement mode to avoid ghost toolbar icon.
                     ToolbarItem(placement: .topBarTrailing) {
                         ZStack(alignment: .topTrailing) {
                             if rightDrawerViewModel.totalUnreadCount > 0 {
@@ -520,6 +525,10 @@ struct MainView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 configureNavigationBarAppearance()
+            }
+            .sheet(item: $selectedViewingMarkerAuthor) { member in
+                GuildUserDetailViewRL(member: member)
+                    .environmentObject(rlAppState)
             }
         }
     }
@@ -750,13 +759,13 @@ struct MainView: View {
     @ViewBuilder
     private var markerViewingToolbarTitle: some View {
         if let marker = chartViewModel.selectedMarkerForSheet {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 UnifiedMarkerBadge(
                     intent: marker.intent,
                     alertSeverity: marker.alertSeverity,
-                    size: 22
+                    size: 30
                 )
-                Text(markerToolbarName(for: marker))
+                Text("\(marker.intent.displayName) Marker")
                     .font(.headline.weight(.bold))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -769,12 +778,57 @@ struct MainView: View {
         }
     }
 
-    private func markerToolbarName(for marker: ChartMarkerUI) -> String {
-        let trimmedTitle = marker.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmedTitle.isEmpty {
-            return trimmedTitle
+    @ViewBuilder
+    private var markerViewingAuthorToolbarButton: some View {
+        if let marker = chartViewModel.selectedMarkerForSheet {
+            Button {
+                selectedViewingMarkerAuthor = marker.author
+            } label: {
+                HStack(spacing: 8) {
+                    UnifiedMemberAvatar(
+                        username: marker.author.username,
+                        avatarURL: marker.author.avatarUrl,
+                        isOnline: marker.author.isOnline,
+                        size: 30,
+                        showOnlineIndicator: false
+                    )
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(marker.author.displayUsername)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+
+                        HStack(spacing: 4) {
+                            Text(marker.author.memberRole.displayName)
+                            Text("Rep \(marker.author.reputation)")
+                            if let accuracy = marker.author.accuracyFormatted {
+                                Text("Acc \(accuracy)")
+                            }
+                        }
+                        .font(.system(size: 8.5, weight: .semibold))
+                        .foregroundColor(AppColors.surfaceWhite82)
+                        .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .frame(maxWidth: 194, alignment: .leading)
+                .background(
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(.ultraThinMaterial)
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(AppColors.surfaceWhite12)
+                    }
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppColors.surfaceWhite20, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
         }
-        return marker.intent.displayName
     }
 
     private func closeMarkerViewingMode() {
@@ -1505,6 +1559,10 @@ struct ChartBottomSheet: View {
         chartViewModel.selectedMarkerForSheet != nil
     }
 
+    private var shouldIgnoreKeyboardSafeArea: Bool {
+        !(isMarkerDetailActive && markerDetailTab == .chat)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Content Area
@@ -1563,7 +1621,7 @@ struct ChartBottomSheet: View {
         }
         .animation(.easeInOut(duration: 0.3), value: selectedView)
         .animation(.easeInOut(duration: 0.3), value: isMarkerDetailActive)
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .ignoresSafeArea(.keyboard, edges: shouldIgnoreKeyboardSafeArea ? .bottom : [])
         .onAppear {
             chartChatManager.configure(with: rlAppState)
         }
@@ -1627,6 +1685,7 @@ struct ChartBottomSheet: View {
             },
             allowsMarkerLinkAttachment: true,
             selectedDetent: $selectedDetent,
+            expandedDetent: .fraction(0.9),
             leadingAccessory: AnyView(
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -2157,7 +2216,7 @@ struct ChartBottomSheet: View {
             .padding(.bottom, 2)
         }
         .frame(height: isExpanded ? 70 : 68)
-        .ignoresSafeArea(.keyboard)
+        .ignoresSafeArea(.keyboard, edges: markerDetailTab == .chat ? [] : .bottom)
     }
 
     private var markerLikeCapsuleButton: some View {
@@ -2166,7 +2225,7 @@ struct ChartBottomSheet: View {
 
         return Button(action: toggleSelectedMarkerLike) {
             HStack(spacing: 6) {
-                Image(systemName: isLiked ? "heart.fill" : "heart")
+                Image(systemName: isLiked ? "hand.thumbsup.fill" : "hand.thumbsup")
                     .font(.headline)
                 Text("\(likeCount)")
                     .font(.subheadline)
