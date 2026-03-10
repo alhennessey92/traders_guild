@@ -31,7 +31,7 @@ struct ManageChatroomsView: View {
                 .padding(.top, 30)
 
                 Divider()
-                    .background(Color.white.opacity(0.15))
+                    .background(AppColors.surfaceWhite15)
                     .padding(.top, 12)
 
                 content

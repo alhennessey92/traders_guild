@@ -478,7 +478,7 @@ struct ChatInputFooter: View {
             }
 
             Divider()
-                .background(Color.gray.opacity(0.3))
+                .background(AppColors.surfaceGray30)
 
             HStack(spacing: 8) {
                 if let leadingAccessory {
@@ -643,7 +643,7 @@ struct ChatInputFooter: View {
             actionPanelButton(
                 icon: "photo.on.rectangle.angled",
                 label: "Photos",
-                tint: Color.purple
+                tint: AppColors.systemPurple
             ) {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showActionPanel = false
@@ -654,7 +654,7 @@ struct ChatInputFooter: View {
             actionPanelButton(
                 icon: "doc.fill",
                 label: "Files",
-                tint: Color.orange
+                tint: AppColors.statusWarning
             ) {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showActionPanel = false
@@ -666,7 +666,7 @@ struct ChatInputFooter: View {
                 actionPanelButton(
                     icon: "mappin.and.ellipse",
                     label: "Marker",
-                    tint: Color.blue
+                    tint: AppColors.statusInfo
                 ) {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         showActionPanel = false
@@ -713,7 +713,7 @@ struct ChatInputFooter: View {
     private var recordingIndicator: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(Color.red)
+                .fill(AppColors.statusNegative)
                 .frame(width: 8, height: 8)
                 .opacity(speechService.isRecording ? 1.0 : 0.3)
                 .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: speechService.isRecording)
@@ -742,7 +742,7 @@ struct ChatInputFooter: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
-        .background(Color.red.opacity(0.1))
+        .background(AppColors.statusNegative10)
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.easeInOut(duration: 0.2), value: speechService.isRecording)
     }
@@ -821,7 +821,7 @@ struct ChatInputFooter: View {
                 .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.72))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                 )
         )
     }
@@ -867,7 +867,7 @@ struct ChatInputFooter: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    .stroke(AppColors.surfaceWhite20, lineWidth: 1)
             )
 
             Button {
@@ -876,7 +876,7 @@ struct ChatInputFooter: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
                     .foregroundColor(.white)
-                    .background(Color.black.opacity(0.45), in: Circle())
+                    .background(AppColors.surfaceBlack45, in: Circle())
             }
             .offset(x: 4, y: -4)
         }
@@ -906,7 +906,7 @@ struct ChatInputFooter: View {
                     .fill(AppColors.whiteText.opacity(0.1))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            .stroke(AppColors.surfaceWhite20, lineWidth: 1)
                     )
             )
 
@@ -916,7 +916,7 @@ struct ChatInputFooter: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
                     .foregroundColor(.white)
-                    .background(Color.black.opacity(0.45), in: Circle())
+                    .background(AppColors.surfaceBlack45, in: Circle())
             }
             .offset(x: 4, y: -4)
         }
@@ -1235,7 +1235,7 @@ struct UnifiedEditMessageSheet: View {
                 TextField("Message", text: $editedText, axis: .vertical)
                     .lineLimit(5...10)
                     .padding()
-                    .background(Color.gray.opacity(0.1))
+                    .background(AppColors.surfaceGray10)
                     .cornerRadius(10)
                     .padding()
                 
@@ -1369,7 +1369,7 @@ struct ActiveUsersPill: View {
         if count > 0 {
             HStack(spacing: 6) {
                 Circle()
-                    .fill(Color.green)
+                    .fill(AppColors.statusPositive)
                     .frame(width: 6, height: 6)
                 
                 Text("\(count) active")
@@ -1379,7 +1379,7 @@ struct ActiveUsersPill: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color.white.opacity(0.06))
+            .background(AppColors.surfaceWhite06)
             .clipShape(Capsule())
         }
     }
@@ -1632,7 +1632,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                     if message.isEdited {
                         Text("(edited)")
                             .font(.caption2)
-                            .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+                            .foregroundColor(message.isCurrentUserMessage ? AppColors.surfaceWhite70 : .secondary)
                     }
                 }
             }
@@ -1642,7 +1642,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         .background(
             message.isCurrentUserMessage ?
             AppColors.accentDarkColor :
-            Color.gray.opacity(0.2)
+            AppColors.surfaceGray20
         )
         .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
     }
@@ -1692,12 +1692,12 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
 
                 Text(type ?? "File")
                     .font(.caption2)
-                    .foregroundColor(message.isCurrentUserMessage ? .white.opacity(0.7) : .secondary)
+                    .foregroundColor(message.isCurrentUserMessage ? AppColors.surfaceWhite70 : .secondary)
             }
         }
         .padding(8)
         .background(
-            (message.isCurrentUserMessage ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
+            (message.isCurrentUserMessage ? AppColors.surfaceWhite15 : AppColors.surfaceGray15)
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
@@ -1804,26 +1804,26 @@ private struct MarkerShareCard: View {
                     Text(payload.intentEnum.displayName)
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundColor(isCurrentUserMessage ? .white.opacity(0.8) : AppColors.greyText)
+                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite80 : AppColors.greyText)
                     Text("\(tickerLabel) • \(timeframeLabel)")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(isCurrentUserMessage ? .white : .primary)
                     Text(timestampLabel)
                         .font(.caption2)
-                        .foregroundColor(isCurrentUserMessage ? .white.opacity(0.75) : .secondary)
+                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite75 : .secondary)
                 }
 
                 Spacer(minLength: 6)
 
                 Image(systemName: "arrow.up.right")
                     .font(.caption)
-                    .foregroundColor(isCurrentUserMessage ? .white.opacity(0.8) : AppColors.accentColor)
+                    .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite80 : AppColors.accentColor)
             }
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isCurrentUserMessage ? Color.white.opacity(0.15) : Color.white.opacity(0.1))
+                    .fill(isCurrentUserMessage ? AppColors.surfaceWhite15 : AppColors.surfaceWhite10)
             )
         }
         .buttonStyle(PlainButtonStyle())

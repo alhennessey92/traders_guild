@@ -48,7 +48,7 @@ struct MarkerActivitySheet: View {
                 .padding(.top, 20)
 
                 Divider()
-                    .background(Color.white.opacity(0.15))
+                    .background(AppColors.surfaceWhite15)
                     .padding(.top, 12)
 
                 content
@@ -101,10 +101,10 @@ struct MarkerActivitySheet: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.04))
+                        .fill(AppColors.surfaceWhite04)
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                         )
                 )
                 .padding(.bottom, 22)
@@ -121,10 +121,10 @@ struct MarkerActivitySheet: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
         .padding(.top, 8)
@@ -143,7 +143,7 @@ struct MarkerActivitySheet: View {
 
                     if !isLast {
                         Rectangle()
-                            .fill(Color.white.opacity(0.1))
+                            .fill(AppColors.surfaceWhite10)
                             .frame(width: 2)
                             .frame(maxHeight: .infinity)
                     }

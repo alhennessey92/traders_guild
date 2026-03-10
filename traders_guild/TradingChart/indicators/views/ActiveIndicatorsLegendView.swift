@@ -41,7 +41,7 @@ struct ActiveIndicatorsLegendView: View {
                             .frame(width: 6, height: 6)
                         Text("SAR")
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(AppColors.surfaceWhite80)
                     }
                 }
                 
@@ -71,7 +71,7 @@ struct ActiveIndicatorsLegendView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.black.opacity(0.4))
+            .background(AppColors.surfaceBlack40)
             .cornerRadius(6)
         }
     }
@@ -85,7 +85,7 @@ struct ActiveIndicatorsLegendView: View {
                 .frame(width: 12, height: 2)
             Text(text)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(AppColors.surfaceWhite80)
         }
     }
     
@@ -127,13 +127,13 @@ struct ActiveIndicatorsLegendCompactView: View {
                         }
                         Text(item.text)
                             .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(AppColors.surfaceWhite70)
                     }
                 }
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(Color.black.opacity(0.3))
+            .background(AppColors.surfaceBlack30)
             .cornerRadius(4)
         }
     }

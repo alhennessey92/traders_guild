@@ -63,7 +63,7 @@ struct MACDPanelView: View {
                 xAxisLabels
             }
         }
-        .background(Color.black.opacity(0.85))
+        .background(AppColors.surfaceBlack85)
     }
 
     // MARK: - Pan Gesture
@@ -106,10 +106,10 @@ struct MACDPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(Color(white: 0.08))
+                .fill(AppColors.chartIndicatorHandleFill)
             
             Capsule()
-                .fill(isDraggingHandle ? Color.white.opacity(0.8) : Color.gray.opacity(0.5))
+                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
                 .frame(width: 36, height: 5)
         }
         .frame(height: 22)
@@ -133,7 +133,7 @@ struct MACDPanelView: View {
         )
         .overlay(
             Rectangle()
-                .fill(Color.gray.opacity(0.3))
+                .fill(AppColors.surfaceGray30)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -147,7 +147,7 @@ struct MACDPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            Color.black.opacity(0.8)
+            AppColors.surfaceBlack80
             
             Canvas { context, size in
                 drawMACDPanel(context: context, size: size)
@@ -225,7 +225,7 @@ struct MACDPanelView: View {
         path.move(to: CGPoint(x: 0, y: zeroY))
         path.addLine(to: CGPoint(x: lineEndX, y: zeroY))
         
-        context.stroke(path, with: .color(.gray.opacity(0.5)), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        context.stroke(path, with: .color(AppColors.surfaceGray50), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
     }
     
     private func drawHistogram(context: GraphicsContext, size: CGSize, config: MACDConfig, dataRange: (min: Double, max: Double), drawableHeight: CGFloat, topPadding: CGFloat) {
@@ -353,7 +353,7 @@ struct MACDPanelView: View {
                             path.addLine(to: CGPoint(x: lineEndX, y: y))
                         }
                         
-                        let lineColor = latestMACD.macdLine >= 0 ? Color.green : Color.red
+                        let lineColor = latestMACD.macdLine >= 0 ? AppColors.statusPositive : AppColors.statusNegative
                         context.stroke(linePath, with: .color(lineColor.opacity(0.6)), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
                         
                         // Price label
@@ -392,7 +392,7 @@ struct MACDPanelView: View {
     }
 
     private var activeGuideColor: Color {
-        gestureState.crosshairActive ? Color.white.opacity(0.4) : Color.blue.opacity(0.6)
+        gestureState.crosshairActive ? AppColors.surfaceWhite40 : AppColors.statusInfo60
     }
     
     // MARK: - Y-Axis Labels
@@ -406,25 +406,25 @@ struct MACDPanelView: View {
             VStack {
                 Text(formatMACDValue(dataRange.max * 0.7))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.78))
+                    .foregroundColor(AppColors.surfaceWhite78)
                 
                 Spacer()
                 
                 Text("0")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.66))
+                    .foregroundColor(AppColors.surfaceWhite66)
                 
                 Spacer()
                 
                 Text(formatMACDValue(dataRange.min * 0.7))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.78))
+                    .foregroundColor(AppColors.surfaceWhite78)
             }
             .frame(width: 42)
             .padding(.top, 18)
             .padding(.bottom, 4)
             .padding(.trailing, 5)
-            .background(Color.black.opacity(0.62))
+            .background(AppColors.surfaceBlack62)
         }
     }
     
@@ -435,7 +435,7 @@ struct MACDPanelView: View {
             HStack(spacing: 6) {
                 Text(macdConfig?.shortLabel ?? "MACD")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(AppColors.surfaceWhite80)
                 
                 if let latest = indicatorManager.latestMACD {
                     Circle()
@@ -508,7 +508,7 @@ struct MACDPanelView: View {
                 drawXAxisLabels(context: context, size: size)
             }
             .frame(height: 24)
-            .background(Color.black)
+            .background(AppColors.systemBlack)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
@@ -533,7 +533,7 @@ struct MACDPanelView: View {
                 .padding(.vertical, 3)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.cyan.opacity(0.9))
+                        .fill(AppColors.statusAccent90)
                 )
         }
         .position(x: xPosition, y: 12)

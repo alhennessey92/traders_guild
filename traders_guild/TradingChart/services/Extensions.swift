@@ -14,17 +14,17 @@ extension Color {
     /// Standard colors for trading charts
     /// Consistent color scheme across the app
     struct Trading {
-        static let bullish = Color.green
-        static let bearish = Color.red
-        static let bullishLight = Color.green.opacity(0.3)
-        static let bearishLight = Color.red.opacity(0.3)
-        static let grid = Color.gray.opacity(0.1)
-        static let gridMajor = Color.gray.opacity(0.2)
-        static let text = Color.gray
-        static let priceIndicator = Color.yellow
-        static let background = Color.black
-        static let volumeUp = Color.green.opacity(0.5)
-        static let volumeDown = Color.red.opacity(0.5)
+        static let bullish = AppColors.statusPositive
+        static let bearish = AppColors.statusNegative
+        static let bullishLight = AppColors.statusPositive30
+        static let bearishLight = AppColors.statusNegative30
+        static let grid = AppColors.surfaceGray10
+        static let gridMajor = AppColors.surfaceGray20
+        static let text = AppColors.systemGray
+        static let priceIndicator = AppColors.systemYellow
+        static let background = AppColors.systemBlack
+        static let volumeUp = AppColors.statusPositive50
+        static let volumeDown = AppColors.statusNegative50
     }
 }
 

@@ -399,7 +399,7 @@ struct TopMarkerCard: View {
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 2)
-                                    .background(Capsule().fill(Color.blue.opacity(0.6)))
+                                    .background(Capsule().fill(AppColors.statusInfo60))
                             }
                             
                             Spacer()

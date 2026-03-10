@@ -53,7 +53,7 @@ struct WelcomeView: View {
 
                     HStack(alignment: .center) {
                         Rectangle()
-                            .fill(Color.gray.opacity(0.5))
+                            .fill(AppColors.surfaceGray50)
                             .frame(height: 1)
                             .frame(maxWidth: .infinity)
 
@@ -63,7 +63,7 @@ struct WelcomeView: View {
                             .padding(.horizontal, 8)
 
                         Rectangle()
-                            .fill(Color.gray.opacity(0.5))
+                            .fill(AppColors.surfaceGray50)
                             .frame(height: 1)
                             .frame(maxWidth: .infinity)
                     }
@@ -104,7 +104,7 @@ struct WelcomeView: View {
                 VStack(spacing: 10) {
                     Divider()
                         .frame(height: 1)
-                        .background(Color.gray.opacity(0.5))
+                        .background(AppColors.surfaceGray50)
 
                     HStack {
                         Text("Don't have an account?")

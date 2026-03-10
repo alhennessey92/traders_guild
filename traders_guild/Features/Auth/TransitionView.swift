@@ -22,7 +22,7 @@ struct TransitionView: View {
     var body: some View {
         ZStack {
             // Solid black base to fully block content behind
-            Color.black
+            AppColors.systemBlack
                 .ignoresSafeArea()
             
             // Use matching gradient for smooth transition

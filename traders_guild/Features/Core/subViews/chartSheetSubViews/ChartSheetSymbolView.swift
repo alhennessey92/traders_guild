@@ -165,7 +165,7 @@ struct ChartSheetSymbolView: View {
                             FlowLayout(spacing: 5) {
                                 Text(symbol.ticker)
                                     .font(.system(size: 11))
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(AppColors.surfaceWhite60)
 
                                 // Market status
                                 SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
@@ -182,11 +182,11 @@ struct ChartSheetSymbolView: View {
 
                                 Text("•")
                                     .font(.system(size: 9))
-                                    .foregroundColor(.white.opacity(0.4))
+                                    .foregroundColor(AppColors.surfaceWhite40)
 
                                 Text(symbol.assetClass.capitalized)
                                     .font(.system(size: 11))
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(AppColors.surfaceWhite60)
                             }
                         }
                         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -244,7 +244,7 @@ struct ChartSheetSymbolView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "doc.text.magnifyingglass")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(AppColors.surfaceWhite80)
 
                             Text("Symbol Details")
                                 .font(.subheadline.weight(.semibold))
@@ -254,14 +254,14 @@ struct ChartSheetSymbolView: View {
 
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.5))
+                                .foregroundColor(AppColors.surfaceWhite50)
                                 .rotationEffect(.degrees(isSymbolDetailsExpanded ? 90 : 0))
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 11)
                         .background(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -303,10 +303,10 @@ struct ChartSheetSymbolView: View {
                         .padding(14)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.04))
+                                .fill(AppColors.surfaceWhite04)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                                 )
                         )
                         .transition(.opacity)
@@ -344,7 +344,7 @@ struct ChartSheetSymbolView: View {
                     if isAddingToPersonal {
                         ProgressView()
                             .scaleEffect(0.6)
-                            .tint(inPersonal ? .yellow : .white.opacity(0.7))
+                            .tint(inPersonal ? .yellow : AppColors.surfaceWhite70)
                     } else {
                         Image(systemName: inPersonal ? "star.fill" : "star")
                             .font(.system(size: 12, weight: .semibold))
@@ -352,18 +352,18 @@ struct ChartSheetSymbolView: View {
                     Text("Personal")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(inPersonal ? .yellow : .white.opacity(0.7))
+                .foregroundColor(inPersonal ? .yellow : AppColors.surfaceWhite70)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
                     inPersonal ?
-                    Color.yellow.opacity(0.2) :
-                    Color.white.opacity(0.1)
+                    AppColors.statusHighlight20 :
+                    AppColors.surfaceWhite10
                 )
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(inPersonal ? Color.yellow.opacity(0.4) : Color.clear, lineWidth: 1)
+                        .stroke(inPersonal ? AppColors.statusHighlight40 : Color.clear, lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -389,7 +389,7 @@ struct ChartSheetSymbolView: View {
                     if isRequestingGuild {
                         ProgressView()
                             .scaleEffect(0.6)
-                            .tint((inGuild || isRequested) ? .blue : .white.opacity(0.7))
+                            .tint((inGuild || isRequested) ? .blue : AppColors.surfaceWhite70)
                     } else {
                         Image(systemName: guildButtonIcon(inGuild: inGuild, isRequested: isRequested, canManage: canDirectlyManageGuildWatchlist))
                             .font(.system(size: 12, weight: .semibold))
@@ -553,18 +553,18 @@ struct ChartSheetSymbolView: View {
     private func guildButtonForegroundColor(inGuild: Bool, isRequested: Bool) -> Color {
         if inGuild { return .blue }
         if isRequested { return .orange }
-        return .white.opacity(0.7)
+        return AppColors.surfaceWhite70
     }
 
     private func guildButtonBackgroundColor(inGuild: Bool, isRequested: Bool) -> Color {
-        if inGuild { return Color.blue.opacity(0.2) }
-        if isRequested { return Color.orange.opacity(0.2) }
-        return Color.white.opacity(0.1)
+        if inGuild { return AppColors.statusInfo20 }
+        if isRequested { return AppColors.statusWarning20 }
+        return AppColors.surfaceWhite10
     }
 
     private func guildButtonStrokeColor(inGuild: Bool, isRequested: Bool) -> Color {
-        if inGuild { return Color.blue.opacity(0.4) }
-        if isRequested { return Color.orange.opacity(0.4) }
+        if inGuild { return AppColors.statusInfo40 }
+        if isRequested { return AppColors.statusWarning40 }
         return Color.clear
     }
     
@@ -607,7 +607,7 @@ struct ChartSheetSymbolView: View {
                 )
             }
             .padding(16)
-            .background(Color.white.opacity(0.05))
+            .background(AppColors.surfaceWhite05)
             .cornerRadius(12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -759,7 +759,7 @@ struct ChartSheetSymbolView: View {
         VStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 36, weight: .light))
-                .foregroundColor(.gray.opacity(0.4))
+                .foregroundColor(AppColors.surfaceGray40)
             
             Text("Search for Symbols")
                 .font(.headline)
@@ -767,7 +767,7 @@ struct ChartSheetSymbolView: View {
             
             Text("Find symbols to view on chart or add to your personal watchlist")
                 .font(.caption)
-                .foregroundColor(.gray.opacity(0.7))
+                .foregroundColor(AppColors.surfaceGray70)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
         }
@@ -960,10 +960,10 @@ struct AssetClassBadge: View {
             Text(assetClass.rawValue)
                 .font(.system(size: 10, weight: .medium))
         }
-        .foregroundColor(.white.opacity(0.7))
+        .foregroundColor(AppColors.surfaceWhite70)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.white.opacity(0.1))
+        .background(AppColors.surfaceWhite10)
         .clipShape(Capsule())
     }
 }
@@ -986,12 +986,12 @@ struct TimeframeChip: View {
                 .background(
                     isSelected ?
                     LinearGradient(
-                        colors: [Color.blue.opacity(0.7), Color.blue.opacity(0.9)],
+                        colors: [AppColors.statusInfo70, AppColors.statusInfo90],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ) :
                     LinearGradient(
-                        colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
+                        colors: [AppColors.surfaceWhite10, AppColors.surfaceWhite05],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -999,7 +999,7 @@ struct TimeframeChip: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(isSelected ? Color.blue.opacity(0.9) : Color.clear, lineWidth: 1)
+                        .stroke(isSelected ? AppColors.statusInfo90 : Color.clear, lineWidth: 1)
                 )
             
         }
@@ -1120,7 +1120,7 @@ struct SymbolListRow: View {
                     endPoint: .trailing
                 ) :
                 LinearGradient(
-                    colors: [Color.white.opacity(0.05), Color.white.opacity(0.03)],
+                    colors: [AppColors.surfaceWhite05, AppColors.surfaceWhite03],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
@@ -1228,7 +1228,7 @@ struct GlobalSymbolListRow: View {
                         endPoint: .trailing
                     ) :
                     LinearGradient(
-                        colors: [Color.white.opacity(0.05), Color.white.opacity(0.03)],
+                        colors: [AppColors.surfaceWhite05, AppColors.surfaceWhite03],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -1247,10 +1247,10 @@ struct GlobalSymbolListRow: View {
                         ForEach(statusBadges, id: \.self) { badge in
                             Text(badge)
                                 .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(AppColors.surfaceWhite90)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.white.opacity(0.14))
+                                .background(AppColors.surfaceWhite14)
                                 .clipShape(Capsule())
                         }
                     }
@@ -1272,13 +1272,13 @@ struct SymbolMarketStatus: View {
     var body: some View {
         if isMarketOpen {
             Circle()
-                .fill(Color.green)
+                .fill(AppColors.statusPositive)
                 .frame(width: 6, height: 6)
-                .shadow(color: .green.opacity(0.5), radius: 2)
+                .shadow(color: AppColors.statusPositive50, radius: 2)
         } else {
             Image(systemName: "moon.fill")
                 .font(.system(size: 8))
-                .foregroundColor(.gray.opacity(0.7))
+                .foregroundColor(AppColors.surfaceGray70)
         }
     }
 }
@@ -1289,10 +1289,10 @@ struct SymbolProviderBadge: View {
     var body: some View {
         Text(provider)
             .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(.white.opacity(0.9))
+            .foregroundColor(AppColors.surfaceWhite90)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(Color.blue.opacity(0.25))
+            .background(AppColors.statusInfo25)
             .clipShape(Capsule())
     }
 }
@@ -1301,10 +1301,10 @@ struct UnsupportedSymbolBadge: View {
     var body: some View {
         Text("Unsupported")
             .font(.system(size: 9, weight: .bold))
-            .foregroundColor(.white.opacity(0.95))
+            .foregroundColor(AppColors.surfaceWhite95)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(Color.red.opacity(0.35))
+            .background(AppColors.statusNegative35)
             .clipShape(Capsule())
     }
 }
@@ -1328,13 +1328,13 @@ struct SymbolActivityBadge: View {
     private var backgroundColor: Color {
         switch label.lowercased() {
         case "trending":
-            return Color.orange.opacity(0.28)
+            return AppColors.statusWarning28
         case "hot":
-            return Color.red.opacity(0.28)
+            return AppColors.statusNegative.opacity(0.28)
         case "new markers":
-            return Color.green.opacity(0.25)
+            return AppColors.statusPositive25
         default:
-            return Color.white.opacity(0.2)
+            return AppColors.surfaceWhite20
         }
     }
 
@@ -1345,7 +1345,7 @@ struct SymbolActivityBadge: View {
             Text(label)
                 .font(.system(size: 9, weight: .semibold))
         }
-        .foregroundColor(.white.opacity(0.95))
+        .foregroundColor(AppColors.surfaceWhite95)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(backgroundColor)
@@ -1361,12 +1361,12 @@ private struct SymbolDetailRow: View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(title)
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.65))
+                .foregroundColor(AppColors.surfaceWhite65)
                 .frame(width: 110, alignment: .leading)
 
             Text(value)
                 .font(.caption.weight(.medium))
-                .foregroundColor(.white.opacity(0.92))
+                .foregroundColor(AppColors.surfaceWhite92)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -1488,14 +1488,14 @@ struct MarketSessionTimeline: View {
             HStack(spacing: 6) {
                 Image(systemName: "clock")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppColors.surfaceWhite70)
                 Text(exchangeTimeString)
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(AppColors.surfaceWhite90)
                 Spacer()
                 Text(countdownText)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(isInSession ? .green.opacity(0.9) : .orange.opacity(0.9))
+                    .foregroundColor(isInSession ? AppColors.statusPositive90 : AppColors.statusWarning90)
             }
 
             if !session.isContinuous {
@@ -1509,10 +1509,10 @@ struct MarketSessionTimeline: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
         .onReceive(timer) { _ in now = Date() }
@@ -1527,13 +1527,13 @@ struct MarketSessionTimeline: View {
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(AppColors.surfaceWhite08)
                     .frame(height: 6)
 
                 RoundedRectangle(cornerRadius: 3)
                     .fill(
                         LinearGradient(
-                            colors: [.green.opacity(0.5), .green.opacity(0.3)],
+                            colors: [AppColors.statusPositive50, AppColors.statusPositive30],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -1542,19 +1542,19 @@ struct MarketSessionTimeline: View {
                     .offset(x: openX)
 
                 Circle()
-                    .fill(Color.white)
+                    .fill(AppColors.systemWhite)
                     .frame(width: 8, height: 8)
-                    .shadow(color: .white.opacity(0.4), radius: 3)
+                    .shadow(color: AppColors.surfaceWhite40, radius: 3)
                     .offset(x: nowX - 4)
 
                 Text(timeLabel(session.openHour, session.openMinute))
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(AppColors.surfaceWhite50)
                     .offset(x: max(0, openX - 10), y: 12)
 
                 Text(timeLabel(session.closeHour, session.closeMinute))
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(AppColors.surfaceWhite50)
                     .offset(x: min(w - 28, closeX - 10), y: 12)
             }
         }
@@ -1572,13 +1572,13 @@ struct MarketSessionTimeline: View {
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(AppColors.surfaceWhite08)
                     .frame(height: 6)
 
                 RoundedRectangle(cornerRadius: 3)
                     .fill(
                         LinearGradient(
-                            colors: [.green.opacity(0.5), .green.opacity(0.3)],
+                            colors: [AppColors.statusPositive50, AppColors.statusPositive30],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -1588,9 +1588,9 @@ struct MarketSessionTimeline: View {
 
                 if !isWeekend {
                     Circle()
-                        .fill(Color.white)
+                        .fill(AppColors.systemWhite)
                         .frame(width: 8, height: 8)
-                        .shadow(color: .white.opacity(0.4), radius: 3)
+                        .shadow(color: AppColors.surfaceWhite40, radius: 3)
                         .offset(x: (CGFloat(currentWeekday - 1) * dayWidth + nowX / 7.0) - 4)
                 }
 
@@ -1598,7 +1598,7 @@ struct MarketSessionTimeline: View {
                     ForEach(Array(["S", "M", "T", "W", "T", "F", "S"].enumerated()), id: \.offset) { _, day in
                         Text(day)
                             .font(.system(size: 7, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(AppColors.surfaceWhite40)
                             .frame(width: dayWidth)
                     }
                 }
@@ -1617,7 +1617,7 @@ struct MarketSessionTimeline: View {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(
                         LinearGradient(
-                            colors: [.green.opacity(0.4), .green.opacity(0.25)],
+                            colors: [AppColors.statusPositive40, AppColors.statusPositive25],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -1625,14 +1625,14 @@ struct MarketSessionTimeline: View {
                     .frame(height: 6)
 
                 Circle()
-                    .fill(Color.white)
+                    .fill(AppColors.systemWhite)
                     .frame(width: 8, height: 8)
-                    .shadow(color: .white.opacity(0.4), radius: 3)
+                    .shadow(color: AppColors.surfaceWhite40, radius: 3)
                     .offset(x: nowX - 4)
 
                 Text("24/7")
                     .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(AppColors.surfaceWhite50)
                     .offset(x: w / 2 - 10, y: 12)
             }
         }
@@ -1651,7 +1651,7 @@ extension Notification.Name {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        AppColors.systemBlack.ignoresSafeArea()
         
         ScrollView {
             Text("Symbol Sheet Preview")

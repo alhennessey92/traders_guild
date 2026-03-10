@@ -421,7 +421,7 @@ struct MainView: View {
                     if chartControlVM.isMarkerPlacementMode {
                         markerToolbarCloseButton(
                             iconColor: .white,
-                            tintColor: .red.opacity(0.55)
+                            tintColor: AppColors.statusNegative55
                         ) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 chartControlVM.cancelMarkerPlacement()
@@ -430,7 +430,7 @@ struct MainView: View {
                     } else if chartControlVM.isMarkerViewingMode {
                         markerToolbarCloseButton(
                             iconColor: AppColors.whiteText.opacity(0.95),
-                            tintColor: Color.white.opacity(0.18)
+                            tintColor: AppColors.surfaceWhite18
                         ) {
                             closeMarkerViewingMode()
                         }
@@ -579,7 +579,7 @@ struct MainView: View {
     }
     
     private var overlayView: some View {
-        Color.black.opacity(LayoutConstants.overlayOpacity)
+        AppColors.systemBlack.opacity(LayoutConstants.overlayOpacity)
             .ignoresSafeArea()
             .onTapGesture {
                 withAnimation(AnimationConstants.standard) {
@@ -597,7 +597,7 @@ struct MainView: View {
     }
     
     private var sheetOverlayView: some View {
-        Color.black.opacity(LayoutConstants.overlayOpacity * 0.8)
+        AppColors.systemBlack.opacity(LayoutConstants.overlayOpacity * 0.8)
             .ignoresSafeArea()
             .contentShape(Rectangle())
             .onTapGesture {
@@ -738,7 +738,7 @@ struct MainView: View {
                         Circle()
                             .fill(tintColor)
                         Circle()
-                            .stroke(Color.white.opacity(0.24), lineWidth: 0.8)
+                            .stroke(AppColors.surfaceWhite24, lineWidth: 0.8)
                     }
                 )
                 .clipShape(Circle())
@@ -1276,7 +1276,7 @@ enum DrawerSide { case left, right }
 //     }
     
 //     private var overlayView: some View {
-//         Color.black.opacity(LayoutConstants.overlayOpacity)
+//         AppColors.systemBlack.opacity(LayoutConstants.overlayOpacity)
 //             .ignoresSafeArea()
 //             .onTapGesture {
 //                 withAnimation(AnimationConstants.standard) {
@@ -1294,7 +1294,7 @@ enum DrawerSide { case left, right }
 //     }
     
 //     private var sheetOverlayView: some View {
-//         Color.black.opacity(LayoutConstants.overlayOpacity * 0.8)
+//         AppColors.systemBlack.opacity(LayoutConstants.overlayOpacity * 0.8)
 //             .ignoresSafeArea()
 //             .contentShape(Rectangle())
 //             .onTapGesture {
@@ -1639,7 +1639,7 @@ struct ChartBottomSheet: View {
                         .frame(width: 40, height: 40)
                         .background(AppColors.gradientBackgroundDark)
                         .clipShape(Circle())
-                        .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+                        .shadow(color: AppColors.surfaceWhite30, radius: 1, x: 0, y: 0)
                 }
             )
         )
@@ -1722,7 +1722,7 @@ struct ChartBottomSheet: View {
         VStack(spacing: 0) {
             if isExpanded {
                 Rectangle()
-                    .fill(Color.gray.opacity(0.2))
+                    .fill(AppColors.surfaceGray20)
                     .frame(height: 0.5)
             }
             
@@ -1825,7 +1825,7 @@ struct ChartBottomSheet: View {
         VStack(spacing: 0) {
             if isExpanded {
                 Rectangle()
-                    .fill(Color.gray.opacity(0.2))
+                    .fill(AppColors.surfaceGray20)
                     .frame(height: 0.5)
             }
 
@@ -2109,24 +2109,29 @@ struct ChartBottomSheet: View {
         VStack(spacing: 0) {
             if isExpanded {
                 Rectangle()
-                    .fill(Color.gray.opacity(0.2))
+                    .fill(AppColors.surfaceGray20)
                     .frame(height: 0.5)
             }
 
             HStack(spacing: 4) {
+                // General tab (left, gets more space via Spacer)
+                if let marker = chartViewModel.selectedMarkerForSheet {
+                    markerDetailGeneralTabButton(
+                        marker: marker,
+                        isSelected: markerDetailTab == .general
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            markerDetailTab = .general
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Action buttons (right) — mirrors standardTabBar layout
                 HStack(spacing: 6) {
                     ForEach(MarkerViewingTab.allCases, id: \.self) { tab in
-                        if tab == .general,
-                           let marker = chartViewModel.selectedMarkerForSheet {
-                            markerDetailGeneralTabButton(
-                                marker: marker,
-                                isSelected: markerDetailTab == tab
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    markerDetailTab = tab
-                                }
-                            }
-                        } else {
+                        if tab != .general {
                             RootBottomBarIconButton(
                                 systemName: tab == .chat ? "message.fill" : tab.icon,
                                 fontSize: 20,
@@ -2143,11 +2148,9 @@ struct ChartBottomSheet: View {
                             }
                         }
                     }
+
+                    markerLikeCapsuleButton
                 }
-
-                Spacer(minLength: 0)
-
-                markerLikeCapsuleButton
             }
             .padding(.horizontal, 16)
             .padding(.top, isExpanded ? 16 : 0)
@@ -2162,38 +2165,25 @@ struct ChartBottomSheet: View {
         let likeCount = chartViewModel.selectedMarkerForSheet?.likeCount ?? 0
 
         return Button(action: toggleSelectedMarkerLike) {
-            HStack(spacing: 7) {
+            HStack(spacing: 6) {
                 Image(systemName: isLiked ? "heart.fill" : "heart")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(isLiked ? .white : AppColors.markerHeartTint.opacity(0.95))
-
+                    .font(.headline)
                 Text("\(likeCount)")
-                    .font(.caption.weight(.bold))
+                    .font(.subheadline)
+                    .fontWeight(.bold)
                     .lineLimit(1)
-                    .foregroundColor(isLiked ? .white : AppColors.whiteText.opacity(0.9))
             }
-            .padding(.horizontal, 12)
-            .frame(height: 50)
+            .foregroundColor(AppColors.bearCandleRed)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 20)
             .background(
                 Capsule()
-                    .fill(isLiked ? Color.red.opacity(0.86) : bottomBarUnselectedBackground)
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                isLiked
-                                    ? Color.white.opacity(0.18)
-                                    : AppColors.markerHeartTint.opacity(0.55),
-                                lineWidth: 1
-                            )
-                    )
+                    .fill(AppColors.bearCandleRed.opacity(isLiked ? 0.2 : 0.1))
             )
-            .shadow(
-                color: isLiked
-                    ? AppColors.markerHeartTint.opacity(0.28)
-                    : Color.white.opacity(0.15),
-                radius: 3,
-                x: 0,
-                y: 1
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(AppColors.bearCandleRed.opacity(0.6), lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
@@ -2208,40 +2198,31 @@ struct ChartBottomSheet: View {
                 UnifiedMarkerBadge(
                     intent: placementState.intent,
                     alertSeverity: placementState.intent == .alert ? placementState.alertSeverity : nil,
-                    sizeToken: .medium,
-                    isSelected: isSelected
+                    size: 40
                 )
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(placementState.intent.displayName)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Text(placementAuthorHandle)
-                        .font(.system(size: 9.5, weight: .semibold))
-                        .foregroundColor(AppColors.whiteText.opacity(0.82))
+                    Text("Marker")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.75))
                         .lineLimit(1)
                 }
             }
-            .padding(.leading, 6)
+            .padding(.vertical, 5)
+            .padding(.leading, 5)
             .padding(.trailing, 12)
             .frame(height: 50)
             .background(
-                Capsule()
-                    .fill(
-                        isSelected
-                            ? bottomBarSelectedBackground
-                            : bottomBarUnselectedBackground
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                placementState.intent.color.opacity(isSelected ? 0.55 : 0.3),
-                                lineWidth: 1
-                            )
-                    )
+                isSelected
+                    ? bottomBarSelectedBackground
+                    : bottomBarUnselectedBackground
             )
-            .shadow(color: Color.white.opacity(0.2), radius: 1, x: 0, y: 0)
+            .clipShape(Capsule())
+            .shadow(color: AppColors.surfaceWhite30, radius: 1, x: 0, y: 0)
         }
         .buttonStyle(.plain)
     }
@@ -2256,40 +2237,31 @@ struct ChartBottomSheet: View {
                 UnifiedMarkerBadge(
                     intent: marker.intent,
                     alertSeverity: marker.alertSeverity,
-                    sizeToken: .small,
-                    isSelected: isSelected
+                    size: 40
                 )
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(marker.intent.displayName)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                     Text(markerAuthorHandle(marker))
-                        .font(.system(size: 9.5, weight: .semibold))
-                        .foregroundColor(AppColors.whiteText.opacity(0.82))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.75))
                         .lineLimit(1)
                 }
             }
-            .padding(.leading, 6)
+            .padding(.vertical, 5)
+            .padding(.leading, 5)
             .padding(.trailing, 12)
             .frame(height: 50)
             .background(
-                Capsule()
-                    .fill(
-                        isSelected
-                            ? bottomBarSelectedBackground
-                            : bottomBarUnselectedBackground
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                marker.intent.color.opacity(isSelected ? 0.55 : 0.3),
-                                lineWidth: 1
-                            )
-                    )
+                isSelected
+                    ? bottomBarSelectedBackground
+                    : bottomBarUnselectedBackground
             )
-            .shadow(color: Color.white.opacity(0.2), radius: 1, x: 0, y: 0)
+            .clipShape(Capsule())
+            .shadow(color: AppColors.surfaceWhite30, radius: 1, x: 0, y: 0)
         }
         .buttonStyle(.plain)
     }
@@ -2330,7 +2302,7 @@ struct IndicatorItem: View {
                     .foregroundColor(.gray)
             }
             .padding()
-            .background(Color.white.opacity(0.05))
+            .background(AppColors.surfaceWhite05)
             .cornerRadius(8)
         }
         .buttonStyle(.plain)
@@ -2354,7 +2326,7 @@ struct MarkerTypeItem: View {
             Spacer()
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(AppColors.surfaceWhite05)
         .cornerRadius(8)
     }
 }
@@ -2376,14 +2348,14 @@ struct ChartControlButton: View {
                 Text(title)
                     .font(.caption)
                     .fontWeight(.medium)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(AppColors.surfaceWhite90)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 90)
             .background(
                 isActive ?
                 color :
-                Color.white.opacity(0.1)
+                AppColors.surfaceWhite10
             )
             .cornerRadius(12)
         }

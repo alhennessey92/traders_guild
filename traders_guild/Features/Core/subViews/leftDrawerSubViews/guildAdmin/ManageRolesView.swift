@@ -206,7 +206,7 @@ struct ManageRolesView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
-                (isMemberOwner ? Color.yellow : memberRole.color).opacity(0.1)
+                (isMemberOwner ? AppColors.systemYellow : memberRole.color).opacity(0.1)
             )
             .cornerRadius(6)
 

@@ -109,18 +109,18 @@ struct CrosshairView: View {
                     path.move(to: CGPoint(x: crosshairManager.position.x, y: 0))
                     path.addLine(to: CGPoint(x: crosshairManager.position.x, y: chartSize.height))
                 }
-                .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
+                .stroke(AppColors.surfaceWhite40, style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
                 
                 // Horizontal line - thinner and more subtle
                 Path { path in
                     path.move(to: CGPoint(x: 0, y: crosshairManager.position.y))
                     path.addLine(to: CGPoint(x: chartSize.width, y: crosshairManager.position.y))
                 }
-                .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
+                .stroke(AppColors.surfaceWhite40, style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
                 
                 // Center dot - smaller
                 Circle()
-                    .fill(Color.white)
+                    .fill(AppColors.systemWhite)
                     .frame(width: 6, height: 6)
                     .position(crosshairManager.position)
                 
@@ -174,8 +174,8 @@ struct CrosshairPriceLabel: View {
                 .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.yellow.opacity(0.95))
-                        .shadow(color: .yellow.opacity(0.4), radius: 3, x: 0, y: 1)
+                        .fill(AppColors.statusHighlight95)
+                        .shadow(color: AppColors.statusHighlight40, radius: 3, x: 0, y: 1)
                 )
         }
     }
@@ -209,8 +209,8 @@ struct CrosshairTimeLabel: View {
                 .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.cyan.opacity(0.9))
-                        .shadow(color: .cyan.opacity(0.4), radius: 3, x: 0, y: 1)
+                        .fill(AppColors.statusAccent90)
+                        .shadow(color: AppColors.statusAccent40, radius: 3, x: 0, y: 1)
                 )
         }
     }
@@ -398,12 +398,12 @@ struct CrosshairInfoPopupCompact: View {
                     // Time header - timeframe aware
                     Text(formatTimeForHeader(candle.timestamp))
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppColors.surfaceWhite70)
 
                     if candle.isGapFill {
                         Text("No data")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.75))
+                            .foregroundColor(AppColors.surfaceWhite75)
                     } else {
                         // OHLC in ultra-compact format
                         HStack(spacing: 6) {
@@ -421,13 +421,13 @@ struct CrosshairInfoPopupCompact: View {
                         if let volume = candle.volume {
                             Text("V:\(volume.formattedVolume)")
                                 .font(.system(size: 7))
-                                .foregroundColor(.white.opacity(0.4))
+                                .foregroundColor(AppColors.surfaceWhite40)
                         }
 
                         // Indicator values section - more compact
                         if hasAnyIndicatorValues {
                             Rectangle()
-                                .fill(Color.white.opacity(0.15))
+                                .fill(AppColors.surfaceWhite15)
                                 .frame(height: 0.5)
                                 .padding(.vertical, 1)
 
@@ -440,7 +440,7 @@ struct CrosshairInfoPopupCompact: View {
                                             .frame(width: 5, height: 5)
                                         Text("\(ema.period)")
                                             .font(.system(size: 7, weight: .medium))
-                                            .foregroundColor(.white.opacity(0.5))
+                                            .foregroundColor(AppColors.surfaceWhite50)
                                         Text(chartData.formatPrice(ema.value))
                                             .font(.system(size: 7, weight: .medium, design: .monospaced))
                                             .foregroundColor(ema.color)
@@ -456,7 +456,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("RSI")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(AppColors.surfaceWhite50)
                                     Text(String(format: "%.0f", rsi))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(rsiColor(for: rsi))
@@ -467,11 +467,11 @@ struct CrosshairInfoPopupCompact: View {
                             if let macd = macdValues {
                                 HStack(spacing: 3) {
                                     Circle()
-                                        .fill(Color.cyan)
+                                        .fill(AppColors.systemCyan)
                                         .frame(width: 5, height: 5)
                                     Text("MACD")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(AppColors.surfaceWhite50)
                                     Text(String(format: "%.4f", macd.macd))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(.cyan)
@@ -486,7 +486,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("Stoch")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(AppColors.surfaceWhite50)
                                     Text(String(format: "%.0f/%.0f", stoch.k, stoch.d))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(stochColor(for: stoch.k))
@@ -501,7 +501,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("CCI")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(AppColors.surfaceWhite50)
                                     Text(String(format: "%.0f", cci))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(cciColor(for: cci))
@@ -516,7 +516,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("%R")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(AppColors.surfaceWhite50)
                                     Text(String(format: "%.0f", wr))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(williamsRColor(for: wr))
@@ -527,11 +527,11 @@ struct CrosshairInfoPopupCompact: View {
                             if let atr = atrValue {
                                 HStack(spacing: 3) {
                                     Circle()
-                                        .fill(Color.red)
+                                        .fill(AppColors.statusNegative)
                                         .frame(width: 5, height: 5)
                                     Text("ATR")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(AppColors.surfaceWhite50)
                                     Text(String(format: "%.4f", atr))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(.red)
@@ -543,10 +543,10 @@ struct CrosshairInfoPopupCompact: View {
                 .padding(5)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(Color.black.opacity(0.85))
+                        .fill(AppColors.surfaceBlack85)
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
-                                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                                .stroke(AppColors.surfaceWhite15, lineWidth: 0.5)
                         )
                 )
                 .fixedSize()  // Prevent expansion - use intrinsic size
@@ -611,7 +611,7 @@ private struct PriceRow: View {
         HStack(spacing: 2) {
             Text(label)
                 .font(.system(size: 8, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(AppColors.surfaceWhite50)
                 .frame(width: 10, alignment: .leading)
             Text(value)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
@@ -632,7 +632,7 @@ struct PriceLabelView: View {
             .foregroundColor(.black)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 3).fill(Color.yellow))
+            .background(RoundedRectangle(cornerRadius: 3).fill(AppColors.systemYellow))
     }
 }
 
@@ -645,7 +645,7 @@ struct TimeLabelView: View {
             .foregroundColor(.black)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 3).fill(Color.yellow))
+            .background(RoundedRectangle(cornerRadius: 3).fill(AppColors.systemYellow))
     }
 }
 
@@ -769,7 +769,7 @@ struct ChartNavigationControls: View {
                 .font(.caption)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color.blue)
+                .background(AppColors.statusInfo)
                 .foregroundColor(.white)
                 .cornerRadius(20)
             }
@@ -799,7 +799,7 @@ struct ZoomControls: View {
                 Image(systemName: "plus.magnifyingglass")
                     .font(.system(size: 16))
                     .frame(width: 40, height: 40)
-                    .background(Color.black.opacity(0.7))
+                    .background(AppColors.surfaceBlack70)
                     .foregroundColor(.white)
                     .cornerRadius(8)
             }
@@ -810,7 +810,7 @@ struct ZoomControls: View {
                 Image(systemName: "arrow.counterclockwise")
                     .font(.system(size: 16))
                     .frame(width: 40, height: 40)
-                    .background(Color.black.opacity(0.7))
+                    .background(AppColors.surfaceBlack70)
                     .foregroundColor(.white)
                     .cornerRadius(8)
             }
@@ -826,7 +826,7 @@ struct ZoomControls: View {
                 Image(systemName: "minus.magnifyingglass")
                     .font(.system(size: 16))
                     .frame(width: 40, height: 40)
-                    .background(Color.black.opacity(0.7))
+                    .background(AppColors.surfaceBlack70)
                     .foregroundColor(.white)
                     .cornerRadius(8)
             }

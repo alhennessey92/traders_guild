@@ -302,7 +302,7 @@ struct ManageGuildWatchlistView: View {
                 FlowLayout(spacing: 6) {
                     Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
                         .font(.system(size: symbol.effectiveIsMarketOpen ? 6 : 8, weight: .semibold))
-                        .foregroundColor(symbol.effectiveIsMarketOpen ? .green : .gray.opacity(0.8))
+                        .foregroundColor(symbol.effectiveIsMarketOpen ? .green : AppColors.surfaceGray80)
 
                     Text(symbol.providerDisplayLabel)
                         .font(.caption2.weight(.semibold))
@@ -356,7 +356,7 @@ struct ManageGuildWatchlistView: View {
                 FlowLayout(spacing: 6) {
                     Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
                         .font(.system(size: symbol.effectiveIsMarketOpen ? 6 : 8, weight: .semibold))
-                        .foregroundColor(symbol.effectiveIsMarketOpen ? .green : .gray.opacity(0.8))
+                        .foregroundColor(symbol.effectiveIsMarketOpen ? .green : AppColors.surfaceGray80)
 
                     Text(symbol.providerDisplayLabel)
                         .font(.caption2.weight(.semibold))
@@ -423,7 +423,7 @@ struct ManageGuildWatchlistView: View {
             Text(label)
                 .font(.system(size: 9, weight: .semibold))
         }
-            .foregroundColor(.white.opacity(0.95))
+            .foregroundColor(AppColors.surfaceWhite95)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(Capsule().fill(color.opacity(0.45)))

@@ -181,9 +181,9 @@ enum ChartXAxisLabelEngine {
             let color: Color
             switch style {
             case .mainChart:
-                color = label.kind == .primary ? .white.opacity(0.96) : .white.opacity(0.82)
+                color = label.kind == .primary ? AppColors.surfaceWhite96 : AppColors.surfaceWhite82
             case .indicatorPanel:
-                color = label.kind == .primary ? .white.opacity(0.93) : .white.opacity(0.78)
+                color = label.kind == .primary ? AppColors.surfaceWhite93 : AppColors.surfaceWhite78
             }
 
             ctx.draw(
@@ -622,12 +622,12 @@ struct MarkerPlacementTimeBar: View {
         ZStack {
             // Semi-transparent bar background
             Rectangle()
-                .fill(Color.blue.opacity(0.15))
+                .fill(AppColors.statusInfo15)
                 .frame(height: 40)
             
             // Highlighted section under selected candle
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color.blue.opacity(0.4))
+                .fill(AppColors.statusInfo40)
                 .frame(width: 75, height: 40)
                 .position(x: xPosition, y: 20)
             
@@ -643,8 +643,8 @@ struct MarkerPlacementTimeBar: View {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(Color.blue)
-                    .shadow(color: .blue.opacity(0.5), radius: 6, x: 0, y: 2)
+                    .fill(AppColors.statusInfo)
+                    .shadow(color: AppColors.statusInfo50, radius: 6, x: 0, y: 2)
             )
             .position(x: xPosition, y: 20)
         }
@@ -676,8 +676,8 @@ struct MarkerPlacementTimeIndicator: View {
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(Color.blue)
-                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                        .fill(AppColors.statusInfo)
+                        .shadow(color: AppColors.surfaceBlack30, radius: 4, x: 0, y: 2)
                 )
         }
         .position(x: xPosition, y: chartHeight - indicatorBottomOffset)
@@ -689,7 +689,7 @@ struct MarkerPlacementTimeIndicator: View {
 
 #Preview("X-Axis Indicator") {
     ZStack {
-        Color.black
+        AppColors.systemBlack
         MarkerXAxisTimeIndicator(
             timestamp: Date(),
             xPosition: 200,
@@ -701,7 +701,7 @@ struct MarkerPlacementTimeIndicator: View {
 
 #Preview("Time Bar") {
     ZStack {
-        Color.black
+        AppColors.systemBlack
         MarkerPlacementTimeBar(
             timestamp: Date(),
             xPosition: 200,

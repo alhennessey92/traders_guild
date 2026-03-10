@@ -371,13 +371,13 @@ struct WatchlistView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 32))
-                        .foregroundColor(.gray.opacity(0.5))
+                        .foregroundColor(AppColors.surfaceGray50)
                     Text("Search for symbols")
                         .font(.subheadline)
                         .foregroundColor(.gray)
                     Text("Find symbols to add to your personal watchlist")
                         .font(.caption)
-                        .foregroundColor(.gray.opacity(0.7))
+                        .foregroundColor(AppColors.surfaceGray70)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, 40)
@@ -647,12 +647,12 @@ struct PersonalWatchlistRow: View {
             .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isCurrentSymbol ? Color.blue.opacity(0.2) :
-                          isJustSelected ? Color.green.opacity(0.2) : Color.white.opacity(0.05))
+                    .fill(isCurrentSymbol ? AppColors.statusInfo20 :
+                          isJustSelected ? AppColors.statusPositive20 : AppColors.surfaceWhite05)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(isCurrentSymbol ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
+                    .stroke(isCurrentSymbol ? AppColors.statusInfo40 : Color.clear, lineWidth: 1)
             )
         }
         .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)
@@ -723,12 +723,12 @@ struct GuildWatchlistRow: View {
             .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isCurrentSymbol ? Color.blue.opacity(0.2) :
-                          isJustSelected ? Color.green.opacity(0.2) : Color.white.opacity(0.05))
+                    .fill(isCurrentSymbol ? AppColors.statusInfo20 :
+                          isJustSelected ? AppColors.statusPositive20 : AppColors.surfaceWhite05)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(isCurrentSymbol ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
+                    .stroke(isCurrentSymbol ? AppColors.statusInfo40 : Color.clear, lineWidth: 1)
             )
         }
         .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)
@@ -781,11 +781,11 @@ struct SearchResultSymbolRow: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(
                             !symbol.isSelectableForActiveProvider
-                                ? .red.opacity(0.8)
+                                ? AppColors.statusNegative80
                                 : (inPersonal ? .yellow : .gray)
                         )
                         .frame(width: 32, height: 32)
-                        .background(inPersonal ? Color.yellow.opacity(0.2) : Color.white.opacity(0.1))
+                        .background(inPersonal ? AppColors.statusHighlight20 : AppColors.surfaceWhite10)
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -800,7 +800,7 @@ struct SearchResultSymbolRow: View {
             .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(AppColors.surfaceWhite05)
             )
         }
         .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)

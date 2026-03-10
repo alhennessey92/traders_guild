@@ -67,7 +67,7 @@ struct SignupGuildView: View {
                     .padding(.horizontal, 20)
 
                 Rectangle()
-                    .fill(Color.gray.opacity(0.4))
+                    .fill(AppColors.surfaceGray40)
                     .frame(height: 0.5)
 
                 ScrollView(showsIndicators: false) {
@@ -134,16 +134,16 @@ struct SignupGuildView: View {
                                     VStack(spacing: 10) {
                                         Text(assignmentErrorMessage)
                                             .font(.footnote)
-                                            .foregroundColor(Color.red.opacity(0.95))
+                                            .foregroundColor(AppColors.statusNegative95)
                                             .multilineTextAlignment(.center)
                                             .padding(.horizontal, 16)
                                             .padding(.vertical, 10)
                                             .background(
                                                 RoundedRectangle(cornerRadius: 12)
-                                                    .fill(Color.red.opacity(0.12))
+                                                    .fill(AppColors.statusNegative12)
                                                     .overlay(
                                                         RoundedRectangle(cornerRadius: 12)
-                                                            .stroke(Color.red.opacity(0.35), lineWidth: 1)
+                                                            .stroke(AppColors.statusNegative35, lineWidth: 1)
                                                     )
                                             )
 
@@ -206,7 +206,7 @@ struct SignupGuildView: View {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
-                    .background(Color.gray.opacity(0.3))
+                    .background(AppColors.surfaceGray30)
 
                 HStack {
                     Spacer()
@@ -613,7 +613,7 @@ struct SignupProfileSetupView: View {
             VStack(spacing: 10) {
                 Divider()
                     .frame(height: 1)
-                    .background(Color.gray.opacity(0.3))
+                    .background(AppColors.surfaceGray30)
 
                 HStack(spacing: 10) {
                     Button {
@@ -818,7 +818,7 @@ struct GuildSelectionRow: View {
 
                     HStack(spacing: 3) {
                         Circle()
-                            .fill(Color.green)
+                            .fill(AppColors.statusPositive)
                             .frame(width: 6, height: 6)
                         Text("\(guild.membersOnline) online")
                             .font(.caption)

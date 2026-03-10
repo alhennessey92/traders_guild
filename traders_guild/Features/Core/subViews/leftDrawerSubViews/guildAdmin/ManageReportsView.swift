@@ -727,7 +727,7 @@ struct ManageReportsView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.blue.opacity(0.08))
+                                .fill(AppColors.statusInfo08)
                         )
                     }
                 }
@@ -768,7 +768,7 @@ struct ManageReportsView: View {
         case "harassment": return .red
         case "hate_speech": return .purple
         case "inappropriate": return .orange
-        case "misinformation": return .yellow.opacity(0.8)
+        case "misinformation": return AppColors.statusHighlight80
         default: return .gray
         }
     }

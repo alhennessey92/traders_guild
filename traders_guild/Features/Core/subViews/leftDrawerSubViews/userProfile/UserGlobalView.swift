@@ -321,7 +321,7 @@ struct UserGlobalSheetView: View {
                     }
                 }
                 .padding()
-                .background(Color.white.opacity(0.03))
+                .background(AppColors.surfaceWhite03)
                 .cornerRadius(12)
                 .padding(.horizontal, 25)
             }
@@ -364,7 +364,7 @@ struct UserGlobalSheetView: View {
                     }
                 }
                 .padding()
-                .background(Color.white.opacity(0.03))
+                .background(AppColors.surfaceWhite03)
                 .cornerRadius(12)
                 .contentShape(Rectangle())
                 .onTapGesture { showGlobalReputationBreakdown = true }
@@ -422,7 +422,7 @@ struct UserGlobalSheetView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .padding()
-                    .background(Color.white.opacity(0.03))
+                    .background(AppColors.surfaceWhite03)
                     .cornerRadius(12)
                     .contentShape(Rectangle())
                     .onTapGesture { showGlobalAccuracyBreakdown = true }
@@ -436,7 +436,7 @@ struct UserGlobalSheetView: View {
                     }
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color.white.opacity(0.03))
+                    .background(AppColors.surfaceWhite03)
                     .cornerRadius(12)
                     .contentShape(Rectangle())
                     .onTapGesture { showGlobalAccuracyBreakdown = true }
@@ -473,7 +473,7 @@ struct UserGlobalSheetView: View {
                         value: lastActiveDisplay
                     )
                 }
-                .background(Color.white.opacity(0.03))
+                .background(AppColors.surfaceWhite03)
                 .cornerRadius(12)
             }
             .padding(.horizontal, 25)
@@ -729,7 +729,7 @@ struct GlobalStatCard: View {
                 .foregroundColor(AppColors.greyText)
         }
         .padding()
-        .background(Color.white.opacity(0.03))
+        .background(AppColors.surfaceWhite03)
         .cornerRadius(12)
     }
 }
@@ -763,7 +763,7 @@ struct ReputationBreakdownRow: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(AppColors.surfaceWhite10)
                         .frame(height: 6)
 
                     RoundedRectangle(cornerRadius: 4)
@@ -890,7 +890,7 @@ struct GlobalGuildCard: View {
             Spacer()
         }
         .padding(14)
-        .background(Color.white.opacity(0.03))
+        .background(AppColors.surfaceWhite03)
         .cornerRadius(12)
     }
 }

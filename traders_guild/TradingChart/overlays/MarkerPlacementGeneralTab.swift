@@ -164,7 +164,7 @@ struct MarkerPlacementGeneralTab: View {
             if let intentChangeWarning {
                 Text(intentChangeWarning)
                     .font(.caption2)
-                    .foregroundColor(.orange.opacity(0.95))
+                    .foregroundColor(AppColors.statusWarning95)
                     .padding(.top, 2)
             }
         }
@@ -389,14 +389,14 @@ struct MarkerPlacementGeneralTab: View {
         HStack(spacing: 8) {
             Image(systemName: "scope")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(.green.opacity(0.95))
+                .foregroundColor(AppColors.statusPositive95)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Tracking Mode Active")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.white)
                 Text("Estimated reputation impact now shown")
                     .font(.caption2)
-                    .foregroundColor(.green.opacity(0.85))
+                    .foregroundColor(AppColors.statusPositive85)
             }
             Spacer(minLength: 0)
         }
@@ -404,10 +404,10 @@ struct MarkerPlacementGeneralTab: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.green.opacity(0.14))
+                .fill(AppColors.statusPositive14)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.green.opacity(0.35), lineWidth: 1)
+                        .stroke(AppColors.statusPositive35, lineWidth: 1)
                 )
         )
     }
@@ -522,7 +522,7 @@ struct MarkerPlacementGeneralTab: View {
                             placementState.pollOptions.remove(at: idx)
                         } label: {
                             Image(systemName: "minus.circle.fill")
-                                .foregroundColor(.red.opacity(0.75))
+                                .foregroundColor(AppColors.statusNegative75)
                         }
                         .buttonStyle(.plain)
                     }

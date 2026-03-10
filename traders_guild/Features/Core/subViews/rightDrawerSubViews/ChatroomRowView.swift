@@ -122,7 +122,7 @@ struct RLChatroomRowView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.white.opacity(isPressed ? 0.1 : 0.03))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.1 : 0.03))
             )
         }
         .buttonStyle(PlainButtonStyle())

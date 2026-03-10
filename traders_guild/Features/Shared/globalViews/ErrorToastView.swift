@@ -49,7 +49,7 @@ struct ErrorToastView: View {
         .background(
             Capsule()  // ✅ Changed from RoundedRectangle to Capsule
                 .fill(AppColors.gradientBackgroundDark)
-                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+                .shadow(color: AppColors.surfaceBlack10, radius: 10, x: 0, y: 5)
         )
         .overlay(
             Capsule()  // ✅ Changed from RoundedRectangle to Capsule

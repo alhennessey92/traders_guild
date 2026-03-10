@@ -177,7 +177,7 @@ struct RLRightDrawerMainView: View {
                     .padding(.top, 12)
                     
                     Rectangle()
-                        .fill(Color.gray.opacity(0.4))
+                        .fill(AppColors.surfaceGray40)
                         .frame(height: 0.5)
                         .padding(.top, 12)
                 }
@@ -231,7 +231,7 @@ struct RLRightDrawerMainView: View {
                                 title: "Online",
                                 count: onlineCount,
                                 icon: "circle.fill",
-                                iconColor: Color.green,
+                                iconColor: AppColors.statusPositive,
                                 threads: filteredOnlineNonFriends,
                                 members: filteredMemberOnlineWithoutThread,
                                 onThreadTap: { thread in
@@ -246,7 +246,7 @@ struct RLRightDrawerMainView: View {
                                 title: "Offline",
                                 count: offlineCount,
                                 icon: "circle.fill",
-                                iconColor: Color.gray,
+                                iconColor: AppColors.systemGray,
                                 threads: filteredOfflineNonFriends,
                                 members: filteredMemberOfflineWithoutThread,
                                 onThreadTap: { thread in
@@ -297,7 +297,7 @@ struct RLRightDrawerMainView: View {
             )
             .overlay(
                 Rectangle()
-                    .fill(Color.white.opacity(0.1))
+                    .fill(AppColors.surfaceWhite10)
                     .frame(width: 1)
                     .frame(maxHeight: .infinity),
                 alignment: .leading

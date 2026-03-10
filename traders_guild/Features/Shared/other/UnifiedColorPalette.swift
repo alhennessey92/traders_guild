@@ -19,11 +19,11 @@ struct UnifiedColors {
     
     /// Primary blue gradient start color
     /// Hex: #3366CC | RGB: (51, 102, 204)
-    static let tabGradientStart = Color(red: 0.2, green: 0.4, blue: 0.8)
+    static let tabGradientStart = AppColors.chartTabGradientStart
     
     /// Primary blue gradient end color
     /// Hex: #263F80 | RGB: (38, 63, 128)
-    static let tabGradientEnd = Color(red: 0.15, green: 0.25, blue: 0.5)
+    static let tabGradientEnd = AppColors.chartTabGradientEnd
     
     /// Standard blue gradient for all selected tabs
     static var tabSelectedGradient: LinearGradient {
@@ -37,7 +37,7 @@ struct UnifiedColors {
     /// Unselected tab background gradient
     static var tabUnselectedGradient: LinearGradient {
         LinearGradient(
-            colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+            colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -46,139 +46,139 @@ struct UnifiedColors {
     // MARK: - Tab Border Colors
     
     /// Border color for selected tabs
-    static let tabSelectedBorder = Color.blue.opacity(0.4)
+    static let tabSelectedBorder = AppColors.statusInfo40
     
     // MARK: - Asset Class Colors (for Disclosure Groups & Categories)
     
     /// Forex - Blue
-    static let assetClassForex = Color.blue
+    static let assetClassForex = AppColors.statusInfo
     
     /// Crypto - Orange
-    static let assetClassCrypto = Color.orange
+    static let assetClassCrypto = AppColors.statusWarning
     
     /// Stocks - Green
-    static let assetClassStocks = Color.green
+    static let assetClassStocks = AppColors.statusPositive
     
     /// Commodities - Yellow
-    static let assetClassCommodities = Color.yellow
+    static let assetClassCommodities = AppColors.systemYellow
     
     /// Indices - Purple
-    static let assetClassIndices = Color.purple
+    static let assetClassIndices = AppColors.systemPurple
     
     /// Futures - Cyan
-    static let assetClassFutures = Color.cyan
+    static let assetClassFutures = AppColors.systemCyan
     
     // MARK: - Indicator Add Button Colors
     
     /// EMA indicator button color - Cyan
-    static let indicatorEMA = Color.cyan
+    static let indicatorEMA = AppColors.systemCyan
     
     /// SMA indicator button color - Orange
-    static let indicatorSMA = Color.orange
+    static let indicatorSMA = AppColors.statusWarning
     
     /// RSI indicator color - Purple
-    static let indicatorRSI = Color.purple
+    static let indicatorRSI = AppColors.systemPurple
     
     /// MACD indicator color - Green
-    static let indicatorMACD = Color.green
+    static let indicatorMACD = AppColors.statusPositive
     
     /// Bollinger Bands indicator color - Yellow
-    static let indicatorBollinger = Color.yellow
+    static let indicatorBollinger = AppColors.systemYellow
     
     /// ATR indicator color - Red
-    static let indicatorATR = Color.red
+    static let indicatorATR = AppColors.statusNegative
     
     // MARK: - Watchlist Action Button Colors
     
     /// Personal watchlist star color (filled)
-    static let personalWatchlistActive = Color.yellow
+    static let personalWatchlistActive = AppColors.systemYellow
     
     /// Personal watchlist star color (unfilled)
-    static let personalWatchlistInactive = Color.gray
+    static let personalWatchlistInactive = AppColors.systemGray
     
     /// Guild watchlist icon color (filled)
-    static let guildWatchlistActive = Color.blue
+    static let guildWatchlistActive = AppColors.statusInfo
     
     /// Guild watchlist icon color (unfilled)
-    static let guildWatchlistInactive = Color.gray
+    static let guildWatchlistInactive = AppColors.systemGray
     
     // MARK: - Price Change Colors
     
     /// Price up / positive change
-    static let priceUp = Color.green
+    static let priceUp = AppColors.statusPositive
     
     /// Price down / negative change
-    static let priceDown = Color.red
+    static let priceDown = AppColors.statusNegative
     
     // MARK: - Background Colors & Opacities
     
     /// Card/row background
-    static let cardBackground = Color.white.opacity(0.05)
+    static let cardBackground = AppColors.surfaceWhite05
     
     /// Selected/highlighted card background
-    static let cardBackgroundSelected = Color.blue.opacity(0.2)
+    static let cardBackgroundSelected = AppColors.statusInfo20
     
     /// Success/just selected feedback background
-    static let cardBackgroundSuccess = Color.green.opacity(0.2)
+    static let cardBackgroundSuccess = AppColors.statusPositive20
     
     /// Subtle border color
-    static let subtleBorder = Color.white.opacity(0.15)
+    static let subtleBorder = AppColors.surfaceWhite15
     
     /// Selected item border
-    static let selectedBorder = Color.blue.opacity(0.4)
+    static let selectedBorder = AppColors.statusInfo40
     
     // MARK: - Text Colors
     
     /// Primary text - White
-    static let textPrimary = Color.white
+    static let textPrimary = AppColors.systemWhite
     
     /// Secondary text - Gray
-    static let textSecondary = Color.gray
+    static let textSecondary = AppColors.systemGray
     
     /// Tertiary/hint text
-    static let textTertiary = Color.gray.opacity(0.7)
+    static let textTertiary = AppColors.surfaceGray70
     
     /// Placeholder/empty state text
-    static let textPlaceholder = Color.gray.opacity(0.5)
+    static let textPlaceholder = AppColors.surfaceGray50
     
     // MARK: - Disclosure Group Colors
     
     /// Disclosure header background (collapsed)
     static var disclosureHeaderBackground: LinearGradient {
         LinearGradient(
-            colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+            colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
             startPoint: .top,
             endPoint: .bottom
         )
     }
     
     /// Disclosure content background
-    static let disclosureContentBackground = Color.white.opacity(0.03)
+    static let disclosureContentBackground = AppColors.surfaceWhite03
     
     /// Disclosure count badge background
-    static let disclosureCountBadge = Color.white.opacity(0.15)
+    static let disclosureCountBadge = AppColors.surfaceWhite15
     
     // MARK: - Search Bar Colors
     
     /// Search bar background
-    static let searchBarBackground = Color.white.opacity(0.08)
+    static let searchBarBackground = AppColors.surfaceWhite08
     
     /// Search bar border
-    static let searchBarBorder = Color.white.opacity(0.1)
+    static let searchBarBorder = AppColors.surfaceWhite10
     
     /// Search bar focused border
-    static let searchBarFocusedBorder = Color.blue.opacity(0.5)
+    static let searchBarFocusedBorder = AppColors.statusInfo50
     
     // MARK: - Empty State Colors
     
     /// Empty state icon color
-    static let emptyStateIcon = Color.gray.opacity(0.5)
+    static let emptyStateIcon = AppColors.surfaceGray50
     
     /// Empty state title color
-    static let emptyStateTitle = Color.gray
+    static let emptyStateTitle = AppColors.systemGray
     
     /// Empty state subtitle color
-    static let emptyStateSubtitle = Color.gray.opacity(0.7)
+    static let emptyStateSubtitle = AppColors.surfaceGray70
 }
 
 // MARK: - ================================================================================================

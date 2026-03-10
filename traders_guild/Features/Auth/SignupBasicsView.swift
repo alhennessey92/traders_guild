@@ -32,19 +32,19 @@ struct SignupBasicsView: View {
             title: "Chart Markers",
             icon: "star.bubble",
             detail: "Place directional ideas directly on the chart with entry, TP, and SL context. Members can react, discuss outcomes, and learn from real setups.",
-            tintColor: Color(red: 0.4, green: 0.7, blue: 0.9)
+            tintColor: AppColors.signupInterestBlue
         ),
         SignupBasicFeature(
             title: "Reputation and Accuracy",
             icon: "chart.bar.doc.horizontal",
             detail: "Your contribution to guild activity and your marker outcomes build long-term standing. Reputation and accuracy help highlight consistent traders.",
-            tintColor: Color(red: 0.5, green: 0.8, blue: 0.5)
+            tintColor: AppColors.signupInterestGreen
         ),
         SignupBasicFeature(
             title: "Safety First",
             icon: "checkmark.shield",
             detail: "Reporting, moderation, and role permissions help keep communities respectful, reduce spam, and protect high-signal conversation quality.",
-            tintColor: Color(red: 0.7, green: 0.6, blue: 0.9)
+            tintColor: AppColors.signupInterestPurple
         ),
     ]
 
@@ -176,7 +176,7 @@ struct SignupBasicsView: View {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
-                    .background(Color.gray.opacity(0.3))
+                    .background(AppColors.surfaceGray30)
 
                 HStack {
                     Spacer()
@@ -307,7 +307,7 @@ struct SignupInterestsView: View {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
-                    .background(Color.gray.opacity(0.3))
+                    .background(AppColors.surfaceGray30)
 
                 HStack(spacing: 10) {
                     Button {

@@ -865,32 +865,85 @@ I want you to try and keep the UI similar to the ChartSheetSymbolView.swift
 
 
 
-76. Chart settings need to include marker distance and distance between them etc...
+76. [FIXED] Chart settings need to include marker distance and distance between them etc...
 
-77. Indicator panels in all views need to use default x axis style and conform better to y axis style, text is appearing too small
+77. [FIXED] Indicator panels in all views need to use default x axis style and conform better to y axis style, text is appearing too small
 
-78. Need to make sure all marker looks are consistent, different look from placing mode to viewing mode and placed in chart. For instance the analysis marker looks great in placement mode but when set on chart and in viewing mode look boring, needs to conform exactly to the placement mode, so all markers are FULLY consistent from placement mode -> chart -> viewing mode -> to all other references throughout the app, must always look identical
+78. [FIXED] Need to make sure all marker looks are consistent, different look from placing mode to viewing mode and placed in chart. For instance the analysis marker looks great in placement mode but when set on chart and in viewing mode look boring, needs to conform exactly to the placement mode, so all markers are FULLY consistent from placement mode -> chart -> viewing mode -> to all other references throughout the app, must always look identical
 
-79. Marker points need to be filled and borders need to be full opacity so maybe make colored darker if needed
+79. [FIXED] Marker points need to be filled and borders need to be full opacity so maybe make colored darker if needed
 
-80. Marker viewing mode info box should be at bottom like checklist and can extend further out maybe even full width but make easy to collapse to the left not up and down, needs to be horizontal collapsible and make more emphasis on the marker info such as question for question marker, poll options for poll etc...
+80. [FIXED] Marker viewing mode info box should be at bottom like checklist and can extend further out maybe even full width but make easy to collapse to the left not up and down, needs to be horizontal collapsible and make more emphasis on the marker info such as question for question marker, poll options for poll etc...
 
-81. Checklist info box needs to collapse horizontally not vertically like the marker info box 
+81. [FIXED] Checklist info box needs to collapse horizontally not vertically like the marker info box 
 
-82. In marker viewing mode move like button to far right and general tab left
+82. [FIXED] In marker viewing mode move like button to far right and general tab left
 
-83. In marker placement mode and viewing mode the general tab with marker avatar, name etc must conform to same style and ui look as symbol details tab in default chart bottom bar, keep it nice and clean
+83. [FIXED] In marker placement mode and viewing mode the general tab with marker avatar, name etc must conform to same style and ui look as symbol details tab in default chart bottom bar, keep it nice and clean
 
-84. In default chart mode the bottom chart buttons (day date, marker visibility, latest, settings) hug too close to indicator panel when active
+84. [FIXED] In default chart mode the bottom chart buttons (day date, marker visibility, latest, settings) hug too close to indicator panel when active
 
-85. In marker placement mode the checklist box is too low, needs to sit above the x axis currently over it 
+85. [FIXED] In marker placement mode the checklist box is too low, needs to sit above the x axis currently over it 
 
-86. In marker placement mode the icons in the bottom bar for indicators, drawing and timeframes need to be larger to fit the button, also think the colors of them three need to stay white as they are a generic option for them marker, all tab buttons in bottom bar need to conform to a single sizing and style, must all be consistent
+86. [FIXED] In marker placement mode the icons in the bottom bar for indicators, drawing and timeframes need to be larger to fit the button, also think the colors of them three need to stay white as they are a generic option for them marker, all tab buttons in bottom bar need to conform to a single sizing and style, must all be consistent
 
-87. Make sure absolutely no lines, drawings, annotations or indicators or anything overlay markers, markers always have top z index priority
+87. [FIXED] Make sure absolutely no lines, drawings, annotations or indicators or anything overlay markers, markers always have top z index priority
 
-88. Like button for markers needs to have better UI, a state for liked and not yet liked, look at ui for blocking a user, similar to that
+88. [FIXED] Like button for markers needs to have better UI, a state for liked and not yet liked, look at ui for blocking a user, similar to that
 
-89. When viewing a marker need to adapt the ui for toolbar at the top, cancel button is fine but need to remove the viewing marker and show a ui displaying marker avatar same size as cancel button and name of marker next to it, in bold making it prominent
+89. [FIXED] When viewing a marker need to adapt the ui for toolbar at the top, cancel button is fine but need to remove the viewing marker and show a ui displaying marker avatar same size as cancel button and name of marker next to it, in bold making it prominent
 
-90. When viewing a marker adapt the marker info box to show user details for who posted it including their avatar, username, basic details like role, reputation and accuracy like we normally do in other parts of the app, if possible when clicking users avatar or username open profile detail view. that way we show user details and then the marker relevant info underneath it, all being collapsible to the left (look at other points)
+90. [FIXED] When viewing a marker adapt the marker info box to show user details for who posted it including their avatar, username, basic details like role, reputation and accuracy like we normally do in other parts of the app, if possible when clicking users avatar or username open profile detail view. that way we show user details and then the marker relevant info underneath it, all being collapsible to the left (look at other points)
+
+
+
+
+91. [FIXED] Need a full audit and upgrade to marker looks, this applies to each individual marker including their placement mode, viewing mode, chart mode and avatar mode(When viewed in another view like top marker tab etc...)
+	Ideally they should all have the same design, a 2-4px border that is light in color to contrast the background, maybe something like #787878. Then the inner background to the marker should be of linear gradient look on a 45 degree angle using colors like #1B1A1F and #000000. 
+	There needs to be a point on the first marker in the stack pointing to the chart, so if below chart points up, if marker is above chart it points down. Make it not too big but noticeable and needs to be full i.e. not hollow in color and color must match border color to make it all look as one. If there is another marker in the stack then there is no point for that marker.
+	In terms of icons for the markers they are as follows:
+
+	Setup - gearshape.arrow.trianglehead.2.clockwise.rotate.90 green
+	Analysis - waveform.path.ecg.magnifyingglass blue
+	Alert - 
+		Critical - exclamationmark.octagan.fill	 - accent color red
+		Severe - info.triangle.fill - accent color orange
+		Warning - exclamationmark.shield.fill - accent color yellow
+		Informational - info.circle.fill - accent color blue
+	News - newspaper.fill - accent color magenta
+	Question - questionmark.circle.dashed - accent color blue
+	Poll - list.bullet.clipboard - accent color purple
+	Reaction - face.smiling - accent color gold
+	Personal - person.badge.shield.checkmark.fill - accent color black/grey
+
+	All should be in #D9D9D9 color but you need apply the icons from sfsymbols in palette mode so we can adjust certain parts of the icon in the markers accent color. I havent listed the accent colors specifically so choose a nice color that fits well, this must be carried across the UI for the marker placement and viewing mode to make it feel professional where necessary.
+
+	It is vital that the markers look identical in all aspects they appear and the icons are scaled accordingly to take up the correct space in the marker, if possible work out a way to make them always appear correct, no matte the scale, the icons must look "Full" in the marker, not to the edges but look dominant in the marker
+
+92. [FIXED] I think the marker is still not right, going to attempt another look, how about we change the marker to act more like the glass buttons we use for example in the current toolbar for left and right drawer / cancel button when in viewing mode. I like the UI and functionality of it when tapping etc... Would be good and more right to stick to a proper ios design of using the buttons as the base of the marker and then overlay the correct icons on top. If possible lets have a go at doing that, because of this i dont think its necessary or possible to add the anchor point in direction of chart, lets just stick to full circle at the moment. I like the sizing of the cancel button we currently use un top toolbar in marker viewing mode as standard marker size and obviously increase on select etc...
+
+93. [FIXED] Markers when placed in chart are still not showing correctly, mainly the icons, the colors are off, either being semi overlapped with white where they should be accent color etc... everywhere else seems fine, just when showing in chart. 
+
+94. [FIXED] Icons in the marker need to be more scale aware, the icons look fine most places but specifically in toolbar the icon is too big, also certain icons like news, poll and personal are too big in the marker.
+
+95. [FIXED] When looking at the general tab in placement mode and more specifically in viewing mode the tab button doesnt look right, it should mirror the look of the symbol tab button in default chart mode, where the marker icon should fit perfectly the capsule height etc like the symbol icon as its round - in the placmeent mode and more the viewing mode the marker avatar is too small, also the placement mode the text should be just the marker type and word marker under neath, so it would say "Alert Marker". In viewin mode it says the right stuff but needs more padding and text style to suit like the symbol tab button.
+
+96. [FIXED] In viewing mode we need to copy same layout as the default chart bottom bar, buttons should sit to the right other than the general tab which sits to the left and is allowed more space/padding. The like button needs to look the same as the block button in the user profile detail view, its a red button to symbolise a like so look at that.
+
+97. When placing a marker, it doesnt always register the starting placement of marker as its required position set, you have to move it a little to get it to register and allow placement. When placing sometimes it doesnt attach it to correct candle, sometimes a candle a few spaces away. Actually finding that it is ignoring where you move the amrker to, it anchors it on starting point
+
+98. Marker info box needs its opacity removed for background or severaly reduced so you cant see anything or very little bhind, maybe even blur it and it needs to strech all the way across chart when open to the start of the y axis, and have a larger handle in right side to expand and contract it. The inner contents need a better style as well, making it easy to see the content in a clean simple way such as poll options, question in question amrker etc... have a look at the image uploaded, its a much cleaner example of a UI i think could work well. also look at no 104 as this affects marker info box
+
+99. Chart symbol info box again still showing content of chart behind it, needs an opaque background or blur to hide chart content
+
+100. Markers are appearing over the x and y axis when panning, 
+
+101. Need to reduce y axis width a little, maybe reduce value by 1 point if necessary
+
+102. the marker like button in the bottom bar needs to use a thumbs up, not heart and needs to show no of likes
+
+103. in marker viewing mode the marker avatar in toolbar needs to be bigger, and also saying marker after name, like setup marker
+
+104. in marker viewing mode add toolbar button at top right based on posting user, including their avatar - username and basic details underneath (reputation, role, accuracy) like normal user display, Style in standard toolbar glass look and base it how the symbol tab button in bottom bar is displayed. Because of yhis you can remove the posting user details in the marker info box on chart
+
+105. look at marker chat section, + button doesnt work, nor does the microphone, and when tapping textbox its hidden by keyboard, needs to all wokr like other chat areas

@@ -263,7 +263,7 @@ struct OverviewTabContent: View {
                     .padding(.vertical, 6)
                     .background(
                         Capsule()
-                            .fill(interest.isPrimary ? AppColors.accentColor : Color.white.opacity(0.1))
+                            .fill(interest.isPrimary ? AppColors.accentColor : AppColors.surfaceWhite10)
                     )
                 }
             }
@@ -284,10 +284,10 @@ struct OverviewTabContent: View {
                         .padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.white.opacity(0.08))
+                                .fill(AppColors.surfaceWhite08)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        .stroke(AppColors.surfaceWhite10, lineWidth: 1)
                                 )
                         )
                 }
@@ -394,10 +394,10 @@ struct BreakdownEntryCard: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.04))
+                    .fill(AppColors.surfaceWhite04)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                     )
             )
         }
@@ -481,7 +481,7 @@ struct MarkersTabContent: View {
                             .padding(.vertical, 4)
                             .background(
                                 Capsule()
-                                    .fill(Color.white.opacity(0.1))
+                                    .fill(AppColors.surfaceWhite10)
                             )
                     }
                     
@@ -492,10 +492,10 @@ struct MarkersTabContent: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -577,10 +577,10 @@ struct ProfileMarkerCard: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(isPressed ? 0.08 : 0.04))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.04))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                     )
             )
         }
@@ -654,10 +654,10 @@ struct UnifiedActivityTimeline: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.04))
+                        .fill(AppColors.surfaceWhite04)
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                         )
                 )
         case .plain:
@@ -680,7 +680,7 @@ struct UnifiedActivityRow: View {
 
                 if !isLast {
                     Rectangle()
-                        .fill(Color.white.opacity(0.1))
+                        .fill(AppColors.surfaceWhite10)
                         .frame(width: 2)
                         .frame(maxHeight: .infinity)
                 }
@@ -887,7 +887,7 @@ struct AwardsTabContent: View {
             
             Divider()
                 .frame(height: 40)
-                .background(Color.white.opacity(0.2))
+                .background(AppColors.surfaceWhite20)
             
             // Total points
             VStack(spacing: 4) {
@@ -907,7 +907,7 @@ struct AwardsTabContent: View {
             
             Divider()
                 .frame(height: 40)
-                .background(Color.white.opacity(0.2))
+                .background(AppColors.surfaceWhite20)
             
             // Rarity breakdown mini
             VStack(spacing: 4) {
@@ -930,10 +930,10 @@ struct AwardsTabContent: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -1009,7 +1009,7 @@ struct AwardCard: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.red))
+                        .background(Capsule().fill(AppColors.statusNegative))
                         .offset(x: 20, y: -20)
                 }
             }
@@ -1028,7 +1028,7 @@ struct AwardCard: View {
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.white.opacity(0.1))
+                                .fill(AppColors.surfaceWhite10)
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(category.color)
                                 .frame(width: geometry.size.width * progress)
@@ -1052,11 +1052,11 @@ struct AwardCard: View {
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(award.isEarned ? 0.06 : 0.03))
+                .fill(AppColors.systemWhite.opacity(award.isEarned ? 0.06 : 0.03))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(
-                            award.isNew ? rarity.color.opacity(0.5) : Color.white.opacity(0.08),
+                            award.isNew ? rarity.color.opacity(0.5) : AppColors.surfaceWhite08,
                             lineWidth: award.isNew ? 1.5 : 1
                         )
                 )
@@ -1103,10 +1103,10 @@ struct ProfileInfoCard<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -1153,10 +1153,10 @@ struct ProfileStatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -1212,7 +1212,7 @@ struct CategoryFilterChip: View {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(isSelected ? color : Color.white.opacity(0.08))
+                    .fill(isSelected ? color : AppColors.surfaceWhite08)
             )
         }
         .buttonStyle(PlainButtonStyle())

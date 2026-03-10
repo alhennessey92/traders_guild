@@ -32,12 +32,12 @@ struct MarkerPlacementTimeframesTab: View {
     private var tabTitleHeader: some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(Color.teal.opacity(0.22))
+                .fill(AppColors.statusTeal22)
                 .frame(width: 26, height: 26)
                 .overlay(
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color.teal.opacity(0.95))
+                        .foregroundColor(AppColors.statusTeal95)
                 )
 
             VStack(alignment: .leading, spacing: 1) {
@@ -68,7 +68,7 @@ struct MarkerPlacementTimeframesTab: View {
             if let limitWarning {
                 Text(limitWarning)
                     .font(.caption2)
-                    .foregroundColor(.orange.opacity(0.95))
+                    .foregroundColor(AppColors.statusWarning95)
             }
         }
     }
@@ -128,8 +128,8 @@ struct MarkerPlacementTimeframesTab: View {
                     if isActive {
                         statusBadge(
                             title: "ACTIVE",
-                            textColor: .green.opacity(0.95),
-                            fillColor: .green.opacity(0.2)
+                            textColor: AppColors.statusPositive95,
+                            fillColor: AppColors.statusPositive20
                         )
                     }
                 }
@@ -202,8 +202,8 @@ struct MarkerPlacementTimeframesTab: View {
                 if isActive {
                     statusBadge(
                         title: "ACTIVE",
-                        textColor: .green.opacity(0.95),
-                        fillColor: .green.opacity(0.2)
+                        textColor: AppColors.statusPositive95,
+                        fillColor: AppColors.statusPositive20
                     )
                 }
 
@@ -225,7 +225,7 @@ struct MarkerPlacementTimeframesTab: View {
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.red.opacity(0.85))
+                        .foregroundColor(AppColors.statusNegative85)
                 }
                 .buttonStyle(.plain)
             }

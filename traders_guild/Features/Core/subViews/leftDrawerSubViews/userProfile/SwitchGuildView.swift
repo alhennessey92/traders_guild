@@ -148,8 +148,8 @@ struct SwitchGuildView: View {
                 DrawerActionButton(
                     title: "Create a Guild",
                     backgroundColor: AppColors.whiteText.opacity(0.8),
-                    foregroundColor: Color.black,
-                    strokeColor: Color.black,
+                    foregroundColor: AppColors.systemBlack,
+                    strokeColor: AppColors.systemBlack,
                     strokeWidth: 0.5,
                     action: {
                         showCreateGuild = true
@@ -287,7 +287,7 @@ struct GuildSwitchRow: View {
                     // Members online
                     HStack(spacing: 3) {
                         Circle()
-                            .fill(Color.green)
+                            .fill(AppColors.statusPositive)
                             .frame(width: 6, height: 6)
                         Text("\(item.guild.membersOnline) online")
                             .font(.caption)
@@ -963,7 +963,7 @@ struct JoinGuildRow: View {
 
                         HStack(spacing: 3) {
                             Circle()
-                                .fill(Color.green)
+                                .fill(AppColors.statusPositive)
                                 .frame(width: 6, height: 6)
                             Text("\(guild.membersOnline) online")
                                 .font(.caption)
@@ -1224,7 +1224,7 @@ struct GuildDetailView: View {
                     StandardActionButtonFullWidth(
                         title: isCurrentGuild ? "Current Guild" : "Switch to Guild",
                         backgroundColor: AppColors.whiteText,
-                        foregroundColor: Color.black,
+                        foregroundColor: AppColors.systemBlack,
                         action: switchToGuild
                     )
                     .disabled(isCurrentGuild)
@@ -1233,7 +1233,7 @@ struct GuildDetailView: View {
                     StandardActionButtonFullWidth(
                         title: guild.isOpen ? "Join Guild" : "Request to Join",
                         backgroundColor: AppColors.whiteText,
-                        foregroundColor: Color.black,
+                        foregroundColor: AppColors.systemBlack,
                         action: {
                             if guild.isOpen {
                                 Task { await joinGuild() }
@@ -1529,7 +1529,7 @@ struct JoinGuildFormView: View {
                     StandardActionButtonFullWidth(
                         title: "Send Request",
                         backgroundColor: AppColors.whiteText,
-                        foregroundColor: Color.black,
+                        foregroundColor: AppColors.systemBlack,
                         action: {
                             Task { await submitRequest() }
                         }
@@ -1835,7 +1835,7 @@ struct CreateGuildView: View {
                                             } label: {
                                                 Image(systemName: "minus.circle.fill")
                                                     .font(.title3)
-                                                    .foregroundColor(.red.opacity(0.8))
+                                                    .foregroundColor(AppColors.statusNegative80)
                                             }
                                         }
                                     }

@@ -45,7 +45,7 @@ struct ImprovedChartSheetChatView: View {
         VStack(spacing: 16) {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 48))
-                .foregroundColor(.gray.opacity(0.5))
+                .foregroundColor(AppColors.surfaceGray50)
             
             Text("No Symbol Selected")
                 .font(.headline)
@@ -67,7 +67,7 @@ struct ImprovedChartSheetChatView: View {
             chartChatHeader(for: chat)
             
             Divider()
-                .background(Color.gray.opacity(0.3))
+                .background(AppColors.surfaceGray30)
             
             // Messages area
             if chartChatManager.messages.isEmpty {

@@ -255,7 +255,7 @@ struct GuildReputationBreakdownSheetView: View {
                                 BreakdownMetricRow(label: "To Tier \(nextTier.tierLevel)", value: "\(profile.reputation) / \(nextTier.minReputation)", valueColor: AppColors.whiteText)
                                 GeometryReader { geometry in
                                     ZStack(alignment: .leading) {
-                                        Capsule().fill(Color.white.opacity(0.08))
+                                        Capsule().fill(AppColors.surfaceWhite08)
                                         Capsule().fill(profile.tier.color)
                                             .frame(width: geometry.size.width * max(0, min(1, progress)))
                                     }
@@ -424,10 +424,10 @@ private struct BreakdownCard<Content: View>: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.black.opacity(0.28))
+                .fill(AppColors.surfaceBlack28)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                 )
         )
     }
@@ -514,7 +514,7 @@ private struct BreakdownBarRow: View {
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.08))
+                    Capsule().fill(AppColors.surfaceWhite08)
                     Capsule()
                         .fill(tint)
                         .frame(width: geometry.size.width * max(0, min(1, progress)))
@@ -550,7 +550,7 @@ private struct BreakdownDateBarChart: View {
             GeometryReader { geometry in
                 if points.isEmpty {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(0.04))
+                        .fill(AppColors.surfaceWhite04)
                         .overlay(
                             Text("No 30-day trend data")
                                 .font(.caption2)
@@ -560,7 +560,7 @@ private struct BreakdownDateBarChart: View {
                     ZStack(alignment: baselineAlignment) {
                         if centeredBaseline {
                             Rectangle()
-                                .fill(Color.white.opacity(0.12))
+                                .fill(AppColors.surfaceWhite12)
                                 .frame(height: 1)
                         }
 
@@ -607,7 +607,7 @@ private func reputationTrendPoints(
         BreakdownDateBarPoint(
             day: point.day,
             value: Double(point.value),
-            tint: point.value >= 0 ? positiveTint : .red.opacity(0.82)
+            tint: point.value >= 0 ? positiveTint : AppColors.statusNegative82
         )
     }
 }

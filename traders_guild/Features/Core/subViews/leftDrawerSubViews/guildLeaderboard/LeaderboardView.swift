@@ -636,9 +636,9 @@ private struct GlobalGuildLeaderboardRow: View {
 
     private var rankColor: Color {
         switch rank {
-        case 1: return Color.yellow
-        case 2: return Color.gray.opacity(0.8)
-        case 3: return Color.orange.opacity(0.8)
+        case 1: return AppColors.systemYellow
+        case 2: return AppColors.surfaceGray80
+        case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
         }
     }
@@ -710,7 +710,7 @@ private struct GlobalGuildLeaderboardRow: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(isPressed ? 0.08 : 0.03))
+                .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.03))
         )
         .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
@@ -733,9 +733,9 @@ private struct GlobalUserAccuracyRow: View {
 
     private var rankColor: Color {
         switch rank {
-        case 1: return Color.yellow
-        case 2: return Color.gray.opacity(0.8)
-        case 3: return Color.orange.opacity(0.8)
+        case 1: return AppColors.systemYellow
+        case 2: return AppColors.surfaceGray80
+        case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
         }
     }
@@ -792,7 +792,7 @@ private struct GlobalUserAccuracyRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(isPressed ? 0.08 : 0.03))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.03))
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -819,9 +819,9 @@ private struct AccuracyLeaderboardRow: View {
 
     private var rankColor: Color {
         switch member.rank {
-        case 1: return Color.yellow
-        case 2: return Color.gray.opacity(0.8)
-        case 3: return Color.orange.opacity(0.8)
+        case 1: return AppColors.systemYellow
+        case 2: return AppColors.surfaceGray80
+        case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
         }
     }
@@ -889,7 +889,7 @@ private struct AccuracyLeaderboardRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .strokeBorder(
@@ -931,9 +931,9 @@ private struct LeaderboardMemberRow: View {
 
     private var rankColor: Color {
         switch rank {
-        case 1: return Color.yellow
-        case 2: return Color.gray.opacity(0.8)
-        case 3: return Color.orange.opacity(0.8)
+        case 1: return AppColors.systemYellow
+        case 2: return AppColors.surfaceGray80
+        case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
         }
     }
@@ -999,7 +999,7 @@ private struct LeaderboardMemberRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .strokeBorder(

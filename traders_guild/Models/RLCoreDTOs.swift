@@ -1930,10 +1930,10 @@ enum RLAwardRarity: String, Codable, CaseIterable {
     var glowColor: Color {
         switch self {
         case .common: return .clear
-        case .uncommon: return .green.opacity(0.3)
-        case .rare: return .blue.opacity(0.4)
-        case .epic: return .purple.opacity(0.5)
-        case .legendary: return .orange.opacity(0.6)
+        case .uncommon: return AppColors.statusPositive30
+        case .rare: return AppColors.statusInfo40
+        case .epic: return AppColors.statusSecondary50
+        case .legendary: return AppColors.statusWarning60
         }
     }
     

@@ -63,7 +63,7 @@ struct StochasticPanelView: View {
                 xAxisLabels
             }
         }
-        .background(Color.black.opacity(0.85))
+        .background(AppColors.surfaceBlack85)
     }
 
     // MARK: - Pan Gesture
@@ -106,10 +106,10 @@ struct StochasticPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(Color(white: 0.08))
+                .fill(AppColors.chartIndicatorHandleFill)
             
             Capsule()
-                .fill(isDraggingHandle ? Color.white.opacity(0.8) : Color.gray.opacity(0.5))
+                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
                 .frame(width: 36, height: 5)
         }
         .frame(height: 22)
@@ -133,7 +133,7 @@ struct StochasticPanelView: View {
         )
         .overlay(
             Rectangle()
-                .fill(Color.gray.opacity(0.3))
+                .fill(AppColors.surfaceGray30)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -147,7 +147,7 @@ struct StochasticPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            Color.black.opacity(0.8)
+            AppColors.surfaceBlack80
             
             Canvas { context, size in
                 drawStochasticPanel(context: context, size: size)
@@ -214,17 +214,17 @@ struct StochasticPanelView: View {
         var path = Path()
         path.move(to: CGPoint(x: 0, y: overboughtY))
         path.addLine(to: CGPoint(x: lineEndX, y: overboughtY))
-        context.stroke(path, with: .color(.red.opacity(0.4)), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        context.stroke(path, with: .color(AppColors.statusNegative40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
         
         path = Path()
         path.move(to: CGPoint(x: 0, y: middleY))
         path.addLine(to: CGPoint(x: lineEndX, y: middleY))
-        context.stroke(path, with: .color(.gray.opacity(0.3)), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+        context.stroke(path, with: .color(AppColors.surfaceGray30), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
         
         path = Path()
         path.move(to: CGPoint(x: 0, y: oversoldY))
         path.addLine(to: CGPoint(x: lineEndX, y: oversoldY))
-        context.stroke(path, with: .color(.green.opacity(0.4)), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        context.stroke(path, with: .color(AppColors.statusPositive40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
     }
     
     private func drawKLine(context: GraphicsContext, size: CGSize, config: StochasticConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
@@ -364,7 +364,7 @@ struct StochasticPanelView: View {
     }
 
     private var activeGuideColor: Color {
-        gestureState.crosshairActive ? Color.white.opacity(0.4) : Color.blue.opacity(0.6)
+        gestureState.crosshairActive ? AppColors.surfaceWhite40 : AppColors.statusInfo60
     }
     
     // MARK: - Y-Axis Labels
@@ -376,25 +376,25 @@ struct StochasticPanelView: View {
             VStack {
                 Text(String(format: "%.0f", stochConfig?.overboughtLevel ?? 80))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.red.opacity(0.85))
+                    .foregroundColor(AppColors.statusNegative85)
                 
                 Spacer()
                 
                 Text("50")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.66))
+                    .foregroundColor(AppColors.surfaceWhite66)
                 
                 Spacer()
                 
                 Text(String(format: "%.0f", stochConfig?.oversoldLevel ?? 20))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.green.opacity(0.85))
+                    .foregroundColor(AppColors.statusPositive85)
             }
             .frame(width: 28)
             .padding(.top, 18)
             .padding(.bottom, 4)
             .padding(.trailing, 5)
-            .background(Color.black.opacity(0.62))
+            .background(AppColors.surfaceBlack62)
         }
     }
     
@@ -405,7 +405,7 @@ struct StochasticPanelView: View {
             HStack(spacing: 6) {
                 Text(stochConfig?.shortLabel ?? "Stochastic")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(AppColors.surfaceWhite80)
                 
                 if let latest = indicatorManager.latestStochastic {
                     Text("%K:")
@@ -445,7 +445,7 @@ struct StochasticPanelView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
-                .background(Color.red.opacity(0.8))
+                .background(AppColors.statusNegative80)
                 .cornerRadius(3)
         } else if value <= oversold {
             Text("OVERSOLD")
@@ -453,7 +453,7 @@ struct StochasticPanelView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
-                .background(Color.green.opacity(0.8))
+                .background(AppColors.statusPositive80)
                 .cornerRadius(3)
         }
     }
@@ -472,7 +472,7 @@ struct StochasticPanelView: View {
                 drawXAxisLabels(context: context, size: size)
             }
             .frame(height: 24)
-            .background(Color.black)
+            .background(AppColors.systemBlack)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
@@ -497,7 +497,7 @@ struct StochasticPanelView: View {
                 .padding(.vertical, 3)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.cyan.opacity(0.9))
+                        .fill(AppColors.statusAccent90)
                 )
         }
         .position(x: xPosition, y: 12)

@@ -878,8 +878,8 @@ struct TradingChartView: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color.white.opacity(0.04),
-                    Color.white.opacity(0.015)
+                    AppColors.surfaceWhite04,
+                    AppColors.surfaceWhite0015
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -1224,7 +1224,7 @@ struct TradingChartView: View {
     @ViewBuilder
     private var loadingOverlay: some View {
         ZStack {
-            Color.black.opacity(0.85)
+            AppColors.surfaceBlack85
                 .ignoresSafeArea()
             
             VStack(spacing: 20) {
@@ -1267,7 +1267,7 @@ struct TradingChartView: View {
     
     @ViewBuilder
     private var duplicateMarkerOverlay: some View {
-        Color.black.opacity(0.4)
+        AppColors.surfaceBlack40
             .ignoresSafeArea()
             .onTapGesture {
                 markerManager.showDuplicateAlert = false
@@ -1324,7 +1324,7 @@ struct TradingChartView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.blue)
+                .background(AppColors.statusInfo)
                 .cornerRadius(12)
             }
             
@@ -1375,8 +1375,8 @@ struct TradingChartView: View {
         .background(
             LinearGradient(
                 colors: [
-                    Color(red: 20/255, green: 20/255, blue: 28/255).opacity(0.95),
-                    Color(red: 20/255, green: 20/255, blue: 28/255).opacity(0.7)
+                    AppColors.chartPanelBackground.opacity(0.95),
+                    AppColors.chartPanelBackground.opacity(0.7)
                 ],
                 startPoint: .trailing,
                 endPoint: .leading
@@ -1431,7 +1431,7 @@ struct TradingChartView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(red: 25/255, green: 25/255, blue: 33/255).opacity(0.85))
+        .background(AppColors.chartPanelBackgroundAlt.opacity(0.85))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .animation(.easeInOut(duration: 0.15), value: state.takeProfitPrice)
         .animation(.easeInOut(duration: 0.15), value: state.stopLossPrice)
@@ -1444,7 +1444,7 @@ struct TradingChartView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
-                .background(Color.red.opacity(0.7))
+                .background(AppColors.statusNegative70)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
@@ -1461,7 +1461,7 @@ struct TradingChartView: View {
             .foregroundColor(.white)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.orange.opacity(0.7))
+            .background(AppColors.statusWarning70)
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
@@ -2842,7 +2842,7 @@ struct TradingChartView: View {
         onChanged: @escaping (CGPoint) -> Void
     ) -> some View {
         Circle()
-            .fill(Color.black.opacity(0.85))
+            .fill(AppColors.surfaceBlack85)
             .overlay(
                 Circle()
                     .stroke(color.opacity(0.9), lineWidth: 1.4)
@@ -3449,7 +3449,7 @@ struct TradingChartView: View {
     // MARK: - Axis Overlays
 
     private var axisPanelBackground: Color {
-        Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 12.0 / 255.0)
+        AppColors.chartPanelBackgroundDeep
     }
     
     @ViewBuilder
@@ -3531,7 +3531,7 @@ struct TradingChartView: View {
                 endPoint: .bottom
             )
             .frame(height: 60)
-            Color.white
+            AppColors.systemWhite
         }
     }
 
@@ -3582,7 +3582,7 @@ struct TradingChartView: View {
                 context.draw(
                     Text(priceText)
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.84)),
+                        .foregroundColor(AppColors.surfaceWhite84),
                     at: CGPoint(x: 30, y: y)
                 )
                 labelCount += 1
@@ -3625,10 +3625,10 @@ struct TradingChartView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.28))
+                .fill(AppColors.surfaceBlack28)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -3682,16 +3682,16 @@ struct TradingChartView: View {
             HStack(spacing: 8) {
                 Text("Marker Info")
                     .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.88))
+                    .foregroundColor(AppColors.surfaceWhite88)
 
                 Spacer(minLength: 0)
 
                 Button(action: toggleViewingInfoPanelCollapse) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white.opacity(0.82))
+                        .foregroundColor(AppColors.surfaceWhite82)
                         .frame(width: 18, height: 18)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .background(Circle().fill(AppColors.surfaceWhite08))
                 }
                 .buttonStyle(.plain)
             }
@@ -3717,10 +3717,10 @@ struct TradingChartView: View {
         .frame(width: panelWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.28))
+                .fill(AppColors.surfaceBlack28)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -3734,20 +3734,20 @@ struct TradingChartView: View {
             )
             Text("@\(marker.author.username.prefix(2))")
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(AppColors.surfaceWhite80)
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundColor(.white.opacity(0.82))
+                .foregroundColor(AppColors.surfaceWhite82)
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 9)
         .frame(width: 38)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.28))
+                .fill(AppColors.surfaceBlack28)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
         .contentShape(RoundedRectangle(cornerRadius: 8))
@@ -3771,7 +3771,7 @@ struct TradingChartView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(marker.author.displayUsername)
                             .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.92))
+                            .foregroundColor(AppColors.surfaceWhite92)
                             .lineLimit(1)
                         HStack(spacing: 4) {
                             Image(systemName: marker.author.memberRole.icon)
@@ -3798,19 +3798,19 @@ struct TradingChartView: View {
         HStack(spacing: 4) {
             Text(label)
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.68))
+                .foregroundColor(AppColors.surfaceWhite68)
             Text(value)
                 .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.92))
+                .foregroundColor(AppColors.surfaceWhite92)
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
         .background(
             Capsule()
-                .fill(Color.white.opacity(0.09))
+                .fill(AppColors.surfaceWhite09)
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.11), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite11, lineWidth: 1)
                 )
         )
     }
@@ -3888,7 +3888,7 @@ struct TradingChartView: View {
                         .font(.system(size: 18))
                     Text("Reaction")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.78))
+                        .foregroundColor(AppColors.surfaceWhite78)
                     Spacer(minLength: 0)
                 }
             }
@@ -3905,7 +3905,7 @@ struct TradingChartView: View {
                 .frame(width: 6, height: 6)
             Text(title)
                 .font(.system(size: 9.5, weight: .semibold))
-                .foregroundColor(.white.opacity(0.78))
+                .foregroundColor(AppColors.surfaceWhite78)
             Spacer(minLength: 0)
             Text(chartData.formatPrice(price))
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -3917,7 +3917,7 @@ struct TradingChartView: View {
         let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return Text(trimmed.isEmpty ? placeholder : trimmed)
             .font(.system(size: 10, weight: .medium))
-            .foregroundColor(trimmed.isEmpty ? .white.opacity(0.58) : .white.opacity(0.86))
+            .foregroundColor(trimmed.isEmpty ? AppColors.surfaceWhite58 : AppColors.surfaceWhite86)
             .lineLimit(3)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -3935,7 +3935,7 @@ struct TradingChartView: View {
         if !question.isEmpty {
             Text(question)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.88))
+                .foregroundColor(AppColors.surfaceWhite88)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -3981,20 +3981,20 @@ struct TradingChartView: View {
                     if isSubmitting {
                         ProgressView()
                             .scaleEffect(0.7)
-                            .tint(.white.opacity(0.8))
+                            .tint(AppColors.surfaceWhite80)
                     } else {
                         Text("\(option.voteCount)")
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.74))
+                            .foregroundColor(AppColors.surfaceWhite74)
                     }
                 }
 
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color.white.opacity(0.1))
+                            .fill(AppColors.surfaceWhite10)
                         Capsule()
-                            .fill(isSelected ? AppColors.accentColor.opacity(0.9) : Color.white.opacity(0.32))
+                            .fill(isSelected ? AppColors.accentColor.opacity(0.9) : AppColors.surfaceWhite32)
                             .frame(width: max(2, geometry.size.width * percentage))
                     }
                 }
@@ -4004,10 +4004,10 @@ struct TradingChartView: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? AppColors.accentColor.opacity(0.18) : Color.white.opacity(0.07))
+                    .fill(isSelected ? AppColors.accentColor.opacity(0.18) : AppColors.surfaceWhite07)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? AppColors.accentColor.opacity(0.42) : Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(isSelected ? AppColors.accentColor.opacity(0.42) : AppColors.surfaceWhite08, lineWidth: 1)
                     )
             )
         }
@@ -4045,16 +4045,16 @@ struct TradingChartView: View {
 
             Text(currentTimeframe.shortName)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(AppColors.surfaceWhite80)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.blue.opacity(0.6))
+                .background(AppColors.statusInfo60)
                 .cornerRadius(4)
 
             if let symbol = currentSymbol {
                 Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
                     .font(.system(size: symbol.effectiveIsMarketOpen ? 7 : 8, weight: .semibold))
-                    .foregroundColor(symbol.effectiveIsMarketOpen ? .green : .gray.opacity(0.75))
+                    .foregroundColor(symbol.effectiveIsMarketOpen ? .green : AppColors.surfaceGray75)
             }
         }
     }
@@ -4064,10 +4064,10 @@ struct TradingChartView: View {
         if let symbol = currentSymbol {
             Text(symbol.providerDisplayLabel)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(AppColors.surfaceWhite85)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.blue.opacity(0.24))
+                .background(AppColors.statusInfo24)
                 .clipShape(Capsule())
         }
     }
@@ -4140,14 +4140,14 @@ struct TradingChartView: View {
                             .foregroundColor(AppColors.whiteText.opacity(0.9))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.12))
+                            .background(AppColors.surfaceWhite12)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.5))
+                    .background(AppColors.surfaceBlack50)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .padding(.trailing, yAxisTrailingInset)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -4166,7 +4166,7 @@ struct TradingChartView: View {
                     ChartBottomControlButton(
                         title: isMarkerVisibilityPanelExpanded ? "Close" : "Markers",
                         icon: isMarkerVisibilityPanelExpanded ? "xmark.circle" : "eye",
-                        color: .white.opacity(0.66),
+                        color: AppColors.surfaceWhite66,
                         isActive: isMarkerVisibilityPanelExpanded
                     ) {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -4178,7 +4178,7 @@ struct TradingChartView: View {
                     ChartBottomControlButton(
                         title: "Latest",
                         icon: "arrow.right.to.line",
-                        color: .white.opacity(0.66)
+                        color: AppColors.surfaceWhite66
                     ) {
                         controlViewModel.jumpToLatest()
                     }
@@ -4187,7 +4187,7 @@ struct TradingChartView: View {
                     // Chart settings (icon-only)
                     ChartBottomIconControlButton(
                         icon: "gearshape",
-                        color: .white.opacity(0.66)
+                        color: AppColors.surfaceWhite66
                     ) {
                         showChartSettingsSheet = true
                     }
@@ -4213,10 +4213,10 @@ struct TradingChartView: View {
             HStack(spacing: 5) {
                 Image(systemName: "calendar")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.66))
+                    .foregroundColor(AppColors.surfaceWhite66)
                 Text(labelText)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.66))
+                    .foregroundColor(AppColors.surfaceWhite66)
                     .lineLimit(1)
             }
             .fixedSize(horizontal: true, vertical: false)
@@ -4341,7 +4341,7 @@ struct TradingChartView: View {
             }
             drawingContext.stroke(
                 guidePath,
-                with: .color(.blue.opacity(0.5)),
+                with: .color(AppColors.statusInfo50),
                 style: StrokeStyle(lineWidth: 2, dash: [5, 5])
             )
         }
@@ -4637,10 +4637,10 @@ struct ChartBottomControlButton: View {
     let action: () -> Void
 
     static let cornerRadius: CGFloat = 8
-    static let inactiveBackground: Color = Color(red: 20.0 / 255.0, green: 20.0 / 255.0, blue: 26.0 / 255.0).opacity(0.96)
-    static let inactiveBorder: Color = Color.white.opacity(0.14)
-    static let activeBackground: Color = Color.white.opacity(0.68)
-    static let activeBorder: Color = Color.white.opacity(0.24)
+    static let inactiveBackground: Color = AppColors.chartPanelBackgroundMuted.opacity(0.96)
+    static let inactiveBorder: Color = AppColors.surfaceWhite14
+    static let activeBackground: Color = AppColors.surfaceWhite68
+    static let activeBorder: Color = AppColors.surfaceWhite24
     
     var body: some View {
         Button(action: action) {
@@ -4746,7 +4746,7 @@ struct PlacementLineDragOverlay: View {
                     VStack(spacing: 2) {
                         ForEach(0..<3, id: \.self) { _ in
                             Rectangle()
-                                .fill(Color.white.opacity(0.6))
+                                .fill(AppColors.surfaceWhite60)
                                 .frame(width: 20, height: 1)
                         }
                     }
@@ -4890,7 +4890,7 @@ struct PlacementSupportResistanceOverlay: View {
                 VStack(spacing: 2) {
                     ForEach(0..<3, id: \.self) { _ in
                         Rectangle()
-                            .fill(Color.white.opacity(0.6))
+                            .fill(AppColors.surfaceWhite60)
                             .frame(width: 20, height: 1)
                     }
                 }
@@ -5022,7 +5022,7 @@ struct PredictionPlacementOverlay: View {
         let tpTop = min(entryY, tpY)
         let tpHeight = abs(entryY - tpY)
         Rectangle()
-            .fill(Color.green.opacity(0.06))
+            .fill(AppColors.statusPositive06)
             .frame(width: chartWidth - 60, height: max(0, tpHeight))
             .position(x: (chartWidth - 60) / 2, y: tpTop + tpHeight / 2)
             .allowsHitTesting(false)
@@ -5031,7 +5031,7 @@ struct PredictionPlacementOverlay: View {
         let slTop = min(entryY, slY)
         let slHeight = abs(entryY - slY)
         Rectangle()
-            .fill(Color.red.opacity(0.06))
+            .fill(AppColors.statusNegative.opacity(0.06))
             .frame(width: chartWidth - 60, height: max(0, slHeight))
             .position(x: (chartWidth - 60) / 2, y: slTop + slHeight / 2)
             .allowsHitTesting(false)
@@ -5087,7 +5087,7 @@ struct PredictionPlacementOverlay: View {
                 VStack(spacing: 2) {
                     ForEach(0..<3, id: \.self) { _ in
                         Rectangle()
-                            .fill(Color.white.opacity(0.6))
+                            .fill(AppColors.surfaceWhite60)
                             .frame(width: 20, height: 1)
                     }
                 }
@@ -5367,7 +5367,7 @@ struct MarkerPriceLinesOverlay: View {
                 p.move(to: CGPoint(x: 0, y: entryY))
                 p.addLine(to: CGPoint(x: lineEndX, y: entryY))
             }
-            context.stroke(entryPath, with: .color(Color.green.opacity(0.6)), style: StrokeStyle(lineWidth: 2))
+            context.stroke(entryPath, with: .color(AppColors.statusPositive60), style: StrokeStyle(lineWidth: 2))
             drawPriceLabel(context: context, size: size, y: entryY, price: entryPrice, color: .green, label: "Entry")
         }
 
@@ -5380,7 +5380,7 @@ struct MarkerPriceLinesOverlay: View {
             let fillHeight = abs(entryY - tpY)
             if fillHeight > 0 {
                 let fillRect = CGRect(x: 0, y: fillTop, width: lineEndX, height: fillHeight)
-                context.fill(Path(fillRect), with: .color(Color.green.opacity(0.06)))
+                context.fill(Path(fillRect), with: .color(AppColors.statusPositive06))
             }
 
             if tpY >= 0 && tpY <= chartHeight {
@@ -5388,7 +5388,7 @@ struct MarkerPriceLinesOverlay: View {
                     p.move(to: CGPoint(x: 0, y: tpY))
                     p.addLine(to: CGPoint(x: lineEndX, y: tpY))
                 }
-                context.stroke(tpPath, with: .color(Color.blue.opacity(0.6)), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
+                context.stroke(tpPath, with: .color(AppColors.statusInfo60), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
                 drawPriceLabel(context: context, size: size, y: tpY, price: tp, color: .blue, label: "TP")
             }
         }
@@ -5402,7 +5402,7 @@ struct MarkerPriceLinesOverlay: View {
             let fillHeight = abs(entryY - slY)
             if fillHeight > 0 {
                 let fillRect = CGRect(x: 0, y: fillTop, width: lineEndX, height: fillHeight)
-                context.fill(Path(fillRect), with: .color(Color.red.opacity(0.06)))
+                context.fill(Path(fillRect), with: .color(AppColors.statusNegative.opacity(0.06)))
             }
 
             if slY >= 0 && slY <= chartHeight {
@@ -5410,7 +5410,7 @@ struct MarkerPriceLinesOverlay: View {
                     p.move(to: CGPoint(x: 0, y: slY))
                     p.addLine(to: CGPoint(x: lineEndX, y: slY))
                 }
-                context.stroke(slPath, with: .color(Color.red.opacity(0.6)), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
+                context.stroke(slPath, with: .color(AppColors.statusNegative60), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
                 drawPriceLabel(context: context, size: size, y: slY, price: sl, color: .red, label: "SL")
             }
         }
@@ -5453,7 +5453,7 @@ struct MarkerPriceLinesOverlay: View {
         case .levelResistance:
             return (RLComponentType.levelResistance.color, "Resistance", true)
         default:
-            return (.white.opacity(0.75), nil, true)
+            return (AppColors.surfaceWhite75, nil, true)
         }
     }
 
@@ -5495,7 +5495,7 @@ struct MarkerPriceLinesOverlay: View {
                     p.move(to: CGPoint(x: 0, y: entryY))
                     p.addLine(to: CGPoint(x: lineEndX, y: entryY))
                 }
-                context.stroke(entryPath, with: .color(Color.green.opacity(0.6)), style: StrokeStyle(lineWidth: 2))
+                context.stroke(entryPath, with: .color(AppColors.statusPositive60), style: StrokeStyle(lineWidth: 2))
                 drawPriceLabel(context: context, size: size, y: entryY, price: entryPrice, color: .green, label: "Entry")
             }
 
@@ -5505,14 +5505,14 @@ struct MarkerPriceLinesOverlay: View {
                 let fillTop = min(entryY, tpY)
                 let fillHeight = abs(entryY - tpY)
                 if fillHeight > 0 {
-                    context.fill(Path(CGRect(x: 0, y: fillTop, width: lineEndX, height: fillHeight)), with: .color(Color.green.opacity(0.06)))
+                    context.fill(Path(CGRect(x: 0, y: fillTop, width: lineEndX, height: fillHeight)), with: .color(AppColors.statusPositive06))
                 }
                 if tpY >= 0 && tpY <= chartHeight {
                     let tpPath = Path { p in
                         p.move(to: CGPoint(x: 0, y: tpY))
                         p.addLine(to: CGPoint(x: lineEndX, y: tpY))
                     }
-                    context.stroke(tpPath, with: .color(Color.blue.opacity(0.6)), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
+                    context.stroke(tpPath, with: .color(AppColors.statusInfo60), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
                     drawPriceLabel(context: context, size: size, y: tpY, price: tp, color: .blue, label: "TP")
                 }
             }
@@ -5523,14 +5523,14 @@ struct MarkerPriceLinesOverlay: View {
                 let fillTop = min(entryY, slY)
                 let fillHeight = abs(entryY - slY)
                 if fillHeight > 0 {
-                    context.fill(Path(CGRect(x: 0, y: fillTop, width: lineEndX, height: fillHeight)), with: .color(Color.red.opacity(0.06)))
+                    context.fill(Path(CGRect(x: 0, y: fillTop, width: lineEndX, height: fillHeight)), with: .color(AppColors.statusNegative.opacity(0.06)))
                 }
                 if slY >= 0 && slY <= chartHeight {
                     let slPath = Path { p in
                         p.move(to: CGPoint(x: 0, y: slY))
                         p.addLine(to: CGPoint(x: lineEndX, y: slY))
                     }
-                    context.stroke(slPath, with: .color(Color.red.opacity(0.6)), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
+                    context.stroke(slPath, with: .color(AppColors.statusNegative60), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
                     drawPriceLabel(context: context, size: size, y: slY, price: sl, color: .red, label: "SL")
                 }
             }
@@ -5775,7 +5775,7 @@ struct PredictionTargetLineOverlay: View {
         }
         
         let lineWidth: CGFloat = isDragging ? 3 : 2
-        context.stroke(linePath, with: .color(Color.orange.opacity(0.8)), style: StrokeStyle(lineWidth: lineWidth))
+        context.stroke(linePath, with: .color(AppColors.statusWarning80), style: StrokeStyle(lineWidth: lineWidth))
     }
     
     private func drawTargetLabel(context: GraphicsContext, size: CGSize, y: CGFloat) {
@@ -5794,7 +5794,7 @@ struct PredictionTargetLineOverlay: View {
         )
         
         let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
-        context.fill(roundedPath, with: .color(Color.orange))
+        context.fill(roundedPath, with: .color(AppColors.statusWarning))
         
         context.draw(
             Text(displayText)
@@ -5814,7 +5814,7 @@ struct PredictionTargetLineOverlay: View {
         )
         
         let handlePath = Path(roundedRect: handleRect, cornerRadius: 8)
-        context.fill(handlePath, with: .color(Color.orange.opacity(isDragging ? 0.3 : 0.2)))
+        context.fill(handlePath, with: .color(AppColors.statusWarning.opacity(isDragging ? 0.3 : 0.2)))
         
         let arrowsImage = Image(systemName: "arrow.up.arrow.down")
         context.draw(arrowsImage, in: handleRect)
@@ -5878,7 +5878,7 @@ struct StaticTargetLineOverlay: View {
                 path.addLine(to: CGPoint(x: lineEndX, y: y))
             }
             
-            context.stroke(linePath, with: .color(Color.orange.opacity(0.8)), style: StrokeStyle(lineWidth: 2))
+            context.stroke(linePath, with: .color(AppColors.statusWarning80), style: StrokeStyle(lineWidth: 2))
             
             let labelX = size.width - 35
             let priceText = chartData.formatPrice(targetPrice)
@@ -5892,7 +5892,7 @@ struct StaticTargetLineOverlay: View {
             )
             
             let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
-            context.fill(roundedPath, with: .color(Color.orange))
+            context.fill(roundedPath, with: .color(AppColors.statusWarning))
             
             context.draw(
                 Text(displayText)

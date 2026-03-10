@@ -249,8 +249,8 @@ struct EventDetailView: View {
                         title: displayedEvent.isAttending ? "Attending" : "Attend",
                         imageName: displayedEvent.isAttending ? "calendar.badge.checkmark" : "calendar.badge.plus",
                         backgroundColor: displayedEvent.isAttending ? AppColors.whiteText.opacity(0.8) : AppColors.gradientBackgroundDark.opacity(0.2),
-                        foregroundColor: displayedEvent.isAttending ? Color.black : AppColors.whiteText.opacity(0.8),
-                        strokeColor: displayedEvent.isAttending ? Color.black : AppColors.whiteText.opacity(0.3),
+                        foregroundColor: displayedEvent.isAttending ? AppColors.systemBlack : AppColors.whiteText.opacity(0.8),
+                        strokeColor: displayedEvent.isAttending ? AppColors.systemBlack : AppColors.whiteText.opacity(0.3),
                         strokeWidth: 0.5,
                         action: {
                             if displayedEvent.isAttending {

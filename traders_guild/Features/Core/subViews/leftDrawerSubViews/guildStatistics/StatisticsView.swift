@@ -124,10 +124,10 @@ private struct GuildStatsCard<Content: View>: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.06))
+                .fill(AppColors.surfaceWhite06)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite10, lineWidth: 1)
                 )
         )
     }

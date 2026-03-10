@@ -193,7 +193,7 @@ struct InviteMembersView: View {
                     .foregroundColor(.orange)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.orange.opacity(0.1))
+                    .background(AppColors.statusWarning10)
                     .cornerRadius(6)
             } else {
                 Button(action: { sendInvite(to: user) }) {

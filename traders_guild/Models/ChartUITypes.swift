@@ -74,15 +74,16 @@ enum MarkerAlertSeverity: String, Codable, CaseIterable {
 
     /// Multi-color palette for SF Symbol palette rendering.
     var markerPalette: [Color] {
+        let base = MarkerVisualSpec.iconBaseColor
         switch self {
         case .critical:
-            return [Color.white.opacity(0.96), Color.red.opacity(0.92), Color.red.opacity(0.6)]
+            return [base, AppColors.statusNegative92, AppColors.statusNegative60]
         case .severe:
-            return [Color.white.opacity(0.96), Color.orange.opacity(0.92), Color.yellow.opacity(0.68)]
+            return [base, AppColors.statusWarning92, AppColors.statusHighlight68]
         case .moderate:
-            return [Color.white.opacity(0.96), Color.yellow.opacity(0.9), Color.orange.opacity(0.62)]
+            return [base, AppColors.statusHighlight90, AppColors.statusWarning62]
         case .mild:
-            return [Color.white.opacity(0.96), Color.blue.opacity(0.9), Color.cyan.opacity(0.66)]
+            return [base, AppColors.statusInfo90, AppColors.statusAccent66]
         }
     }
 }

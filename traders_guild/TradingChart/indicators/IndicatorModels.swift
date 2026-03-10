@@ -300,8 +300,8 @@ struct RSIConfig: IndicatorConfiguration {
         overboughtLevel: Double = 70,
         oversoldLevel: Double = 30,
         showLevels: Bool = true,
-        overboughtColor: CodableColor = CodableColor(.red.opacity(0.15)),
-        oversoldColor: CodableColor = CodableColor(.green.opacity(0.15))
+        overboughtColor: CodableColor = CodableColor(AppColors.statusNegative15),
+        oversoldColor: CodableColor = CodableColor(AppColors.statusPositive15)
     ) {
         self.id = id
         self.isEnabled = isEnabled
@@ -347,8 +347,8 @@ struct MACDConfig: IndicatorConfiguration, Identifiable {
         slowPeriod: Int = 26,
         signalPeriod: Int = 9,
         signalColor: CodableColor = CodableColor(.orange),
-        histogramPositiveColor: CodableColor = CodableColor(.green.opacity(0.7)),
-        histogramNegativeColor: CodableColor = CodableColor(.red.opacity(0.7)),
+        histogramPositiveColor: CodableColor = CodableColor(AppColors.statusPositive70),
+        histogramNegativeColor: CodableColor = CodableColor(AppColors.statusNegative70),
         showHistogram: Bool = true,
         showSignalLine: Bool = true
     ) {
@@ -408,8 +408,8 @@ struct StochasticConfig: IndicatorConfiguration, Identifiable {
         overboughtLevel: Double = 80,
         oversoldLevel: Double = 20,
         showLevels: Bool = true,
-        overboughtColor: CodableColor = CodableColor(.red.opacity(0.15)),
-        oversoldColor: CodableColor = CodableColor(.green.opacity(0.15))
+        overboughtColor: CodableColor = CodableColor(AppColors.statusNegative15),
+        oversoldColor: CodableColor = CodableColor(AppColors.statusPositive15)
     ) {
         self.id = id
         self.isEnabled = isEnabled
@@ -629,9 +629,9 @@ struct BollingerBandsConfig: IndicatorConfiguration {
         lineWidth: CGFloat = 1.0,
         period: Int = 20,
         standardDeviations: Double = 2.0,
-        upperBandColor: CodableColor = CodableColor(.red.opacity(0.7)),
-        lowerBandColor: CodableColor = CodableColor(.green.opacity(0.7)),
-        fillColor: CodableColor = CodableColor(.blue.opacity(0.1)),
+        upperBandColor: CodableColor = CodableColor(AppColors.statusNegative70),
+        lowerBandColor: CodableColor = CodableColor(AppColors.statusPositive70),
+        fillColor: CodableColor = CodableColor(AppColors.statusInfo10),
         showFill: Bool = true
     ) {
         self.id = id
@@ -680,8 +680,8 @@ struct VWAPConfig: IndicatorConfiguration {
         color: CodableColor = CodableColor(.orange),
         lineWidth: CGFloat = 1.5,
         showStandardDeviationBands: Bool = false,
-        upperBandColor: CodableColor = CodableColor(.orange.opacity(0.5)),
-        lowerBandColor: CodableColor = CodableColor(.orange.opacity(0.5))
+        upperBandColor: CodableColor = CodableColor(AppColors.statusWarning50),
+        lowerBandColor: CodableColor = CodableColor(AppColors.statusWarning50)
     ) {
         self.id = id
         self.isEnabled = isEnabled
@@ -726,9 +726,9 @@ struct DonchianChannelsConfig: IndicatorConfiguration {
         color: CodableColor = CodableColor(.gray),
         lineWidth: CGFloat = 1.0,
         period: Int = 20,
-        upperBandColor: CodableColor = CodableColor(.blue.opacity(0.8)),
-        lowerBandColor: CodableColor = CodableColor(.blue.opacity(0.8)),
-        fillColor: CodableColor = CodableColor(.blue.opacity(0.1)),
+        upperBandColor: CodableColor = CodableColor(AppColors.statusInfo80),
+        lowerBandColor: CodableColor = CodableColor(AppColors.statusInfo80),
+        fillColor: CodableColor = CodableColor(AppColors.statusInfo10),
         showFill: Bool = true,
         showMiddleLine: Bool = true
     ) {
@@ -780,9 +780,9 @@ struct KeltnerChannelsConfig: IndicatorConfiguration {
         emaPeriod: Int = 20,
         atrPeriod: Int = 10,
         atrMultiplier: Double = 2.0,
-        upperBandColor: CodableColor = CodableColor(.purple.opacity(0.7)),
-        lowerBandColor: CodableColor = CodableColor(.purple.opacity(0.7)),
-        fillColor: CodableColor = CodableColor(.purple.opacity(0.1)),
+        upperBandColor: CodableColor = CodableColor(AppColors.statusSecondary70),
+        lowerBandColor: CodableColor = CodableColor(AppColors.statusSecondary70),
+        fillColor: CodableColor = CodableColor(AppColors.statusSecondary10),
         showFill: Bool = true
     ) {
         self.id = id
@@ -881,8 +881,8 @@ struct CCIConfig: IndicatorConfiguration {
         overboughtLevel: Double = 100,
         oversoldLevel: Double = -100,
         showLevels: Bool = true,
-        overboughtColor: CodableColor = CodableColor(.red.opacity(0.15)),
-        oversoldColor: CodableColor = CodableColor(.green.opacity(0.15))
+        overboughtColor: CodableColor = CodableColor(AppColors.statusNegative15),
+        oversoldColor: CodableColor = CodableColor(AppColors.statusPositive15)
     ) {
         self.id = id
         self.isEnabled = isEnabled
@@ -956,8 +956,8 @@ struct WilliamsRConfig: IndicatorConfiguration {
         overboughtLevel: Double = -20,
         oversoldLevel: Double = -80,
         showLevels: Bool = true,
-        overboughtColor: CodableColor = CodableColor(.red.opacity(0.15)),
-        oversoldColor: CodableColor = CodableColor(.green.opacity(0.15))
+        overboughtColor: CodableColor = CodableColor(AppColors.statusNegative15),
+        oversoldColor: CodableColor = CodableColor(AppColors.statusPositive15)
     ) {
         self.id = id
         self.isEnabled = isEnabled
@@ -1052,8 +1052,8 @@ struct VolumeConfig: IndicatorConfiguration {
         isEnabled: Bool = true,
         color: CodableColor = CodableColor(.blue),
         lineWidth: CGFloat = 1.0,
-        bullishColor: CodableColor = CodableColor(.green.opacity(0.7)),
-        bearishColor: CodableColor = CodableColor(.red.opacity(0.7)),
+        bullishColor: CodableColor = CodableColor(AppColors.statusPositive70),
+        bearishColor: CodableColor = CodableColor(AppColors.statusNegative70),
         showMA: Bool = false,
         maPeriod: Int = 20,
         maColor: CodableColor = CodableColor(.yellow)

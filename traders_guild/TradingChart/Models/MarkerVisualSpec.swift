@@ -2,24 +2,57 @@
 //  MarkerVisualSpec.swift
 //  traders_guild
 //
-//  Shared marker shell/icon/border spec used by chart rendering and SwiftUI badges.
+//  Shared marker glass-button spec used by chart rendering and SwiftUI badges.
 //
 
 import SwiftUI
-import UIKit
 
 enum MarkerVisualSpec {
-    static let shellGradientColors: [Color] = [
-        Color(hex: "#000127") ?? AppColors.gradientBackgroundLight,
-        Color(hex: "#111111") ?? AppColors.gradientBackgroundMid,
-    ]
+    // MARK: - Glass Material
 
-    static func shellGradient(
-        startPoint: UnitPoint = .topLeading,
-        endPoint: UnitPoint = .bottomTrailing
-    ) -> LinearGradient {
-        LinearGradient(colors: shellGradientColors, startPoint: startPoint, endPoint: endPoint)
+    /// Thin white stroke matching iOS glass button style.
+    static let glassStrokeColor: Color = AppColors.surfaceWhite24
+    static let glassStrokeWidth: CGFloat = 0.8
+    static let glassShadowRadius: CGFloat = 2
+    static let glassShadowOpacity: Double = 0.35
+
+    /// Tint overlay — neutral grey for all standard markers, severity-colored for alerts.
+    static func glassTint(
+        for intent: RLMarkerIntent,
+        severity: MarkerAlertSeverity? = nil
+    ) -> Color {
+        if intent == .alert, let severity {
+            return severity.color.opacity(0.25)
+        }
+        return Color.white.opacity(0.06)
     }
+
+    // MARK: - Border
+
+    static func borderWidth(isSelected: Bool) -> CGFloat {
+        glassStrokeWidth
+    }
+
+    static func borderColor(
+        for intent: RLMarkerIntent,
+        severity: MarkerAlertSeverity? = nil,
+        displayColor: Color = .clear,
+        isSelected: Bool = false
+    ) -> Color {
+        if intent == .alert, let severity {
+            return severity.color.opacity(0.4)
+        }
+        return glassStrokeColor
+    }
+
+    // MARK: - Size
+
+    /// Base diameter for chart canvas markers (matches cancel button).
+    static let baseCanvasDiameter: CGFloat = 36
+
+    // MARK: - Icon
+
+    static let iconBaseColor: Color = Color(hex: "#D9D9D9") ?? Color(white: 0.85)
 
     static func symbol(
         for intent: RLMarkerIntent,
@@ -35,50 +68,27 @@ enum MarkerVisualSpec {
         intent.markerPalette(for: severity)
     }
 
-    static func borderWidth(isSelected: Bool) -> CGFloat {
-        isSelected
-            ? max(3.2, AppColors.markerSelectedBorderWidth)
-            : max(2.4, AppColors.markerUnselectedBorderWidth)
-    }
-
-    static func borderColor(
-        for intent: RLMarkerIntent,
-        displayColor: Color,
-        isSelected _: Bool
-    ) -> Color {
-        switch intent.markerBorderStyle {
-        case .white:
-            return .white
-        case .intentDark:
-            return darkIntentBorderColor(from: displayColor)
+    /// Per-intent icon scale — some SF Symbols are visually larger and need reduction.
+    static func iconScale(for intent: RLMarkerIntent) -> CGFloat {
+        switch intent {
+        case .news, .poll, .personal: return 0.48
+        default: return 0.58
         }
     }
 
-    static func iconSize(for diameter: CGFloat) -> CGFloat {
-        diameter * 0.58
+    /// Icon size with optional intent-aware scaling.
+    static func iconSize(for diameter: CGFloat, intent: RLMarkerIntent? = nil) -> CGFloat {
+        let scale = intent.map { iconScale(for: $0) } ?? 0.58
+        return diameter * scale
     }
+
+    /// Smaller scale for toolbar context.
+    static let toolbarIconScale: CGFloat = 0.45
 
     static func iconPrimaryColor(
         for intent: RLMarkerIntent,
         severity: MarkerAlertSeverity? = nil
     ) -> Color {
-        palette(for: intent, severity: severity).first ?? Color.white.opacity(0.96)
-    }
-
-    private static func darkIntentBorderColor(from color: Color) -> Color {
-        let uiColor = UIColor(color)
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 0
-        guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
-            return color
-        }
-        let darkenFactor: CGFloat = 0.34
-        return Color(
-            red: red * darkenFactor,
-            green: green * darkenFactor,
-            blue: blue * darkenFactor
-        )
+        palette(for: intent, severity: severity).first ?? iconBaseColor
     }
 }

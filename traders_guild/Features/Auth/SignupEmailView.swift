@@ -177,7 +177,7 @@ struct SignupEmailView: View {
                     VStack(spacing: 0) {
                         Divider()
                             .frame(height: 1)
-                            .background(Color.gray.opacity(0.3))
+                            .background(AppColors.surfaceGray30)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)

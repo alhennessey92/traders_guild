@@ -95,17 +95,17 @@ struct GhostPreviewLayer: View {
                 if isFixed {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white.opacity(0.82))
+                        .foregroundColor(AppColors.surfaceWhite82)
                 }
                 Text(formattedPrice(price))
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(AppColors.surfaceWhite90)
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(
                 Capsule()
-                    .fill(Color.black.opacity(0.7))
+                    .fill(AppColors.surfaceBlack70)
                     .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 0.8))
             )
             .padding(.trailing, 64) // offset from right edge to stay left of Y-axis
@@ -277,7 +277,7 @@ struct GhostPreviewLayer: View {
         crosshair.addLine(to: CGPoint(x: size.width, y: y))
         context.stroke(
             crosshair,
-            with: .color(Color.white.opacity(0.22)),
+            with: .color(AppColors.surfaceWhite22),
             style: StrokeStyle(lineWidth: 1.0, dash: [4, 4])
         )
 
@@ -295,7 +295,7 @@ struct GhostPreviewLayer: View {
         let innerHalf = innerSize / 2
         let outerRect = CGRect(x: center.x - outerHalf, y: center.y - outerHalf, width: size, height: size)
         let innerRect = CGRect(x: center.x - innerHalf, y: center.y - innerHalf, width: innerSize, height: innerSize)
-        context.fill(Path(ellipseIn: outerRect), with: .color(Color.black.opacity(0.75)))
+        context.fill(Path(ellipseIn: outerRect), with: .color(AppColors.surfaceBlack75))
         context.stroke(
             Path(ellipseIn: outerRect),
             with: .color(color.opacity(0.8)),
@@ -390,7 +390,7 @@ struct GhostPreviewLayer: View {
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.black.opacity(isSelected ? 0.82 : 0.7))
+                    .fill(AppColors.systemBlack.opacity(isSelected ? 0.82 : 0.7))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(
@@ -414,7 +414,7 @@ struct GhostPreviewLayer: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.black.opacity(isSelected ? 0.8 : 0.66))
+                    .fill(AppColors.systemBlack.opacity(isSelected ? 0.8 : 0.66))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(
@@ -559,23 +559,23 @@ struct GhostPreviewLayer: View {
                     .foregroundColor(placementState.intent.color.opacity(0.92))
                 Text("Checklist")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.94))
+                    .foregroundColor(AppColors.surfaceWhite94)
                 Spacer(minLength: 0)
                 Text("\(completedChecklistItemCount)/\(placementState.placementChecklistItems.count)")
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(AppColors.surfaceWhite80)
                 Button(action: toggleChecklistPanel) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white.opacity(0.82))
+                        .foregroundColor(AppColors.surfaceWhite82)
                         .frame(width: 18, height: 18)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .background(Circle().fill(AppColors.surfaceWhite08))
                 }
                 .buttonStyle(.plain)
             }
 
             Divider()
-                .overlay(Color.white.opacity(0.12))
+                .overlay(AppColors.surfaceWhite12)
 
             ForEach(placementState.placementChecklistItems) { item in
                 checklistRow(item)
@@ -594,10 +594,10 @@ struct GhostPreviewLayer: View {
                 .foregroundColor(placementState.intent.color.opacity(0.92))
             Text("\(completedChecklistItemCount)/\(placementState.placementChecklistItems.count)")
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(AppColors.surfaceWhite90)
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundColor(.white.opacity(0.82))
+                .foregroundColor(AppColors.surfaceWhite82)
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 9)
@@ -612,11 +612,11 @@ struct GhostPreviewLayer: View {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(.ultraThinMaterial)
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(Color.black.opacity(0.62))
+                .fill(AppColors.surfaceBlack62)
         }
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                .stroke(AppColors.surfaceWhite14, lineWidth: 1)
         )
     }
 
@@ -628,11 +628,11 @@ struct GhostPreviewLayer: View {
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(item.isComplete ? .green.opacity(0.95) : .white.opacity(0.5))
+                .foregroundColor(item.isComplete ? AppColors.statusPositive95 : AppColors.surfaceWhite50)
 
             Text(item.title)
                 .font(.system(size: 9.5, weight: item.isRequired ? .semibold : .regular))
-                .foregroundColor(item.isComplete ? .white.opacity(0.93) : .white.opacity(0.82))
+                .foregroundColor(item.isComplete ? AppColors.surfaceWhite93 : AppColors.surfaceWhite82)
                 .multilineTextAlignment(.leading)
                 .lineLimit(5)
                 .fixedSize(horizontal: false, vertical: true)
@@ -641,7 +641,7 @@ struct GhostPreviewLayer: View {
 
             Text(item.isRequired ? "REQ" : "TIP")
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(item.isRequired ? .orange.opacity(0.95) : AppColors.greyText)
+                .foregroundColor(item.isRequired ? AppColors.statusWarning95 : AppColors.greyText)
         }
     }
 

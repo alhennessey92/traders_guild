@@ -73,7 +73,7 @@ struct RootBottomBarSymbolButton: View {
             .frame(height: 50)
             .background(backgroundColor)
             .clipShape(Capsule())
-            .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+            .shadow(color: AppColors.surfaceWhite30, radius: 1, x: 0, y: 0)
         }
         .padding(.horizontal, 4)
     }
@@ -107,7 +107,7 @@ struct RootBottomBarSymbolButton: View {
             }
             .overlay(
                 Circle()
-                    .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                    .stroke(AppColors.surfaceWhite30, lineWidth: 1.5)
             )
         }
     }
@@ -115,7 +115,7 @@ struct RootBottomBarSymbolButton: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        AppColors.systemBlack.ignoresSafeArea()
         
         VStack(spacing: 20) {
             // Without DTO (backwards compatible)
@@ -164,12 +164,12 @@ struct RootBottomBarSymbolButton: View {
 //                    .clipShape(Circle())
 //                    .background(
 //                        Circle()
-//                            .fill(Color.white)
+//                            .fill(AppColors.systemWhite)
 //                            .frame(width: 44, height: 44)
 //                    )
 //                    .overlay(
 //                        Circle()
-//                            .stroke(Color.white, lineWidth: 2)
+//                            .stroke(AppColors.systemWhite, lineWidth: 2)
 //                    )
 //                
 //                Text(symbol)
@@ -185,7 +185,7 @@ struct RootBottomBarSymbolButton: View {
 //            .frame(height: 50)
 //            .background(backgroundColor)
 //            .clipShape(Capsule())
-//            .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+//            .shadow(color: AppColors.surfaceWhite30, radius: 1, x: 0, y: 0)
 //        }
 //        .padding(.horizontal, 4)
 //    }

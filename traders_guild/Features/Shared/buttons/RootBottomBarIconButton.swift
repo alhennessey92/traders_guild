@@ -23,7 +23,7 @@ struct RootBottomBarIconButton: View {
                 .frame(width: 50, height: 50)
                 .background(backgroundColor)
                 .clipShape(Circle())
-                .shadow(color: Color.white.opacity(0.3), radius: 1, x: 0, y: 0)
+                .shadow(color: AppColors.surfaceWhite30, radius: 1, x: 0, y: 0)
         }
         .padding(.horizontal, 4)
     }

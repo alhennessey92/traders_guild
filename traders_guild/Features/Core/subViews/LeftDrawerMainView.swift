@@ -182,7 +182,7 @@ struct LeftDrawerMainView: View {
             )
             .overlay(
                 Rectangle()
-                    .fill(Color.white.opacity(0.1))
+                    .fill(AppColors.surfaceWhite10)
                     .frame(width: 1)
                     .frame(maxHeight: .infinity),
                 alignment: .trailing
@@ -455,7 +455,7 @@ struct MainDrawerView: View {
                     .multilineTextAlignment(.leading)
                 
                 Rectangle()
-                    .fill(Color.gray.opacity(0.4))
+                    .fill(AppColors.surfaceGray40)
                     .frame(height: 0.5)
                     .padding(.top, 6)
             }
@@ -603,7 +603,7 @@ struct SectionDrawerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
                 Rectangle()
-                    .fill(Color.gray.opacity(0.4))
+                    .fill(AppColors.surfaceGray40)
                     .frame(height: 0.5)
                 
                 // Content for the specific section
@@ -736,7 +736,7 @@ struct DrawerMenuButton: View {
             .padding(.vertical, 8)
 //            .background(
 //                RoundedRectangle(cornerRadius: 10)
-//                    .fill(Color.white.opacity(0.08))
+//                    .fill(AppColors.surfaceWhite08)
 //            )
         }
         .buttonStyle(PlainButtonStyle())
@@ -797,8 +797,8 @@ struct BottomSheetView: View {
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.15),
-                            Color.white.opacity(0.0)
+                            AppColors.surfaceWhite15,
+                            AppColors.surfaceWhite00
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -807,7 +807,7 @@ struct BottomSheetView: View {
                 )
                 .allowsHitTesting(false)
         )
-        .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 0)
+        .shadow(color: AppColors.surfaceBlack20, radius: 15, x: 0, y: 0)
     }
 }
 

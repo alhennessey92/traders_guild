@@ -193,7 +193,7 @@ struct IndicatorSettingsContent: View {
                 .foregroundColor(indicatorManager.activePanelCount >= 2 ? .orange : .green)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
-                .background(Color.white.opacity(0.1))
+                .background(AppColors.surfaceWhite10)
                 .clipShape(Capsule())
         }
         .padding(.horizontal, 4)
@@ -207,7 +207,7 @@ struct IndicatorSettingsContent: View {
                 VStack(spacing: 10) {
                     Image(systemName: "chart.line.uptrend.xyaxis.circle")
                         .font(.system(size: 28))
-                        .foregroundColor(.gray.opacity(0.8))
+                        .foregroundColor(AppColors.surfaceGray80)
                     Text("No active indicators")
                         .font(.subheadline)
                         .foregroundColor(.gray)
@@ -220,12 +220,12 @@ struct IndicatorSettingsContent: View {
                     .padding(.vertical, 8)
                     .background(
                         Capsule()
-                            .fill(Color.blue.opacity(0.45))
+                            .fill(AppColors.statusInfo45)
                     )
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
-                .background(Color.white.opacity(0.04))
+                .background(AppColors.surfaceWhite04)
                 .cornerRadius(12)
             } else {
                 if !indicatorManager.activeIndicators.enabledMovingAverages.isEmpty {
@@ -468,7 +468,7 @@ struct IndicatorSettingsContent: View {
                 AddButton(title: "HMA", color: .mint) { addingIndicatorType = .hma }
             }
             
-            Divider().background(Color.gray.opacity(0.3))
+            Divider().background(AppColors.surfaceGray30)
             
             // VWAP
             IndicatorRowWithEdit(
@@ -548,7 +548,7 @@ struct IndicatorSettingsContent: View {
                 onEdit: indicatorManager.isKeltnerChannelsActive ? { editingKC = true } : nil
             )
             
-            Divider().background(Color.gray.opacity(0.3))
+            Divider().background(AppColors.surfaceGray30)
             IndicatorSectionHeader(title: "Volatility Panels", icon: "ruler")
             
             // ATR
@@ -687,7 +687,7 @@ struct IndicatorSettingsContent: View {
             }
         }
         .padding(10)
-        .background(Color.orange.opacity(0.15))
+        .background(AppColors.statusWarning15)
         .clipShape(Capsule())
     }
 }
@@ -777,12 +777,12 @@ struct ActiveIndicatorRow: View {
             
             Button(action: onRemove) {
                 Image(systemName: "trash")
-                    .foregroundColor(.red.opacity(0.7))
+                    .foregroundColor(AppColors.statusNegative70)
                     .font(.caption)
             }
         }
         .padding(10)
-        .background(Color.white.opacity(0.05))
+        .background(AppColors.surfaceWhite05)
         .cornerRadius(10)
     }
 }
@@ -830,7 +830,7 @@ struct IndicatorRowWithEdit: View {
             }
         }
         .padding(12)
-        .background(isActive ? color.opacity(0.15) : Color.white.opacity(0.05))
+        .background(isActive ? color.opacity(0.15) : AppColors.surfaceWhite05)
         .cornerRadius(10)
     }
 }
@@ -863,7 +863,7 @@ struct PanelIndicatorRowWithEdit: View {
                         .foregroundColor(.gray)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
-                        .background(Color.gray.opacity(0.3))
+                        .background(AppColors.surfaceGray30)
                         .clipShape(Capsule())
                 }
                 if let subtitle = subtitle {
@@ -889,7 +889,7 @@ struct PanelIndicatorRowWithEdit: View {
                     .foregroundColor(.orange)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.2))
+                    .background(AppColors.statusWarning20)
                     .clipShape(Capsule())
             } else {
                 Button(action: onToggle) {
@@ -900,7 +900,7 @@ struct PanelIndicatorRowWithEdit: View {
             }
         }
         .padding(12)
-        .background(isActive ? color.opacity(0.15) : Color.white.opacity(0.05))
+        .background(isActive ? color.opacity(0.15) : AppColors.surfaceWhite05)
         .cornerRadius(10)
         .opacity(!isActive && !canAdd ? 0.5 : 1.0)
     }
@@ -918,7 +918,7 @@ struct ColorPickerGrid: View {
                 Circle()
                     .fill(color)
                     .frame(width: 30, height: 30)
-                    .overlay(Circle().stroke(selectedColor == color ? Color.white : Color.clear, lineWidth: 2))
+                    .overlay(Circle().stroke(selectedColor == color ? AppColors.systemWhite : Color.clear, lineWidth: 2))
                     .onTapGesture { selectedColor = color }
             }
         }

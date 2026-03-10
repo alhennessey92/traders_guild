@@ -64,20 +64,20 @@ struct UnifiedDisclosureGroup<Content: View>: View {
                     
                     Text("(\(count))")
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppColors.surfaceWhite50)
                     
                     Spacer()
                     
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppColors.surfaceWhite50)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                        colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -148,7 +148,7 @@ struct UnifiedSearchBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(AppColors.surfaceWhite50)
                 .font(.system(size: 15))
             
             TextField(placeholder, text: $text)
@@ -169,7 +169,7 @@ struct UnifiedSearchBar: View {
                     isFocused = false
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppColors.surfaceWhite50)
                         .font(.system(size: 16))
                 }
             }
@@ -178,7 +178,7 @@ struct UnifiedSearchBar: View {
         .padding(.vertical, 12)
         .background(
             LinearGradient(
-                colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -202,7 +202,7 @@ struct UnifiedSymbolSearchBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(AppColors.surfaceWhite50)
                 .font(.system(size: 15))
             
             TextField(placeholder, text: $text)
@@ -223,7 +223,7 @@ struct UnifiedSymbolSearchBar: View {
                     isFocused = false
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppColors.surfaceWhite50)
                         .font(.system(size: 16))
                 }
             }
@@ -232,7 +232,7 @@ struct UnifiedSymbolSearchBar: View {
         .padding(.vertical, 12)
         .background(
             LinearGradient(
-                colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -306,8 +306,8 @@ enum UnifiedTabTheme {
     static var consistentBlueGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 0.2, green: 0.4, blue: 0.8),      // #3366CC
-                Color(red: 0.15, green: 0.25, blue: 0.5)    // #263F80
+                AppColors.chartTabGradientStart,      // #3366CC
+                AppColors.chartTabGradientEnd    // #263F80
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -320,10 +320,10 @@ enum UnifiedTabTheme {
             return UnifiedTabTheme.consistentBlueGradient
         case .colored:
             let colors: [(Color, Color)] = [
-                (.yellow.opacity(0.5), .orange.opacity(0.3)),
-                (.blue.opacity(0.5), .purple.opacity(0.3)),
-                (.green.opacity(0.5), .teal.opacity(0.3)),
-                (.pink.opacity(0.5), .red.opacity(0.3))
+                (AppColors.statusHighlight50, AppColors.statusWarning30),
+                (AppColors.statusInfo50, AppColors.statusSecondary30),
+                (AppColors.statusPositive50, AppColors.statusTeal30),
+                (AppColors.statusPink50, AppColors.statusNegative30)
             ]
             let colorPair = colors[index % colors.count]
             return LinearGradient(
@@ -339,19 +339,19 @@ enum UnifiedTabTheme {
             )
         case .emerald:
             return LinearGradient(
-                colors: [Color.green.opacity(0.72), Color.teal.opacity(0.58)],
+                colors: [AppColors.statusPositive72, AppColors.statusTeal58],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         case .amber:
             return LinearGradient(
-                colors: [Color.orange.opacity(0.72), Color.yellow.opacity(0.55)],
+                colors: [AppColors.statusWarning72, AppColors.statusHighlight55],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         case .magenta:
             return LinearGradient(
-                colors: [Color.pink.opacity(0.72), Color.indigo.opacity(0.58)],
+                colors: [AppColors.statusPink72, AppColors.statusIndigo58],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -361,18 +361,18 @@ enum UnifiedTabTheme {
     func borderColor(for index: Int) -> Color {
         switch self {
         case .blue:
-            return Color.blue.opacity(0.4)
+            return AppColors.statusInfo40
         case .colored:
             let colors: [Color] = [.yellow, .blue, .green, .pink]
             return colors[index % colors.count].opacity(0.3)
         case .accent:
             return AppColors.accentColor.opacity(0.4)
         case .emerald:
-            return Color.green.opacity(0.45)
+            return AppColors.statusPositive45
         case .amber:
-            return Color.orange.opacity(0.45)
+            return AppColors.statusWarning45
         case .magenta:
-            return Color.pink.opacity(0.45)
+            return AppColors.statusPink45
         }
     }
 }
@@ -403,7 +403,7 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
                 if let count = count {
                     Text("(\(count))")
                         .font(.system(size: size.labelSize - 2))
-                        .foregroundColor(isSelected ? .white.opacity(0.7) : .gray)
+                        .foregroundColor(isSelected ? AppColors.surfaceWhite70 : .gray)
                 }
             }
             .foregroundColor(isSelected ? .white : .gray)
@@ -413,7 +413,7 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
                 isSelected ?
                 theme.selectedBackground(for: index) :
                 LinearGradient(
-                    colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                    colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -478,8 +478,8 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
     private var selectedGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 0.2, green: 0.4, blue: 0.8),      // #3366CC
-                Color(red: 0.15, green: 0.25, blue: 0.5)    // #263F80
+                AppColors.chartTabGradientStart,      // #3366CC
+                AppColors.chartTabGradientEnd    // #263F80
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -488,7 +488,7 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
     
     private var unselectedGradient: LinearGradient {
         LinearGradient(
-            colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+            colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -522,7 +522,7 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
+                    .stroke(isSelected ? AppColors.statusInfo40 : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -664,7 +664,7 @@ struct UnifiedEmptyState: View {
     let icon: String
     let title: String
     var subtitle: String? = nil
-    var iconColor: Color = .gray.opacity(0.4)
+    var iconColor: Color = AppColors.surfaceGray40
     
     var body: some View {
         VStack(spacing: 12) {
@@ -675,7 +675,7 @@ struct UnifiedEmptyState: View {
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(AppColors.surfaceWhite70)
             
             if let subtitle = subtitle {
                 Text(subtitle)
@@ -699,15 +699,15 @@ struct UnifiedNoResultsState: View {
         VStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .font(.largeTitle)
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(AppColors.surfaceWhite30)
             
             Text(searchText.isEmpty ? message : "No results for '\(searchText)'")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(AppColors.surfaceWhite50)
             
             Text(suggestion)
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(AppColors.surfaceWhite40)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -788,11 +788,11 @@ struct UnifiedContentCard<Content: View>: View {
             content()
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(Color.white.opacity(isPressed ? 0.06 : 0.03))
+                        .fill(AppColors.systemWhite.opacity(isPressed ? 0.06 : 0.03))
                         .overlay(
                             RoundedRectangle(cornerRadius: cornerRadius)
                                 .strokeBorder(
-                                    showUnreadBorder ? AppColors.accentColor.opacity(0.3) : Color.white.opacity(0.08),
+                                    showUnreadBorder ? AppColors.accentColor.opacity(0.3) : AppColors.surfaceWhite08,
                                     lineWidth: 1
                                 )
                         )
@@ -835,7 +835,7 @@ struct UnifiedAuthorFooter: View {
             // Online indicator (optional)
             if showOnlineStatus && isOnline {
                 Circle()
-                    .fill(Color.green)
+                    .fill(AppColors.statusPositive)
                     .frame(width: 5, height: 5)
             }
             
@@ -869,7 +869,7 @@ struct UnifiedAuthorFooter: View {
                     Text(accuracy)
                         .font(.system(size: 10, weight: .semibold))
                 }
-                .foregroundColor(.green.opacity(0.9))
+                .foregroundColor(AppColors.statusPositive90)
             }
             
             Spacer()
@@ -892,7 +892,7 @@ struct UnifiedAuthorFooter: View {
                     topTrailing: 0
                 )
             )
-            .fill(Color.white.opacity(0.06))
+            .fill(AppColors.surfaceWhite06)
         )
     }
 }
@@ -930,7 +930,7 @@ struct UnifiedAuthorFooterFromMember: View {
             // Online indicator (optional)
             if showOnlineStatus && author.isOnline {
                 Circle()
-                    .fill(Color.green)
+                    .fill(AppColors.statusPositive)
                     .frame(width: 5, height: 5)
             }
             
@@ -975,7 +975,7 @@ struct UnifiedAuthorFooterFromMember: View {
                     topTrailing: 0
                 )
             )
-            .fill(Color.white.opacity(0.06))
+            .fill(AppColors.surfaceWhite06)
         )
     }
 }
@@ -1008,7 +1008,7 @@ struct UnifiedAuthorRow: View {
             // Online indicator
             if isOnline {
                 Circle()
-                    .fill(Color.green)
+                    .fill(AppColors.statusPositive)
                     .frame(width: 5, height: 5)
             }
             
@@ -1083,7 +1083,7 @@ struct UnifiedAuthorRowFromMember: View {
             // Online indicator
             if author.isOnline {
                 Circle()
-                    .fill(Color.green)
+                    .fill(AppColors.statusPositive)
                     .frame(width: 5, height: 5)
             }
             
@@ -1355,15 +1355,12 @@ struct UnifiedMarkerBadge: View {
         self.isSelected = isSelected
     }
 
-    private var borderWidth: CGFloat {
-        MarkerVisualSpec.borderWidth(isSelected: isSelected)
+    private var glassTint: Color {
+        MarkerVisualSpec.glassTint(for: intent, severity: alertSeverity)
     }
 
-    private var resolvedDisplayColor: Color {
-        if intent == .alert, let severity = alertSeverity {
-            return severity.color
-        }
-        return displayColor
+    private var strokeColor: Color {
+        MarkerVisualSpec.borderColor(for: intent, severity: alertSeverity)
     }
 
     private var iconColor: Color {
@@ -1371,7 +1368,7 @@ struct UnifiedMarkerBadge: View {
     }
 
     private var iconSize: CGFloat {
-        MarkerVisualSpec.iconSize(for: size)
+        MarkerVisualSpec.iconSize(for: size, intent: intent)
     }
 
     private var resolvedSymbol: String {
@@ -1382,26 +1379,14 @@ struct UnifiedMarkerBadge: View {
         MarkerVisualSpec.palette(for: intent, severity: alertSeverity)
     }
 
-    private var shellGradient: LinearGradient {
-        MarkerVisualSpec.shellGradient()
-    }
-
-    private var borderColor: Color {
-        MarkerVisualSpec.borderColor(for: intent, displayColor: resolvedDisplayColor, isSelected: isSelected)
-    }
-
     var body: some View {
         ZStack {
-            Circle()
-                .fill(Color.black.opacity(0.32))
-                .offset(x: 1.0, y: 1.0)
-                .frame(width: size, height: size)
-            Circle()
-                .fill(shellGradient)
-                .frame(width: size, height: size)
-            Circle()
-                .stroke(borderColor, lineWidth: borderWidth)
-                .frame(width: size, height: size)
+            // Glass background
+            Circle().fill(.ultraThinMaterial)
+            Circle().fill(glassTint)
+            Circle().stroke(strokeColor, lineWidth: MarkerVisualSpec.glassStrokeWidth)
+
+            // Icon
             if intent == .reaction, let emoji = emoji {
                 Text(emoji)
                     .font(.system(size: iconSize, weight: .semibold))
@@ -1415,6 +1400,12 @@ struct UnifiedMarkerBadge: View {
             }
         }
         .frame(width: size, height: size)
+        .clipShape(Circle())
+        .shadow(
+            color: glassTint.opacity(MarkerVisualSpec.glassShadowOpacity),
+            radius: MarkerVisualSpec.glassShadowRadius,
+            x: 0, y: 1
+        )
     }
 
     @ViewBuilder
@@ -1495,7 +1486,7 @@ struct UnifiedDatePill: View {
         }
         .frame(width: width)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.1))
+        .background(AppColors.surfaceWhite10)
         .cornerRadius(8)
     }
 }
@@ -1619,7 +1610,7 @@ struct UnifiedMemberRow: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(isPressed ? 0.06 : 0.03))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.06 : 0.03))
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1695,7 +1686,7 @@ struct UnifiedGuildMemberRow: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(isPressed ? 0.06 : 0.03))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.06 : 0.03))
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1728,9 +1719,9 @@ struct UnifiedLeaderboardRow: View {
     /// Rank color based on position
     private var rankColor: Color {
         switch rank {
-        case 1: return Color.yellow
-        case 2: return Color.gray.opacity(0.8)
-        case 3: return Color.orange.opacity(0.8)
+        case 1: return AppColors.systemYellow
+        case 2: return AppColors.surfaceGray80
+        case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
         }
     }
@@ -1801,7 +1792,7 @@ struct UnifiedLeaderboardRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .strokeBorder(
@@ -1864,7 +1855,7 @@ enum PreviewCategoryTab: String, CaseIterable, UnifiedTabItem {
 
 #Preview("Unified Components") {
     ZStack {
-        Color.black.ignoresSafeArea()
+        AppColors.systemBlack.ignoresSafeArea()
         
         ScrollView {
             VStack(spacing: 24) {
@@ -1921,7 +1912,7 @@ enum PreviewCategoryTab: String, CaseIterable, UnifiedTabItem {
                                     .foregroundColor(.gray)
                             }
                             .padding(12)
-                            .background(Color.white.opacity(0.05))
+                            .background(AppColors.surfaceWhite05)
                             .cornerRadius(10)
                         }
                     }

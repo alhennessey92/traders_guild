@@ -65,10 +65,10 @@ struct AdminSectionCard<Content: View>: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.05))
+                .fill(AppColors.surfaceWhite05)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
                 )
         )
     }
@@ -94,7 +94,7 @@ struct AdminInputField: View {
                         .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.9))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                .stroke(AppColors.surfaceWhite15, lineWidth: 1)
                         )
                 )
         }
@@ -134,7 +134,7 @@ struct AdminInputTextEditor: View {
                     .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.9))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                            .stroke(AppColors.surfaceWhite15, lineWidth: 1)
                     )
             )
         }
@@ -168,7 +168,7 @@ struct AdminToggleRow: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.03))
+                .fill(AppColors.surfaceWhite03)
         )
     }
 }
@@ -189,7 +189,7 @@ struct AdminFooterActions: View {
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(0.06))
+                        .fill(AppColors.surfaceWhite06)
                 )
 
             Spacer()

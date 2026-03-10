@@ -177,8 +177,8 @@ struct UserProfileDetailView: View {
                     title: "Switch Guild",
                     imageName: "arrow.trianglehead.2.counterclockwise",
                     backgroundColor: AppColors.whiteText.opacity(0.8),
-                    foregroundColor: Color.black,
-                    strokeColor: Color.black,
+                    foregroundColor: AppColors.systemBlack,
+                    strokeColor: AppColors.systemBlack,
                     strokeWidth: 0.5,
                     action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
@@ -430,8 +430,8 @@ struct UserProfileFooterView: View {
                 title: "Switch Guild",
                 imageName: "arrow.trianglehead.2.counterclockwise",
                 backgroundColor: AppColors.whiteText.opacity(0.8),
-                foregroundColor: Color.black,
-                strokeColor: Color.black,
+                foregroundColor: AppColors.systemBlack,
+                strokeColor: AppColors.systemBlack,
                 strokeWidth: 0.5,
                 action: {
                     withAnimation(.easeInOut(duration: 0.3)) {

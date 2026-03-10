@@ -166,7 +166,7 @@ struct MarkerViewingGeneralTab: View {
                             if isSelected {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.blue.opacity(0.95))
+                                    .foregroundColor(AppColors.statusInfo95)
                             }
 
                             Text(option.text)
@@ -178,17 +178,17 @@ struct MarkerViewingGeneralTab: View {
 
                             Text("\(option.voteCount)")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundColor(isSelected ? .blue.opacity(0.95) : AppColors.greyText)
+                                .foregroundColor(isSelected ? AppColors.statusInfo95 : AppColors.greyText)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(isSelected ? Color.blue.opacity(0.2) : AppColors.whiteText.opacity(0.08))
+                                .fill(isSelected ? AppColors.statusInfo20 : AppColors.whiteText.opacity(0.08))
                                 .overlay(
                                     Capsule()
                                         .stroke(
-                                            isSelected ? Color.blue.opacity(0.52) : AppColors.whiteText.opacity(0.08),
+                                            isSelected ? AppColors.statusInfo52 : AppColors.whiteText.opacity(0.08),
                                             lineWidth: 1
                                         )
                                 )

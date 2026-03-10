@@ -19,7 +19,7 @@ struct IndicatorPanelHeaderRow: View {
         HStack(spacing: 6) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(AppColors.surfaceWhite80)
 
             if let valueText {
                 Text(valueText)
@@ -108,7 +108,7 @@ struct RSIPanelView: View {
                 xAxisLabels
             }
         }
-        .background(Color.black.opacity(0.85))
+        .background(AppColors.surfaceBlack85)
     }
 
     // MARK: - Pan Gesture
@@ -151,11 +151,11 @@ struct RSIPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(Color(white: 0.08))
+                .fill(AppColors.chartIndicatorHandleFill)
             
             VStack(spacing: 3) {
                 Capsule()
-                    .fill(isDraggingHandle ? Color.white.opacity(0.8) : Color.gray.opacity(0.5))
+                    .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
                     .frame(width: 36, height: 5)
             }
         }
@@ -180,7 +180,7 @@ struct RSIPanelView: View {
         )
         .overlay(
             Rectangle()
-                .fill(Color.gray.opacity(0.3))
+                .fill(AppColors.surfaceGray30)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -194,7 +194,7 @@ struct RSIPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            Color.black.opacity(0.8)
+            AppColors.surfaceBlack80
             
             Canvas { context, size in
                 drawRSIPanel(context: context, size: size)
@@ -229,7 +229,7 @@ struct RSIPanelView: View {
     }
 
     private var activeGuideColor: Color {
-        gestureState.crosshairActive ? Color.white.opacity(0.4) : Color.blue.opacity(0.6)
+        gestureState.crosshairActive ? AppColors.surfaceWhite40 : AppColors.statusInfo60
     }
     
     // MARK: - Current RSI Indicator
@@ -304,7 +304,7 @@ struct RSIPanelView: View {
                 IndicatorPanelHeaderRow(
                     title: rsiConfig?.label ?? "RSI 14",
                     valueText: nil,
-                    valueColor: .white.opacity(0.9),
+                    valueColor: AppColors.surfaceWhite90,
                     badgeText: nil,
                     badgeColor: nil
                 )
@@ -323,25 +323,25 @@ struct RSIPanelView: View {
             VStack {
                 Text(String(format: "%.0f", rsiConfig?.overboughtLevel ?? 70))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.red.opacity(0.85))
+                    .foregroundColor(AppColors.statusNegative85)
                 
                 Spacer()
                 
                 Text("50")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.66))
+                    .foregroundColor(AppColors.surfaceWhite66)
                 
                 Spacer()
                 
                 Text(String(format: "%.0f", rsiConfig?.oversoldLevel ?? 30))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.green.opacity(0.85))
+                    .foregroundColor(AppColors.statusPositive85)
             }
             .frame(width: 28)
             .padding(.top, 18)
             .padding(.bottom, 4)
             .padding(.trailing, 5)
-            .background(Color.black.opacity(0.62))
+            .background(AppColors.surfaceBlack62)
         }
     }
     
@@ -377,12 +377,12 @@ struct RSIPanelView: View {
         let overboughtZone = Path { p in
             p.addRect(CGRect(x: 0, y: topY, width: lineEndX, height: overboughtY - topY))
         }
-        context.fill(overboughtZone, with: .color(.red.opacity(0.08)))
+        context.fill(overboughtZone, with: .color(AppColors.statusNegative08))
         
         let oversoldZone = Path { p in
             p.addRect(CGRect(x: 0, y: oversoldY, width: lineEndX, height: bottomY - oversoldY))
         }
-        context.fill(oversoldZone, with: .color(.green.opacity(0.08)))
+        context.fill(oversoldZone, with: .color(AppColors.statusPositive08))
     }
     
     private func drawReferenceLevels(context: GraphicsContext, size: CGSize, config: RSIConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
@@ -394,17 +394,17 @@ struct RSIPanelView: View {
         var path = Path()
         path.move(to: CGPoint(x: 0, y: overboughtY))
         path.addLine(to: CGPoint(x: lineEndX, y: overboughtY))
-        context.stroke(path, with: .color(.red.opacity(0.4)), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        context.stroke(path, with: .color(AppColors.statusNegative40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
         
         path = Path()
         path.move(to: CGPoint(x: 0, y: middleY))
         path.addLine(to: CGPoint(x: lineEndX, y: middleY))
-        context.stroke(path, with: .color(.gray.opacity(0.3)), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+        context.stroke(path, with: .color(AppColors.surfaceGray30), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
         
         path = Path()
         path.move(to: CGPoint(x: 0, y: oversoldY))
         path.addLine(to: CGPoint(x: lineEndX, y: oversoldY))
-        context.stroke(path, with: .color(.green.opacity(0.4)), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+        context.stroke(path, with: .color(AppColors.statusPositive40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
     }
     
     private func drawRSILine(context: GraphicsContext, size: CGSize, config: RSIConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
@@ -449,7 +449,7 @@ struct RSIPanelView: View {
     }
     
     private func rsiValueColor(_ value: Double) -> Color {
-        rsiCondition(for: value).label.isEmpty ? .white.opacity(0.9) : rsiCondition(for: value).color
+        rsiCondition(for: value).label.isEmpty ? AppColors.surfaceWhite90 : rsiCondition(for: value).color
     }
 
     private func rsiCondition(for value: Double) -> RSICondition {
@@ -474,7 +474,7 @@ struct RSIPanelView: View {
                 drawXAxisLabels(context: context, size: size)
             }
             .frame(height: 24)
-            .background(Color.black)
+            .background(AppColors.systemBlack)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
@@ -499,7 +499,7 @@ struct RSIPanelView: View {
                 .padding(.vertical, 3)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.cyan.opacity(0.9))
+                        .fill(AppColors.statusAccent90)
                 )
         }
         .position(x: xPosition, y: 12)

@@ -252,7 +252,7 @@ struct UserSettingsSheetView: View {
                             .foregroundColor(AppColors.greyText)
                     }
                     .padding()
-                    .background(Color.white.opacity(0.03))
+                    .background(AppColors.surfaceWhite03)
                     .cornerRadius(12)
                     .padding(.horizontal, 25)
                     .padding(.bottom, 12)
@@ -362,7 +362,7 @@ struct UserSettingsSheetView: View {
                     HStack(spacing: 12) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.orange.opacity(0.2))
+                                .fill(AppColors.statusWarning20)
                                 .frame(width: 36, height: 36)
                             Image(systemName: "paperplane.fill")
                                 .font(.system(size: 16))
@@ -523,11 +523,11 @@ struct UserSettingsSheetView: View {
                     Spacer()
                 }
                 .padding()
-                .background(Color.red.opacity(0.1))
+                .background(AppColors.statusNegative10)
                 .cornerRadius(10)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                        .stroke(AppColors.statusNegative30, lineWidth: 1)
                 )
             }
             .padding(.horizontal, 25)
@@ -1076,11 +1076,11 @@ struct UserSettingsSheetView: View {
 //                     Spacer()
 //                 }
 //                 .padding()
-//                 .background(Color.red.opacity(0.1))
+//                 .background(AppColors.statusNegative10)
 //                 .cornerRadius(10)
 //                 .overlay(
 //                     RoundedRectangle(cornerRadius: 10)
-//                         .stroke(Color.red.opacity(0.3), lineWidth: 1)
+//                         .stroke(AppColors.statusNegative30, lineWidth: 1)
 //                 )
 //             }
 //             .padding(.horizontal, 25)

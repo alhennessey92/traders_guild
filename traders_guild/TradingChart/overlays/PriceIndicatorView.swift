@@ -57,7 +57,7 @@ struct PriceIndicatorView: View {
                     }
                     context.stroke(
                         linePath,
-                        with: .color(Color.yellow.opacity(0.8)),
+                        with: .color(AppColors.statusHighlight80),
                         style: StrokeStyle(lineWidth: 1, dash: [5, 3])
                     )
                     
@@ -166,7 +166,7 @@ struct PriceLevelsView: View {
                         Text(label)
                             .font(.system(size: 10))
                             .foregroundColor(level.color)
-                            .background(Color.black.opacity(0.7))
+                            .background(AppColors.surfaceBlack70)
                             .position(x: 30, y: y - 10)
                     }
                 }
@@ -191,7 +191,7 @@ struct VolumeIndicatorView: View {
             }
         }
         .frame(height: 60)
-        .background(Color.black.opacity(0.8))
+        .background(AppColors.surfaceBlack80)
     }
     
     private func drawVolumeBars(context: GraphicsContext, size: CGSize) {
@@ -211,7 +211,7 @@ struct VolumeIndicatorView: View {
             let candle = candles[i]
             
             let barColor = candle.close >= candle.open ?
-                Color.green.opacity(0.5) : Color.red.opacity(0.5)
+                AppColors.statusPositive50 : AppColors.statusNegative50
             
             let rect = CGRect(
                 x: x,

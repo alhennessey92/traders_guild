@@ -268,7 +268,7 @@ struct NotificationCard: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.green.opacity(0.8))
+                                .background(AppColors.statusPositive80)
                                 .foregroundColor(.white)
                                 .cornerRadius(6)
                             }
@@ -279,7 +279,7 @@ struct NotificationCard: View {
                                     .font(.system(size: 11, weight: .semibold))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(Color.white.opacity(0.1))
+                                    .background(AppColors.surfaceWhite10)
                                     .foregroundColor(AppColors.whiteText.opacity(0.7))
                                     .cornerRadius(6)
                             }
@@ -308,7 +308,7 @@ struct NotificationCard: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(isPressed ? 0.08 : 0.04))
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.04))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .strokeBorder(
@@ -528,7 +528,7 @@ struct NotificationCard: View {
 //             .padding(.vertical, 10)
 //             .background(
 //                 RoundedRectangle(cornerRadius: 12)
-//                     .fill(Color.white.opacity(isPressed ? 0.08 : 0.04))
+//                     .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.04))
 //                     .overlay(
 //                         RoundedRectangle(cornerRadius: 12)
 //                             .strokeBorder(
@@ -605,7 +605,7 @@ struct NotificationCard: View {
 struct NavigationLoadingOverlay: View {
     var body: some View {
         ZStack {
-            Color.black.opacity(0.3)
+            AppColors.surfaceBlack30
                 .ignoresSafeArea()
             
             VStack(spacing: 12) {
@@ -619,7 +619,7 @@ struct NavigationLoadingOverlay: View {
             .padding(24)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(0.8))
+                    .fill(AppColors.surfaceBlack80)
             )
         }
     }

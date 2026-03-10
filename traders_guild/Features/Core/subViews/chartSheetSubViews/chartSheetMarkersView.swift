@@ -194,7 +194,7 @@ struct chartSheetMarkersView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.circle")
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(.orange.opacity(0.9))
+                            .foregroundColor(AppColors.statusWarning90)
 
                         Text("Marker settings are unavailable right now.")
                             .font(.subheadline.weight(.semibold))
@@ -207,7 +207,7 @@ struct chartSheetMarkersView: View {
                     }
                     .padding(20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .background(Color.black.ignoresSafeArea())
+                    .background(AppColors.systemBlack.ignoresSafeArea())
                     .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) {
                             Button("Done") {
@@ -246,9 +246,9 @@ struct chartSheetMarkersView: View {
                             } else {
                                 Image(systemName: "arrow.clockwise.circle")
                                     .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.85))
+                                    .foregroundColor(AppColors.surfaceWhite85)
                                     .frame(width: 34, height: 34)
-                                    .background(Color.white.opacity(0.08))
+                                    .background(AppColors.surfaceWhite08)
                                     .clipShape(Circle())
                             }
                         }
@@ -300,7 +300,7 @@ struct chartSheetMarkersView: View {
             if selectedAddCategory == .prediction {
                 HStack(spacing: 6) {
                     Image(systemName: "shield.checkered")
-                        .foregroundColor(.orange.opacity(0.9))
+                        .foregroundColor(AppColors.statusWarning90)
                         .font(.caption)
                     Text("Prediction markers affect your reputation. Set entry, SL, and TP when prompted.")
                         .font(.caption2)
@@ -458,7 +458,7 @@ struct chartSheetMarkersView: View {
         HStack(spacing: 8) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.caption)
-                .foregroundColor(.blue.opacity(0.8))
+                .foregroundColor(AppColors.statusInfo80)
 
             Text("\(currentSymbolLabel) • \(scopedMarkers.count) markers • \(Set(scopedMarkers.map { timeframeLabel($0.timeframe) }).count) timeframes")
                 .font(.caption2)
@@ -479,7 +479,7 @@ struct chartSheetMarkersView: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption)
-                    .foregroundColor(.blue.opacity(0.85))
+                    .foregroundColor(AppColors.statusInfo85)
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -492,10 +492,10 @@ struct chartSheetMarkersView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -507,11 +507,11 @@ struct chartSheetMarkersView: View {
                 .foregroundColor(.orange)
             Text(text)
                 .font(.caption)
-                .foregroundColor(.orange.opacity(0.95))
+                .foregroundColor(AppColors.statusWarning95)
             Spacer()
         }
         .padding(10)
-        .background(Color.orange.opacity(0.14))
+        .background(AppColors.statusWarning14)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -672,17 +672,17 @@ private struct MarkerPlacementOptionRow: View {
 
                 Image(systemName: isActive ? "xmark" : "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? .white.opacity(0.8) : .gray.opacity(0.9))
+                    .foregroundColor(isActive ? AppColors.surfaceWhite80 : AppColors.surfaceGray90)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isActive ? Color.red.opacity(0.35) : intent.color.opacity(0.12))
+                    .fill(isActive ? AppColors.statusNegative35 : intent.color.opacity(0.12))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(AppColors.surfaceWhite08, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -698,9 +698,9 @@ private struct MarkerSettingsButton: View {
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(AppColors.surfaceWhite85)
                 .frame(width: 34, height: 34)
-                .background(Color.white.opacity(0.08))
+                .background(AppColors.surfaceWhite08)
                 .clipShape(Circle())
         }
         .accessibilityLabel("Marker settings")
@@ -750,7 +750,7 @@ private struct MarkerFilterSettingsSheet: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Color.black)
+            .background(AppColors.systemBlack)
             .navigationTitle("Marker Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -794,7 +794,7 @@ private struct MarkerTimelineGroupCard: View {
             HStack(spacing: 8) {
                 Image(systemName: "clock")
                     .font(.caption)
-                    .foregroundColor(.blue.opacity(0.85))
+                    .foregroundColor(AppColors.statusInfo85)
 
                 Text(group.candleTimestamp.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
@@ -803,10 +803,10 @@ private struct MarkerTimelineGroupCard: View {
                 if group.markers.count > 1 {
                     Text("\(group.markers.count) stacked")
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(.orange.opacity(0.9))
+                        .foregroundColor(AppColors.statusWarning90)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
-                        .background(Color.orange.opacity(0.18))
+                        .background(AppColors.statusWarning18)
                         .clipShape(Capsule())
                 }
 
@@ -827,16 +827,16 @@ private struct MarkerTimelineGroupCard: View {
 
             if !isLast {
                 Divider()
-                    .background(Color.white.opacity(0.08))
+                    .background(AppColors.surfaceWhite08)
             }
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -884,7 +884,7 @@ private struct ActiveMarkerRow: View {
 
                         Image(systemName: "arrow.up.right")
                             .font(.caption)
-                            .foregroundColor(.gray.opacity(0.9))
+                            .foregroundColor(AppColors.surfaceGray90)
                     }
 
                     HStack(spacing: 6) {
@@ -937,7 +937,7 @@ private struct ActiveMarkerRow: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.03))
+                    .fill(AppColors.surfaceWhite03)
             )
         }
         .buttonStyle(.plain)
@@ -986,16 +986,16 @@ private struct AnalysisMetricCard: View {
                 .foregroundColor(.white)
             Text(subtitle)
                 .font(.caption2)
-                .foregroundColor(.gray.opacity(0.9))
+                .foregroundColor(AppColors.surfaceGray90)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.surfaceWhite04)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -1016,7 +1016,7 @@ private struct BreakdownRow: View {
             HStack {
                 Text(title)
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(AppColors.surfaceWhite90)
                 Spacer()
                 Text("\(count)")
                     .font(.caption.weight(.semibold))
@@ -1026,9 +1026,9 @@ private struct BreakdownRow: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(AppColors.surfaceWhite08)
                     Capsule()
-                        .fill(Color.blue.opacity(0.6))
+                        .fill(AppColors.statusInfo60)
                         .frame(width: geometry.size.width * ratio)
                 }
             }
@@ -1066,13 +1066,13 @@ private struct QuickLinkRow: View {
 
                 Image(systemName: "arrow.up.right")
                     .font(.caption)
-                    .foregroundColor(.gray.opacity(0.9))
+                    .foregroundColor(AppColors.surfaceGray90)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(0.03))
+                    .fill(AppColors.surfaceWhite03)
             )
         }
         .buttonStyle(.plain)

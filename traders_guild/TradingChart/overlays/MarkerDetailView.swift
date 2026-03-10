@@ -246,10 +246,10 @@ struct MarkerShareSheet: View {
                         .padding(8)
                         .background(
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.white.opacity(0.06))
+                                .fill(AppColors.surfaceWhite06)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        .stroke(AppColors.surfaceWhite10, lineWidth: 1)
                                 )
                         )
                 }
@@ -374,10 +374,10 @@ struct MarkerShareSheet: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(isSelected ? 0.11 : 0.05))
+                    .fill(AppColors.systemWhite.opacity(isSelected ? 0.11 : 0.05))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(isSelected ? AppColors.accentColor.opacity(0.65) : Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(isSelected ? AppColors.accentColor.opacity(0.65) : AppColors.surfaceWhite08, lineWidth: 1)
                     )
             )
         }
@@ -546,7 +546,7 @@ struct CommentsView: View {
             markerChatHeader
 
             Divider()
-                .background(Color.gray.opacity(0.3))
+                .background(AppColors.surfaceGray30)
 
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
@@ -1445,7 +1445,7 @@ struct MarkerInfoContent: View {
                                     .frame(width: 28, height: 28)
                                 Image(systemName: node.icon)
                                     .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(isCurrent ? .white : isPast ? .white.opacity(0.7) : AppColors.greyText.opacity(0.5))
+                                    .foregroundColor(isCurrent ? .white : isPast ? AppColors.surfaceWhite70 : AppColors.greyText.opacity(0.5))
                             }
                             Text(nodeLabel)
                                 .font(.system(size: 9, weight: .semibold))
@@ -1520,7 +1520,7 @@ struct MarkerInfoContent: View {
                 VStack(spacing: 10) {
                     // Entry
                     HStack {
-                        Circle().fill(Color.green).frame(width: 8, height: 8)
+                        Circle().fill(AppColors.statusPositive).frame(width: 8, height: 8)
                         Text("Entry").font(.subheadline).foregroundColor(AppColors.greyText)
                         Spacer()
                         Text(String(format: "%.5f", entryPrice))
@@ -1531,7 +1531,7 @@ struct MarkerInfoContent: View {
                     if let tp = tpPrice {
                         let profitPct = abs(tp - entryPrice) / entryPrice * 100
                         HStack {
-                            Circle().fill(Color.blue).frame(width: 8, height: 8)
+                            Circle().fill(AppColors.statusInfo).frame(width: 8, height: 8)
                             Text("Take Profit").font(.subheadline).foregroundColor(AppColors.greyText)
                             Spacer()
                             Text(String(format: "+%.2f%%", profitPct))
@@ -1546,7 +1546,7 @@ struct MarkerInfoContent: View {
                     if let sl = slPrice {
                         let lossPct = abs(sl - entryPrice) / entryPrice * 100
                         HStack {
-                            Circle().fill(Color.red).frame(width: 8, height: 8)
+                            Circle().fill(AppColors.statusNegative).frame(width: 8, height: 8)
                             Text("Stop Loss").font(.subheadline).foregroundColor(AppColors.greyText)
                             Spacer()
                             Text(String(format: "-%.2f%%", lossPct))
@@ -1751,17 +1751,17 @@ struct FloatingEngagementBar: View {
                 HStack(spacing: 6) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(isLiked ? AppColors.markerHeartTint : .white.opacity(0.85))
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.surfaceWhite85)
                         .scaleEffect(likeScale)
                     Text("\(likeCount)")
                         .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .foregroundColor(isLiked ? AppColors.markerHeartTint : .white.opacity(0.85))
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.surfaceWhite85)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(isLiked ? AppColors.markerHeartBackground : Color.white.opacity(0.08))
+                        .fill(isLiked ? AppColors.markerHeartBackground : AppColors.surfaceWhite08)
                 )
             }
             .buttonStyle(.plain)
@@ -1772,10 +1772,10 @@ struct FloatingEngagementBar: View {
             HStack(spacing: 5) {
                 Image(systemName: "bubble.left.fill")
                     .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(AppColors.surfaceWhite60)
                 Text("\(commentCount)")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppColors.surfaceWhite70)
             }
 
             Spacer()
@@ -1784,9 +1784,9 @@ struct FloatingEngagementBar: View {
             Button(action: onShare) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(AppColors.surfaceWhite85)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
+                    .background(Circle().fill(AppColors.surfaceWhite08))
             }
             .buttonStyle(.plain)
             .padding(.trailing, 8)
@@ -1805,21 +1805,21 @@ struct FloatingEngagementBar: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(AppColors.surfaceWhite85)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
+                    .background(Circle().fill(AppColors.surfaceWhite08))
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(
             Capsule()
-                .fill(Color(red: 18/255, green: 18/255, blue: 28/255).opacity(0.95))
+                .fill(AppColors.chartPanelBackgroundInset.opacity(0.95))
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.4), radius: 12, y: -4)
+                .shadow(color: AppColors.surfaceBlack40, radius: 12, y: -4)
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
@@ -1859,8 +1859,8 @@ struct LevelLadderCard: View {
                         .padding(.vertical, 4)
                         .background(
                             Capsule()
-                                .fill(Color.white.opacity(0.1))
-                                .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                                .fill(AppColors.surfaceWhite10)
+                                .overlay(Capsule().stroke(AppColors.surfaceWhite15, lineWidth: 1))
                         )
                 }
             }
@@ -1902,10 +1902,10 @@ struct LevelLadderCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.05))
+                .fill(AppColors.surfaceWhite05)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
                 )
         )
     }
@@ -1928,7 +1928,7 @@ struct LevelLadderCard: View {
             if let pct = percentFromEntry, let profit = isProfit {
                 Text(String(format: "%@%.2f%%", profit ? "+" : "-", pct))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(profit ? .green.opacity(0.8) : .red.opacity(0.8))
+                    .foregroundColor(profit ? AppColors.statusPositive80 : AppColors.statusNegative80)
                     .padding(.trailing, 4)
             }
 

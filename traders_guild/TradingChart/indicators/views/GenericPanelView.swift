@@ -91,7 +91,7 @@ struct GenericIndicatorPanelView: View {
                 xAxisLabels
             }
         }
-        .background(Color.black.opacity(0.85))
+        .background(AppColors.surfaceBlack85)
     }
 
     // MARK: - Pan Gesture
@@ -134,11 +134,11 @@ struct GenericIndicatorPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(Color(white: 0.08))
+                .fill(AppColors.chartIndicatorHandleFill)
             
             VStack(spacing: 3) {
                 Capsule()
-                    .fill(isDraggingHandle ? Color.white.opacity(0.8) : Color.gray.opacity(0.5))
+                    .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
                     .frame(width: 36, height: 5)
             }
         }
@@ -163,7 +163,7 @@ struct GenericIndicatorPanelView: View {
         )
         .overlay(
             Rectangle()
-                .fill(Color.gray.opacity(0.3))
+                .fill(AppColors.surfaceGray30)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -178,7 +178,7 @@ struct GenericIndicatorPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            Color.black.opacity(0.8)
+            AppColors.surfaceBlack80
             
             Canvas { context, size in
                 drawPanel(context: context, size: size)
@@ -219,7 +219,7 @@ struct GenericIndicatorPanelView: View {
     }
 
     private var activeGuideColor: Color {
-        gestureState.crosshairActive ? Color.white.opacity(0.4) : Color.blue.opacity(0.6)
+        gestureState.crosshairActive ? AppColors.surfaceWhite40 : AppColors.statusInfo60
     }
     
     // MARK: - Y-Axis Labels Overlay
@@ -235,7 +235,7 @@ struct GenericIndicatorPanelView: View {
                 if y >= 0 && y <= geometry.size.height {
                     Text(formatValue(value))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.76))
+                        .foregroundColor(AppColors.surfaceWhite76)
                         .position(x: geometry.size.width - 20, y: y)
                 }
             }
@@ -292,18 +292,18 @@ struct GenericIndicatorPanelView: View {
         switch panelType {
         case .cci:
             guard let latest = indicatorManager.latestCCI else {
-                return (nil, .white.opacity(0.9), nil, nil)
+                return (nil, AppColors.surfaceWhite90, nil, nil)
             }
             let condition = cciCondition(for: latest.value)
             return (
                 formatValue(latest.value),
-                condition.label.isEmpty ? .white.opacity(0.9) : condition.color,
+                condition.label.isEmpty ? AppColors.surfaceWhite90 : condition.color,
                 condition.label.isEmpty ? nil : condition.label,
                 condition.label.isEmpty ? nil : condition.color
             )
         case .volume:
             guard let latest = indicatorManager.volumeData.last else {
-                return (nil, .white.opacity(0.9), nil, nil)
+                return (nil, AppColors.surfaceWhite90, nil, nil)
             }
             let condition = latest.condition
             let badgeColor = condition == .bullish
@@ -317,7 +317,7 @@ struct GenericIndicatorPanelView: View {
             )
         default:
             guard let currentValue = getCurrentValue() else {
-                return (nil, .white.opacity(0.9), nil, nil)
+                return (nil, AppColors.surfaceWhite90, nil, nil)
             }
             return (formatValue(currentValue), lineColor, nil, nil)
         }
@@ -337,7 +337,7 @@ struct GenericIndicatorPanelView: View {
                 drawXAxisLabels(context: context, size: size)
             }
             .frame(height: 24)
-            .background(Color.black)
+            .background(AppColors.systemBlack)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
@@ -362,7 +362,7 @@ struct GenericIndicatorPanelView: View {
                 .padding(.vertical, 3)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.cyan.opacity(0.9))
+                        .fill(AppColors.statusAccent90)
                 )
         }
         .position(x: xPosition, y: 12)
@@ -463,7 +463,7 @@ struct GenericIndicatorPanelView: View {
         let minATR: Double = 0
         
         // Draw horizontal grid lines
-        let gridColor = Color.gray.opacity(0.2)
+        let gridColor = AppColors.surfaceGray20
         for i in 1...3 {
             let y = size.height * CGFloat(i) / 4
             let gridPath = Path { path in
@@ -559,26 +559,26 @@ struct GenericIndicatorPanelView: View {
         // Overbought zone
         let obY = size.height * CGFloat((maxValue - overbought) / range)
         let obRect = CGRect(x: 0, y: 0, width: chartWidth, height: obY)
-        context.fill(Path(obRect), with: .color(Color.red.opacity(0.1)))
+        context.fill(Path(obRect), with: .color(AppColors.statusNegative10))
         
         // Oversold zone
         let osY = size.height * CGFloat((maxValue - oversold) / range)
         let osRect = CGRect(x: 0, y: osY, width: chartWidth, height: size.height - osY)
-        context.fill(Path(osRect), with: .color(Color.green.opacity(0.1)))
+        context.fill(Path(osRect), with: .color(AppColors.statusPositive10))
         
         // Overbought line
         let obPath = Path { path in
             path.move(to: CGPoint(x: 0, y: obY))
             path.addLine(to: CGPoint(x: chartWidth, y: obY))
         }
-        context.stroke(obPath, with: .color(Color.red.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        context.stroke(obPath, with: .color(AppColors.statusNegative50), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         
         // Oversold line
         let osPath = Path { path in
             path.move(to: CGPoint(x: 0, y: osY))
             path.addLine(to: CGPoint(x: chartWidth, y: osY))
         }
-        context.stroke(osPath, with: .color(Color.green.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        context.stroke(osPath, with: .color(AppColors.statusPositive50), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         
         // Middle line
         let midY = size.height * CGFloat((maxValue - midLine) / range)
@@ -586,7 +586,7 @@ struct GenericIndicatorPanelView: View {
             path.move(to: CGPoint(x: 0, y: midY))
             path.addLine(to: CGPoint(x: chartWidth, y: midY))
         }
-        context.stroke(midPath, with: .color(Color.gray.opacity(0.3)), lineWidth: 0.5)
+        context.stroke(midPath, with: .color(AppColors.surfaceGray30), lineWidth: 0.5)
     }
     
     private func drawIndicatorLine(context: GraphicsContext, size: CGSize, data: [(candleIndex: Int, value: Double)], minValue: Double, maxValue: Double, color: Color) {

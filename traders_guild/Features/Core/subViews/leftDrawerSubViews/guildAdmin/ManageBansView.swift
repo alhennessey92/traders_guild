@@ -60,7 +60,7 @@ struct ManageBansView: View {
                         Spacer()
                         Image(systemName: "checkmark.shield.fill")
                             .font(.system(size: 40))
-                            .foregroundColor(.green.opacity(0.6))
+                            .foregroundColor(AppColors.statusPositive60)
                         Text("No Banned Users")
                             .font(.headline)
                             .foregroundColor(.primary)

@@ -1712,24 +1712,24 @@ struct ChartMarkerSystem {
         isBelow: Bool
     ) {
         guard !markers.isEmpty else { return }
-        
-        let baseRadius: CGFloat = 13
+
+        let baseRadius: CGFloat = MarkerVisualSpec.baseCanvasDiameter / 2
         var previousY = anchorY
-        
-        for (marker, position) in markers {
-            let markerEdgeY: CGFloat = isBelow ? position.y - baseRadius : position.y + baseRadius
-            
+
+        for (_, position) in markers {
+            let nearEdge = isBelow ? position.y - baseRadius : position.y + baseRadius
+
             let linePath = Path { path in
                 path.move(to: CGPoint(x: centerX, y: previousY))
-                path.addLine(to: CGPoint(x: centerX, y: markerEdgeY))
+                path.addLine(to: CGPoint(x: centerX, y: nearEdge))
             }
-            
+
             context.stroke(
                 linePath,
-                with: .color(Color.gray.opacity(0.4)),
+                with: .color(AppColors.surfaceGray40),
                 style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
             )
-            
+
             previousY = isBelow ? position.y + baseRadius : position.y - baseRadius
         }
     }
@@ -1743,7 +1743,6 @@ struct ChartMarkerSystem {
         isSelected: Bool = false,
         rotation: CGFloat = 0
     ) {
-        // Apply rotation around marker center for wiggle effect
         var drawContext = context
         if rotation != 0 {
             let radians = rotation * .pi / 180
@@ -1752,73 +1751,54 @@ struct ChartMarkerSystem {
             drawContext.translateBy(x: -position.x, y: -position.y)
         }
 
-        let baseRadius: CGFloat = 15
+        let baseRadius: CGFloat = MarkerVisualSpec.baseCanvasDiameter / 2
         let scaledRadius = baseRadius * scale
+        let diameter = scaledRadius * 2
 
         let circleRect = CGRect(
             x: position.x - scaledRadius,
             y: position.y - scaledRadius,
-            width: scaledRadius * 2,
-            height: scaledRadius * 2
+            width: diameter,
+            height: diameter
         )
         let circlePath = Path(ellipseIn: circleRect)
-        let hasPointer = marker.stackIndex == 0
-        let pointerPath = markerPointerPath(
-            center: position,
-            radius: scaledRadius,
-            isBelow: isBelow,
-            includePointer: hasPointer
-        )
+
+        let markerSeverity = marker.intent == .alert ? marker.alertSeverity : nil
+        let isAlert = marker.intent == .alert && markerSeverity != nil
 
         // 1. Shadow
-        let shadowRect = CGRect(
-            x: position.x - scaledRadius + 1.2,
-            y: position.y - scaledRadius + 1.2,
-            width: scaledRadius * 2,
-            height: scaledRadius * 2
-        )
-        drawContext.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.28)))
-        if hasPointer {
-            let shadowPointer = markerPointerPath(
-                center: CGPoint(x: position.x + 1.2, y: position.y + 1.2),
-                radius: scaledRadius,
-                isBelow: isBelow,
-                includePointer: true
-            )
-            drawContext.fill(shadowPointer, with: .color(.black.opacity(0.28)))
+        let shadowRect = circleRect.offsetBy(dx: 1, dy: 1)
+        drawContext.fill(Path(ellipseIn: shadowRect), with: .color(Color.black.opacity(0.25)))
+
+        // 2. Opaque dark base (canvas can't use .ultraThinMaterial — must block chart content)
+        drawContext.fill(circlePath, with: .color(Color(white: 0.11).opacity(0.94)))
+
+        // 3. Tint overlay — subtle for standard, stronger for alerts
+        if isAlert, let severity = markerSeverity {
+            drawContext.fill(circlePath, with: .color(severity.color.opacity(0.30)))
+        } else {
+            drawContext.fill(circlePath, with: .color(Color.white.opacity(0.06)))
         }
 
-        // 2. Shared shell gradient
-        let grad = Gradient(colors: MarkerVisualSpec.shellGradientColors)
-        let startPt = CGPoint(x: position.x - scaledRadius, y: position.y - scaledRadius)
-        let endPt = CGPoint(x: position.x + scaledRadius, y: position.y + scaledRadius)
-        if hasPointer {
-            drawContext.fill(pointerPath, with: .linearGradient(grad, startPoint: startPt, endPoint: endPt))
-        }
-        drawContext.fill(circlePath, with: .linearGradient(grad, startPoint: startPt, endPoint: endPt))
-
-        // 3. Shared border treatment
-        let markerSeverity = marker.intent == .alert ? marker.alertSeverity : nil
-        let borderWidth = MarkerVisualSpec.borderWidth(isSelected: isSelected)
-        let borderColor = MarkerVisualSpec.borderColor(
-            for: marker.intent,
-            displayColor: marker.displayColor,
-            isSelected: isSelected
-        )
-        if hasPointer {
+        // 4. Stroke — thin white for standard, colored + thicker for alerts
+        if isAlert, let severity = markerSeverity {
             drawContext.stroke(
-                pointerPath,
-                with: .color(borderColor),
-                style: StrokeStyle(lineWidth: borderWidth, lineJoin: .round)
+                circlePath,
+                with: .color(severity.color.opacity(0.55)),
+                style: StrokeStyle(lineWidth: 1.5)
+            )
+        } else {
+            drawContext.stroke(
+                circlePath,
+                with: .color(MarkerVisualSpec.glassStrokeColor),
+                style: StrokeStyle(lineWidth: MarkerVisualSpec.glassStrokeWidth)
             )
         }
-        drawContext.stroke(circlePath, with: .color(borderColor), lineWidth: borderWidth)
 
-        // 4. Shared symbol/palette sizing and rendering
-        let iconPalette = MarkerVisualSpec.palette(for: marker.intent, severity: markerSeverity)
-        let iconSymbol = MarkerVisualSpec.symbol(for: marker.intent, severity: markerSeverity)
+        // 5. Icon — single monochrome (no faux-palette layering)
         let iconColor = MarkerVisualSpec.iconPrimaryColor(for: marker.intent, severity: markerSeverity)
-        let iconSize = MarkerVisualSpec.iconSize(for: scaledRadius * 2)
+        let iconSymbol = MarkerVisualSpec.symbol(for: marker.intent, severity: markerSeverity)
+        let iconSize = MarkerVisualSpec.iconSize(for: diameter, intent: marker.intent)
         if marker.intent == .reaction, let iconChar = marker.selectedEmoji {
             drawContext.draw(
                 Text(iconChar)
@@ -1827,16 +1807,17 @@ struct ChartMarkerSystem {
                 at: position
             )
         } else {
-            drawPaletteSymbol(
+            drawMonochromeSymbol(
                 context: &drawContext,
                 symbolName: iconSymbol,
-                palette: iconPalette,
+                color: iconColor,
                 at: position,
-                maxIconSize: iconSize
+                maxIconSize: iconSize,
+                yOffset: 0
             )
         }
 
-        // 5. Like count badge
+        // 6. Like count badge
         if marker.likeCount > 0 {
             let badgeOffset: CGFloat = isBelow ? -17 : 5
             let badgeRect = CGRect(
@@ -1855,36 +1836,7 @@ struct ChartMarkerSystem {
         }
     }
 
-    private static func drawPaletteSymbol(
-        context: inout GraphicsContext,
-        symbolName: String,
-        palette: [Color],
-        at position: CGPoint,
-        maxIconSize: CGFloat
-    ) {
-        let primary = palette.first ?? Color.white.opacity(0.96)
-        let accent = palette.count > 1 ? palette[1] : nil
-
-        if let accent {
-            drawMonochromeSymbol(
-                context: &context,
-                symbolName: symbolName,
-                color: accent.opacity(0.9),
-                at: position,
-                maxIconSize: maxIconSize,
-                yOffset: 0.6
-            )
-        }
-
-        drawMonochromeSymbol(
-            context: &context,
-            symbolName: symbolName,
-            color: primary,
-            at: position,
-            maxIconSize: accent == nil ? maxIconSize : maxIconSize * 0.88,
-            yOffset: 0
-        )
-    }
+    // drawPaletteSymbol removed — canvas now uses single monochrome icons (Point 93 fix).
 
     private static func drawMonochromeSymbol(
         context: inout GraphicsContext,
@@ -1922,26 +1874,7 @@ struct ChartMarkerSystem {
         context.draw(resolvedIcon, in: iconRect)
     }
 
-    private static func markerPointerPath(
-        center: CGPoint,
-        radius: CGFloat,
-        isBelow: Bool,
-        includePointer: Bool
-    ) -> Path {
-        guard includePointer else { return Path() }
-
-        let pointerHeight = radius * 0.38
-        let pointerHalfWidth = radius * 0.34
-        let baseY = isBelow ? center.y - radius + 0.6 : center.y + radius - 0.6
-        let tipY = isBelow ? baseY - pointerHeight : baseY + pointerHeight
-
-        var path = Path()
-        path.move(to: CGPoint(x: center.x - pointerHalfWidth, y: baseY))
-        path.addLine(to: CGPoint(x: center.x + pointerHalfWidth, y: baseY))
-        path.addLine(to: CGPoint(x: center.x, y: tipY))
-        path.closeSubpath()
-        return path
-    }
+    // markerPinPath removed — all markers are now glass circles (Point 92).
 
     private static func usernameLabelCandidate(
         for marker: ChartMarkerUI,
@@ -2037,7 +1970,7 @@ struct ChartMarkerSystem {
 }
 
 enum MarkerLabelStyling {
-    private static let chartBackground = UIColor(red: 25.0 / 255.0, green: 25.0 / 255.0, blue: 33.0 / 255.0, alpha: 1.0)
+    private static let chartBackground = UIColor(AppColors.chartPanelBackgroundAlt)
     private static let minimumContrast: CGFloat = 2.8
 
     static func usernameColor(for marker: ChartMarkerUI) -> Color {

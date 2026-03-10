@@ -43,7 +43,7 @@ struct TradingSymbolIconView: View {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(strokeOpacity), lineWidth: 1)
+                    .stroke(AppColors.systemWhite.opacity(strokeOpacity), lineWidth: 1)
             )
             .shadow(
                 color: showShadow ? symbol.primaryColorValue.opacity(0.35) : .clear,

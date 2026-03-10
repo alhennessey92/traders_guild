@@ -67,7 +67,7 @@ struct MarkerPlacementDrawingsTab: View {
                 }
 
                 if let limitWarning {
-                    statusMessage(limitWarning, color: .orange.opacity(0.95))
+                    statusMessage(limitWarning, color: AppColors.statusWarning95)
                 }
 
                 switch selectedSubTab {
@@ -464,7 +464,7 @@ struct MarkerPlacementDrawingsTab: View {
                         limitWarning = nil
                     }
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(.red.opacity(0.85))
+                    .foregroundColor(AppColors.statusNegative85)
                     .buttonStyle(.plain)
                 } else {
                     Button("Add") {
@@ -525,7 +525,7 @@ struct MarkerPlacementDrawingsTab: View {
                         limitWarning = nil
                     }
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(.red.opacity(0.85))
+                    .foregroundColor(AppColors.statusNegative85)
                     .buttonStyle(.plain)
                 }
             }
@@ -602,7 +602,7 @@ struct MarkerPlacementDrawingsTab: View {
         } label: {
             Image(systemName: "minus.circle.fill")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.red.opacity(0.85))
+                .foregroundColor(AppColors.statusNegative85)
         }
         .buttonStyle(.plain)
     }
@@ -625,7 +625,7 @@ struct MarkerPlacementDrawingsTab: View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.88))
+                    .foregroundColor(AppColors.surfaceWhite88)
                     .frame(width: 18)
 
                 VStack(alignment: .leading, spacing: 2) {

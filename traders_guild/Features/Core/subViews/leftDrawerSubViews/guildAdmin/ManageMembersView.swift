@@ -583,7 +583,7 @@ struct ManageMembersView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
-            (isOwner ? Color.yellow : role.color).opacity(0.1)
+            (isOwner ? AppColors.systemYellow : role.color).opacity(0.1)
         )
         .cornerRadius(6)
     }

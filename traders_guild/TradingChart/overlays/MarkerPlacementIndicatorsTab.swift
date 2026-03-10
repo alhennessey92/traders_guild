@@ -69,7 +69,7 @@ struct MarkerPlacementIndicatorsTab: View {
                 }
 
                 if let limitWarning {
-                    statusMessage(limitWarning, color: .orange.opacity(0.95))
+                    statusMessage(limitWarning, color: AppColors.statusWarning95)
                 }
 
                 switch selectedSubTab {
@@ -122,12 +122,12 @@ struct MarkerPlacementIndicatorsTab: View {
     private var tabTitleHeader: some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(Color.blue.opacity(0.22))
+                .fill(AppColors.statusInfo22)
                 .frame(width: 26, height: 26)
                 .overlay(
                     Image(systemName: "waveform.path.ecg")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.blue.opacity(0.95))
+                        .foregroundColor(AppColors.statusInfo95)
                 )
 
             VStack(alignment: .leading, spacing: 1) {
@@ -281,7 +281,7 @@ struct MarkerPlacementIndicatorsTab: View {
             } label: {
                 Image(systemName: "minus.circle.fill")
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.red.opacity(0.85))
+                    .foregroundColor(AppColors.statusNegative85)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -317,7 +317,7 @@ struct MarkerPlacementIndicatorsTab: View {
                 HStack(spacing: 6) {
                     Image(systemName: item.icon)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.88))
+                        .foregroundColor(AppColors.surfaceWhite88)
                     Text(item.title)
                         .font(.subheadline)
                         .foregroundColor(.white)
@@ -353,7 +353,7 @@ struct MarkerPlacementIndicatorsTab: View {
             } label: {
                 Image(systemName: isAttached ? "minus.circle.fill" : "plus.circle.fill")
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(isAttached ? .red.opacity(0.85) : .green.opacity(0.9))
+                    .foregroundColor(isAttached ? AppColors.statusNegative85 : AppColors.statusPositive90)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -390,12 +390,12 @@ struct MarkerPlacementIndicatorsTab: View {
     private func indicatorModeBadge(isPanel: Bool) -> some View {
         Text(isPanel ? "PANEL" : "OVERLAY")
             .font(.system(size: 9, weight: .bold))
-            .foregroundColor(isPanel ? .orange.opacity(0.9) : .blue.opacity(0.9))
+            .foregroundColor(isPanel ? AppColors.statusWarning90 : AppColors.statusInfo90)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(
                 Capsule()
-                    .fill(isPanel ? .orange.opacity(0.16) : .blue.opacity(0.16))
+                    .fill(isPanel ? AppColors.statusWarning16 : AppColors.statusInfo16)
             )
     }
 
@@ -543,8 +543,8 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "showStandardDeviationBands": AnyCodable(false),
                 "lineWidth": AnyCodable(1.5),
                 "color": Self.colorValue(.orange),
-                "upperBandColor": Self.colorValue(.orange.opacity(0.5)),
-                "lowerBandColor": Self.colorValue(.orange.opacity(0.5)),
+                "upperBandColor": Self.colorValue(AppColors.statusWarning50),
+                "lowerBandColor": Self.colorValue(AppColors.statusWarning50),
             ]
         case .bollingerBands:
             return [
@@ -553,9 +553,9 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "showFill": AnyCodable(true),
                 "lineWidth": AnyCodable(1.0),
                 "color": Self.colorValue(.gray),
-                "upperBandColor": Self.colorValue(.red.opacity(0.7)),
-                "lowerBandColor": Self.colorValue(.green.opacity(0.7)),
-                "fillColor": Self.colorValue(.blue.opacity(0.1)),
+                "upperBandColor": Self.colorValue(AppColors.statusNegative70),
+                "lowerBandColor": Self.colorValue(AppColors.statusPositive70),
+                "fillColor": Self.colorValue(AppColors.statusInfo10),
             ]
         case .donchianChannels:
             return [
@@ -564,9 +564,9 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "showMiddleLine": AnyCodable(true),
                 "lineWidth": AnyCodable(1.0),
                 "color": Self.colorValue(.gray),
-                "upperBandColor": Self.colorValue(.blue.opacity(0.8)),
-                "lowerBandColor": Self.colorValue(.blue.opacity(0.8)),
-                "fillColor": Self.colorValue(.blue.opacity(0.1)),
+                "upperBandColor": Self.colorValue(AppColors.statusInfo80),
+                "lowerBandColor": Self.colorValue(AppColors.statusInfo80),
+                "fillColor": Self.colorValue(AppColors.statusInfo10),
             ]
         case .keltnerChannels:
             return [
@@ -576,9 +576,9 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "showFill": AnyCodable(true),
                 "lineWidth": AnyCodable(1.0),
                 "color": Self.colorValue(.purple),
-                "upperBandColor": Self.colorValue(.purple.opacity(0.7)),
-                "lowerBandColor": Self.colorValue(.purple.opacity(0.7)),
-                "fillColor": Self.colorValue(.purple.opacity(0.1)),
+                "upperBandColor": Self.colorValue(AppColors.statusSecondary70),
+                "lowerBandColor": Self.colorValue(AppColors.statusSecondary70),
+                "fillColor": Self.colorValue(AppColors.statusSecondary10),
             ]
         case .parabolicSAR:
             return [
@@ -598,8 +598,8 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "showLevels": AnyCodable(true),
                 "lineWidth": AnyCodable(1.5),
                 "color": Self.colorValue(.purple),
-                "overboughtColor": Self.colorValue(.red.opacity(0.15)),
-                "oversoldColor": Self.colorValue(.green.opacity(0.15)),
+                "overboughtColor": Self.colorValue(AppColors.statusNegative15),
+                "oversoldColor": Self.colorValue(AppColors.statusPositive15),
             ]
         case .macd:
             return [
@@ -611,8 +611,8 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "lineWidth": AnyCodable(1.5),
                 "color": Self.colorValue(.cyan),
                 "signalColor": Self.colorValue(.orange),
-                "histogramPositiveColor": Self.colorValue(.green.opacity(0.7)),
-                "histogramNegativeColor": Self.colorValue(.red.opacity(0.7)),
+                "histogramPositiveColor": Self.colorValue(AppColors.statusPositive70),
+                "histogramNegativeColor": Self.colorValue(AppColors.statusNegative70),
             ]
         case .stochastic:
             return [
@@ -625,8 +625,8 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "lineWidth": AnyCodable(1.5),
                 "color": Self.colorValue(.yellow),
                 "dColor": Self.colorValue(.red),
-                "overboughtColor": Self.colorValue(.red.opacity(0.15)),
-                "oversoldColor": Self.colorValue(.green.opacity(0.15)),
+                "overboughtColor": Self.colorValue(AppColors.statusNegative15),
+                "oversoldColor": Self.colorValue(AppColors.statusPositive15),
             ]
         case .cci:
             return [
@@ -636,8 +636,8 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "showLevels": AnyCodable(true),
                 "lineWidth": AnyCodable(1.5),
                 "color": Self.colorValue(.orange),
-                "overboughtColor": Self.colorValue(.red.opacity(0.15)),
-                "oversoldColor": Self.colorValue(.green.opacity(0.15)),
+                "overboughtColor": Self.colorValue(AppColors.statusNegative15),
+                "oversoldColor": Self.colorValue(AppColors.statusPositive15),
             ]
         case .williamsR:
             return [
@@ -647,8 +647,8 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "showLevels": AnyCodable(true),
                 "lineWidth": AnyCodable(1.5),
                 "color": Self.colorValue(.pink),
-                "overboughtColor": Self.colorValue(.red.opacity(0.15)),
-                "oversoldColor": Self.colorValue(.green.opacity(0.15)),
+                "overboughtColor": Self.colorValue(AppColors.statusNegative15),
+                "oversoldColor": Self.colorValue(AppColors.statusPositive15),
             ]
         case .atr:
             return [
@@ -662,8 +662,8 @@ private struct IndicatorCatalogItem: Identifiable, Hashable {
                 "maPeriod": AnyCodable(20),
                 "lineWidth": AnyCodable(1.0),
                 "color": Self.colorValue(.blue),
-                "bullishColor": Self.colorValue(.green.opacity(0.7)),
-                "bearishColor": Self.colorValue(.red.opacity(0.7)),
+                "bullishColor": Self.colorValue(AppColors.statusPositive70),
+                "bearishColor": Self.colorValue(AppColors.statusNegative70),
                 "maColor": Self.colorValue(.yellow),
             ]
         }
@@ -711,34 +711,34 @@ private struct IndicatorSettingField: Identifiable {
         case .ema, .sma, .wma, .hma:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
-                .init(key: "color", label: "Color", valueType: .color, defaultValue: Color.cyan),
+                .init(key: "color", label: "Color", valueType: .color, defaultValue: AppColors.systemCyan),
             ]
         case .vwap:
             return [
                 .init(key: "showStandardDeviationBands", label: "Show Std Dev Bands", valueType: .bool, defaultValue: false),
-                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.orange),
-                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: Color.orange.opacity(0.5)),
-                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: Color.orange.opacity(0.5)),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.statusWarning),
+                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: AppColors.statusWarning50),
+                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: AppColors.statusWarning50),
             ]
         case .bollingerBands:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
                 .init(key: "standardDeviations", label: "Std Deviations", valueType: .double, defaultValue: 2.0),
                 .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
-                .init(key: "color", label: "Middle Line Color", valueType: .color, defaultValue: Color.gray),
-                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: Color.red.opacity(0.7)),
-                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: Color.green.opacity(0.7)),
-                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: Color.blue.opacity(0.1)),
+                .init(key: "color", label: "Middle Line Color", valueType: .color, defaultValue: AppColors.systemGray),
+                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: AppColors.statusNegative70),
+                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: AppColors.statusPositive70),
+                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: AppColors.statusInfo10),
             ]
         case .donchianChannels:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
                 .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
                 .init(key: "showMiddleLine", label: "Show Middle Line", valueType: .bool, defaultValue: true),
-                .init(key: "color", label: "Middle Line Color", valueType: .color, defaultValue: Color.gray),
-                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: Color.blue.opacity(0.8)),
-                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: Color.blue.opacity(0.8)),
-                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: Color.blue.opacity(0.1)),
+                .init(key: "color", label: "Middle Line Color", valueType: .color, defaultValue: AppColors.systemGray),
+                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: AppColors.statusInfo80),
+                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: AppColors.statusInfo80),
+                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: AppColors.statusInfo10),
             ]
         case .keltnerChannels:
             return [
@@ -746,19 +746,19 @@ private struct IndicatorSettingField: Identifiable {
                 .init(key: "atrPeriod", label: "ATR Period", valueType: .int, defaultValue: 14),
                 .init(key: "atrMultiplier", label: "ATR Multiplier", valueType: .double, defaultValue: 2.0),
                 .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
-                .init(key: "color", label: "EMA Color", valueType: .color, defaultValue: Color.purple),
-                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: Color.purple.opacity(0.7)),
-                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: Color.purple.opacity(0.7)),
-                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: Color.purple.opacity(0.1)),
+                .init(key: "color", label: "EMA Color", valueType: .color, defaultValue: AppColors.systemPurple),
+                .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: AppColors.statusSecondary70),
+                .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: AppColors.statusSecondary70),
+                .init(key: "fillColor", label: "Fill Color", valueType: .color, defaultValue: AppColors.statusSecondary10),
             ]
         case .parabolicSAR:
             return [
                 .init(key: "accelerationStart", label: "Acceleration Start", valueType: .double, defaultValue: 0.02),
                 .init(key: "accelerationIncrement", label: "Acceleration Increment", valueType: .double, defaultValue: 0.02),
                 .init(key: "accelerationMax", label: "Acceleration Max", valueType: .double, defaultValue: 0.2),
-                .init(key: "color", label: "Primary Color", valueType: .color, defaultValue: Color.yellow),
-                .init(key: "bullishColor", label: "Bullish Color", valueType: .color, defaultValue: Color.green),
-                .init(key: "bearishColor", label: "Bearish Color", valueType: .color, defaultValue: Color.red),
+                .init(key: "color", label: "Primary Color", valueType: .color, defaultValue: AppColors.systemYellow),
+                .init(key: "bullishColor", label: "Bullish Color", valueType: .color, defaultValue: AppColors.statusPositive),
+                .init(key: "bearishColor", label: "Bearish Color", valueType: .color, defaultValue: AppColors.statusNegative),
             ]
         case .rsi:
             return [
@@ -766,9 +766,9 @@ private struct IndicatorSettingField: Identifiable {
                 .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 70.0),
                 .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: 30.0),
                 .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
-                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.purple),
-                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: Color.red.opacity(0.15)),
-                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: Color.green.opacity(0.15)),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.systemPurple),
+                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: AppColors.statusNegative15),
+                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: AppColors.statusPositive15),
             ]
         case .macd:
             return [
@@ -777,10 +777,10 @@ private struct IndicatorSettingField: Identifiable {
                 .init(key: "signalPeriod", label: "Signal Period", valueType: .int, defaultValue: 9),
                 .init(key: "showHistogram", label: "Show Histogram", valueType: .bool, defaultValue: true),
                 .init(key: "showSignalLine", label: "Show Signal", valueType: .bool, defaultValue: true),
-                .init(key: "color", label: "MACD Color", valueType: .color, defaultValue: Color.cyan),
-                .init(key: "signalColor", label: "Signal Color", valueType: .color, defaultValue: Color.orange),
-                .init(key: "histogramPositiveColor", label: "Histogram + Color", valueType: .color, defaultValue: Color.green.opacity(0.7)),
-                .init(key: "histogramNegativeColor", label: "Histogram - Color", valueType: .color, defaultValue: Color.red.opacity(0.7)),
+                .init(key: "color", label: "MACD Color", valueType: .color, defaultValue: AppColors.systemCyan),
+                .init(key: "signalColor", label: "Signal Color", valueType: .color, defaultValue: AppColors.statusWarning),
+                .init(key: "histogramPositiveColor", label: "Histogram + Color", valueType: .color, defaultValue: AppColors.statusPositive70),
+                .init(key: "histogramNegativeColor", label: "Histogram - Color", valueType: .color, defaultValue: AppColors.statusNegative70),
             ]
         case .stochastic:
             return [
@@ -790,10 +790,10 @@ private struct IndicatorSettingField: Identifiable {
                 .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 80.0),
                 .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: 20.0),
                 .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
-                .init(key: "color", label: "K Color", valueType: .color, defaultValue: Color.yellow),
-                .init(key: "dColor", label: "D Color", valueType: .color, defaultValue: Color.red),
-                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: Color.red.opacity(0.15)),
-                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: Color.green.opacity(0.15)),
+                .init(key: "color", label: "K Color", valueType: .color, defaultValue: AppColors.systemYellow),
+                .init(key: "dColor", label: "D Color", valueType: .color, defaultValue: AppColors.statusNegative),
+                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: AppColors.statusNegative15),
+                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: AppColors.statusPositive15),
             ]
         case .cci:
             return [
@@ -801,9 +801,9 @@ private struct IndicatorSettingField: Identifiable {
                 .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 100.0),
                 .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: -100.0),
                 .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
-                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.orange),
-                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: Color.red.opacity(0.15)),
-                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: Color.green.opacity(0.15)),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.statusWarning),
+                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: AppColors.statusNegative15),
+                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: AppColors.statusPositive15),
             ]
         case .williamsR:
             return [
@@ -811,23 +811,23 @@ private struct IndicatorSettingField: Identifiable {
                 .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: -20.0),
                 .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: -80.0),
                 .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
-                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.pink),
-                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: Color.red.opacity(0.15)),
-                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: Color.green.opacity(0.15)),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.systemPink),
+                .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: AppColors.statusNegative15),
+                .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: AppColors.statusPositive15),
             ]
         case .atr:
             return [
                 .init(key: "period", label: "Period", valueType: .int, defaultValue: 14),
-                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: Color.red),
+                .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.statusNegative),
             ]
         case .volume:
             return [
                 .init(key: "showMA", label: "Show MA", valueType: .bool, defaultValue: false),
                 .init(key: "maPeriod", label: "MA Period", valueType: .int, defaultValue: 20),
-                .init(key: "color", label: "Base Color", valueType: .color, defaultValue: Color.blue),
-                .init(key: "bullishColor", label: "Bullish Color", valueType: .color, defaultValue: Color.green.opacity(0.7)),
-                .init(key: "bearishColor", label: "Bearish Color", valueType: .color, defaultValue: Color.red.opacity(0.7)),
-                .init(key: "maColor", label: "MA Color", valueType: .color, defaultValue: Color.yellow),
+                .init(key: "color", label: "Base Color", valueType: .color, defaultValue: AppColors.statusInfo),
+                .init(key: "bullishColor", label: "Bullish Color", valueType: .color, defaultValue: AppColors.statusPositive70),
+                .init(key: "bearishColor", label: "Bearish Color", valueType: .color, defaultValue: AppColors.statusNegative70),
+                .init(key: "maColor", label: "MA Color", valueType: .color, defaultValue: AppColors.systemYellow),
             ]
         }
     }
@@ -868,7 +868,7 @@ private struct IndicatorSettingsEditorSheet: View {
                 }
                 .padding(14)
             }
-            .background(Color.black.opacity(0.96))
+            .background(AppColors.surfaceBlack96)
             .navigationTitle(context.item.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

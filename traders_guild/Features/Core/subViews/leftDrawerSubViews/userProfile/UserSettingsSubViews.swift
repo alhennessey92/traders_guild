@@ -167,11 +167,11 @@ struct EditProfileView: View {
                                     TextEditor(text: $bio)
                                         .frame(minHeight: 100)
                                         .padding(12)
-                                        .background(Color.white.opacity(0.05))
+                                        .background(AppColors.surfaceWhite05)
                                         .cornerRadius(10)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                                .stroke(AppColors.surfaceWhite10, lineWidth: 1)
                                         )
                                         .foregroundColor(AppColors.whiteText)
                                         .onChange(of: bio) { _, _ in
@@ -446,7 +446,7 @@ struct AvatarSelectionView: View {
                         }
                         .foregroundColor(AppColors.whiteText)
                         .padding()
-                        .background(Color.white.opacity(0.05))
+                        .background(AppColors.surfaceWhite05)
                         .cornerRadius(12)
                     }
                     
@@ -471,7 +471,7 @@ struct AvatarSelectionView: View {
                             }
                             .foregroundColor(.red)
                             .padding()
-                            .background(Color.red.opacity(0.1))
+                            .background(AppColors.statusNegative10)
                             .cornerRadius(12)
                         }
                     }
@@ -641,7 +641,7 @@ struct ChangeEmailView: View {
                                 Spacer()
                             }
                             .padding()
-                            .background(Color.white.opacity(0.03))
+                            .background(AppColors.surfaceWhite03)
                             .cornerRadius(10)
                         }
                         
@@ -688,7 +688,7 @@ struct ChangeEmailView: View {
                                 .foregroundColor(AppColors.greyText)
                         }
                         .padding()
-                        .background(Color.blue.opacity(0.1))
+                        .background(AppColors.statusInfo10)
                         .cornerRadius(10)
                         
                         // Save button
@@ -828,7 +828,7 @@ struct ChangePasswordView: View {
                                 HStack(spacing: 4) {
                                     ForEach(0..<4) { index in
                                         Rectangle()
-                                            .fill(index < passwordStrength.level ? passwordStrength.color : Color.white.opacity(0.1))
+                                            .fill(index < passwordStrength.level ? passwordStrength.color : AppColors.surfaceWhite10)
                                             .frame(height: 4)
                                             .cornerRadius(2)
                                     }
@@ -863,7 +863,7 @@ struct ChangePasswordView: View {
                             PasswordRequirementRow(text: "Contains special character", isMet: newPassword.rangeOfCharacter(from: CharacterSet.punctuationCharacters.union(.symbols)) != nil)
                         }
                         .padding()
-                        .background(Color.white.opacity(0.03))
+                        .background(AppColors.surfaceWhite03)
                         .cornerRadius(10)
                         
                         // Save button
@@ -1049,7 +1049,7 @@ struct DateOfBirthView: View {
                         .datePickerStyle(.wheel)
                         .labelsHidden()
                         .frame(maxWidth: .infinity)
-                        .background(Color.white.opacity(0.05))
+                        .background(AppColors.surfaceWhite05)
                         .cornerRadius(12)
                         
                         // Age warning
@@ -1063,7 +1063,7 @@ struct DateOfBirthView: View {
                                     .foregroundColor(AppColors.greyText)
                             }
                             .padding()
-                            .background(Color.orange.opacity(0.1))
+                            .background(AppColors.statusWarning10)
                             .cornerRadius(10)
                         }
                     }
@@ -1317,7 +1317,7 @@ struct InterestChip: View {
             .foregroundColor(isSelected ? AppColors.accentColor : AppColors.whiteText.opacity(0.8))
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(isSelected ? AppColors.accentColor.opacity(0.2) : Color.white.opacity(0.05))
+            .background(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.surfaceWhite05)
             .cornerRadius(10)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -1503,12 +1503,12 @@ struct BlockedUserRow: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.8))
+                    .background(AppColors.statusNegative80)
                     .cornerRadius(8)
             }
         }
         .padding()
-        .background(Color.white.opacity(0.03))
+        .background(AppColors.surfaceWhite03)
         .cornerRadius(12)
     }
 }
@@ -1558,7 +1558,7 @@ struct DataPrivacyView: View {
                                 HStack(spacing: 12) {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.orange.opacity(0.2))
+                                            .fill(AppColors.statusWarning20)
                                             .frame(width: 36, height: 36)
                                         Image(systemName: "paperplane.fill")
                                             .font(.system(size: 16))
@@ -1768,7 +1768,7 @@ struct HelpCenterView: View {
                         .foregroundColor(AppColors.whiteText)
                 }
                 .padding()
-                .background(Color.white.opacity(0.05))
+                .background(AppColors.surfaceWhite05)
                 .cornerRadius(12)
                 .padding(.horizontal, 25)
                 .padding(.top, 16)
@@ -1823,7 +1823,7 @@ struct HelpCenterView: View {
                         }
                         .padding(24)
                         .frame(maxWidth: .infinity)
-                        .background(Color.white.opacity(0.03))
+                        .background(AppColors.surfaceWhite03)
                         .cornerRadius(16)
                         .padding(.horizontal, 25)
                         
@@ -1906,7 +1906,7 @@ struct FAQItem: View {
                     .padding(.bottom)
             }
         }
-        .background(Color.white.opacity(0.03))
+        .background(AppColors.surfaceWhite03)
         .cornerRadius(10)
     }
 }
@@ -2011,11 +2011,11 @@ struct ContactSupportView: View {
                             TextEditor(text: $message)
                                 .frame(minHeight: 150)
                                 .padding(12)
-                                .background(Color.white.opacity(0.05))
+                                .background(AppColors.surfaceWhite05)
                                 .cornerRadius(10)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        .stroke(AppColors.surfaceWhite10, lineWidth: 1)
                                 )
                                 .foregroundColor(AppColors.whiteText)
                             
@@ -2042,7 +2042,7 @@ struct ContactSupportView: View {
                         }
                         .tint(AppColors.accentColor)
                         .padding()
-                        .background(Color.white.opacity(0.03))
+                        .background(AppColors.surfaceWhite03)
                         .cornerRadius(10)
                         
                         // Send button
@@ -2126,7 +2126,7 @@ struct CategoryChip: View {
             .foregroundColor(isSelected ? AppColors.accentColor : AppColors.whiteText.opacity(0.7))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(isSelected ? AppColors.accentColor.opacity(0.2) : Color.white.opacity(0.05))
+            .background(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.surfaceWhite05)
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -2309,7 +2309,7 @@ struct AboutLinkRow: View {
                     .foregroundColor(AppColors.greyText)
             }
             .padding()
-            .background(Color.white.opacity(0.03))
+            .background(AppColors.surfaceWhite03)
             .cornerRadius(12)
         }
     }
@@ -2386,7 +2386,7 @@ struct DeleteAccountConfirmationView: View {
                                     DeleteItemRow(text: "Your awards and achievements")
                                 }
                                 .padding()
-                                .background(Color.red.opacity(0.1))
+                                .background(AppColors.statusNegative10)
                                 .cornerRadius(12)
                                 
                                 // Password field
@@ -2403,7 +2403,7 @@ struct DeleteAccountConfirmationView: View {
                                         .fontWeight(.semibold)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 14)
-                                        .background(canProceed ? Color.red : Color.red.opacity(0.3))
+                                        .background(canProceed ? AppColors.statusNegative : AppColors.statusNegative30)
                                         .foregroundColor(.white)
                                         .cornerRadius(12)
                                 }
@@ -2424,7 +2424,7 @@ struct DeleteAccountConfirmationView: View {
                                         .multilineTextAlignment(.center)
                                 }
                                 .padding()
-                                .background(Color.red.opacity(0.1))
+                                .background(AppColors.statusNegative10)
                                 .cornerRadius(12)
                                 
                                 // Confirmation text field
@@ -2437,11 +2437,11 @@ struct DeleteAccountConfirmationView: View {
                                     TextField("delete my account", text: $confirmationText)
                                         .foregroundColor(AppColors.whiteText)
                                         .padding()
-                                        .background(Color.white.opacity(0.05))
+                                        .background(AppColors.surfaceWhite05)
                                         .cornerRadius(10)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                                .stroke(AppColors.surfaceWhite10, lineWidth: 1)
                                         )
                                         .textInputAutocapitalization(.never)
                                         .autocorrectionDisabled()
@@ -2461,7 +2461,7 @@ struct DeleteAccountConfirmationView: View {
                                     }
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 14)
-                                    .background(canProceed ? Color.red : Color.red.opacity(0.3))
+                                    .background(canProceed ? AppColors.statusNegative : AppColors.statusNegative30)
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                                 }
@@ -2481,7 +2481,7 @@ struct DeleteAccountConfirmationView: View {
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(Color.white.opacity(0.05))
+                                .background(AppColors.surfaceWhite05)
                                 .foregroundColor(AppColors.whiteText)
                                 .cornerRadius(12)
                         }
@@ -2610,11 +2610,11 @@ struct SettingsTextField: View {
                     .textInputAutocapitalization(.never)
             }
             .padding()
-            .background(Color.white.opacity(0.05))
+            .background(AppColors.surfaceWhite05)
             .cornerRadius(10)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(error != nil ? Color.red : Color.white.opacity(0.1), lineWidth: 1)
+                    .stroke(error != nil ? AppColors.statusNegative : AppColors.surfaceWhite10, lineWidth: 1)
             )
             
             if let error = error {
@@ -2660,11 +2660,11 @@ struct SettingsSecureField: View {
                 }
             }
             .padding()
-            .background(Color.white.opacity(0.05))
+            .background(AppColors.surfaceWhite05)
             .cornerRadius(10)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(error != nil ? Color.red : Color.white.opacity(0.1), lineWidth: 1)
+                    .stroke(error != nil ? AppColors.statusNegative : AppColors.surfaceWhite10, lineWidth: 1)
             )
             
             if let error = error {
@@ -2850,11 +2850,11 @@ struct SettingsSecureField: View {
 //                                 TextEditor(text: $bio)
 //                                     .frame(minHeight: 100)
 //                                     .padding(12)
-//                                     .background(Color.white.opacity(0.05))
+//                                     .background(AppColors.surfaceWhite05)
 //                                     .cornerRadius(10)
 //                                     .overlay(
 //                                         RoundedRectangle(cornerRadius: 10)
-//                                             .stroke(Color.white.opacity(0.1), lineWidth: 1)
+//                                             .stroke(AppColors.surfaceWhite10, lineWidth: 1)
 //                                     )
 //                                     .foregroundColor(AppColors.whiteText)
 //                                     .onChange(of: bio) { _, _ in
@@ -3082,7 +3082,7 @@ struct SettingsSecureField: View {
 //                                 .padding(.vertical, 10)
 //                                 .background(
 //                                     RoundedRectangle(cornerRadius: 10)
-//                                         .fill(selectedCategory == category ? AppColors.accentColor.opacity(0.2) : Color.white.opacity(0.05))
+//                                         .fill(selectedCategory == category ? AppColors.accentColor.opacity(0.2) : AppColors.surfaceWhite05)
 //                                 )
 //                                 .overlay(
 //                                     RoundedRectangle(cornerRadius: 10)
@@ -3142,7 +3142,7 @@ struct SettingsSecureField: View {
 //                                         Circle()
 //                                             .fill(selectedAvatarId == avatar.0 ?
 //                                                   AppColors.accentColor.opacity(0.3) :
-//                                                     Color.white.opacity(0.05))
+//                                                     AppColors.surfaceWhite05)
 //                                             .frame(width: 80, height: 80)
                                         
 //                                         Text(avatar.1)
@@ -3260,7 +3260,7 @@ struct SettingsSecureField: View {
 //                                 Spacer()
 //                             }
 //                             .padding()
-//                             .background(Color.white.opacity(0.03))
+//                             .background(AppColors.surfaceWhite03)
 //                             .cornerRadius(10)
 //                         }
                         
@@ -3307,7 +3307,7 @@ struct SettingsSecureField: View {
 //                                 .foregroundColor(AppColors.greyText)
 //                         }
 //                         .padding()
-//                         .background(Color.blue.opacity(0.1))
+//                         .background(AppColors.statusInfo10)
 //                         .cornerRadius(10)
                         
 //                         // Save button
@@ -3438,7 +3438,7 @@ struct SettingsSecureField: View {
 //                                 HStack(spacing: 4) {
 //                                     ForEach(0..<4) { index in
 //                                         Rectangle()
-//                                             .fill(index < passwordStrength.level ? passwordStrength.color : Color.white.opacity(0.1))
+//                                             .fill(index < passwordStrength.level ? passwordStrength.color : AppColors.surfaceWhite10)
 //                                             .frame(height: 4)
 //                                             .cornerRadius(2)
 //                                     }
@@ -3473,7 +3473,7 @@ struct SettingsSecureField: View {
 //                             PasswordRequirementRow(text: "Contains special character", isMet: newPassword.rangeOfCharacter(from: CharacterSet.punctuationCharacters.union(.symbols)) != nil)
 //                         }
 //                         .padding()
-//                         .background(Color.white.opacity(0.03))
+//                         .background(AppColors.surfaceWhite03)
 //                         .cornerRadius(10)
                         
 //                         // Save button
@@ -3661,7 +3661,7 @@ struct SettingsSecureField: View {
 //                                 Spacer()
 //                             }
 //                             .padding()
-//                             .background(Color.white.opacity(0.03))
+//                             .background(AppColors.surfaceWhite03)
 //                             .cornerRadius(10)
 //                         }
 //                     }
@@ -3919,7 +3919,7 @@ struct SettingsSecureField: View {
 //             .foregroundColor(isSelected ? AppColors.accentColor : AppColors.whiteText.opacity(0.8))
 //             .padding(.horizontal, 14)
 //             .padding(.vertical, 12)
-//             .background(isSelected ? AppColors.accentColor.opacity(0.2) : Color.white.opacity(0.05))
+//             .background(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.surfaceWhite05)
 //             .cornerRadius(10)
 //             .overlay(
 //                 RoundedRectangle(cornerRadius: 10)
@@ -4044,7 +4044,7 @@ struct SettingsSecureField: View {
 //     var body: some View {
 //         HStack(spacing: 12) {
 //             Circle()
-//                 .fill(Color.red.opacity(0.2))
+//                 .fill(AppColors.statusNegative20)
 //                 .frame(width: 44, height: 44)
 //                 .overlay(
 //                     Text(String(user.displayName.prefix(2)).uppercased())
@@ -4077,12 +4077,12 @@ struct SettingsSecureField: View {
 //                     .foregroundColor(.red)
 //                     .padding(.horizontal, 12)
 //                     .padding(.vertical, 6)
-//                     .background(Color.red.opacity(0.15))
+//                     .background(AppColors.statusNegative15)
 //                     .cornerRadius(8)
 //             }
 //         }
 //         .padding(12)
-//         .background(Color.white.opacity(0.03))
+//         .background(AppColors.surfaceWhite03)
 //         .cornerRadius(12)
 //     }
 // }
@@ -4202,7 +4202,7 @@ struct SettingsSecureField: View {
 //                                 .foregroundColor(AppColors.greyText)
 //                         }
 //                         .padding()
-//                         .background(Color.blue.opacity(0.1))
+//                         .background(AppColors.statusInfo10)
 //                         .cornerRadius(10)
 //                         .padding(.horizontal, 25)
 //                         .padding(.top, 16)
@@ -4320,7 +4320,7 @@ struct SettingsSecureField: View {
 //                         .foregroundColor(AppColors.whiteText)
 //                 }
 //                 .padding()
-//                 .background(Color.white.opacity(0.05))
+//                 .background(AppColors.surfaceWhite05)
 //                 .cornerRadius(12)
 //                 .padding(.horizontal, 25)
 //                 .padding(.top, 16)
@@ -4375,7 +4375,7 @@ struct SettingsSecureField: View {
 //                         }
 //                         .padding(24)
 //                         .frame(maxWidth: .infinity)
-//                         .background(Color.white.opacity(0.03))
+//                         .background(AppColors.surfaceWhite03)
 //                         .cornerRadius(16)
 //                         .padding(.horizontal, 25)
                         
@@ -4459,7 +4459,7 @@ struct SettingsSecureField: View {
 //                         .padding(.bottom)
 //                 }
 //             }
-//             .background(Color.white.opacity(0.03))
+//             .background(AppColors.surfaceWhite03)
 //             .cornerRadius(12)
 //         }
 //     }
@@ -4548,7 +4548,7 @@ struct SettingsSecureField: View {
 //                                             .foregroundColor(selectedCategory == category ? .white : AppColors.whiteText.opacity(0.8))
 //                                             .padding(.horizontal, 12)
 //                                             .padding(.vertical, 8)
-//                                             .background(selectedCategory == category ? category.color : Color.white.opacity(0.05))
+//                                             .background(selectedCategory == category ? category.color : AppColors.surfaceWhite05)
 //                                             .cornerRadius(20)
 //                                         }
 //                                     }
@@ -4574,11 +4574,11 @@ struct SettingsSecureField: View {
 //                             TextEditor(text: $message)
 //                                 .frame(minHeight: 150)
 //                                 .padding(12)
-//                                 .background(Color.white.opacity(0.05))
+//                                 .background(AppColors.surfaceWhite05)
 //                                 .cornerRadius(10)
 //                                 .overlay(
 //                                     RoundedRectangle(cornerRadius: 10)
-//                                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
+//                                         .stroke(AppColors.surfaceWhite10, lineWidth: 1)
 //                                 )
 //                                 .foregroundColor(AppColors.whiteText)
                             
@@ -4614,7 +4614,7 @@ struct SettingsSecureField: View {
 //                                 .tint(AppColors.accentColor)
 //                         }
 //                         .padding()
-//                         .background(Color.white.opacity(0.03))
+//                         .background(AppColors.surfaceWhite03)
 //                         .cornerRadius(10)
                         
 //                         // Response time info
@@ -4875,7 +4875,7 @@ struct SettingsSecureField: View {
 //                             AboutInfoRow(label: "Release Date", value: "January 2026")
 //                         }
 //                         .padding()
-//                         .background(Color.white.opacity(0.03))
+//                         .background(AppColors.surfaceWhite03)
 //                         .cornerRadius(12)
 //                         .padding(.horizontal, 25)
                         
@@ -4971,7 +4971,7 @@ struct SettingsSecureField: View {
 //                     .foregroundColor(AppColors.greyText)
 //             }
 //             .padding()
-//             .background(Color.white.opacity(0.03))
+//             .background(AppColors.surfaceWhite03)
 //             .cornerRadius(10)
 //         }
 //     }
@@ -5011,7 +5011,7 @@ struct SettingsSecureField: View {
 //                     // Warning icon
 //                     ZStack {
 //                         Circle()
-//                             .fill(Color.red.opacity(0.2))
+//                             .fill(AppColors.statusNegative20)
 //                             .frame(width: 80, height: 80)
                         
 //                         Image(systemName: "exclamationmark.triangle.fill")
@@ -5041,7 +5041,7 @@ struct SettingsSecureField: View {
 //                         LeaveConsequenceRow(text: "End your guild membership immediately")
 //                     }
 //                     .padding()
-//                     .background(Color.red.opacity(0.1))
+//                     .background(AppColors.statusNegative10)
 //                     .cornerRadius(12)
                     
 //                     // Confirmation input
@@ -5054,11 +5054,11 @@ struct SettingsSecureField: View {
 //                         TextField("", text: $confirmationText)
 //                             .textInputAutocapitalization(.never)
 //                             .padding()
-//                             .background(Color.white.opacity(0.05))
+//                             .background(AppColors.surfaceWhite05)
 //                             .cornerRadius(10)
 //                             .overlay(
 //                                 RoundedRectangle(cornerRadius: 10)
-//                                     .stroke(isConfirmed ? Color.red : Color.white.opacity(0.1), lineWidth: 1)
+//                                     .stroke(isConfirmed ? AppColors.statusNegative : AppColors.surfaceWhite10, lineWidth: 1)
 //                             )
 //                             .foregroundColor(AppColors.whiteText)
 //                     }
@@ -5079,7 +5079,7 @@ struct SettingsSecureField: View {
 //                             }
 //                             .frame(maxWidth: .infinity)
 //                             .padding(.vertical, 14)
-//                             .background(isConfirmed ? Color.red : Color.red.opacity(0.3))
+//                             .background(isConfirmed ? AppColors.statusNegative : AppColors.statusNegative30)
 //                             .foregroundColor(.white)
 //                             .cornerRadius(12)
 //                         }
@@ -5090,7 +5090,7 @@ struct SettingsSecureField: View {
 //                                 .fontWeight(.semibold)
 //                                 .frame(maxWidth: .infinity)
 //                                 .padding(.vertical, 14)
-//                                 .background(Color.white.opacity(0.05))
+//                                 .background(AppColors.surfaceWhite05)
 //                                 .foregroundColor(AppColors.whiteText)
 //                                 .cornerRadius(12)
 //                         }
@@ -5171,7 +5171,7 @@ struct SettingsSecureField: View {
 //                         // Warning icon
 //                         ZStack {
 //                             Circle()
-//                                 .fill(Color.red.opacity(0.2))
+//                                 .fill(AppColors.statusNegative20)
 //                                 .frame(width: 80, height: 80)
                             
 //                             Image(systemName: "trash.fill")
@@ -5184,7 +5184,7 @@ struct SettingsSecureField: View {
 //                         HStack(spacing: 8) {
 //                             ForEach(1...2, id: \.self) { step in
 //                                 Circle()
-//                                     .fill(step <= currentStep ? Color.red : Color.white.opacity(0.2))
+//                                     .fill(step <= currentStep ? AppColors.statusNegative : AppColors.surfaceWhite20)
 //                                     .frame(width: 10, height: 10)
 //                             }
 //                         }
@@ -5218,7 +5218,7 @@ struct SettingsSecureField: View {
 //                                 DeleteItemRow(text: "All awards and achievements")
 //                             }
 //                             .padding()
-//                             .background(Color.red.opacity(0.1))
+//                             .background(AppColors.statusNegative10)
 //                             .cornerRadius(12)
                             
 //                             Button(action: { currentStep = 2 }) {
@@ -5226,7 +5226,7 @@ struct SettingsSecureField: View {
 //                                     .fontWeight(.semibold)
 //                                     .frame(maxWidth: .infinity)
 //                                     .padding(.vertical, 14)
-//                                     .background(Color.red)
+//                                     .background(AppColors.statusNegative)
 //                                     .foregroundColor(.white)
 //                                     .cornerRadius(12)
 //                             }
@@ -5255,11 +5255,11 @@ struct SettingsSecureField: View {
 //                                 TextField("", text: $confirmationText)
 //                                     .textInputAutocapitalization(.never)
 //                                     .padding()
-//                                     .background(Color.white.opacity(0.05))
+//                                     .background(AppColors.surfaceWhite05)
 //                                     .cornerRadius(10)
 //                                     .overlay(
 //                                         RoundedRectangle(cornerRadius: 10)
-//                                             .stroke(isConfirmed ? Color.red : Color.white.opacity(0.1), lineWidth: 1)
+//                                             .stroke(isConfirmed ? AppColors.statusNegative : AppColors.surfaceWhite10, lineWidth: 1)
 //                                     )
 //                                     .foregroundColor(AppColors.whiteText)
 //                             }
@@ -5287,7 +5287,7 @@ struct SettingsSecureField: View {
 //                                 }
 //                                 .frame(maxWidth: .infinity)
 //                                 .padding(.vertical, 14)
-//                                 .background(canProceed ? Color.red : Color.red.opacity(0.3))
+//                                 .background(canProceed ? AppColors.statusNegative : AppColors.statusNegative30)
 //                                 .foregroundColor(.white)
 //                                 .cornerRadius(12)
 //                             }
@@ -5306,7 +5306,7 @@ struct SettingsSecureField: View {
 //                                 .fontWeight(.semibold)
 //                                 .frame(maxWidth: .infinity)
 //                                 .padding(.vertical, 14)
-//                                 .background(Color.white.opacity(0.05))
+//                                 .background(AppColors.surfaceWhite05)
 //                                 .foregroundColor(AppColors.whiteText)
 //                                 .cornerRadius(12)
 //                         }
@@ -5427,11 +5427,11 @@ struct SettingsSecureField: View {
 //                     .textInputAutocapitalization(.never)
 //             }
 //             .padding()
-//             .background(Color.white.opacity(0.05))
+//             .background(AppColors.surfaceWhite05)
 //             .cornerRadius(10)
 //             .overlay(
 //                 RoundedRectangle(cornerRadius: 10)
-//                     .stroke(error != nil ? Color.red : Color.white.opacity(0.1), lineWidth: 1)
+//                     .stroke(error != nil ? AppColors.statusNegative : AppColors.surfaceWhite10, lineWidth: 1)
 //             )
             
 //             if let error = error {
@@ -5477,11 +5477,11 @@ struct SettingsSecureField: View {
 //                 }
 //             }
 //             .padding()
-//             .background(Color.white.opacity(0.05))
+//             .background(AppColors.surfaceWhite05)
 //             .cornerRadius(10)
 //             .overlay(
 //                 RoundedRectangle(cornerRadius: 10)
-//                     .stroke(error != nil ? Color.red : Color.white.opacity(0.1), lineWidth: 1)
+//                     .stroke(error != nil ? AppColors.statusNegative : AppColors.surfaceWhite10, lineWidth: 1)
 //             )
             
 //             if let error = error {

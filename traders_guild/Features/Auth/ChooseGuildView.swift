@@ -73,7 +73,7 @@ struct GuildSelectionFullView: View {
                     .padding(.horizontal)
                     
                     Divider()
-                        .background(Color.gray.opacity(0.3))
+                        .background(AppColors.surfaceGray30)
                 }
                 .background(
                     LinearGradient(
@@ -108,7 +108,7 @@ struct GuildSelectionFullView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 Divider()
-                    .background(Color.gray.opacity(0.3))
+                    .background(AppColors.surfaceGray30)
                 
                 HStack {
                     Spacer()
@@ -226,7 +226,7 @@ struct GuildSelectionRowFull: View {
                     // Members online
                     HStack(spacing: 3) {
                         Circle()
-                            .fill(Color.green)
+                            .fill(AppColors.statusPositive)
                             .frame(width: 6, height: 6)
                         Text("\(item.guild.membersOnline) online")
                             .font(.caption)

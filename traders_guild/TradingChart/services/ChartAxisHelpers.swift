@@ -450,7 +450,7 @@ struct AxisConfiguration {
         var labelHeight: CGFloat = 30
         var labelFont: Font = .system(size: 10)
         var labelColor: Color = .gray
-        var gridColor: Color = .gray.opacity(0.2)
+        var gridColor: Color = AppColors.surfaceGray20
         var gridLineWidth: CGFloat = 0.5
     }
     
@@ -460,7 +460,7 @@ struct AxisConfiguration {
         var labelWidth: CGFloat = 60
         var labelFont: Font = .system(size: 10)
         var labelColor: Color = .gray
-        var gridColor: Color = .gray.opacity(0.2)
+        var gridColor: Color = AppColors.surfaceGray20
         var gridLineWidth: CGFloat = 0.5
     }
     
