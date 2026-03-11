@@ -4005,16 +4005,8 @@ struct TradingChartView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(AppColors.surfaceBlack40)
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(AppColors.surfaceWhite18, lineWidth: 1)
-            )
+            RoundedRectangle(cornerRadius: 8)
+                .fill(AppColors.sheetBackground.opacity(0.75))
         )
     }
 
@@ -4056,7 +4048,11 @@ struct TradingChartView: View {
             chartHeight: geometry.size.height,
             includeLabelStrip: !chartViewModel.indicatorManager.shouldShowAnyPanel
         )
-        let controlsReserve: CGFloat = (!isMarkerPlacementMode && !controlViewModel.isMarkerViewingMode)
+        // Viewing mode: sit just above x-axis with minimal padding
+        if controlViewModel.isMarkerViewingMode {
+            return xAxisReserve + 2
+        }
+        let controlsReserve: CGFloat = !isMarkerPlacementMode
             ? (40 + (indicatorPanelBottomPadding > 0 ? indicatorPanelBottomPadding + 14 : 0))
             : 0
         return xAxisReserve + controlsReserve + geometry.safeAreaInsets.bottom + 6

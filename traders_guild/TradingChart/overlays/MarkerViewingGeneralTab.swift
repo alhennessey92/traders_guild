@@ -4,6 +4,8 @@ struct MarkerViewingGeneralTab: View {
     let marker: ChartMarkerUI
     @ObservedObject var markerManager: MarkerManager
     let onClose: () -> Void
+    var symbolDTO: RLTradingSymbolDTO? = nil
+    var onAuthorTap: (() -> Void)? = nil
 
     private static let priceFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -30,12 +32,21 @@ struct MarkerViewingGeneralTab: View {
                 heroPanel
                 requirementsSection
                 generalSection
+                symbolInfoSection
+                authorSection
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
             .padding(.bottom, 22)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var heroColor: Color {
+        if liveMarker.intent == .alert, let severity = liveMarker.alertSeverity {
+            return severity.color
+        }
+        return liveMarker.intent.color
     }
 
     private var heroPanel: some View {
@@ -54,9 +65,6 @@ struct MarkerViewingGeneralTab: View {
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
                     .lineLimit(2)
-                Text(authorHandle)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(AppColors.whiteText.opacity(0.85))
             }
 
             Spacer(minLength: 0)
@@ -65,8 +73,8 @@ struct MarkerViewingGeneralTab: View {
         .background(
             LinearGradient(
                 colors: [
-                    liveMarker.intent.color.opacity(0.32),
-                    liveMarker.intent.color.opacity(0.15),
+                    heroColor.opacity(0.32),
+                    heroColor.opacity(0.15),
                     AppColors.whiteText.opacity(0.06),
                 ],
                 startPoint: .topLeading,
@@ -75,7 +83,7 @@ struct MarkerViewingGeneralTab: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(liveMarker.intent.color.opacity(0.32), lineWidth: 1)
+                .stroke(heroColor.opacity(0.32), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
@@ -429,6 +437,165 @@ struct MarkerViewingGeneralTab: View {
 
             Spacer(minLength: 0)
         }
+    }
+
+    private var symbolInfoSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader(
+                title: "Symbol Info",
+                subtitle: "Placement context",
+                icon: "chart.xyaxis.line",
+                tint: AppColors.whiteText.opacity(0.85)
+            )
+
+            // Symbol hero card with avatar
+            if let symbol = symbolDTO {
+                HStack(spacing: 12) {
+                    TradingSymbolIconView(symbol: symbol, size: 40, cornerRadiusRatio: 0.22)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(symbol.ticker)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(.white)
+                        HStack(spacing: 6) {
+                            Text(symbol.displayName)
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                                .lineLimit(1)
+                            Text(symbol.assetClass.uppercased())
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    // Live price + 24h change
+                    if let priceStr = symbol.priceFormatted {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(priceStr)
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.white)
+                            if let changeStr = symbol.changeFormatted {
+                                let isUp = symbol.isUp ?? false
+                                Text(changeStr)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(isUp ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.whiteText.opacity(0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                        )
+                )
+            }
+
+            // Placement metadata
+            HStack(spacing: 8) {
+                metaChip(label: liveMarker.timeframe, icon: "clock")
+                metaChip(
+                    label: Self.priceFormatter.string(from: NSNumber(value: liveMarker.price)) ?? "\(liveMarker.price)",
+                    icon: "tag"
+                )
+            }
+
+            readOnlyMetaRow(title: "Placed", value: liveMarker.createdAtFormatted)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(sectionCardBackground())
+    }
+
+    private func metaChip(label: String, icon: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(AppColors.greyText)
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(AppColors.whiteText.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private var authorSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader(
+                title: "Author",
+                subtitle: "Marker creator",
+                icon: "person.circle.fill",
+                tint: AppColors.whiteText.opacity(0.85)
+            )
+
+            Button {
+                onAuthorTap?()
+            } label: {
+                HStack(spacing: 10) {
+                    UnifiedMemberAvatar(
+                        username: liveMarker.author.username,
+                        avatarURL: liveMarker.author.avatarUrl,
+                        isOnline: liveMarker.author.isOnline,
+                        size: 36,
+                        showOnlineIndicator: true
+                    )
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(authorHandle)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(.white)
+
+                        HStack(spacing: 6) {
+                            Text(liveMarker.author.memberRole.displayName)
+                            Text("Rep \(liveMarker.author.reputation)")
+                            if let acc = liveMarker.author.accuracyFormatted {
+                                Text("Acc \(acc)")
+                            }
+                        }
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(AppColors.greyText)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.greyText)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.whiteText.opacity(0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(sectionCardBackground())
     }
 
     private func sectionCardBackground(cornerRadius: CGFloat = 12) -> some View {

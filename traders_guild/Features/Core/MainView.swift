@@ -254,6 +254,14 @@ struct MainView: View {
                     },
                     onPlaceMarker: {
                         NotificationCenter.default.post(name: .placeMarkerRequested, object: nil)
+                    },
+                    onViewingAuthorTap: { marker in
+                        if marker.author.userId == rlAppState.currentUser?.id {
+                            markerAuthorProfileDetent = .fraction(0.6)
+                            selectedViewingMarkerAuthorRoute = .currentUser
+                        } else {
+                            selectedViewingMarkerAuthorRoute = .guildMember(marker.author)
+                        }
                     }
                 )
                 .environmentObject(rlAppState)
@@ -862,48 +870,23 @@ struct MainView: View {
                     selectedViewingMarkerAuthorRoute = .guildMember(marker.author)
                 }
             } label: {
-                HStack(spacing: 8) {
-                    UnifiedMemberAvatar(
-                        username: marker.author.username,
-                        avatarURL: marker.author.avatarUrl,
-                        isOnline: marker.author.isOnline,
-                        size: 30,
-                        showOnlineIndicator: false
-                    )
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(marker.author.displayUsername)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-
-                        HStack(spacing: 4) {
-                            Text(marker.author.memberRole.displayName)
-                            Text("Rep \(marker.author.reputation)")
-                            if let accuracy = marker.author.accuracyFormatted {
-                                Text("Acc \(accuracy)")
-                            }
-                        }
-                        .font(.system(size: 8.5, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite82)
-                        .lineLimit(1)
-                    }
-                }
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .frame(maxWidth: 194, alignment: .leading)
+                UnifiedMemberAvatar(
+                    username: marker.author.username,
+                    avatarURL: marker.author.avatarUrl,
+                    isOnline: marker.author.isOnline,
+                    size: 28,
+                    showOnlineIndicator: false
+                )
+                .frame(width: 36, height: 36)
                 .background(
                     ZStack {
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(.ultraThinMaterial)
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(AppColors.surfaceWhite12)
+                        Circle().fill(.ultraThinMaterial)
+                        Circle().fill(AppColors.surfaceWhite12)
+                        Circle().stroke(AppColors.surfaceWhite24, lineWidth: 0.8)
                     }
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.surfaceWhite20, lineWidth: 1)
-                )
+                .clipShape(Circle())
+                .shadow(color: AppColors.surfaceWhite12.opacity(0.35), radius: 2, x: 0, y: 1)
             }
             .buttonStyle(.plain)
         }
@@ -1581,6 +1564,7 @@ struct ChartBottomSheet: View {
     @EnvironmentObject var rlAppState: RLAppState
     let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
     let onPlaceMarker: (() -> Void)?
+    var onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil
 
     // Chat state - managed here since parent handles input
     @StateObject private var chartChatManager: ChartChatManager
@@ -1596,7 +1580,8 @@ struct ChartBottomSheet: View {
         markerOverlayState: MarkerOverlayState,
         selectedDetent: Binding<PresentationDetent>,
         onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil,
-        onPlaceMarker: (() -> Void)? = nil
+        onPlaceMarker: (() -> Void)? = nil,
+        onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil
     ) {
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
@@ -1605,6 +1590,7 @@ struct ChartBottomSheet: View {
         self._selectedDetent = selectedDetent
         self.onNavigateToMarker = onNavigateToMarker
         self.onPlaceMarker = onPlaceMarker
+        self.onViewingAuthorTap = onViewingAuthorTap
         // Initialize ChartChatManager with RealAPIService
         // We'll configure it with rlAppState in onAppear
         _chartChatManager = StateObject(wrappedValue: ChartChatManager(
@@ -2127,7 +2113,9 @@ struct ChartBottomSheet: View {
             MarkerViewingGeneralTab(
                 marker: marker,
                 markerManager: markerManager,
-                onClose: clearSelectedMarker
+                onClose: clearSelectedMarker,
+                symbolDTO: chartViewModel.currentSymbol,
+                onAuthorTap: { onViewingAuthorTap?(marker) }
             )
             .environmentObject(rlAppState)
         case .chat:
@@ -2315,7 +2303,7 @@ struct ChartBottomSheet: View {
                     .fontWeight(.bold)
                     .lineLimit(1)
             }
-            .foregroundColor(AppColors.bearCandleRed)
+            .foregroundColor(.white)
             .padding(.vertical, 12)
             .padding(.horizontal, 20)
             .background(

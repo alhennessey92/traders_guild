@@ -427,7 +427,10 @@ struct GhostPreviewLayer: View {
 
     private var annotationDrafts: [MarkerComponentDraft] {
         placementState.components.filter {
-            if $0.componentType == .textNote { return true }
+            // Alert markers: note text is managed in the general tab, not as a chart overlay
+            if $0.componentType == .textNote {
+                return placementState.intent != .alert
+            }
             if $0.componentType == .reactionEmoji {
                 return placementState.intent != .reaction
             }

@@ -351,9 +351,9 @@ struct MarkerPlacementIndicatorsTab: View {
             Button {
                 toggleIndicator(item)
             } label: {
-                Image(systemName: isAttached ? "minus.circle.fill" : "plus.circle.fill")
+                Image(systemName: isAttached ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(isAttached ? AppColors.statusNegative85 : AppColors.statusPositive90)
+                    .foregroundColor(isAttached ? placementState.intent.color : .gray)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)

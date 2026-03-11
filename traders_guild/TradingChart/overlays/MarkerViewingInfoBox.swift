@@ -44,24 +44,21 @@ struct MarkerViewingInfoBox: View {
     }
 
     private var collapsedStrip: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             UnifiedMarkerBadge(
                 intent: marker.intent,
                 alertSeverity: marker.alertSeverity,
                 sizeToken: .tiny
             )
-            Text("Info")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(AppColors.surfaceWhite88)
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(AppColors.surfaceWhite84)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 5)
         .padding(.vertical, 10)
-        .frame(width: 46)
-        .background(panelBackground(cornerRadius: 12))
-        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .frame(width: 30)
+        .background(panelBackground(cornerRadius: 10))
+        .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture(perform: toggleCollapse)
     }
 
@@ -290,9 +287,9 @@ struct MarkerViewingInfoBox: View {
     private func panelBackground(cornerRadius: CGFloat) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(.ultraThickMaterial)
+                .fill(.ultraThinMaterial)
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(AppColors.surfaceBlack85)
+                .fill(AppColors.surfaceBlack50)
         }
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius)
@@ -301,25 +298,18 @@ struct MarkerViewingInfoBox: View {
     }
 
     private func collapseHandle(icon: String, hint: String) -> some View {
-        VStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(AppColors.surfaceWhite94)
-            Text(hint)
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundColor(AppColors.surfaceWhite68)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-        }
-        .frame(width: 34, height: 76)
-        .background(
-            Capsule()
-                .fill(AppColors.surfaceWhite12)
-                .overlay(
-                    Capsule()
-                        .stroke(AppColors.surfaceWhite20, lineWidth: 1)
-                )
-        )
+        Image(systemName: icon)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(AppColors.surfaceWhite94)
+            .frame(width: 18, height: 64)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(AppColors.surfaceWhite12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(AppColors.surfaceWhite20, lineWidth: 1)
+                    )
+            )
     }
 
     private func toggleCollapse() {

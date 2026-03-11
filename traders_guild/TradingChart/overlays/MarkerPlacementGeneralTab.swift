@@ -82,6 +82,13 @@ struct MarkerPlacementGeneralTab: View {
         }
     }
 
+    private var heroColor: Color {
+        if placementState.intent == .alert, let severity = placementState.alertSeverity {
+            return severity.color
+        }
+        return placementState.intent.color
+    }
+
     private var heroPanel: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -128,8 +135,8 @@ struct MarkerPlacementGeneralTab: View {
             .background(
                 LinearGradient(
                     colors: [
-                        placementState.intent.color.opacity(0.32),
-                        placementState.intent.color.opacity(0.15),
+                        heroColor.opacity(0.32),
+                        heroColor.opacity(0.15),
                         AppColors.whiteText.opacity(0.06),
                     ],
                     startPoint: .topLeading,
@@ -138,7 +145,7 @@ struct MarkerPlacementGeneralTab: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(placementState.intent.color.opacity(0.32), lineWidth: 1)
+                    .stroke(heroColor.opacity(0.32), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
