@@ -70,6 +70,11 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var stopLossPrice: Double? { marker.stopLossPrice }
     var horizontalLinePrice: Double? { marker.horizontalLinePrice }
     var horizontalLineLabel: String {
+        if let lineComponent = components.first(where: { $0.componentType == RLComponentType.drawingHorizontalLine.rawValue }),
+           case let .drawingHorizontalLine(payload) = lineComponent.payload {
+            let trimmed = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? "Line" : trimmed
+        }
         if components.contains(where: { $0.componentType == RLComponentType.levelEntry.rawValue }) {
             return "Entry"
         }

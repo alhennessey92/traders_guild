@@ -12,6 +12,7 @@ struct MarkerComponentOverlayLayer: View {
 
     var body: some View {
         Canvas { context, size in
+            drawHorizontalLines(context: context)
             drawTrendlines(context: context)
             drawZones(context: context)
         }
@@ -24,11 +25,35 @@ struct MarkerComponentOverlayLayer: View {
         components.filter { $0.componentTypeEnum == .drawingTrendline }
     }
 
+    private var horizontalLineComponents: [RLMarkerComponentDTO] {
+        components.filter { $0.componentTypeEnum == .drawingHorizontalLine }
+    }
+
     private var zoneComponents: [RLMarkerComponentDTO] {
         components.filter { $0.componentTypeEnum == .drawingZone }
     }
 
     // MARK: - Canvas Drawing
+
+    private func drawHorizontalLines(context: GraphicsContext) {
+        for component in horizontalLineComponents {
+            guard case let .drawingHorizontalLine(payload) = component.payload else { continue }
+            guard let y = yForPrice(payload.price) else { continue }
+
+            let startX: CGFloat = 0
+            let endX = max(0, width - 60)
+            var path = Path()
+            path.move(to: CGPoint(x: startX, y: y))
+            path.addLine(to: CGPoint(x: endX, y: y))
+
+            let lineColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingHorizontalLine.color
+            context.stroke(
+                path,
+                with: .color(lineColor.opacity(0.72)),
+                style: StrokeStyle(lineWidth: 1.8, dash: [8, 5])
+            )
+        }
+    }
 
     private func drawTrendlines(context: GraphicsContext) {
         for component in trendlineComponents {

@@ -5,6 +5,7 @@ struct MarkerPlacementPanel: View {
     let activeChartIndicators: [IndicatorPayload]
     let currentChartTimeframe: RLChartTimeframe?
     let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
+    let onBeginInteractiveDrawing: (() -> Void)?
     let onCancel: (() -> Void)?
     let onPlace: (() -> Void)?
 
@@ -13,6 +14,7 @@ struct MarkerPlacementPanel: View {
         activeChartIndicators: [IndicatorPayload] = [],
         currentChartTimeframe: RLChartTimeframe? = nil,
         onSelectTimeframe: ((RLChartTimeframe) -> Void)? = nil,
+        onBeginInteractiveDrawing: (() -> Void)? = nil,
         onCancel: (() -> Void)? = nil,
         onPlace: (() -> Void)? = nil
     ) {
@@ -20,6 +22,7 @@ struct MarkerPlacementPanel: View {
         self.activeChartIndicators = activeChartIndicators
         self.currentChartTimeframe = currentChartTimeframe
         self.onSelectTimeframe = onSelectTimeframe
+        self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
         self.onCancel = onCancel
         self.onPlace = onPlace
     }
@@ -36,7 +39,8 @@ struct MarkerPlacementPanel: View {
                 )
             case .drawings:
                 MarkerPlacementDrawingsTab(
-                    placementState: placementState
+                    placementState: placementState,
+                    onBeginInteractiveDrawing: onBeginInteractiveDrawing
                 )
             case .timeframes:
                 MarkerPlacementTimeframesTab(

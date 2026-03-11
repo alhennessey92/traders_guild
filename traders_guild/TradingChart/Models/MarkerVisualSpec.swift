@@ -7,6 +7,17 @@
 
 import SwiftUI
 
+/// Unique key for each pre-rendered palette symbol in the Canvas `symbols:` closure.
+struct MarkerSymbolID: Hashable {
+    let intent: RLMarkerIntent
+    let alertSeverity: MarkerAlertSeverity?
+    let isSelected: Bool
+
+    var tag: String {
+        "\(intent.rawValue)_\(alertSeverity?.rawValue ?? "none")_\(isSelected ? "sel" : "std")"
+    }
+}
+
 enum MarkerVisualSpec {
     // MARK: - Glass Material
 
@@ -45,6 +56,26 @@ enum MarkerVisualSpec {
         return glassStrokeColor
     }
 
+    // MARK: - Symbol IDs for Canvas
+
+    /// All symbol IDs needed for palette-rendered Canvas symbols.
+    /// 8 non-alert intents × 2 (normal + selected) + 4 alert severities × 2 = 24 total.
+    static var allSymbolIDs: [MarkerSymbolID] {
+        var ids: [MarkerSymbolID] = []
+        for intent in RLMarkerIntent.allCases {
+            if intent == .alert {
+                for sev in MarkerAlertSeverity.allCases {
+                    ids.append(.init(intent: intent, alertSeverity: sev, isSelected: false))
+                    ids.append(.init(intent: intent, alertSeverity: sev, isSelected: true))
+                }
+            } else {
+                ids.append(.init(intent: intent, alertSeverity: nil, isSelected: false))
+                ids.append(.init(intent: intent, alertSeverity: nil, isSelected: true))
+            }
+        }
+        return ids
+    }
+
     // MARK: - Size
 
     /// Base diameter for chart canvas markers (matches cancel button).
@@ -71,6 +102,7 @@ enum MarkerVisualSpec {
     /// Per-intent icon scale — some SF Symbols are visually larger and need reduction.
     static func iconScale(for intent: RLMarkerIntent) -> CGFloat {
         switch intent {
+        case .setup: return 0.64
         case .news, .poll, .personal: return 0.48
         default: return 0.58
         }

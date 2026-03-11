@@ -1071,7 +1071,7 @@ struct SymbolListRow: View {
                         .foregroundColor(.gray)
                         .lineLimit(1)
 
-                    HStack(spacing: 6) {
+                    FlowLayout(spacing: 6) {
                         SymbolProviderBadge(provider: symbol.providerDisplayLabel)
                         ForEach(symbol.activityBadgeValues, id: \.self) { badge in
                             SymbolActivityBadge(label: badge)
@@ -1081,6 +1081,7 @@ struct SymbolListRow: View {
                         }
                     }
                 }
+                .layoutPriority(1)
                 
                 Spacer()
                 
@@ -1100,6 +1101,8 @@ struct SymbolListRow: View {
                     }
                     .foregroundColor(symbol.changeColor)
                 }
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
                 
                 // Selection indicator
                 if isSelected {
@@ -1290,6 +1293,8 @@ struct SymbolProviderBadge: View {
         Text(provider)
             .font(.system(size: 9, weight: .semibold))
             .foregroundColor(AppColors.surfaceWhite90)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(AppColors.statusInfo25)
@@ -1344,8 +1349,10 @@ struct SymbolActivityBadge: View {
                 .font(.system(size: 8, weight: .bold))
             Text(label)
                 .font(.system(size: 9, weight: .semibold))
+                .lineLimit(1)
         }
         .foregroundColor(AppColors.surfaceWhite95)
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(backgroundColor)

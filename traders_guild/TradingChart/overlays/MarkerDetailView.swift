@@ -18,6 +18,7 @@ import Combine
 struct MarkerDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @ObservedObject var markerManager: MarkerManager
     
     let marker: ChartMarkerUI
@@ -30,6 +31,7 @@ struct MarkerDetailView: View {
     @State private var showReportReasonSheet: Bool = false
     @State private var showShareSheet: Bool = false
     @State private var selectedAuthorProfileMember: RLGuildMemberDTO? = nil
+    @State private var authorProfileDetent: PresentationDetent = .fraction(0.6)
     @StateObject private var overlayState = MarkerOverlayState()
     
     init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
@@ -121,8 +123,14 @@ struct MarkerDetailView: View {
                     .environmentObject(rlAppState)
             }
             .sheet(item: $selectedAuthorProfileMember) { member in
-                GuildUserDetailViewRL(member: member)
-                    .environmentObject(rlAppState)
+                if member.userId == rlAppState.currentUser?.id {
+                    UserProfileDetailView(selectedDetent: $authorProfileDetent)
+                        .environmentObject(rlAppState)
+                        .environmentObject(leftDrawerViewModel)
+                } else {
+                    GuildUserDetailViewRL(member: member)
+                        .environmentObject(rlAppState)
+                }
             }
             .onReceive(markerManager.$markers) { updatedMarkers in
                 guard let updated = updatedMarkers.first(where: { $0.id == marker.id }) else { return }

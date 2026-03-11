@@ -154,11 +154,28 @@ class MarkerNavigationHelper {
             let chartHeight = UIScreen.main.bounds.height * 0.6 // Approximate chart height
 
             if let candle = candle, priceRange.max > priceRange.min {
+                let focusMarker = capturedChartViewModel.markerManager
+                    .flatMap { manager in
+                        Self.matchingMarkerForNavigation(targetMarker, markers: manager.markers)
+                    }
+                let focusPrice = focusMarker.flatMap { marker in
+                    MarkerFocusHelper.renderedGlyphFocusPrice(
+                        marker: marker,
+                        candles: candles,
+                        chartSize: CGSize(width: width, height: chartHeight),
+                        priceRange: priceRange,
+                        priceScale: capturedGestureState.priceScale,
+                        verticalOffset: capturedGestureState.verticalPanOffset,
+                        totalCandleWidth: totalCandleWidth,
+                        actualCandleWidth: scaledCandleWidth,
+                        totalOffset: capturedGestureState.panOffset.width
+                    )
+                } ?? candle.close
                 capturedGestureState.animateCenterOnMarker(
                     at: targetCandleIndex,
                     chartWidth: width,
                     candleWidth: totalCandleWidth,
-                    price: candle.close,
+                    price: focusPrice,
                     chartHeight: chartHeight,
                     priceRange: priceRange
                 )
@@ -229,20 +246,8 @@ class MarkerNavigationHelper {
     ) {
         guard let markerManager = chartViewModel.markerManager else { return }
 
-        if let exactMatch = markerManager.markers.first(where: { $0.id == target.id }) {
+        if let exactMatch = matchingMarkerForNavigation(target, markers: markerManager.markers) {
             markerManager.selectedMarker = exactMatch
-            return
-        }
-
-        let closeTimeAndTypeMatches = markerManager.markers.filter { marker in
-            let timestampDiff = abs(marker.candleTimestamp.timeIntervalSince(target.candleTimestamp))
-            return timestampDiff < 1 && marker.intent == target.intentEnum
-        }
-
-        if let fallbackMatch = closeTimeAndTypeMatches.min(by: { lhs, rhs in
-            abs(lhs.price - target.price) < abs(rhs.price - target.price)
-        }) {
-            markerManager.selectedMarker = fallbackMatch
             return
         }
 
@@ -251,6 +256,24 @@ class MarkerNavigationHelper {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             selectMarkerForDetail(target, in: chartViewModel, attemptsRemaining: attemptsRemaining - 1)
         }
+    }
+
+    private static func matchingMarkerForNavigation(
+        _ target: RLTopMarkerDTO,
+        markers: [ChartMarkerUI]
+    ) -> ChartMarkerUI? {
+        if let exactMatch = markers.first(where: { $0.id == target.id }) {
+            return exactMatch
+        }
+
+        let closeTimeAndTypeMatches = markers.filter { marker in
+            let timestampDiff = abs(marker.candleTimestamp.timeIntervalSince(target.candleTimestamp))
+            return timestampDiff < 1 && marker.intent == target.intentEnum
+        }
+
+        return closeTimeAndTypeMatches.min(by: { lhs, rhs in
+            abs(lhs.price - target.price) < abs(rhs.price - target.price)
+        })
     }
     
     // MARK: - Private Methods

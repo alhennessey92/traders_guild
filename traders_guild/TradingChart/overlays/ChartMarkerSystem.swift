@@ -1795,11 +1795,10 @@ struct ChartMarkerSystem {
             )
         }
 
-        // 5. Icon — single monochrome (no faux-palette layering)
-        let iconColor = MarkerVisualSpec.iconPrimaryColor(for: marker.intent, severity: markerSeverity)
-        let iconSymbol = MarkerVisualSpec.symbol(for: marker.intent, severity: markerSeverity)
+        // 5. Icon — palette rendering via pre-resolved SwiftUI symbols
         let iconSize = MarkerVisualSpec.iconSize(for: diameter, intent: marker.intent)
         if marker.intent == .reaction, let iconChar = marker.selectedEmoji {
+            let iconColor = MarkerVisualSpec.iconPrimaryColor(for: marker.intent, severity: markerSeverity)
             drawContext.draw(
                 Text(iconChar)
                     .font(.system(size: iconSize, weight: .bold))
@@ -1807,14 +1806,28 @@ struct ChartMarkerSystem {
                 at: position
             )
         } else {
-            drawMonochromeSymbol(
-                context: &drawContext,
-                symbolName: iconSymbol,
-                color: iconColor,
-                at: position,
-                maxIconSize: iconSize,
-                yOffset: 0
-            )
+            let symbolId = MarkerSymbolID(intent: marker.intent, alertSeverity: markerSeverity, isSelected: isSelected)
+            if let resolved = drawContext.resolveSymbol(id: symbolId.tag) {
+                let symSize = resolved.size
+                let drawRect = CGRect(
+                    x: position.x - symSize.width / 2,
+                    y: position.y - symSize.height / 2,
+                    width: symSize.width,
+                    height: symSize.height
+                )
+                drawContext.draw(resolved, in: drawRect)
+            } else {
+                // Fallback monochrome if symbol not resolved
+                let iconColor = MarkerVisualSpec.iconPrimaryColor(for: marker.intent, severity: markerSeverity)
+                drawMonochromeSymbol(
+                    context: &drawContext,
+                    symbolName: MarkerVisualSpec.symbol(for: marker.intent, severity: markerSeverity),
+                    color: iconColor,
+                    at: position,
+                    maxIconSize: iconSize,
+                    yOffset: 0
+                )
+            }
         }
 
         // 6. Like count badge

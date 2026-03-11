@@ -429,6 +429,8 @@ struct MarkerViewingComponentsTab: View {
 
     private func drawingCoordinateSummary(_ component: RLMarkerComponentDTO) -> String {
         switch component.payload {
+        case .drawingHorizontalLine(let payload):
+            return "Price \(formattedPrice(payload.price))"
         case .drawingTrendline(let payload):
             return "\(formattedPrice(payload.startPrice)) -> \(formattedPrice(payload.endPrice))"
         case .drawingZone(let payload):

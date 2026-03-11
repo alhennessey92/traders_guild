@@ -29,6 +29,7 @@ private struct DrawingColorOption: Identifiable {
 
 struct MarkerPlacementDrawingsTab: View {
     @ObservedObject var placementState: MarkerPlacementState
+    let onBeginInteractiveDrawing: (() -> Void)?
 
     @State private var selectedSubTab: MarkerDrawingSubTab = .active
     @State private var limitWarning: String?
@@ -129,7 +130,7 @@ struct MarkerPlacementDrawingsTab: View {
                 Text("Drawings")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
-                Text("Add trendlines, zones, and annotations")
+                Text("Add lines, zones, and annotations")
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
             }
@@ -161,7 +162,7 @@ struct MarkerPlacementDrawingsTab: View {
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
 
-            if placementState.drawingOverlayDrafts.isEmpty {
+            if placementState.drawingOverlayDrafts.isEmpty && activeLevelDrafts.isEmpty {
                 Text("No drawing overlays attached.")
                     .font(.caption2)
                     .foregroundColor(AppColors.greyText)
@@ -169,14 +170,23 @@ struct MarkerPlacementDrawingsTab: View {
                 ForEach(placementState.drawingOverlayDrafts) { draft in
                     activeOverlayRow(draft)
                 }
+                ForEach(activeLevelDrafts) { draft in
+                    activeLevelRow(draft)
+                }
             }
+        }
+    }
+
+    private var activeLevelDrafts: [MarkerComponentDraft] {
+        placementState.components.filter {
+            $0.componentType == .levelSupport || $0.componentType == .levelResistance
         }
     }
 
     @ViewBuilder
     private func activeOverlayRow(_ draft: MarkerComponentDraft) -> some View {
         switch draft.payload {
-        case .drawingTrendline(let payload):
+        case .drawingTrendline:
             let trendlineColor = placementState.drawingColor(
                 for: draft.id,
                 fallback: RLComponentType.drawingTrendline.color
@@ -188,8 +198,7 @@ struct MarkerPlacementDrawingsTab: View {
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    let isHorizontal = abs(payload.startPrice - payload.endPrice) < 0.0000001
-                    Text(isHorizontal ? "Horizontal Line" : "Trendline")
+                    Text("Trendline")
                         .font(.caption)
                         .foregroundColor(.white)
                     Text("Tap row to edit on chart")
@@ -218,6 +227,66 @@ struct MarkerPlacementDrawingsTab: View {
             .contentShape(RoundedRectangle(cornerRadius: 10))
             .onTapGesture {
                 editTrendline(draft.id)
+            }
+
+        case .drawingHorizontalLine:
+            let lineColor = placementState.drawingColor(
+                for: draft.id,
+                fallback: RLComponentType.drawingHorizontalLine.color
+            )
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(lineColor)
+                        .frame(width: 16)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Horizontal Line")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                        Text("Tap row to edit on chart")
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        colorEditingDraftID = draft.id
+                    } label: {
+                        Image(systemName: "paintpalette.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(lineColor)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(AppColors.whiteText.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
+
+                    removeDraftButton(draft.id)
+                }
+
+                TextField("Line label", text: horizontalLineLabelBinding(for: draft.id))
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(AppColors.whiteText.opacity(0.07))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                            )
+                    )
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(overlayCardBackground)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .onTapGesture {
+                editHorizontalLine(draft.id)
             }
 
         case .drawingZone:
@@ -351,6 +420,71 @@ struct MarkerPlacementDrawingsTab: View {
         }
     }
 
+    @ViewBuilder
+    private func activeLevelRow(_ draft: MarkerComponentDraft) -> some View {
+        switch draft.payload {
+        case .levelSupport(let payload):
+            levelActiveRow(
+                title: payload.label ?? "Support",
+                subtitle: "Support level",
+                icon: "arrow.down.to.line",
+                color: RLComponentType.levelSupport.color,
+                draftId: draft.id
+            ) {
+                beginInteractiveDrawingSession()
+                placementState.activeTool = .levels
+                placementState.activeSubTool = MarkerToolOption.levelSupport.rawValue
+            }
+        case .levelResistance(let payload):
+            levelActiveRow(
+                title: payload.label ?? "Resistance",
+                subtitle: "Resistance level",
+                icon: "arrow.up.to.line",
+                color: RLComponentType.levelResistance.color,
+                draftId: draft.id
+            ) {
+                beginInteractiveDrawingSession()
+                placementState.activeTool = .levels
+                placementState.activeSubTool = MarkerToolOption.levelResistance.rawValue
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private func levelActiveRow(
+        title: String,
+        subtitle: String,
+        icon: String,
+        color: Color,
+        draftId: UUID,
+        onActivate: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(color)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? subtitle : title)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                Text("Tap row to edit on chart")
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText)
+            }
+
+            Spacer(minLength: 0)
+            removeDraftButton(draftId)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(overlayCardBackground)
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onTapGesture(perform: onActivate)
+    }
+
     private var linesSubTab: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Line Tools")
@@ -364,19 +498,21 @@ struct MarkerPlacementDrawingsTab: View {
                 isActive: placementState.activeTool == .draw && placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue,
                 actionTitle: "Activate"
             ) {
-                placementState.beginTrendlinePlacement()
+                beginInteractiveDrawingSession()
+                placementState.startDrawingWorkflow(tool: .trendline)
                 infoMessage = "Trendline tool active."
                 limitWarning = nil
             }
 
             toolCard(
                 title: "Horizontal Line",
-                subtitle: "Quick-add a neutral horizontal trendline.",
+                subtitle: "Add a support/resistance style horizontal line.",
                 icon: "line.3.horizontal",
-                isActive: false,
-                actionTitle: "Create"
+                isActive: placementState.activeTool == .draw
+                    && placementState.activeSubTool == MarkerToolOption.drawHorizontalLine.rawValue,
+                actionTitle: "Add"
             ) {
-                addHorizontalTrendline()
+                addHorizontalLine()
             }
 
             toolCard(
@@ -387,6 +523,7 @@ struct MarkerPlacementDrawingsTab: View {
                     && placementState.activeSubTool == MarkerToolOption.levelSupport.rawValue,
                 actionTitle: "Activate"
             ) {
+                beginInteractiveDrawingSession()
                 selectHorizontalLevel(.levelSupport, label: "Support")
             }
 
@@ -398,8 +535,11 @@ struct MarkerPlacementDrawingsTab: View {
                     && placementState.activeSubTool == MarkerToolOption.levelResistance.rawValue,
                 actionTitle: "Activate"
             ) {
+                beginInteractiveDrawingSession()
                 selectHorizontalLevel(.levelResistance, label: "Resistance")
             }
+
+            horizontalLevelLabelEditors
         }
     }
 
@@ -416,7 +556,8 @@ struct MarkerPlacementDrawingsTab: View {
                 isActive: placementState.activeTool == .draw && placementState.activeSubTool == MarkerToolOption.drawZone.rawValue,
                 actionTitle: "Activate"
             ) {
-                placementState.beginZonePlacement()
+                beginInteractiveDrawingSession()
+                placementState.startDrawingWorkflow(tool: .zone)
                 infoMessage = "Zone tool active."
                 limitWarning = nil
             }
@@ -594,6 +735,63 @@ struct MarkerPlacementDrawingsTab: View {
             )
     }
 
+    @ViewBuilder
+    private var horizontalLevelLabelEditors: some View {
+        if placementState.component(.levelSupport) != nil || placementState.component(.levelResistance) != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Level Labels")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+
+                if placementState.component(.levelSupport) != nil {
+                    levelLabelEditorCard(
+                        title: "Support Label",
+                        placeholder: "Support",
+                        binding: levelLabelBinding(for: .levelSupport, defaultLabel: "Support")
+                    )
+                }
+
+                if placementState.component(.levelResistance) != nil {
+                    levelLabelEditorCard(
+                        title: "Resistance Label",
+                        placeholder: "Resistance",
+                        binding: levelLabelBinding(for: .levelResistance, defaultLabel: "Resistance")
+                    )
+                }
+            }
+        }
+    }
+
+    private func levelLabelEditorCard(
+        title: String,
+        placeholder: String,
+        binding: Binding<String>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(AppColors.greyText)
+
+            TextField(placeholder, text: binding)
+                .textFieldStyle(.plain)
+                .font(.caption)
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(AppColors.whiteText.opacity(0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                        )
+                )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(overlayCardBackground)
+    }
+
     private func removeDraftButton(_ id: UUID) -> some View {
         Button {
             placementState.removeComponent(id: id)
@@ -689,30 +887,80 @@ struct MarkerPlacementDrawingsTab: View {
         )
     }
 
-    private func addHorizontalTrendline() {
+    private func horizontalLineLabelBinding(for draftID: UUID) -> Binding<String> {
+        Binding(
+            get: {
+                placementState.horizontalLineLabel(for: draftID, fallback: "Line")
+            },
+            set: { value in
+                placementState.setHorizontalLineLabel(value, for: draftID)
+            }
+        )
+    }
+
+    private func levelLabelBinding(
+        for componentType: RLComponentType,
+        defaultLabel: String
+    ) -> Binding<String> {
+        Binding(
+            get: {
+                guard let component = placementState.component(componentType) else { return defaultLabel }
+                switch component.payload {
+                case .levelSupport(let payload):
+                    return (payload.label ?? defaultLabel).trimmingCharacters(in: .whitespacesAndNewlines)
+                case .levelResistance(let payload):
+                    return (payload.label ?? defaultLabel).trimmingCharacters(in: .whitespacesAndNewlines)
+                default:
+                    return defaultLabel
+                }
+            },
+            set: { value in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                let resolvedLabel = trimmed.isEmpty ? defaultLabel : trimmed
+                guard let component = placementState.component(componentType) else { return }
+
+                switch component.payload {
+                case .levelSupport(let payload):
+                    placementState.upsertComponent(
+                        .levelSupport,
+                        payload: .levelSupport(LevelPayload(price: payload.price, label: resolvedLabel))
+                    )
+                case .levelResistance(let payload):
+                    placementState.upsertComponent(
+                        .levelResistance,
+                        payload: .levelResistance(LevelPayload(price: payload.price, label: resolvedLabel))
+                    )
+                default:
+                    break
+                }
+            }
+        )
+    }
+
+    private func addHorizontalLine() {
         guard placementState.canAddDrawing else {
             applyDrawingLimitWarning()
             return
         }
 
-        let anchorTime = placementState.anchorDraft?.payload.anchorTime ?? Date()
+        beginInteractiveDrawingSession()
+
         let anchorPrice = placementState.anchorDraft?.payload.levelPrice ?? 0
 
-        let payload = MarkerComponentPayload.drawingTrendline(
-            TrendlinePayload(
-                startTime: anchorTime.addingTimeInterval(-30 * 60),
-                startPrice: anchorPrice,
-                endTime: anchorTime.addingTimeInterval(30 * 60),
-                endPrice: anchorPrice
+        let payload = MarkerComponentPayload.drawingHorizontalLine(
+            HorizontalLinePayload(
+                price: anchorPrice,
+                label: "Line"
             )
         )
 
-        if placementState.addDrawingOverlayComponent(.drawingTrendline, payload: payload) == nil {
+        guard let draftID = placementState.addDrawingOverlayComponent(.drawingHorizontalLine, payload: payload) else {
             applyDrawingLimitWarning()
             return
         }
 
-        placementState.beginTrendlinePlacement()
+        selectedSubTab = .active
+        placementState.beginEditingDrawing(draftID, tool: .horizontalLine)
         infoMessage = "Horizontal line added."
         limitWarning = nil
     }
@@ -722,6 +970,8 @@ struct MarkerPlacementDrawingsTab: View {
             applyDrawingLimitWarning()
             return
         }
+
+        beginInteractiveDrawingSession()
 
         let anchorTime = placementState.anchorDraft?.payload.anchorTime ?? Date()
         let anchorPrice = placementState.anchorDraft?.payload.levelPrice ?? 0
@@ -736,12 +986,13 @@ struct MarkerPlacementDrawingsTab: View {
             )
         )
 
-        if placementState.addDrawingOverlayComponent(.drawingZone, payload: payload) == nil {
+        guard let draftID = placementState.addDrawingOverlayComponent(.drawingZone, payload: payload) else {
             applyDrawingLimitWarning()
             return
         }
 
-        placementState.beginZonePlacement()
+        selectedSubTab = .active
+        placementState.beginEditingDrawing(draftID, tool: .zone)
         infoMessage = "Default zone added."
         limitWarning = nil
     }
@@ -761,22 +1012,37 @@ struct MarkerPlacementDrawingsTab: View {
             break
         }
 
+        selectedSubTab = .active
         infoMessage = "\(label) level ready. Drag the on-chart handle to reposition."
         limitWarning = nil
     }
 
     private func editTrendline(_ draftID: UUID) {
+        beginInteractiveDrawingSession()
+        selectedSubTab = .active
         placementState.activeTool = .draw
         placementState.activeSubTool = MarkerToolOption.drawTrendline.rawValue
-        placementState.beginEditingDrawing(draftID)
+        placementState.beginEditingDrawing(draftID, tool: .trendline)
         infoMessage = "Trendline selected. Drag handles on chart to edit."
         limitWarning = nil
     }
 
+    private func editHorizontalLine(_ draftID: UUID) {
+        beginInteractiveDrawingSession()
+        selectedSubTab = .active
+        placementState.activeTool = .draw
+        placementState.activeSubTool = MarkerToolOption.drawHorizontalLine.rawValue
+        placementState.beginEditingDrawing(draftID, tool: .horizontalLine)
+        infoMessage = "Horizontal line selected. Drag handle on chart to edit."
+        limitWarning = nil
+    }
+
     private func editZone(_ draftID: UUID) {
+        beginInteractiveDrawingSession()
+        selectedSubTab = .active
         placementState.activeTool = .draw
         placementState.activeSubTool = MarkerToolOption.drawZone.rawValue
-        placementState.beginEditingDrawing(draftID)
+        placementState.beginEditingDrawing(draftID, tool: .zone)
         infoMessage = "Zone selected. Drag corners on chart to edit."
         limitWarning = nil
     }
@@ -792,6 +1058,11 @@ struct MarkerPlacementDrawingsTab: View {
             .textNote,
             payload: .note(NotePayload(text: text.isEmpty ? "Add your context" : text))
         )
+        if let draft = placementState.component(.textNote) {
+            beginInteractiveDrawingSession()
+            selectedSubTab = .active
+            placementState.beginEditingDrawing(draft.id, tool: .note)
+        }
         infoMessage = "Text note added."
         limitWarning = nil
     }
@@ -806,8 +1077,19 @@ struct MarkerPlacementDrawingsTab: View {
             .reactionEmoji,
             payload: .reactionEmoji(EmojiPayload(emoji: emoji))
         )
+        if placementState.intent != .reaction,
+           let draft = placementState.component(.reactionEmoji) {
+            beginInteractiveDrawingSession()
+            selectedSubTab = .active
+            placementState.beginEditingDrawing(draft.id, tool: .emoji)
+        }
         infoMessage = nil
         limitWarning = nil
+    }
+
+    private func beginInteractiveDrawingSession() {
+        placementState.prepareForInteractiveDrawing()
+        onBeginInteractiveDrawing?()
     }
 
     private func applyDrawingLimitWarning() {

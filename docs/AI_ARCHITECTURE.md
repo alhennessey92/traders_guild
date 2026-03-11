@@ -930,20 +930,92 @@ I want you to try and keep the UI similar to the ChartSheetSymbolView.swift
 
 96. [FIXED] In viewing mode we need to copy same layout as the default chart bottom bar, buttons should sit to the right other than the general tab which sits to the left and is allowed more space/padding. The like button needs to look the same as the block button in the user profile detail view, its a red button to symbolise a like so look at that.
 
-97. When placing a marker, it doesnt always register the starting placement of marker as its required position set, you have to move it a little to get it to register and allow placement. When placing sometimes it doesnt attach it to correct candle, sometimes a candle a few spaces away. Actually finding that it is ignoring where you move the amrker to, it anchors it on starting point
+97. [FIXED] When placing a marker, it doesnt always register the starting placement of marker as its required position set, you have to move it a little to get it to register and allow placement. When placing sometimes it doesnt attach it to correct candle, sometimes a candle a few spaces away. Actually finding that it is ignoring where you move the amrker to, it anchors it on starting point
 
-98. Marker info box needs its opacity removed for background or severaly reduced so you cant see anything or very little bhind, maybe even blur it and it needs to strech all the way across chart when open to the start of the y axis, and have a larger handle in right side to expand and contract it. The inner contents need a better style as well, making it easy to see the content in a clean simple way such as poll options, question in question amrker etc... have a look at the image uploaded, its a much cleaner example of a UI i think could work well. also look at no 104 as this affects marker info box
+98. [FIXED] Marker info box needs its opacity removed for background or severaly reduced so you cant see anything or very little bhind, maybe even blur it and it needs to strech all the way across chart when open to the start of the y axis, and have a larger handle in right side to expand and contract it. The inner contents need a better style as well, making it easy to see the content in a clean simple way such as poll options, question in question amrker etc... have a look at the image uploaded, its a much cleaner example of a UI i think could work well. also look at no 104 as this affects marker info box
 
-99. Chart symbol info box again still showing content of chart behind it, needs an opaque background or blur to hide chart content
+99. [FIXED] Chart symbol info box again still showing content of chart behind it, needs an opaque background or blur to hide chart content
 
-100. Markers are appearing over the x and y axis when panning, 
+100. [FIXED] Markers are appearing over the x and y axis when panning, 
 
-101. Need to reduce y axis width a little, maybe reduce value by 1 point if necessary
+101. [FIXED] Need to reduce y axis width a little, maybe reduce value by 1 point if necessary
 
-102. the marker like button in the bottom bar needs to use a thumbs up, not heart and needs to show no of likes
+102. [FIXED] the marker like button in the bottom bar needs to use a thumbs up, not heart and needs to show no of likes
 
-103. in marker viewing mode the marker avatar in toolbar needs to be bigger, and also saying marker after name, like setup marker
+103. [FIXED] in marker viewing mode the marker avatar in toolbar needs to be bigger, and also saying marker after name, like setup marker
 
-104. in marker viewing mode add toolbar button at top right based on posting user, including their avatar - username and basic details underneath (reputation, role, accuracy) like normal user display, Style in standard toolbar glass look and base it how the symbol tab button in bottom bar is displayed. Because of yhis you can remove the posting user details in the marker info box on chart
+104. [FIXED] in marker viewing mode add toolbar button at top right based on posting user, including their avatar - username and basic details underneath (reputation, role, accuracy) like normal user display, Style in standard toolbar glass look and base it how the symbol tab button in bottom bar is displayed. Because of yhis you can remove the posting user details in the marker info box on chart
 
-105. look at marker chat section, + button doesnt work, nor does the microphone, and when tapping textbox its hidden by keyboard, needs to all wokr like other chat areas
+105. [FIXED] look at marker chat section, + button doesnt work, nor does the microphone, and when tapping textbox its hidden by keyboard, needs to all wokr like other chat areas
+
+106. When adding indicators in marker placement mode the UI is still not exactly the same as for when adding markers in normal default chart mode, there is a + button etc, whereas in normal mode it is a circle, need to make sure that these UI elements are the same to keep consistency
+
+107. Still need to add the like No in like button in bottom bar in marker viewing mode and make it look better, perhaps white icon and no
+
+108. In marker viewing mode the user profile button in toolbar on right needs adjusting, looks weird at the moment, perhaps just show the avatar, in a glass button look to mimick the cancel button on right, could give it a special tint or border like white or light blue etc...
+
+109. In marker viewing mode the marker info box on chart needs better UI, its too black, needs to be aligned with UI in profile detail view etc with better heading and better UI display that is coherent with rest of the app. The close handle needs to be a thin vertical rectangle in white with black or similar arrow icon on the right side of the rectangle indicating it closes the info box, and similar to re open
+
+110. In marker viewing mode the general tab needs a better UI, more interesting a bit like the symbol tab in main chart, with a seperate section at bottom showing basics of user posting it that also links to their account. In terms of sections needs to be top section basic info about the marker as it is but improved, then unique information relating to marker, then general information regarding the marker, then general info regarding the symbol at time of marker placement, then a section for information about posting user.
+
+110. the symbol info box on top left is ok but still the background is too dark, needs a more subtle look, while still being MOSTLY opaque, can have a little seethrough
+
+111. Need a full review of marker looks when in chart, they look good sizing wise etc, but the icons are still appearing white, they need to have the same palette multi color look as when in placement mode  and all other areas of app they appear as avatars, for instance the setup marker has white cog and green arrows, but appears full white in chart. Also the setup icon in when on the chart needs to be slightly bigger, and the alert markers need to make sure they have their tint background and full color icon
+
+112. When changing the alert severity marker in placement mode the background to the top section in general tab is not changing color, stays the same
+
+
+
+
+
+
+113. [FIXED] Symbol list item in watchlist in bottom bar symbol tab has letter wrapping for the extra views such as hot, oanda etc, they re not appearing correct unlike their counterpart in top section which does look good.
+
+114. [FIXED] When selecting a drawing from the drawing tab in marker placement mode, needs to minimise the sheet to allow user to immediately begin placing a point, think also for drawings we should also auto collapse the checklist info box to give more space. Also think we need to guide users through the process of adding the drawing other wise it can get quite confusing, think we should do this in the toolbar. So for instance with the trendline the toolbar should say "Draw a Trendline - Place first point on chart" or similar then "drag line or place second dot" etc... The guide needs to follow the process of placing the drawing on chart and i will outline the process below for each drawing as they are currently not working correctly, at the moment you cant get out of drawing mode, you should be able to by clicking on the chart. We should also display a rubbish icon or similar in toolbar allwoing to exit drawing mode and remove the drawing
+	Trendline: Rather than clicking a point to place first point to start trendline, should move a crosshair to first point, then click anywhere on chart to set, then move second crosshair to next point and click anywhere to set. After this the line is created and shows 2 semi large circles at each point - which is in drawing viewing mode also available when clicking a drawing from chart, allowing to drag the points around individually to reset position, when dragging a point that point shows a crosshair displaying price and time values in respective axis. At this point by clicking somewhere on the chart saves drawing in state on chart and exits back to marker placement mode. Viewing mode is only available in placment marker mode. Once set cant do anything by clicking drawing in chart. Can edit colors and line style
+
+	Horizontal line: is just a generic line that doesnt allow point movement, just position on chart vertically, being able to be dragged up and down, edit color and edit text on y axis placeholder "Support" or "Low Level" etc...
+
+	Support / Resistance levels: Like horizontal line just drag up and down and edit color/liny type etc... but not placeholder working
+
+	Zone: Similar to trendline, using crosshairs place both points, once set can re adjust points by dragging them individually, clicking outside of popints on chart exits drawing mode and saves drawing, can edit colors 
+
+	Quick add zone: nice, but once selecting can drag points like in zone, when click outside saves the drawing and exits drawing mode
+
+	Annotation/note: Needs to look better UI wise on screen, when selecting in sheet opens keyboard to set annotation, submit button adds to chart, user can drag around, edit, color, size of writing etc... Selecting outside of it saves and exits drawing mode, selecting again shows Ui wise its been selected
+
+	Emoji: On selection adds to chart, can drag and can resize it by gesture pinching to enlarge/smaller etc... clicking outside of it exits drawing mode
+
+These are all the steps to the current drawings, need to make sure its vital, once set clicking outside of a selected drawing exits the drawing mode so users can interact with chart, when in drawing mode and say have a trendline selected, user should be able to still pan around and pinch to zoom etc without affecting trendline, trendline or other drawings only react when selecting/dragging them specifically from their positions.
+
+115. [FIXED] Want to play with the idea of making the y axis background similar to the toolbar header background that has the same color as the chart, but acts as a mask so content disappears with a blur, have a look how the toolbar is on the chart and see if you can mimick it for the y axis. Remember the chart background is a linear gradient of 2 colors so lighter at the bottom, you may need to take this in consideration with the y axis background, or keep it one color
+
+
+116. [FIXED] Updates needed to drawings
+	trendline - once placed and reselecting to move points again, whatever point i click it auto selects the second point only to move, so if i select the first point it selects the second one and resets it to users click location on the first point, making it impossible to move the first point, also clicking outside of it to save trendline is sometimes tricky 
+	
+	horizontal line - looks like a small trendline currently, should look like a support/resistance line, but allow custom text for price indicator bar - also needs custom text for guide. Need to make sure it looks exactly like a support or resistance line with same handle, line, price indicator etc...
+
+	support/resistance line - need to make sure delete/rubbish button exists to cancel it . also not appearing in active tab
+
+	zone - should mirror process as trendline - showing crosshairs to place points so users can see price and time, and again can only select second point. also allows dragging from seelcting anywhere in zone - should only be from points. also hard to make it save by clikcing chart
+
+	auto zone - same issue as dragging from anywhere inside the zone. also hard to make it save by tapping chart
+
+	annotations - when tapping annotation button should close sheet and show annotation on chart
+
+	emoji - when in drawing mode lock chart and allow pinch gesture to scale emoji, tap on chart to save.
+
+	General - absolutely make sure that at any point in any drawing - tapping the chart saves the drawing and exits drawing mode. and make sure all drawings appear in active tab. Need to make it apparent that when a point of bar is selected it look difffernt in a selection state
+
+117. Need to review the state machine is working for any setup markers to make sure they are being updated as the chart moves past take profits and stop losses to provide details on setup trade outcome annd if tracked any reputation gained etc... Also feel that when viewing setup in marker viewing mode we display outcome and current details on setup trade in the general tab and in the details view on chart
+
+118. [FIXED] Sometimes when viewing a marker it doesnt center on the marker but on the candle its connected to, happens more on stacked markers
+
+119. When pinching chart for zoom, the markers sometimes start overlapping, they should never get to the point of overlapping, the minimum basic distance is a few points between them, users can extend this in settings but never allow to overlap
+
+120. [FIXED] When viewing profile in marker viewing mode, allows chat button for current user, which cant happen that ui should display current user buttons like in current user profile view
+
+121. [FIXED] Markers on chart are still overlaying the symbol info box and x axis. and in marker viewing mode they are overlaying the marker info box on chart. Markers shouldnt be above any main elements of the chart
+
+

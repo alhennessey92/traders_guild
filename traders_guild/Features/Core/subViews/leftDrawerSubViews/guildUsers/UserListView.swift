@@ -439,6 +439,10 @@ struct GuildUserDetailViewRL: View {
         _member = State(initialValue: member)
     }
 
+    private var isCurrentUser: Bool {
+        member.userId == rlAppState.currentUser?.id
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 0) {
@@ -464,7 +468,7 @@ struct GuildUserDetailViewRL: View {
                         awards: awards,
                         awardsSummary: awardsSummary,
                         stats: buildStats(),
-                        isCurrentUser: false,
+                        isCurrentUser: isCurrentUser,
                         username: member.username,
                         tabs: [.overview, .markers, .awards],
                         onMarkerTap: { marker in
@@ -743,23 +747,25 @@ struct GuildUserActionButtonsRL: View {
                 }
             )
             
-            // Chat button - NOW USES RLMessagingManager
-            DrawerActionButton(
-                title: "Chat",
-                imageName: "message.fill",
-                backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
-                foregroundColor: AppColors.whiteText.opacity(0.8),
-                strokeColor: AppColors.whiteText.opacity(0.3),
-                strokeWidth: 0.5,
-                action: {
-                    dismiss()
-                    Task {
-                        await openDMChat()
+            // Chat button - never shown for current user profile
+            if !isCurrentUser {
+                DrawerActionButton(
+                    title: "Chat",
+                    imageName: "message.fill",
+                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
+                    foregroundColor: AppColors.whiteText.opacity(0.8),
+                    strokeColor: AppColors.whiteText.opacity(0.3),
+                    strokeWidth: 0.5,
+                    action: {
+                        dismiss()
+                        Task {
+                            await openDMChat()
+                        }
                     }
-                }
-            )
-            .opacity(isOpeningChat ? 0.5 : 1.0)
-            .disabled(isOpeningChat)
+                )
+                .opacity(isOpeningChat ? 0.5 : 1.0)
+                .disabled(isOpeningChat)
+            }
             
             // Report user (not shown for current user)
             if !isCurrentUser {
@@ -955,6 +961,7 @@ struct GuildUserActionButtonsRL: View {
     /// Opens a DM chat with this member using the new RLMessagingManager.
     /// Creates a DM thread if one doesn't exist.
     private func openDMChat() async {
+        guard !isCurrentUser else { return }
         isOpeningChat = true
         defer { isOpeningChat = false }
         

@@ -256,6 +256,7 @@ enum RLComponentType: String, Codable, CaseIterable {
     case levelSupport = "level.support"
     case levelResistance = "level.resistance"
     case drawingTrendline = "drawing.trendline"
+    case drawingHorizontalLine = "drawing.horizontal_line"
     case drawingZone = "drawing.zone"
     case indicator = "indicator"
     case linkURL = "link.url"
@@ -272,6 +273,7 @@ enum RLComponentType: String, Codable, CaseIterable {
         case .levelSupport: return "Support"
         case .levelResistance: return "Resistance"
         case .drawingTrendline: return "Trendline"
+        case .drawingHorizontalLine: return "Horizontal Line"
         case .drawingZone: return "Zone"
         case .indicator: return "Indicator"
         case .linkURL: return "Link"
@@ -291,6 +293,7 @@ enum RLComponentType: String, Codable, CaseIterable {
         case .levelSupport: return "SUP"
         case .levelResistance: return "RES"
         case .drawingTrendline: return "TL"
+        case .drawingHorizontalLine: return "HL"
         case .drawingZone: return "ZN"
         case .indicator: return "IND"
         case .linkURL: return "URL"
@@ -304,6 +307,8 @@ enum RLComponentType: String, Codable, CaseIterable {
         switch self {
         case .anchor: return "scope"
         case .levelEntry, .levelSl, .levelTp, .levelSupport, .levelResistance:
+            return "line.3.horizontal"
+        case .drawingHorizontalLine:
             return "line.3.horizontal"
         case .drawingTrendline, .drawingZone:
             return "pencil.and.ruler"
@@ -329,6 +334,7 @@ enum RLComponentType: String, Codable, CaseIterable {
         case .levelSupport: return Color(hex: "#7C3AED") ?? .purple
         case .levelResistance: return Color(hex: "#DB2777") ?? .pink
         case .drawingTrendline: return Color(hex: "#14B8A6") ?? .teal
+        case .drawingHorizontalLine: return Color(hex: "#7C3AED") ?? .purple
         case .drawingZone: return Color(hex: "#22C55E") ?? .green
         case .indicator: return Color(hex: "#F59E0B") ?? .orange
         case .linkURL: return Color(hex: "#EC4899") ?? .pink
@@ -370,6 +376,18 @@ struct TrendlinePayload: Codable {
         self.startPrice = startPrice
         self.endTime = endTime
         self.endPrice = endPrice
+        self.colorHex = colorHex
+    }
+}
+
+struct HorizontalLinePayload: Codable {
+    let price: Double
+    let label: String?
+    let colorHex: String?
+
+    init(price: Double, label: String? = nil, colorHex: String? = nil) {
+        self.price = price
+        self.label = label
         self.colorHex = colorHex
     }
 }
@@ -445,6 +463,7 @@ enum MarkerComponentPayload: Codable {
     case levelSupport(LevelPayload)
     case levelResistance(LevelPayload)
     case drawingTrendline(TrendlinePayload)
+    case drawingHorizontalLine(HorizontalLinePayload)
     case drawingZone(ZonePayload)
     case indicator(IndicatorPayload)
     case note(NotePayload)
@@ -496,6 +515,8 @@ enum MarkerComponentPayload: Codable {
             if let payload = decodePayload(LevelPayload.self) { return .levelResistance(payload) }
         case RLComponentType.drawingTrendline.rawValue:
             if let payload = decodePayload(TrendlinePayload.self) { return .drawingTrendline(payload) }
+        case RLComponentType.drawingHorizontalLine.rawValue:
+            if let payload = decodePayload(HorizontalLinePayload.self) { return .drawingHorizontalLine(payload) }
         case RLComponentType.drawingZone.rawValue:
             if let payload = decodePayload(ZonePayload.self) { return .drawingZone(payload) }
         case RLComponentType.indicator.rawValue:
@@ -537,6 +558,7 @@ enum MarkerComponentPayload: Codable {
         case .levelSupport(let payload): return encodePayload(payload)
         case .levelResistance(let payload): return encodePayload(payload)
         case .drawingTrendline(let payload): return encodePayload(payload)
+        case .drawingHorizontalLine(let payload): return encodePayload(payload)
         case .drawingZone(let payload): return encodePayload(payload)
         case .indicator(let payload): return encodePayload(payload)
         case .note(let payload): return encodePayload(payload)
@@ -556,6 +578,7 @@ extension MarkerComponentPayload {
         case .levelTp(let payload): return payload.price
         case .levelSupport(let payload): return payload.price
         case .levelResistance(let payload): return payload.price
+        case .drawingHorizontalLine(let payload): return payload.price
         case .anchor(let payload): return payload.price
         default: return nil
         }

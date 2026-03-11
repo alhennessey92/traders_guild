@@ -23,6 +23,20 @@ enum AnimationConstants {
     static let quick = Animation.spring(response: 0.3, dampingFraction: 0.9)
 }
 
+private enum MarkerAuthorProfileRoute: Identifiable {
+    case currentUser
+    case guildMember(RLGuildMemberDTO)
+
+    var id: String {
+        switch self {
+        case .currentUser:
+            return "current-user"
+        case .guildMember(let member):
+            return "member-\(member.userId.uuidString)"
+        }
+    }
+}
+
 // MARK: - Main View
 struct MainView: View {
     // MARK: - Properties
@@ -68,7 +82,8 @@ struct MainView: View {
     @State private var williamsRPanelHeight: CGFloat = 120
     @State private var atrPanelHeight: CGFloat = 120
     @State private var volumePanelHeight: CGFloat = 120
-    @State private var selectedViewingMarkerAuthor: RLGuildMemberDTO?
+    @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
+    @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
     
     // MARK: - Computed Properties
     private var screenSize: CGSize {
@@ -370,154 +385,10 @@ struct MainView: View {
         NavigationStack {
             ZStack {
                 StaticBackgroundView()
-                
-                VStack(spacing: 0) {
-                    if let user = rlAppState.currentUser,
-                       let guild = rlAppState.currentGuild {
-                        chartView(controlViewModel: chartControlVM, user: user, guild: guild)
-                    }
-                }
-                .opacity(fadeIn ? 1 : 0)
-                .animation(.easeIn(duration: 1.5), value: fadeIn)
-                .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
-                    if let symbol = notification.userInfo?["symbol"] as? RLTradingSymbolDTO {
-                        // Dismiss keyboard first
-                        dismissKeyboard()
-                        
-                        // Update chart
-                        chartViewModel.setSymbol(symbol)
-                        
-                        // Close drawer if open
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showLeftDrawer = false
-                        }
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .openSharedMarker)) { notification in
-                    Task {
-                        await handleOpenSharedMarker(notification.userInfo)
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .guildWatchlistUpdated)) { _ in
-                    guard let guildId = rlAppState.currentGuild?.id else { return }
-                    Task {
-                        do {
-                            async let guildTask = rlAppState.fetchGuildWatchlist(guildId: guildId)
-                            async let globalTask = rlAppState.realApi.getGlobalSymbols(guildId: guildId, limit: 100)
-                            let (guildWatchlist, globalSymbols) = try await (guildTask, globalTask)
-                            await MainActor.run {
-                                leftDrawerViewModel.guildTradingWatchlist = guildWatchlist.symbols.map { $0.symbol }
-                                leftDrawerViewModel.globalTradingSymbols = globalSymbols.symbols
-                            }
-                        } catch {
-                            // Errors are surfaced via RLAppState.
-                        }
-                        await chartViewModel.reloadData()
-                    }
-                }
+                mainChartContentLayer
             }
             .toolbar {
-                // Leading Toolbar Item
-                ToolbarItem(placement: .topBarLeading) {
-                    if chartControlVM.isMarkerPlacementMode {
-                        markerToolbarCloseButton(
-                            iconColor: .white,
-                            tintColor: AppColors.statusNegative55
-                        ) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                chartControlVM.cancelMarkerPlacement()
-                            }
-                        }
-                    } else if chartControlVM.isMarkerViewingMode {
-                        markerToolbarCloseButton(
-                            iconColor: AppColors.whiteText.opacity(0.95),
-                            tintColor: AppColors.surfaceWhite18
-                        ) {
-                            closeMarkerViewingMode()
-                        }
-                    } else {
-                        ToolbarIconButton(
-                            systemName: "shield.pattern.checkered",
-                            backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                            fontType: .headline,
-                            symbolRenderingMode: .monochrome,
-                            foregroundStyle: AppColors.whiteText,
-                            padding: 8
-                        ) {
-                            withAnimation(AnimationConstants.standard) {
-                                dismissKeyboard()
-                                selectedDetent = .fraction(0.11)
-                                showLeftDrawer.toggle()
-                                showRightDrawer = false
-                                showOverlay = showLeftDrawer
-                            }
-                        }
-                    }
-                }
-
-                // Principal Toolbar Title
-                ToolbarItem(placement: .principal) {
-                    if chartControlVM.isMarkerPlacementMode {
-                        Text("Place a Marker")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                    } else if chartControlVM.isMarkerViewingMode {
-                        markerViewingToolbarTitle
-                    } else {
-                        Text("TG")
-                            .font(.largeTitle)
-                            .fontWeight(.heavy)
-                            .foregroundColor(AppColors.chartLogo)
-                    }
-                }
-                
-                if chartControlVM.isMarkerViewingMode {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        markerViewingAuthorToolbarButton
-                    }
-                } else if !chartControlVM.isMarkerPlacementMode {
-                    // Right Drawer Button — never render in placement mode to avoid ghost toolbar icon.
-                    ToolbarItem(placement: .topBarTrailing) {
-                        ZStack(alignment: .topTrailing) {
-                            if rightDrawerViewModel.totalUnreadCount > 0 {
-                                ToolbarIconButton(
-                                    systemName: "message.badge.filled.fill",
-                                    backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                                    fontType: .subheadline,
-                                    symbolRenderingMode: .palette,
-                                    foregroundStyles: [AppColors.accentColor, AppColors.whiteText],
-                                    padding: 8
-                                ) {
-                                    withAnimation(AnimationConstants.standard) {
-                                        dismissKeyboard()
-                                        selectedDetent = .fraction(0.11)
-                                        showRightDrawer.toggle()
-                                        showLeftDrawer = false
-                                        showOverlay = showRightDrawer
-                                    }
-                                }
-                            } else {
-                                ToolbarIconButton(
-                                    systemName: "message.badge.filled.fill",
-                                    backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                                    fontType: .subheadline,
-                                    symbolRenderingMode: .monochrome,
-                                    foregroundStyle: AppColors.whiteText,
-                                    padding: 8
-                                ) {
-                                    withAnimation(AnimationConstants.standard) {
-                                        dismissKeyboard()
-                                        selectedDetent = .fraction(0.11)
-                                        showRightDrawer.toggle()
-                                        showLeftDrawer = false
-                                        showOverlay = showRightDrawer
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                mainToolbarContent
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -526,10 +397,212 @@ struct MainView: View {
             .onAppear {
                 configureNavigationBarAppearance()
             }
-            .sheet(item: $selectedViewingMarkerAuthor) { member in
-                GuildUserDetailViewRL(member: member)
-                    .environmentObject(rlAppState)
+            .sheet(item: $selectedViewingMarkerAuthorRoute) { route in
+                switch route {
+                case .currentUser:
+                    UserProfileDetailView(selectedDetent: $markerAuthorProfileDetent)
+                        .environmentObject(rlAppState)
+                        .environmentObject(leftDrawerViewModel)
+                case .guildMember(let member):
+                    GuildUserDetailViewRL(member: member)
+                        .environmentObject(rlAppState)
+                }
             }
+        }
+    }
+
+    private var mainChartContentLayer: some View {
+        VStack(spacing: 0) {
+            if let user = rlAppState.currentUser,
+               let guild = rlAppState.currentGuild {
+                chartView(controlViewModel: chartControlVM, user: user, guild: guild)
+            }
+        }
+        .opacity(fadeIn ? 1 : 0)
+        .animation(.easeIn(duration: 1.5), value: fadeIn)
+        .onReceive(NotificationCenter.default.publisher(for: .selectChartSymbol)) { notification in
+            if let symbol = notification.userInfo?["symbol"] as? RLTradingSymbolDTO {
+                dismissKeyboard()
+                chartViewModel.setSymbol(symbol)
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showLeftDrawer = false
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openSharedMarker)) { notification in
+            Task {
+                await handleOpenSharedMarker(notification.userInfo)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .guildWatchlistUpdated)) { _ in
+            guard let guildId = rlAppState.currentGuild?.id else { return }
+            Task {
+                do {
+                    async let guildTask = rlAppState.fetchGuildWatchlist(guildId: guildId)
+                    async let globalTask = rlAppState.realApi.getGlobalSymbols(guildId: guildId, limit: 100)
+                    let (guildWatchlist, globalSymbols) = try await (guildTask, globalTask)
+                    await MainActor.run {
+                        leftDrawerViewModel.guildTradingWatchlist = guildWatchlist.symbols.map { $0.symbol }
+                        leftDrawerViewModel.globalTradingSymbols = globalSymbols.symbols
+                    }
+                } catch {
+                    // Errors are surfaced via RLAppState.
+                }
+                await chartViewModel.reloadData()
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var mainToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            mainToolbarLeadingItem
+        }
+        ToolbarItem(placement: .principal) {
+            mainToolbarPrincipalItem
+        }
+        mainToolbarTrailingContent
+    }
+
+    @ViewBuilder
+    private var mainToolbarLeadingItem: some View {
+        if chartControlVM.isMarkerPlacementMode {
+            markerToolbarCloseButton(
+                iconColor: .white,
+                tintColor: AppColors.statusNegative55
+            ) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    chartControlVM.cancelMarkerPlacement()
+                }
+            }
+        } else if chartControlVM.isMarkerViewingMode {
+            markerToolbarCloseButton(
+                iconColor: AppColors.whiteText.opacity(0.95),
+                tintColor: AppColors.surfaceWhite18
+            ) {
+                closeMarkerViewingMode()
+            }
+        } else {
+            ToolbarIconButton(
+                systemName: "shield.pattern.checkered",
+                backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                fontType: .headline,
+                symbolRenderingMode: .monochrome,
+                foregroundStyle: AppColors.whiteText,
+                padding: 8
+            ) {
+                toggleLeftDrawerFromToolbar()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mainToolbarPrincipalItem: some View {
+        if chartControlVM.isMarkerPlacementMode {
+            Text(placementState.toolbarInstructionText ?? "Place a Marker")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .allowsTightening(true)
+                .multilineTextAlignment(.center)
+        } else if chartControlVM.isMarkerViewingMode {
+            markerViewingToolbarTitle
+        } else {
+            Text("TG")
+                .font(.largeTitle)
+                .fontWeight(.heavy)
+                .foregroundColor(AppColors.chartLogo)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var mainToolbarTrailingContent: some ToolbarContent {
+        if chartControlVM.isMarkerPlacementMode {
+            if placementState.shouldShowDrawingDiscardAction {
+                ToolbarItem(placement: .topBarTrailing) {
+                    drawingDiscardToolbarButton
+                }
+            }
+        } else if chartControlVM.isMarkerViewingMode {
+            ToolbarItem(placement: .topBarTrailing) {
+                markerViewingAuthorToolbarButton
+            }
+        } else {
+            ToolbarItem(placement: .topBarTrailing) {
+                rightDrawerToolbarButton
+            }
+        }
+    }
+
+    private var drawingDiscardToolbarButton: some View {
+        Button {
+            placementState.discardActiveDrawingAndExit()
+        } label: {
+            Image(systemName: "trash")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(AppColors.whiteText.opacity(0.95))
+                .frame(width: 36, height: 36)
+                .background(
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                        Circle()
+                            .fill(AppColors.surfaceWhite12)
+                        Circle()
+                            .stroke(AppColors.surfaceWhite24, lineWidth: 0.8)
+                    }
+                )
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var rightDrawerToolbarButton: some View {
+        ZStack(alignment: .topTrailing) {
+            if rightDrawerViewModel.totalUnreadCount > 0 {
+                ToolbarIconButton(
+                    systemName: "message.badge.filled.fill",
+                    backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                    fontType: .subheadline,
+                    symbolRenderingMode: .palette,
+                    foregroundStyles: [AppColors.accentColor, AppColors.whiteText],
+                    padding: 8
+                ) {
+                    toggleRightDrawerFromToolbar()
+                }
+            } else {
+                ToolbarIconButton(
+                    systemName: "message.badge.filled.fill",
+                    backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                    fontType: .subheadline,
+                    symbolRenderingMode: .monochrome,
+                    foregroundStyle: AppColors.whiteText,
+                    padding: 8
+                ) {
+                    toggleRightDrawerFromToolbar()
+                }
+            }
+        }
+    }
+
+    private func toggleLeftDrawerFromToolbar() {
+        withAnimation(AnimationConstants.standard) {
+            dismissKeyboard()
+            selectedDetent = .fraction(0.11)
+            showLeftDrawer.toggle()
+            showRightDrawer = false
+            showOverlay = showLeftDrawer
+        }
+    }
+
+    private func toggleRightDrawerFromToolbar() {
+        withAnimation(AnimationConstants.standard) {
+            dismissKeyboard()
+            selectedDetent = .fraction(0.11)
+            showRightDrawer.toggle()
+            showLeftDrawer = false
+            showOverlay = showRightDrawer
         }
     }
     
@@ -782,7 +855,12 @@ struct MainView: View {
     private var markerViewingAuthorToolbarButton: some View {
         if let marker = chartViewModel.selectedMarkerForSheet {
             Button {
-                selectedViewingMarkerAuthor = marker.author
+                if marker.author.userId == rlAppState.currentUser?.id {
+                    markerAuthorProfileDetent = .fraction(0.6)
+                    selectedViewingMarkerAuthorRoute = .currentUser
+                } else {
+                    selectedViewingMarkerAuthorRoute = .guildMember(marker.author)
+                }
             } label: {
                 HStack(spacing: 8) {
                     UnifiedMemberAvatar(
@@ -2017,6 +2095,11 @@ struct ChartBottomSheet: View {
             onSelectTimeframe: { timeframe in
                 if chartViewModel.currentTimeframe != timeframe {
                     chartViewModel.setTimeframe(timeframe)
+                }
+            },
+            onBeginInteractiveDrawing: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedDetent = .fraction(0.11)
                 }
             }
         )

@@ -13,6 +13,7 @@ struct GhostPreviewLayer: View {
     /// Optional price formatter — uses symbol-appropriate decimal places when provided.
     var formatPrice: ((Double) -> String)?
     @State private var annotationDragStartOffsets: [UUID: CGPoint] = [:]
+    @State private var emojiScaleStartValues: [UUID: CGFloat] = [:]
 
     init(
         placementState: MarkerPlacementState,
@@ -43,6 +44,7 @@ struct GhostPreviewLayer: View {
             // Canvas layer for lines, zones, and anchor crosshair
             Canvas { context, size in
                 drawLevels(context: context)
+                drawHorizontalLines(context: context)
                 drawTrendlines(context: context)
                 drawZones(context: context)
                 drawTrendlinePlacementPreview(context: context)
@@ -144,6 +146,19 @@ struct GhostPreviewLayer: View {
                 for: trendline.id,
                 fallback: RLComponentType.drawingTrendline.color
             )
+            let isHorizontal = abs(payload.startPrice - payload.endPrice) < 0.0000001
+
+            if isHorizontal {
+                drawHorizontalLine(
+                    context: context,
+                    y: startY,
+                    price: payload.startPrice,
+                    label: "Line",
+                    color: trendlineColor,
+                    isEditing: drawingInteractionPhase == .editing && editingDrawingId == trendline.id
+                )
+                continue
+            }
 
             let startX = xForTime?(payload.startTime) ?? width * 0.24
             let endX = xForTime?(payload.endTime) ?? width * 0.76
@@ -177,6 +192,94 @@ struct GhostPreviewLayer: View {
                 )
             }
         }
+    }
+
+    private func drawHorizontalLines(context: GraphicsContext) {
+        for line in placementState.components where line.componentType == .drawingHorizontalLine {
+            guard case let .drawingHorizontalLine(payload) = line.payload else { continue }
+            guard let y = yForPrice(payload.price) else { continue }
+            let lineColor = placementState.drawingColor(
+                for: line.id,
+                fallback: RLComponentType.drawingHorizontalLine.color
+            )
+            let resolvedLabel: String = {
+                let trimmed = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return trimmed.isEmpty ? "Line" : trimmed
+            }()
+            drawHorizontalLine(
+                context: context,
+                y: y,
+                price: payload.price,
+                label: resolvedLabel,
+                color: lineColor,
+                isEditing: drawingInteractionPhase == .editing && editingDrawingId == line.id
+            )
+        }
+    }
+
+    private func drawHorizontalLine(
+        context: GraphicsContext,
+        y: CGFloat,
+        price: Double,
+        label: String,
+        color: Color,
+        isEditing: Bool
+    ) {
+        let startX: CGFloat = 0
+        let endX: CGFloat = max(0, width - 60)
+        var path = Path()
+        path.move(to: CGPoint(x: startX, y: y))
+        path.addLine(to: CGPoint(x: endX, y: y))
+        context.stroke(
+            path,
+            with: .color(color.opacity(isEditing ? 0.92 : 0.64)),
+            style: StrokeStyle(lineWidth: isEditing ? 2.6 : 2.0, dash: [10, 6])
+        )
+
+        drawHorizontalLineLabel(
+            context: context,
+            y: y,
+            price: price,
+            label: label,
+            color: color
+        )
+
+        if isEditing {
+            drawControlHandle(
+                context: context,
+                center: CGPoint(x: (startX + endX) * 0.5, y: y),
+                color: color,
+                size: 20
+            )
+        }
+    }
+
+    private func drawHorizontalLineLabel(
+        context: GraphicsContext,
+        y: CGFloat,
+        price: Double,
+        label: String,
+        color: Color
+    ) {
+        let displayText = "\(label) \(formattedPrice(price))"
+        let estimatedWidth = max(52, CGFloat(displayText.count) * 5.6 + 10)
+        let labelX = max(10 + estimatedWidth / 2, width - 38)
+
+        let labelRect = CGRect(
+            x: labelX - estimatedWidth / 2,
+            y: y - 11,
+            width: estimatedWidth,
+            height: 22
+        )
+
+        let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
+        context.fill(roundedPath, with: .color(color.opacity(0.88)))
+        context.draw(
+            Text(displayText)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white),
+            at: CGPoint(x: labelX, y: y)
+        )
     }
 
     private func drawZones(context: GraphicsContext) {
@@ -367,11 +470,14 @@ struct GhostPreviewLayer: View {
             case .reactionEmoji(let payload):
                 if isSelectedForEditing {
                     annotationEmojiView(emoji: payload.emoji, isSelected: true)
+                        .scaleEffect(placementState.emojiScale(for: draft.id))
                         .position(x: x, y: y)
                         .highPriorityGesture(annotationDragGesture(draftId: draft.id, payload: draft.payload))
+                        .simultaneousGesture(annotationEmojiScaleGesture(draftId: draft.id))
                         .allowsHitTesting(true)
                 } else {
                     annotationEmojiView(emoji: payload.emoji, isSelected: false)
+                        .scaleEffect(placementState.emojiScale(for: draft.id))
                         .position(x: x, y: y)
                         .allowsHitTesting(false)
                 }
@@ -460,6 +566,23 @@ struct GhostPreviewLayer: View {
                     return
                 }
                 annotationDragStartOffsets[draftId] = nil
+            }
+    }
+
+    private func annotationEmojiScaleGesture(draftId: UUID) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                guard drawingInteractionPhase == .editing, editingDrawingId == draftId else {
+                    return
+                }
+                if emojiScaleStartValues[draftId] == nil {
+                    emojiScaleStartValues[draftId] = placementState.emojiScale(for: draftId)
+                }
+                let base = emojiScaleStartValues[draftId] ?? placementState.emojiScale(for: draftId)
+                placementState.setEmojiScale(base * value, for: draftId)
+            }
+            .onEnded { _ in
+                emojiScaleStartValues[draftId] = nil
             }
     }
 

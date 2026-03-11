@@ -763,7 +763,7 @@ struct MarkerPlacementGeneralTab: View {
     }
 
     private func allowedComponentTypes(for intent: RLMarkerIntent) -> Set<RLComponentType> {
-        let drawingAndIndicators: Set<RLComponentType> = [.drawingTrendline, .drawingZone, .indicator]
+        let drawingAndIndicators: Set<RLComponentType> = [.drawingTrendline, .drawingHorizontalLine, .drawingZone, .indicator]
 
         switch intent {
         case .analysis:
