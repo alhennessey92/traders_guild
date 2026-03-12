@@ -4,31 +4,28 @@ import SwiftUI
 struct MarkerViewingComponentsTab: View {
     let marker: ChartMarkerUI
 
-    private var orderedComponents: [RLMarkerComponentDTO] {
-        marker.components.sorted {
-            if $0.ordering != $1.ordering { return $0.ordering < $1.ordering }
-            return $0.id.uuidString < $1.id.uuidString
-        }
+    private var metrics: MarkerViewingComponentMetrics {
+        MarkerViewingComponentMetrics(marker: marker)
     }
 
     private var drawingComponents: [RLMarkerComponentDTO] {
-        orderedComponents.filter { $0.componentTypeEnum?.isDrawing == true }
+        metrics.drawingComponents
     }
 
     private var indicatorComponents: [RLMarkerComponentDTO] {
-        orderedComponents.filter { $0.componentTypeEnum == .indicator }
+        metrics.indicatorComponents
     }
 
     private var timeframeComponents: [RLMarkerComponentDTO] {
-        orderedComponents.filter { $0.componentTypeEnum == .timeframeLink }
+        metrics.timeframeComponents
     }
 
     private var displayedComponentCount: Int {
-        indicatorComponents.count + drawingComponents.count + timeframeComponents.count
+        metrics.displayedComponentCount
     }
 
     private var hiddenComponentCount: Int {
-        max(0, orderedComponents.count - displayedComponentCount)
+        metrics.hiddenComponentCount
     }
 
     private var indicatorPanelCount: Int {

@@ -1595,8 +1595,8 @@ struct CreateGuildView: View {
     @State private var guildDescription: String = ""
     @State private var isOpen: Bool = true
     @State private var isCreating: Bool = false
-    @State private var language: String = ""
-    @State private var location: String = ""
+    @State private var selectedLanguageCode: String = ""
+    @State private var selectedCountryCode: String = ""
     @State private var initialAnnouncementTitle: String = ""
     @State private var initialAnnouncementContent: String = ""
     @State private var initialAnnouncementImportant: Bool = true
@@ -1608,6 +1608,22 @@ struct CreateGuildView: View {
         let announcementTitle = initialAnnouncementTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let announcementContent = initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines)
         return !name.isEmpty && !announcementTitle.isEmpty && !announcementContent.isEmpty
+    }
+
+    private var selectedLanguageLabel: String {
+        LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label ?? "Select language"
+    }
+
+    private var selectedCountryLabel: String {
+        LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label ?? "Select country"
+    }
+
+    private var selectedLanguageValue: String? {
+        LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label
+    }
+
+    private var selectedCountryValue: String? {
+        LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label
     }
 
     // Section card helper
@@ -1623,6 +1639,40 @@ struct CreateGuildView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                )
+        )
+    }
+
+    private func requiredFieldLabel(_ title: String) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+            Text("*")
+                .font(.caption.weight(.bold))
+                .foregroundColor(AppColors.statusNegative80)
+        }
+    }
+
+    private func dropdownFieldLabel(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            Text(text)
+                .font(.body)
+                .foregroundColor(AppColors.whiteText)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.down")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppColors.greyText)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
                 )
         )
     }
@@ -1678,6 +1728,8 @@ struct CreateGuildView: View {
 
                         // Guild name field (inline, no extra horizontal padding)
                         VStack(alignment: .leading, spacing: 4) {
+                            requiredFieldLabel("Guild Name")
+
                             TextField("Guild name", text: $guildName)
                                 .font(.body)
                                 .foregroundColor(AppColors.whiteText)
@@ -1736,20 +1788,19 @@ struct CreateGuildView: View {
                                 .font(.caption)
                                 .foregroundColor(AppColors.greyText)
 
-                            TextField("e.g. English", text: $language)
-                                .font(.body)
-                                .foregroundColor(AppColors.whiteText)
-                                .autocorrectionDisabled()
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                        )
-                                )
+                            Menu {
+                                Button("Not specified") {
+                                    selectedLanguageCode = ""
+                                }
+                                Divider()
+                                ForEach(LocaleOptionCatalog.languages) { option in
+                                    Button(option.label) {
+                                        selectedLanguageCode = option.code
+                                    }
+                                }
+                            } label: {
+                                dropdownFieldLabel(selectedLanguageLabel)
+                            }
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
@@ -1757,20 +1808,19 @@ struct CreateGuildView: View {
                                 .font(.caption)
                                 .foregroundColor(AppColors.greyText)
 
-                            TextField("e.g. London", text: $location)
-                                .font(.body)
-                                .foregroundColor(AppColors.whiteText)
-                                .autocorrectionDisabled()
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                        )
-                                )
+                            Menu {
+                                Button("Not specified") {
+                                    selectedCountryCode = ""
+                                }
+                                Divider()
+                                ForEach(LocaleOptionCatalog.countries) { option in
+                                    Button(option.label) {
+                                        selectedCountryCode = option.code
+                                    }
+                                }
+                            } label: {
+                                dropdownFieldLabel(selectedCountryLabel)
+                            }
                         }
                     }
                     .opacity(visibleSections.contains(2) ? 1 : 0)
@@ -1870,9 +1920,7 @@ struct CreateGuildView: View {
                             .foregroundColor(AppColors.greyText)
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Title")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
+                            requiredFieldLabel("Title")
 
                             TextField("Welcome to the guild", text: $initialAnnouncementTitle)
                                 .font(.body)
@@ -1892,9 +1940,7 @@ struct CreateGuildView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Content")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
+                            requiredFieldLabel("Content")
 
                             TextEditor(text: $initialAnnouncementContent)
                                 .frame(minHeight: 90)
@@ -1980,8 +2026,8 @@ struct CreateGuildView: View {
                 name: guildName,
                 description: guildDescription.isEmpty ? nil : guildDescription,
                 isOpen: isOpen,
-                language: language.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : language,
-                location: location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : location,
+                language: selectedLanguageValue,
+                location: selectedCountryValue,
                 joinQuestions: isOpen ? [] : joinQuestions
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }

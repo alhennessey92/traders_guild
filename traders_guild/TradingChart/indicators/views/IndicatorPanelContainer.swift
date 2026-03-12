@@ -19,6 +19,7 @@ struct IndicatorPanelContainer: View {
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
     var timeframe: RLChartTimeframe = .h1
+    var timeframePanelCount: Int = 0
     
     @Binding var rsiPanelHeight: CGFloat
     @Binding var macdPanelHeight: CGFloat
@@ -43,9 +44,13 @@ struct IndicatorPanelContainer: View {
     }
     
     private var adjustedMaxHeight: CGFloat {
-        activePanelCount > 1
-            ? IndicatorManager.maxPanelHeightWith2Panels
-            : IndicatorManager.maxPanelHeight
+        let totalPanels = activePanelCount + timeframePanelCount
+        if totalPanels >= 3 {
+            return 140
+        } else if totalPanels >= 2 {
+            return IndicatorManager.maxPanelHeightWith2Panels
+        }
+        return IndicatorManager.maxPanelHeight
     }
     
     // MARK: - Body

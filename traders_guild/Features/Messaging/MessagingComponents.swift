@@ -634,33 +634,21 @@ struct ChatInputFooter: View {
 
     private var attachmentActionPanel: some View {
         HStack(spacing: 0) {
-            actionPanelButton(
-                icon: "camera.fill",
-                label: "Camera",
-                tint: AppColors.accentColor
-            ) {
+            actionPanelButton(icon: "camera.fill", label: "Camera") {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showActionPanel = false
                 }
                 showPhotoPicker = true
             }
 
-            actionPanelButton(
-                icon: "photo.on.rectangle.angled",
-                label: "Photos",
-                tint: AppColors.systemPurple
-            ) {
+            actionPanelButton(icon: "photo.on.rectangle.angled", label: "Photos") {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showActionPanel = false
                 }
                 showPhotoPicker = true
             }
 
-            actionPanelButton(
-                icon: "doc.fill",
-                label: "Files",
-                tint: AppColors.statusWarning
-            ) {
+            actionPanelButton(icon: "doc.fill", label: "Files") {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showActionPanel = false
                 }
@@ -668,11 +656,7 @@ struct ChatInputFooter: View {
             }
 
             if allowsMarkerLinkAttachment {
-                actionPanelButton(
-                    icon: "mappin.and.ellipse",
-                    label: "Marker",
-                    tint: AppColors.statusInfo
-                ) {
+                actionPanelButton(icon: "target", label: "Marker") {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         showActionPanel = false
                     }
@@ -685,13 +669,23 @@ struct ChatInputFooter: View {
         .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppColors.whiteText.opacity(0.06))
+                .fill(
+                    LinearGradient(
+                        colors: [AppColors.surfaceWhite12, AppColors.surfaceWhite08],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppColors.surfaceWhite20, lineWidth: 1)
+                )
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 6)
     }
 
-    private func actionPanelButton(icon: String, label: String, tint: Color, action: @escaping () -> Void) -> some View {
+    private func actionPanelButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: {
             HapticFeedback.light.trigger()
             action()
@@ -699,14 +693,21 @@ struct ChatInputFooter: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 22))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.surfaceWhite92)
                     .frame(width: 54, height: 54)
-                    .background(tint.opacity(0.85))
+                    .background(
+                        Circle()
+                            .fill(AppColors.surfaceWhite14)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppColors.surfaceWhite24, lineWidth: 1)
+                            )
+                    )
                     .clipShape(Circle())
 
                 Text(label)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(AppColors.greyText)
+                    .foregroundColor(AppColors.surfaceWhite80)
             }
             .frame(maxWidth: .infinity)
         }
@@ -1028,7 +1029,7 @@ private struct ChatMarkerPickerSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if markers.isEmpty {
                     ChatEmptyStateView(
-                        icon: "mappin.and.ellipse",
+                        icon: "target",
                         title: "No markers found",
                         subtitle: "Place a marker to share it in chat."
                     )

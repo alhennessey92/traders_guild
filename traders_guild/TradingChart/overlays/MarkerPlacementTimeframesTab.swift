@@ -4,6 +4,9 @@ struct MarkerPlacementTimeframesTab: View {
     @ObservedObject var placementState: MarkerPlacementState
     let currentChartTimeframe: RLChartTimeframe?
     let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
+    var timeframePanelManager: TimeframePanelManager?
+    var symbolId: UUID?
+    var guildId: UUID?
 
     @State private var limitWarning: String?
     @State private var contextInfoMessage: String?
@@ -220,6 +223,9 @@ struct MarkerPlacementTimeframesTab: View {
 
                 Button {
                     placementState.removeComponent(id: draft.id)
+                    if let timeframe {
+                        timeframePanelManager?.removePanel(timeframe: timeframe)
+                    }
                     limitWarning = nil
                     contextInfoMessage = nil
                 } label: {
@@ -268,12 +274,16 @@ struct MarkerPlacementTimeframesTab: View {
         let backendValue = timeframe.toBackendString()
         if placementState.isTimeframeLinked(backendValue) {
             placementState.removeTimeframeLink(backendValue)
+            timeframePanelManager?.removePanel(timeframe: timeframe)
             limitWarning = nil
             return
         }
 
         if placementState.upsertTimeframeLink(backendValue) {
             limitWarning = nil
+            if let symbolId, let guildId {
+                timeframePanelManager?.addPanel(timeframe: timeframe, symbolId: symbolId, guildId: guildId)
+            }
             return
         }
 

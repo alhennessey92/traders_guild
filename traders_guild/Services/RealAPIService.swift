@@ -56,6 +56,7 @@ enum APIService {
                 #else
                 // ⚠️ UPDATE THIS to your Mac's IP for device testing
                 let macIP = "192.168.1.182"
+//                let macIP = "192.168.1.196"
                 switch self {
                 case .auth:       return "http://\(macIP):8000/api/v1"
                 case .core:       return "http://\(macIP):8001/api/v1"

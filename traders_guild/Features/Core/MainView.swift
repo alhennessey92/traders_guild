@@ -82,6 +82,11 @@ struct MainView: View {
     @State private var williamsRPanelHeight: CGFloat = 120
     @State private var atrPanelHeight: CGFloat = 120
     @State private var volumePanelHeight: CGFloat = 120
+
+    // MARK: - Timeframe Panel State
+    @StateObject private var timeframePanelManager = TimeframePanelManager()
+    @State private var tfPanel1Height: CGFloat = 140
+    @State private var tfPanel2Height: CGFloat = 140
     @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
     
@@ -154,16 +159,29 @@ struct MainView: View {
                 mainContentStack
                     .disabled(showLeftDrawer || showRightDrawer)
                 
-                // MARK: - Indicator Panels Overlay
+                // MARK: - Chart Panels Overlay (Timeframe + Indicator)
                 // Positioned ABOVE main content, BELOW bottom sheet
                 // allowsHitTesting only on panels themselves (not the spacer above)
                 // so chart controls beneath remain tappable
                 // Visible in placement/viewing so linked panel indicators remain visible.
-                if chartViewModel.indicatorManager.shouldShowAnyPanel {
+                if chartViewModel.indicatorManager.shouldShowAnyPanel || timeframePanelManager.hasActivePanels {
                     VStack {
                         Spacer()
                             .allowsHitTesting(false)
 
+                        // Timeframe panels (above indicator panels)
+                        TimeframePanelContainer(
+                            timeframePanelManager: timeframePanelManager,
+                            markerTimestamp: placementState.anchorDraft?.payload.anchorTime ?? Date(),
+                            intentColor: placementState.intent.color,
+                            baseCandleWidth: 12,
+                            candleSpacing: 4,
+                            indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count,
+                            panel1Height: $tfPanel1Height,
+                            panel2Height: $tfPanel2Height
+                        )
+
+                        // Indicator panels
                         IndicatorPanelContainer(
                             indicatorManager: chartViewModel.indicatorManager,
                             chartData: chartViewModel.dataManager,
@@ -171,6 +189,7 @@ struct MainView: View {
                             baseCandleWidth: 12,
                             candleSpacing: 4,
                             timeframe: chartViewModel.currentTimeframe,
+                            timeframePanelCount: timeframePanelManager.activePanelCount,
                             rsiPanelHeight: $rsiPanelHeight,
                             macdPanelHeight: $macdPanelHeight,
                             stochasticPanelHeight: $stochasticPanelHeight,
@@ -248,6 +267,7 @@ struct MainView: View {
                     chartViewModel: chartViewModel,
                     placementState: placementState,
                     markerOverlayState: markerOverlayState,
+                    timeframePanelManager: timeframePanelManager,
                     selectedDetent: $selectedDetent,
                     onNavigateToMarker: { marker in
                         leftDrawerViewModel.requestNavigationToMarker(marker)
@@ -295,6 +315,7 @@ struct MainView: View {
                 
                 // Configure ChartViewModel with proper RLAppState and RealAPIService
                 chartViewModel.configure(appState: rlAppState, api: rlAppState.realApi)
+                timeframePanelManager.api = rlAppState.realApi
 
                 print(rlAppState.currentUser?.displayUsername ?? "Username")
                 print(rlAppState.currentGuild?.name ?? "Guild Name")
@@ -353,6 +374,12 @@ struct MainView: View {
             .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { oldId, newId in
                 chartControlVM.isMarkerViewingMode = (newId != nil)
                 handleMarkerViewingSelectionChange(oldId: oldId, newId: newId)
+                // Bump sheet up when viewing a marker so it's visible above panels
+                if newId != nil {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        selectedDetent = .fraction(0.35)
+                    }
+                }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {
@@ -906,6 +933,7 @@ struct MainView: View {
                 indicatorManager: chartViewModel.indicatorManager,
                 candles: chartDataManager.candles
             )
+            timeframePanelManager.clearAll()
             return
         }
 
@@ -914,6 +942,24 @@ struct MainView: View {
             indicatorManager: chartViewModel.indicatorManager,
             candles: chartDataManager.candles
         )
+
+        // Populate timeframe panels from marker's linked timeframes
+        populateTimeframePanels(for: marker)
+    }
+
+    private func populateTimeframePanels(for marker: ChartMarkerUI) {
+        timeframePanelManager.clearAll()
+
+        guard let symbolId = chartViewModel.currentSymbol?.id,
+              let guildId = rlAppState.currentGuild?.id else { return }
+
+        let tfComponents = marker.marker.components.filter { $0.componentTypeEnum == .timeframeLink }
+        for component in tfComponents {
+            if case .timeframeLink(let tfPayload) = component.payload,
+               let timeframe = RLChartTimeframe.fromBackendString(tfPayload.timeframe) {
+                timeframePanelManager.addPanel(timeframe: timeframe, symbolId: symbolId, guildId: guildId)
+            }
+        }
     }
     
     
@@ -1560,6 +1606,7 @@ struct ChartBottomSheet: View {
     @ObservedObject var chartViewModel: ChartViewModel
     @ObservedObject var placementState: MarkerPlacementState
     @ObservedObject var markerOverlayState: MarkerOverlayState
+    @ObservedObject var timeframePanelManager: TimeframePanelManager
     @Binding var selectedDetent: PresentationDetent
     @EnvironmentObject var rlAppState: RLAppState
     let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
@@ -1578,6 +1625,7 @@ struct ChartBottomSheet: View {
         chartViewModel: ChartViewModel,
         placementState: MarkerPlacementState,
         markerOverlayState: MarkerOverlayState,
+        timeframePanelManager: TimeframePanelManager,
         selectedDetent: Binding<PresentationDetent>,
         onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil,
         onPlaceMarker: (() -> Void)? = nil,
@@ -1587,6 +1635,7 @@ struct ChartBottomSheet: View {
         self.chartViewModel = chartViewModel
         self.placementState = placementState
         self.markerOverlayState = markerOverlayState
+        self.timeframePanelManager = timeframePanelManager
         self._selectedDetent = selectedDetent
         self.onNavigateToMarker = onNavigateToMarker
         self.onPlaceMarker = onPlaceMarker
@@ -2087,7 +2136,10 @@ struct ChartBottomSheet: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     selectedDetent = .fraction(0.11)
                 }
-            }
+            },
+            timeframePanelManager: timeframePanelManager,
+            symbolId: chartViewModel.currentSymbol?.id,
+            guildId: rlAppState.currentGuild?.id
         )
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -2115,7 +2167,9 @@ struct ChartBottomSheet: View {
                 markerManager: markerManager,
                 onClose: clearSelectedMarker,
                 symbolDTO: chartViewModel.currentSymbol,
-                onAuthorTap: { onViewingAuthorTap?(marker) }
+                onAuthorTap: { onViewingAuthorTap?(marker) },
+                canEditMarker: canEditSelectedMarker,
+                onEditMarker: beginEditingSelectedMarker
             )
             .environmentObject(rlAppState)
         case .chat:
@@ -2133,6 +2187,20 @@ struct ChartBottomSheet: View {
     private func clearSelectedMarker() {
         withAnimation(.easeInOut(duration: 0.25)) {
             chartViewModel.markerManager?.selectedMarker = nil
+        }
+    }
+
+    private func beginEditingSelectedMarker() {
+        guard let marker = chartViewModel.selectedMarkerForSheet,
+              isMarkerEditableForCurrentUser(marker) else {
+            return
+        }
+
+        placementState.beginEditingMarker(marker)
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            chartViewModel.markerManager?.selectedMarker = nil
+            controlViewModel.startMarkerPlacement(intent: marker.intent)
         }
     }
 
@@ -2212,6 +2280,7 @@ struct ChartBottomSheet: View {
             chartViewModel.indicatorManager.restoreSnapshot()
             chartViewModel.indicatorManager.recalculateIndicators(candles: chartViewModel.dataManager.candles)
             capturedPlacementIndicatorSnapshot = false
+            timeframePanelManager.clearAll()
         }
     }
 
@@ -2278,7 +2347,6 @@ struct ChartBottomSheet: View {
                             }
                         }
                     }
-
                     markerLikeCapsuleButton
                 }
             }
@@ -2288,6 +2356,22 @@ struct ChartBottomSheet: View {
         }
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard, edges: markerDetailTab == .chat ? [] : .bottom)
+    }
+
+    private var canEditSelectedMarker: Bool {
+        guard let marker = chartViewModel.selectedMarkerForSheet else { return false }
+        return isMarkerEditableForCurrentUser(marker)
+    }
+
+    private func isMarkerEditableForCurrentUser(_ marker: ChartMarkerUI) -> Bool {
+        if marker.canOpenEditFlow {
+            return true
+        }
+
+        guard let currentUserId = rlAppState.currentUser?.id else {
+            return false
+        }
+        return marker.author.userId == currentUserId
     }
 
     private var markerLikeCapsuleButton: some View {
@@ -2302,6 +2386,8 @@ struct ChartBottomSheet: View {
                     .font(.subheadline)
                     .fontWeight(.bold)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
             }
             .foregroundColor(.white)
             .padding(.vertical, 12)

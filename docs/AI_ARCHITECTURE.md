@@ -948,21 +948,21 @@ I want you to try and keep the UI similar to the ChartSheetSymbolView.swift
 
 105. [FIXED] look at marker chat section, + button doesnt work, nor does the microphone, and when tapping textbox its hidden by keyboard, needs to all wokr like other chat areas
 
-106. When adding indicators in marker placement mode the UI is still not exactly the same as for when adding markers in normal default chart mode, there is a + button etc, whereas in normal mode it is a circle, need to make sure that these UI elements are the same to keep consistency
+106. [FIXED] When adding indicators in marker placement mode the UI is still not exactly the same as for when adding markers in normal default chart mode, there is a + button etc, whereas in normal mode it is a circle, need to make sure that these UI elements are the same to keep consistency
 
-107. Still need to add the like No in like button in bottom bar in marker viewing mode and make it look better, perhaps white icon and no
+107. [FIXED] Still need to add the like No in like button in bottom bar in marker viewing mode and make it look better, perhaps white icon and no
 
-108. In marker viewing mode the user profile button in toolbar on right needs adjusting, looks weird at the moment, perhaps just show the avatar, in a glass button look to mimick the cancel button on right, could give it a special tint or border like white or light blue etc...
+108. [FIXED] In marker viewing mode the user profile button in toolbar on right needs adjusting, looks weird at the moment, perhaps just show the avatar, in a glass button look to mimick the cancel button on right, could give it a special tint or border like white or light blue etc...
 
-109. In marker viewing mode the marker info box on chart needs better UI, its too black, needs to be aligned with UI in profile detail view etc with better heading and better UI display that is coherent with rest of the app. The close handle needs to be a thin vertical rectangle in white with black or similar arrow icon on the right side of the rectangle indicating it closes the info box, and similar to re open
+109. [FIXED] In marker viewing mode the marker info box on chart needs better UI, its too black, needs to be aligned with UI in profile detail view etc with better heading and better UI display that is coherent with rest of the app. The close handle needs to be a thin vertical rectangle in white with black or similar arrow icon on the right side of the rectangle indicating it closes the info box, and similar to re open
 
-110. In marker viewing mode the general tab needs a better UI, more interesting a bit like the symbol tab in main chart, with a seperate section at bottom showing basics of user posting it that also links to their account. In terms of sections needs to be top section basic info about the marker as it is but improved, then unique information relating to marker, then general information regarding the marker, then general info regarding the symbol at time of marker placement, then a section for information about posting user.
+110. [FIXED] In marker viewing mode the general tab needs a better UI, more interesting a bit like the symbol tab in main chart, with a seperate section at bottom showing basics of user posting it that also links to their account. In terms of sections needs to be top section basic info about the marker as it is but improved, then unique information relating to marker, then general information regarding the marker, then general info regarding the symbol at time of marker placement, then a section for information about posting user.
 
-110. the symbol info box on top left is ok but still the background is too dark, needs a more subtle look, while still being MOSTLY opaque, can have a little seethrough
+110. [FIXED] the symbol info box on top left is ok but still the background is too dark, needs a more subtle look, while still being MOSTLY opaque, can have a little seethrough
 
-111. Need a full review of marker looks when in chart, they look good sizing wise etc, but the icons are still appearing white, they need to have the same palette multi color look as when in placement mode  and all other areas of app they appear as avatars, for instance the setup marker has white cog and green arrows, but appears full white in chart. Also the setup icon in when on the chart needs to be slightly bigger, and the alert markers need to make sure they have their tint background and full color icon
+111. [FIXED] Need a full review of marker looks when in chart, they look good sizing wise etc, but the icons are still appearing white, they need to have the same palette multi color look as when in placement mode  and all other areas of app they appear as avatars, for instance the setup marker has white cog and green arrows, but appears full white in chart. Also the setup icon in when on the chart needs to be slightly bigger, and the alert markers need to make sure they have their tint background and full color icon
 
-112. When changing the alert severity marker in placement mode the background to the top section in general tab is not changing color, stays the same
+112. [FIXED] When changing the alert severity marker in placement mode the background to the top section in general tab is not changing color, stays the same
 
 
 
@@ -1019,3 +1019,64 @@ These are all the steps to the current drawings, need to make sure its vital, on
 121. [FIXED] Markers on chart are still overlaying the symbol info box and x axis. and in marker viewing mode they are overlaying the marker info box on chart. Markers shouldnt be above any main elements of the chart
 
 
+122. [FIXED] Alert needs to be neutral color until selected
+
+123. [FIXED] Panning smoother very jittery in marker viewing mode
+
+124. [FIXED] Weird jump in n pinch zoom on chart
+
+125. [FIXED] Sometimes place marker keeps in placement mode doesn’t go to default chart view
+
+126. [FIXED] Need to copy indicator ui for markers more and drawing adding custom sheet etc
+
+127. [FIXED] Edit button for personal markers to jump back into placement mode, can’t move the marker but can edit indicators and drawings
+
+128. [FIXED] Like marker button unliked state needs same outline color as tab buttons more light greyish
+
+129. [FIXED] Markers overlay price indicators
+
+130. [FIXED] In marker viewing mode shows 4 components in general tab but there are none set in components or on marker actual 
+
+131. [FIXED] Reduce width of price indicator and make tp/sl entry bold . Maybe add a slight pattern overlay like static background 
+
+132. [FIXED] Chart buttons still sit too high when a indicator panel is active 
+
+133. [FIXED] Still not seeing any edit button on marker select to edit the marker
+
+134. [FIXED] In chart symbol info box need to move the timeframe to second line next to provider name to be able to reduce the width of the box. Also background needs to be more opaque but keep background similar if not the same to chart background
+
+135. [FIXED] When adding any form of text in the requirements or general section of marker placement mode need a button next or inside each textbox that saves the text, at the moment only way to do this and close the keyboard is to select outside the textbox, but this is a little unintuitive, so need a simple way to allow users to do this.
+
+136. [FIXED] When initially entering the marker placement mode the markers position follows the users center of screen until they first move the marker to a new position of which it then is fixed to that position, this looks a little weird when panning around, marker should have its intial position as if its been placed there by user so we dont get this following center of screen effect, user can then move as they desire
+
+137. [CLAUDE] Need to look into the state machine that controls outcome of the setup marker, so we can properly track results, even if the server goes offline so almost need to check when retrieving the marker each time that a value has been set for finalised outcome, listing results of the setup mock trade, and for if its tracked, the reputation gain and loss. Also need to update the marker info box to display this result and more/ better UI for the result in general tab of marker
+
+138. [CLAUDE] Need to look into timeframe section of markers. At the moment we just link other timeframes, but this is not benefitial to users, what would be benefitial is seeing a panel on chart like an indicator panel that shows a relative time state of the timeframe chart for the symbol, relative to the chart position, in a way showing their correlation, obviously when the user is viewing a 1 min timeframe with marker and links to a 1 day timeframe the time frame wont mov at all, but we could do it where it doesnt pan with the chart, shows a snapshot of the timeframe chart with an indicator of the marker position timewise in that timeframe chart, so the user can see its position in that timeframe. This panel should allow pinch gesture and independent panning. Need to make panels similar looking to indicator panel, maybe with their own axis etc... and make them collapsible to allow fitment with other indicator panels. SHould be allowed 2 timeframe panels and 2 indicator panels on chart. The timeframe panel should be viewable on chart and in the timeframe sheet in bottom bar
+
+139. [FIXED] Need like No next to thumbs up icon in bottom bar like button for markers
+
+140. [FIXED] UI for attahcement buttons need to be improved, dont like the coloring, need to be more inline wioth our own UI. Also the icon for markers is wrong, use the target icon like used in marker placement button
+
+141. When creating guild need to label which values are required to create guild, also need dropdown of different languages, and location should be dropdown of different countries
+
+142. [FIXED] When adding a poll marker and add questuon with answers, when viewing in viewing mode, shows no question in general tab - no poll question and no question in marker info box
+
+143. Lines need a little more work in marker placement mode, when adding support/resistance lines, shouldnt be able to move them by tapping on chart, only movable by dragging, tapping the chart moves out of line editing mode, same for horizontal line, should have a drag handle like support and resistance and tapping chart exits line editing mode. Have to click line again to show handle and drag. Also whe viewing them in marker viewing mode the support indicator and resistance indicator are getting lost on the right side so you cant see the prices, they should extend out into the chart, same for horizontal line, it doesnt show the price indicator at all, should extend from right of screen out left into chart. Should be a character cap on title for horizontal line, so its not craxy long, maybe 10-15 max
+
+144. [CLAUDE TO IMPLEMENT] May combine Indicator, drawing and timeframe buttons/sections in bottom bar in marker placement mode into single screen/button with sub tabs for each section, this can mirror in the marker viewing mode to make it look identical, this way all components are int he same space, and give more space for the general tab to extend and show full marker name. Because of this we can remove the active tabs in each section and create one single components active tab for all components together that are active, will be easier to view. Use icon plus.viewfinder for main bottom bar tab icon
+
+145. Marker in placement mode too far from chart, can be closer
+
+146. [FIXED] Checklist info box needs same UI as marker info box with same handle
+
+147. [FIXED] Color style for poll answer in marker info box is different to color in general tab, needs to be the same
+
+148. [CLAUDE TO IMPLEMENT] Looking at point 144 once it is implemented need to adapt the indicator bottom bar section to be similar, allowing users to place drawings in chart like when placing a marker - this is for their default chart
+
+149. [CLAUDE TO IMPLEMENT] Add button in marker placement mode in new components tab that uses current chart setup mirrored to marker, so users viewing marker will see their current components setup, indicators, drawings etc... This basically takes the users current on chart indicators and drawings and sets them contextually to the marker being placed
+
+150. [CLAUDE TO IMPLEMENT] Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout
+
+151. crosshair price indicator above x axis
+
+152. [CLAUDE TO IMPLEMENT] Need all panels to be collapsible and say the name with handle to re open - or just drag to show only top panel bar

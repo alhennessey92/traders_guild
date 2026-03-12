@@ -8,6 +8,9 @@ struct MarkerPlacementPanel: View {
     let onBeginInteractiveDrawing: (() -> Void)?
     let onCancel: (() -> Void)?
     let onPlace: (() -> Void)?
+    var timeframePanelManager: TimeframePanelManager?
+    var symbolId: UUID?
+    var guildId: UUID?
 
     init(
         placementState: MarkerPlacementState,
@@ -16,7 +19,10 @@ struct MarkerPlacementPanel: View {
         onSelectTimeframe: ((RLChartTimeframe) -> Void)? = nil,
         onBeginInteractiveDrawing: (() -> Void)? = nil,
         onCancel: (() -> Void)? = nil,
-        onPlace: (() -> Void)? = nil
+        onPlace: (() -> Void)? = nil,
+        timeframePanelManager: TimeframePanelManager? = nil,
+        symbolId: UUID? = nil,
+        guildId: UUID? = nil
     ) {
         self.placementState = placementState
         self.activeChartIndicators = activeChartIndicators
@@ -25,6 +31,9 @@ struct MarkerPlacementPanel: View {
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
         self.onCancel = onCancel
         self.onPlace = onPlace
+        self.timeframePanelManager = timeframePanelManager
+        self.symbolId = symbolId
+        self.guildId = guildId
     }
 
     var body: some View {
@@ -46,7 +55,10 @@ struct MarkerPlacementPanel: View {
                 MarkerPlacementTimeframesTab(
                     placementState: placementState,
                     currentChartTimeframe: currentChartTimeframe,
-                    onSelectTimeframe: onSelectTimeframe
+                    onSelectTimeframe: onSelectTimeframe,
+                    timeframePanelManager: timeframePanelManager,
+                    symbolId: symbolId,
+                    guildId: guildId
                 )
             }
         }

@@ -170,9 +170,7 @@ struct MarkerPlacementIndicatorsTab: View {
                     .foregroundColor(AppColors.greyText)
 
                 if attachedIndicators.isEmpty {
-                    Text("No indicator components attached.")
-                        .font(.caption2)
-                        .foregroundColor(AppColors.greyText)
+                    emptyAttachedIndicatorsState
                 } else {
                     ForEach(attachedIndicators) { attached in
                         attachedIndicatorRow(attached)
@@ -180,6 +178,40 @@ struct MarkerPlacementIndicatorsTab: View {
                 }
             }
         }
+    }
+
+    private var emptyAttachedIndicatorsState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "chart.line.uptrend.xyaxis.circle")
+                .font(.system(size: 24))
+                .foregroundColor(AppColors.whiteText.opacity(0.42))
+
+            Text("No indicator components attached.")
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+
+            Button("Browse indicator categories") {
+                selectedSubTab = .trend
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(placementState.intent.color.opacity(0.4))
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.whiteText.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                )
+        )
     }
 
     private func categoryTabSection(category: IndicatorCategory) -> some View {

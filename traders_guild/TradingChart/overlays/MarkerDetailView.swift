@@ -1672,7 +1672,7 @@ struct MarkerInfoContent: View {
     
     @ViewBuilder
     private var pollSection: some View {
-        if let question = marker.pollQuestion, let options = marker.pollOptions {
+        if let question = marker.resolvedPollQuestion, let options = marker.pollOptions {
             infoCard {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(question).font(.subheadline).fontWeight(.semibold).foregroundColor(AppColors.whiteText)

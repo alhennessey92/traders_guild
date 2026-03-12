@@ -208,6 +208,12 @@ final class MarkerPlacementState: ObservableObject {
     @Published var drawingInteractionPhase: DrawingInteractionPhase = .idle
     @Published var pendingDrawingFirstPoint: (time: Date, price: Double)?
     @Published var editingDrawingId: UUID?
+    @Published var editingMarkerId: UUID?
+    @Published var isAnchorLocked: Bool = false
+
+    var isEditingExistingMarker: Bool {
+        editingMarkerId != nil
+    }
 
     var anchorDraft: MarkerComponentDraft? {
         components.first { $0.componentType == .anchor }
@@ -661,23 +667,17 @@ final class MarkerPlacementState: ObservableObject {
             return !payload.emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
 
-        if intent == .setup && trackingEnabled {
-            guard
-                let entry = anchorDraft?.payload.levelPrice,
-                let sl = componentPrice(.levelSl),
-                let tp = componentPrice(.levelTp)
-            else {
-                return false
-            }
-            let isLong = tp > entry && sl < entry
-            let isShort = tp < entry && sl > entry
-            return isLong || isShort
+        // Setup anchors are fixed by chart placement flow; do not block submit on
+        // additional directional/location requirements.
+        if intent == .setup {
+            return true
         }
 
         return true
     }
 
     func reset(to intent: RLMarkerIntent, anchorTime: Date, anchorPrice: Double) {
+        clearMarkerEditSession()
         self.intent = intent
         self.selectedPlacementTab = .general
         var resetComponents = [
@@ -907,6 +907,10 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     func upsertComponent(_ componentType: RLComponentType, payload: MarkerComponentPayload) {
+        if componentType == .anchor, isAnchorLocked {
+            return
+        }
+
         if componentType == .indicator {
             guard case let .indicator(indicatorPayload) = payload else { return }
             _ = upsertIndicator(
@@ -1089,6 +1093,74 @@ final class MarkerPlacementState: ObservableObject {
 
     func componentPrice(_ componentType: RLComponentType) -> Double? {
         component(componentType)?.payload.levelPrice
+    }
+
+    func clearMarkerEditSession() {
+        editingMarkerId = nil
+        isAnchorLocked = false
+    }
+
+    func beginEditingMarker(_ marker: ChartMarkerUI) {
+        intent = marker.intent
+        selectedPlacementTab = .indicators
+        activeTool = .indicators
+        activeSubTool = nil
+
+        title = marker.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        note = marker.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        let normalizedVisibility = marker.visibility.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        visibility = normalizedVisibility == "private" ? "private" : "guild"
+        confidence = nil
+        trackingEnabled = marker.trackingEnabled
+
+        pollQuestion = marker.resolvedPollQuestion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let existingPollOptions = marker.pollOptions?.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) } ?? []
+        let nonEmptyPollOptions = existingPollOptions.filter { !$0.isEmpty }
+        pollOptions = nonEmptyPollOptions.count >= 2 ? nonEmptyPollOptions : ["", ""]
+
+        alertSeverity = marker.alertSeverity
+        isChecklistCollapsed = false
+        emojiScaleOverrides = [:]
+
+        let orderedComponents = marker.components.sorted {
+            if $0.ordering != $1.ordering { return $0.ordering < $1.ordering }
+            return $0.id.uuidString < $1.id.uuidString
+        }
+
+        var seededComponents = orderedComponents.compactMap { component -> MarkerComponentDraft? in
+            guard let componentType = component.componentTypeEnum else { return nil }
+            return MarkerComponentDraft(componentType: componentType, payload: component.payload)
+        }
+
+        if !seededComponents.contains(where: { $0.componentType == .anchor }) {
+            seededComponents.insert(
+                MarkerComponentDraft(
+                    componentType: .anchor,
+                    payload: .anchor(AnchorPayload(time: marker.candleTimestamp, price: marker.price))
+                ),
+                at: 0
+            )
+        }
+
+        components = seededComponents
+
+        drawingColorOverrides = Dictionary(
+            uniqueKeysWithValues: seededComponents.compactMap { draft in
+                guard let colorHex = normalizedDrawingColorHex(from: draft.payload) else { return nil }
+                return (draft.id, colorHex)
+            }
+        )
+
+        if case let .link(payload)? = component(.linkURL)?.payload {
+            newsURL = payload.url
+        } else {
+            newsURL = ""
+        }
+
+        resetDrawingInteraction()
+        editingMarkerId = marker.id
+        isAnchorLocked = true
     }
 
     func resetDrawingInteraction() {
@@ -1317,6 +1389,56 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     func buildCreateRequest(symbolId: UUID, timeframe: String) -> RLCreateMarkerRequest {
+        let requestComponents = requestComponentsForCurrentState()
+
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPollQuestion = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPollOptions = pollOptions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let resolvedVisibility = intent == .personal ? "private" : "guild"
+        let resolvedConfidence: Int? = nil
+
+        return RLCreateMarkerRequest(
+            symbolId: symbolId,
+            timeframe: timeframe,
+            intent: intent.rawValue,
+            title: trimmedTitle.isEmpty ? nil : trimmedTitle,
+            note: trimmedNote.isEmpty ? nil : trimmedNote,
+            visibility: resolvedVisibility,
+            confidence: resolvedConfidence,
+            trackingEnabled: trackingEnabled,
+            components: requestComponents,
+            pollQuestion: intent == .poll ? (trimmedPollQuestion.isEmpty ? nil : trimmedPollQuestion) : nil,
+            pollOptions: intent == .poll ? normalizedPollOptions : nil
+        )
+    }
+
+    func buildUpdateRequest() -> RLUpdateMarkerRequest {
+        let requestComponents = requestComponentsForCurrentState()
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPollQuestion = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPollOptions = pollOptions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let resolvedVisibility = intent == .personal ? "private" : "guild"
+
+        return RLUpdateMarkerRequest(
+            intent: nil,
+            title: trimmedTitle.isEmpty ? nil : trimmedTitle,
+            note: trimmedNote.isEmpty ? nil : trimmedNote,
+            visibility: resolvedVisibility,
+            confidence: nil,
+            trackingEnabled: trackingEnabled,
+            components: requestComponents,
+            pollQuestion: intent == .poll ? (trimmedPollQuestion.isEmpty ? nil : trimmedPollQuestion) : nil,
+            pollOptions: intent == .poll ? normalizedPollOptions : nil
+        )
+    }
+
+    private func requestComponentsForCurrentState() -> [RLMarkerComponentRequest] {
         var requestDrafts = components
         if intent == .setup, let anchorPrice = anchorDraft?.payload.levelPrice {
             let entryPayload: MarkerComponentPayload = .levelEntry(
@@ -1341,35 +1463,12 @@ final class MarkerPlacementState: ObservableObject {
             return $0.id.uuidString < $1.id.uuidString
         }
 
-        let requestComponents = orderedDrafts.map { draft in
+        return orderedDrafts.map { draft in
             RLMarkerComponentRequest(
                 componentType: draft.componentType.rawValue,
                 payload: draft.payload.rawPayload
             )
         }
-
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedPollQuestion = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedPollOptions = pollOptions
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let resolvedVisibility = intent == .personal ? "private" : "guild"
-        let resolvedConfidence: Int? = nil
-
-        return RLCreateMarkerRequest(
-            symbolId: symbolId,
-            timeframe: timeframe,
-            intent: intent.rawValue,
-            title: trimmedTitle.isEmpty ? nil : trimmedTitle,
-            note: trimmedNote.isEmpty ? nil : trimmedNote,
-            visibility: resolvedVisibility,
-            confidence: resolvedConfidence,
-            trackingEnabled: trackingEnabled,
-            components: requestComponents,
-            pollQuestion: intent == .poll ? (trimmedPollQuestion.isEmpty ? nil : trimmedPollQuestion) : nil,
-            pollOptions: intent == .poll ? normalizedPollOptions : nil
-        )
     }
 
     private func componentOrderingRank(_ type: RLComponentType) -> Int {

@@ -113,7 +113,7 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
         switch self {
         case .analysis: return Color(hex: "#0F9EB4") ?? .teal
         case .setup: return Color(hex: "#0E854D") ?? .green
-        case .alert: return Color(hex: "#D4A017") ?? .orange
+        case .alert: return Color(hex: "#8E959D") ?? .gray
         case .question: return Color(hex: "#5B7FFF") ?? .blue
         case .poll: return Color(hex: "#8B5CF6") ?? .purple
         case .news: return Color(hex: "#EC4899") ?? .pink
@@ -152,8 +152,8 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
         case .alert:
             return [
                 base,
-                (Color(hex: "#F59E0B") ?? .orange).opacity(0.9),
-                (Color(hex: "#FDE68A") ?? .yellow).opacity(0.66),
+                (Color(hex: "#9CA3AF") ?? .gray).opacity(0.9),
+                (Color(hex: "#D1D5DB") ?? .gray).opacity(0.66),
             ]
         case .question:
             return [
@@ -1027,6 +1027,21 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
 
 /// Full chart marker with engagement data and permissions
 /// Backend: ChartMarkerResponse
+// MARK: - Prediction Result
+
+struct RLPredictionResultDTO: Codable, Equatable {
+    let resultType: String       // "take_profit" or "stop_loss"
+    let triggerPrice: Double
+    let triggeredAt: Date
+    let triggeredAtFormatted: String
+    let pnl: Double?
+
+    var isWin: Bool { resultType == "take_profit" }
+    var displayLabel: String { isWin ? "TP Hit" : "SL Hit" }
+}
+
+// MARK: - Chart Marker
+
 struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let id: UUID
     let symbolId: UUID
@@ -1070,7 +1085,10 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let pollQuestion: String?
     let pollOptions: [RLPollOptionDTO]?
     let userPollVote: UUID?
-    
+
+    // Prediction outcome (tracked setups only)
+    let predictionResult: RLPredictionResultDTO?
+
     // MARK: - Hashable
     
     func hash(into hasher: inout Hasher) {
@@ -1082,7 +1100,8 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.likeCount == rhs.likeCount &&
         lhs.commentCount == rhs.commentCount &&
         lhs.isVisible == rhs.isVisible &&
-        lhs.trackingState == rhs.trackingState
+        lhs.trackingState == rhs.trackingState &&
+        lhs.predictionResult == rhs.predictionResult
     }
     
     // MARK: - Convenience
@@ -1688,6 +1707,31 @@ struct RLUpdateMarkerRequest: Codable {
     let confidence: Int?
     let trackingEnabled: Bool?
     let components: [RLMarkerComponentRequest]?
+    // Local-only fields for optimistic reconciliation when server payload omits poll values.
+    let pollQuestion: String?
+    let pollOptions: [String]?
+
+    init(
+        intent: String? = nil,
+        title: String? = nil,
+        note: String? = nil,
+        visibility: String? = nil,
+        confidence: Int? = nil,
+        trackingEnabled: Bool? = nil,
+        components: [RLMarkerComponentRequest]? = nil,
+        pollQuestion: String? = nil,
+        pollOptions: [String]? = nil
+    ) {
+        self.intent = intent
+        self.title = title
+        self.note = note
+        self.visibility = visibility
+        self.confidence = confidence
+        self.trackingEnabled = trackingEnabled
+        self.components = components
+        self.pollQuestion = pollQuestion
+        self.pollOptions = pollOptions
+    }
     
     enum CodingKeys: String, CodingKey {
         case intent
@@ -1697,6 +1741,30 @@ struct RLUpdateMarkerRequest: Codable {
         case confidence
         case trackingEnabled = "tracking_enabled"
         case components
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        intent = try container.decodeIfPresent(String.self, forKey: .intent)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        visibility = try container.decodeIfPresent(String.self, forKey: .visibility)
+        confidence = try container.decodeIfPresent(Int.self, forKey: .confidence)
+        trackingEnabled = try container.decodeIfPresent(Bool.self, forKey: .trackingEnabled)
+        components = try container.decodeIfPresent([RLMarkerComponentRequest].self, forKey: .components)
+        pollQuestion = nil
+        pollOptions = nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(intent, forKey: .intent)
+        try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(note, forKey: .note)
+        try container.encodeIfPresent(visibility, forKey: .visibility)
+        try container.encodeIfPresent(confidence, forKey: .confidence)
+        try container.encodeIfPresent(trackingEnabled, forKey: .trackingEnabled)
+        try container.encodeIfPresent(components, forKey: .components)
     }
 }
 

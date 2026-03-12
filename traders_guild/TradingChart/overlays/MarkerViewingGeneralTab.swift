@@ -6,6 +6,8 @@ struct MarkerViewingGeneralTab: View {
     let onClose: () -> Void
     var symbolDTO: RLTradingSymbolDTO? = nil
     var onAuthorTap: (() -> Void)? = nil
+    var canEditMarker: Bool = false
+    var onEditMarker: (() -> Void)? = nil
 
     private static let priceFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -24,6 +26,10 @@ struct MarkerViewingGeneralTab: View {
             if $0.ordering != $1.ordering { return $0.ordering < $1.ordering }
             return $0.id.uuidString < $1.id.uuidString
         }
+    }
+
+    private var componentMetrics: MarkerViewingComponentMetrics {
+        MarkerViewingComponentMetrics(marker: liveMarker)
     }
 
     var body: some View {
@@ -68,6 +74,10 @@ struct MarkerViewingGeneralTab: View {
             }
 
             Spacer(minLength: 0)
+
+            if canShowEditAction {
+                heroEditButton
+            }
         }
         .padding(12)
         .background(
@@ -124,6 +134,7 @@ struct MarkerViewingGeneralTab: View {
                     color: RLComponentType.levelSl.color
                 )
                 trackingBadge
+                outcomeResultCard
             }
 
         case .analysis:
@@ -174,7 +185,7 @@ struct MarkerViewingGeneralTab: View {
                             if isSelected {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(AppColors.statusInfo95)
+                                    .foregroundColor(MarkerPollStyleTokens.selectedAccent)
                             }
 
                             Text(option.text)
@@ -186,17 +197,17 @@ struct MarkerViewingGeneralTab: View {
 
                             Text("\(option.voteCount)")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundColor(isSelected ? AppColors.statusInfo95 : AppColors.greyText)
+                                .foregroundColor(isSelected ? MarkerPollStyleTokens.selectedAccent : MarkerPollStyleTokens.unselectedCount)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(isSelected ? AppColors.statusInfo20 : AppColors.whiteText.opacity(0.08))
+                                .fill(isSelected ? MarkerPollStyleTokens.selectedBackground : MarkerPollStyleTokens.unselectedBackground)
                                 .overlay(
                                     Capsule()
                                         .stroke(
-                                            isSelected ? AppColors.statusInfo52 : AppColors.whiteText.opacity(0.08),
+                                            isSelected ? MarkerPollStyleTokens.selectedBorder : MarkerPollStyleTokens.unselectedBorder,
                                             lineWidth: 1
                                         )
                                 )
@@ -301,8 +312,39 @@ struct MarkerViewingGeneralTab: View {
         HStack(spacing: 8) {
             statBadge(title: "Likes", value: "\(liveMarker.likeCount)")
             statBadge(title: "Comments", value: "\(liveMarker.commentCount)")
-            statBadge(title: "Components", value: "\(liveMarker.components.count)")
+            statBadge(title: "Components", value: "\(componentMetrics.displayedComponentCount)")
         }
+    }
+
+    private var canShowEditAction: Bool {
+        canEditMarker &&
+        onEditMarker != nil
+    }
+
+    private var heroEditButton: some View {
+        Button {
+            onEditMarker?()
+            HapticFeedback.light.trigger()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 11, weight: .bold))
+                Text("Edit")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(AppColors.whiteText.opacity(0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(AppColors.whiteText.opacity(0.14), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var trackingBadge: some View {
@@ -328,6 +370,110 @@ struct MarkerViewingGeneralTab: View {
                                 .stroke(stateColor.opacity(0.62), lineWidth: 1)
                         )
                 )
+        }
+    }
+
+    @ViewBuilder
+    private var outcomeResultCard: some View {
+        if let outcome = MarkerPredictionProgress.outcomeDescription(for: liveMarker.marker) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Outcome header
+                HStack(spacing: 8) {
+                    Image(systemName: outcome.displayIcon)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(outcome.state.color)
+
+                    Text("Outcome")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.greyText)
+
+                    Spacer(minLength: 0)
+
+                    Text(outcome.displayLabel.uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(outcome.state.color.opacity(0.42))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(outcome.state.color.opacity(0.62), lineWidth: 1)
+                                )
+                        )
+                }
+
+                // Trigger price
+                if let triggerPrice = outcome.triggerPrice {
+                    HStack(spacing: 8) {
+                        Text("Trigger Price")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer(minLength: 0)
+                        Text(formattedPrice(triggerPrice))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white)
+                    }
+                }
+
+                // P&L
+                if let pnl = outcome.pnl {
+                    HStack(spacing: 8) {
+                        Text("P&L")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer(minLength: 0)
+                        Text(pnl >= 0 ? "+\(formattedPrice(pnl))" : formattedPrice(pnl))
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(pnl >= 0 ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                    }
+                }
+
+                // Triggered time
+                if let triggeredAt = outcome.triggeredAtFormatted {
+                    HStack(spacing: 8) {
+                        Text("Resolved")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer(minLength: 0)
+                        Text(triggeredAt)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(AppColors.whiteText.opacity(0.7))
+                    }
+                }
+
+                // Tracking impact note
+                if outcome.isTracked {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("This result affected your accuracy rating")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(outcome.isWin ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                    .padding(.top, 2)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                outcome.state.color.opacity(0.15),
+                                outcome.state.color.opacity(0.06),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(outcome.state.color.opacity(0.28), lineWidth: 1)
+                    )
+            )
         }
     }
 
@@ -640,11 +786,7 @@ struct MarkerViewingGeneralTab: View {
     }
 
     private var pollQuestionText: String {
-        let question = liveMarker.pollQuestion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !question.isEmpty {
-            return question
-        }
-        return trimmedNote
+        liveMarker.resolvedPollQuestion ?? ""
     }
 
     private var pollOptions: [RLPollOptionDTO] {

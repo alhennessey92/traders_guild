@@ -85,7 +85,7 @@ final class IndicatorManager: ObservableObject {
     
     private var lastCandleCount: Int = 0
     private var lastClosePrice: Double = 0
-    private var markerIndicatorSnapshot: ActiveIndicators?
+    private var markerIndicatorSnapshots: [ActiveIndicators] = []
     
     // MARK: - Initialization
     
@@ -295,10 +295,10 @@ final class IndicatorManager: ObservableObject {
 
     // MARK: - Marker Viewing Snapshot
 
-    /// Save current indicator state before temporary marker-view application.
+    /// Save current indicator state before temporary marker/view/edit application.
+    /// Supports nested contexts (e.g. viewing -> edit placement) via stack semantics.
     func saveSnapshot() {
-        guard markerIndicatorSnapshot == nil else { return }
-        markerIndicatorSnapshot = activeIndicators
+        markerIndicatorSnapshots.append(activeIndicators)
     }
 
     /// Apply indicator state from marker components (all linked indicators).
@@ -327,9 +327,8 @@ final class IndicatorManager: ObservableObject {
 
     /// Restore indicator state saved by `saveSnapshot()`.
     func restoreSnapshot() {
-        guard let snapshot = markerIndicatorSnapshot else { return }
+        guard let snapshot = markerIndicatorSnapshots.popLast() else { return }
         activeIndicators = snapshot
-        markerIndicatorSnapshot = nil
     }
 
     private func activeIndicators(for payload: IndicatorPayload) -> ActiveIndicators {
@@ -1319,7 +1318,7 @@ final class IndicatorManager: ObservableObject {
     
     func resetToDefaults() {
         activeIndicators = ActiveIndicators()
-        markerIndicatorSnapshot = nil
+        markerIndicatorSnapshots.removeAll()
         clearAllData()
         UserDefaults.standard.removeObject(forKey: configKey)
         UserDefaults.standard.removeObject(forKey: "indicatorConfiguration_v2")
@@ -1426,7 +1425,6 @@ extension IndicatorManager {
         print("==============================")
     }
 }
-
 
 
 

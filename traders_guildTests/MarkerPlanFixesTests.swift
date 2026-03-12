@@ -1,0 +1,657 @@
+import CoreGraphics
+import Foundation
+import SwiftUI
+import Testing
+import UIKit
+@testable import traders_guild
+
+@MainActor
+struct MarkerPlanFixesTests {
+    @Test
+    func markerSpacingFloorAppliesAcrossZoomLevels() {
+        let settings = MarkerDisplaySettings.shared
+        let originalMinStackSpacing = settings.minStackSpacing
+        let originalStackOffset = settings.stackOffset
+        defer {
+            settings.stackOffset = originalStackOffset
+            settings.minStackSpacing = originalMinStackSpacing
+        }
+
+        settings.stackOffset = 2
+        settings.minStackSpacing = 1
+        #expect(settings.minStackSpacing == MarkerPositionCalculator.hardMinimumStackSpacing)
+
+        var markerA = makeMarkerUI(intent: .analysis, title: "A")
+        var markerB = markerA
+        markerA.stackIndex = 0
+        markerB.stackIndex = 1
+        markerA.positionedBelow = false
+        markerB.positionedBelow = false
+
+        let zooms: [CGFloat] = [0.35, 0.75, 1.0, 1.6, 2.4]
+        for zoom in zooms {
+            let p0 = MarkerPositionCalculator.computeMarkerScreenPosition(
+                marker: markerA,
+                candleHighY: 180,
+                candleLowY: 220,
+                centerX: 120,
+                priceScale: zoom
+            )
+            let p1 = MarkerPositionCalculator.computeMarkerScreenPosition(
+                marker: markerB,
+                candleHighY: 180,
+                candleLowY: 220,
+                centerX: 120,
+                priceScale: zoom
+            )
+
+            let separation = abs(p1.y - p0.y)
+            #expect(separation + 0.001 >= MarkerPositionCalculator.hardMinimumStackSpacing)
+        }
+    }
+
+    @Test
+    func alertIntentDefaultsToNeutralWhenSeverityIsUnset() {
+        let neutralExpected = Color(hex: "#8E959D") ?? .gray
+        let neutralAlertColor = RLMarkerIntent.alert.color
+        let neutralDistance = colorDistance(rgba(neutralExpected), rgba(neutralAlertColor))
+        #expect(neutralDistance < 0.02)
+
+        let neutralMarker = makeMarkerUI(intent: .alert, title: "Neutral Alert", alertSeverity: nil)
+        let criticalMarker = makeMarkerUI(intent: .alert, title: "Critical Alert", alertSeverity: "critical")
+
+        let markerNeutralDistance = colorDistance(rgba(neutralMarker.effectiveColor), rgba(neutralAlertColor))
+        #expect(markerNeutralDistance < 0.02)
+
+        let severityDistance = colorDistance(rgba(neutralMarker.effectiveColor), rgba(criticalMarker.effectiveColor))
+        #expect(severityDistance > 0.12)
+
+        let neutralPalette = RLMarkerIntent.alert.markerPalette(for: nil)
+        let criticalPalette = RLMarkerIntent.alert.markerPalette(for: .critical)
+        #expect(colorDistance(rgba(neutralPalette[0]), rgba(criticalPalette[0])) > 0.12)
+    }
+
+    @Test
+    func displayableComponentCountOnlyIncludesSurfacedTypes() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let components: [RLMarkerComponentDTO] = [
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.anchor.rawValue,
+                payload: .anchor(AnchorPayload(time: now, price: 100)),
+                ordering: 0
+            ),
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.indicator.rawValue,
+                payload: .indicator(IndicatorPayload(name: "rsi", settings: ["length": AnyCodable(14)], isPrimary: nil)),
+                ordering: 1
+            ),
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.drawingZone.rawValue,
+                payload: .drawingZone(
+                    ZonePayload(
+                        topPrice: 102,
+                        bottomPrice: 98,
+                        startTime: now.addingTimeInterval(-300),
+                        endTime: now.addingTimeInterval(300)
+                    )
+                ),
+                ordering: 2
+            ),
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.timeframeLink.rawValue,
+                payload: .timeframeLink(TimeframeLinkPayload(timeframe: "4h", note: "Higher timeframe")),
+                ordering: 3
+            ),
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.textNote.rawValue,
+                payload: .note(NotePayload(text: "Context")),
+                ordering: 4
+            ),
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.reactionEmoji.rawValue,
+                payload: .reactionEmoji(EmojiPayload(emoji: "🔥")),
+                ordering: 5
+            ),
+        ]
+
+        let marker = makeMarkerUI(intent: .analysis, title: "Count Test", components: components)
+        let metrics = MarkerViewingComponentMetrics(marker: marker)
+
+        #expect(metrics.indicatorComponents.count == 1)
+        #expect(metrics.drawingComponents.count == 1)
+        #expect(metrics.timeframeComponents.count == 1)
+        #expect(metrics.displayedComponentCount == 3)
+        #expect(metrics.hiddenComponentCount == 3)
+    }
+
+    @Test
+    func editSessionLocksAnchorButAllowsIndicatorsAndDrawings() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let anchor = RLMarkerComponentDTO(
+            id: UUID(),
+            componentType: RLComponentType.anchor.rawValue,
+            payload: .anchor(AnchorPayload(time: now, price: 101.5)),
+            ordering: 0
+        )
+
+        let marker = makeMarkerUI(
+            intent: .personal,
+            title: "Editable Marker",
+            visibility: "private",
+            components: [anchor],
+            isCurrentUserMarker: true,
+            canEdit: true
+        )
+
+        let state = MarkerPlacementState()
+        state.beginEditingMarker(marker)
+
+        #expect(state.isEditingExistingMarker)
+        #expect(state.editingMarkerId == marker.id)
+        #expect(state.isAnchorLocked)
+        #expect(state.selectedPlacementTab == .indicators)
+
+        let originalAnchorPrice = state.anchorDraft?.payload.levelPrice
+        let originalAnchorTime = state.anchorDraft?.payload.anchorTime
+
+        state.upsertComponent(
+            .anchor,
+            payload: .anchor(
+                AnchorPayload(
+                    time: now.addingTimeInterval(300),
+                    price: 777
+                )
+            )
+        )
+
+        #expect(state.anchorDraft?.payload.levelPrice == originalAnchorPrice)
+        #expect(state.anchorDraft?.payload.anchorTime == originalAnchorTime)
+
+        state.upsertComponent(
+            .indicator,
+            payload: .indicator(
+                IndicatorPayload(
+                    name: "rsi",
+                    settings: ["length": AnyCodable(14)],
+                    isPrimary: nil
+                )
+            )
+        )
+        #expect(state.component(.indicator) != nil)
+
+        state.upsertComponent(
+            .drawingZone,
+            payload: .drawingZone(
+                ZonePayload(
+                    topPrice: 103,
+                    bottomPrice: 99,
+                    startTime: now.addingTimeInterval(-120),
+                    endTime: now.addingTimeInterval(120)
+                )
+            )
+        )
+        #expect(state.component(.drawingZone) != nil)
+
+        let updateRequest = state.buildUpdateRequest()
+        #expect(updateRequest.intent == nil)
+        if let anchorRequest = updateRequest.components?.first(where: { $0.componentType == RLComponentType.anchor.rawValue }) {
+            let decoded = MarkerComponentPayload.decode(
+                componentType: anchorRequest.componentType,
+                rawPayload: anchorRequest.payload
+            )
+            #expect(decoded.levelPrice == originalAnchorPrice)
+            #expect(decoded.anchorTime == originalAnchorTime)
+        } else {
+            Issue.record("Expected anchor component in edit-session update request")
+        }
+    }
+
+    @Test
+    func setupMarkersRemainPlaceableEvenWithDirectionalMismatch() {
+        let state = MarkerPlacementState()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        state.reset(to: .setup, anchorTime: now, anchorPrice: 100)
+
+        state.trackingEnabled = true
+        state.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: 90, label: "TP")))
+        state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: 95, label: "SL")))
+
+        #expect(state.isValid)
+    }
+
+    @Test
+    func updateMarkerFromPlacementUsesUpdatePathAndRollsBackOnFailure() async {
+        let guildId = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let symbolId = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let member = makeMember(userId: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!, username: "tester")
+        let markerId = UUID(uuidString: "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC")!
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let anchor = RLMarkerComponentDTO(
+            id: UUID(),
+            componentType: RLComponentType.anchor.rawValue,
+            payload: .anchor(AnchorPayload(time: now, price: 100)),
+            ordering: 0
+        )
+
+        let manager = MarkerManager(userId: member.userId, guildId: guildId, currentUserMember: member)
+        manager.markers = [
+            makeMarkerUI(
+                id: markerId,
+                intent: .personal,
+                title: "Original",
+                visibility: "private",
+                components: [anchor],
+                isCurrentUserMarker: true,
+                canEdit: true
+            ),
+        ]
+
+        let api = MarkerPlacementUpdateFakeAPI()
+        api.updateResponse = makeMarkerDTO(
+            id: markerId,
+            author: member,
+            intent: .personal,
+            title: "Updated",
+            visibility: "private",
+            trackingEnabled: true,
+            components: [anchor],
+            candleTimestamp: now
+        )
+
+        manager.configure(api: api, symbolId: symbolId, timeframe: .h1)
+
+        let updateRequest = RLUpdateMarkerRequest(
+            intent: nil,
+            title: "Updated",
+            note: nil,
+            visibility: "private",
+            confidence: nil,
+            trackingEnabled: true,
+            components: [RLMarkerComponentRequest(componentType: anchor.componentType, payload: anchor.payload.rawPayload)]
+        )
+
+        let firstSuccess = await manager.updateMarkerFromPlacement(id: markerId, request: updateRequest)
+        #expect(firstSuccess)
+        #expect(api.updateCalls == 1)
+        #expect(api.createCalls == 0)
+        #expect(manager.markers.first?.title == "Updated")
+
+        api.shouldFailUpdate = true
+        let failedRequest = RLUpdateMarkerRequest(
+            intent: nil,
+            title: "Broken Title",
+            note: nil,
+            visibility: "private",
+            confidence: nil,
+            trackingEnabled: true,
+            components: [RLMarkerComponentRequest(componentType: anchor.componentType, payload: anchor.payload.rawPayload)]
+        )
+
+        let secondSuccess = await manager.updateMarkerFromPlacement(id: markerId, request: failedRequest)
+        #expect(!secondSuccess)
+        #expect(api.updateCalls == 2)
+        #expect(api.createCalls == 0)
+        #expect(manager.markers.first?.title == "Updated")
+    }
+
+    @Test
+    func editableMarkersUseOwnershipAndCanEditOnly() {
+        let ownedEditableAnalysis = makeMarkerUI(
+            intent: .analysis,
+            title: "Owned analysis",
+            isCurrentUserMarker: true,
+            canEdit: true
+        )
+        let ownedLockedPersonal = makeMarkerUI(
+            intent: .personal,
+            title: "Owned locked",
+            isCurrentUserMarker: true,
+            canEdit: false
+        )
+        let foreignEditablePersonal = makeMarkerUI(
+            intent: .personal,
+            title: "Foreign personal",
+            isCurrentUserMarker: false,
+            canEdit: true
+        )
+
+        #expect(ownedEditableAnalysis.isEditableByCurrentUser)
+        #expect(!ownedLockedPersonal.isEditableByCurrentUser)
+        #expect(!foreignEditablePersonal.isEditableByCurrentUser)
+    }
+
+    @Test
+    func placementPreviewIndexLocksToInitialCenterUntilExplicitReposition() {
+        let initial = MarkerPlacementPreviewIndexResolver.fixedPreviewIndex(
+            currentPreviewIndex: -1,
+            centerIndex: 42,
+            candleCount: 120
+        )
+        #expect(initial == 42)
+
+        let afterPan = MarkerPlacementPreviewIndexResolver.fixedPreviewIndex(
+            currentPreviewIndex: initial,
+            centerIndex: 88,
+            candleCount: 120
+        )
+        #expect(afterPan == 42)
+    }
+
+    @Test
+    func placementOffsetMigrationOnlyRemapsLegacyDefault() {
+        let suiteName = "MarkerDisplaySettingsTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Failed to create isolated UserDefaults suite")
+            return
+        }
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        defaults.set(
+            MarkerDisplaySettings.placementExtraOffsetLegacyDefault,
+            forKey: MarkerDisplaySettings.keyPlacementExtraOffset
+        )
+        defaults.set(false, forKey: MarkerDisplaySettings.keyPlacementOffsetMigrated)
+        let migrated = MarkerDisplaySettings(userDefaults: defaults)
+        #expect(abs(migrated.placementExtraOffset - MarkerDisplaySettings.placementExtraOffsetDefault) < 0.0001)
+
+        defaults.set(31, forKey: MarkerDisplaySettings.keyPlacementExtraOffset)
+        defaults.set(false, forKey: MarkerDisplaySettings.keyPlacementOffsetMigrated)
+        let customPreserved = MarkerDisplaySettings(userDefaults: defaults)
+        #expect(abs(customPreserved.placementExtraOffset - 31) < 0.0001)
+    }
+
+    @Test
+    func pollQuestionResolutionUsesFallbackOrder() {
+        let withQuestion = makeMarkerUI(
+            intent: .poll,
+            title: "Fallback title",
+            note: "Fallback note",
+            pollQuestion: "Primary question"
+        )
+        let withNote = makeMarkerUI(
+            intent: .poll,
+            title: "Fallback title",
+            note: "Fallback note",
+            pollQuestion: nil
+        )
+        let withTitle = makeMarkerUI(
+            intent: .poll,
+            title: "Fallback title",
+            note: nil,
+            pollQuestion: nil
+        )
+
+        #expect(withQuestion.resolvedPollQuestion == "Primary question")
+        #expect(withNote.resolvedPollQuestion == "Fallback note")
+        #expect(withTitle.resolvedPollQuestion == "Fallback title")
+    }
+
+    @Test
+    func optimisticCreatePreservesPollQuestionWhenServerPayloadOmitsIt() async {
+        let guildId = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let symbolId = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let member = makeMember(userId: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!, username: "creator")
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let manager = MarkerManager(userId: member.userId, guildId: guildId, currentUserMember: member)
+        let api = MarkerPlacementUpdateFakeAPI()
+        api.createResponse = makeMarkerDTO(
+            id: UUID(uuidString: "DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD")!,
+            author: member,
+            intent: .poll,
+            title: "Server Poll",
+            note: "Fallback note",
+            visibility: "guild",
+            trackingEnabled: false,
+            components: [
+                RLMarkerComponentDTO(
+                    id: UUID(),
+                    componentType: RLComponentType.anchor.rawValue,
+                    payload: .anchor(AnchorPayload(time: timestamp, price: 100)),
+                    ordering: 0
+                ),
+            ],
+            isCurrentUserMarker: true,
+            canEdit: true,
+            pollQuestion: nil,
+            pollOptions: nil,
+            candleTimestamp: timestamp
+        )
+        manager.configure(api: api, symbolId: symbolId, timeframe: .h1)
+
+        let request = RLCreateMarkerRequest(
+            symbolId: symbolId,
+            timeframe: RLChartTimeframe.h1.toBackendString(),
+            intent: RLMarkerIntent.poll.rawValue,
+            title: "Client Poll",
+            note: "Fallback note",
+            visibility: "guild",
+            confidence: nil,
+            trackingEnabled: false,
+            components: [
+                RLMarkerComponentRequest(
+                    componentType: RLComponentType.anchor.rawValue,
+                    payload: ["time": AnyCodable(timestamp), "price": AnyCodable(100.0)]
+                ),
+            ],
+            pollQuestion: "Will this breakout hold?",
+            pollOptions: ["Yes", "No"]
+        )
+        let candles = [
+            RLCandleDTO(
+                timestamp: timestamp,
+                timestampFormatted: nil,
+                open: 99,
+                high: 101,
+                low: 98,
+                close: 100,
+                volume: 1_000,
+                volumeFormatted: nil
+            ),
+        ]
+
+        let success = await manager.addMarkerV2(
+            request: request,
+            candleIndex: 0,
+            candles: candles
+        )
+        #expect(success)
+        #expect(api.createCalls == 1)
+
+        guard let created = manager.markers.first else {
+            Issue.record("Expected optimistic-create marker in manager")
+            return
+        }
+        #expect(created.pollQuestion == "Will this breakout hold?")
+        #expect(created.pollOptions?.map(\.text) == ["Yes", "No"])
+    }
+
+    @Test
+    func pollStyleTokensMatchSharedPaletteForAllSurfaces() {
+        #expect(colorDistance(rgba(MarkerPollStyleTokens.selectedAccent), rgba(AppColors.statusInfo95)) < 0.02)
+        #expect(colorDistance(rgba(MarkerPollStyleTokens.selectedBackground), rgba(AppColors.statusInfo20)) < 0.02)
+        #expect(colorDistance(rgba(MarkerPollStyleTokens.selectedBorder), rgba(AppColors.statusInfo52)) < 0.02)
+        #expect(colorDistance(rgba(MarkerPollStyleTokens.unselectedCount), rgba(AppColors.greyText)) < 0.02)
+    }
+}
+
+private final class MarkerPlacementUpdateFakeAPI: RealAPIService {
+    var updateCalls = 0
+    var createCalls = 0
+    var shouldFailUpdate = false
+    var createResponse: RLChartMarkerDTO?
+    var updateResponse: RLChartMarkerDTO?
+
+    override func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO {
+        createCalls += 1
+        if let createResponse {
+            return createResponse
+        }
+        return updateResponse ?? makeMarkerDTO(author: makeMember(userId: UUID(), username: "fallback"), intent: .analysis)
+    }
+
+    override func updateMarkerV2(guildId: UUID, markerId: UUID, request body: RLUpdateMarkerRequest) async throws -> RLChartMarkerDTO {
+        updateCalls += 1
+        if shouldFailUpdate {
+            throw MarkerPlacementUpdateError.simulatedFailure
+        }
+        if let updateResponse {
+            return updateResponse
+        }
+        return makeMarkerDTO(id: markerId, author: makeMember(userId: UUID(), username: "fallback"), intent: .analysis)
+    }
+}
+
+private enum MarkerPlacementUpdateError: Error {
+    case simulatedFailure
+}
+
+private func makeMember(userId: UUID, username: String) -> RLGuildMemberDTO {
+    RLGuildMemberDTO(
+        membershipId: UUID(),
+        role: "member",
+        reputation: 100,
+        contributionScore: 10,
+        dateJoined: Date(timeIntervalSince1970: 1_600_000_000),
+        accuracyRate: 0.5,
+        mutedUntil: nil,
+        suspendedUntil: nil,
+        userId: userId,
+        username: username,
+        displayName: username,
+        avatarUrl: nil,
+        isOnline: true,
+        globalReputation: 100,
+        isFriend: false,
+        friendshipStatus: nil,
+        isBlocked: false,
+        isBlockedBy: false
+    )
+}
+
+private func makeMarkerUI(
+    id: UUID = UUID(),
+    intent: RLMarkerIntent,
+    title: String? = nil,
+    note: String? = nil,
+    visibility: String = "guild",
+    components: [RLMarkerComponentDTO]? = nil,
+    isCurrentUserMarker: Bool = false,
+    canEdit: Bool = false,
+    alertSeverity: String? = nil,
+    pollQuestion: String? = nil,
+    pollOptions: [RLPollOptionDTO]? = nil
+) -> ChartMarkerUI {
+    let member = makeMember(userId: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!, username: "author")
+    let dto = makeMarkerDTO(
+        id: id,
+        author: member,
+        intent: intent,
+        title: title,
+        note: note,
+        visibility: visibility,
+        trackingEnabled: false,
+        components: components,
+        isCurrentUserMarker: isCurrentUserMarker,
+        canEdit: canEdit,
+        alertSeverity: alertSeverity,
+        pollQuestion: pollQuestion,
+        pollOptions: pollOptions
+    )
+    return ChartMarkerUI(marker: dto, candleIndex: 0)
+}
+
+private func makeMarkerDTO(
+    id: UUID = UUID(),
+    author: RLGuildMemberDTO,
+    intent: RLMarkerIntent,
+    title: String? = nil,
+    note: String? = nil,
+    visibility: String = "guild",
+    trackingEnabled: Bool = false,
+    components: [RLMarkerComponentDTO]? = nil,
+    isCurrentUserMarker: Bool = false,
+    canEdit: Bool = false,
+    alertSeverity: String? = nil,
+    pollQuestion: String? = nil,
+    pollOptions: [RLPollOptionDTO]? = nil,
+    candleTimestamp: Date = Date(timeIntervalSince1970: 1_700_000_000)
+) -> RLChartMarkerDTO {
+    let resolvedComponents: [RLMarkerComponentDTO]
+    if let components, !components.isEmpty {
+        resolvedComponents = components
+    } else {
+        resolvedComponents = [
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.anchor.rawValue,
+                payload: .anchor(AnchorPayload(time: candleTimestamp, price: 100)),
+                ordering: 0
+            ),
+        ]
+    }
+
+    return RLChartMarkerDTO(
+        id: id,
+        symbolId: UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!,
+        guildId: UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!,
+        author: author,
+        candleTimestamp: candleTimestamp,
+        timeframe: RLChartTimeframe.h1.toBackendString(),
+        price: 100,
+        intent: intent.rawValue,
+        title: title,
+        note: note,
+        visibility: visibility,
+        confidence: nil,
+        trackingEnabled: trackingEnabled,
+        trackingState: nil,
+        alertSeverity: alertSeverity,
+        createdAt: candleTimestamp,
+        createdAtFormatted: "now",
+        isVisible: true,
+        likeCount: 0,
+        isLikedByCurrentUser: false,
+        commentCount: 0,
+        comments: [],
+        isCurrentUserMarker: isCurrentUserMarker,
+        canEdit: canEdit,
+        canDelete: canEdit,
+        components: resolvedComponents,
+        primaryComponentId: resolvedComponents.first?.id,
+        pollQuestion: pollQuestion,
+        pollOptions: pollOptions,
+        userPollVote: nil
+    )
+}
+
+private func rgba(_ color: Color) -> (CGFloat, CGFloat, CGFloat, CGFloat) {
+    let uiColor = UIColor(color)
+    var red: CGFloat = 0
+    var green: CGFloat = 0
+    var blue: CGFloat = 0
+    var alpha: CGFloat = 0
+    if uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+        return (red, green, blue, alpha)
+    }
+    return (0, 0, 0, 0)
+}
+
+private func colorDistance(
+    _ lhs: (CGFloat, CGFloat, CGFloat, CGFloat),
+    _ rhs: (CGFloat, CGFloat, CGFloat, CGFloat)
+) -> CGFloat {
+    let dr = lhs.0 - rhs.0
+    let dg = lhs.1 - rhs.1
+    let db = lhs.2 - rhs.2
+    return sqrt((dr * dr) + (dg * dg) + (db * db))
+}

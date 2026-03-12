@@ -84,7 +84,7 @@ class ChartGestureState: ObservableObject {
     private var lastDragTranslation: CGSize = .zero
     
     /// Deceleration rate (0.95 = smooth, 0.99 = ice-like)
-    private let decelerationRate: CGFloat = 0.94
+    private let decelerationRate: CGFloat = 0.955
     
     /// Minimum velocity to continue momentum (points per second)
     private let minimumVelocity: CGFloat = 15
@@ -476,5 +476,4 @@ extension View {
         )
     }
 }
-
 

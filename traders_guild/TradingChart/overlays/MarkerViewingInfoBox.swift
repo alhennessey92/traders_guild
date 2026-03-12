@@ -34,13 +34,13 @@ struct MarkerViewingInfoBox: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            collapseHandle(icon: "chevron.left", hint: "Collapse")
+            OverlayPanelChrome.sideHandle(icon: "chevron.left")
                 .onTapGesture { toggleCollapse() }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(width: expandedWidth, alignment: .leading)
-        .background(panelBackground(cornerRadius: 12))
+        .background(OverlayPanelChrome.background(cornerRadius: 12))
     }
 
     private var collapsedStrip: some View {
@@ -57,7 +57,7 @@ struct MarkerViewingInfoBox: View {
         .padding(.horizontal, 5)
         .padding(.vertical, 10)
         .frame(width: 30)
-        .background(panelBackground(cornerRadius: 10))
+        .background(OverlayPanelChrome.background(cornerRadius: 10))
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture(perform: toggleCollapse)
     }
@@ -166,7 +166,7 @@ struct MarkerViewingInfoBox: View {
     }
 
     private var pollContent: some View {
-        let question = marker.pollQuestion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let question = marker.resolvedPollQuestion ?? ""
         let options = marker.pollOptions ?? []
         let totalVotes = max(0, options.reduce(0) { $0 + $1.voteCount })
 
@@ -208,20 +208,20 @@ struct MarkerViewingInfoBox: View {
                     if isSubmitting {
                         ProgressView()
                             .scaleEffect(0.65)
-                            .tint(AppColors.surfaceWhite88)
+                            .tint(MarkerPollStyleTokens.progressSubmittingTint)
                     } else {
                         Text("\(option.voteCount)")
                             .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                            .foregroundColor(AppColors.surfaceWhite78)
+                            .foregroundColor(isSelected ? MarkerPollStyleTokens.selectedAccent : MarkerPollStyleTokens.unselectedCount)
                     }
                 }
 
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(AppColors.surfaceWhite10)
+                            .fill(MarkerPollStyleTokens.progressBackground)
                         Capsule()
-                            .fill(isSelected ? AppColors.accentColor.opacity(0.9) : AppColors.surfaceWhite32)
+                            .fill(isSelected ? MarkerPollStyleTokens.progressSelected : MarkerPollStyleTokens.progressUnselected)
                             .frame(width: max(3, geometry.size.width * percentage))
                     }
                 }
@@ -231,10 +231,10 @@ struct MarkerViewingInfoBox: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 9)
-                    .fill(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.surfaceWhite08)
+                    .fill(isSelected ? MarkerPollStyleTokens.selectedBackground : MarkerPollStyleTokens.unselectedBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: 9)
-                            .stroke(isSelected ? AppColors.accentColor.opacity(0.46) : AppColors.surfaceWhite12, lineWidth: 1)
+                            .stroke(isSelected ? MarkerPollStyleTokens.selectedBorder : MarkerPollStyleTokens.unselectedBorder, lineWidth: 1)
                     )
             )
         }
@@ -280,34 +280,6 @@ struct MarkerViewingInfoBox: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 9)
                             .stroke(AppColors.surfaceWhite12, lineWidth: 1)
-                    )
-            )
-    }
-
-    private func panelBackground(cornerRadius: CGFloat) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(.ultraThinMaterial)
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(AppColors.surfaceBlack50)
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .stroke(AppColors.surfaceWhite18, lineWidth: 1)
-        )
-    }
-
-    private func collapseHandle(icon: String, hint: String) -> some View {
-        Image(systemName: icon)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(AppColors.surfaceWhite94)
-            .frame(width: 18, height: 64)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(AppColors.surfaceWhite12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(AppColors.surfaceWhite20, lineWidth: 1)
                     )
             )
     }

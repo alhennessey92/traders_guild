@@ -34,7 +34,8 @@ struct MarkerPlacementDrawingsTab: View {
     @State private var selectedSubTab: MarkerDrawingSubTab = .active
     @State private var limitWarning: String?
     @State private var infoMessage: String?
-    @State private var colorEditingDraftID: UUID?
+    @State private var colorEditorDraftID: UUID?
+    @State private var pendingDrawingColorHex: String?
 
     private let annotationEmojis: [String] = [
         "🎯", "🔥", "🐻", "🐂", "✅", "❌",
@@ -86,32 +87,16 @@ struct MarkerPlacementDrawingsTab: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .confirmationDialog(
-            "Drawing Color",
-            isPresented: Binding(
-                get: { colorEditingDraftID != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        colorEditingDraftID = nil
-                    }
-                }
-            )
-        ) {
-            if let draftID = colorEditingDraftID {
-                ForEach(drawingColorOptions) { option in
-                    Button(option.name) {
-                        placementState.setDrawingColorHex(option.hex, for: draftID)
-                    }
-                }
-                Button("Clear Color", role: .destructive) {
-                    placementState.setDrawingColorHex(nil, for: draftID)
+        .sheet(isPresented: Binding(
+            get: { colorEditorDraftID != nil },
+            set: { isPresented in
+                if !isPresented {
+                    colorEditorDraftID = nil
+                    pendingDrawingColorHex = nil
                 }
             }
-            Button("Cancel", role: .cancel) {
-                colorEditingDraftID = nil
-            }
-        } message: {
-            Text("Choose a color for this drawing.")
+        )) {
+            drawingColorEditorSheet
         }
     }
 
@@ -209,7 +194,7 @@ struct MarkerPlacementDrawingsTab: View {
                 Spacer(minLength: 0)
 
                 Button {
-                    colorEditingDraftID = draft.id
+                    openDrawingColorEditor(for: draft.id)
                 } label: {
                     Image(systemName: "paintpalette.fill")
                         .font(.system(size: 12, weight: .semibold))
@@ -253,7 +238,7 @@ struct MarkerPlacementDrawingsTab: View {
                     Spacer(minLength: 0)
 
                     Button {
-                        colorEditingDraftID = draft.id
+                        openDrawingColorEditor(for: draft.id)
                     } label: {
                         Image(systemName: "paintpalette.fill")
                             .font(.system(size: 12, weight: .semibold))
@@ -312,7 +297,7 @@ struct MarkerPlacementDrawingsTab: View {
                 Spacer(minLength: 0)
 
                 Button {
-                    colorEditingDraftID = draft.id
+                    openDrawingColorEditor(for: draft.id)
                 } label: {
                     Image(systemName: "paintpalette.fill")
                         .font(.system(size: 12, weight: .semibold))
@@ -735,6 +720,128 @@ struct MarkerPlacementDrawingsTab: View {
             )
     }
 
+    private var drawingColorEditorSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                if let draft = currentColorEditingDraft {
+                    Text("Select a color for \(drawingDisplayName(for: draft.componentType)).")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+
+                    let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(drawingColorOptions) { option in
+                            let isSelected = pendingDrawingColorHex == option.hex
+                            Button {
+                                pendingDrawingColorHex = option.hex
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(Color(hex: option.hex) ?? AppColors.surfaceWhite70)
+                                        .frame(width: 14, height: 14)
+                                    Text(option.name)
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundColor(.white)
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 9)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(isSelected ? AppColors.whiteText.opacity(0.16) : AppColors.whiteText.opacity(0.07))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(
+                                                    isSelected
+                                                        ? (Color(hex: option.hex) ?? AppColors.surfaceWhite66)
+                                                        : AppColors.whiteText.opacity(0.08),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Button {
+                        pendingDrawingColorHex = nil
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "xmark.circle")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("Use Default Color")
+                                .font(.caption.weight(.semibold))
+                            Spacer(minLength: 0)
+                            Circle()
+                                .fill(defaultDrawingColor(for: draft.componentType))
+                                .frame(width: 14, height: 14)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(AppColors.whiteText.opacity(0.07))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text("Drawing not available.")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 10) {
+                    Button("Cancel") {
+                        colorEditorDraftID = nil
+                        pendingDrawingColorHex = nil
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.greyText)
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 0)
+
+                    Button("Apply") {
+                        applyDrawingColorSelection()
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(placementState.intent.color.opacity(0.45))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(placementState.intent.color.opacity(0.75), lineWidth: 1)
+                    )
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(16)
+            .navigationTitle("Drawing Color")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.height(320), .medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var currentColorEditingDraft: MarkerComponentDraft? {
+        guard let draftId = colorEditorDraftID else { return nil }
+        return placementState.components.first {
+            $0.id == draftId && $0.componentType.isDrawing
+        }
+    }
+
     @ViewBuilder
     private var horizontalLevelLabelEditors: some View {
         if placementState.component(.levelSupport) != nil || placementState.component(.levelResistance) != nil {
@@ -809,6 +916,51 @@ struct MarkerPlacementDrawingsTab: View {
         Text(text)
             .font(.caption2)
             .foregroundColor(color)
+    }
+
+    private func openDrawingColorEditor(for draftID: UUID) {
+        guard let draft = placementState.components.first(where: { $0.id == draftID }),
+              draft.componentType.isDrawing else {
+            return
+        }
+
+        colorEditorDraftID = draft.id
+        pendingDrawingColorHex = placementState.drawingColorHex(for: draft.id)
+    }
+
+    private func applyDrawingColorSelection() {
+        guard let draftID = colorEditorDraftID else { return }
+        placementState.setDrawingColorHex(pendingDrawingColorHex, for: draftID)
+        colorEditorDraftID = nil
+        pendingDrawingColorHex = nil
+        infoMessage = "Updated drawing color."
+        limitWarning = nil
+    }
+
+    private func drawingDisplayName(for componentType: RLComponentType) -> String {
+        switch componentType {
+        case .drawingTrendline:
+            return "Trendline"
+        case .drawingHorizontalLine:
+            return "Horizontal Line"
+        case .drawingZone:
+            return "Zone"
+        default:
+            return "Drawing"
+        }
+    }
+
+    private func defaultDrawingColor(for componentType: RLComponentType) -> Color {
+        switch componentType {
+        case .drawingTrendline:
+            return RLComponentType.drawingTrendline.color
+        case .drawingHorizontalLine:
+            return RLComponentType.drawingHorizontalLine.color
+        case .drawingZone:
+            return RLComponentType.drawingZone.color
+        default:
+            return placementState.intent.color
+        }
     }
 
     private func toolCard(

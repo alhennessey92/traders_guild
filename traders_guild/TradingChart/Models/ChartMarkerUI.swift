@@ -34,6 +34,7 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var confidence: Int? { marker.confidence }
     var trackingEnabled: Bool { marker.trackingEnabled }
     var trackingState: RLTrackingState? { marker.trackingStateEnum }
+    var predictionResult: RLPredictionResultDTO? { marker.predictionResult }
     var createdAt: Date { marker.createdAt }
     var createdAtFormatted: String { marker.createdAtFormatted }
     var likeCount: Int { marker.likeCount }
@@ -43,6 +44,8 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var isCurrentUserMarker: Bool { marker.isCurrentUserMarker }
     var canEdit: Bool { marker.canEdit }
     var canDelete: Bool { marker.canDelete }
+    var isEditableByCurrentUser: Bool { isCurrentUserMarker && canEdit }
+    var canOpenEditFlow: Bool { canEdit || isCurrentUserMarker }
     var components: [RLMarkerComponentDTO] { marker.components }
     var anchorComponent: RLMarkerComponentDTO? { marker.anchorComponent }
     var levelComponents: [RLMarkerComponentDTO] { marker.levelComponents }
@@ -114,6 +117,20 @@ struct ChartMarkerUI: Identifiable, Hashable {
     }
     var selectedEmoji: String? { marker.selectedEmoji }
     var pollQuestion: String? { marker.pollQuestion }
+    var resolvedPollQuestion: String? {
+        let candidates: [String?] = [
+            marker.pollQuestion,
+            marker.note,
+            marker.title,
+        ]
+        for candidate in candidates {
+            let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return nil
+    }
     var pollOptions: [RLPollOptionDTO]? { marker.pollOptions }
     var userPollVote: UUID? { marker.userPollVote }
     var totalPollVotes: Int {
@@ -178,6 +195,7 @@ extension RLChartMarkerDTO {
         isLikedByCurrentUser: Bool? = nil,
         comments: [RLMarkerCommentDTO]? = nil,
         commentCount: Int? = nil,
+        pollQuestion: String? = nil,
         pollOptions: [RLPollOptionDTO]? = nil,
         userPollVote: UUID? = nil
     ) -> RLChartMarkerDTO {
@@ -205,6 +223,7 @@ extension RLChartMarkerDTO {
             dict["comments"] = commentsArray
         }
         if let commentCount = commentCount { dict["commentCount"] = commentCount }
+        if let pollQuestion = pollQuestion { dict["pollQuestion"] = pollQuestion }
         if let pollOptions = pollOptions,
            let pollOptionsData = try? JSONEncoder().encode(pollOptions),
            let pollOptionsArray = try? JSONSerialization.jsonObject(with: pollOptionsData) {

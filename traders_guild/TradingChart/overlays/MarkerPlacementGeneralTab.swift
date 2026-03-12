@@ -5,6 +5,7 @@ struct MarkerPlacementGeneralTab: View {
     @State private var intentChangeWarning: String?
     @State private var pendingIntentSwitch: PendingIntentSwitch?
     @State private var isIntentPickerExpanded = false
+    @FocusState private var focusedInput: PlacementInputFocus?
 
     private static let priceFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -79,6 +80,15 @@ struct MarkerPlacementGeneralTab: View {
                     pendingIntentSwitch = nil
                 }
             )
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedInput = nil
+                }
+                .font(.subheadline.weight(.semibold))
+            }
         }
     }
 
@@ -187,7 +197,9 @@ struct MarkerPlacementGeneralTab: View {
                 icon: "list.bullet.clipboard",
                 tint: placementState.intent == .setup && placementState.trackingEnabled
                     ? .green
-                    : placementState.intent.color
+                    : (placementState.intent == .alert
+                        ? (placementState.alertSeverity?.color ?? placementState.intent.color)
+                        : placementState.intent.color)
             )
             requirementsContent
         }
@@ -230,7 +242,12 @@ struct MarkerPlacementGeneralTab: View {
             }
 
         case .analysis:
-            placementInputField("Write analysis context", text: $placementState.note, axis: .vertical)
+            placementInputField(
+                "Write analysis context",
+                text: $placementState.note,
+                axis: .vertical,
+                focus: .analysisNote
+            )
                 .lineLimit(3...6)
 
         case .alert:
@@ -242,14 +259,23 @@ struct MarkerPlacementGeneralTab: View {
             }
 
         case .question:
-            placementInputField("Type your question", text: $placementState.note, axis: .vertical)
+            placementInputField(
+                "Type your question",
+                text: $placementState.note,
+                axis: .vertical,
+                focus: .questionNote
+            )
                 .lineLimit(3...5)
 
         case .poll:
             pollFields
 
         case .news:
-            placementInputField("https://example.com/news-link", text: newsURLBinding)
+            placementInputField(
+                "https://example.com/news-link",
+                text: newsURLBinding,
+                focus: .newsURL
+            )
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
 
@@ -303,9 +329,14 @@ struct MarkerPlacementGeneralTab: View {
                 tint: AppColors.whiteText.opacity(0.85)
             )
 
-            placementInputField("Title (optional)", text: $placementState.title)
+            placementInputField("Title (optional)", text: $placementState.title, focus: .generalTitle)
 
-            placementInputField("Description / Note", text: $placementState.note, axis: .vertical)
+            placementInputField(
+                "Description / Note",
+                text: $placementState.note,
+                axis: .vertical,
+                focus: .generalNote
+            )
                 .lineLimit(2...5)
                 .onChange(of: placementState.note) { _, newValue in
                     if placementState.component(.textNote) != nil {
@@ -378,6 +409,7 @@ struct MarkerPlacementGeneralTab: View {
                 .foregroundColor(.white)
                 .multilineTextAlignment(.trailing)
                 .keyboardType(.decimalPad)
+                .focused($focusedInput, equals: .level(componentType.rawValue))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(
@@ -389,6 +421,26 @@ struct MarkerPlacementGeneralTab: View {
                         )
                 )
                 .frame(width: 132)
+
+            if focusedInput == .level(componentType.rawValue) {
+                Button("Done") {
+                    focusedInput = nil
+                    HapticFeedback.light.trigger()
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(placementState.intent.color)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(placementState.intent.color.opacity(0.18))
+                        .overlay(
+                            Capsule()
+                                .stroke(placementState.intent.color.opacity(0.45), lineWidth: 1)
+                        )
+                )
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -485,6 +537,8 @@ struct MarkerPlacementGeneralTab: View {
     private func alertSeverityButton(_ option: AlertSeverityOption) -> some View {
         let isSelected = placementState.alertSeverity == option.severity
         let severityColor = option.severity.color
+        let neutralFill = AppColors.whiteText.opacity(0.08)
+        let neutralStroke = AppColors.whiteText.opacity(0.16)
         return Button {
             applyAlertSeverity(option)
             HapticFeedback.light.trigger()
@@ -497,18 +551,18 @@ struct MarkerPlacementGeneralTab: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
-            .foregroundColor(isSelected ? .white : severityColor.opacity(0.92))
+            .foregroundColor(isSelected ? .white : AppColors.whiteText.opacity(0.82))
             .frame(maxWidth: .infinity)
             .frame(height: 58)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? severityColor.opacity(0.38) : severityColor.opacity(0.14))
+                    .fill(isSelected ? severityColor.opacity(0.38) : neutralFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(
                                 isSelected
                                     ? severityColor.opacity(0.72)
-                                    : severityColor.opacity(0.35),
+                                    : neutralStroke,
                                 lineWidth: 1
                             )
                     )
@@ -519,11 +573,15 @@ struct MarkerPlacementGeneralTab: View {
 
     private var pollFields: some View {
         VStack(alignment: .leading, spacing: 8) {
-            placementInputField("Poll question", text: $placementState.pollQuestion)
+            placementInputField("Poll question", text: $placementState.pollQuestion, focus: .pollQuestion)
 
             ForEach(placementState.pollOptions.indices, id: \.self) { idx in
                 HStack(spacing: 8) {
-                    placementInputField("Option \(idx + 1)", text: $placementState.pollOptions[idx])
+                    placementInputField(
+                        "Option \(idx + 1)",
+                        text: $placementState.pollOptions[idx],
+                        focus: .pollOption(idx)
+                    )
                     if placementState.pollOptions.count > 2 {
                         Button {
                             placementState.pollOptions.remove(at: idx)
@@ -551,14 +609,17 @@ struct MarkerPlacementGeneralTab: View {
     private func placementInputField(
         _ title: String,
         text: Binding<String>,
-        axis: Axis = .horizontal
+        axis: Axis = .horizontal,
+        focus: PlacementInputFocus
     ) -> some View {
         TextField(title, text: text, axis: axis)
             .textFieldStyle(.plain)
             .font(.subheadline)
             .foregroundColor(.white)
+            .focused($focusedInput, equals: focus)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
+            .padding(.trailing, focusedInput == focus ? 52 : 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(
@@ -573,6 +634,18 @@ struct MarkerPlacementGeneralTab: View {
                             .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
                     )
             )
+            .overlay(alignment: .trailing) {
+                if focusedInput == focus {
+                    Button("Save") {
+                        focusedInput = nil
+                        HapticFeedback.light.trigger()
+                    }
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(placementState.intent.color)
+                    .padding(.trailing, 10)
+                    .buttonStyle(.plain)
+                }
+            }
     }
 
     private var statsRow: some View {
@@ -819,4 +892,15 @@ private struct AlertSeverityOption: Identifiable {
         self.severity = severity
         self.defaultMessage = defaultMessage
     }
+}
+
+private enum PlacementInputFocus: Hashable {
+    case level(String)
+    case analysisNote
+    case questionNote
+    case newsURL
+    case pollQuestion
+    case pollOption(Int)
+    case generalTitle
+    case generalNote
 }

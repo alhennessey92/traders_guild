@@ -576,7 +576,8 @@ class MarkerManager: ObservableObject {
             primaryComponentId: tempComponents.first(where: { $0.componentType == RLComponentType.anchor.rawValue })?.id,
             pollQuestion: request.pollQuestion,
             pollOptions: request.pollOptions?.map { RLPollOptionDTO(id: UUID(), text: $0, voteCount: 0, hasVoted: false) },
-            userPollVote: nil
+            userPollVote: nil,
+            predictionResult: nil
         )
 
         var marker = ChartMarkerUI(marker: tempMarkerDTO, candleIndex: candleIndex)
@@ -598,7 +599,15 @@ class MarkerManager: ObservableObject {
             let created = try await api.createMarkerV2(guildId: currentGuildId, request: request)
             if let idx = markers.firstIndex(where: { $0.id == tempId }),
                let newCandleIndex = findCandleIndex(timestamp: created.candleTimestamp, in: candles) {
-                var updated = ChartMarkerUI(marker: created, candleIndex: newCandleIndex)
+                let resolvedCreated = patchPollFields(
+                    in: created,
+                    fallbackQuestion: normalizedPollQuestion(request.pollQuestion) ?? markers[idx].pollQuestion,
+                    fallbackOptions: fallbackPollOptions(
+                        from: request.pollOptions,
+                        preservingIDsFrom: markers[idx].pollOptions
+                    ) ?? markers[idx].pollOptions
+                )
+                var updated = ChartMarkerUI(marker: resolvedCreated, candleIndex: newCandleIndex)
                 updated.positionedBelow = marker.positionedBelow
                 updated.proximityTier = marker.proximityTier
                 updated.stackIndex = marker.stackIndex
@@ -666,6 +675,48 @@ class MarkerManager: ObservableObject {
     private func syncSelectedMarker(_ marker: ChartMarkerUI) {
         guard selectedMarker?.id == marker.id else { return }
         selectedMarker = marker
+    }
+
+    private func normalizedPollQuestion(_ question: String?) -> String? {
+        let trimmed = question?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func fallbackPollOptions(
+        from options: [String]?,
+        preservingIDsFrom existing: [RLPollOptionDTO]?
+    ) -> [RLPollOptionDTO]? {
+        guard let options else { return nil }
+        let normalized = options
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !normalized.isEmpty else { return nil }
+
+        return normalized.enumerated().map { index, text in
+            let existingID = existing?.indices.contains(index) == true ? existing?[index].id : nil
+            return RLPollOptionDTO(
+                id: existingID ?? UUID(),
+                text: text,
+                voteCount: 0,
+                hasVoted: false
+            )
+        }
+    }
+
+    private func patchPollFields(
+        in marker: RLChartMarkerDTO,
+        fallbackQuestion: String?,
+        fallbackOptions: [RLPollOptionDTO]?
+    ) -> RLChartMarkerDTO {
+        let serverQuestion = marker.pollQuestion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let shouldPatchQuestion = serverQuestion.isEmpty && fallbackQuestion != nil
+        let shouldPatchOptions = (marker.pollOptions?.isEmpty ?? true) && !(fallbackOptions?.isEmpty ?? true)
+
+        guard shouldPatchQuestion || shouldPatchOptions else { return marker }
+        return marker.updating(
+            pollQuestion: shouldPatchQuestion ? fallbackQuestion : nil,
+            pollOptions: shouldPatchOptions ? fallbackOptions : nil
+        )
     }
     
     /// Update a marker with any combination of fields (all optional). Only provided fields are sent to the backend.
@@ -869,6 +920,110 @@ class MarkerManager: ObservableObject {
                 syncSelectedMarker(rolledBack)
             }
             print("Failed to update marker: \(error)")
+        }
+    }
+
+    @discardableResult
+    func updateMarkerFromPlacement(
+        id: UUID,
+        request: RLUpdateMarkerRequest
+    ) async -> Bool {
+        guard let index = markerIndex(for: id) else { return false }
+        guard let api = api else { return false }
+
+        let originalMarker = markers[index]
+        let originalSnapshot = snapshotLayout(for: originalMarker)
+        let originalDTO = originalMarker.marker
+
+        let optimisticComponents: [RLMarkerComponentDTO]? = request.components.map { requests in
+            buildComponentDTOs(
+                from: requests,
+                preservingFrom: originalDTO.components
+            )
+        }
+        let optimisticPollQuestion = normalizedPollQuestion(request.pollQuestion)
+        let optimisticPollOptions = fallbackPollOptions(
+            from: request.pollOptions,
+            preservingIDsFrom: originalDTO.pollOptions
+        )
+
+        let optimistic = originalMarker.withMarker(
+            originalDTO.updating(
+                title: request.title,
+                note: request.note,
+                visibility: request.visibility,
+                trackingEnabled: request.trackingEnabled,
+                components: optimisticComponents,
+                pollQuestion: optimisticPollQuestion,
+                pollOptions: optimisticPollOptions
+            )
+        )
+        markers[index] = optimistic
+        syncSelectedMarker(optimistic)
+
+        do {
+            let updatedMarker = try await api.updateMarkerV2(
+                guildId: currentGuildId,
+                markerId: id,
+                request: request
+            )
+            guard let latestIndex = markerIndex(for: id) else { return false }
+
+            let latestSnapshot = snapshotLayout(for: markers[latestIndex])
+            let reconciled = patchPollFields(
+                in: updatedMarker,
+                fallbackQuestion: optimistic.pollQuestion,
+                fallbackOptions: optimistic.pollOptions
+            )
+            let updated = applyingLayout(
+                latestSnapshot,
+                to: ChartMarkerUI(marker: reconciled, candleIndex: latestSnapshot.candleIndex)
+            )
+            markers[latestIndex] = updated
+            syncSelectedMarker(updated)
+            return true
+        } catch {
+            guard let latestIndex = markerIndex(for: id) else { return false }
+            let rolledBack = applyingLayout(
+                originalSnapshot,
+                to: ChartMarkerUI(marker: originalMarker.marker, candleIndex: originalSnapshot.candleIndex)
+            )
+            markers[latestIndex] = rolledBack
+            syncSelectedMarker(rolledBack)
+            print("Failed to update marker from placement: \(error)")
+            return false
+        }
+    }
+
+    private func buildComponentDTOs(
+        from requests: [RLMarkerComponentRequest],
+        preservingFrom existing: [RLMarkerComponentDTO]
+    ) -> [RLMarkerComponentDTO] {
+        var reusableIDs: [String: [UUID]] = [:]
+        for component in existing.sorted(by: { $0.ordering < $1.ordering }) {
+            reusableIDs[component.componentType, default: []].append(component.id)
+        }
+
+        return requests.enumerated().map { ordering, component in
+            let id: UUID = {
+                var pool = reusableIDs[component.componentType] ?? []
+                if !pool.isEmpty {
+                    let preserved = pool.removeFirst()
+                    reusableIDs[component.componentType] = pool
+                    return preserved
+                }
+                return UUID()
+            }()
+
+            return RLMarkerComponentDTO(
+                id: id,
+                componentType: component.componentType,
+                payload: MarkerComponentPayload.decode(
+                    componentType: component.componentType,
+                    rawPayload: component.payload
+                ),
+                ordering: ordering
+            )
         }
     }
     
@@ -1157,41 +1312,84 @@ class MarkerManager: ObservableObject {
 
 class MarkerDisplaySettings: ObservableObject {
     static let shared = MarkerDisplaySettings()
-    
+    static let baseOffsetDefault: CGFloat = 70
+    static let stackOffsetDefault: CGFloat = 36
+    static let minStackSpacingDefault: CGFloat = 34
+    static let proximityTierOffsetDefault: CGFloat = 25
+    static let placementExtraOffsetLegacyDefault: CGFloat = 40
+    static let placementExtraOffsetDefault: CGFloat = 24
+
+    static let keyBaseOffset = "markerBaseOffset"
+    static let keyStackOffset = "markerStackOffset"
+    static let keyMinStackSpacing = "markerMinStackSpacing"
+    static let keyProximityTierOffset = "markerProximityTierOffset"
+    static let keyPlacementExtraOffset = "markerPlacementExtraOffset"
+    static let keyPlacementOffsetMigrated = "markerPlacementExtraOffsetMigrated_v2"
+
+    private let userDefaults: UserDefaults
+
     @Published var baseOffset: CGFloat {
-        didSet { UserDefaults.standard.set(baseOffset, forKey: "markerBaseOffset") }
+        didSet { userDefaults.set(baseOffset, forKey: Self.keyBaseOffset) }
     }
-    
+
     @Published var stackOffset: CGFloat {
-        didSet { UserDefaults.standard.set(stackOffset, forKey: "markerStackOffset") }
+        didSet { userDefaults.set(stackOffset, forKey: Self.keyStackOffset) }
     }
-    
+
     @Published var minStackSpacing: CGFloat {
-        didSet { UserDefaults.standard.set(minStackSpacing, forKey: "markerMinStackSpacing") }
+        didSet {
+            let clamped = Swift.max(MarkerPositionCalculator.hardMinimumStackSpacing, minStackSpacing)
+            if clamped != minStackSpacing {
+                minStackSpacing = clamped
+                return
+            }
+            userDefaults.set(minStackSpacing, forKey: Self.keyMinStackSpacing)
+        }
     }
-    
+
     @Published var proximityTierOffset: CGFloat {
-        didSet { UserDefaults.standard.set(proximityTierOffset, forKey: "markerProximityTierOffset") }
+        didSet { userDefaults.set(proximityTierOffset, forKey: Self.keyProximityTierOffset) }
     }
-    
+
     @Published var placementExtraOffset: CGFloat {
-        didSet { UserDefaults.standard.set(placementExtraOffset, forKey: "markerPlacementExtraOffset") }
+        didSet { userDefaults.set(placementExtraOffset, forKey: Self.keyPlacementExtraOffset) }
     }
-    
-    private init() {
-        self.baseOffset = UserDefaults.standard.object(forKey: "markerBaseOffset") as? CGFloat ?? 70
-        self.stackOffset = UserDefaults.standard.object(forKey: "markerStackOffset") as? CGFloat ?? 36
-        self.minStackSpacing = UserDefaults.standard.object(forKey: "markerMinStackSpacing") as? CGFloat ?? 34
-        self.proximityTierOffset = UserDefaults.standard.object(forKey: "markerProximityTierOffset") as? CGFloat ?? 25
-        self.placementExtraOffset = UserDefaults.standard.object(forKey: "markerPlacementExtraOffset") as? CGFloat ?? 40
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        self.baseOffset = userDefaults.object(forKey: Self.keyBaseOffset) as? CGFloat ?? Self.baseOffsetDefault
+        self.stackOffset = userDefaults.object(forKey: Self.keyStackOffset) as? CGFloat ?? Self.stackOffsetDefault
+        let persistedMinSpacing = userDefaults.object(forKey: Self.keyMinStackSpacing) as? CGFloat ?? Self.minStackSpacingDefault
+        self.minStackSpacing = Swift.max(MarkerPositionCalculator.hardMinimumStackSpacing, persistedMinSpacing)
+        self.proximityTierOffset = userDefaults.object(forKey: Self.keyProximityTierOffset) as? CGFloat ?? Self.proximityTierOffsetDefault
+
+        let persistedPlacementOffset = userDefaults.object(forKey: Self.keyPlacementExtraOffset) as? CGFloat
+        let hasMigratedPlacementOffset = userDefaults.bool(forKey: Self.keyPlacementOffsetMigrated)
+        if let persistedPlacementOffset {
+            let shouldMigrateLegacyDefault =
+                !hasMigratedPlacementOffset &&
+                abs(persistedPlacementOffset - Self.placementExtraOffsetLegacyDefault) < 0.0001
+
+            self.placementExtraOffset = shouldMigrateLegacyDefault
+                ? Self.placementExtraOffsetDefault
+                : persistedPlacementOffset
+        } else {
+            self.placementExtraOffset = Self.placementExtraOffsetDefault
+        }
+
+        userDefaults.set(self.placementExtraOffset, forKey: Self.keyPlacementExtraOffset)
+
+        if !hasMigratedPlacementOffset {
+            userDefaults.set(true, forKey: Self.keyPlacementOffsetMigrated)
+        }
     }
-    
+
     func resetToDefaults() {
-        baseOffset = 70
-        stackOffset = 36
-        minStackSpacing = 34
-        proximityTierOffset = 25
-        placementExtraOffset = 40
+        baseOffset = Self.baseOffsetDefault
+        stackOffset = Self.stackOffsetDefault
+        minStackSpacing = Swift.max(MarkerPositionCalculator.hardMinimumStackSpacing, Self.minStackSpacingDefault)
+        proximityTierOffset = Self.proximityTierOffsetDefault
+        placementExtraOffset = Self.placementExtraOffsetDefault
     }
 }
 
@@ -1203,6 +1401,7 @@ struct MarkerPositionCalculator {
     static var baseOffset: CGFloat { settings.baseOffset }
     static var stackOffset: CGFloat { settings.stackOffset }
     static var minStackSpacing: CGFloat { settings.minStackSpacing }
+    static let hardMinimumStackSpacing: CGFloat = MarkerVisualSpec.baseCanvasDiameter + 4
     static let proximityRange = 3
     static let hitRadius: CGFloat = 28
     
@@ -1224,7 +1423,7 @@ struct MarkerPositionCalculator {
         
         let dampenedBaseScale = dampenPriceScale(priceScale, dampening: 0.75)
         let scaledStackOffsetRaw = stackOffset * dampenPriceScale(priceScale, dampening: 0.5)
-        let scaledStackOffset = Swift.max(minStackSpacing, scaledStackOffsetRaw)
+        let scaledStackOffset = Swift.max(hardMinimumStackSpacing, Swift.max(minStackSpacing, scaledStackOffsetRaw))
         let scaledBaseOffset = baseOffset * dampenedBaseScale
         let scaledTierOffset = offsetForTier(marker.proximityTier) * dampenedBaseScale
         
@@ -1261,7 +1460,7 @@ struct MarkerPositionCalculator {
         let dampenedBaseScale = dampenPriceScale(priceScale, dampening: 0.75)
         let scaledPlacementOffset = placementOffset * dampenedBaseScale
         let scaledStackOffsetRaw = stackOffset * dampenPriceScale(priceScale, dampening: 0.5)
-        let scaledStackOffset = Swift.max(minStackSpacing, scaledStackOffsetRaw)
+        let scaledStackOffset = Swift.max(hardMinimumStackSpacing, Swift.max(minStackSpacing, scaledStackOffsetRaw))
         
         let shouldBeBelow: Bool
         

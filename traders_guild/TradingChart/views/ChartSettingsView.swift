@@ -68,7 +68,7 @@ struct ChartSettingsView: View {
                     markerLayoutSliderRow(
                         title: "Min Stack Spacing",
                         value: minStackSpacingBinding,
-                        range: 16...80
+                        range: Double(MarkerPositionCalculator.hardMinimumStackSpacing)...80
                     )
                     markerLayoutSliderRow(
                         title: "Proximity Spread",

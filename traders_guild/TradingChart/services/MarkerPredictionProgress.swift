@@ -90,4 +90,52 @@ enum MarkerPredictionProgress {
     static func trackingState(for marker: RLChartMarkerDTO) -> RLTrackingState? {
         marker.trackingStateEnum
     }
+
+    // MARK: - Outcome Verification
+
+    /// Whether the marker's outcome has been finalized (TP hit, SL hit, or expired).
+    static func isOutcomeFinalized(_ marker: RLChartMarkerDTO) -> Bool {
+        marker.trackingStateEnum?.isResolved == true
+    }
+
+    /// Build a structured outcome description for display in the marker info box.
+    static func outcomeDescription(for marker: RLChartMarkerDTO) -> SetupOutcome? {
+        guard let state = marker.trackingStateEnum, state.isResolved else { return nil }
+
+        let result = marker.predictionResult
+        return SetupOutcome(
+            state: state,
+            resultType: result?.resultType,
+            triggerPrice: result.map { $0.triggerPrice },
+            triggeredAtFormatted: result?.triggeredAtFormatted,
+            pnl: result?.pnl,
+            isTracked: marker.trackingEnabled
+        )
+    }
+}
+
+// MARK: - Setup Outcome
+
+struct SetupOutcome {
+    let state: RLTrackingState
+    let resultType: String?
+    let triggerPrice: Double?
+    let triggeredAtFormatted: String?
+    let pnl: Double?
+    let isTracked: Bool
+
+    var isWin: Bool { state == .tpHit }
+    var isLoss: Bool { state == .slHit }
+    var isExpired: Bool { state == .expired }
+
+    var displayLabel: String { state.displayName }
+
+    var displayIcon: String {
+        switch state {
+        case .tpHit: return "checkmark.circle.fill"
+        case .slHit: return "xmark.circle.fill"
+        case .expired: return "clock.badge.xmark.fill"
+        default: return "questionmark.circle"
+        }
+    }
 }
