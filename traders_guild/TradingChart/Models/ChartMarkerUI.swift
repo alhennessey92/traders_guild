@@ -118,15 +118,41 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var selectedEmoji: String? { marker.selectedEmoji }
     var pollQuestion: String? { marker.pollQuestion }
     var resolvedPollQuestion: String? {
+        func normalized(_ value: String?) -> String? {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        func extractFromUnknownPayload(_ payload: [String: AnyCodable]) -> String? {
+            let keys = ["poll_question", "question", "prompt", "text", "title"]
+            for key in keys {
+                if let value = payload[key]?.value as? String,
+                   let normalized = normalized(value) {
+                    return normalized
+                }
+            }
+            return nil
+        }
+
+        let componentPollText: String? = marker.components.first { $0.componentTypeEnum == .textNote }
+            .flatMap { component in
+                guard case let .note(payload) = component.payload else { return nil }
+                return payload.text
+            }
+        let unknownComponentPollText: String? = marker.components.compactMap { component in
+            guard case let .unknown(_, rawPayload) = component.payload else { return nil }
+            return extractFromUnknownPayload(rawPayload)
+        }.first
         let candidates: [String?] = [
             marker.pollQuestion,
+            componentPollText,
+            unknownComponentPollText,
             marker.note,
             marker.title,
         ]
         for candidate in candidates {
-            let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if !trimmed.isEmpty {
-                return trimmed
+            if let normalized = normalized(candidate) {
+                return normalized
             }
         }
         return nil

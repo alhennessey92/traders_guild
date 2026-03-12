@@ -41,21 +41,13 @@ struct MarkerPlacementPanel: View {
             switch placementState.selectedPlacementTab {
             case .general:
                 MarkerPlacementGeneralTab(placementState: placementState)
-            case .indicators:
-                MarkerPlacementIndicatorsTab(
+            case .components:
+                MarkerPlacementComponentsTab(
                     placementState: placementState,
-                    activeChartIndicators: activeChartIndicators
-                )
-            case .drawings:
-                MarkerPlacementDrawingsTab(
-                    placementState: placementState,
-                    onBeginInteractiveDrawing: onBeginInteractiveDrawing
-                )
-            case .timeframes:
-                MarkerPlacementTimeframesTab(
-                    placementState: placementState,
+                    activeChartIndicators: activeChartIndicators,
                     currentChartTimeframe: currentChartTimeframe,
                     onSelectTimeframe: onSelectTimeframe,
+                    onBeginInteractiveDrawing: onBeginInteractiveDrawing,
                     timeframePanelManager: timeframePanelManager,
                     symbolId: symbolId,
                     guildId: guildId

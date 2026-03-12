@@ -176,7 +176,7 @@ struct IndicatorSettingsContent: View {
         UnifiedTabBar(
             selectedTab: $selectedTab,
             size: .compact,
-            theme: .blue,
+            theme: .subTab,
             spacing: 6
         )
     }

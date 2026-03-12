@@ -1,7 +1,6 @@
 import SwiftUI
 
 private enum MarkerDrawingSubTab: String, CaseIterable, UnifiedTabItem {
-    case active = "Active"
     case lines = "Lines"
     case zones = "Zones"
     case annotations = "Annotations"
@@ -11,7 +10,6 @@ private enum MarkerDrawingSubTab: String, CaseIterable, UnifiedTabItem {
 
     var icon: String {
         switch self {
-        case .active: return "checkmark.circle.fill"
         case .lines: return "line.3.horizontal"
         case .zones: return "square.dashed"
         case .annotations: return "text.bubble"
@@ -31,7 +29,7 @@ struct MarkerPlacementDrawingsTab: View {
     @ObservedObject var placementState: MarkerPlacementState
     let onBeginInteractiveDrawing: (() -> Void)?
 
-    @State private var selectedSubTab: MarkerDrawingSubTab = .active
+    @State private var selectedSubTab: MarkerDrawingSubTab = .lines
     @State private var limitWarning: String?
     @State private var infoMessage: String?
     @State private var colorEditorDraftID: UUID?
@@ -58,7 +56,7 @@ struct MarkerPlacementDrawingsTab: View {
                 UnifiedTabBar(
                     selectedTab: $selectedSubTab,
                     size: .compact,
-                    theme: .blue,
+                    theme: .deepSubTab,
                     spacing: 6
                 )
 
@@ -73,8 +71,6 @@ struct MarkerPlacementDrawingsTab: View {
                 }
 
                 switch selectedSubTab {
-                case .active:
-                    activeSubTab
                 case .lines:
                     linesSubTab
                 case .zones:
@@ -1111,7 +1107,7 @@ struct MarkerPlacementDrawingsTab: View {
             return
         }
 
-        selectedSubTab = .active
+        selectedSubTab = .lines
         placementState.beginEditingDrawing(draftID, tool: .horizontalLine)
         infoMessage = "Horizontal line added."
         limitWarning = nil
@@ -1143,7 +1139,7 @@ struct MarkerPlacementDrawingsTab: View {
             return
         }
 
-        selectedSubTab = .active
+        selectedSubTab = .zones
         placementState.beginEditingDrawing(draftID, tool: .zone)
         infoMessage = "Default zone added."
         limitWarning = nil
@@ -1164,14 +1160,14 @@ struct MarkerPlacementDrawingsTab: View {
             break
         }
 
-        selectedSubTab = .active
+        selectedSubTab = .lines
         infoMessage = "\(label) level ready. Drag the on-chart handle to reposition."
         limitWarning = nil
     }
 
     private func editTrendline(_ draftID: UUID) {
         beginInteractiveDrawingSession()
-        selectedSubTab = .active
+        selectedSubTab = .lines
         placementState.activeTool = .draw
         placementState.activeSubTool = MarkerToolOption.drawTrendline.rawValue
         placementState.beginEditingDrawing(draftID, tool: .trendline)
@@ -1181,7 +1177,7 @@ struct MarkerPlacementDrawingsTab: View {
 
     private func editHorizontalLine(_ draftID: UUID) {
         beginInteractiveDrawingSession()
-        selectedSubTab = .active
+        selectedSubTab = .lines
         placementState.activeTool = .draw
         placementState.activeSubTool = MarkerToolOption.drawHorizontalLine.rawValue
         placementState.beginEditingDrawing(draftID, tool: .horizontalLine)
@@ -1191,7 +1187,7 @@ struct MarkerPlacementDrawingsTab: View {
 
     private func editZone(_ draftID: UUID) {
         beginInteractiveDrawingSession()
-        selectedSubTab = .active
+        selectedSubTab = .zones
         placementState.activeTool = .draw
         placementState.activeSubTool = MarkerToolOption.drawZone.rawValue
         placementState.beginEditingDrawing(draftID, tool: .zone)
@@ -1212,7 +1208,7 @@ struct MarkerPlacementDrawingsTab: View {
         )
         if let draft = placementState.component(.textNote) {
             beginInteractiveDrawingSession()
-            selectedSubTab = .active
+            selectedSubTab = .annotations
             placementState.beginEditingDrawing(draft.id, tool: .note)
         }
         infoMessage = "Text note added."
@@ -1232,7 +1228,7 @@ struct MarkerPlacementDrawingsTab: View {
         if placementState.intent != .reaction,
            let draft = placementState.component(.reactionEmoji) {
             beginInteractiveDrawingSession()
-            selectedSubTab = .active
+            selectedSubTab = .annotations
             placementState.beginEditingDrawing(draft.id, tool: .emoji)
         }
         infoMessage = nil

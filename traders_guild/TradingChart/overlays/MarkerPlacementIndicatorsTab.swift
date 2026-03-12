@@ -1,7 +1,6 @@
 import SwiftUI
 
 private enum MarkerIndicatorSubTab: String, CaseIterable, UnifiedTabItem {
-    case active = "Active"
     case trend = "Trend"
     case volatility = "Volatility"
     case momentum = "Momentum"
@@ -11,7 +10,6 @@ private enum MarkerIndicatorSubTab: String, CaseIterable, UnifiedTabItem {
 
     var icon: String {
         switch self {
-        case .active: return "checkmark.circle.fill"
         case .trend: return IndicatorCategory.trend.icon
         case .volatility: return IndicatorCategory.volatility.icon
         case .momentum: return IndicatorCategory.momentum.icon
@@ -21,7 +19,6 @@ private enum MarkerIndicatorSubTab: String, CaseIterable, UnifiedTabItem {
 
     var category: IndicatorCategory? {
         switch self {
-        case .active: return nil
         case .trend: return .trend
         case .volatility: return .volatility
         case .momentum: return .momentum
@@ -34,7 +31,7 @@ struct MarkerPlacementIndicatorsTab: View {
     @ObservedObject var placementState: MarkerPlacementState
     let activeChartIndicators: [IndicatorPayload]
 
-    @State private var selectedSubTab: MarkerIndicatorSubTab = .active
+    @State private var selectedSubTab: MarkerIndicatorSubTab = .trend
     @State private var limitWarning: String?
     @State private var infoMessage: String?
     @State private var editingContext: IndicatorEditingContext?
@@ -58,7 +55,7 @@ struct MarkerPlacementIndicatorsTab: View {
                 UnifiedTabBar(
                     selectedTab: $selectedSubTab,
                     size: .compact,
-                    theme: .blue,
+                    theme: .deepSubTab,
                     spacing: 6
                 )
 
@@ -72,13 +69,8 @@ struct MarkerPlacementIndicatorsTab: View {
                     statusMessage(limitWarning, color: AppColors.statusWarning95)
                 }
 
-                switch selectedSubTab {
-                case .active:
-                    activeTabSection
-                case .trend, .volatility, .momentum, .volume:
-                    if let category = selectedSubTab.category {
-                        categoryTabSection(category: category)
-                    }
+                if let category = selectedSubTab.category {
+                    categoryTabSection(category: category)
                 }
             }
             .padding(.trailing, 2)

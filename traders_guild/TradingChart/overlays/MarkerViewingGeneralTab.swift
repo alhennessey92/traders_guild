@@ -7,13 +7,20 @@ struct MarkerViewingGeneralTab: View {
     var symbolDTO: RLTradingSymbolDTO? = nil
     var onAuthorTap: (() -> Void)? = nil
     var canEditMarker: Bool = false
-    var onEditMarker: (() -> Void)? = nil
+    var onEditMarker: ((ChartMarkerUI) -> Void)? = nil
 
     private static let priceFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 8
+        return formatter
+    }()
+
+    private static let fullDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd MMM yyyy  HH:mm"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }()
 
@@ -309,10 +316,21 @@ struct MarkerViewingGeneralTab: View {
     }
 
     private var statsRow: some View {
-        HStack(spacing: 8) {
-            statBadge(title: "Likes", value: "\(liveMarker.likeCount)")
-            statBadge(title: "Comments", value: "\(liveMarker.commentCount)")
-            statBadge(title: "Components", value: "\(componentMetrics.displayedComponentCount)")
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                statBadge(title: "Likes", value: "\(liveMarker.likeCount)")
+                statBadge(title: "Comments", value: "\(liveMarker.commentCount)")
+                statBadge(title: "Components", value: "\(componentMetrics.displayedComponentCount)")
+            }
+            HStack(spacing: 8) {
+                if let confidence = liveMarker.confidence {
+                    statBadge(title: "Confidence", value: "\(confidence)%")
+                }
+                let tfCount = componentMetrics.timeframeComponents.count
+                if tfCount > 0 {
+                    statBadge(title: "Timeframes", value: "\(tfCount)")
+                }
+            }
         }
     }
 
@@ -323,7 +341,7 @@ struct MarkerViewingGeneralTab: View {
 
     private var heroEditButton: some View {
         Button {
-            onEditMarker?()
+            onEditMarker?(liveMarker)
             HapticFeedback.light.trigger()
         } label: {
             HStack(spacing: 6) {
@@ -646,16 +664,55 @@ struct MarkerViewingGeneralTab: View {
                 )
             }
 
-            // Placement metadata
+            // Placement metadata chips
             HStack(spacing: 8) {
-                metaChip(label: liveMarker.timeframe, icon: "clock")
+                metaChip(label: liveMarker.timeframe.uppercased(), icon: "clock")
                 metaChip(
                     label: Self.priceFormatter.string(from: NSNumber(value: liveMarker.price)) ?? "\(liveMarker.price)",
                     icon: "tag"
                 )
+                if let confidence = liveMarker.confidence {
+                    metaChip(label: "\(confidence)%", icon: "gauge.with.needle")
+                }
             }
 
-            readOnlyMetaRow(title: "Placed", value: liveMarker.createdAtFormatted)
+            // Placement time details
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("Placed")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                    Spacer(minLength: 0)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(Self.fullDateFormatter.string(from: liveMarker.createdAt))
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white)
+                        Text(liveMarker.createdAtFormatted)
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Text("Candle Time")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                    Spacer(minLength: 0)
+                    Text(Self.fullDateFormatter.string(from: liveMarker.candleTimestamp))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(AppColors.whiteText.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                    )
+            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)

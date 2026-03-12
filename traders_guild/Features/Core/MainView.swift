@@ -98,7 +98,23 @@ struct MainView: View {
     private var drawerWidth: CGFloat {
         screenSize.width * LayoutConstants.drawerWidthRatio
     }
-    
+
+    /// Marker timestamp for timeframe panels — uses viewed marker or placement anchor
+    private var activeMarkerTimestamp: Date {
+        if let viewedMarker = chartViewModel.selectedMarkerForSheet {
+            return viewedMarker.marker.candleTimestamp
+        }
+        return placementState.anchorDraft?.payload.anchorTime ?? Date()
+    }
+
+    /// Intent color for timeframe panels — uses viewed marker or placement intent
+    private var activeMarkerIntentColor: Color {
+        if let viewedMarker = chartViewModel.selectedMarkerForSheet {
+            return viewedMarker.intent.color
+        }
+        return placementState.intent.color
+    }
+
     /// Calculate total height of active indicator panels for bottom padding
     private var indicatorPanelsTotalHeight: CGFloat {
         let activePanels = chartViewModel.indicatorManager.activeIndicators.activePanelTypes
@@ -130,11 +146,32 @@ struct MainView: View {
         
         return totalHeight
     }
+
+    /// Calculate total height of active timeframe panels for bottom padding
+    private var timeframePanelsTotalHeight: CGFloat {
+        let count = timeframePanelManager.activePanelCount
+        guard count > 0 else { return 0 }
+
+        var totalHeight: CGFloat = 0
+        if count >= 1 {
+            totalHeight += tfPanel1Height + 22
+        }
+        if count >= 2 {
+            totalHeight += tfPanel2Height + 22
+        }
+        totalHeight += 24
+        return totalHeight
+    }
+
+    /// Combined stack height for indicator + timeframe panel overlays.
+    private var chartPanelsTotalHeight: CGFloat {
+        indicatorPanelsTotalHeight + timeframePanelsTotalHeight
+    }
     
     /// Bottom padding for controls that need to float above indicator panels
     private var bottomControlsPadding: CGFloat {
         // Base padding for minimized bottom sheet + indicator panels
-        return indicatorPanelsTotalHeight + 100
+        return chartPanelsTotalHeight + 100
     }
 
     // MARK: - Initialization
@@ -172,8 +209,8 @@ struct MainView: View {
                         // Timeframe panels (above indicator panels)
                         TimeframePanelContainer(
                             timeframePanelManager: timeframePanelManager,
-                            markerTimestamp: placementState.anchorDraft?.payload.anchorTime ?? Date(),
-                            intentColor: placementState.intent.color,
+                            markerTimestamp: activeMarkerTimestamp,
+                            intentColor: activeMarkerIntentColor,
                             baseCandleWidth: 12,
                             candleSpacing: 4,
                             indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count,
@@ -374,10 +411,9 @@ struct MainView: View {
             .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { oldId, newId in
                 chartControlVM.isMarkerViewingMode = (newId != nil)
                 handleMarkerViewingSelectionChange(oldId: oldId, newId: newId)
-                // Bump sheet up when viewing a marker so it's visible above panels
                 if newId != nil {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        selectedDetent = .fraction(0.35)
+                        selectedDetent = .fraction(0.11)
                     }
                 }
             }
@@ -679,7 +715,7 @@ struct MainView: View {
             gestureState: chartGestureState,
             placementState: placementState,
             rsiPanelHeight: $rsiPanelHeight,
-            indicatorPanelBottomPadding: indicatorPanelsTotalHeight
+            indicatorPanelBottomPadding: chartPanelsTotalHeight
         )
     }
 
@@ -2169,7 +2205,9 @@ struct ChartBottomSheet: View {
                 symbolDTO: chartViewModel.currentSymbol,
                 onAuthorTap: { onViewingAuthorTap?(marker) },
                 canEditMarker: canEditSelectedMarker,
-                onEditMarker: beginEditingSelectedMarker
+                onEditMarker: { liveMarker in
+                    beginEditingSelectedMarker(liveMarker)
+                }
             )
             .environmentObject(rlAppState)
         case .chat:
@@ -2190,8 +2228,9 @@ struct ChartBottomSheet: View {
         }
     }
 
-    private func beginEditingSelectedMarker() {
-        guard let marker = chartViewModel.selectedMarkerForSheet,
+    private func beginEditingSelectedMarker(_ sourceMarker: ChartMarkerUI? = nil) {
+        let marker = resolvedMarkerForEditing(sourceMarker)
+        guard let marker,
               isMarkerEditableForCurrentUser(marker) else {
             return
         }
@@ -2202,6 +2241,15 @@ struct ChartBottomSheet: View {
             chartViewModel.markerManager?.selectedMarker = nil
             controlViewModel.startMarkerPlacement(intent: marker.intent)
         }
+    }
+
+    private func resolvedMarkerForEditing(_ sourceMarker: ChartMarkerUI?) -> ChartMarkerUI? {
+        let candidate = sourceMarker ?? chartViewModel.selectedMarkerForSheet
+        guard let candidate else { return nil }
+        if let live = chartViewModel.markerManager?.markers.first(where: { $0.id == candidate.id }) {
+            return live
+        }
+        return candidate
     }
 
     private func toggleSelectedMarkerLike() {

@@ -2641,7 +2641,8 @@ struct TradingChartView: View {
         coordinateSystem: ChartCoordinateSystem
     ) {
         let drawingTapContextEnabled =
-            placementState.selectedPlacementTab == .drawings || placementState.activeTool == .draw
+            placementState.activeTool == .draw
+            || placementState.drawingInteractionPhase != .idle
 
         let isPlacingDrawingPoint =
             placementState.drawingInteractionPhase == .placingFirstPoint ||
@@ -3616,7 +3617,8 @@ struct TradingChartView: View {
     ) -> Bool {
         guard isMarkerPlacementMode else { return false }
         let drawingContextEnabled =
-            placementState.selectedPlacementTab == .drawings || placementState.activeTool == .draw
+            placementState.activeTool == .draw
+            || placementState.drawingInteractionPhase != .idle
         guard drawingContextEnabled else { return false }
 
         guard placementState.drawingInteractionPhase == .editing else { return false }

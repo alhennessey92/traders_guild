@@ -296,6 +296,8 @@ enum UnifiedTabSize {
 /// Color theme for tabs
 enum UnifiedTabTheme {
     case blue           // Default blue accent
+    case subTab         // Level 2: darker navy
+    case deepSubTab     // Level 3: darkest navy
     case colored        // Per-tab colors (personal=yellow, guild=blue, etc.)
     case accent         // Uses AppColors.accentColor
     case emerald
@@ -318,6 +320,18 @@ enum UnifiedTabTheme {
         switch self {
         case .blue:
             return UnifiedTabTheme.consistentBlueGradient
+        case .subTab:
+            return LinearGradient(
+                colors: [AppColors.chartSubTabGradientStart, AppColors.chartSubTabGradientEnd],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .deepSubTab:
+            return LinearGradient(
+                colors: [AppColors.chartDeepSubTabGradientStart, AppColors.chartDeepSubTabGradientEnd],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         case .colored:
             let colors: [(Color, Color)] = [
                 (AppColors.statusHighlight50, AppColors.statusWarning30),
@@ -361,6 +375,10 @@ enum UnifiedTabTheme {
     func borderColor(for index: Int) -> Color {
         switch self {
         case .blue:
+            return AppColors.statusInfo40
+        case .subTab:
+            return AppColors.statusInfo40
+        case .deepSubTab:
             return AppColors.statusInfo40
         case .colored:
             let colors: [Color] = [.yellow, .blue, .green, .pink]
@@ -474,16 +492,8 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
     var theme: UnifiedTabTheme = .blue
     let action: () -> Void
     
-    // Consistent blue gradient for all category tabs
     private var selectedGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                AppColors.chartTabGradientStart,      // #3366CC
-                AppColors.chartTabGradientEnd    // #263F80
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        theme.selectedBackground(for: index)
     }
     
     private var unselectedGradient: LinearGradient {

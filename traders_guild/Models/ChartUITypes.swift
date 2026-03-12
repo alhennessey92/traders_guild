@@ -122,18 +122,14 @@ enum ChartPattern: String, Codable, CaseIterable {
 
 enum MarkerPlacementTab: String, CaseIterable, UnifiedTabItem {
     case general = "General"
-    case indicators = "Indicators"
-    case drawings = "Drawings"
-    case timeframes = "Timeframes"
+    case components = "Components"
 
     var title: String { rawValue }
 
     var icon: String {
         switch self {
         case .general: return "slider.horizontal.3"
-        case .indicators: return "chart.line.uptrend.xyaxis.circle"
-        case .drawings: return "pencil.circle"
-        case .timeframes: return "clock.circle"
+        case .components: return "plus.viewfinder"
         }
     }
 }

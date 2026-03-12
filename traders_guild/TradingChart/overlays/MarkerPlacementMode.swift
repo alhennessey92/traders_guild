@@ -1102,7 +1102,7 @@ final class MarkerPlacementState: ObservableObject {
 
     func beginEditingMarker(_ marker: ChartMarkerUI) {
         intent = marker.intent
-        selectedPlacementTab = .indicators
+        selectedPlacementTab = .components
         activeTool = .indicators
         activeSubTool = nil
 
@@ -1394,6 +1394,12 @@ final class MarkerPlacementState: ObservableObject {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPollQuestion = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle: String? = {
+            if intent == .poll {
+                return trimmedPollQuestion.isEmpty ? nil : trimmedPollQuestion
+            }
+            return trimmedTitle.isEmpty ? nil : trimmedTitle
+        }()
         let normalizedPollOptions = pollOptions
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -1404,7 +1410,7 @@ final class MarkerPlacementState: ObservableObject {
             symbolId: symbolId,
             timeframe: timeframe,
             intent: intent.rawValue,
-            title: trimmedTitle.isEmpty ? nil : trimmedTitle,
+            title: resolvedTitle,
             note: trimmedNote.isEmpty ? nil : trimmedNote,
             visibility: resolvedVisibility,
             confidence: resolvedConfidence,
@@ -1420,6 +1426,12 @@ final class MarkerPlacementState: ObservableObject {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPollQuestion = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle: String? = {
+            if intent == .poll {
+                return trimmedPollQuestion.isEmpty ? nil : trimmedPollQuestion
+            }
+            return trimmedTitle.isEmpty ? nil : trimmedTitle
+        }()
         let normalizedPollOptions = pollOptions
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -1427,7 +1439,7 @@ final class MarkerPlacementState: ObservableObject {
 
         return RLUpdateMarkerRequest(
             intent: nil,
-            title: trimmedTitle.isEmpty ? nil : trimmedTitle,
+            title: resolvedTitle,
             note: trimmedNote.isEmpty ? nil : trimmedNote,
             visibility: resolvedVisibility,
             confidence: nil,

@@ -31,6 +31,8 @@ struct GenericIndicatorPanelView: View {
     @State private var isDraggingHandle = false
     @State private var dragStartHeight: CGFloat = 0
     @State private var lastDragTranslation: CGSize = .zero
+    @State private var isCollapsed = false
+    @State private var expandedPanelHeight: CGFloat = 0
     
     // MARK: - Computed Properties
     
@@ -80,15 +82,17 @@ struct GenericIndicatorPanelView: View {
         VStack(spacing: 0) {
             // Resize handle
             resizeHandleBar
-            
-            // Panel content area with pan gesture
-            panelContentArea
-                .frame(height: panelHeight)
-                .gesture(panGesture)
-            
-            // X-axis labels only if this is the bottom panel
-            if isBottomPanel {
-                xAxisLabels
+
+            if !isCollapsed {
+                // Panel content area with pan gesture
+                panelContentArea
+                    .frame(height: panelHeight)
+                    .gesture(panGesture)
+
+                // X-axis labels only if this is the bottom panel
+                if isBottomPanel {
+                    xAxisLabels
+                }
             }
         }
         .background(AppColors.surfaceBlack85)
@@ -135,38 +139,81 @@ struct GenericIndicatorPanelView: View {
         ZStack {
             Rectangle()
                 .fill(AppColors.chartIndicatorHandleFill)
-            
-            VStack(spacing: 3) {
+
+            HStack(spacing: 8) {
                 Capsule()
                     .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
                     .frame(width: 36, height: 5)
+
+                if isCollapsed {
+                    Text(panelTitle)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(AppColors.surfaceWhite80)
+                        .lineLimit(1)
+
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppColors.surfaceWhite80)
+                }
             }
         }
         .frame(height: 22)
         .contentShape(Rectangle())
         .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            DragGesture(minimumDistance: 2, coordinateSpace: .global)
                 .onChanged { value in
                     if !isDraggingHandle {
                         isDraggingHandle = true
+                        if isCollapsed {
+                            expandPanel()
+                        }
                         dragStartHeight = panelHeight
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
                     let delta = -value.translation.height
-                    let newHeight = dragStartHeight + delta
-                    panelHeight = min(maxPanelHeight, max(minPanelHeight, newHeight))
+                    let rawHeight = dragStartHeight + delta
+                    if rawHeight < minPanelHeight - 12 {
+                        collapsePanel()
+                        return
+                    }
+                    let newHeight = min(maxPanelHeight, max(minPanelHeight, rawHeight))
+                    panelHeight = newHeight
+                    expandedPanelHeight = newHeight
                 }
                 .onEnded { _ in
                     isDraggingHandle = false
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }
         )
+        .onTapGesture {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                if isCollapsed {
+                    expandPanel()
+                } else {
+                    collapsePanel()
+                }
+            }
+        }
         .overlay(
             Rectangle()
                 .fill(AppColors.surfaceGray30)
                 .frame(height: 1),
             alignment: .bottom
         )
+    }
+
+    private func collapsePanel() {
+        guard !isCollapsed else { return }
+        expandedPanelHeight = max(minPanelHeight, panelHeight)
+        panelHeight = 0
+        isCollapsed = true
+    }
+
+    private func expandPanel() {
+        guard isCollapsed else { return }
+        let restoredHeight = expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight
+        panelHeight = min(maxPanelHeight, max(minPanelHeight, restoredHeight))
+        isCollapsed = false
     }
     
     // MARK: - Panel Content Area
