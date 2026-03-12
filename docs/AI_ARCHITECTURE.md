@@ -1049,9 +1049,9 @@ These are all the steps to the current drawings, need to make sure its vital, on
 
 136. [FIXED] When initially entering the marker placement mode the markers position follows the users center of screen until they first move the marker to a new position of which it then is fixed to that position, this looks a little weird when panning around, marker should have its intial position as if its been placed there by user so we dont get this following center of screen effect, user can then move as they desire
 
-137. [CLAUDE] Need to look into the state machine that controls outcome of the setup marker, so we can properly track results, even if the server goes offline so almost need to check when retrieving the marker each time that a value has been set for finalised outcome, listing results of the setup mock trade, and for if its tracked, the reputation gain and loss. Also need to update the marker info box to display this result and more/ better UI for the result in general tab of marker
+137. [FIXED] Need to look into the state machine that controls outcome of the setup marker, so we can properly track results, even if the server goes offline so almost need to check when retrieving the marker each time that a value has been set for finalised outcome, listing results of the setup mock trade, and for if its tracked, the reputation gain and loss. Also need to update the marker info box to display this result and more/ better UI for the result in general tab of marker
 
-138. [CLAUDE] Need to look into timeframe section of markers. At the moment we just link other timeframes, but this is not benefitial to users, what would be benefitial is seeing a panel on chart like an indicator panel that shows a relative time state of the timeframe chart for the symbol, relative to the chart position, in a way showing their correlation, obviously when the user is viewing a 1 min timeframe with marker and links to a 1 day timeframe the time frame wont mov at all, but we could do it where it doesnt pan with the chart, shows a snapshot of the timeframe chart with an indicator of the marker position timewise in that timeframe chart, so the user can see its position in that timeframe. This panel should allow pinch gesture and independent panning. Need to make panels similar looking to indicator panel, maybe with their own axis etc... and make them collapsible to allow fitment with other indicator panels. SHould be allowed 2 timeframe panels and 2 indicator panels on chart. The timeframe panel should be viewable on chart and in the timeframe sheet in bottom bar
+138. [FIXED] Need to look into timeframe section of markers. At the moment we just link other timeframes, but this is not benefitial to users, what would be benefitial is seeing a panel on chart like an indicator panel that shows a relative time state of the timeframe chart for the symbol, relative to the chart position, in a way showing their correlation, obviously when the user is viewing a 1 min timeframe with marker and links to a 1 day timeframe the time frame wont mov at all, but we could do it where it doesnt pan with the chart, shows a snapshot of the timeframe chart with an indicator of the marker position timewise in that timeframe chart, so the user can see its position in that timeframe. This panel should allow pinch gesture and independent panning. Need to make panels similar looking to indicator panel, maybe with their own axis etc... and make them collapsible to allow fitment with other indicator panels. SHould be allowed 2 timeframe panels and 2 indicator panels on chart. The timeframe panel should be viewable on chart and in the timeframe sheet in bottom bar
 
 139. [FIXED] Need like No next to thumbs up icon in bottom bar like button for markers
 
@@ -1071,12 +1071,57 @@ These are all the steps to the current drawings, need to make sure its vital, on
 
 147. [FIXED] Color style for poll answer in marker info box is different to color in general tab, needs to be the same
 
-148. [CLAUDE TO IMPLEMENT] Looking at point 144 once it is implemented need to adapt the indicator bottom bar section to be similar, allowing users to place drawings in chart like when placing a marker - this is for their default chart
+148. [FIXED] Looking at point 144 once it is implemented need to adapt the indicator bottom bar section to be similar, allowing users to place drawings in chart like when placing a marker - this is for their default chart
 
-149. [CLAUDE TO IMPLEMENT] Add button in marker placement mode in new components tab that uses current chart setup mirrored to marker, so users viewing marker will see their current components setup, indicators, drawings etc... This basically takes the users current on chart indicators and drawings and sets them contextually to the marker being placed
+149. [FIXED] Add button in marker placement mode in new components tab that uses current chart setup mirrored to marker, so users viewing marker will see their current components setup, indicators, drawings etc... This basically takes the users current on chart indicators and drawings and sets them contextually to the marker being placed
 
-150. [CLAUDE TO IMPLEMENT] Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout
+150. [FIXED] Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout
 
-151. crosshair price indicator above x axis
+151. [FIXED] crosshair price indicator above x axis
 
-152. [CLAUDE TO IMPLEMENT] Need all panels to be collapsible and say the name with handle to re open - or just drag to show only top panel bar
+152. [FIXED] Need all panels to be collapsible and say the name with handle to re open - or just drag to show only top panel bar
+
+
+153. When displaying question in marker info box need to increase its size a little to make it more apparent. A bit too small at the moment. Same can be said for poll marker, question appears a bit too small
+
+154. Copy chart setup doesn’t work or do anything in marker placement mode
+
+155. When editing shows marker as ghost and new marker above it, even though cant change position of marker which is good, can still move this new marker around which is off putting and not correct
+
+156. In marker placement mode the add components button needs to move to the right so general tab can have more width padding
+
+157. In marker placement mode all components tabs need to move down a bit have title header of add compoents, any sub tabs appear under main tabs and under all that is the mirror chart button so:
+	Add Components header
+	Tabs for active, indicator etc
+	Sub tabs relative to above tabs
+	Mirror chart setup button
+	Content
+	In that order
+
+
+158. Time indicator needs to be darker blue/grey no opacity and move up a little bit so runs cleanly in x axis
+
+159. Marker info box can move down a little so maybe 5px from top of x axis and then subsequently 5 px from top of any panel on screen 
+
+160. When collapsing panels in chart they cover the x axis and need slightly more pronounced border. Also chart button on bottom sit too high from panel
+
+161. Panels being added to chart need to be added to the chart info box. Ema gets added correctly but just added rsi and macd panels and neither were added. Need a review of components on chart so user can see all added components in the chart info box.
+
+162. Need a toggle for panel indicators on main chart for active state like ema does
+
+163. [Claude] Need to review indicators and drawing sections for markers and default chart. They should both look and work identical, ideally from a unified indicator and drawing section so they work on marker section and default chart section. Due to this, on default chart view need to update indicator bottom bar section to be updated to the component section like when adding markers,  combining indicators and now drawings for adding to default chart. Obviously we dont want timeframes at the moment but maybe in the future. Basically my idea is that they work the same for users default chart to adding markers so user see a identical ui and functionality when adding components as i call them now, same sub tab section of indicators and drawings etc... would be good if it could all derive from the same part - a unified indicator/drawing component system
+
+164. Panel background needs to be slightly less dark more aligned with bottom gradient color of main chart 
+
+165. Like button for markers - on like background should go red 
+
+166. Guild reputation breakdown showing weird screen when no data need placeholder, similar to guild accuracy
+
+167. [Claude] Need a full audit of the owner, admin and moderator panel to bring it more into line with the rest of the UI in the app. This includes headers, text boxes, buttons etc
+This also includes making sure requirements are shown for any form, highlighting areas users need to fill to complete the form.
+
+168. When rotation is on it’s turning the app and then bugging out, need to stop this. App should be fixed at all times in portrait mode 
+
+169. Need to investigate why bottom chat text boxes are jumping when showing keyboard 
+
+170. [Claude] Need to audit all sub tab sections of the app . Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout. Make it look nice but consistent across the app

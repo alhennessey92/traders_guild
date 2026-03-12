@@ -115,63 +115,76 @@ struct MainView: View {
         return placementState.intent.color
     }
 
-    /// Calculate total height of active indicator panels for bottom padding
-    private var indicatorPanelsTotalHeight: CGFloat {
-        let activePanels = chartViewModel.indicatorManager.activeIndicators.activePanelTypes
-        guard !activePanels.isEmpty else { return 0 }
-        
-        var totalHeight: CGFloat = 0
-        
-        for panelType in activePanels {
-            switch panelType {
-            case .rsi:
-                totalHeight += rsiPanelHeight + 22  // +22 for resize handle
-            case .macd:
-                totalHeight += macdPanelHeight + 22
-            case .stochastic:
-                totalHeight += stochasticPanelHeight + 22
-            case .cci:
-                totalHeight += cciPanelHeight + 22
-            case .williamsR:
-                totalHeight += williamsRPanelHeight + 22
-            case .atr:
-                totalHeight += atrPanelHeight + 22
-            case .volume:
-                totalHeight += volumePanelHeight + 22
-            }
-        }
-
-        // Add X-axis labels height from bottom indicator panel
-        totalHeight += 24
-        
-        return totalHeight
+    private var indicatorPanelHeights: [CGFloat] {
+        chartViewModel.indicatorManager.activeIndicators.activePanelTypes.map(indicatorPanelHeight(for:))
     }
 
-    /// Calculate total height of active timeframe panels for bottom padding
-    private var timeframePanelsTotalHeight: CGFloat {
+    private var timeframePanelHeights: [CGFloat] {
         let count = timeframePanelManager.activePanelCount
-        guard count > 0 else { return 0 }
-
-        var totalHeight: CGFloat = 0
-        if count >= 1 {
-            totalHeight += tfPanel1Height + 22
-        }
         if count >= 2 {
-            totalHeight += tfPanel2Height + 22
+            return [tfPanel1Height, tfPanel2Height]
         }
-        totalHeight += 24
-        return totalHeight
+        if count == 1 {
+            return [tfPanel1Height]
+        }
+        return []
+    }
+
+    /// Calculate total height of active indicator panels for bottom padding.
+    private var indicatorPanelsTotalHeight: CGFloat {
+        ChartPanelReserveCalculator.stackReserve(panelHeights: indicatorPanelHeights)
+    }
+
+    /// Calculate total height of active timeframe panels for bottom padding.
+    private var timeframePanelsTotalHeight: CGFloat {
+        ChartPanelReserveCalculator.stackReserve(panelHeights: timeframePanelHeights)
     }
 
     /// Combined stack height for indicator + timeframe panel overlays.
     private var chartPanelsTotalHeight: CGFloat {
         indicatorPanelsTotalHeight + timeframePanelsTotalHeight
     }
+
+    /// Label-strip reserve only when the bottom-most visible panel is expanded.
+    private var chartPanelsBottomLabelStripReserve: CGFloat {
+        ChartPanelReserveCalculator.bottomBoundaryLabelReserve(
+            indicatorPanelHeights: indicatorPanelHeights,
+            timeframePanelHeights: timeframePanelHeights
+        )
+    }
+
+    /// When the bottom panel is collapsed, lift the panel stack so it doesn't cover
+    /// the chart x-axis strip.
+    private var collapsedPanelXAxisClearance: CGFloat {
+        guard chartPanelsTotalHeight > 0 else { return 0 }
+        return chartPanelsBottomLabelStripReserve == 0
+            ? ChartPanelReserveCalculator.panelXAxisLabelStripHeight
+            : 0
+    }
     
     /// Bottom padding for controls that need to float above indicator panels
     private var bottomControlsPadding: CGFloat {
         // Base padding for minimized bottom sheet + indicator panels
         return chartPanelsTotalHeight + 100
+    }
+
+    private func indicatorPanelHeight(for panelType: PanelIndicatorType) -> CGFloat {
+        switch panelType {
+        case .rsi:
+            return rsiPanelHeight
+        case .macd:
+            return macdPanelHeight
+        case .stochastic:
+            return stochasticPanelHeight
+        case .cci:
+            return cciPanelHeight
+        case .williamsR:
+            return williamsRPanelHeight
+        case .atr:
+            return atrPanelHeight
+        case .volume:
+            return volumePanelHeight
+        }
     }
 
     // MARK: - Initialization
@@ -202,7 +215,7 @@ struct MainView: View {
                 // so chart controls beneath remain tappable
                 // Visible in placement/viewing so linked panel indicators remain visible.
                 if chartViewModel.indicatorManager.shouldShowAnyPanel || timeframePanelManager.hasActivePanels {
-                    VStack {
+                    VStack(spacing: 0) {
                         Spacer()
                             .allowsHitTesting(false)
 
@@ -235,9 +248,12 @@ struct MainView: View {
                             atrPanelHeight: $atrPanelHeight,
                             volumePanelHeight: $volumePanelHeight
                         )
-                        // Keep bottom sheet clearance while allowing panels to run down to x-axis area.
-                        Color.clear
-                            .frame(height: 100)
+                        // Keep bottom-sheet clearance. Mask only while an expanded bottom panel
+                        // owns the x-axis strip; keep transparent when collapsed so controls remain visible.
+                        Rectangle()
+                            .fill(chartPanelsBottomLabelStripReserve > 0 ? AppColors.systemBlack : Color.clear)
+                            .frame(height: 100 + collapsedPanelXAxisClearance)
+                            .allowsHitTesting(false)
                     }
                     .ignoresSafeArea(edges: .bottom)
                 }
@@ -715,7 +731,8 @@ struct MainView: View {
             gestureState: chartGestureState,
             placementState: placementState,
             rsiPanelHeight: $rsiPanelHeight,
-            indicatorPanelBottomPadding: chartPanelsTotalHeight
+            indicatorPanelBottomPadding: chartPanelsTotalHeight,
+            panelBottomBoundaryLabelReserve: chartPanelsBottomLabelStripReserve
         )
     }
 
@@ -1654,7 +1671,7 @@ struct ChartBottomSheet: View {
     @State private var chatMessageText: String = ""
     @State private var isSendingChartMessage = false
     @State private var markerDetailTab: MarkerViewingTab = .general
-    @State private var capturedPlacementIndicatorSnapshot = false
+    @State private var placementIndicatorSnapshot = PlacementIndicatorSnapshot()
 
     init(
         controlViewModel: ChartControlViewModel,
@@ -2038,82 +2055,79 @@ struct ChartBottomSheet: View {
             }
 
             HStack(spacing: 4) {
+                placementGeneralTabButton(
+                    isSelected: placementState.selectedPlacementTab == .general
+                ) {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        placementState.selectedPlacementTab = .general
+                    }
+                }
+                Spacer(minLength: 0)
+
                 HStack(spacing: 6) {
-                    ForEach(MarkerPlacementTab.allCases, id: \.self) { tab in
-                        if tab == .general {
-                            placementGeneralTabButton(
-                                isSelected: placementState.selectedPlacementTab == tab
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    placementState.selectedPlacementTab = tab
-                                }
-                            }
-                        } else {
-                            RootBottomBarIconButton(
-                                systemName: tab.icon,
-                                fontSize: 21,
-                                backgroundColor: placementState.selectedPlacementTab == tab ?
-                                    bottomBarSelectedBackground :
-                                    bottomBarUnselectedBackground,
-                                foregroundColor: placementState.selectedPlacementTab == tab ?
-                                    bottomBarSelectedForeground :
-                                    bottomBarUnselectedForeground
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    placementState.selectedPlacementTab = tab
-                                }
+                    ForEach(MarkerPlacementTab.allCases.filter { $0 != .general }, id: \.self) { tab in
+                        RootBottomBarIconButton(
+                            systemName: tab.icon,
+                            fontSize: 21,
+                            backgroundColor: placementState.selectedPlacementTab == tab ?
+                                bottomBarSelectedBackground :
+                                bottomBarUnselectedBackground,
+                            foregroundColor: placementState.selectedPlacementTab == tab ?
+                                bottomBarSelectedForeground :
+                                bottomBarUnselectedForeground
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                placementState.selectedPlacementTab = tab
                             }
                         }
                     }
-                }
 
-                Spacer(minLength: 0)
-
-                Button {
-                    onPlaceMarker?()
-                } label: {
-                    Image(systemName: "target")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundColor(placementState.isValid ? .white : AppColors.whiteText.opacity(0.55))
-                        .frame(width: 54, height: 54)
-                        .background(
-                            Circle()
-                                .fill(
-                                    placementState.isValid
-                                        ? AnyShapeStyle(
-                                            LinearGradient(
-                                                colors: [
-                                                    placementState.intent.color.opacity(0.96),
-                                                    placementState.intent.color.opacity(0.74),
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
+                    Button {
+                        onPlaceMarker?()
+                    } label: {
+                        Image(systemName: "target")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundColor(placementState.isValid ? .white : AppColors.whiteText.opacity(0.55))
+                            .frame(width: 54, height: 54)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        placementState.isValid
+                                            ? AnyShapeStyle(
+                                                LinearGradient(
+                                                    colors: [
+                                                        placementState.intent.color.opacity(0.96),
+                                                        placementState.intent.color.opacity(0.74),
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
                                             )
-                                        )
-                                        : AnyShapeStyle(bottomBarUnselectedBackground)
-                                )
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    placementState.isValid
-                                        ? placementState.intent.color.opacity(0.72)
-                                        : AppColors.whiteText.opacity(0.16),
-                                    lineWidth: 1
-                                )
-                        )
-                        .shadow(
-                            color: placementState.isValid
-                                ? placementState.intent.color.opacity(0.22)
-                                : .clear,
-                            radius: 6,
-                            x: 0,
-                            y: 1
-                        )
+                                            : AnyShapeStyle(bottomBarUnselectedBackground)
+                                    )
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        placementState.isValid
+                                            ? placementState.intent.color.opacity(0.72)
+                                            : AppColors.whiteText.opacity(0.16),
+                                        lineWidth: 1
+                                    )
+                            )
+                            .shadow(
+                                color: placementState.isValid
+                                    ? placementState.intent.color.opacity(0.22)
+                                    : .clear,
+                                radius: 6,
+                                x: 0,
+                                y: 1
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!placementState.isValid)
+                    .opacity(placementState.isValid ? 1.0 : 0.55)
                 }
-                .buttonStyle(.plain)
-                .disabled(!placementState.isValid)
-                .opacity(placementState.isValid ? 1.0 : 0.55)
             }
             .padding(.horizontal, 16)
             .padding(.top, isExpanded ? 16 : 0)
@@ -2157,11 +2171,14 @@ struct ChartBottomSheet: View {
     
     // MARK: - Placement Mode Content
     private var placementModeContent: some View {
-        MarkerPlacementPanel(
+        let liveChartIndicatorPayloads = MarkerPlacementIndicatorFactory.activePayloads(
+            from: chartViewModel.indicatorManager.activeIndicators
+        )
+        return MarkerPlacementPanel(
             placementState: placementState,
-            activeChartIndicators: MarkerPlacementIndicatorFactory.activePayloads(
-                from: chartViewModel.indicatorManager.activeIndicators
-            ),
+            activeChartIndicators: placementIndicatorSnapshot.didCapture
+                ? placementIndicatorSnapshot.payloads
+                : liveChartIndicatorPayloads,
             currentChartTimeframe: chartViewModel.currentTimeframe,
             onSelectTimeframe: { timeframe in
                 if chartViewModel.currentTimeframe != timeframe {
@@ -2319,15 +2336,17 @@ struct ChartBottomSheet: View {
 
     private func handlePlacementIndicatorLifecycle(isPlacing: Bool) {
         if isPlacing {
-            if !capturedPlacementIndicatorSnapshot {
+            if !placementIndicatorSnapshot.didCapture {
                 chartViewModel.indicatorManager.saveSnapshot()
-                capturedPlacementIndicatorSnapshot = true
+                placementIndicatorSnapshot.captureIfNeeded(
+                    from: chartViewModel.indicatorManager.activeIndicators
+                )
             }
             applyPlacementIndicatorsToChart()
-        } else if capturedPlacementIndicatorSnapshot {
+        } else if placementIndicatorSnapshot.didCapture {
             chartViewModel.indicatorManager.restoreSnapshot()
             chartViewModel.indicatorManager.recalculateIndicators(candles: chartViewModel.dataManager.candles)
-            capturedPlacementIndicatorSnapshot = false
+            placementIndicatorSnapshot.reset()
             timeframePanelManager.clearAll()
         }
     }
@@ -2442,12 +2461,12 @@ struct ChartBottomSheet: View {
             .padding(.horizontal, 20)
             .background(
                 Capsule()
-                    .fill(AppColors.bearCandleRed.opacity(isLiked ? 0.2 : 0.1))
+                    .fill(isLiked ? AppColors.markerHeartBadge : AppColors.bearCandleRed.opacity(0.12))
             )
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .strokeBorder(AppColors.bearCandleRed.opacity(0.6), lineWidth: 0.5)
+                    .strokeBorder(isLiked ? AppColors.markerHeartTint : AppColors.bearCandleRed.opacity(0.6), lineWidth: isLiked ? 0.9 : 0.5)
             )
         }
         .buttonStyle(.plain)

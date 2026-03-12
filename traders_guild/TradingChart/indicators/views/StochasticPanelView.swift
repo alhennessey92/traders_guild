@@ -67,7 +67,7 @@ struct StochasticPanelView: View {
                 }
             }
         }
-        .background(AppColors.surfaceBlack85)
+        .background(AppColors.chartPanelBackgroundMuted)
     }
 
     // MARK: - Pan Gesture
@@ -136,10 +136,9 @@ struct StochasticPanelView: View {
                 .onChanged { value in
                     if !isDraggingHandle {
                         isDraggingHandle = true
-                        if isCollapsed {
-                            expandPanel()
-                        }
-                        dragStartHeight = panelHeight
+                        dragStartHeight = isCollapsed
+                            ? max(minPanelHeight, expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight)
+                            : panelHeight
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
                     let delta = -value.translation.height
@@ -149,6 +148,9 @@ struct StochasticPanelView: View {
                         return
                     }
                     let newHeight = min(maxPanelHeight, max(minPanelHeight, rawHeight))
+                    if isCollapsed {
+                        expandPanel()
+                    }
                     panelHeight = newHeight
                     expandedPanelHeight = newHeight
                 }
@@ -196,7 +198,7 @@ struct StochasticPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            AppColors.surfaceBlack80
+            AppColors.chartPanelBackground
             
             Canvas { context, size in
                 drawStochasticPanel(context: context, size: size)

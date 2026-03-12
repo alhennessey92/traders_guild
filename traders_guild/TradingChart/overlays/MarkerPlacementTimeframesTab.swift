@@ -7,9 +7,13 @@ struct MarkerPlacementTimeframesTab: View {
     var timeframePanelManager: TimeframePanelManager?
     var symbolId: UUID?
     var guildId: UUID?
+    var mirrorSourceIndicators: [IndicatorPayload] = []
+    var showsTitleHeader: Bool = true
+    var showsMirrorButton: Bool = false
 
     @State private var limitWarning: String?
     @State private var contextInfoMessage: String?
+    @State private var mirrorInfoMessage: String?
 
     private var orderedLinkedDrafts: [MarkerComponentDraft] {
         placementState.timeframeLinkDrafts.sorted { lhs, rhs in
@@ -23,7 +27,14 @@ struct MarkerPlacementTimeframesTab: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
-                tabTitleHeader
+                if showsTitleHeader {
+                    tabTitleHeader
+                }
+
+                if showsMirrorButton {
+                    mirrorChartSetupButton
+                }
+
                 headerSection
                 allTimeframesSection
                 linkedTimeframesSection
@@ -68,12 +79,54 @@ struct MarkerPlacementTimeframesTab: View {
                     .foregroundColor(AppColors.greyText)
             }
 
+            if let mirrorInfoMessage {
+                Text(mirrorInfoMessage)
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText)
+            }
+
             if let limitWarning {
                 Text(limitWarning)
                     .font(.caption2)
                     .foregroundColor(AppColors.statusWarning95)
             }
         }
+    }
+
+    private var mirrorChartSetupButton: some View {
+        Button {
+            mirrorChartSetup()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "rectangle.2.swap")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mirror Chart Setup")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                    Text("Copy current chart indicators to this marker")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(AppColors.whiteText.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .opacity(mirrorSourceIndicators.isEmpty ? 0.55 : 1)
+        .disabled(mirrorSourceIndicators.isEmpty)
     }
 
     private var allTimeframesSection: some View {
@@ -270,6 +323,7 @@ struct MarkerPlacementTimeframesTab: View {
 
     private func toggleTimeframeLink(_ timeframe: RLChartTimeframe) {
         contextInfoMessage = nil
+        mirrorInfoMessage = nil
 
         let backendValue = timeframe.toBackendString()
         if placementState.isTimeframeLinked(backendValue) {
@@ -298,6 +352,22 @@ struct MarkerPlacementTimeframesTab: View {
             return Int.max
         }
         return index
+    }
+
+    private func mirrorChartSetup() {
+        let result = placementState.attachActiveChartIndicators(mirrorSourceIndicators)
+        if result.added > 0 {
+            mirrorInfoMessage = "Mirrored \(result.added) indicator\(result.added == 1 ? "" : "s") from chart."
+        } else {
+            mirrorInfoMessage = "No new chart indicators to mirror."
+        }
+
+        if result.blockedByLimit {
+            limitWarning = placementState.limitMessage(for: .indicatorPanels)
+            HapticFeedback.light.trigger()
+        } else {
+            limitWarning = nil
+        }
     }
 }
 

@@ -30,6 +30,8 @@ private enum MarkerIndicatorSubTab: String, CaseIterable, UnifiedTabItem {
 struct MarkerPlacementIndicatorsTab: View {
     @ObservedObject var placementState: MarkerPlacementState
     let activeChartIndicators: [IndicatorPayload]
+    var showsTitleHeader: Bool = true
+    var showsMirrorButton: Bool = false
 
     @State private var selectedSubTab: MarkerIndicatorSubTab = .trend
     @State private var limitWarning: String?
@@ -50,7 +52,9 @@ struct MarkerPlacementIndicatorsTab: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
-                tabTitleHeader
+                if showsTitleHeader {
+                    tabTitleHeader
+                }
 
                 UnifiedTabBar(
                     selectedTab: $selectedSubTab,
@@ -58,6 +62,10 @@ struct MarkerPlacementIndicatorsTab: View {
                     theme: .deepSubTab,
                     spacing: 6
                 )
+
+                if showsMirrorButton {
+                    attachCurrentChartSetButton
+                }
 
                 panelUsageHeader
 
@@ -220,7 +228,7 @@ struct MarkerPlacementIndicatorsTab: View {
 
     private var attachCurrentChartSetButton: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Attach Active Chart Indicators")
+            Text("Mirror Chart Setup")
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
 
@@ -230,7 +238,7 @@ struct MarkerPlacementIndicatorsTab: View {
                 HStack(spacing: 8) {
                     Image(systemName: "waveform.path.ecg.rectangle")
                         .font(.system(size: 12, weight: .semibold))
-                    Text("Attach Current Chart Set")
+                    Text("Copy Current Chart Indicators")
                         .font(.caption)
                         .fontWeight(.semibold)
                     Spacer(minLength: 0)
@@ -433,9 +441,9 @@ struct MarkerPlacementIndicatorsTab: View {
         let result = placementState.attachActiveChartIndicators(activeChartIndicators)
 
         if result.added > 0 {
-            infoMessage = "Attached \(result.added) indicator\(result.added == 1 ? "" : "s")."
+            infoMessage = "Mirrored \(result.added) indicator\(result.added == 1 ? "" : "s") from chart."
         } else {
-            infoMessage = "No new chart indicators to attach."
+            infoMessage = "No new chart indicators to mirror."
         }
 
         if result.blockedByLimit {

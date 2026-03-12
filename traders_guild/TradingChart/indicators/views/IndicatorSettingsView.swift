@@ -844,6 +844,11 @@ struct PanelIndicatorRowWithEdit: View {
     let canAdd: Bool
     let onToggle: () -> Void
     let onEdit: (() -> Void)?
+
+    private var toggleColor: Color {
+        if isActive { return color }
+        return AppColors.surfaceGray80
+    }
     
     var body: some View {
         HStack {
@@ -891,18 +896,17 @@ struct PanelIndicatorRowWithEdit: View {
                     .padding(.vertical, 2)
                     .background(AppColors.statusWarning20)
                     .clipShape(Capsule())
-            } else {
-                Button(action: onToggle) {
-                    Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isActive ? color : .gray)
-                }
-                .disabled(!isActive && !canAdd)
             }
+
+            Button(action: onToggle) {
+                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(toggleColor)
+            }
+            .disabled(!isActive && !canAdd)
         }
         .padding(12)
         .background(isActive ? color.opacity(0.15) : AppColors.surfaceWhite05)
         .cornerRadius(10)
-        .opacity(!isActive && !canAdd ? 0.5 : 1.0)
     }
 }
 

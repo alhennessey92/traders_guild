@@ -69,7 +69,7 @@ struct TimeframePanelView: View {
                 }
             }
         }
-        .background(AppColors.surfaceBlack85)
+        .background(AppColors.chartPanelBackgroundMuted)
         .onChange(of: dataManager.candles.count) { _, _ in
             centerOnMarkerIfNeeded()
         }
@@ -151,10 +151,9 @@ struct TimeframePanelView: View {
                 .onChanged { value in
                     if !isDraggingHandle {
                         isDraggingHandle = true
-                        if isCollapsed {
-                            expandPanel()
-                        }
-                        dragStartHeight = panelHeight
+                        dragStartHeight = isCollapsed
+                            ? max(minPanelHeight, expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight)
+                            : panelHeight
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
                     let delta = -value.translation.height
@@ -164,6 +163,9 @@ struct TimeframePanelView: View {
                         return
                     }
                     let newHeight = min(maxPanelHeight, max(minPanelHeight, rawHeight))
+                    if isCollapsed {
+                        expandPanel()
+                    }
                     panelHeight = newHeight
                     expandedPanelHeight = newHeight
                 }
@@ -210,7 +212,7 @@ struct TimeframePanelView: View {
         let _ = gestureState.candleWidthScale
 
         return ZStack {
-            AppColors.surfaceBlack80
+            AppColors.chartPanelBackground
 
             if dataManager.isLoading {
                 ProgressView()

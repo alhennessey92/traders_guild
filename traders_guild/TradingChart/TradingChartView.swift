@@ -146,6 +146,9 @@ struct TradingChartView: View {
     /// Total height of all active indicator panels (for bottom controls positioning)
     /// Passed from MainView to ensure controls float above panels
     var indicatorPanelBottomPadding: CGFloat = 0
+    /// Label-strip reserve currently present at the bottom chart/panel boundary.
+    /// Used to avoid double-counting that strip in control/info offsets.
+    var panelBottomBoundaryLabelReserve: CGFloat = 0
 
     /// Current user/guild context for marker ownership and filtering.
     private let currentUserId: UUID
@@ -443,6 +446,7 @@ struct TradingChartView: View {
     ///   - chartViewModel: View model for chart data and state
     ///   - rsiPanelHeight: Binding to RSI panel height (for control box positioning)
     ///   - indicatorPanelBottomPadding: Total height of all active indicator panels
+    ///   - panelBottomBoundaryLabelReserve: Bottom boundary x-axis-strip reserve, if visible
     init(
         userId: UUID = UUID(),
         username: String = "TestUser",
@@ -453,7 +457,8 @@ struct TradingChartView: View {
         gestureState: ChartGestureState,
         placementState: MarkerPlacementState,
         rsiPanelHeight: Binding<CGFloat> = .constant(120),
-        indicatorPanelBottomPadding: CGFloat = 0
+        indicatorPanelBottomPadding: CGFloat = 0,
+        panelBottomBoundaryLabelReserve: CGFloat = 0
     ) {
         let resolvedMember = currentUserMember ?? RLGuildMemberDTO(
             membershipId: UUID(),
@@ -491,6 +496,7 @@ struct TradingChartView: View {
         self.placementState = placementState
         self._rsiPanelHeight = rsiPanelHeight
         self.indicatorPanelBottomPadding = indicatorPanelBottomPadding
+        self.panelBottomBoundaryLabelReserve = panelBottomBoundaryLabelReserve
     }
     
     // MARK: - Target Line Helpers
@@ -1599,13 +1605,14 @@ struct TradingChartView: View {
     private func markerPlacementOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: geometry.size.height,
-            includeLabelStrip: !chartViewModel.indicatorManager.shouldShowAnyPanel
+            includeLabelStrip: !panelOwnsBottomXAxisStrip
         )
         let plotWidth = max(0, geometry.size.width - yAxisWidth)
         let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
 
         ZStack {
-            if effectiveCandleIndex >= 0 && effectiveCandleIndex < chartData.candles.count {
+            if !placementState.isEditingExistingMarker,
+               effectiveCandleIndex >= 0 && effectiveCandleIndex < chartData.candles.count {
                 previewMarkerView(geometry: geometry, coordinateSystem: coordinateSystem)
             }
         }
@@ -1681,7 +1688,10 @@ struct TradingChartView: View {
         }
         .position(x: x, y: y)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isMarkerBeingDragged)
-        .gesture(previewMarkerDragGesture(coordinateSystem: coordinateSystem))
+        .gesture(
+            previewMarkerDragGesture(coordinateSystem: coordinateSystem),
+            including: placementState.isEditingExistingMarker ? .none : .all
+        )
     }
 
     private func markerPreviewDisplayColor(for intent: RLMarkerIntent) -> Color {
@@ -1805,6 +1815,7 @@ struct TradingChartView: View {
     private func previewMarkerDragGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                guard !placementState.isEditingExistingMarker else { return }
                 guard effectiveMarkerIntent != .setup else { return }
                 if !isMarkerBeingDragged {
                     isMarkerBeingDragged = true
@@ -1812,11 +1823,17 @@ struct TradingChartView: View {
                 }
                 markerDragPosition = value.location
 
-                if let index = nearestMarkerCandleIndex(atXPosition: value.location.x) {
-                    previewCandleIndex = index
+                let resolvedPreviewIndex = MarkerPlacementPreviewDragResolver.resolvedPreviewIndex(
+                    isEditingExistingMarker: placementState.isEditingExistingMarker,
+                    currentIndex: previewCandleIndex,
+                    candidateIndex: nearestMarkerCandleIndex(atXPosition: value.location.x)
+                )
+                if resolvedPreviewIndex != previewCandleIndex {
+                    previewCandleIndex = resolvedPreviewIndex
                 }
             }
             .onEnded { value in
+                guard !placementState.isEditingExistingMarker else { return }
                 isMarkerBeingDragged = false
                 persistPreviewMarkerDragIfNeeded(location: value.location, coordinateSystem: coordinateSystem)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
@@ -2033,6 +2050,8 @@ struct TradingChartView: View {
             placementSubmitErrorMessage = nil
 
             if placementState.isEditingExistingMarker {
+                isMarkerBeingDragged = false
+                markerDragPosition = nil
                 if let editingMarker = markerManager.markers.first(where: { $0.id == placementState.editingMarkerId }) {
                     if let index = chartData.candles.firstIndex(where: { $0.timestamp == editingMarker.candleTimestamp }) {
                         previewCandleIndex = index
@@ -3963,7 +3982,12 @@ struct TradingChartView: View {
     // MARK: - Axis Overlays
 
     private var axisPanelBackground: Color {
-        AppColors.chartPanelBackgroundDeep
+        AppColors.systemBlack
+    }
+
+    /// True when the bottom panel currently renders its own x-axis label strip.
+    private var panelOwnsBottomXAxisStrip: Bool {
+        panelBottomBoundaryLabelReserve > 0
     }
 
     private var yAxisPanelBackground: some View {
@@ -3984,13 +4008,13 @@ struct TradingChartView: View {
     @ViewBuilder
     func xAxisOverlay(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.085
-        let hasIndicatorPanels = chartViewModel.indicatorManager.shouldShowAnyPanel
+        let shouldShowMainXAxisLabels = !panelOwnsBottomXAxisStrip
 
         ZStack {
             VStack(spacing: 0) {
                 Spacer()
 
-                if !hasIndicatorPanels {
+                if shouldShowMainXAxisLabels {
                     xAxisLabelsCanvas(geometry: geometry)
                 }
 
@@ -4000,7 +4024,7 @@ struct TradingChartView: View {
                     .edgesIgnoringSafeArea(.bottom)
             }
 
-            if !hasIndicatorPanels,
+            if shouldShowMainXAxisLabels,
                !crosshairManager.isActive,
                gestureState.markerPlacementGuide.isActive,
                let timestamp = gestureState.markerPlacementGuide.timestamp {
@@ -4021,8 +4045,7 @@ struct TradingChartView: View {
         Canvas { context, size in
             drawXAxisLabels(context: context, size: size)
         }
-        .frame(height: 22)
-        .padding(.top, 6)
+        .frame(height: ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
         .background(axisPanelBackground)
     }
     
@@ -4041,7 +4064,7 @@ struct TradingChartView: View {
                 locale: Locale(identifier: "en_US_POSIX"),
                 minSpacing: 60
             ),
-            style: .mainChart
+            style: .indicatorPanel
         )
     }
     
@@ -4194,24 +4217,28 @@ struct TradingChartView: View {
     private func bottomInfoPanelsPadding(geometry: GeometryProxy) -> CGFloat {
         let xAxisReserve = xAxisReservedBandHeight(
             chartHeight: geometry.size.height,
-            includeLabelStrip: !chartViewModel.indicatorManager.shouldShowAnyPanel
+            includeLabelStrip: !panelOwnsBottomXAxisStrip
         )
-        let normalizedIndicatorReserve: CGFloat = indicatorPanelBottomPadding > 0
-            ? max(0, indicatorPanelBottomPadding - 24)
-            : 0
+        let normalizedIndicatorReserve = ChartPanelReserveCalculator.normalizedPanelReserve(
+            totalPanelReserve: indicatorPanelBottomPadding,
+            bottomBoundaryLabelReserve: panelBottomBoundaryLabelReserve
+        )
+        let markerInfoGap: CGFloat = 5
         // Viewing mode: float above active indicator panels as well.
         if controlViewModel.isMarkerViewingMode {
-            return xAxisReserve + normalizedIndicatorReserve + geometry.safeAreaInsets.bottom + 6
+            return xAxisReserve + normalizedIndicatorReserve + geometry.safeAreaInsets.bottom + markerInfoGap
         }
         let controlsReserve: CGFloat = !isMarkerPlacementMode
             ? 40
             : 0
-        return xAxisReserve + normalizedIndicatorReserve + controlsReserve + geometry.safeAreaInsets.bottom + 6
+        return xAxisReserve + normalizedIndicatorReserve + controlsReserve + geometry.safeAreaInsets.bottom + markerInfoGap
     }
 
     private func xAxisReservedBandHeight(chartHeight: CGFloat, includeLabelStrip: Bool) -> CGFloat {
         let baseBand = chartHeight * 0.085
-        return includeLabelStrip ? (baseBand + 28) : baseBand
+        return includeLabelStrip
+            ? (baseBand + ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
+            : baseBand
     }
     
     @ViewBuilder
@@ -4293,9 +4320,10 @@ struct TradingChartView: View {
     func chartControlsBox(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.085 + 34
         let yAxisTrailingInset: CGFloat = yAxisWidth + 4
-        let panelPadding: CGFloat = indicatorPanelBottomPadding > 0
-            ? max(0, indicatorPanelBottomPadding - 24)
-            : 0
+        let panelPadding = ChartPanelReserveCalculator.normalizedPanelReserve(
+            totalPanelReserve: indicatorPanelBottomPadding,
+            bottomBoundaryLabelReserve: panelBottomBoundaryLabelReserve
+        )
 
         VStack {
             Spacer()
@@ -4541,7 +4569,7 @@ struct TradingChartView: View {
         var markerContext = context
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: size.height,
-            includeLabelStrip: !chartViewModel.indicatorManager.shouldShowAnyPanel
+            includeLabelStrip: !panelOwnsBottomXAxisStrip
         )
         let plotRect = CGRect(
             x: 0,

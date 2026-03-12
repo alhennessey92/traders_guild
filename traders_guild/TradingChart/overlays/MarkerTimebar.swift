@@ -37,7 +37,7 @@ enum ChartXAxisLabelStyle {
         case .mainChart:
             return 13
         case .indicatorPanel:
-            return 11
+            return 13
         }
     }
 
@@ -46,7 +46,7 @@ enum ChartXAxisLabelStyle {
         case .mainChart:
             return 11
         case .indicatorPanel:
-            return 10
+            return 11
         }
     }
 }
@@ -175,7 +175,7 @@ enum ChartXAxisLabelEngine {
                     fontSize = label.isHourBoundary ? 12 : 11
                 } else {
                     weight = label.isHourBoundary ? .semibold : .medium
-                    fontSize = style.secondaryFontSize
+                    fontSize = label.isHourBoundary ? max(12, style.secondaryFontSize) : style.secondaryFontSize
                 }
             }
             let color: Color
@@ -186,11 +186,13 @@ enum ChartXAxisLabelEngine {
                 color = label.kind == .primary ? AppColors.surfaceWhite93 : AppColors.surfaceWhite78
             }
 
+            let labelY: CGFloat = 12
+
             ctx.draw(
                 Text(label.text)
                     .font(.system(size: fontSize, weight: weight))
                     .foregroundColor(color),
-                at: CGPoint(x: label.x, y: 10)
+                at: CGPoint(x: label.x, y: labelY)
             )
         }
     }
@@ -596,11 +598,16 @@ struct MarkerXAxisTimeIndicator: View {
 
     private var timeLabelY: CGFloat {
         let bottomAreaHeight = chartHeight * 0.085
-        return chartHeight - bottomAreaHeight - 12
+        return chartHeight - bottomAreaHeight - 16
     }
 
     var body: some View {
-        CrosshairTimeLabel(timestamp: timestamp, timeframe: timeframe, timeZone: timeZone)
+        CrosshairTimeLabel(
+            timestamp: timestamp,
+            timeframe: timeframe,
+            timeZone: timeZone,
+            style: .markerPlacement
+        )
             .position(x: xPosition, y: timeLabelY)
         .allowsHitTesting(false)
     }

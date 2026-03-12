@@ -155,7 +155,7 @@ struct MarkerPlanFixesTests {
         #expect(state.isEditingExistingMarker)
         #expect(state.editingMarkerId == marker.id)
         #expect(state.isAnchorLocked)
-        #expect(state.selectedPlacementTab == .indicators)
+        #expect(state.selectedPlacementTab == .components)
 
         let originalAnchorPrice = state.anchorDraft?.payload.levelPrice
         let originalAnchorTime = state.anchorDraft?.payload.anchorTime
@@ -210,6 +210,88 @@ struct MarkerPlanFixesTests {
         } else {
             Issue.record("Expected anchor component in edit-session update request")
         }
+    }
+
+    @Test
+    func prePlacementSnapshotRetainsMirrorSourceAndAttachesIndicators() {
+        var activeBeforePlacement = ActiveIndicators()
+        activeBeforePlacement.rsi = RSIConfig(period: 14)
+
+        var snapshot = PlacementIndicatorSnapshot()
+        snapshot.captureIfNeeded(from: activeBeforePlacement)
+
+        #expect(snapshot.didCapture)
+        #expect(snapshot.payloads.contains { $0.name.uppercased().contains("RSI") })
+
+        // A second capture attempt should not overwrite the first snapshot.
+        snapshot.captureIfNeeded(from: ActiveIndicators())
+        #expect(snapshot.payloads.contains { $0.name.uppercased().contains("RSI") })
+
+        let state = MarkerPlacementState()
+        let result = state.attachActiveChartIndicators(snapshot.payloads)
+        #expect(result.added == 1)
+        #expect(state.indicatorDrafts.contains { draft in
+            guard case let .indicator(payload) = draft.payload else { return false }
+            return payload.name.uppercased().contains("RSI")
+        })
+    }
+
+    @Test
+    func legendSummaryIncludesPanelIndicators() {
+        var active = ActiveIndicators()
+        active.rsi = RSIConfig(period: 14)
+        active.macd = MACDConfig(fastPeriod: 12, slowPeriod: 26, signalPeriod: 9)
+
+        let labels = ActiveIndicatorsLegendComposer.labels(from: active)
+        #expect(labels.contains("RSI(14)"))
+        #expect(labels.contains("MACD(12,26,9)"))
+    }
+
+    @Test
+    func collapsedPanelReserveSkipsBottomLabelStrip() {
+        let collapsedStackReserve = ChartPanelReserveCalculator.stackReserve(panelHeights: [0])
+        #expect(abs(collapsedStackReserve - 22) < 0.0001)
+
+        let bottomBoundaryStrip = ChartPanelReserveCalculator.bottomBoundaryLabelReserve(
+            indicatorPanelHeights: [0],
+            timeframePanelHeights: []
+        )
+        #expect(bottomBoundaryStrip == 0)
+
+        let normalized = ChartPanelReserveCalculator.normalizedPanelReserve(
+            totalPanelReserve: collapsedStackReserve,
+            bottomBoundaryLabelReserve: bottomBoundaryStrip
+        )
+        #expect(abs(normalized - 22) < 0.0001)
+    }
+
+    @Test
+    func tinyPanelHeightDoesNotTriggerBottomStripOrReserveJitter() {
+        let nearZeroStackReserve = ChartPanelReserveCalculator.stackReserve(panelHeights: [0.9])
+        #expect(abs(nearZeroStackReserve - 22) < 0.0001)
+
+        let bottomBoundaryStrip = ChartPanelReserveCalculator.bottomBoundaryLabelReserve(
+            indicatorPanelHeights: [0.9],
+            timeframePanelHeights: []
+        )
+        #expect(bottomBoundaryStrip == 0)
+    }
+
+    @Test
+    func editModePreviewDragResolverIgnoresDragCandidate() {
+        let lockedIndex = MarkerPlacementPreviewDragResolver.resolvedPreviewIndex(
+            isEditingExistingMarker: true,
+            currentIndex: 44,
+            candidateIndex: 88
+        )
+        #expect(lockedIndex == 44)
+
+        let movedIndex = MarkerPlacementPreviewDragResolver.resolvedPreviewIndex(
+            isEditingExistingMarker: false,
+            currentIndex: 44,
+            candidateIndex: 88
+        )
+        #expect(movedIndex == 88)
     }
 
     @Test

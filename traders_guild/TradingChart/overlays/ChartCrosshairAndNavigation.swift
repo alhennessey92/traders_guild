@@ -183,10 +183,16 @@ struct CrosshairPriceLabel: View {
 
 // MARK: - Crosshair Time Label
 
+enum CrosshairTimeLabelStyle {
+    case standard
+    case markerPlacement
+}
+
 struct CrosshairTimeLabel: View {
     let timestamp: Date
     var timeframe: RLChartTimeframe = .h1
     var timeZone: TimeZone = .current
+    var style: CrosshairTimeLabelStyle = .standard
     
     /// Format time based on timeframe
     /// - Daily and above: Just show date (no time)
@@ -194,23 +200,90 @@ struct CrosshairTimeLabel: View {
     private var formattedTime: String {
         MarkerPlacementLabelFormatter.format(timestamp, timeframe: timeframe, timeZone: timeZone)
     }
+
+    private var arrowColor: Color {
+        switch style {
+        case .standard:
+            return .cyan
+        case .markerPlacement:
+            return Color(red: 0.53, green: 0.62, blue: 0.76)
+        }
+    }
+
+    private var textColor: Color {
+        switch style {
+        case .standard:
+            return .white
+        case .markerPlacement:
+            return AppColors.surfaceWhite95
+        }
+    }
+
+    private var backgroundFill: AnyShapeStyle {
+        switch style {
+        case .standard:
+            return AnyShapeStyle(AppColors.statusAccent90)
+        case .markerPlacement:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.20, green: 0.24, blue: 0.32),
+                        Color(red: 0.13, green: 0.16, blue: 0.22)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+    }
+
+    private var borderColor: Color {
+        switch style {
+        case .standard:
+            return .clear
+        case .markerPlacement:
+            return Color(red: 0.39, green: 0.49, blue: 0.64).opacity(0.95)
+        }
+    }
+
+    private var borderLineWidth: CGFloat {
+        switch style {
+        case .standard:
+            return 0
+        case .markerPlacement:
+            return 1.0
+        }
+    }
+
+    private var shadowColor: Color {
+        switch style {
+        case .standard:
+            return AppColors.statusAccent40
+        case .markerPlacement:
+            return AppColors.surfaceBlack80
+        }
+    }
     
     var body: some View {
         VStack(spacing: 2) {
             // Arrow indicator pointing up to the crosshair
             Image(systemName: "arrowtriangle.up.fill")
                 .font(.system(size: 6))
-                .foregroundColor(.cyan)
+                .foregroundColor(arrowColor)
             
             Text(formattedTime)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(textColor)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(AppColors.statusAccent90)
-                        .shadow(color: AppColors.statusAccent40, radius: 3, x: 0, y: 1)
+                        .fill(backgroundFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(borderColor, lineWidth: borderLineWidth)
+                        )
+                        .shadow(color: shadowColor, radius: 3, x: 0, y: 1)
                 )
         }
     }
@@ -833,6 +906,3 @@ struct ZoomControls: View {
         }
     }
 }
-
-
-

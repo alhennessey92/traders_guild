@@ -137,7 +137,11 @@ struct MarkerViewingInfoBox: View {
             }
 
         case .question:
-            bodyText(marker.note, placeholder: "No question provided.")
+            questionBodyText(
+                marker.note,
+                placeholder: "No question provided.",
+                label: "QUESTION"
+            )
 
         case .poll:
             pollContent
@@ -172,10 +176,11 @@ struct MarkerViewingInfoBox: View {
 
         return VStack(alignment: .leading, spacing: 7) {
             if !question.isEmpty {
-                Text(question)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite92)
-                    .lineLimit(3)
+                questionBodyText(
+                    question,
+                    placeholder: "No poll question.",
+                    label: "POLL QUESTION"
+                )
             }
 
             if options.isEmpty {
@@ -282,6 +287,42 @@ struct MarkerViewingInfoBox: View {
                             .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                     )
             )
+    }
+
+    private func questionBodyText(_ text: String?, placeholder: String, label: String) -> some View {
+        let value = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return VStack(alignment: .leading, spacing: 5) {
+            Text(label)
+                .font(.system(size: 8.5, weight: .heavy))
+                .foregroundColor(AppColors.statusInfo90)
+                .tracking(0.4)
+
+            Text(value.isEmpty ? placeholder : value)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(value.isEmpty ? AppColors.surfaceWhite74 : AppColors.surfaceWhite96)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppColors.statusInfo20,
+                            AppColors.surfaceWhite08
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(AppColors.statusInfo50, lineWidth: 1)
+                )
+        )
     }
 
     private func toggleCollapse() {

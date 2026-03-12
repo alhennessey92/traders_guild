@@ -28,6 +28,9 @@ private struct DrawingColorOption: Identifiable {
 struct MarkerPlacementDrawingsTab: View {
     @ObservedObject var placementState: MarkerPlacementState
     let onBeginInteractiveDrawing: (() -> Void)?
+    var mirrorSourceIndicators: [IndicatorPayload] = []
+    var showsTitleHeader: Bool = true
+    var showsMirrorButton: Bool = false
 
     @State private var selectedSubTab: MarkerDrawingSubTab = .lines
     @State private var limitWarning: String?
@@ -51,7 +54,9 @@ struct MarkerPlacementDrawingsTab: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
-                tabTitleHeader
+                if showsTitleHeader {
+                    tabTitleHeader
+                }
 
                 UnifiedTabBar(
                     selectedTab: $selectedSubTab,
@@ -59,6 +64,10 @@ struct MarkerPlacementDrawingsTab: View {
                     theme: .deepSubTab,
                     spacing: 6
                 )
+
+                if showsMirrorButton {
+                    mirrorChartSetupButton
+                }
 
                 overlayUsageHeader
 
@@ -94,6 +103,42 @@ struct MarkerPlacementDrawingsTab: View {
         )) {
             drawingColorEditorSheet
         }
+    }
+
+    private var mirrorChartSetupButton: some View {
+        Button {
+            mirrorChartSetup()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "rectangle.2.swap")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mirror Chart Setup")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                    Text("Copy current chart indicators to this marker")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(AppColors.whiteText.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .opacity(mirrorSourceIndicators.isEmpty ? 0.55 : 1)
+        .disabled(mirrorSourceIndicators.isEmpty)
     }
 
     private var tabTitleHeader: some View {
@@ -912,6 +957,22 @@ struct MarkerPlacementDrawingsTab: View {
         Text(text)
             .font(.caption2)
             .foregroundColor(color)
+    }
+
+    private func mirrorChartSetup() {
+        let result = placementState.attachActiveChartIndicators(mirrorSourceIndicators)
+        if result.added > 0 {
+            infoMessage = "Mirrored \(result.added) indicator\(result.added == 1 ? "" : "s") from chart."
+        } else {
+            infoMessage = "No new chart indicators to mirror."
+        }
+
+        if result.blockedByLimit {
+            limitWarning = placementState.limitMessage(for: .indicatorPanels)
+            HapticFeedback.light.trigger()
+        } else {
+            limitWarning = nil
+        }
     }
 
     private func openDrawingColorEditor(for draftID: UUID) {

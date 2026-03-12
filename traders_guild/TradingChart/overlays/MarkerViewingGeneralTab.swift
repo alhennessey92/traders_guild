@@ -177,11 +177,19 @@ struct MarkerViewingGeneralTab: View {
             }
 
         case .question:
-            readOnlyTextBlock(questionText, placeholder: "No question provided")
+            readOnlyQuestionBlock(
+                questionText,
+                placeholder: "No question provided",
+                label: "QUESTION"
+            )
 
         case .poll:
             VStack(alignment: .leading, spacing: 8) {
-                readOnlyTextBlock(pollQuestionText, placeholder: "No poll question")
+                readOnlyQuestionBlock(
+                    pollQuestionText,
+                    placeholder: "No poll question",
+                    label: "POLL QUESTION"
+                )
 
                 if pollOptions.isEmpty {
                     placeholderText("No poll options")
@@ -535,6 +543,41 @@ struct MarkerViewingGeneralTab: View {
                             .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
                     )
             )
+    }
+
+    private func readOnlyQuestionBlock(_ text: String, placeholder: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label)
+                .font(.system(size: 8.5, weight: .heavy))
+                .foregroundColor(AppColors.statusInfo90)
+                .tracking(0.4)
+
+            Text(text.isEmpty ? placeholder : text)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(text.isEmpty ? AppColors.surfaceWhite74 : AppColors.surfaceWhite96)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppColors.statusInfo20,
+                            AppColors.whiteText.opacity(0.07)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.statusInfo50, lineWidth: 1)
+                )
+        )
     }
 
     private func readOnlyMetaRow(title: String, value: String) -> some View {

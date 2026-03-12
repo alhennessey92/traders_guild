@@ -65,22 +65,14 @@ struct MarkerPlacementComponentsTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            addComponentsHeader
+
             UnifiedTabBar(
                 selectedTab: $selectedSubTab,
                 size: .compact,
                 theme: .subTab,
                 spacing: 6
             )
-
-            mirrorChartSetupButton
-
-            if let infoMessage {
-                statusMessage(infoMessage, color: AppColors.greyText)
-            }
-
-            if let limitWarning {
-                statusMessage(limitWarning, color: AppColors.statusWarning95)
-            }
 
             content
         }
@@ -93,6 +85,16 @@ struct MarkerPlacementComponentsTab: View {
         case .active:
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
+                    mirrorChartSetupButton
+
+                    if let infoMessage {
+                        statusMessage(infoMessage, color: AppColors.greyText)
+                    }
+
+                    if let limitWarning {
+                        statusMessage(limitWarning, color: AppColors.statusWarning95)
+                    }
+
                     overviewCard
                     activeIndicatorsSection
                     activeDrawingsSection
@@ -102,12 +104,17 @@ struct MarkerPlacementComponentsTab: View {
         case .indicators:
             MarkerPlacementIndicatorsTab(
                 placementState: placementState,
-                activeChartIndicators: activeChartIndicators
+                activeChartIndicators: activeChartIndicators,
+                showsTitleHeader: false,
+                showsMirrorButton: true
             )
         case .drawings:
             MarkerPlacementDrawingsTab(
                 placementState: placementState,
-                onBeginInteractiveDrawing: onBeginInteractiveDrawing
+                onBeginInteractiveDrawing: onBeginInteractiveDrawing,
+                mirrorSourceIndicators: activeChartIndicators,
+                showsTitleHeader: false,
+                showsMirrorButton: true
             )
         case .timeframes:
             MarkerPlacementTimeframesTab(
@@ -116,8 +123,35 @@ struct MarkerPlacementComponentsTab: View {
                 onSelectTimeframe: onSelectTimeframe,
                 timeframePanelManager: timeframePanelManager,
                 symbolId: symbolId,
-                guildId: guildId
+                guildId: guildId,
+                mirrorSourceIndicators: activeChartIndicators,
+                showsTitleHeader: false,
+                showsMirrorButton: true
             )
+        }
+    }
+
+    private var addComponentsHeader: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(AppColors.statusInfo22)
+                .frame(width: 26, height: 26)
+                .overlay(
+                    Image(systemName: "plus.viewfinder")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppColors.statusInfo95)
+                )
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Add Components")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                Text("Build context with indicators, drawings, and timeframes")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+            }
+
+            Spacer(minLength: 0)
         }
     }
 
