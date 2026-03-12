@@ -27,10 +27,12 @@ struct MarkerPlacementComponentsTab: View {
     var timeframePanelManager: TimeframePanelManager?
     var symbolId: UUID?
     var guildId: UUID?
+    var showsMirrorButtons: Bool = true
 
     @State private var selectedSubTab: MarkerComponentSubTab = .active
     @State private var limitWarning: String?
     @State private var infoMessage: String?
+    @State private var editingIndicatorContext: IndicatorEditingContext?
 
     private var orderedIndicatorDrafts: [MarkerComponentDraft] {
         placementState.indicatorDrafts.sorted { lhs, rhs in
@@ -64,28 +66,38 @@ struct MarkerPlacementComponentsTab: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            addComponentsHeader
-
-            UnifiedTabBar(
-                selectedTab: $selectedSubTab,
-                size: .compact,
-                theme: .subTab,
-                spacing: 6
-            )
-
-            content
+        UnifiedComponentsScaffold(
+            title: "Add Components",
+            subtitle: "Build context with indicators, drawings, and timeframes",
+            headerIcon: "plus.viewfinder",
+            selectedTab: $selectedSubTab
+        ) { tab in
+            content(for: tab)
         }
-        .padding(.trailing, 2)
+        .sheet(item: $editingIndicatorContext) { context in
+            IndicatorSettingsEditorSheet(
+                context: context,
+                onSave: { updatedSettings in
+                    _ = placementState.upsertIndicator(
+                        name: context.indicatorName,
+                        settings: updatedSettings
+                    )
+                    infoMessage = "Updated \(context.item.title) settings."
+                    limitWarning = nil
+                }
+            )
+        }
     }
 
     @ViewBuilder
-    private var content: some View {
+    private func content(for selectedSubTab: MarkerComponentSubTab) -> some View {
         switch selectedSubTab {
         case .active:
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
-                    mirrorChartSetupButton
+                    if showsMirrorButtons {
+                        mirrorChartSetupButton
+                    }
 
                     if let infoMessage {
                         statusMessage(infoMessage, color: AppColors.greyText)
@@ -106,7 +118,7 @@ struct MarkerPlacementComponentsTab: View {
                 placementState: placementState,
                 activeChartIndicators: activeChartIndicators,
                 showsTitleHeader: false,
-                showsMirrorButton: true
+                showsMirrorButton: showsMirrorButtons
             )
         case .drawings:
             MarkerPlacementDrawingsTab(
@@ -114,7 +126,7 @@ struct MarkerPlacementComponentsTab: View {
                 onBeginInteractiveDrawing: onBeginInteractiveDrawing,
                 mirrorSourceIndicators: activeChartIndicators,
                 showsTitleHeader: false,
-                showsMirrorButton: true
+                showsMirrorButton: showsMirrorButtons
             )
         case .timeframes:
             MarkerPlacementTimeframesTab(
@@ -126,32 +138,8 @@ struct MarkerPlacementComponentsTab: View {
                 guildId: guildId,
                 mirrorSourceIndicators: activeChartIndicators,
                 showsTitleHeader: false,
-                showsMirrorButton: true
+                showsMirrorButton: showsMirrorButtons
             )
-        }
-    }
-
-    private var addComponentsHeader: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(AppColors.statusInfo22)
-                .frame(width: 26, height: 26)
-                .overlay(
-                    Image(systemName: "plus.viewfinder")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(AppColors.statusInfo95)
-                )
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Add Components")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
-                Text("Build context with indicators, drawings, and timeframes")
-                    .font(.caption)
-                    .foregroundColor(AppColors.greyText)
-            }
-
-            Spacer(minLength: 0)
         }
     }
 
@@ -215,15 +203,26 @@ struct MarkerPlacementComponentsTab: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(AppColors.statusWarning90)
                                 .frame(width: 16)
-                            Text(payload.name)
-                                .font(.caption)
-                                .foregroundColor(.white)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(indicatorTitle(for: payload))
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                                Text(indicatorSubtitle(for: payload))
+                                    .font(.caption2)
+                                    .foregroundColor(AppColors.greyText)
+                                    .lineLimit(1)
+                            }
                             Spacer(minLength: 0)
+                            indicatorSettingsButton(for: payload)
                             removeDraftButton(draft.id)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .background(rowCardBackground())
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
+                        .onTapGesture {
+                            openIndicatorEditor(for: payload)
+                        }
                     }
                 }
             }
@@ -364,6 +363,22 @@ struct MarkerPlacementComponentsTab: View {
         .buttonStyle(.plain)
     }
 
+    @ViewBuilder
+    private func indicatorSettingsButton(for payload: IndicatorPayload) -> some View {
+        if IndicatorCatalogItem.item(forIndicatorName: payload.name) != nil {
+            Button {
+                openIndicatorEditor(for: payload)
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(AppColors.whiteText.opacity(0.08)))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private func removeTimeframeDraftButton(_ draft: MarkerComponentDraft) -> some View {
         Button {
             placementState.removeComponent(id: draft.id)
@@ -396,6 +411,18 @@ struct MarkerPlacementComponentsTab: View {
         }
     }
 
+    private func openIndicatorEditor(for payload: IndicatorPayload) {
+        guard let item = IndicatorCatalogItem.item(forIndicatorName: payload.name) else {
+            infoMessage = "Settings editor unavailable for this indicator."
+            return
+        }
+        editingIndicatorContext = IndicatorEditingContext(
+            item: item,
+            indicatorName: payload.name,
+            existingSettings: payload.settings
+        )
+    }
+
     private func drawingSortRank(for componentType: RLComponentType) -> Int {
         switch componentType {
         case .drawingTrendline: return 0
@@ -422,6 +449,17 @@ struct MarkerPlacementComponentsTab: View {
     private func indicatorName(for draft: MarkerComponentDraft) -> String {
         guard case let .indicator(payload) = draft.payload else { return "" }
         return payload.name
+    }
+
+    private func indicatorTitle(for payload: IndicatorPayload) -> String {
+        IndicatorCatalogItem.item(forIndicatorName: payload.name)?.title ?? payload.name
+    }
+
+    private func indicatorSubtitle(for payload: IndicatorPayload) -> String {
+        let item = IndicatorCatalogItem.item(forIndicatorName: payload.name)
+        let mode = (item?.isPanelIndicator ?? false) ? "Panel" : "Overlay"
+        let summary = item?.description ?? "Custom indicator"
+        return "\(mode) • \(summary)"
     }
 
     private func timeframeValue(for draft: MarkerComponentDraft) -> RLChartTimeframe? {

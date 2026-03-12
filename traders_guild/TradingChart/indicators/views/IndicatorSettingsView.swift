@@ -9,40 +9,12 @@
 
 import SwiftUI
 
-// MARK: - Make IndicatorCategory conform to UnifiedTabItem
-
-extension IndicatorCategory: UnifiedTabItem {
-    var title: String { rawValue }
-    // icon property is already defined in IndicatorModels.swift
-}
-
-enum IndicatorSettingsTab: String, CaseIterable, UnifiedTabItem {
-    case active = "Active"
-    case trend = "Trend"
-    case volatility = "Volatility"
-    case momentum = "Momentum"
-    case volume = "Volume"
-
-    var title: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .active: return "checkmark.circle.fill"
-        case .trend: return IndicatorCategory.trend.icon
-        case .volatility: return IndicatorCategory.volatility.icon
-        case .momentum: return IndicatorCategory.momentum.icon
-        case .volume: return IndicatorCategory.volume.icon
-        }
-    }
-}
-
-// MARK: - Main Settings Content
-
-struct IndicatorSettingsContent: View {
+struct ChartIndicatorBrowser: View {
     @ObservedObject var indicatorManager: IndicatorManager
     var onRecalculate: () -> Void
+    var showsTitleHeader: Bool = true
     
-    @State private var selectedTab: IndicatorSettingsTab = .active
+    @State private var selectedTab: IndicatorSubTab = .trend
     @State private var addingIndicatorType: IndicatorType?
     
     // Edit sheet states
@@ -62,33 +34,32 @@ struct IndicatorSettingsContent: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // MARK: - Header
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Indicators")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    Spacer()
-                }
-                .padding(.bottom, 6)
-
-                Text("Add indicators to analyse chart data.")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 4)
-
-            // Use UnifiedCategoryTabBar for consistent tab styling
             categoryTabs
+
+            if showsTitleHeader {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("Indicators")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    .padding(.bottom, 6)
+
+                    Text("Add indicators to analyse chart data.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
+            }
             
             panelLimitBadge
             
             ScrollView {
                 VStack(spacing: 12) {
                     switch selectedTab {
-                    case .active: activeIndicators
                     case .trend: trendIndicators
                     case .volatility: volatilityIndicators
                     case .momentum: momentumIndicators
@@ -176,7 +147,7 @@ struct IndicatorSettingsContent: View {
         UnifiedTabBar(
             selectedTab: $selectedTab,
             size: .compact,
-            theme: .subTab,
+            theme: .deepSubTab,
             spacing: 6
         )
     }

@@ -333,6 +333,9 @@ struct TradingChartView: View {
     /// Chart view model that coordinates chart state and data
     @ObservedObject var chartViewModel: ChartViewModel
     
+    /// Observe indicator changes directly so chart overlays redraw reliably.
+    @ObservedObject private var indicatorManager: IndicatorManager
+    
     /// Shorthand accessor for data manager
     /// This computed property lets us keep using "chartData" throughout the file
     private var chartData: ChartDataManager {
@@ -492,6 +495,7 @@ struct TradingChartView: View {
         ))
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
+        self._indicatorManager = ObservedObject(wrappedValue: chartViewModel.indicatorManager)
         self.gestureState = gestureState
         self.placementState = placementState
         self._rsiPanelHeight = rsiPanelHeight
@@ -982,9 +986,9 @@ struct TradingChartView: View {
                 crosshairManager: crosshairManager,
                 chartSize: geometry.size,
                 chartData: chartData,
-                rsiPanelActive: chartViewModel.indicatorManager.shouldShowAnyPanel,
+                rsiPanelActive: indicatorManager.shouldShowAnyPanel,
                 rsiPanelHeight: rsiPanelHeight,
-                indicatorManager: chartViewModel.indicatorManager,
+                indicatorManager: indicatorManager,
                 timeframe: chartViewModel.currentTimeframe,
                 timeZone: axisTimeZone
             )
@@ -1050,7 +1054,7 @@ struct TradingChartView: View {
     /// Create drawing data for indicators (computed on main thread before Canvas)
     /// UPDATED: Now includes all overlay indicators (BB, VWAP, Donchian, Keltner, SAR)
     private var indicatorDrawingData: IndicatorDrawingData {
-        let im = chartViewModel.indicatorManager
+        let im = indicatorManager
         return IndicatorDrawingData(
             maConfigs: im.activeIndicators.enabledMovingAverages,
             maDataMap: im.movingAverageData,
@@ -2257,7 +2261,7 @@ struct TradingChartView: View {
                 }
             }
         }
-        chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
+        indicatorManager.recalculateIndicators(candles: chartData.candles)
     }
     
     private func handleSymbolStringChange(oldValue: String?, newValue: String?) {
@@ -2284,7 +2288,7 @@ struct TradingChartView: View {
                 }
             }
         }
-        chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
+        indicatorManager.recalculateIndicators(candles: chartData.candles)
     }
     
     private func handleCandleCountChange(oldCount: Int, newCount: Int) {
@@ -2292,7 +2296,7 @@ struct TradingChartView: View {
             resetChartToMostRecentCandles()
         }
         if newCount != oldCount {
-            chartViewModel.indicatorManager.recalculateIndicators(candles: chartData.candles)
+            indicatorManager.recalculateIndicators(candles: chartData.candles)
         }
 
         // Keep prediction placement pinned to latest candle
@@ -4170,8 +4174,7 @@ struct TradingChartView: View {
             symbolTimeframeRow
             providerRow
             priceRow
-            // Use chartViewModel.indicatorManager (not just indicatorManager)
-            ActiveIndicatorsLegendView(indicatorManager: chartViewModel.indicatorManager)
+            ActiveIndicatorsLegendView(indicatorManager: indicatorManager)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

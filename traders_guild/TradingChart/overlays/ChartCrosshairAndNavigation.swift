@@ -93,12 +93,11 @@ struct CrosshairView: View {
     }
     
     /// Computed property for time label Y position
-    /// Always positioned at the x-axis area at the bottom of the chart
+    /// Positioned on the x-axis at the bottom of the chart canvas
     private var timeLabelY: CGFloat {
         let bottomAreaHeight = chartSize.height * 0.11
-        // Position inline with x-axis labels (22pt canvas + 10pt padding = 32pt total, center at ~21pt from bottom of canvas)
-        // This positions it at the same y as the x-axis labels regardless of RSI panel
-        return chartSize.height - bottomAreaHeight - 21
+        // Position directly on the x-axis line (bottom of chart canvas area)
+        return chartSize.height - bottomAreaHeight
     }
     
     var body: some View {
@@ -202,66 +201,36 @@ struct CrosshairTimeLabel: View {
     }
 
     private var arrowColor: Color {
-        switch style {
-        case .standard:
-            return .cyan
-        case .markerPlacement:
-            return Color(red: 0.53, green: 0.62, blue: 0.76)
-        }
+        Color(red: 0.53, green: 0.62, blue: 0.76)
     }
 
     private var textColor: Color {
-        switch style {
-        case .standard:
-            return .white
-        case .markerPlacement:
-            return AppColors.surfaceWhite95
-        }
+        AppColors.surfaceWhite95
     }
 
     private var backgroundFill: AnyShapeStyle {
-        switch style {
-        case .standard:
-            return AnyShapeStyle(AppColors.statusAccent90)
-        case .markerPlacement:
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.20, green: 0.24, blue: 0.32),
-                        Color(red: 0.13, green: 0.16, blue: 0.22)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+        AnyShapeStyle(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.20, green: 0.24, blue: 0.32),
+                    Color(red: 0.13, green: 0.16, blue: 0.22)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
-        }
+        )
     }
 
     private var borderColor: Color {
-        switch style {
-        case .standard:
-            return .clear
-        case .markerPlacement:
-            return Color(red: 0.39, green: 0.49, blue: 0.64).opacity(0.95)
-        }
+        Color(red: 0.39, green: 0.49, blue: 0.64).opacity(0.95)
     }
 
     private var borderLineWidth: CGFloat {
-        switch style {
-        case .standard:
-            return 0
-        case .markerPlacement:
-            return 1.0
-        }
+        1.0
     }
 
     private var shadowColor: Color {
-        switch style {
-        case .standard:
-            return AppColors.statusAccent40
-        case .markerPlacement:
-            return AppColors.surfaceBlack80
-        }
+        AppColors.surfaceBlack80
     }
     
     var body: some View {

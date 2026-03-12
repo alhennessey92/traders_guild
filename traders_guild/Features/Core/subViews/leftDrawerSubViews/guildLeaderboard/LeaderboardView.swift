@@ -137,7 +137,7 @@ struct LeaderboardListView: View {
                 UnifiedTabBar(
                     selectedTab: $selectedGuildMode,
                     size: .compact,
-                    theme: .amber,
+                    theme: .subTab,
                     countForTab: { tab in countForGuildMode(tab) },
                     spacing: 6
                 )
@@ -147,7 +147,7 @@ struct LeaderboardListView: View {
                 UnifiedTabBar(
                     selectedTab: $selectedGlobalScope,
                     size: .compact,
-                    theme: .emerald,
+                    theme: .subTab,
                     countForTab: { tab in countForGlobalScope(tab) },
                     spacing: 6
                 )
@@ -157,7 +157,7 @@ struct LeaderboardListView: View {
                 UnifiedTabBar(
                     selectedTab: $selectedGlobalMode,
                     size: .compact,
-                    theme: .magenta,
+                    theme: .subTab,
                     countForTab: { tab in countForGlobalMode(tab) },
                     spacing: 6
                 )

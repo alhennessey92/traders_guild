@@ -300,11 +300,8 @@ enum UnifiedTabTheme {
     case deepSubTab     // Level 3: darkest navy
     case colored        // Per-tab colors (personal=yellow, guild=blue, etc.)
     case accent         // Uses AppColors.accentColor
-    case emerald
-    case amber
-    case magenta
     
-    // Consistent blue gradient used across all tab types
+    // Consistent green gradient used for active/selected tabs
     static var consistentBlueGradient: LinearGradient {
         LinearGradient(
             colors: [
@@ -351,46 +348,22 @@ enum UnifiedTabTheme {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-        case .emerald:
-            return LinearGradient(
-                colors: [AppColors.statusPositive72, AppColors.statusTeal58],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .amber:
-            return LinearGradient(
-                colors: [AppColors.statusWarning72, AppColors.statusHighlight55],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .magenta:
-            return LinearGradient(
-                colors: [AppColors.statusPink72, AppColors.statusIndigo58],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
         }
     }
     
     func borderColor(for index: Int) -> Color {
         switch self {
         case .blue:
-            return AppColors.statusInfo40
+            return AppColors.statusPositive40
         case .subTab:
-            return AppColors.statusInfo40
+            return AppColors.statusPositive40
         case .deepSubTab:
-            return AppColors.statusInfo40
+            return AppColors.statusPositive40
         case .colored:
             let colors: [Color] = [.yellow, .blue, .green, .pink]
             return colors[index % colors.count].opacity(0.3)
         case .accent:
             return AppColors.accentColor.opacity(0.4)
-        case .emerald:
-            return AppColors.statusPositive45
-        case .amber:
-            return AppColors.statusWarning45
-        case .magenta:
-            return AppColors.statusPink45
         }
     }
 }
@@ -418,7 +391,7 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
                 }
                 
                 // Optional count badge
-                if let count = count {
+                if let count = count, count > 0 {
                     Text("(\(count))")
                         .font(.system(size: size.labelSize - 2))
                         .foregroundColor(isSelected ? AppColors.surfaceWhite70 : .gray)

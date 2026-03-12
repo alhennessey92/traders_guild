@@ -31,6 +31,7 @@ struct ChartXAxisLabel: Equatable {
 enum ChartXAxisLabelStyle {
     case mainChart
     case indicatorPanel
+    case timeframePanel
 
     var primaryFontSize: CGFloat {
         switch self {
@@ -38,6 +39,8 @@ enum ChartXAxisLabelStyle {
             return 13
         case .indicatorPanel:
             return 13
+        case .timeframePanel:
+            return 11
         }
     }
 
@@ -47,6 +50,8 @@ enum ChartXAxisLabelStyle {
             return 11
         case .indicatorPanel:
             return 11
+        case .timeframePanel:
+            return 10
         }
     }
 }
@@ -184,6 +189,8 @@ enum ChartXAxisLabelEngine {
                 color = label.kind == .primary ? AppColors.surfaceWhite96 : AppColors.surfaceWhite82
             case .indicatorPanel:
                 color = label.kind == .primary ? AppColors.surfaceWhite93 : AppColors.surfaceWhite78
+            case .timeframePanel:
+                color = label.kind == .primary ? AppColors.statusInfo85 : AppColors.statusInfo60
             }
 
             let labelY: CGFloat = 12
@@ -598,7 +605,8 @@ struct MarkerXAxisTimeIndicator: View {
 
     private var timeLabelY: CGFloat {
         let bottomAreaHeight = chartHeight * 0.085
-        return chartHeight - bottomAreaHeight - 16
+        // Position directly on the x-axis line
+        return chartHeight - bottomAreaHeight
     }
 
     var body: some View {

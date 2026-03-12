@@ -426,11 +426,26 @@ struct TimeframePanelView: View {
                         locale: Locale(identifier: "en_US_POSIX"),
                         minSpacing: 52
                     ),
-                    style: .indicatorPanel
+                    style: .timeframePanel
                 )
             }
             .frame(height: 24)
-            .background(AppColors.systemBlack)
+            .background(
+                LinearGradient(
+                    colors: [
+                        AppColors.statusInfo15,
+                        AppColors.systemBlack,
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(AppColors.statusInfo40)
+                    .frame(height: 1)
+                    .opacity(0.7)
+            }
         }
         .frame(height: 24)
     }

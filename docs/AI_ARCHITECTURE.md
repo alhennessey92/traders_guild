@@ -1082,15 +1082,15 @@ These are all the steps to the current drawings, need to make sure its vital, on
 152. [FIXED] Need all panels to be collapsible and say the name with handle to re open - or just drag to show only top panel bar
 
 
-153. When displaying question in marker info box need to increase its size a little to make it more apparent. A bit too small at the moment. Same can be said for poll marker, question appears a bit too small
+153. [FIXED] When displaying question in marker info box need to increase its size a little to make it more apparent. A bit too small at the moment. Same can be said for poll marker, question appears a bit too small
 
-154. Copy chart setup doesn’t work or do anything in marker placement mode
+154. [FIXED] Copy chart setup doesn’t work or do anything in marker placement mode
 
-155. When editing shows marker as ghost and new marker above it, even though cant change position of marker which is good, can still move this new marker around which is off putting and not correct
+155. [FIXED] When editing shows marker as ghost and new marker above it, even though cant change position of marker which is good, can still move this new marker around which is off putting and not correct
 
-156. In marker placement mode the add components button needs to move to the right so general tab can have more width padding
+156. [FIXED] In marker placement mode the add components button needs to move to the right so general tab can have more width padding
 
-157. In marker placement mode all components tabs need to move down a bit have title header of add compoents, any sub tabs appear under main tabs and under all that is the mirror chart button so:
+157. [FIXED] In marker placement mode all components tabs need to move down a bit have title header of add compoents, any sub tabs appear under main tabs and under all that is the mirror chart button so:
 	Add Components header
 	Tabs for active, indicator etc
 	Sub tabs relative to above tabs
@@ -1099,21 +1099,21 @@ These are all the steps to the current drawings, need to make sure its vital, on
 	In that order
 
 
-158. Time indicator needs to be darker blue/grey no opacity and move up a little bit so runs cleanly in x axis
+158. [FIXED] Time indicator needs to be darker blue/grey no opacity and move up a little bit so runs cleanly in x axis
 
-159. Marker info box can move down a little so maybe 5px from top of x axis and then subsequently 5 px from top of any panel on screen 
+159. [FIXED] Marker info box can move down a little so maybe 5px from top of x axis and then subsequently 5 px from top of any panel on screen 
 
-160. When collapsing panels in chart they cover the x axis and need slightly more pronounced border. Also chart button on bottom sit too high from panel
+160. [FIXED] When collapsing panels in chart they cover the x axis and need slightly more pronounced border. Also chart button on bottom sit too high from panel
 
-161. Panels being added to chart need to be added to the chart info box. Ema gets added correctly but just added rsi and macd panels and neither were added. Need a review of components on chart so user can see all added components in the chart info box.
+161. [FIXED] Panels being added to chart need to be added to the chart info box. Ema gets added correctly but just added rsi and macd panels and neither were added. Need a review of components on chart so user can see all added components in the chart info box.
 
-162. Need a toggle for panel indicators on main chart for active state like ema does
+162. [FIXED] Need a toggle for panel indicators on main chart for active state like ema does
 
-163. [Claude] Need to review indicators and drawing sections for markers and default chart. They should both look and work identical, ideally from a unified indicator and drawing section so they work on marker section and default chart section. Due to this, on default chart view need to update indicator bottom bar section to be updated to the component section like when adding markers,  combining indicators and now drawings for adding to default chart. Obviously we dont want timeframes at the moment but maybe in the future. Basically my idea is that they work the same for users default chart to adding markers so user see a identical ui and functionality when adding components as i call them now, same sub tab section of indicators and drawings etc... would be good if it could all derive from the same part - a unified indicator/drawing component system
+163. [FIXED] Need to review indicators and drawing sections for markers and default chart. They should both look and work identical, ideally from a unified indicator and drawing section so they work on marker section and default chart section. Due to this, on default chart view need to update indicator bottom bar section to be updated to the component section like when adding markers,  combining indicators and now drawings for adding to default chart. Obviously we dont want timeframes at the moment but maybe in the future. Basically my idea is that they work the same for users default chart to adding markers so user see a identical ui and functionality when adding components as i call them now, same sub tab section of indicators and drawings etc... would be good if it could all derive from the same part - a unified indicator/drawing component system
 
-164. Panel background needs to be slightly less dark more aligned with bottom gradient color of main chart 
+164. [FIXED] Panel background needs to be slightly less dark more aligned with bottom gradient color of main chart 
 
-165. Like button for markers - on like background should go red 
+165. [FIXED] Like button for markers - on like background should go red 
 
 166. Guild reputation breakdown showing weird screen when no data need placeholder, similar to guild accuracy
 
@@ -1124,4 +1124,10 @@ This also includes making sure requirements are shown for any form, highlighting
 
 169. Need to investigate why bottom chat text boxes are jumping when showing keyboard 
 
-170. [Claude] Need to audit all sub tab sections of the app . Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout. Make it look nice but consistent across the app
+170. [Claude] Need to audit all sub tab sections of the app . Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout. Make it look nice but consistent across the app. This is mostly done but want to make sure the color scheme is good and cant be improved, each layer of the sub tabs should have a slightly different shade.
+
+171. Need to make sure in marker palcement section any options that are required in the general tab have a small req text or similar to symbolise they are a required part of the marker to be placed
+
+172. Not really sure on the UI/style of the guild reputaiton and accuracy in profile view and reputation/accuracy sections in global view, for one both sets are different look button/list wise before entering each section and the sections are too dark and not in keeping with rest of app ui
+
+173. Crosshair time indicator still running above the x axis not not it, and needs a better color, for its entire use throuhgout the app, to make it more readable

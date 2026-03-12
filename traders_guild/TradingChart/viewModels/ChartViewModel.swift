@@ -71,6 +71,8 @@ class ChartViewModel: ObservableObject {
     let gestureState = ChartGestureState()
     
     @Published var indicatorManager = IndicatorManager()
+    @Published var chartDrawingManager = ChartDrawingManager()
+    @Published var chartTimeframeLinkManager = ChartTimeframeLinkManager()
     
     // In ChartViewModel.swift, add:
     var totalCandleWidth: CGFloat {
@@ -110,6 +112,8 @@ class ChartViewModel: ObservableObject {
         self.appState = appState
         self.dataManager = dataManager
         self.api = api
+        chartDrawingManager.load()
+        chartTimeframeLinkManager.load()
     }
     
     // MARK: - Public Methods
@@ -161,6 +165,7 @@ class ChartViewModel: ObservableObject {
                     ?? combinedWatchlist.first
                     ?? globalSymbols.first
             }
+            syncChartDrawingStorageContext()
             availableSymbols = available
             
             // Load chart data for the selected symbol
@@ -202,6 +207,7 @@ class ChartViewModel: ObservableObject {
             if currentSymbol?.id != chartData.symbol.id {
                 currentSymbol = chartData.symbol
             }
+            syncChartDrawingStorageContext()
             activeMarketProvider = chartData.symbol.activeMarketProvider ?? activeMarketProvider
 
             // Sync symbol to dataManager so MarkerCreationSheet can access it
@@ -259,6 +265,7 @@ class ChartViewModel: ObservableObject {
         }
         if let fallback {
             currentSymbol = fallback
+            syncChartDrawingStorageContext()
             activeMarketProvider = fallback.activeMarketProvider ?? activeMarketProvider
             appState.showError(
                 title: "Symbol Unavailable",
@@ -299,6 +306,7 @@ class ChartViewModel: ObservableObject {
         guard currentSymbol?.id != symbol.id else { return }
         
         currentSymbol = symbol
+        syncChartDrawingStorageContext()
         if let provider = symbol.activeMarketProvider {
             activeMarketProvider = provider
         }
@@ -393,6 +401,11 @@ class ChartViewModel: ObservableObject {
 
     private func firstSupportedSymbol(in symbols: [RLTradingSymbolDTO]) -> RLTradingSymbolDTO? {
         symbols.first(where: { $0.isSelectableForActiveProvider })
+    }
+
+    private func syncChartDrawingStorageContext() {
+        chartDrawingManager.symbolId = currentSymbol?.id
+        chartTimeframeLinkManager.symbolId = currentSymbol?.id
     }
     
     /// Load user's personal watchlist

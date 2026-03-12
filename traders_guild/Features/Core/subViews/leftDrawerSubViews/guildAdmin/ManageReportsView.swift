@@ -10,24 +10,37 @@ import SwiftUI
 
 // MARK: - Report Filters
 
-enum ReportStatusFilter: String, CaseIterable {
+enum ReportStatusFilter: String, CaseIterable, UnifiedTabItem {
     case all = "All"
     case pending = "Pending"
     case resolved = "Resolved"
     case dismissed = "Dismissed"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .all: return "tray.full.fill"
+        case .pending: return "clock.fill"
+        case .resolved: return "checkmark.circle.fill"
+        case .dismissed: return "xmark.circle.fill"
+        }
+    }
 
     var apiValue: String? {
         self == .all ? nil : self.rawValue.lowercased()
     }
 }
 
-enum ContentTypeFilter: String, CaseIterable {
+enum ContentTypeFilter: String, CaseIterable, UnifiedTabItem {
     case all = "All"
     case messages = "Chat Messages"
     case dmMessages = "DMs"
     case chartChat = "Chart Chat"
     case markers = "Markers"
     case users = "Users"
+
+    var title: String { tabLabel }
 
     /// Compact label for tab bar to avoid wrapping
     var tabLabel: String {
@@ -125,7 +138,7 @@ struct ManageReportsView: View {
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
             }
             .padding(.top, 20)
             .padding(.trailing, 20)
@@ -168,69 +181,28 @@ struct ManageReportsView: View {
     // MARK: - Status Filter Bar
 
     private var statusFilterBar: some View {
-        HStack(spacing: 4) {
-            ForEach(ReportStatusFilter.allCases, id: \.self) { filter in
-                Button(action: { selectedStatus = filter }) {
-                    HStack(spacing: 4) {
-                        Text(filter.rawValue)
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                        // Show pending count badge
-                        if filter == .pending && pendingCount > 0 {
-                            Text("\(pendingCount)")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(.orange))
-                        }
-                    }
-                    .foregroundColor(selectedStatus == filter ? .white : .secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(selectedStatus == filter ? Color.accentColor : Color.clear)
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
+        UnifiedTabBar(
+            selectedTab: $selectedStatus,
+            size: .compact,
+            theme: .subTab,
+            countForTab: { tab in
+                tab == .pending ? pendingCount : 0
+            },
+            spacing: 6
+        )
         .padding(.horizontal)
     }
 
-    // MARK: - Content Type Filter Bar (scrollable, compact labels)
+    // MARK: - Content Type Filter Bar
 
     private var contentTypeFilterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(ContentTypeFilter.allCases, id: \.self) { filter in
-                    Button(action: { selectedContentType = filter }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: filter.icon)
-                                .font(.system(size: 10))
-                            Text(filter.tabLabel)
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundColor(selectedContentType == filter ? .white : .secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule()
-                                .fill(selectedContentType == filter ? Color.accentColor.opacity(0.8) : AppColors.whiteText.opacity(0.08))
-                        )
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(selectedContentType == filter ? Color.clear : AppColors.whiteText.opacity(0.15), lineWidth: 0.5)
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .padding(.horizontal)
-        }
-        .padding(.vertical, 4)
+        UnifiedTabBar(
+            selectedTab: $selectedContentType,
+            size: .compact,
+            theme: .deepSubTab,
+            spacing: 6
+        )
+        .padding(.horizontal)
     }
 
     // MARK: - Content
@@ -248,16 +220,13 @@ struct ManageReportsView: View {
             emptyState
         } else {
             ScrollView {
-                VStack(spacing: 0) {
+                VStack(spacing: 8) {
                     ForEach(reports) { report in
                         reportCard(report: report)
-                        if report.id != reports.last?.id {
-                            Divider()
-                                .padding(.horizontal)
-                        }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
         }
     }
@@ -265,21 +234,11 @@ struct ManageReportsView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 40))
-                .foregroundColor(.secondary.opacity(0.6))
-            Text("No Reports")
-                .font(.headline)
-                .foregroundColor(.primary)
-            Text(emptyStateSubtitle)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+        UnifiedEmptyState(
+            icon: "checkmark.shield.fill",
+            title: "No Reports",
+            subtitle: emptyStateSubtitle
+        )
     }
 
     private var emptyStateSubtitle: String {
@@ -310,7 +269,7 @@ struct ManageReportsView: View {
                     // Content type icon
                     Image(systemName: report.contentTypeIcon)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColors.greyText)
                 }
                 .frame(width: 20)
                 .padding(.top, 4)
@@ -322,7 +281,7 @@ struct ManageReportsView: View {
                         Text(report.contentTypeDisplay)
                             .font(.caption)
                             .fontWeight(.semibold)
-                            .foregroundColor(.primary)
+                            .foregroundColor(AppColors.whiteText)
 
                         // Reason badge
                         Text(report.reasonDisplay)
@@ -346,20 +305,20 @@ struct ManageReportsView: View {
                     if let reporterName = report.reporterDisplayName ?? report.reporterUsername {
                         Text("Reported by \(reporterName)")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppColors.greyText)
                     }
 
                     // Content snippet or reporter details (if any)
                     if let snippet = report.contentSnippet, !snippet.isEmpty {
                         Text(snippet)
                             .font(.caption2)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundColor(AppColors.greyText.opacity(0.8))
                             .lineLimit(2)
                     }
                     if let details = report.details, !details.isEmpty {
                         Text(details)
                             .font(.caption2)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundColor(AppColors.greyText.opacity(0.8))
                             .lineLimit(2)
                     }
 
@@ -372,13 +331,13 @@ struct ManageReportsView: View {
                                     .foregroundColor(report.statusColor)
                                 Text("\(report.isResolved ? "Resolved" : "Dismissed") by \(reviewer)")
                                     .font(.caption2)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppColors.greyText)
                             }
                         }
                         if let note = report.resolutionNote, !note.isEmpty {
                             Text("Note: \(note)")
                                 .font(.caption2)
-                                .foregroundColor(.secondary.opacity(0.7))
+                                .foregroundColor(AppColors.greyText.opacity(0.7))
                                 .lineLimit(1)
                         }
                     }
@@ -386,20 +345,28 @@ struct ManageReportsView: View {
                     // Timestamp
                     Text(report.createdAt, style: .relative)
                         .font(.caption2)
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .foregroundColor(AppColors.greyText.opacity(0.6))
                 }
 
                 // Chevron for all reports
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundColor(AppColors.greyText.opacity(0.5))
                     .padding(.top, 4)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.surfaceWhite05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
+                )
+        )
     }
 
     // MARK: - Report Detail Sheet
@@ -447,10 +414,10 @@ struct ManageReportsView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Preview")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(AppColors.greyText)
                                     Text(snippet)
                                         .font(.subheadline)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(AppColors.whiteText)
                                         .padding(10)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .background(
@@ -464,7 +431,7 @@ struct ManageReportsView: View {
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.systemGray6))
+                            .fill(AppColors.surfaceWhite05)
                     )
 
                     // ── Reported User (offending user) ──
@@ -477,7 +444,7 @@ struct ManageReportsView: View {
                                 HStack {
                                     Text("@\(member.username)")
                                         .font(.subheadline)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(AppColors.whiteText)
                                     Spacer()
                                     Button("View profile") {
                                         selectedReport = nil
@@ -498,7 +465,7 @@ struct ManageReportsView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.systemGray6))
+                                .fill(AppColors.surfaceWhite05)
                         )
                     }
 
@@ -518,10 +485,10 @@ struct ManageReportsView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Additional Details")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(AppColors.greyText)
                                     Text(details)
                                         .font(.subheadline)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(AppColors.whiteText)
                                         .padding(10)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .background(
@@ -534,17 +501,17 @@ struct ManageReportsView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "clock")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppColors.greyText)
                                 Text("Reported \(report.createdAt, style: .relative) ago")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppColors.greyText)
                             }
                         }
                     }
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.systemGray6))
+                            .fill(AppColors.surfaceWhite05)
                     )
 
                     // ── Resolution Info (for already resolved/dismissed reports) ──
@@ -566,24 +533,24 @@ struct ManageReportsView: View {
                                     HStack(spacing: 4) {
                                         Text("When")
                                             .font(.caption)
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(AppColors.greyText)
                                             .frame(width: 80, alignment: .leading)
                                         Text(reviewedAt, style: .relative)
                                             .font(.caption)
-                                            .foregroundColor(.primary)
+                                            .foregroundColor(AppColors.whiteText)
                                         Text("ago")
                                             .font(.caption)
-                                            .foregroundColor(.primary)
+                                            .foregroundColor(AppColors.whiteText)
                                     }
                                 }
                                 if let note = report.resolutionNote, !note.isEmpty {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Resolution Note")
                                             .font(.caption)
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(AppColors.greyText)
                                         Text(note)
                                             .font(.subheadline)
-                                            .foregroundColor(.primary)
+                                            .foregroundColor(AppColors.whiteText)
                                             .padding(10)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .background(
@@ -650,7 +617,7 @@ struct ManageReportsView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.systemGray6))
+                                .fill(AppColors.surfaceWhite05)
                         )
                     }
 
@@ -665,11 +632,22 @@ struct ManageReportsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Resolution Note (Optional)")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppColors.greyText)
 
                                 TextField("Add a note about your decision...", text: $resolutionNote, axis: .vertical)
-                                    .textFieldStyle(.roundedBorder)
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.whiteText)
                                     .lineLimit(3...5)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.9))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(AppColors.surfaceWhite15, lineWidth: 1)
+                                            )
+                                    )
                             }
 
                             // Action buttons
@@ -713,7 +691,7 @@ struct ManageReportsView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.systemGray6))
+                                .fill(AppColors.surfaceWhite05)
                         )
                     } else if report.isPending && !canAdmin {
                         // Moderator viewing pending report — info only
@@ -722,7 +700,7 @@ struct ManageReportsView: View {
                                 .foregroundColor(.blue)
                             Text("Only admins and owners can resolve or dismiss reports.")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(AppColors.greyText)
                         }
                         .padding()
                         .background(
@@ -752,11 +730,11 @@ struct ManageReportsView: View {
         HStack(spacing: 4) {
             Text(label)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.greyText)
                 .frame(width: 80, alignment: .leading)
             Text(value)
                 .font(.caption)
-                .foregroundColor(.primary)
+                .foregroundColor(AppColors.whiteText)
         }
     }
 

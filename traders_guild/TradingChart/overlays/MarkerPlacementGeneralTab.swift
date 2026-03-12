@@ -191,16 +191,21 @@ struct MarkerPlacementGeneralTab: View {
 
     private var requirementsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(
-                title: "Requirements",
-                subtitle: "Intent-specific fields",
-                icon: "list.bullet.clipboard",
-                tint: placementState.intent == .setup && placementState.trackingEnabled
-                    ? .green
-                    : (placementState.intent == .alert
-                        ? (placementState.alertSeverity?.color ?? placementState.intent.color)
-                        : placementState.intent.color)
-            )
+            HStack(spacing: 6) {
+                sectionHeader(
+                    title: "Requirements",
+                    subtitle: "Intent-specific fields",
+                    icon: "list.bullet.clipboard",
+                    tint: placementState.intent == .setup && placementState.trackingEnabled
+                        ? .green
+                        : (placementState.intent == .alert
+                            ? (placementState.alertSeverity?.color ?? placementState.intent.color)
+                            : placementState.intent.color)
+                )
+                if placementState.intent != .personal {
+                    requiredBadge
+                }
+            }
             requirementsContent
         }
         .padding(.horizontal, 12)
@@ -216,12 +221,14 @@ struct MarkerPlacementGeneralTab: View {
                 levelInputRow(
                     title: "Take Profit",
                     componentType: .levelTp,
-                    color: RLComponentType.levelTp.color
+                    color: RLComponentType.levelTp.color,
+                    showRequired: true
                 )
                 levelInputRow(
                     title: "Stop Loss",
                     componentType: .levelSl,
-                    color: RLComponentType.levelSl.color
+                    color: RLComponentType.levelSl.color,
+                    showRequired: true
                 )
                 Toggle(isOn: $placementState.trackingEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -394,12 +401,18 @@ struct MarkerPlacementGeneralTab: View {
     private func levelInputRow(
         title: String,
         componentType: RLComponentType,
-        color: Color
+        color: Color,
+        showRequired: Bool = false
     ) -> some View {
         HStack(spacing: 8) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(color)
+            HStack(spacing: 5) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(color)
+                if showRequired {
+                    requiredBadge
+                }
+            }
 
             Spacer(minLength: 0)
 
@@ -704,6 +717,17 @@ struct MarkerPlacementGeneralTab: View {
 
             Spacer(minLength: 0)
         }
+    }
+
+    private var requiredBadge: some View {
+        Text("Req")
+            .font(.system(size: 9.5, weight: .semibold))
+            .foregroundColor(AppColors.statusWarning95)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(
+                Capsule().fill(AppColors.statusWarning95.opacity(0.15))
+            )
     }
 
     private func sectionCardBackground(cornerRadius: CGFloat = 12) -> some View {

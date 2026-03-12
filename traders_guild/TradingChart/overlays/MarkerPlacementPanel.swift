@@ -42,15 +42,18 @@ struct MarkerPlacementPanel: View {
             case .general:
                 MarkerPlacementGeneralTab(placementState: placementState)
             case .components:
-                MarkerPlacementComponentsTab(
-                    placementState: placementState,
-                    activeChartIndicators: activeChartIndicators,
-                    currentChartTimeframe: currentChartTimeframe,
-                    onSelectTimeframe: onSelectTimeframe,
-                    onBeginInteractiveDrawing: onBeginInteractiveDrawing,
-                    timeframePanelManager: timeframePanelManager,
-                    symbolId: symbolId,
-                    guildId: guildId
+                UnifiedComponentsHostView(
+                    adapter: MarkerComponentsAdapter(
+                        placementState: placementState,
+                        activeChartIndicators: activeChartIndicators,
+                        currentChartTimeframe: currentChartTimeframe,
+                        onSelectTimeframeAction: onSelectTimeframe,
+                        onBeginInteractiveDrawing: onBeginInteractiveDrawing,
+                        timeframePanelManager: timeframePanelManager,
+                        symbolId: symbolId,
+                        guildId: guildId,
+                        showsMirrorButtons: true
+                    )
                 )
             }
         }

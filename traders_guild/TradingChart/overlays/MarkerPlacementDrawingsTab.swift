@@ -1,23 +1,5 @@
 import SwiftUI
 
-private enum MarkerDrawingSubTab: String, CaseIterable, UnifiedTabItem {
-    case lines = "Lines"
-    case zones = "Zones"
-    case annotations = "Annotations"
-    case patterns = "Patterns"
-
-    var title: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .lines: return "line.3.horizontal"
-        case .zones: return "square.dashed"
-        case .annotations: return "text.bubble"
-        case .patterns: return "triangle"
-        }
-    }
-}
-
 private struct DrawingColorOption: Identifiable {
     let name: String
     let hex: String
@@ -32,7 +14,7 @@ struct MarkerPlacementDrawingsTab: View {
     var showsTitleHeader: Bool = true
     var showsMirrorButton: Bool = false
 
-    @State private var selectedSubTab: MarkerDrawingSubTab = .lines
+    @State private var selectedSubTab: DrawingSubTab = .lines
     @State private var limitWarning: String?
     @State private var infoMessage: String?
     @State private var colorEditorDraftID: UUID?

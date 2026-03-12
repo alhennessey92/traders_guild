@@ -326,121 +326,24 @@ struct UserGlobalSheetView: View {
                 .padding(.horizontal, 25)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                Button {
-                    showGlobalReputationBreakdown = true
-                } label: {
-                    HStack {
-                        Text("Reputation Breakdown")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                    }
-                }
+            VStack(spacing: 10) {
+                BreakdownEntryCard(
+                    title: "Global Reputation Breakdown",
+                    subtitle: "Tier, weekly delta, guild contributions",
+                    value: "\(globalRepData?.globalReputation ?? rlAppState.currentUser?.globalReputation ?? 0)",
+                    icon: "shield.checkered",
+                    iconColor: AppColors.accentColor,
+                    action: { showGlobalReputationBreakdown = true }
+                )
 
-                VStack(spacing: 10) {
-                    if let rep = globalRepData, !rep.guildContributions.isEmpty {
-                        ForEach(rep.guildContributions, id: \.guildId) { guild in
-                            ReputationBreakdownRow(
-                                title: guild.guildName,
-                                value: guild.reputation,
-                                total: max(1, rep.globalReputation),
-                                color: AppColors.accentColor
-                            )
-                        }
-                    } else {
-                        HStack {
-                            Image(systemName: "shield")
-                                .foregroundColor(AppColors.greyText)
-                            Text("No guild contribution data available yet")
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
-                    }
-                }
-                .padding()
-                .background(AppColors.surfaceWhite03)
-                .cornerRadius(12)
-                .contentShape(Rectangle())
-                .onTapGesture { showGlobalReputationBreakdown = true }
-            }
-            .padding(.horizontal, 25)
-
-            VStack(alignment: .leading, spacing: 12) {
-                Button {
-                    showGlobalAccuracyBreakdown = true
-                } label: {
-                    HStack {
-                        Text("Trading Accuracy")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                    }
-                }
-
-                if let accuracy = globalAccuracyData {
-                    HStack(spacing: 16) {
-                        VStack(spacing: 4) {
-                            Text(accuracy.accuracyFormatted)
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(accuracy.accuracyRate >= 0.5 ? .green : .red)
-                            Text("Accuracy")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        VStack(spacing: 4) {
-                            Text("\(accuracy.totalPredictions)")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppColors.whiteText)
-                            Text("Predictions")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        VStack(spacing: 4) {
-                            Text(accuracy.rrRatioFormatted ?? "--")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(.orange)
-                            Text("Avg R:R")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .padding()
-                    .background(AppColors.surfaceWhite03)
-                    .cornerRadius(12)
-                    .contentShape(Rectangle())
-                    .onTapGesture { showGlobalAccuracyBreakdown = true }
-                } else {
-                    HStack {
-                        Image(systemName: "target")
-                            .foregroundColor(AppColors.greyText)
-                        Text("No global accuracy data yet")
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(AppColors.surfaceWhite03)
-                    .cornerRadius(12)
-                    .contentShape(Rectangle())
-                    .onTapGesture { showGlobalAccuracyBreakdown = true }
-                }
+                BreakdownEntryCard(
+                    title: "Global Accuracy Breakdown",
+                    subtitle: "Win/loss, streaks, R:R metrics",
+                    value: globalAccuracyData?.accuracyFormatted ?? "--",
+                    icon: "target",
+                    iconColor: .green,
+                    action: { showGlobalAccuracyBreakdown = true }
+                )
             }
             .padding(.horizontal, 25)
 

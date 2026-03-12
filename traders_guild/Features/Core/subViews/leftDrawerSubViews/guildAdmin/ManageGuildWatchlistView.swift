@@ -5,9 +5,20 @@
 
 import SwiftUI
 
-private enum GuildWatchlistAdminTab: String, CaseIterable {
+private enum GuildWatchlistAdminTab: String, CaseIterable, UnifiedTabItem {
     case requests = "Requests"
     case current = "Current"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .requests:
+            return "tray.and.arrow.down.fill"
+        case .current:
+            return "list.bullet"
+        }
+    }
 }
 
 struct ManageGuildWatchlistView: View {
@@ -37,18 +48,31 @@ struct ManageGuildWatchlistView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
                 header
+                    .padding(.horizontal, 16)
+                    .padding(.top, 30)
+
+                Divider()
+                    .background(AppColors.surfaceWhite15)
+                    .padding(.top, 12)
+
                 tabBar
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                Divider()
+                    .background(AppColors.surfaceWhite15)
+                    .padding(.top, 8)
+
                 content
+                    .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 30)
 
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
             }
             .padding(.top, 20)
             .padding(.trailing, 20)
@@ -72,32 +96,14 @@ struct ManageGuildWatchlistView: View {
 
     private var tabBar: some View {
         HStack(spacing: 8) {
-            ForEach(GuildWatchlistAdminTab.allCases, id: \.self) { tab in
-                Button(action: {
-                    selectedTab = tab
-                }) {
-                    HStack(spacing: 6) {
-                        Text(tab.rawValue)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                        if tab == .requests && !pendingRequests.isEmpty {
-                            Text("\(pendingRequests.count)")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(.orange))
-                        }
-                    }
-                    .foregroundColor(selectedTab == tab ? .white : .secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule().fill(selectedTab == tab ? Color.accentColor : AppColors.whiteText.opacity(0.08))
-                    )
-                }
-                .buttonStyle(.plain)
-            }
+            UnifiedTabBar(
+                selectedTab: $selectedTab,
+                size: .compact,
+                theme: .subTab,
+                countForTab: { badgeCount(for: $0) },
+                spacing: 6
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer()
             Button("Refresh") {
@@ -105,6 +111,15 @@ struct ManageGuildWatchlistView: View {
             }
             .font(.caption)
             .disabled(isLoading)
+        }
+    }
+
+    private func badgeCount(for tab: GuildWatchlistAdminTab) -> Int {
+        switch tab {
+        case .requests:
+            return pendingRequests.count
+        case .current:
+            return 0
         }
     }
 
@@ -155,28 +170,28 @@ struct ManageGuildWatchlistView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(request.symbolTicker)
                         .font(.headline)
-                        .foregroundColor(.primary)
+                        .foregroundColor(AppColors.whiteText)
                     Text(request.symbolDisplayName)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColors.greyText)
                 }
                 Spacer()
                 Text(request.createdAtFormatted)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
             }
 
             Text("Requested by @\(request.requester.username)")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.greyText)
 
             if let reason = request.reason, !reason.isEmpty {
                 Text(reason)
                     .font(.caption)
-                    .foregroundColor(.primary)
+                    .foregroundColor(AppColors.whiteText)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(AppColors.whiteText.opacity(0.05)))
+                    .background(RoundedRectangle(cornerRadius: 8).fill(AppColors.surfaceWhite05))
             }
 
             if canManage {
@@ -191,10 +206,12 @@ struct ManageGuildWatchlistView: View {
                         }
                         .font(.caption)
                         .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(AppColors.statusPositive60))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.green)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
                     .disabled(busy)
 
                     Button {
@@ -207,10 +224,12 @@ struct ManageGuildWatchlistView: View {
                         }
                         .font(.caption)
                         .fontWeight(.semibold)
+                        .foregroundColor(AppColors.greyText)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(AppColors.surfaceWhite06))
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.secondary)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
                     .disabled(busy)
 
                     Spacer()
@@ -218,10 +237,13 @@ struct ManageGuildWatchlistView: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(AppColors.whiteText.opacity(0.04)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 0.5)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.surfaceWhite05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
+                )
         )
     }
 
@@ -235,7 +257,7 @@ struct ManageGuildWatchlistView: View {
                 Text("Current Guild Watchlist")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
 
                 if guildSymbols.isEmpty {
                     UnifiedEmptyState(
@@ -260,7 +282,7 @@ struct ManageGuildWatchlistView: View {
             Text("Add Symbol")
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.greyText)
 
             AdminInputField(
                 title: "Search Symbols",
@@ -294,10 +316,10 @@ struct ManageGuildWatchlistView: View {
                 Text(symbol.ticker)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.primary)
+                    .foregroundColor(AppColors.whiteText)
                 Text(symbol.displayName)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
 
                 FlowLayout(spacing: 6) {
                     Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
@@ -306,7 +328,7 @@ struct ManageGuildWatchlistView: View {
 
                     Text(symbol.providerDisplayLabel)
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColors.greyText)
 
                     ForEach(symbol.activityBadgeValues, id: \.self) { badge in
                         watchlistActivityBadge(label: badge)
@@ -330,15 +352,25 @@ struct ManageGuildWatchlistView: View {
                     }
                     .font(.caption)
                     .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(AppColors.accentColor))
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                .buttonStyle(.plain)
                 .disabled(busy)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10).fill(AppColors.whiteText.opacity(0.05)))
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.surfaceWhite05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 0.5)
+                )
+        )
     }
 
     private func guildSymbolRow(_ symbol: RLTradingSymbolDTO) -> some View {
@@ -348,10 +380,10 @@ struct ManageGuildWatchlistView: View {
                 Text(symbol.ticker)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.primary)
+                    .foregroundColor(AppColors.whiteText)
                 Text(symbol.displayName)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
 
                 FlowLayout(spacing: 6) {
                     Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
@@ -360,7 +392,7 @@ struct ManageGuildWatchlistView: View {
 
                     Text(symbol.providerDisplayLabel)
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColors.greyText)
 
                     ForEach(symbol.activityBadgeValues, id: \.self) { badge in
                         watchlistActivityBadge(label: badge)
@@ -379,15 +411,25 @@ struct ManageGuildWatchlistView: View {
                     }
                     .font(.caption)
                     .fontWeight(.semibold)
+                    .foregroundColor(AppColors.statusNegative85)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(AppColors.statusNegative15))
                 }
-                .buttonStyle(.bordered)
-                .tint(.red)
+                .buttonStyle(.plain)
                 .disabled(busy)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10).fill(AppColors.whiteText.opacity(0.05)))
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.surfaceWhite05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 0.5)
+                )
+        )
     }
 
     private func statusPill(_ title: String, color: Color) -> some View {

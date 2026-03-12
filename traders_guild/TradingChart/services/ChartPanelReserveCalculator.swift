@@ -39,8 +39,9 @@ enum ChartPanelReserveCalculator {
         if let bottomIndicatorHeight = indicatorPanelHeights.last.map(effectivePanelHeight) {
             return bottomIndicatorHeight > 0 ? panelXAxisLabelStripHeight : 0
         }
-        if let bottomTimeframeHeight = timeframePanelHeights.last.map(effectivePanelHeight) {
-            return bottomTimeframeHeight > 0 ? panelXAxisLabelStripHeight : 0
+        if timeframePanelHeights.last.map(effectivePanelHeight) != nil {
+            // Timeframe panels render their own x-axis strip inside the panel; keep main chart x-axis visible.
+            return 0
         }
         return 0
     }

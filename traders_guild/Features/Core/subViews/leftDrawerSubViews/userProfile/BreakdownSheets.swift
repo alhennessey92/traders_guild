@@ -423,11 +423,11 @@ private struct BreakdownCard<Content: View>: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.surfaceBlack28)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.surfaceWhite05)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
                 )
         )
     }
@@ -435,14 +435,11 @@ private struct BreakdownCard<Content: View>: View {
 
 private struct BreakdownSheetBackground: View {
     var body: some View {
-        LinearGradient(
-            colors: [
-                AppColors.gradientBackgroundDark.opacity(0.55),
-                AppColors.sheetBackground
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        ZStack {
+            Color.clear
+                .background(.ultraThinMaterial)
+            AppColors.sheetBackground
+        }
         .ignoresSafeArea()
     }
 }

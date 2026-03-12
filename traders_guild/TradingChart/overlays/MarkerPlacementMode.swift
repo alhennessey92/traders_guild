@@ -815,7 +815,7 @@ final class MarkerPlacementState: ObservableObject {
         )
 
         if let index = existingIndex {
-            components[index].payload = .indicator(payload)
+            setComponentPayload(at: index, to: .indicator(payload))
         } else {
             components.append(
                 MarkerComponentDraft(componentType: .indicator, payload: .indicator(payload))
@@ -857,8 +857,11 @@ final class MarkerPlacementState: ObservableObject {
             }
             return normalizedTimeframeKey(payload.timeframe) == normalized
         }) {
-            components[index].payload = .timeframeLink(
-                TimeframeLinkPayload(timeframe: trimmedTimeframe, note: note)
+            setComponentPayload(
+                at: index,
+                to: .timeframeLink(
+                    TimeframeLinkPayload(timeframe: trimmedTimeframe, note: note)
+                )
             )
             return true
         }
@@ -921,10 +924,11 @@ final class MarkerPlacementState: ObservableObject {
         }
 
         if let index = components.firstIndex(where: { $0.componentType == componentType }) {
-            components[index].payload = mergedDrawingAnnotationPayload(
+            let mergedPayload = mergedDrawingAnnotationPayload(
                 existing: components[index].payload,
                 incoming: payload
             )
+            setComponentPayload(at: index, to: mergedPayload)
         } else {
             components.append(MarkerComponentDraft(componentType: componentType, payload: payload))
         }
@@ -963,10 +967,11 @@ final class MarkerPlacementState: ObservableObject {
 
     func updateComponent(id: UUID, payload: MarkerComponentPayload) {
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
-        components[index].payload = payload
+        let componentType = components[index].componentType
+        setComponentPayload(at: index, to: payload)
         if let normalized = normalizedDrawingColorHex(from: payload) {
             drawingColorOverrides[id] = normalized
-        } else if components[index].componentType.isDrawing {
+        } else if componentType.isDrawing {
             drawingColorOverrides.removeValue(forKey: id)
         }
     }
@@ -982,36 +987,52 @@ final class MarkerPlacementState: ObservableObject {
 
         switch components[index].payload {
         case let .drawingTrendline(payload):
-            components[index].payload = .drawingTrendline(
-                TrendlinePayload(
-                    startTime: payload.startTime,
-                    startPrice: payload.startPrice,
-                    endTime: payload.endTime,
-                    endPrice: payload.endPrice,
-                    colorHex: normalized
+            setComponentPayload(
+                at: index,
+                to: .drawingTrendline(
+                    TrendlinePayload(
+                        startTime: payload.startTime,
+                        startPrice: payload.startPrice,
+                        endTime: payload.endTime,
+                        endPrice: payload.endPrice,
+                        colorHex: normalized
+                    )
                 )
             )
         case let .drawingHorizontalLine(payload):
-            components[index].payload = .drawingHorizontalLine(
-                HorizontalLinePayload(
-                    price: payload.price,
-                    label: payload.label,
-                    colorHex: normalized
+            setComponentPayload(
+                at: index,
+                to: .drawingHorizontalLine(
+                    HorizontalLinePayload(
+                        price: payload.price,
+                        label: payload.label,
+                        colorHex: normalized
+                    )
                 )
             )
         case let .drawingZone(payload):
-            components[index].payload = .drawingZone(
-                ZonePayload(
-                    topPrice: payload.topPrice,
-                    bottomPrice: payload.bottomPrice,
-                    startTime: payload.startTime,
-                    endTime: payload.endTime,
-                    colorHex: normalized
+            setComponentPayload(
+                at: index,
+                to: .drawingZone(
+                    ZonePayload(
+                        topPrice: payload.topPrice,
+                        bottomPrice: payload.bottomPrice,
+                        startTime: payload.startTime,
+                        endTime: payload.endTime,
+                        colorHex: normalized
+                    )
                 )
             )
         default:
             break
         }
+    }
+
+    private func setComponentPayload(at index: Int, to payload: MarkerComponentPayload) {
+        guard components.indices.contains(index) else { return }
+        var updated = components
+        updated[index].payload = payload
+        components = updated
     }
 
     func drawingColorHex(for draftId: UUID) -> String? {

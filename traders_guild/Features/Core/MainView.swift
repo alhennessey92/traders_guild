@@ -986,7 +986,11 @@ struct MainView: View {
                 indicatorManager: chartViewModel.indicatorManager,
                 candles: chartDataManager.candles
             )
-            timeframePanelManager.clearAll()
+            if chartControlVM.isMarkerPlacementMode {
+                populateTimeframePanelsForPlacement()
+            } else {
+                populateTimeframePanelsForChart()
+            }
             return
         }
 
@@ -1001,17 +1005,45 @@ struct MainView: View {
     }
 
     private func populateTimeframePanels(for marker: ChartMarkerUI) {
+        let linkedValues = marker.marker.components.compactMap { component -> String? in
+            guard component.componentTypeEnum == .timeframeLink,
+                  case .timeframeLink(let payload) = component.payload else {
+                return nil
+            }
+            return payload.timeframe
+        }
+        populateTimeframePanels(fromBackendValues: linkedValues)
+    }
+
+    private func populateTimeframePanelsForChart() {
+        populateTimeframePanels(fromBackendValues: chartViewModel.chartTimeframeLinkManager.linkedTimeframes)
+    }
+
+    private func populateTimeframePanelsForPlacement() {
+        let linkedValues = placementState.timeframeLinkDrafts.compactMap { draft -> String? in
+            guard case .timeframeLink(let payload) = draft.payload else { return nil }
+            return payload.timeframe
+        }
+        populateTimeframePanels(fromBackendValues: linkedValues)
+    }
+
+    private func populateTimeframePanels(fromBackendValues values: [String]) {
         timeframePanelManager.clearAll()
 
         guard let symbolId = chartViewModel.currentSymbol?.id,
               let guildId = rlAppState.currentGuild?.id else { return }
 
-        let tfComponents = marker.marker.components.filter { $0.componentTypeEnum == .timeframeLink }
-        for component in tfComponents {
-            if case .timeframeLink(let tfPayload) = component.payload,
-               let timeframe = RLChartTimeframe.fromBackendString(tfPayload.timeframe) {
-                timeframePanelManager.addPanel(timeframe: timeframe, symbolId: symbolId, guildId: guildId)
+        var inserted = Set<RLChartTimeframe>()
+        for value in values {
+            guard let timeframe = RLChartTimeframe.fromBackendString(value),
+                  inserted.insert(timeframe).inserted else {
+                continue
             }
+            timeframePanelManager.addPanel(timeframe: timeframe, symbolId: symbolId, guildId: guildId)
+        }
+
+        if !timeframePanelManager.panels.isEmpty {
+            timeframePanelManager.reloadAll(symbolId: symbolId, guildId: guildId)
         }
     }
     
@@ -1704,14 +1736,14 @@ struct ChartBottomSheet: View {
     enum ChartView: String, CaseIterable {
         case symbol = "Symbol"
         case chat = "Chat"
-        case indicator = "Indicator"
+        case components = "Components"
         case markers = "Markers"
         
         var icon: String {
             switch self {
             case .symbol: return "chart.bar.fill"
             case .chat: return "message.fill"
-            case .indicator: return "chart.line.uptrend.xyaxis.circle"
+            case .components: return "plus.viewfinder"
             case .markers: return "mappin.circle.fill"
             }
         }
@@ -1746,6 +1778,12 @@ struct ChartBottomSheet: View {
                     // Chat view - manages its own scroll and keyboard
                     chatContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if selectedView == .components {
+                    // Components has internal scroll behavior; avoid nested scroll views.
+                    componentsContent
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // Other views use standard scrollable layout
                     ScrollView {
@@ -1753,12 +1791,10 @@ struct ChartBottomSheet: View {
                             switch selectedView {
                             case .symbol:
                                 symbolAndSettingsContent
-                            case .indicator:
-                                indicatorContent
                             case .markers:
                                 markersContent
-                            case .chat:
-                                EmptyView() // Handled above
+                            case .components, .chat:
+                                EmptyView()
                             }
                         }
                         .padding(.horizontal, 16)
@@ -1989,17 +2025,17 @@ struct ChartBottomSheet: View {
                     
                     // Indicator button
                     RootBottomBarIconButton(
-                        systemName: "chart.line.uptrend.xyaxis.circle",
+                        systemName: "plus.viewfinder",
                         fontSize: 25,
-                        backgroundColor: selectedView == .indicator ?
+                        backgroundColor: selectedView == .components ?
                             AppColors.gradientBackgroundDark :
                             AppColors.gradientBackgroundMid.opacity(0.9),
-                        foregroundColor: selectedView == .indicator ?
+                        foregroundColor: selectedView == .components ?
                             .white :
                             AppColors.whiteText.opacity(0.8)
                     ) {
                         withAnimation(.easeInOut(duration: 0.25)) {
-                            selectedView = .indicator
+                            selectedView = .components
                         }
                     }
                     
@@ -2145,13 +2181,32 @@ struct ChartBottomSheet: View {
         )
     }
     
-    // MARK: - Indicator Tab Content
-    private var indicatorContent: some View {
-        IndicatorSettingsContent(
+    // MARK: - Components Tab Content
+    private var componentsContent: some View {
+        let latestCandle = chartViewModel.dataManager.candles.last
+        return ChartComponentsContent(
             indicatorManager: chartViewModel.indicatorManager,
+            drawingManager: chartViewModel.chartDrawingManager,
+            timeframeLinkManager: chartViewModel.chartTimeframeLinkManager,
+            currentChartTimeframe: chartViewModel.currentTimeframe,
+            onSelectTimeframe: { timeframe in
+                if chartViewModel.currentTimeframe != timeframe {
+                    chartViewModel.setTimeframe(timeframe)
+                }
+            },
             onRecalculate: {
                 chartViewModel.recalculateIndicators()
-            }
+            },
+            onBeginInteractiveDrawing: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedDetent = .fraction(0.11)
+                }
+            },
+            timeframePanelManager: timeframePanelManager,
+            symbolId: chartViewModel.currentSymbol?.id,
+            guildId: rlAppState.currentGuild?.id,
+            anchorTime: latestCandle?.timestamp,
+            anchorPrice: latestCandle?.close
         )
     }
     
@@ -2343,17 +2398,69 @@ struct ChartBottomSheet: View {
                 )
             }
             applyPlacementIndicatorsToChart()
-        } else if placementIndicatorSnapshot.didCapture {
+            syncPlacementTimeframePanels()
+            return
+        }
+
+        if placementIndicatorSnapshot.didCapture {
             chartViewModel.indicatorManager.restoreSnapshot()
             chartViewModel.indicatorManager.recalculateIndicators(candles: chartViewModel.dataManager.candles)
             placementIndicatorSnapshot.reset()
-            timeframePanelManager.clearAll()
+        }
+
+        if let marker = chartViewModel.selectedMarkerForSheet {
+            populateTimeframePanelsFromMarker(marker)
+        } else {
+            restoreChartLinkedTimeframePanels()
         }
     }
 
     private func applyPlacementIndicatorsToChart() {
         chartViewModel.indicatorManager.applyMarkerIndicators(placementIndicatorComponents)
         chartViewModel.indicatorManager.recalculateIndicators(candles: chartViewModel.dataManager.candles)
+    }
+
+    private func restoreChartLinkedTimeframePanels() {
+        syncTimeframePanels(fromBackendValues: chartViewModel.chartTimeframeLinkManager.linkedTimeframes)
+    }
+
+    private func syncPlacementTimeframePanels() {
+        let linkedValues = placementState.timeframeLinkDrafts.compactMap { draft -> String? in
+            guard case .timeframeLink(let payload) = draft.payload else { return nil }
+            return payload.timeframe
+        }
+        syncTimeframePanels(fromBackendValues: linkedValues)
+    }
+
+    private func populateTimeframePanelsFromMarker(_ marker: ChartMarkerUI) {
+        let linkedValues = marker.components.compactMap { component -> String? in
+            guard component.componentTypeEnum == .timeframeLink,
+                  case .timeframeLink(let payload) = component.payload else {
+                return nil
+            }
+            return payload.timeframe
+        }
+        syncTimeframePanels(fromBackendValues: linkedValues)
+    }
+
+    private func syncTimeframePanels(fromBackendValues values: [String]) {
+        timeframePanelManager.clearAll()
+
+        guard let symbolId = chartViewModel.currentSymbol?.id,
+              let guildId = rlAppState.currentGuild?.id else { return }
+
+        var inserted = Set<RLChartTimeframe>()
+        for value in values {
+            guard let timeframe = RLChartTimeframe.fromBackendString(value),
+                  inserted.insert(timeframe).inserted else {
+                continue
+            }
+            timeframePanelManager.addPanel(timeframe: timeframe, symbolId: symbolId, guildId: guildId)
+        }
+
+        if !timeframePanelManager.panels.isEmpty {
+            timeframePanelManager.reloadAll(symbolId: symbolId, guildId: guildId)
+        }
     }
 
     private func refreshViewingIndicatorsIfNeeded() {

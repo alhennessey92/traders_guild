@@ -281,179 +281,106 @@ struct CreateAnnouncementView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    
+
     @State private var title: String = ""
     @State private var content: String = ""
     @State private var preview: String = ""
     @State private var isImportant: Bool = false
     @State private var isSubmitting: Bool = false
-    
+
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         title.count >= 3 &&
         !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         content.count >= 3
     }
-    
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
-                HStack(spacing: 12) {
-                    UnifiedIconBadge(
-                        icon: "megaphone.fill",
-                        color: AppColors.accentColor,
-                        size: 44,
-                        iconSize: 20,
-                        backgroundOpacity: 0.2
-                    )
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Create Announcement")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.primary)
-                        
-                        Text("Post to your guild members")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                }
-                
+            VStack(spacing: 0) {
+                AdminSheetHeader(
+                    icon: "megaphone.fill",
+                    iconColor: AppColors.accentColor,
+                    title: "Create Announcement",
+                    subtitle: "Post to your guild members"
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 30)
+
                 Divider()
-                
-                // Form
+                    .background(AppColors.surfaceWhite15)
+                    .padding(.top, 12)
+
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Title Field
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Title")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-                            
-                            TextField("Announcement title...", text: $title)
-                                .textFieldStyle(.roundedBorder)
+                    VStack(spacing: 12) {
+                        AdminSectionCard {
+                            AdminInputField(
+                                title: "Title (Required, min 3 chars)",
+                                placeholder: "Announcement title...",
+                                text: $title
+                            )
+                            AdminInputField(
+                                title: "Preview (Optional)",
+                                placeholder: "Short preview text...",
+                                text: $preview
+                            )
+                            AdminInputTextEditor(
+                                title: "Content (Required, min 3 chars)",
+                                placeholder: "Announcement content...",
+                                text: $content
+                            )
+                            AdminToggleRow(
+                                title: "Mark as Important",
+                                subtitle: "Highlights this announcement",
+                                icon: "exclamationmark.triangle.fill",
+                                iconColor: .orange,
+                                isOn: $isImportant
+                            )
                         }
-                        
-                        // Preview Field (Optional)
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text("Preview")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
-                                Text("(Optional)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            TextField("Short preview text...", text: $preview)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        
-                        // Content Field
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Content")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-                            
-                            TextEditor(text: $content)
-                                .frame(minHeight: 120)
-                                .padding(8)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color(.systemGray4), lineWidth: 0.5)
-                                )
-                        }
-                        
-                        // Important Toggle
-                        Toggle(isOn: $isImportant) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Mark as Important")
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                    Text("Highlights this announcement")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 8)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                 }
-                
-                Spacer()
-                
-                Divider()
-                
-                // Action Buttons
-                HStack(spacing: 12) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    Spacer()
-                    
-                    Button(action: createAnnouncement) {
-                        HStack {
-                            if isSubmitting {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            }
-                            Text(isSubmitting ? "Posting..." : "Post Announcement")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!isValid || isSubmitting)
-                }
+
+                AdminFooterActions(
+                    primaryTitle: "Post Announcement",
+                    primaryDisabled: !isValid,
+                    isSubmitting: isSubmitting,
+                    onCancel: { dismiss() },
+                    onPrimary: { Task { await createAnnouncement() } }
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .padding(.top, 30)
-            .padding(.horizontal)
-            .padding(.bottom, 20)
-            
-            // Dismiss button
+
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
             }
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(AdminSheetBackground())
     }
     
-    private func createAnnouncement() {
-        guard isValid else { return }
+    private func createAnnouncement() async {
+        guard isValid && !isSubmitting else { return }
         isSubmitting = true
-        
-        Task {
-            do {
-                let newAnnouncement = try await rlAppState.createAnnouncement(
-                    title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                    content: content.trimmingCharacters(in: .whitespacesAndNewlines),
-                    preview: preview.isEmpty ? nil : preview.trimmingCharacters(in: .whitespacesAndNewlines),
-                    isImportant: isImportant
-                )
-                
-                // Add to local cache at the beginning
-                leftDrawerViewModel.announcements.insert(newAnnouncement, at: 0)
-                
-                dismiss()
-            } catch {
-                isSubmitting = false
-                // Error is already shown by rlAppState
-            }
+        defer { isSubmitting = false }
+
+        do {
+            let newAnnouncement = try await rlAppState.createAnnouncement(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+                preview: preview.isEmpty ? nil : preview.trimmingCharacters(in: .whitespacesAndNewlines),
+                isImportant: isImportant
+            )
+
+            leftDrawerViewModel.announcements.insert(newAnnouncement, at: 0)
+            dismiss()
+        } catch {
+            // Error is already shown by rlAppState
         }
     }
 }
@@ -466,14 +393,14 @@ struct CreateEventView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    
+
     @State private var title: String = ""
     @State private var content: String = ""
     @State private var preview: String = ""
-    @State private var eventDate: Date = Date().addingTimeInterval(86400) // Tomorrow
+    @State private var eventDate: Date = Date().addingTimeInterval(86400)
     @State private var isImportant: Bool = false
     @State private var isSubmitting: Bool = false
-    
+
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         title.count >= 3 &&
@@ -481,181 +408,112 @@ struct CreateEventView: View {
         content.count >= 3 &&
         !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         preview.count >= 3 &&
-        eventDate > Date() // Must be in the future
+        eventDate > Date()
     }
-    
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
-                HStack(spacing: 12) {
-                    UnifiedIconBadge(
-                        icon: "calendar.badge.plus",
-                        color: .green,
-                        size: 44,
-                        iconSize: 20,
-                        backgroundOpacity: 0.2
-                    )
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Create Event")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.primary)
-                        
-                        Text("Schedule a guild event")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                }
-                
+            VStack(spacing: 0) {
+                AdminSheetHeader(
+                    icon: "calendar.badge.plus",
+                    iconColor: .green,
+                    title: "Create Event",
+                    subtitle: "Schedule a guild event"
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 30)
+
                 Divider()
-                
-                // Form
+                    .background(AppColors.surfaceWhite15)
+                    .padding(.top, 12)
+
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Title Field
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Event Title")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-                            
-                            TextField("What's the event?", text: $title)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        
-                        // Date & Time Picker
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Date & Time")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-                            
-                            DatePicker(
-                                "Event Date",
-                                selection: $eventDate,
-                                in: Date()...,
-                                displayedComponents: [.date, .hourAndMinute]
+                    VStack(spacing: 12) {
+                        AdminSectionCard {
+                            AdminInputField(
+                                title: "Event Title (Required, min 3 chars)",
+                                placeholder: "What's the event?",
+                                text: $title
                             )
-                            .datePickerStyle(.compact)
-                            .labelsHidden()
-                        }
-                        
-                        // Preview Field
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Preview Text")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-                            
-                            TextField("Short description for the list view...", text: $preview)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        
-                        // Content Field
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Full Description")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-                            
-                            TextEditor(text: $content)
-                                .frame(minHeight: 100)
-                                .padding(8)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color(.systemGray4), lineWidth: 0.5)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Date & Time (Required, must be future)")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                                DatePicker(
+                                    "Event Date",
+                                    selection: $eventDate,
+                                    in: Date()...,
+                                    displayedComponents: [.date, .hourAndMinute]
                                 )
-                        }
-                        
-                        // Important Toggle
-                        Toggle(isOn: $isImportant) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "star.fill")
-                                    .foregroundColor(.yellow)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Featured Event")
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                    Text("Highlight this event")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                                .datePickerStyle(.compact)
+                                .labelsHidden()
+                                .colorScheme(.dark)
                             }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                }
-                
-                Spacer()
-                
-                Divider()
-                
-                // Action Buttons
-                HStack(spacing: 12) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    Spacer()
-                    
-                    Button(action: createEvent) {
-                        HStack {
-                            if isSubmitting {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            }
-                            Text(isSubmitting ? "Creating..." : "Create Event")
+
+                            AdminInputField(
+                                title: "Preview Text (Required, min 3 chars)",
+                                placeholder: "Short description for the list view...",
+                                text: $preview
+                            )
+                            AdminInputTextEditor(
+                                title: "Full Description (Required, min 3 chars)",
+                                placeholder: "Describe the event in detail...",
+                                text: $content
+                            )
+                            AdminToggleRow(
+                                title: "Featured Event",
+                                subtitle: "Highlight this event",
+                                icon: "star.fill",
+                                iconColor: .yellow,
+                                isOn: $isImportant
+                            )
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!isValid || isSubmitting)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                 }
+
+                AdminFooterActions(
+                    primaryTitle: "Create Event",
+                    primaryDisabled: !isValid,
+                    isSubmitting: isSubmitting,
+                    onCancel: { dismiss() },
+                    onPrimary: { Task { await createEvent() } }
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .padding(.top, 30)
-            .padding(.horizontal)
-            .padding(.bottom, 20)
-            
-            // Dismiss button
+
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
             }
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
-        .background(AppColors.drawerBackground.opacity(0.2))
+        .background(AdminSheetBackground())
     }
-    
-    private func createEvent() {
-        guard isValid else { return }
+
+    private func createEvent() async {
+        guard isValid && !isSubmitting else { return }
         isSubmitting = true
-        
-        Task {
-            do {
-                let newEvent = try await rlAppState.createEvent(
-                    title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                    content: content.trimmingCharacters(in: .whitespacesAndNewlines),
-                    preview: preview.trimmingCharacters(in: .whitespacesAndNewlines),
-                    eventDate: eventDate,
-                    isImportant: isImportant
-                )
-                
-                // Add to local cache at the beginning
-                leftDrawerViewModel.upcomingEvents.insert(newEvent, at: 0)
-                
-                dismiss()
-            } catch {
-                isSubmitting = false
-                // Error is already shown by rlAppState
-            }
+        defer { isSubmitting = false }
+
+        do {
+            let newEvent = try await rlAppState.createEvent(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+                preview: preview.trimmingCharacters(in: .whitespacesAndNewlines),
+                eventDate: eventDate,
+                isImportant: isImportant
+            )
+
+            leftDrawerViewModel.upcomingEvents.insert(newEvent, at: 0)
+            dismiss()
+        } catch {
+            // Error is already shown by rlAppState
         }
     }
 }

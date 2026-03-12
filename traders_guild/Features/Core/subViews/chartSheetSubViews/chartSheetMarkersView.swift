@@ -154,7 +154,7 @@ struct chartSheetMarkersView: View {
                 UnifiedTabBar(
                     selectedTab: $selectedAddCategory,
                     size: .compact,
-                    theme: .blue,
+                    theme: .subTab,
                     countForTab: { markerIntents(for: $0).count },
                     spacing: 6
                 )
@@ -162,7 +162,7 @@ struct chartSheetMarkersView: View {
                 UnifiedTabBar(
                     selectedTab: $selectedActivityScope,
                     size: .compact,
-                    theme: .blue,
+                    theme: .subTab,
                     countForTab: { markers(for: $0).count },
                     spacing: 6
                 )

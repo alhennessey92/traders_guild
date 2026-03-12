@@ -285,12 +285,12 @@ enum AppColors {
 
     // MARK: - Chart / Indicator Literal Tokens
 
-    static let chartTabGradientStart = Color(red: 0.2, green: 0.4, blue: 0.8)
-    static let chartTabGradientEnd = Color(red: 0.15, green: 0.25, blue: 0.5)
-    static let chartSubTabGradientStart = Color(red: 0.12, green: 0.18, blue: 0.38)
-    static let chartSubTabGradientEnd = Color(red: 0.08, green: 0.12, blue: 0.28)
-    static let chartDeepSubTabGradientStart = Color(red: 0.08, green: 0.12, blue: 0.25)
-    static let chartDeepSubTabGradientEnd = Color(red: 0.05, green: 0.08, blue: 0.18)
+    static let chartTabGradientStart = Color(red: 0.13, green: 0.50, blue: 0.30)
+    static let chartTabGradientEnd = Color(red: 0.08, green: 0.34, blue: 0.20)
+    static let chartSubTabGradientStart = Color(red: 0.08, green: 0.34, blue: 0.20)
+    static let chartSubTabGradientEnd = Color(red: 0.05, green: 0.22, blue: 0.13)
+    static let chartDeepSubTabGradientStart = Color(red: 0.06, green: 0.25, blue: 0.15)
+    static let chartDeepSubTabGradientEnd = Color(red: 0.03, green: 0.15, blue: 0.08)
 
     static let chartPanelBackground = Color(red: 20.0 / 255.0, green: 20.0 / 255.0, blue: 28.0 / 255.0)
     static let chartPanelBackgroundMuted = Color(red: 20.0 / 255.0, green: 20.0 / 255.0, blue: 26.0 / 255.0)

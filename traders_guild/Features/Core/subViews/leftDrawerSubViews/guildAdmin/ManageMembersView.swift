@@ -13,11 +13,13 @@ struct ManageMembersView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
 
-    enum MemberTab: String, CaseIterable {
+    enum MemberTab: String, CaseIterable, UnifiedTabItem {
         case active = "Active"
         case muted = "Muted"
         case suspended = "Suspended"
         case banned = "Banned"
+
+        var title: String { rawValue }
 
         var icon: String {
             switch self {
@@ -84,7 +86,7 @@ struct ManageMembersView: View {
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
             }
             .padding(.top, 20)
             .padding(.trailing, 20)
@@ -156,41 +158,22 @@ struct ManageMembersView: View {
     // MARK: - Tab Bar
 
     private var tabBar: some View {
-        HStack(spacing: 4) {
-            ForEach(MemberTab.allCases, id: \.self) { tab in
-                // Hide banned tab for moderators (admin+ only)
-                if tab != .banned || canAdmin {
-                    Button(action: { selectedTab = tab }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: tab.icon)
-                                .font(.caption2)
-                            Text(tab.rawValue)
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                            // Badge count
-                            let count = badgeCount(for: tab)
-                            if count > 0 {
-                                Text("\(count)")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(Capsule().fill(tab == .banned ? .red : .orange))
-                            }
-                        }
-                        .foregroundColor(selectedTab == tab ? .white : .secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(selectedTab == tab ? Color.accentColor : Color.clear)
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-        }
+        UnifiedTabBar(
+            selectedTab: $selectedTab,
+            tabs: availableTabs,
+            size: .compact,
+            theme: .subTab,
+            countForTab: { badgeCount(for: $0) },
+            spacing: 6
+        )
         .padding(.horizontal)
+    }
+
+    private var availableTabs: [MemberTab] {
+        if canAdmin {
+            return Array(MemberTab.allCases)
+        }
+        return MemberTab.allCases.filter { $0 != .banned }
     }
 
     // MARK: - Content
@@ -227,14 +210,13 @@ struct ManageMembersView: View {
                 emptyState(icon: "person.3.fill", title: "No Active Members", subtitle: "No members to display")
             } else {
                 ScrollView {
-                    VStack(spacing: 0) {
+                    VStack(spacing: 8) {
                         ForEach(sortedMembers(activeMembers)) { member in
                             memberRow(member: member)
-                            if member.id != sortedMembers(activeMembers).last?.id {
-                                Divider().padding(.horizontal)
-                            }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                 }
             }
         }
@@ -249,14 +231,13 @@ struct ManageMembersView: View {
                 emptyState(icon: "speaker.fill", title: "No Muted Members", subtitle: "No members are currently muted")
             } else {
                 ScrollView {
-                    VStack(spacing: 0) {
+                    VStack(spacing: 8) {
                         ForEach(mutedMembers) { member in
                             mutedMemberRow(member: member)
-                            if member.id != mutedMembers.last?.id {
-                                Divider().padding(.horizontal)
-                            }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                 }
             }
         }
@@ -271,14 +252,13 @@ struct ManageMembersView: View {
                 emptyState(icon: "play.circle.fill", title: "No Suspended Members", subtitle: "No members are currently suspended")
             } else {
                 ScrollView {
-                    VStack(spacing: 0) {
+                    VStack(spacing: 8) {
                         ForEach(suspendedMembers) { member in
                             suspendedMemberRow(member: member)
-                            if member.id != suspendedMembers.last?.id {
-                                Divider().padding(.horizontal)
-                            }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                 }
             }
         }
@@ -292,14 +272,13 @@ struct ManageMembersView: View {
                 emptyState(icon: "checkmark.shield.fill", title: "No Banned Users", subtitle: "There are no banned users in this guild")
             } else {
                 ScrollView {
-                    VStack(spacing: 0) {
+                    VStack(spacing: 8) {
                         ForEach(bans) { ban in
                             banRow(ban: ban)
-                            if ban.id != bans.last?.id {
-                                Divider().padding(.horizontal)
-                            }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                 }
             }
         }
@@ -315,10 +294,10 @@ struct ManageMembersView: View {
                 .foregroundColor(.secondary.opacity(0.6))
             Text(title)
                 .font(.headline)
-                .foregroundColor(.primary)
+                .foregroundColor(AppColors.whiteText)
             Text(subtitle)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.greyText)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -347,12 +326,12 @@ struct ManageMembersView: View {
                     if isCurrentUser {
                         Text("(You)")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppColors.greyText)
                     }
                 }
                 Text("@\(member.username)")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
             }
 
             Spacer()
@@ -401,7 +380,7 @@ struct ManageMembersView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .font(.title3)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColors.greyText)
                 }
 
                 if processingUserId == member.userId {
@@ -410,8 +389,16 @@ struct ManageMembersView: View {
                 }
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.surfaceWhite05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
+                )
+        )
     }
 
     // MARK: - Muted Member Row
@@ -427,7 +414,7 @@ struct ManageMembersView: View {
                     .fontWeight(.medium)
                 Text("@\(member.username)")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
                 if let mutedUntil = member.mutedUntil {
                     Text("Expires \(mutedUntil, style: .relative)")
                         .font(.caption2)
@@ -453,8 +440,16 @@ struct ManageMembersView: View {
             .tint(.green)
             .disabled(processingUserId == member.userId)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.surfaceWhite05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
+                )
+        )
     }
 
     // MARK: - Suspended Member Row
@@ -470,7 +465,7 @@ struct ManageMembersView: View {
                     .fontWeight(.medium)
                 Text("@\(member.username)")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
                 if let suspendedUntil = member.suspendedUntil {
                     Text("Expires \(suspendedUntil, style: .relative)")
                         .font(.caption2)
@@ -496,8 +491,16 @@ struct ManageMembersView: View {
             .tint(.green)
             .disabled(processingUserId == member.userId)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.surfaceWhite05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
+                )
+        )
     }
 
     // MARK: - Ban Row
@@ -513,11 +516,11 @@ struct ManageMembersView: View {
                     .fontWeight(.medium)
                 Text("@\(ban.bannedUsername)")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.greyText)
                 if let reason = ban.reason, !reason.isEmpty {
                     Text("Reason: \(reason)")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColors.greyText)
                         .lineLimit(2)
                 }
                 Text("Banned \(ban.bannedAt, style: .relative) ago")
@@ -543,15 +546,23 @@ struct ManageMembersView: View {
             .tint(.green)
             .disabled(unbanningId == ban.id)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.surfaceWhite05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
+                )
+        )
     }
 
     // MARK: - Shared Components
 
     private func memberAvatar(avatarUrl: String?) -> some View {
         Circle()
-            .fill(Color(.systemGray4))
+            .fill(AppColors.surfaceWhite15)
             .frame(width: 44, height: 44)
             .overlay(
                 Group {
@@ -560,11 +571,11 @@ struct ManageMembersView: View {
                             image.resizable().aspectRatio(contentMode: .fill)
                         } placeholder: {
                             Image(systemName: "person.fill")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(AppColors.greyText)
                         }
                     } else {
                         Image(systemName: "person.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppColors.greyText)
                     }
                 }
             )
@@ -659,6 +670,9 @@ struct ManageMembersView: View {
     // MARK: - Actions
 
     private func loadData() {
+        if !canAdmin && selectedTab == .banned {
+            selectedTab = .active
+        }
         isLoading = true
         Task {
             do {
