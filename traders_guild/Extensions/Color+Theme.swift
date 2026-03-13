@@ -285,12 +285,20 @@ enum AppColors {
 
     // MARK: - Chart / Indicator Literal Tokens
 
-    static let chartTabGradientStart = Color(red: 0.13, green: 0.50, blue: 0.30)
-    static let chartTabGradientEnd = Color(red: 0.08, green: 0.34, blue: 0.20)
-    static let chartSubTabGradientStart = Color(red: 0.08, green: 0.34, blue: 0.20)
-    static let chartSubTabGradientEnd = Color(red: 0.05, green: 0.22, blue: 0.13)
-    static let chartDeepSubTabGradientStart = Color(red: 0.06, green: 0.25, blue: 0.15)
-    static let chartDeepSubTabGradientEnd = Color(red: 0.03, green: 0.15, blue: 0.08)
+    static let chartTabGradientStart = Color(red: 0.20, green: 0.40, blue: 0.80)
+    static let chartTabGradientEnd = Color(red: 0.15, green: 0.25, blue: 0.50)
+
+    // Orange gradient for active/selected tabs in specific contexts
+    static let chartOrangeGradientStart = Color(red: 0.82, green: 0.42, blue: 0.12)
+    static let chartOrangeGradientEnd = Color(red: 0.62, green: 0.28, blue: 0.08)
+
+    // Green gradient for marker "Add" tab
+    static let chartGreenGradientStart = Color(red: 0.14, green: 0.52, blue: 0.28)
+    static let chartGreenGradientEnd = Color(red: 0.09, green: 0.36, blue: 0.18)
+    static let chartSubTabGradientStart = Color(red: 0.12, green: 0.18, blue: 0.38)
+    static let chartSubTabGradientEnd = Color(red: 0.08, green: 0.12, blue: 0.28)
+    static let chartDeepSubTabGradientStart = Color(red: 0.08, green: 0.12, blue: 0.25)
+    static let chartDeepSubTabGradientEnd = Color(red: 0.05, green: 0.08, blue: 0.18)
 
     static let chartPanelBackground = Color(red: 20.0 / 255.0, green: 20.0 / 255.0, blue: 28.0 / 255.0)
     static let chartPanelBackgroundMuted = Color(red: 20.0 / 255.0, green: 20.0 / 255.0, blue: 26.0 / 255.0)

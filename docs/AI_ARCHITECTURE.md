@@ -1061,9 +1061,9 @@ These are all the steps to the current drawings, need to make sure its vital, on
 
 142. [FIXED] When adding a poll marker and add questuon with answers, when viewing in viewing mode, shows no question in general tab - no poll question and no question in marker info box
 
-143. Lines need a little more work in marker placement mode, when adding support/resistance lines, shouldnt be able to move them by tapping on chart, only movable by dragging, tapping the chart moves out of line editing mode, same for horizontal line, should have a drag handle like support and resistance and tapping chart exits line editing mode. Have to click line again to show handle and drag. Also whe viewing them in marker viewing mode the support indicator and resistance indicator are getting lost on the right side so you cant see the prices, they should extend out into the chart, same for horizontal line, it doesnt show the price indicator at all, should extend from right of screen out left into chart. Should be a character cap on title for horizontal line, so its not craxy long, maybe 10-15 max
 
-144. [CLAUDE TO IMPLEMENT] May combine Indicator, drawing and timeframe buttons/sections in bottom bar in marker placement mode into single screen/button with sub tabs for each section, this can mirror in the marker viewing mode to make it look identical, this way all components are int he same space, and give more space for the general tab to extend and show full marker name. Because of this we can remove the active tabs in each section and create one single components active tab for all components together that are active, will be easier to view. Use icon plus.viewfinder for main bottom bar tab icon
+
+144. [FIXED] May combine Indicator, drawing and timeframe buttons/sections in bottom bar in marker placement mode into single screen/button with sub tabs for each section, this can mirror in the marker viewing mode to make it look identical, this way all components are int he same space, and give more space for the general tab to extend and show full marker name. Because of this we can remove the active tabs in each section and create one single components active tab for all components together that are active, will be easier to view. Use icon plus.viewfinder for main bottom bar tab icon
 
 145. Marker in placement mode too far from chart, can be closer
 
@@ -1115,19 +1115,39 @@ These are all the steps to the current drawings, need to make sure its vital, on
 
 165. [FIXED] Like button for markers - on like background should go red 
 
-166. Guild reputation breakdown showing weird screen when no data need placeholder, similar to guild accuracy
+166. [FIXED] Guild reputation breakdown showing weird screen when no data need placeholder, similar to guild accuracy
 
-167. [Claude] Need a full audit of the owner, admin and moderator panel to bring it more into line with the rest of the UI in the app. This includes headers, text boxes, buttons etc
+167. [FIXED] Need a full audit of the owner, admin and moderator panel to bring it more into line with the rest of the UI in the app. This includes headers, text boxes, buttons etc
 This also includes making sure requirements are shown for any form, highlighting areas users need to fill to complete the form.
 
 168. When rotation is on it’s turning the app and then bugging out, need to stop this. App should be fixed at all times in portrait mode 
 
 169. Need to investigate why bottom chat text boxes are jumping when showing keyboard 
 
-170. [Claude] Need to audit all sub tab sections of the app . Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout. Make it look nice but consistent across the app. This is mostly done but want to make sure the color scheme is good and cant be improved, each layer of the sub tabs should have a slightly different shade.
+170. [FIXED] Need to audit all sub tab sections of the app . Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout. Make it look nice but consistent across the app. This is mostly done but want to make sure the color scheme is good and cant be improved, each layer of the sub tabs should have a slightly different shade.
 
-171. Need to make sure in marker palcement section any options that are required in the general tab have a small req text or similar to symbolise they are a required part of the marker to be placed
+171. [FIXED] Need to make sure in marker palcement section any options that are required in the general tab have a small req text or similar to symbolise they are a required part of the marker to be placed
 
-172. Not really sure on the UI/style of the guild reputaiton and accuracy in profile view and reputation/accuracy sections in global view, for one both sets are different look button/list wise before entering each section and the sections are too dark and not in keeping with rest of app ui
+172. [FIXED] Not really sure on the UI/style of the guild reputaiton and accuracy in profile view and reputation/accuracy sections in global view, for one both sets are different look button/list wise before entering each section and the sections are too dark and not in keeping with rest of app ui
 
-173. Crosshair time indicator still running above the x axis not not it, and needs a better color, for its entire use throuhgout the app, to make it more readable
+173. [FIXED] Crosshair time indicator still running above the x axis not not it, and needs a better color, for its entire use throuhgout the app, to make it more readable
+
+174. crosshair time indicator resorting back to old look when panel is active, need to check this
+
+175. Need to show direction of latest candle in y axis when out of scope, so user can see which direction it is in
+
+143. Lines need a little more work in marker placement mode, when adding support/resistance lines, shouldnt be able to move them by tapping on chart, only movable by dragging, tapping the chart moves out of line editing mode, same for horizontal line, should have a drag handle like support and resistance and tapping chart exits line editing mode. Have to click line again to show handle and drag. Also whe viewing them in marker viewing mode the support indicator and resistance indicator are getting lost on the right side so you cant see the prices, they should extend out into the chart, same for horizontal line, it doesnt show the price indicator at all, should extend from right of screen out left into chart. Should be a character cap on title for horizontal line, so its not craxy long, maybe 10-15 max
+
+176. Need a full audit again of the chat system, making sure all options, edits, settings, are in place and working. Want to introduce a like option / emoji reaction to chat messages, and a option to reference someones message like a reply that displays it like a caption with their own message. All of this can come from long pressing the message and choosing options, so need a better UI for it. Also need a major revamp of the attachments section, better UI/styling for each option and a much better process in applying, feels very disjointed and tricky to attach a image with a caption, camers doesnt work etc... Attaching markers is good, but all others need to be better. 
+
+177. The big one. Need to review the drawing/ pattern section of the app. Currently not working great, needs to be a super smooth experience that is intuitive to the user to complete the process of adding a drawing or pattern.
+
+Process for most drawings is as follows
+On selecting drawing to add, a crosshair is shown with price and time labels on respective axis, user drags this to first position, can drag from any drag position on chart, chart is locked in this state
+User then taps the screen anywhere to set it and activate next point/crosshair
+User then drags again from anywhere and the crosshair moves with line/zone attached.
+User taps anywhere to set. 
+At this point the process continues for how many points the drawing requires, mostly 2. Once all points are set the drawing mode deactivates and the drawing is set in its locked position allowing chart to be moved/panned again
+If user taps the drawing, circles appear at each point which can be dragged individually to move them to any position and adjust drawing.
+If user taps anywhere on chart the drawing mode deactivates and the chart is free to move
+At no point by tapping the chart does the point/drawing move to that position, tapping the chart is only ever to save/set the drawing point

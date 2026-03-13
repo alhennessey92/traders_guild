@@ -623,19 +623,19 @@ struct MarkerViewingGeneralTab: View {
         icon: String,
         tint: Color
     ) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Circle()
-                .fill(tint.opacity(0.24))
-                .frame(width: 26, height: 26)
+                .fill(tint.opacity(0.22))
+                .frame(width: 34, height: 34)
                 .overlay(
                     Image(systemName: icon)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(tint)
                 )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.headline.weight(.bold))
                     .foregroundColor(.white)
                 Text(subtitle)
                     .font(.caption)
@@ -644,6 +644,26 @@ struct MarkerViewingGeneralTab: View {
 
             Spacer(minLength: 0)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            tint.opacity(0.22),
+                            tint.opacity(0.12),
+                            AppColors.whiteText.opacity(0.06),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(tint.opacity(0.34), lineWidth: 1)
+                )
+        )
     }
 
     private var symbolInfoSection: some View {

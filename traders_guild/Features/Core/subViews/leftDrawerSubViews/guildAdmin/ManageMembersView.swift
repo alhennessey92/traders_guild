@@ -291,7 +291,7 @@ struct ManageMembersView: View {
             Spacer()
             Image(systemName: icon)
                 .font(.system(size: 40))
-                .foregroundColor(.secondary.opacity(0.6))
+                .foregroundColor(AppColors.greyText.opacity(0.6))
             Text(title)
                 .font(.headline)
                 .foregroundColor(AppColors.whiteText)
@@ -525,7 +525,7 @@ struct ManageMembersView: View {
                 }
                 Text("Banned \(ban.bannedAt, style: .relative) ago")
                     .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .foregroundColor(AppColors.greyText.opacity(0.7))
             }
 
             Spacer()

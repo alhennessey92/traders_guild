@@ -70,7 +70,8 @@ struct MarkerPlacementComponentsTab: View {
             title: "Add Components",
             subtitle: "Build context with indicators, drawings, and timeframes",
             headerIcon: "plus.viewfinder",
-            selectedTab: $selectedSubTab
+            selectedTab: $selectedSubTab,
+            tabTheme: .componentsTabs
         ) { tab in
             content(for: tab)
         }

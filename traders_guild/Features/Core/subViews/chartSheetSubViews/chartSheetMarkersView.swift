@@ -145,7 +145,7 @@ struct chartSheetMarkersView: View {
             UnifiedTabBar(
                 selectedTab: $selectedPrimaryTab,
                 size: .compact,
-                theme: .blue,
+                theme: .markerPrimary,
                 countForTab: { count(for: $0) },
                 spacing: 6
             )
@@ -222,52 +222,79 @@ struct chartSheetMarkersView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(AppColors.statusInfo22.opacity(0.9))
+                .frame(width: 34, height: 34)
+                .overlay(
+                    Image(systemName: "target")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(AppColors.statusInfo95)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Markers")
-                    .font(.title2)
-                    .fontWeight(.bold)
+                    .font(.headline.weight(.bold))
                     .foregroundColor(.white)
-
-                Spacer()
-
-                HStack(spacing: 10) {
-                    if selectedPrimaryTab != .add {
-                        Button {
-                            Task {
-                                await loadActiveMarkers(forceRefresh: true)
-                            }
-                        } label: {
-                            if isRefreshingActive {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .tint(.white)
-                                    .frame(width: 34, height: 34)
-                            } else {
-                                Image(systemName: "arrow.clockwise.circle")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(AppColors.surfaceWhite85)
-                                    .frame(width: 34, height: 34)
-                                    .background(AppColors.surfaceWhite08)
-                                    .clipShape(Circle())
-                            }
-                        }
-                        .disabled(isRefreshingActive || isLoadingActive)
-                    }
-
-                    MarkerSettingsButton {
-                        showMarkerSettingsSheet = true
-                    }
-                    .disabled(chartViewModel.markerManager == nil)
-                    .opacity(chartViewModel.markerManager == nil ? 0.45 : 1)
-                }
+                Text(subtitleForCurrentTab)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                    .lineLimit(2)
             }
-            .padding(.bottom, 6)
 
-            Text(subtitleForCurrentTab)
-                .font(.caption)
-                .foregroundColor(.gray)
+            Spacer(minLength: 0)
+
+            HStack(spacing: 10) {
+                if selectedPrimaryTab != .add {
+                    Button {
+                        Task {
+                            await loadActiveMarkers(forceRefresh: true)
+                        }
+                    } label: {
+                        if isRefreshingActive {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(.white)
+                                .frame(width: 34, height: 34)
+                        } else {
+                            Image(systemName: "arrow.clockwise.circle")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(AppColors.surfaceWhite85)
+                                .frame(width: 34, height: 34)
+                                .background(AppColors.surfaceWhite08)
+                                .clipShape(Circle())
+                        }
+                    }
+                    .disabled(isRefreshingActive || isLoadingActive)
+                }
+
+                MarkerSettingsButton {
+                    showMarkerSettingsSheet = true
+                }
+                .disabled(chartViewModel.markerManager == nil)
+                .opacity(chartViewModel.markerManager == nil ? 0.45 : 1)
+            }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppColors.statusInfo95.opacity(0.22),
+                            AppColors.statusInfo95.opacity(0.12),
+                            AppColors.whiteText.opacity(0.06),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppColors.statusInfo95.opacity(0.34), lineWidth: 1)
+                )
+        )
     }
 
     private var subtitleForCurrentTab: String {
@@ -720,52 +747,125 @@ private struct MarkerFilterSettingsSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Visibility") {
-                    Picker("Visibility", selection: $markerManager.visibilityMode) {
-                        ForEach(MarkerVisibilityMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) {
+                AdminSheetHeader(
+                    icon: "slider.horizontal.3",
+                    iconColor: AppColors.accentColor,
+                    title: "Marker Settings",
+                    subtitle: "Visibility and intent filters"
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 30)
 
-                Section("Intent Filters (\(selectedIntentCount)/\(totalIntentCount))") {
-                    ForEach(RLMarkerIntent.allCases, id: \.self) { intent in
-                        Toggle(isOn: binding(for: intent)) {
-                            HStack(spacing: 10) {
-                                UnifiedMarkerBadge(
-                                    intent: intent,
-                                    sizeToken: .tiny
-                                )
+                Divider()
+                    .background(AppColors.surfaceWhite15)
+                    .padding(.top, 12)
 
-                                Text(intent.displayName)
-                                    .font(.subheadline)
-                                    .foregroundColor(.white)
+                ScrollView {
+                    VStack(spacing: 12) {
+                        // Visibility Section
+                        AdminSectionCard {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Visibility Mode")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppColors.greyText)
+
+                                Picker("Visibility", selection: $markerManager.visibilityMode) {
+                                    ForEach(MarkerVisibilityMode.allCases) { mode in
+                                        Text(mode.title).tag(mode)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .colorScheme(.dark)
                             }
                         }
-                        .tint(AppColors.accentColor)
+
+                        // Intent Filters Section
+                        AdminSectionCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Text("Intent Filters")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(AppColors.greyText)
+
+                                    Spacer()
+
+                                    Text("\(selectedIntentCount)/\(totalIntentCount)")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundColor(AppColors.surfaceWhite70)
+
+                                    Button {
+                                        markerManager.visibleIntents = Set(RLMarkerIntent.allCases)
+                                    } label: {
+                                        Text("All")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundColor(AppColors.accentColor)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(
+                                                Capsule().fill(AppColors.accentColor.opacity(0.15))
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                ForEach(RLMarkerIntent.allCases, id: \.self) { intent in
+                                    HStack(spacing: 10) {
+                                        UnifiedMarkerBadge(
+                                            intent: intent,
+                                            sizeToken: .tiny
+                                        )
+
+                                        Text(intent.displayName)
+                                            .font(.subheadline)
+                                            .foregroundColor(.white)
+
+                                        Spacer()
+
+                                        Toggle("", isOn: binding(for: intent))
+                                            .labelsHidden()
+                                            .tint(AppColors.accentColor)
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                 }
+
+                // Done button
+                Button {
+                    isPresented = false
+                } label: {
+                    Text("Done")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(AppColors.accentColor)
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .scrollContentBackground(.hidden)
-            .background(AppColors.systemBlack)
-            .navigationTitle("Marker Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("All") {
-                        markerManager.visibleIntents = Set(RLMarkerIntent.allCases)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        isPresented = false
-                    }
-                }
+
+            Button(action: { isPresented = false }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(AppColors.greyText)
             }
+            .padding(.top, 20)
+            .padding(.trailing, 20)
         }
+        .background(AdminSheetBackground())
         .presentationDetents([.fraction(0.55), .large])
     }
 

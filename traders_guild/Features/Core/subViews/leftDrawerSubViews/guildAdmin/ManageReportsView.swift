@@ -143,6 +143,7 @@ struct ManageReportsView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AdminSheetBackground())
         .onAppear {
             loadReports()
@@ -215,9 +216,14 @@ struct ManageReportsView: View {
                 ProgressView("Loading reports...")
                 Spacer()
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if reports.isEmpty {
-            emptyState
+            VStack {
+                Spacer()
+                emptyState
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
                 VStack(spacing: 8) {

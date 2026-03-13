@@ -300,8 +300,10 @@ enum UnifiedTabTheme {
     case deepSubTab     // Level 3: darkest navy
     case colored        // Per-tab colors (personal=yellow, guild=blue, etc.)
     case accent         // Uses AppColors.accentColor
-    
-    // Consistent green gradient used for active/selected tabs
+    case componentsTabs  // Orange only for "Active" tab (index 0), blue for rest
+    case markerPrimary   // Green for "Add" (index 0), orange for "Active" (index 1), blue for rest
+
+    // Consistent blue gradient used for active/selected tabs
     static var consistentBlueGradient: LinearGradient {
         LinearGradient(
             colors: [
@@ -312,7 +314,23 @@ enum UnifiedTabTheme {
             endPoint: .bottomTrailing
         )
     }
-    
+
+    static var orangeGradient: LinearGradient {
+        LinearGradient(
+            colors: [AppColors.chartOrangeGradientStart, AppColors.chartOrangeGradientEnd],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static var greenGradient: LinearGradient {
+        LinearGradient(
+            colors: [AppColors.chartGreenGradientStart, AppColors.chartGreenGradientEnd],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     func selectedBackground(for index: Int) -> LinearGradient {
         switch self {
         case .blue:
@@ -348,22 +366,36 @@ enum UnifiedTabTheme {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
+        case .componentsTabs:
+            // Only "Active" tab (index 0) is orange, all others are blue
+            return index == 0 ? UnifiedTabTheme.orangeGradient : UnifiedTabTheme.consistentBlueGradient
+        case .markerPrimary:
+            // "Add" (index 0) = green, "Active" (index 1) = orange, rest = blue
+            if index == 0 { return UnifiedTabTheme.greenGradient }
+            if index == 1 { return UnifiedTabTheme.orangeGradient }
+            return UnifiedTabTheme.consistentBlueGradient
         }
     }
-    
+
     func borderColor(for index: Int) -> Color {
         switch self {
         case .blue:
-            return AppColors.statusPositive40
+            return AppColors.statusInfo40
         case .subTab:
-            return AppColors.statusPositive40
+            return AppColors.statusInfo40
         case .deepSubTab:
-            return AppColors.statusPositive40
+            return AppColors.statusInfo40
         case .colored:
             let colors: [Color] = [.yellow, .blue, .green, .pink]
             return colors[index % colors.count].opacity(0.3)
         case .accent:
             return AppColors.accentColor.opacity(0.4)
+        case .componentsTabs:
+            return index == 0 ? Color.orange.opacity(0.4) : AppColors.statusInfo40
+        case .markerPrimary:
+            if index == 0 { return AppColors.statusPositive40 }
+            if index == 1 { return Color.orange.opacity(0.4) }
+            return AppColors.statusInfo40
         }
     }
 }

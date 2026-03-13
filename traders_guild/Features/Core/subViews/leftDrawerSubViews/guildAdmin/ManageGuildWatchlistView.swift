@@ -77,6 +77,7 @@ struct ManageGuildWatchlistView: View {
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AdminSheetBackground())
         .onAppear {
             Task {
@@ -131,7 +132,7 @@ struct ManageGuildWatchlistView: View {
                 ProgressView("Loading watchlist...")
                 Spacer()
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             switch selectedTab {
             case .requests:
@@ -145,11 +146,16 @@ struct ManageGuildWatchlistView: View {
     private var requestsContent: some View {
         Group {
             if pendingRequests.isEmpty {
-                UnifiedEmptyState(
-                    icon: "checkmark.seal",
-                    title: "No Pending Requests",
-                    subtitle: "All watchlist requests are up to date"
-                )
+                VStack {
+                    Spacer()
+                    UnifiedEmptyState(
+                        icon: "checkmark.seal",
+                        title: "No Pending Requests",
+                        subtitle: "All watchlist requests are up to date"
+                    )
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     VStack(spacing: 10) {
