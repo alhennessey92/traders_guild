@@ -1,17 +1,22 @@
 import SwiftUI
 
 enum OverlayPanelChrome {
-    static func background(cornerRadius: CGFloat) -> some View {
+    static func background(
+        cornerRadius: CGFloat,
+        showsBorder: Bool = true
+    ) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(.ultraThinMaterial)
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(AppColors.surfaceBlack50)
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .stroke(AppColors.surfaceWhite18, lineWidth: 1)
-        )
+        .overlay {
+            if showsBorder {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(AppColors.surfaceWhite18, lineWidth: 1)
+            }
+        }
     }
 
     static func sideHandle(icon: String) -> some View {

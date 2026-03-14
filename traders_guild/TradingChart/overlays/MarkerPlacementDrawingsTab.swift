@@ -7,10 +7,17 @@ private struct DrawingColorOption: Identifiable {
     var id: String { hex }
 }
 
+private struct DrawingLineStyleOption: Identifiable {
+    let style: MarkerDrawingLineStyle
+
+    var id: MarkerDrawingLineStyle { style }
+}
+
 struct MarkerPlacementDrawingsTab: View {
     @ObservedObject var placementState: MarkerPlacementState
     let onBeginInteractiveDrawing: (() -> Void)?
     var mirrorSourceIndicators: [IndicatorPayload] = []
+    var mirrorSourceDrawings: [ChartDrawing] = []
     var showsTitleHeader: Bool = true
     var showsMirrorButton: Bool = false
 
@@ -19,6 +26,7 @@ struct MarkerPlacementDrawingsTab: View {
     @State private var infoMessage: String?
     @State private var colorEditorDraftID: UUID?
     @State private var pendingDrawingColorHex: String?
+    @State private var pendingDrawingLineStyle: MarkerDrawingLineStyle = .dashed
 
     private let annotationEmojis: [String] = [
         "🎯", "🔥", "🐻", "🐂", "✅", "❌",
@@ -32,6 +40,7 @@ struct MarkerPlacementDrawingsTab: View {
         .init(name: "Violet", hex: "#8B5CF6"),
         .init(name: "Slate", hex: "#94A3B8"),
     ]
+    private let drawingLineStyleOptions: [DrawingLineStyleOption] = MarkerDrawingLineStyle.allCases.map { DrawingLineStyleOption(style: $0) }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -80,6 +89,7 @@ struct MarkerPlacementDrawingsTab: View {
                 if !isPresented {
                     colorEditorDraftID = nil
                     pendingDrawingColorHex = nil
+                    pendingDrawingLineStyle = .dashed
                 }
             }
         )) {
@@ -100,7 +110,7 @@ struct MarkerPlacementDrawingsTab: View {
                     Text("Mirror Chart Setup")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(.white)
-                    Text("Copy current chart indicators to this marker")
+                    Text("Copy current chart drawings and indicators to this marker")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                 }
@@ -119,8 +129,8 @@ struct MarkerPlacementDrawingsTab: View {
             )
         }
         .buttonStyle(.plain)
-        .opacity(mirrorSourceIndicators.isEmpty ? 0.55 : 1)
-        .disabled(mirrorSourceIndicators.isEmpty)
+        .opacity((mirrorSourceIndicators.isEmpty && mirrorSourceDrawings.isEmpty) ? 0.55 : 1)
+        .disabled(mirrorSourceIndicators.isEmpty && mirrorSourceDrawings.isEmpty)
     }
 
     private var tabTitleHeader: some View {
@@ -436,24 +446,26 @@ struct MarkerPlacementDrawingsTab: View {
                 title: payload.label ?? "Support",
                 subtitle: "Support level",
                 icon: "arrow.down.to.line",
-                color: RLComponentType.levelSupport.color,
+                color: placementState.drawingColor(
+                    for: draft.id,
+                    fallback: RLComponentType.levelSupport.color
+                ),
                 draftId: draft.id
             ) {
-                beginInteractiveDrawingSession()
-                placementState.activeTool = .levels
-                placementState.activeSubTool = MarkerToolOption.levelSupport.rawValue
+                editLevel(draft.id, tool: .support)
             }
         case .levelResistance(let payload):
             levelActiveRow(
                 title: payload.label ?? "Resistance",
                 subtitle: "Resistance level",
                 icon: "arrow.up.to.line",
-                color: RLComponentType.levelResistance.color,
+                color: placementState.drawingColor(
+                    for: draft.id,
+                    fallback: RLComponentType.levelResistance.color
+                ),
                 draftId: draft.id
             ) {
-                beginInteractiveDrawingSession()
-                placementState.activeTool = .levels
-                placementState.activeSubTool = MarkerToolOption.levelResistance.rawValue
+                editLevel(draft.id, tool: .resistance)
             }
         default:
             EmptyView()
@@ -484,6 +496,18 @@ struct MarkerPlacementDrawingsTab: View {
             }
 
             Spacer(minLength: 0)
+
+            Button {
+                openDrawingColorEditor(for: draftId)
+            } label: {
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(color)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(AppColors.whiteText.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+
             removeDraftButton(draftId)
         }
         .padding(.horizontal, 10)
@@ -501,34 +525,36 @@ struct MarkerPlacementDrawingsTab: View {
 
             toolCard(
                 title: "Trendline Tool",
-                subtitle: "Drag-tap-drag-tap on chart to place.",
+                subtitle: "Drag the guide, tap to place each point, then drag handles to refine.",
                 icon: "pencil.and.ruler",
-                isActive: placementState.activeTool == .draw && placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue,
+                isActive: placementState.activeDrawingWorkflowTool == .trendline,
                 actionTitle: "Activate"
             ) {
+                guard placementState.canAddDrawing else {
+                    applyDrawingLimitWarning()
+                    return
+                }
                 beginInteractiveDrawingSession()
                 placementState.startDrawingWorkflow(tool: .trendline)
-                infoMessage = "Trendline tool active."
+                infoMessage = "Trendline tool active. Drag to the first point, then tap to set it."
                 limitWarning = nil
             }
 
             toolCard(
                 title: "Horizontal Line",
-                subtitle: "Add a support/resistance style horizontal line.",
+                subtitle: "Drag the guide to price, tap to place, then drag the handle to fine-tune.",
                 icon: "line.3.horizontal",
-                isActive: placementState.activeTool == .draw
-                    && placementState.activeSubTool == MarkerToolOption.drawHorizontalLine.rawValue,
-                actionTitle: "Add"
+                isActive: placementState.activeDrawingWorkflowTool == .horizontalLine,
+                actionTitle: "Activate"
             ) {
                 addHorizontalLine()
             }
 
             toolCard(
                 title: "Support Level",
-                subtitle: "Add and drag a support line directly on chart.",
+                subtitle: "Drag the guide to price, tap to place, then drag the handle to adjust.",
                 icon: "arrow.down.to.line",
-                isActive: placementState.activeTool == .levels
-                    && placementState.activeSubTool == MarkerToolOption.levelSupport.rawValue,
+                isActive: placementState.activeDrawingWorkflowTool == .support,
                 actionTitle: "Activate"
             ) {
                 beginInteractiveDrawingSession()
@@ -537,10 +563,9 @@ struct MarkerPlacementDrawingsTab: View {
 
             toolCard(
                 title: "Resistance Level",
-                subtitle: "Add and drag a resistance line directly on chart.",
+                subtitle: "Drag the guide to price, tap to place, then drag the handle to adjust.",
                 icon: "arrow.up.to.line",
-                isActive: placementState.activeTool == .levels
-                    && placementState.activeSubTool == MarkerToolOption.levelResistance.rawValue,
+                isActive: placementState.activeDrawingWorkflowTool == .resistance,
                 actionTitle: "Activate"
             ) {
                 beginInteractiveDrawingSession()
@@ -559,14 +584,18 @@ struct MarkerPlacementDrawingsTab: View {
 
             toolCard(
                 title: "Zone Tool",
-                subtitle: "Tap chart twice to define a zone region.",
+                subtitle: "Drag the guide, tap to place both corners, then drag handles to refine.",
                 icon: "square.dashed",
-                isActive: placementState.activeTool == .draw && placementState.activeSubTool == MarkerToolOption.drawZone.rawValue,
+                isActive: placementState.activeDrawingWorkflowTool == .zone,
                 actionTitle: "Activate"
             ) {
+                guard placementState.canAddDrawing else {
+                    applyDrawingLimitWarning()
+                    return
+                }
                 beginInteractiveDrawingSession()
                 placementState.startDrawingWorkflow(tool: .zone)
-                infoMessage = "Zone tool active."
+                infoMessage = "Zone tool active. Drag to the first corner, then tap to set it."
                 limitWarning = nil
             }
 
@@ -710,16 +739,47 @@ struct MarkerPlacementDrawingsTab: View {
                 .foregroundColor(AppColors.greyText)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Coming soon")
+                Text("Planned tools")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
-                Text("Pattern templates and snap assist tools will land in a later update.")
+                Text("Phase 2 builds on this workflow with additional line tools and pattern templates.")
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(overlayCardBackground)
+
+            ForEach(MarkerDrawingToolRegistry.futureTools, id: \.kind) { tool in
+                HStack(spacing: 10) {
+                    Image(systemName: tool.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppColors.surfaceWhite70)
+                        .frame(width: 18)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tool.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text("Reserved for the phase 2 drawing engine rollout.")
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Text("Later")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(AppColors.greyText)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(overlayCardBackground)
+                .opacity(0.7)
+            }
         }
     }
 
@@ -747,7 +807,7 @@ struct MarkerPlacementDrawingsTab: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
                 if let draft = currentColorEditingDraft {
-                    Text("Select a color for \(drawingDisplayName(for: draft.componentType)).")
+                    Text("Adjust the line color and stroke style for \(drawingDisplayName(for: draft.componentType)).")
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
 
@@ -784,6 +844,20 @@ struct MarkerPlacementDrawingsTab: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Line Style")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(AppColors.greyText)
+
+                        ForEach(drawingLineStyleOptions) { option in
+                            drawingLineStyleButton(
+                                option.style,
+                                isSelected: pendingDrawingLineStyle == option.style,
+                                color: previewColor(for: draft)
+                            )
                         }
                     }
 
@@ -825,6 +899,7 @@ struct MarkerPlacementDrawingsTab: View {
                     Button("Cancel") {
                         colorEditorDraftID = nil
                         pendingDrawingColorHex = nil
+                        pendingDrawingLineStyle = .dashed
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundColor(AppColors.greyText)
@@ -851,17 +926,17 @@ struct MarkerPlacementDrawingsTab: View {
                 }
             }
             .padding(16)
-            .navigationTitle("Drawing Color")
+            .navigationTitle("Drawing Style")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .presentationDetents([.height(320), .medium])
+        .presentationDetents([.height(420), .medium])
         .presentationDragIndicator(.visible)
     }
 
     private var currentColorEditingDraft: MarkerComponentDraft? {
         guard let draftId = colorEditorDraftID else { return nil }
         return placementState.components.first {
-            $0.id == draftId && $0.componentType.isDrawing
+            $0.id == draftId && supportsStyleEditing($0.componentType)
         }
     }
 
@@ -942,15 +1017,27 @@ struct MarkerPlacementDrawingsTab: View {
     }
 
     private func mirrorChartSetup() {
-        let result = placementState.attachActiveChartIndicators(mirrorSourceIndicators)
-        if result.added > 0 {
-            infoMessage = "Mirrored \(result.added) indicator\(result.added == 1 ? "" : "s") from chart."
+        let indicatorResult = placementState.attachActiveChartIndicators(mirrorSourceIndicators)
+        let drawingResult = placementState.attachActiveChartDrawings(mirrorSourceDrawings)
+        let totalAdded = indicatorResult.added + drawingResult.added
+
+        if totalAdded > 0 {
+            var mirroredParts: [String] = []
+            if drawingResult.added > 0 {
+                mirroredParts.append("\(drawingResult.added) drawing\(drawingResult.added == 1 ? "" : "s")")
+            }
+            if indicatorResult.added > 0 {
+                mirroredParts.append("\(indicatorResult.added) indicator\(indicatorResult.added == 1 ? "" : "s")")
+            }
+            infoMessage = "Mirrored \(mirroredParts.joined(separator: " and ")) from chart."
         } else {
-            infoMessage = "No new chart indicators to mirror."
+            infoMessage = "No new chart drawings or indicators to mirror."
         }
 
-        if result.blockedByLimit {
-            limitWarning = placementState.limitMessage(for: .indicatorPanels)
+        if drawingResult.blockedByLimit || indicatorResult.blockedByLimit {
+            limitWarning = drawingResult.blockedByLimit
+                ? placementState.limitMessage(for: .drawingOverlays)
+                : placementState.limitMessage(for: .indicatorPanels)
             HapticFeedback.light.trigger()
         } else {
             limitWarning = nil
@@ -959,20 +1046,26 @@ struct MarkerPlacementDrawingsTab: View {
 
     private func openDrawingColorEditor(for draftID: UUID) {
         guard let draft = placementState.components.first(where: { $0.id == draftID }),
-              draft.componentType.isDrawing else {
+              supportsStyleEditing(draft.componentType) else {
             return
         }
 
         colorEditorDraftID = draft.id
         pendingDrawingColorHex = placementState.drawingColorHex(for: draft.id)
+        pendingDrawingLineStyle = placementState.drawingLineStyle(
+            for: draft.id,
+            fallback: defaultDrawingLineStyle(for: draft.componentType)
+        )
     }
 
     private func applyDrawingColorSelection() {
         guard let draftID = colorEditorDraftID else { return }
         placementState.setDrawingColorHex(pendingDrawingColorHex, for: draftID)
+        placementState.setDrawingLineStyle(pendingDrawingLineStyle, for: draftID)
         colorEditorDraftID = nil
         pendingDrawingColorHex = nil
-        infoMessage = "Updated drawing color."
+        pendingDrawingLineStyle = .dashed
+        infoMessage = "Updated drawing style."
         limitWarning = nil
     }
 
@@ -984,6 +1077,10 @@ struct MarkerPlacementDrawingsTab: View {
             return "Horizontal Line"
         case .drawingZone:
             return "Zone"
+        case .levelSupport:
+            return "Support Level"
+        case .levelResistance:
+            return "Resistance Level"
         default:
             return "Drawing"
         }
@@ -997,9 +1094,83 @@ struct MarkerPlacementDrawingsTab: View {
             return RLComponentType.drawingHorizontalLine.color
         case .drawingZone:
             return RLComponentType.drawingZone.color
+        case .levelSupport:
+            return RLComponentType.levelSupport.color
+        case .levelResistance:
+            return RLComponentType.levelResistance.color
         default:
             return placementState.intent.color
         }
+    }
+
+    private func defaultDrawingLineStyle(for componentType: RLComponentType) -> MarkerDrawingLineStyle {
+        switch componentType {
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .levelSupport, .levelResistance:
+            return .dashed
+        default:
+            return .solid
+        }
+    }
+
+    private func previewColor(for draft: MarkerComponentDraft) -> Color {
+        if let pendingDrawingColorHex,
+           let resolved = Color(hex: pendingDrawingColorHex) {
+            return resolved
+        }
+        return placementState.drawingColor(
+            for: draft.id,
+            fallback: defaultDrawingColor(for: draft.componentType)
+        )
+    }
+
+    private func drawingLineStyleButton(
+        _ lineStyle: MarkerDrawingLineStyle,
+        isSelected: Bool,
+        color: Color
+    ) -> some View {
+        Button {
+            pendingDrawingLineStyle = lineStyle
+        } label: {
+            HStack(spacing: 10) {
+                Text(lineStyle.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 72, alignment: .leading)
+
+                GeometryReader { geometry in
+                    Path { path in
+                        let midY = geometry.size.height * 0.5
+                        path.move(to: CGPoint(x: 0, y: midY))
+                        path.addLine(to: CGPoint(x: geometry.size.width, y: midY))
+                    }
+                    .stroke(
+                        color,
+                        style: StrokeStyle(lineWidth: 2.0, dash: lineStyle.dashPattern)
+                    )
+                }
+                .frame(height: 18)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? AppColors.whiteText.opacity(0.16) : AppColors.whiteText.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                isSelected ? color.opacity(0.9) : AppColors.whiteText.opacity(0.08),
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func supportsStyleEditing(_ componentType: RLComponentType) -> Bool {
+        componentType.isDrawing || componentType == .levelSupport || componentType == .levelResistance
     }
 
     private func toolCard(
@@ -1135,25 +1306,13 @@ struct MarkerPlacementDrawingsTab: View {
         }
 
         beginInteractiveDrawingSession()
-
-        let anchorPrice = placementState.anchorDraft?.payload.levelPrice ?? 0
-
-        let payload = MarkerComponentPayload.drawingHorizontalLine(
-            HorizontalLinePayload(
-                price: anchorPrice,
-                label: "Line"
-            )
-        )
-
-        guard let draftID = placementState.addDrawingOverlayComponent(.drawingHorizontalLine, payload: payload) else {
-            applyDrawingLimitWarning()
-            return
-        }
-
         selectedSubTab = .lines
-        placementState.beginEditingDrawing(draftID, tool: .horizontalLine)
-        infoMessage = "Horizontal line added."
-        limitWarning = nil
+        if placementState.activateImmediateHorizontalDrawing(tool: .horizontalLine) != nil {
+            infoMessage = "Horizontal line placed. Drag the handle, then tap empty chart to save."
+            limitWarning = nil
+        } else {
+            applyDrawingLimitWarning()
+        }
     }
 
     private func quickAddZone() {
@@ -1189,22 +1348,17 @@ struct MarkerPlacementDrawingsTab: View {
     }
 
     private func selectHorizontalLevel(_ type: RLComponentType, label: String) {
-        let anchorPrice = placementState.anchorDraft?.payload.levelPrice ?? 0
-
-        placementState.activeTool = .levels
         switch type {
         case .levelSupport:
-            placementState.activeSubTool = MarkerToolOption.levelSupport.rawValue
-            placementState.upsertComponent(.levelSupport, payload: .levelSupport(LevelPayload(price: anchorPrice, label: "Support")))
+            _ = placementState.activateImmediateHorizontalDrawing(tool: .support)
         case .levelResistance:
-            placementState.activeSubTool = MarkerToolOption.levelResistance.rawValue
-            placementState.upsertComponent(.levelResistance, payload: .levelResistance(LevelPayload(price: anchorPrice, label: "Resistance")))
+            _ = placementState.activateImmediateHorizontalDrawing(tool: .resistance)
         default:
             break
         }
 
         selectedSubTab = .lines
-        infoMessage = "\(label) level ready. Drag the on-chart handle to reposition."
+        infoMessage = "\(label) level placed. Drag the handle, then tap empty chart to save."
         limitWarning = nil
     }
 
@@ -1235,6 +1389,14 @@ struct MarkerPlacementDrawingsTab: View {
         placementState.activeSubTool = MarkerToolOption.drawZone.rawValue
         placementState.beginEditingDrawing(draftID, tool: .zone)
         infoMessage = "Zone selected. Drag corners on chart to edit."
+        limitWarning = nil
+    }
+
+    private func editLevel(_ draftID: UUID, tool: MarkerDrawingToolKind) {
+        beginInteractiveDrawingSession()
+        selectedSubTab = .lines
+        placementState.beginEditingDrawing(draftID, tool: tool)
+        infoMessage = "\(tool.title) selected. Drag the handle on chart, then tap empty chart to save."
         limitWarning = nil
     }
 

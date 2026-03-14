@@ -95,13 +95,17 @@ struct CrosshairView: View {
     /// Computed property for time label Y position
     /// Positioned on the x-axis at the bottom of the chart canvas
     private var timeLabelY: CGFloat {
-        let bottomAreaHeight = chartSize.height * 0.11
-        // Position directly on the x-axis line (bottom of chart canvas area)
-        return chartSize.height - bottomAreaHeight
+        CrosshairTimeLabel.mainChartCenterY(
+            chartHeight: chartSize.height,
+            showsMainXAxisLabels: !rsiPanelActive
+        )
     }
     
     var body: some View {
-        if crosshairManager.isActive {
+        if crosshairManager.isActive,
+           crosshairManager.position.x.isFinite,
+           crosshairManager.position.y.isFinite,
+           timeLabelY.isFinite {
             ZStack {
                 // Vertical line - thinner and more subtle
                 Path { path in
@@ -188,6 +192,25 @@ enum CrosshairTimeLabelStyle {
 }
 
 struct CrosshairTimeLabel: View {
+    static let indicatorHeight: CGFloat = 22
+    static let compactBandLift: CGFloat = 14
+    static let stripBandInset: CGFloat = 6
+
+    static func mainChartCenterY(
+        chartHeight: CGFloat,
+        showsMainXAxisLabels: Bool
+    ) -> CGFloat {
+        let bottomAreaHeight = chartHeight * 0.085
+        if showsMainXAxisLabels {
+            return chartHeight
+                - bottomAreaHeight
+                - ChartPanelReserveCalculator.panelXAxisLabelStripHeight
+                + (indicatorHeight * 0.5)
+                - stripBandInset
+        }
+        return chartHeight - bottomAreaHeight + (indicatorHeight * 0.5) - compactBandLift
+    }
+
     let timestamp: Date
     var timeframe: RLChartTimeframe = .h1
     var timeZone: TimeZone = .current
@@ -200,61 +223,43 @@ struct CrosshairTimeLabel: View {
         MarkerPlacementLabelFormatter.format(timestamp, timeframe: timeframe, timeZone: timeZone)
     }
 
-    private var arrowColor: Color {
-        Color(red: 0.53, green: 0.62, blue: 0.76)
-    }
-
     private var textColor: Color {
-        AppColors.surfaceWhite95
-    }
-
-    private var backgroundFill: AnyShapeStyle {
-        AnyShapeStyle(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.20, green: 0.24, blue: 0.32),
-                    Color(red: 0.13, green: 0.16, blue: 0.22)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        AppColors.systemBlack
     }
 
     private var borderColor: Color {
-        Color(red: 0.39, green: 0.49, blue: 0.64).opacity(0.95)
-    }
-
-    private var borderLineWidth: CGFloat {
-        1.0
+        AppColors.surfaceBlack30
     }
 
     private var shadowColor: Color {
-        AppColors.surfaceBlack80
+        AppColors.surfaceBlack30
+    }
+
+    private var backgroundColor: Color {
+        switch style {
+        case .standard:
+            return AppColors.surfaceWhite90
+        case .markerPlacement:
+            return AppColors.surfaceWhite94
+        }
     }
     
     var body: some View {
-        VStack(spacing: 2) {
-            // Arrow indicator pointing up to the crosshair
-            Image(systemName: "arrowtriangle.up.fill")
-                .font(.system(size: 6))
-                .foregroundColor(arrowColor)
-            
-            Text(formattedTime)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(textColor)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(backgroundFill)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(borderColor, lineWidth: borderLineWidth)
-                        )
-                        .shadow(color: shadowColor, radius: 3, x: 0, y: 1)
-                )
-        }
+        Text(formattedTime)
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .foregroundColor(textColor)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: Self.indicatorHeight)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(backgroundColor)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(borderColor, lineWidth: 1)
+                    )
+                    .shadow(color: shadowColor, radius: 2, x: 0, y: 1)
+            )
     }
 }
 

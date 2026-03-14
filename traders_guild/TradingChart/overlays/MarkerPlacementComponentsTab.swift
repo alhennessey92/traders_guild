@@ -21,6 +21,7 @@ private enum MarkerComponentSubTab: String, CaseIterable, UnifiedTabItem {
 struct MarkerPlacementComponentsTab: View {
     @ObservedObject var placementState: MarkerPlacementState
     let activeChartIndicators: [IndicatorPayload]
+    let activeChartDrawings: [ChartDrawing]
     let currentChartTimeframe: RLChartTimeframe?
     let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     let onBeginInteractiveDrawing: (() -> Void)?
@@ -44,12 +45,14 @@ struct MarkerPlacementComponentsTab: View {
     }
 
     private var orderedDrawingDrafts: [MarkerComponentDraft] {
-        placementState.drawingOverlayDrafts.sorted { lhs, rhs in
-            let lhsRank = drawingSortRank(for: lhs.componentType)
-            let rhsRank = drawingSortRank(for: rhs.componentType)
-            if lhsRank != rhsRank { return lhsRank < rhsRank }
-            return lhs.id.uuidString < rhs.id.uuidString
-        }
+        placementState.components
+            .filter { isActiveDrawingComponent($0.componentType) }
+            .sorted { lhs, rhs in
+                let lhsRank = drawingSortRank(for: lhs.componentType)
+                let rhsRank = drawingSortRank(for: rhs.componentType)
+                if lhsRank != rhsRank { return lhsRank < rhsRank }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
     }
 
     private var orderedTimeframeDrafts: [MarkerComponentDraft] {
@@ -126,6 +129,7 @@ struct MarkerPlacementComponentsTab: View {
                 placementState: placementState,
                 onBeginInteractiveDrawing: onBeginInteractiveDrawing,
                 mirrorSourceIndicators: activeChartIndicators,
+                mirrorSourceDrawings: activeChartDrawings,
                 showsTitleHeader: false,
                 showsMirrorButton: showsMirrorButtons
             )
@@ -138,6 +142,7 @@ struct MarkerPlacementComponentsTab: View {
                 symbolId: symbolId,
                 guildId: guildId,
                 mirrorSourceIndicators: activeChartIndicators,
+                mirrorSourceDrawings: activeChartDrawings,
                 showsTitleHeader: false,
                 showsMirrorButton: showsMirrorButtons
             )
@@ -157,7 +162,7 @@ struct MarkerPlacementComponentsTab: View {
                     Text("Mirror Chart Setup")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(.white)
-                    Text("Copy current chart indicators to this marker")
+                    Text("Copy current chart indicators and drawings to this marker")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                 }
@@ -176,8 +181,8 @@ struct MarkerPlacementComponentsTab: View {
             )
         }
         .buttonStyle(.plain)
-        .opacity(activeChartIndicators.isEmpty ? 0.55 : 1)
-        .disabled(activeChartIndicators.isEmpty)
+        .opacity((activeChartIndicators.isEmpty && activeChartDrawings.isEmpty) ? 0.55 : 1)
+        .disabled(activeChartIndicators.isEmpty && activeChartDrawings.isEmpty)
     }
 
     private var overviewCard: some View {
@@ -397,15 +402,28 @@ struct MarkerPlacementComponentsTab: View {
     }
 
     private func mirrorChartSetup() {
-        let result = placementState.attachActiveChartIndicators(activeChartIndicators)
-        if result.added > 0 {
-            infoMessage = "Mirrored \(result.added) indicator\(result.added == 1 ? "" : "s") from chart."
+        let indicatorResult = placementState.attachActiveChartIndicators(activeChartIndicators)
+        let drawingResult = placementState.attachActiveChartDrawings(activeChartDrawings)
+        let totalAdded = indicatorResult.added + drawingResult.added
+
+        if totalAdded > 0 {
+            var mirroredParts: [String] = []
+            if indicatorResult.added > 0 {
+                mirroredParts.append("\(indicatorResult.added) indicator\(indicatorResult.added == 1 ? "" : "s")")
+            }
+            if drawingResult.added > 0 {
+                mirroredParts.append("\(drawingResult.added) drawing\(drawingResult.added == 1 ? "" : "s")")
+            }
+            infoMessage = "Mirrored \(mirroredParts.joined(separator: " and ")) from chart."
         } else {
-            infoMessage = "No new chart indicators to mirror."
+            infoMessage = "No new chart indicators or drawings to mirror."
         }
 
-        if result.blockedByLimit {
+        if indicatorResult.blockedByLimit || drawingResult.blockedByLimit {
             limitWarning = placementState.limitMessage(for: .indicatorPanels)
+            if drawingResult.blockedByLimit {
+                limitWarning = placementState.limitMessage(for: .drawingOverlays)
+            }
             HapticFeedback.light.trigger()
         } else {
             limitWarning = nil
@@ -428,10 +446,27 @@ struct MarkerPlacementComponentsTab: View {
         switch componentType {
         case .drawingTrendline: return 0
         case .drawingHorizontalLine: return 1
-        case .drawingZone: return 2
-        case .textNote: return 3
-        case .reactionEmoji: return 4
-        default: return 5
+        case .levelSupport: return 2
+        case .levelResistance: return 3
+        case .drawingZone: return 4
+        case .textNote: return 5
+        case .reactionEmoji: return 6
+        default: return 7
+        }
+    }
+
+    private func isActiveDrawingComponent(_ componentType: RLComponentType) -> Bool {
+        switch componentType {
+        case .drawingTrendline,
+             .drawingHorizontalLine,
+             .drawingZone,
+             .levelSupport,
+             .levelResistance,
+             .textNote,
+             .reactionEmoji:
+            return true
+        default:
+            return false
         }
     }
 

@@ -14,7 +14,9 @@ struct MarkerHorizontalLinePayloadTests {
                 HorizontalLinePayload(
                     price: 1.23456,
                     label: "Breakout Level",
-                    colorHex: "#10B981"
+                    colorHex: "#10B981",
+                    lineStyle: .dotted,
+                    lineWidth: 2.5
                 )
             ),
             ordering: 4
@@ -30,6 +32,8 @@ struct MarkerHorizontalLinePayloadTests {
             #expect(payload.price == 1.23456)
             #expect(payload.label == "Breakout Level")
             #expect(payload.colorHex == "#10B981")
+            #expect(payload.lineStyle == .dotted)
+            #expect(payload.lineWidth == 2.5)
         } else {
             Issue.record("Expected drawing.horizontal_line payload after decode")
         }
@@ -47,7 +51,9 @@ struct MarkerHorizontalLinePayloadTests {
                 HorizontalLinePayload(
                     price: 1.245,
                     label: "Liquidity Sweep",
-                    colorHex: "#8B5CF6"
+                    colorHex: "#8B5CF6",
+                    lineStyle: .solid,
+                    lineWidth: 3
                 )
             )
         )
@@ -61,6 +67,8 @@ struct MarkerHorizontalLinePayloadTests {
         #expect((horizontal?.payload["label"]?.value as? String) == "Liquidity Sweep")
         #expect((horizontal?.payload["price"]?.value as? Double) == 1.245)
         #expect((horizontal?.payload["color_hex"]?.value as? String) == "#8B5CF6")
+        #expect((horizontal?.payload["line_style"]?.value as? String) == "solid")
+        #expect((horizontal?.payload["line_width"]?.value as? Double) == 3)
     }
 
     @Test

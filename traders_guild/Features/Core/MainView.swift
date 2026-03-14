@@ -2185,6 +2185,7 @@ struct ChartBottomSheet: View {
     private var componentsContent: some View {
         let latestCandle = chartViewModel.dataManager.candles.last
         return ChartComponentsContent(
+            placementState: chartViewModel.chartComponentsPlacementState,
             indicatorManager: chartViewModel.indicatorManager,
             drawingManager: chartViewModel.chartDrawingManager,
             timeframeLinkManager: chartViewModel.chartTimeframeLinkManager,
@@ -2229,11 +2230,15 @@ struct ChartBottomSheet: View {
         let liveChartIndicatorPayloads = MarkerPlacementIndicatorFactory.activePayloads(
             from: chartViewModel.indicatorManager.activeIndicators
         )
+        let liveChartDrawings = chartViewModel.chartDrawingManager.activeDrawings
         return MarkerPlacementPanel(
             placementState: placementState,
             activeChartIndicators: placementIndicatorSnapshot.didCapture
-                ? placementIndicatorSnapshot.payloads
+                ? placementIndicatorSnapshot.indicators
                 : liveChartIndicatorPayloads,
+            activeChartDrawings: placementIndicatorSnapshot.didCapture
+                ? placementIndicatorSnapshot.drawings
+                : liveChartDrawings,
             currentChartTimeframe: chartViewModel.currentTimeframe,
             onSelectTimeframe: { timeframe in
                 if chartViewModel.currentTimeframe != timeframe {
@@ -2394,7 +2399,8 @@ struct ChartBottomSheet: View {
             if !placementIndicatorSnapshot.didCapture {
                 chartViewModel.indicatorManager.saveSnapshot()
                 placementIndicatorSnapshot.captureIfNeeded(
-                    from: chartViewModel.indicatorManager.activeIndicators
+                    from: chartViewModel.indicatorManager.activeIndicators,
+                    drawings: chartViewModel.chartDrawingManager.activeDrawings
                 )
             }
             applyPlacementIndicatorsToChart()

@@ -78,6 +78,8 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
     var type: ChartDrawingType
     var points: [ChartDrawingPoint]
     var colorHex: String
+    var lineStyle: MarkerDrawingLineStyle?
+    var lineWidth: Double?
     var isVisible: Bool
     var note: String?
     var emoji: String?
@@ -87,6 +89,8 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
         type: ChartDrawingType,
         points: [ChartDrawingPoint] = [],
         colorHex: String,
+        lineStyle: MarkerDrawingLineStyle? = nil,
+        lineWidth: Double? = nil,
         isVisible: Bool = true,
         note: String? = nil,
         emoji: String? = nil
@@ -95,6 +99,8 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
         self.type = type
         self.points = points
         self.colorHex = colorHex
+        self.lineStyle = lineStyle
+        self.lineWidth = lineWidth
         self.isVisible = isVisible
         self.note = note
         self.emoji = emoji
@@ -192,12 +198,16 @@ final class ChartDrawingManager: ObservableObject {
     func addDrawing(
         type: ChartDrawingType,
         colorHex: String? = nil,
+        lineStyle: MarkerDrawingLineStyle? = nil,
+        lineWidth: Double? = nil,
         note: String? = nil,
         emoji: String? = nil
     ) -> UUID {
         let drawing = ChartDrawing(
             type: type,
             colorHex: colorHex ?? type.defaultColorHex,
+            lineStyle: lineStyle,
+            lineWidth: lineWidth,
             note: note,
             emoji: emoji
         )

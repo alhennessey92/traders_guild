@@ -5,6 +5,7 @@ import Combine
 protocol ComponentsHostAdapter {
     var placementState: MarkerPlacementState { get }
     var activeChartIndicators: [IndicatorPayload] { get }
+    var activeChartDrawings: [ChartDrawing] { get }
     var currentChartTimeframe: RLChartTimeframe? { get }
     var onBeginInteractiveDrawing: (() -> Void)? { get }
     var timeframePanelManager: TimeframePanelManager? { get }
@@ -23,6 +24,7 @@ struct UnifiedComponentsHostView<Adapter: ComponentsHostAdapter>: View {
         MarkerPlacementComponentsTab(
             placementState: adapter.placementState,
             activeChartIndicators: adapter.activeChartIndicators,
+            activeChartDrawings: adapter.activeChartDrawings,
             currentChartTimeframe: adapter.currentChartTimeframe,
             onSelectTimeframe: { timeframe in
                 adapter.selectTimeframe(timeframe)
@@ -40,6 +42,7 @@ struct UnifiedComponentsHostView<Adapter: ComponentsHostAdapter>: View {
 struct MarkerComponentsAdapter: ComponentsHostAdapter {
     let placementState: MarkerPlacementState
     let activeChartIndicators: [IndicatorPayload]
+    let activeChartDrawings: [ChartDrawing]
     let currentChartTimeframe: RLChartTimeframe?
     let onSelectTimeframeAction: ((RLChartTimeframe) -> Void)?
     let onBeginInteractiveDrawing: (() -> Void)?
@@ -51,6 +54,7 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
     init(
         placementState: MarkerPlacementState,
         activeChartIndicators: [IndicatorPayload],
+        activeChartDrawings: [ChartDrawing] = [],
         currentChartTimeframe: RLChartTimeframe?,
         onSelectTimeframeAction: ((RLChartTimeframe) -> Void)?,
         onBeginInteractiveDrawing: (() -> Void)?,
@@ -61,6 +65,7 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
     ) {
         self.placementState = placementState
         self.activeChartIndicators = activeChartIndicators
+        self.activeChartDrawings = activeChartDrawings
         self.currentChartTimeframe = currentChartTimeframe
         self.onSelectTimeframeAction = onSelectTimeframeAction
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
@@ -77,7 +82,7 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
 
 @MainActor
 final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
-    let placementState = MarkerPlacementState()
+    let placementState: MarkerPlacementState
 
     private let indicatorManager: IndicatorManager
     private let drawingManager: ChartDrawingManager
@@ -100,6 +105,10 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
+    var activeChartDrawings: [ChartDrawing] {
+        drawingManager.activeDrawings
+    }
+
     private var cancellables = Set<AnyCancellable>()
     private var isSyncingFromHost = false
     private var isApplyingToHost = false
@@ -109,6 +118,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
     private var timeframeIDsByBackend: [String: UUID] = [:]
 
     init(
+        placementState: MarkerPlacementState,
         indicatorManager: IndicatorManager,
         drawingManager: ChartDrawingManager,
         timeframeLinkManager: ChartTimeframeLinkManager,
@@ -122,6 +132,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         anchorTime: Date?,
         anchorPrice: Double?
     ) {
+        self.placementState = placementState
         self.indicatorManager = indicatorManager
         self.drawingManager = drawingManager
         self.timeframeLinkManager = timeframeLinkManager
@@ -207,14 +218,6 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
             }
             .store(in: &cancellables)
 
-        drawingManager.$drawings
-            .dropFirst()
-            .sink { [weak self] _ in
-                guard let self, !self.isApplyingToHost else { return }
-                self.scheduleSyncFromHost()
-            }
-            .store(in: &cancellables)
-
         timeframeLinkManager.$linkedTimeframes
             .dropFirst()
             .sink { [weak self] _ in
@@ -261,9 +264,12 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         isSyncingFromHost = true
         defer { isSyncingFromHost = false }
 
+        let preservedDrawingComponents = placementState.components.filter {
+            isChartDrawingPlacementComponent($0.componentType)
+        }
         var nextComponents: [MarkerComponentDraft] = [anchorDraft()]
         nextComponents.append(contentsOf: indicatorDraftsFromHost())
-        nextComponents.append(contentsOf: drawingDraftsFromHost())
+        nextComponents.append(contentsOf: preservedDrawingComponents)
         nextComponents.append(contentsOf: timeframeDraftsFromHost())
         placementState.components = nextComponents
     }
@@ -287,22 +293,23 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
             guard case let .indicator(payload) = draft.payload else { return nil }
             return payload
         }
-        applyIndicatorPayloads(indicatorPayloads)
-
-        let updatedDrawings = drawingDraftsToChartDrawings(placementState.components)
-        drawingManager.setDrawings(updatedDrawings)
+        if indicatorSyncSignature(for: indicatorPayloads) != indicatorSyncSignature(for: activeChartIndicators) {
+            applyIndicatorPayloads(indicatorPayloads)
+        }
 
         let oldLinks = timeframeLinkManager.linkedTimeframes
         let newLinks = placementState.timeframeLinkDrafts.compactMap { draft -> String? in
             guard case let .timeframeLink(payload) = draft.payload else { return nil }
             return payload.timeframe
         }
-        timeframeLinkManager.setLinkedTimeframes(newLinks)
-        let currentLinks = timeframeLinkManager.linkedTimeframes
-        reconcileTimeframePanels(previousLinks: oldLinks, currentLinks: currentLinks)
-        if oldLinks != currentLinks {
-            // Keep Active tab and linked-timeframe drafts aligned with the persisted chart link state.
-            syncFromHost()
+        if timeframeSyncSignature(for: oldLinks) != timeframeSyncSignature(for: newLinks) {
+            timeframeLinkManager.setLinkedTimeframes(newLinks)
+            let currentLinks = timeframeLinkManager.linkedTimeframes
+            reconcileTimeframePanels(previousLinks: oldLinks, currentLinks: currentLinks)
+            if oldLinks != currentLinks {
+                // Keep Active tab and linked-timeframe drafts aligned with the persisted chart link state.
+                syncFromHost()
+            }
         }
     }
 
@@ -348,159 +355,42 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         name.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     }
 
-    private func drawingDraftsFromHost() -> [MarkerComponentDraft] {
-        drawingManager.drawings.map { drawing in
-            markerDraft(from: drawing)
-        }
+    private func indicatorSyncSignature(for payloads: [IndicatorPayload]) -> [String] {
+        let encoder = JSONEncoder()
+        return payloads
+            .map { payload in
+                let encoded = (try? encoder.encode(payload))
+                    .flatMap { String(data: $0, encoding: .utf8) }
+                    ?? payload.name
+                return "\(payload.name.uppercased())|\(encoded)"
+            }
+            .sorted()
     }
 
-    private func markerDraft(from drawing: ChartDrawing) -> MarkerComponentDraft {
-        switch drawing.type {
-        case .trendline:
-            let first = drawing.points.first ?? ChartDrawingPoint(time: anchorTime, price: anchorPrice)
-            let second = drawing.points.dropFirst().first ?? ChartDrawingPoint(
-                time: first.time.addingTimeInterval(30 * 60),
-                price: first.price
-            )
-            return MarkerComponentDraft(
-                id: drawing.id,
-                componentType: .drawingTrendline,
-                payload: .drawingTrendline(
-                    TrendlinePayload(
-                        startTime: first.time,
-                        startPrice: first.price,
-                        endTime: second.time,
-                        endPrice: second.price,
-                        colorHex: drawing.colorHex
-                    )
-                )
-            )
-        case .horizontalLine:
-            let price = drawing.points.first?.price ?? anchorPrice
-            return MarkerComponentDraft(
-                id: drawing.id,
-                componentType: .drawingHorizontalLine,
-                payload: .drawingHorizontalLine(
-                    HorizontalLinePayload(
-                        price: price,
-                        label: drawing.note,
-                        colorHex: drawing.colorHex
-                    )
-                )
-            )
-        case .zone:
-            let topPrice = drawing.points.first?.price ?? anchorPrice
-            let bottomPrice = drawing.points.dropFirst().first?.price ?? anchorPrice
-            let startTime = drawing.points.first?.time ?? anchorTime
-            let endTime = drawing.points.dropFirst().first?.time ?? anchorTime
-            return MarkerComponentDraft(
-                id: drawing.id,
-                componentType: .drawingZone,
-                payload: .drawingZone(
-                    ZonePayload(
-                        topPrice: max(topPrice, bottomPrice),
-                        bottomPrice: min(topPrice, bottomPrice),
-                        startTime: startTime,
-                        endTime: endTime,
-                        colorHex: drawing.colorHex
-                    )
-                )
-            )
-        case .supportLevel:
-            let price = drawing.points.first?.price ?? anchorPrice
-            return MarkerComponentDraft(
-                id: drawing.id,
-                componentType: .levelSupport,
-                payload: .levelSupport(LevelPayload(price: price, label: drawing.note))
-            )
-        case .resistanceLevel:
-            let price = drawing.points.first?.price ?? anchorPrice
-            return MarkerComponentDraft(
-                id: drawing.id,
-                componentType: .levelResistance,
-                payload: .levelResistance(LevelPayload(price: price, label: drawing.note))
-            )
-        case .textNote:
-            return MarkerComponentDraft(
-                id: drawing.id,
-                componentType: .textNote,
-                payload: .note(NotePayload(text: drawing.note ?? "Add your context"))
-            )
-        case .emoji:
-            return MarkerComponentDraft(
-                id: drawing.id,
-                componentType: .reactionEmoji,
-                payload: .reactionEmoji(EmojiPayload(emoji: drawing.emoji ?? "🎯"))
-            )
+    private func timeframeSyncSignature(for values: [String]) -> [String] {
+        values
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .sorted()
+    }
+
+    private func isChartDrawingPlacementComponent(_ componentType: RLComponentType) -> Bool {
+        switch componentType {
+        case .drawingTrendline,
+             .drawingHorizontalLine,
+             .drawingZone,
+             .levelSupport,
+             .levelResistance,
+             .textNote,
+             .reactionEmoji:
+            return true
+        default:
+            return false
         }
     }
 
     private func drawingDraftsToChartDrawings(_ components: [MarkerComponentDraft]) -> [ChartDrawing] {
         components.compactMap { draft in
-            switch draft.payload {
-            case let .drawingTrendline(payload):
-                return ChartDrawing(
-                    id: draft.id,
-                    type: .trendline,
-                    points: [
-                        ChartDrawingPoint(time: payload.startTime, price: payload.startPrice),
-                        ChartDrawingPoint(time: payload.endTime, price: payload.endPrice),
-                    ],
-                    colorHex: payload.colorHex ?? ChartDrawingType.trendline.defaultColorHex
-                )
-            case let .drawingHorizontalLine(payload):
-                return ChartDrawing(
-                    id: draft.id,
-                    type: .horizontalLine,
-                    points: [ChartDrawingPoint(time: anchorTime, price: payload.price)],
-                    colorHex: payload.colorHex ?? ChartDrawingType.horizontalLine.defaultColorHex,
-                    note: payload.label
-                )
-            case let .drawingZone(payload):
-                let start = payload.startTime ?? anchorTime
-                let end = payload.endTime ?? anchorTime
-                return ChartDrawing(
-                    id: draft.id,
-                    type: .zone,
-                    points: [
-                        ChartDrawingPoint(time: start, price: payload.topPrice),
-                        ChartDrawingPoint(time: end, price: payload.bottomPrice),
-                    ],
-                    colorHex: payload.colorHex ?? ChartDrawingType.zone.defaultColorHex
-                )
-            case let .levelSupport(payload):
-                return ChartDrawing(
-                    id: draft.id,
-                    type: .supportLevel,
-                    points: [ChartDrawingPoint(time: anchorTime, price: payload.price)],
-                    colorHex: ChartDrawingType.supportLevel.defaultColorHex,
-                    note: payload.label
-                )
-            case let .levelResistance(payload):
-                return ChartDrawing(
-                    id: draft.id,
-                    type: .resistanceLevel,
-                    points: [ChartDrawingPoint(time: anchorTime, price: payload.price)],
-                    colorHex: ChartDrawingType.resistanceLevel.defaultColorHex,
-                    note: payload.label
-                )
-            case let .note(payload):
-                return ChartDrawing(
-                    id: draft.id,
-                    type: .textNote,
-                    colorHex: ChartDrawingType.textNote.defaultColorHex,
-                    note: payload.text
-                )
-            case let .reactionEmoji(payload):
-                return ChartDrawing(
-                    id: draft.id,
-                    type: .emoji,
-                    colorHex: ChartDrawingType.emoji.defaultColorHex,
-                    emoji: payload.emoji
-                )
-            default:
-                return nil
-            }
+            ChartDrawingBridge.chartDrawing(from: draft, anchorTime: anchorTime, anchorPrice: anchorPrice)
         }
     }
 

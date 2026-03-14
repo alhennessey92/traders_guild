@@ -20,6 +20,12 @@ struct ActiveIndicatorLegendEntry: Identifiable {
     let kind: ActiveIndicatorLegendKind
 }
 
+struct ChartDrawingLegendEntry: Identifiable {
+    let id: UUID
+    let text: String
+    let accentColor: Color
+}
+
 enum ActiveIndicatorsLegendComposer {
     static func entries(from active: ActiveIndicators) -> [ActiveIndicatorLegendEntry] {
         var entries: [ActiveIndicatorLegendEntry] = []
@@ -189,24 +195,105 @@ enum ActiveIndicatorsLegendComposer {
 
 }
 
+enum ChartDrawingsLegendComposer {
+    static func entries(
+        from drawings: [ChartDrawing],
+        formatPrice: (Double) -> String
+    ) -> [ChartDrawingLegendEntry] {
+        drawings.compactMap { drawing in
+            let accentColor = Color(hex: drawing.colorHex) ?? accentColor(for: drawing.type)
+            switch drawing.type {
+            case .horizontalLine, .supportLevel, .resistanceLevel:
+                guard let price = drawing.points.first?.price else { return nil }
+                let fallbackLabel: String = {
+                    switch drawing.type {
+                    case .horizontalLine: return "Line"
+                    case .supportLevel: return "Support"
+                    case .resistanceLevel: return "Resistance"
+                    default: return drawing.type.title
+                    }
+                }()
+                let trimmedLabel = drawing.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let label = trimmedLabel.isEmpty ? fallbackLabel : trimmedLabel
+                return ChartDrawingLegendEntry(
+                    id: drawing.id,
+                    text: "\(label) \(formatPrice(price))",
+                    accentColor: accentColor
+                )
+
+            case .trendline, .zone:
+                return ChartDrawingLegendEntry(
+                    id: drawing.id,
+                    text: drawing.type.title,
+                    accentColor: accentColor
+                )
+
+            case .textNote:
+                let trimmed = drawing.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return ChartDrawingLegendEntry(
+                    id: drawing.id,
+                    text: trimmed.isEmpty ? "Note" : trimmed,
+                    accentColor: accentColor
+                )
+
+            case .emoji:
+                let emoji = drawing.emoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return ChartDrawingLegendEntry(
+                    id: drawing.id,
+                    text: emoji.isEmpty ? "Emoji" : emoji,
+                    accentColor: accentColor
+                )
+            }
+        }
+    }
+
+    static func labels(from drawings: [ChartDrawing], formatPrice: (Double) -> String) -> [String] {
+        entries(from: drawings, formatPrice: formatPrice).map(\.text)
+    }
+
+    private static func accentColor(for type: ChartDrawingType) -> Color {
+        Color(hex: type.defaultColorHex) ?? AppColors.surfaceWhite70
+    }
+}
+
 struct ActiveIndicatorsLegendView: View {
     @ObservedObject var indicatorManager: IndicatorManager
+    var drawings: [ChartDrawing] = []
+    var formatPrice: (Double) -> String = { price in String(format: "%.4f", price) }
 
     private var legendEntries: [ActiveIndicatorLegendEntry] {
         ActiveIndicatorsLegendComposer.entries(from: indicatorManager.activeIndicators)
     }
 
+    private var drawingEntries: [ChartDrawingLegendEntry] {
+        ChartDrawingsLegendComposer.entries(from: drawings, formatPrice: formatPrice)
+    }
+
     var body: some View {
-        if !legendEntries.isEmpty {
+        if !legendEntries.isEmpty || !drawingEntries.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(legendEntries) { entry in
-                    legendItem(entry)
+                if !legendEntries.isEmpty {
+                    ForEach(legendEntries) { entry in
+                        legendItem(entry)
+                    }
+                }
+
+                if !legendEntries.isEmpty && !drawingEntries.isEmpty {
+                    Capsule()
+                        .fill(AppColors.surfaceWhite12)
+                        .frame(width: 26, height: 1)
+                        .padding(.vertical, 2)
+                }
+
+                if !drawingEntries.isEmpty {
+                    ForEach(drawingEntries) { entry in
+                        drawingLegendItem(entry)
+                    }
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(AppColors.surfaceBlack40)
-            .cornerRadius(6)
+            .padding(.top, 2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -228,7 +315,25 @@ struct ActiveIndicatorsLegendView: View {
             Text(entry.text)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(AppColors.surfaceWhite80)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func drawingLegendItem(_ entry: ChartDrawingLegendEntry) -> some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(entry.accentColor)
+                .frame(width: 12, height: 2)
+
+            Text(entry.text)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(AppColors.surfaceWhite80)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

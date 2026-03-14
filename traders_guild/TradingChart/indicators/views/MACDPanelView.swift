@@ -572,30 +572,14 @@ struct MACDPanelView: View {
     
     @ViewBuilder
     private func crosshairTimeLabelOverlay(timestamp: Date, xPosition: CGFloat) -> some View {
-        VStack(spacing: 1) {
-            Image(systemName: "arrowtriangle.up.fill")
-                .font(.system(size: 6))
-                .foregroundColor(.cyan)
-            
-            Text(formatCrosshairTime(timestamp))
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppColors.statusAccent90)
-                )
+        if xPosition.isFinite {
+            CrosshairTimeLabel(
+                timestamp: timestamp,
+                timeframe: timeframe,
+                timeZone: chartData.currentSymbol?.exchangeTimeZone ?? .current
+            )
+            .position(x: xPosition, y: CrosshairTimeLabel.indicatorHeight * 0.5)
         }
-        .position(x: xPosition, y: 12)
-    }
-    
-    private func formatCrosshairTime(_ date: Date) -> String {
-        MarkerPlacementLabelFormatter.format(
-            date,
-            timeframe: timeframe,
-            timeZone: chartData.currentSymbol?.exchangeTimeZone ?? .current
-        )
     }
     
     private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {

@@ -73,6 +73,10 @@ class ChartViewModel: ObservableObject {
     @Published var indicatorManager = IndicatorManager()
     @Published var chartDrawingManager = ChartDrawingManager()
     @Published var chartTimeframeLinkManager = ChartTimeframeLinkManager()
+    let chartComponentsPlacementState = MarkerPlacementState()
+
+    private var isSyncingChartDrawingPlacementFromManager = false
+    private var isApplyingChartDrawingPlacementToManager = false
     
     // In ChartViewModel.swift, add:
     var totalCandleWidth: CGFloat {
@@ -114,6 +118,9 @@ class ChartViewModel: ObservableObject {
         self.api = api
         chartDrawingManager.load()
         chartTimeframeLinkManager.load()
+        chartComponentsPlacementState.intent = .analysis
+        setupChartDrawingPlacementSync()
+        syncChartDrawingPlacementFromManager()
     }
     
     // MARK: - Public Methods
@@ -406,8 +413,91 @@ class ChartViewModel: ObservableObject {
     private func syncChartDrawingStorageContext() {
         chartDrawingManager.symbolId = currentSymbol?.id
         chartTimeframeLinkManager.symbolId = currentSymbol?.id
+        syncChartDrawingPlacementFromManager()
     }
-    
+
+    func updateChartDrawingPlacementAnchor(time: Date?, price: Double?) {
+        let resolvedTime = time ?? dataManager.candles.last?.timestamp ?? Date()
+        let resolvedPrice = price ?? dataManager.candles.last?.close ?? 0
+        chartComponentsPlacementState.upsertComponent(
+            .anchor,
+            payload: .anchor(
+                AnchorPayload(
+                    time: resolvedTime,
+                    price: resolvedPrice
+                )
+            )
+        )
+    }
+
+    private func setupChartDrawingPlacementSync() {
+        chartDrawingManager.$drawings
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.syncChartDrawingPlacementFromManager()
+            }
+            .store(in: &cancellables)
+
+        chartComponentsPlacementState.$components
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.applyChartDrawingPlacementToManager()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func syncChartDrawingPlacementFromManager() {
+        guard !isApplyingChartDrawingPlacementToManager else { return }
+        isSyncingChartDrawingPlacementFromManager = true
+        defer { isSyncingChartDrawingPlacementFromManager = false }
+
+        let anchorTime = dataManager.candles.last?.timestamp ?? Date()
+        let anchorPrice = dataManager.candles.last?.close ?? 0
+        let preservedComponents = chartComponentsPlacementState.components.filter { draft in
+            draft.componentType != .anchor && !isChartDrawingPlacementComponent(draft.componentType)
+        }
+
+        var nextComponents: [MarkerComponentDraft] = [
+            MarkerComponentDraft(
+                id: chartComponentsPlacementState.anchorDraft?.id ?? UUID(),
+                componentType: .anchor,
+                payload: .anchor(
+                    AnchorPayload(
+                        time: anchorTime,
+                        price: anchorPrice
+                    )
+                )
+            )
+        ]
+        nextComponents.append(contentsOf: preservedComponents)
+        nextComponents.append(contentsOf: chartDrawingManager.drawings.map {
+            ChartDrawingBridge.markerDraft(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
+        })
+        chartComponentsPlacementState.components = nextComponents
+    }
+
+    private func applyChartDrawingPlacementToManager() {
+        guard !isSyncingChartDrawingPlacementFromManager else { return }
+        isApplyingChartDrawingPlacementToManager = true
+        defer { isApplyingChartDrawingPlacementToManager = false }
+        let anchorTime = dataManager.candles.last?.timestamp ?? Date()
+        let anchorPrice = dataManager.candles.last?.close ?? 0
+        chartDrawingManager.setDrawings(
+            chartComponentsPlacementState.components.compactMap {
+                ChartDrawingBridge.chartDrawing(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
+            }
+        )
+    }
+
+    private func isChartDrawingPlacementComponent(_ componentType: RLComponentType) -> Bool {
+        switch componentType {
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .levelSupport, .levelResistance, .textNote, .reactionEmoji:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Load user's personal watchlist
     private func loadPersonalWatchlist() async throws {
         let watchlistDTO = try await api.getPersonalWatchlist()

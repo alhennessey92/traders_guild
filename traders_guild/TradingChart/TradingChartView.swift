@@ -72,10 +72,39 @@ struct PreviewPriceLine {
     let explicitPrice: Double?
 }
 
+private struct DrawingTextEditorContext: Identifiable {
+    enum Kind: Equatable {
+        case lineLabel
+        case levelLabel
+        case note
+        case emoji
+    }
+
+    let id = UUID()
+    let draftId: UUID
+    let title: String
+    let placeholder: String
+    let initialValue: String
+    let kind: Kind
+}
+
+private struct HorizontalAxisPriceLabelItem: Identifiable {
+    let id: String
+    let text: String
+    let price: Double
+    let color: Color
+}
+
 /// Main trading chart view that handles all chart rendering and interactions
 /// Features centered scaling that keeps visible candles in view during zoom
 /// Includes marker placement system for collaborative chart annotations
 struct TradingChartView: View {
+    private struct DrawingHandleDragOrigin {
+        let draftId: UUID
+        let handle: MarkerDrawingHandle
+        let screenPoint: CGPoint
+    }
+
     // MARK: - State Properties
     
     // MARK: - Chart Context Accessors
@@ -164,11 +193,7 @@ struct TradingChartView: View {
     @State private var lastDragTranslation: CGSize = .zero
     @State private var isChartPanning = false
 
-    /// Per-drag pan arbitration state for drawing interactions.
-    /// When true, chart panning is suppressed so drawing interactions stay precise.
-    @State private var isDrawingPanLockActive = false
     @State private var didEvaluateDrawingPanLockForCurrentDrag = false
-    @State private var isDraggingDrawingControlHandle = false
     
     /// Y-axis pinch scale for vertical price range scaling (not used but kept for reference)
     @GestureState private var yAxisPinchScale: CGFloat = 1.0
@@ -211,6 +236,10 @@ struct TradingChartView: View {
     
     /// Track the center of visible candles for centered scaling operations
     @State private var visibleCandlesCenter: CGFloat = 0
+
+    /// Intrinsic width of the chart info header rows.
+    /// The legend is constrained to this width so active drawings/indicators don't widen the panel.
+    @State private var chartInfoBaseContentWidth: CGFloat = 0
     
     
     
@@ -221,6 +250,16 @@ struct TradingChartView: View {
     // Marker placement mode is now controlled by ViewModel
     private var isMarkerPlacementMode: Bool {
         controlViewModel.isMarkerPlacementMode
+    }
+
+    @ObservedObject private var chartDrawingPlacementState: MarkerPlacementState
+
+    private var isDrawingPanLockActive: Bool {
+        activeInteractiveDrawingState?.drawingSession.isPanLocked ?? false
+    }
+
+    private var isDraggingDrawingControlHandle: Bool {
+        activeInteractiveDrawingState?.drawingSession.selectedHandle != nil
     }
     
     /// Track if marker is actively being dragged (for scale animation)
@@ -252,8 +291,6 @@ struct TradingChartView: View {
     @State private var placementLinePrice: Double? = nil
     /// Whether the placement line is actively being dragged
     @State private var isDraggingPlacementLine: Bool = false
-    /// Active placement-level drag kind for support/resistance lines.
-    @State private var draggingPlacementLevelType: RLComponentType?
 
     /// Current candle index where the preview marker is positioned
     /// Updates in real-time as user drags during placement mode
@@ -270,6 +307,9 @@ struct TradingChartView: View {
     /// Stores crosshair position at start of drag for relative movement
     /// This allows crosshair to move by delta instead of jumping to finger position
     @State private var crosshairDragStartPosition: CGPoint? = nil
+    @State private var drawingGuideDragStartScreenPoint: CGPoint? = nil
+    @State private var drawingGuideDragStartGuidePoint: MarkerDrawingGuidePoint? = nil
+    @State private var drawingHandleDragOrigin: DrawingHandleDragOrigin? = nil
 
     
     /// Whether to show duplicate marker type alert
@@ -285,6 +325,7 @@ struct TradingChartView: View {
     @State private var isSubmittingViewingPollVote = false
     @State private var viewingPollVoteOptionId: UUID?
     @State private var isViewingInfoPanelCollapsed = false
+    @State private var drawingTextEditorContext: DrawingTextEditorContext?
     
 
     
@@ -496,6 +537,7 @@ struct TradingChartView: View {
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
         self._indicatorManager = ObservedObject(wrappedValue: chartViewModel.indicatorManager)
+        self._chartDrawingPlacementState = ObservedObject(wrappedValue: chartViewModel.chartComponentsPlacementState)
         self.gestureState = gestureState
         self.placementState = placementState
         self._rsiPanelHeight = rsiPanelHeight
@@ -631,6 +673,70 @@ struct TradingChartView: View {
     private var shouldShowMarkerPlacementOverlay: Bool {
         isMarkerPlacementMode || pendingMarkerInfo != nil
     }
+
+    private var hasDefaultChartDrawingComponents: Bool {
+        chartDrawingPlacementState.components.contains { draft in
+            switch draft.componentType {
+            case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .textNote, .reactionEmoji, .levelSupport, .levelResistance:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private var isDefaultChartDrawingContextEnabled: Bool {
+        !isMarkerPlacementMode
+        && !controlViewModel.isMarkerViewingMode
+        && (
+            hasDefaultChartDrawingComponents
+            || chartDrawingPlacementState.drawingInteractionPhase != .idle
+            || chartDrawingPlacementState.activeDrawingWorkflowTool != nil
+        )
+    }
+
+    private var activeInteractiveDrawingState: MarkerPlacementState? {
+        if isMarkerPlacementMode {
+            return placementState
+        }
+        if isDefaultChartDrawingContextEnabled {
+            return chartDrawingPlacementState
+        }
+        return nil
+    }
+
+    private var shouldShowDefaultChartDrawingOverlay: Bool {
+        !isMarkerPlacementMode && isDefaultChartDrawingContextEnabled
+    }
+
+    private var isInteractiveDrawingSessionActive: Bool {
+        guard let drawingState = activeInteractiveDrawingState else { return false }
+        if drawingState.drawingSession.isActive {
+            return true
+        }
+        switch drawingState.drawingInteractionPhase {
+        case .idle:
+            return false
+        case .placingFirstPoint, .placingSecondPoint, .editing, .committing:
+            return true
+        }
+    }
+
+    private var shouldShowDrawingGuideAxisIndicators: Bool {
+        guard let drawingState = activeInteractiveDrawingState,
+              currentDrawingGuidePoint != nil else {
+            return false
+        }
+
+        switch drawingState.drawingInteractionPhase {
+        case .placingFirstPoint, .placingSecondPoint:
+            return true
+        case .editing:
+            return drawingState.drawingSession.selectedHandle != nil
+        case .idle, .committing:
+            return false
+        }
+    }
     
     /// Whether instruction banner should be shown
     /// Disabled — replaced by inline MarkerPlacementPanel during placement mode
@@ -666,6 +772,14 @@ struct TradingChartView: View {
             }
             .sheet(isPresented: $showChartSettingsSheet) {
                 ChartSettingsView(settings: chartSettings)
+            }
+            .sheet(item: $drawingTextEditorContext) { context in
+                DrawingTextEditorSheet(
+                    context: context,
+                    onSave: { value in
+                        applyDrawingTextEditorValue(value, context: context)
+                    }
+                )
             }
     }
 
@@ -775,7 +889,8 @@ struct TradingChartView: View {
             .gesture(crosshairDismissTapGesture())
             .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
             .simultaneousGesture(tapGestureForMarkers(geometry: geometry))
-            .simultaneousGesture(placementToolTapGesture(coordinateSystem: coordinateSystem))
+            .simultaneousGesture(drawingInteractionTapGesture(coordinateSystem: coordinateSystem))
+            .simultaneousGesture(drawingInteractionDragGesture(coordinateSystem: coordinateSystem))
             .simultaneousGesture(dragGesture(in: geometry.size, coordinateSystem: coordinateSystem))
             .simultaneousGesture(pinchGesture(in: geometry.size))
             .overlay(yAxisGestureOverlay)
@@ -784,6 +899,10 @@ struct TradingChartView: View {
             .onAppear {
                 updateChartSize(geometry.size)
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                chartViewModel.updateChartDrawingPlacementAnchor(
+                    time: chartData.candles.last?.timestamp,
+                    price: chartData.candles.last?.close
+                )
                 seedInitialDrawingGuidePointIfNeeded(
                     coordinateSystem: coordinateSystem,
                     size: geometry.size
@@ -813,6 +932,10 @@ struct TradingChartView: View {
             }
             .onChange(of: chartData.candles.count) { _, _ in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                chartViewModel.updateChartDrawingPlacementAnchor(
+                    time: chartData.candles.last?.timestamp,
+                    price: chartData.candles.last?.close
+                )
                 seedInitialDrawingGuidePointIfNeeded(
                     coordinateSystem: coordinateSystem,
                     size: geometry.size
@@ -843,6 +966,30 @@ struct TradingChartView: View {
                     size: geometry.size
                 )
             }
+            .onChange(of: chartDrawingPlacementState.activeTool) { _, _ in
+                reconcileDrawingInteractionState()
+                seedInitialDrawingGuidePointIfNeeded(
+                    coordinateSystem: coordinateSystem,
+                    size: geometry.size
+                )
+            }
+            .onChange(of: chartDrawingPlacementState.activeSubTool) { _, _ in
+                reconcileDrawingInteractionState()
+                seedInitialDrawingGuidePointIfNeeded(
+                    coordinateSystem: coordinateSystem,
+                    size: geometry.size
+                )
+            }
+            .onChange(of: chartDrawingPlacementState.selectedPlacementTab) { _, _ in
+                reconcileDrawingInteractionState()
+            }
+            .onChange(of: chartDrawingPlacementState.drawingInteractionPhase) { _, _ in
+                reconcileDrawingInteractionState()
+                seedInitialDrawingGuidePointIfNeeded(
+                    coordinateSystem: coordinateSystem,
+                    size: geometry.size
+                )
+            }
 
             // MARK: - On-Chart Placement Mode UI
             if isMarkerPlacementMode {
@@ -851,7 +998,7 @@ struct TradingChartView: View {
                 GhostPreviewLayer(
                     placementState: placementState,
                     yForPrice: { price in coordinateSystem.yPosition(forPrice: price) },
-                    width: geometry.size.width,
+                    width: max(0, geometry.size.width - yAxisWidth),
                     topSafeAreaInset: geometry.safeAreaInsets.top,
                     bottomPanelPadding: bottomInfoPanelsPadding(geometry: geometry),
                     xForTime: { time in
@@ -861,51 +1008,73 @@ struct TradingChartView: View {
                     guidePoint: currentDrawingGuidePoint,
                     drawingInteractionPhase: placementState.drawingInteractionPhase,
                     editingDrawingId: placementState.editingDrawingId,
+                    showsInfoPanels: false,
                     formatPrice: { price in chartData.formatPrice(price) }
                 )
+                .mask(plotAreaMask(geometry: geometry))
                 .zIndex(30)
-
-                PlacementSupportResistanceOverlay(
-                    placementState: placementState,
-                    draggingLineType: $draggingPlacementLevelType,
-                    coordinateSystem: coordinateSystem,
-                    chartWidth: geometry.size.width,
-                    chartHeight: geometry.size.height,
-                    chartData: chartData
-                )
-                .zIndex(31)
 
                 drawingControlHandlesOverlay(
                     geometry: geometry,
                     coordinateSystem: coordinateSystem
                 )
-                .zIndex(32)
+                .mask(plotAreaMask(geometry: geometry))
+                .zIndex(31)
+            }
+
+            if shouldShowDefaultChartDrawingOverlay {
+                GhostPreviewLayer(
+                    placementState: chartDrawingPlacementState,
+                    yForPrice: { price in coordinateSystem.yPosition(forPrice: price) },
+                    width: max(0, geometry.size.width - yAxisWidth),
+                    topSafeAreaInset: geometry.safeAreaInsets.top,
+                    bottomPanelPadding: bottomInfoPanelsPadding(geometry: geometry),
+                    xForTime: { time in
+                        guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
+                        return coordinateSystem.xCenterPosition(forCandleIndex: index)
+                    },
+                    guidePoint: currentDrawingGuidePoint,
+                    drawingInteractionPhase: chartDrawingPlacementState.drawingInteractionPhase,
+                    editingDrawingId: chartDrawingPlacementState.editingDrawingId,
+                    showsInfoPanels: false,
+                    formatPrice: { price in chartData.formatPrice(price) }
+                )
+                .mask(plotAreaMask(geometry: geometry))
+                .zIndex(26)
+
+                drawingControlHandlesOverlay(
+                    geometry: geometry,
+                    coordinateSystem: coordinateSystem
+                )
+                .mask(plotAreaMask(geometry: geometry))
+                .zIndex(27)
             }
 
             // Marker overlay: render selected marker's components as temporary overlays
-            if !markerOverlayComponents.isEmpty {
+            if !markerOverlayComponents.isEmpty,
+               !isInteractiveDrawingSessionActive {
                 MarkerComponentOverlayLayer(
                     components: markerOverlayComponents,
                     yForPrice: { price in coordinateSystem.yPosition(forPrice: price) },
-                    width: geometry.size.width,
+                    width: max(0, geometry.size.width - yAxisWidth),
                     xForTime: { time in
                         guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
                         return coordinateSystem.xCenterPosition(forCandleIndex: index)
                     },
                     formatPrice: { price in chartData.formatPrice(price) }
                 )
+                .mask(plotAreaMask(geometry: geometry))
                 .allowsHitTesting(false)
                 .zIndex(28)
                 .transition(.opacity)
             }
 
-            if let marker = viewingInfoMarker {
-                viewingMarkerInfoOverlay(marker: marker, geometry: geometry)
-                    .zIndex(54)
-            }
-
-            // Standard chart controls — hidden during placement and marker viewing modes
-            if !isMarkerPlacementMode && !controlViewModel.isMarkerViewingMode {
+            if shouldShowSelectedDrawingToolbar {
+                selectedDrawingToolbar(geometry: geometry)
+                    .zIndex(60)
+            } else if !isMarkerPlacementMode && !controlViewModel.isMarkerViewingMode {
+                // Standard chart controls — hidden during placement, marker viewing,
+                // and while a drawing is actively selected for editing.
                 chartControlsBox(geometry: geometry)
                     .zIndex(60)
             }
@@ -931,7 +1100,8 @@ struct TradingChartView: View {
             mainChartCanvas(geometry: geometry)
                 .mask(topFadeMask(geometry: geometry))
 
-            if shouldShowMarkerPlacementOverlay {
+            if shouldShowMarkerPlacementOverlay,
+               !isInteractiveDrawingSessionActive {
                 markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
                     .zIndex(18)
             }
@@ -940,15 +1110,22 @@ struct TradingChartView: View {
             yAxisOverlay(geometry: geometry)
 
             markerDrawingOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                .mask(topFadeMask(geometry: geometry))
-            markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                .mask(topFadeMask(geometry: geometry))
-            draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                .mask(topFadeMask(geometry: geometry))
-            draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                .mask(topFadeMask(geometry: geometry))
-            targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
-                .mask(topFadeMask(geometry: geometry))
+                .mask(plotAreaMask(geometry: geometry))
+            if !isInteractiveDrawingSessionActive {
+                markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                    .mask(plotAreaMask(geometry: geometry))
+                draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                    .mask(plotAreaMask(geometry: geometry))
+                draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                    .mask(plotAreaMask(geometry: geometry))
+                targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
+                    .mask(plotAreaMask(geometry: geometry))
+            }
+
+            horizontalDrawingAxisLabelsOverlay(
+                geometry: geometry,
+                coordinateSystem: coordinateSystem
+            )
 
             markerTopPriorityOverlay()
                 .mask(topFadeMask(geometry: geometry))
@@ -961,16 +1138,19 @@ struct TradingChartView: View {
             chartInfoBox(geometry: geometry)
             xAxisOverlay(geometry: geometry)
 
-            if let markerIntent = linePlacementOverlayIntent {
+            if let markerIntent = linePlacementOverlayIntent,
+               !isInteractiveDrawingSessionActive {
                 linePlacementOverlay(
                     markerIntent: markerIntent,
                     geometry: geometry,
                     coordinateSystem: coordinateSystem
                 )
+                .mask(plotAreaMask(geometry: geometry))
                 .zIndex(40)
             }
 
-            if predictionPlacementActive {
+            if predictionPlacementActive,
+               !isInteractiveDrawingSessionActive {
                 PredictionPlacementOverlay(
                     placement: $predictionPlacement,
                     draggingLine: $draggingPredictionLine,
@@ -979,6 +1159,7 @@ struct TradingChartView: View {
                     chartHeight: geometry.size.height,
                     chartData: chartData
                 )
+                .mask(plotAreaMask(geometry: geometry))
                 .zIndex(40)
             }
 
@@ -992,6 +1173,8 @@ struct TradingChartView: View {
                 timeframe: chartViewModel.currentTimeframe,
                 timeZone: axisTimeZone
             )
+
+            drawingGuideAxisOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
 
             if shouldShowInstructionBanner {
                 instructionBanner(coordinateSystem: coordinateSystem)
@@ -1008,7 +1191,8 @@ struct TradingChartView: View {
     }
 
     private var shouldHideCurrentPriceIndicator: Bool {
-        controlViewModel.isMarkerPlacementMode && controlViewModel.currentMarkerIntent == .setup
+        (controlViewModel.isMarkerPlacementMode && controlViewModel.currentMarkerIntent == .setup)
+            || isInteractiveDrawingSessionActive
     }
 
     @ViewBuilder
@@ -1209,7 +1393,7 @@ struct TradingChartView: View {
         MarkerDrawingOverlay(
             selectedMarker: activeSelectedMarker,
             coordinateSystem: coordinateSystem,
-            chartWidth: geometry.size.width,
+            chartWidth: max(0, geometry.size.width - yAxisWidth),
             chartHeight: geometry.size.height
         )
     }
@@ -1283,7 +1467,7 @@ struct TradingChartView: View {
 
     private var yAxisGesturesEnabled: Bool {
         if isDraggingDrawingControlHandle { return false }
-        if isDraggingPlacementLine || draggingPredictionLine != nil || draggingPlacementLevelType != nil {
+        if isDraggingPlacementLine || draggingPredictionLine != nil {
             return false
         }
         return true
@@ -1666,7 +1850,10 @@ struct TradingChartView: View {
         let markerX = markerDragPosition?.x ?? snapPosition.x
         let markerY = markerDragPosition?.y ?? snapPosition.y
         
-        if markerX >= -50 && markerX <= geometry.size.width + 50 {
+        if markerX.isFinite,
+           markerY.isFinite,
+           markerX >= -50,
+           markerX <= geometry.size.width + 50 {
             previewMarkerContent(x: markerX, y: markerY, coordinateSystem: coordinateSystem)
         }
     }
@@ -1703,6 +1890,23 @@ struct TradingChartView: View {
         return placementPreviewAlertSeverity?.color ?? intent.color
     }
 
+    private var placementGuideLineColor: Color {
+        guard let intent = gestureState.markerPlacementGuide.markerIntent else {
+            return AppColors.statusInfo50
+        }
+
+        if intent == .alert {
+            switch gestureState.markerPlacementGuide.source {
+            case .placement:
+                return placementPreviewAlertSeverity?.color ?? intent.color
+            case .selected:
+                return markerManager.selectedMarker?.alertSeverity?.color ?? intent.color
+            }
+        }
+
+        return intent.color
+    }
+
     private var placementPreviewAlertSeverity: MarkerAlertSeverity? {
         if let selected = placementState.alertSeverity {
             return selected
@@ -1727,6 +1931,11 @@ struct TradingChartView: View {
     }
 
     private func updatePlacementGuideState(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) {
+        guard !isInteractiveDrawingSessionActive else {
+            applyPlacementGuideState(MarkerPlacementGuideState())
+            return
+        }
+
         guard effectiveCandleIndex >= 0,
               effectiveCandleIndex < chartData.candles.count,
               let markerIntent = effectiveMarkerIntent else {
@@ -1736,6 +1945,10 @@ struct TradingChartView: View {
 
         let candle = chartData.candles[effectiveCandleIndex]
         let x = coordinateSystem.xCenterPosition(forCandleIndex: effectiveCandleIndex)
+        guard x.isFinite else {
+            applyPlacementGuideState(MarkerPlacementGuideState())
+            return
+        }
         let isVisible = x >= -50 && x <= geometry.size.width + 50
 
         applyPlacementGuideState(MarkerPlacementGuideState(
@@ -1771,6 +1984,11 @@ struct TradingChartView: View {
     }
 
     private func syncSelectedMarkerGuideState(chartWidth: CGFloat, coordinateSystem: ChartCoordinateSystem) {
+        guard !isInteractiveDrawingSessionActive else {
+            applyPlacementGuideState(MarkerPlacementGuideState())
+            return
+        }
+
         guard !isMarkerPlacementMode else { return }
         guard controlViewModel.isMarkerViewingMode else {
             if gestureState.markerPlacementGuide.source == .selected {
@@ -1789,6 +2007,10 @@ struct TradingChartView: View {
 
         let candle = chartData.candles[selectedMarker.candleIndex]
         let x = coordinateSystem.xCenterPosition(forCandleIndex: selectedMarker.candleIndex)
+        guard x.isFinite else {
+            applyPlacementGuideState(MarkerPlacementGuideState())
+            return
+        }
         let isVisible = x >= -50 && x <= chartWidth + 50
         applyPlacementGuideState(MarkerPlacementGuideState(
             isActive: isVisible,
@@ -1800,6 +2022,13 @@ struct TradingChartView: View {
     }
 
     private func applyPlacementGuideState(_ newState: MarkerPlacementGuideState) {
+        guard !newState.isActive || (newState.x.isFinite && newState.timestamp != nil) else {
+            if gestureState.markerPlacementGuide.isActive {
+                gestureState.markerPlacementGuide = MarkerPlacementGuideState()
+            }
+            return
+        }
+
         let current = gestureState.markerPlacementGuide
 
         // Skip tiny x-only deltas to reduce per-frame guide churn while panning.
@@ -1878,7 +2107,7 @@ struct TradingChartView: View {
             isDraggingPlacementLine = false
             predictionPlacement = nil
             draggingPredictionLine = nil
-            isDrawingPanLockActive = false
+            placementState.setDrawingPanLocked(false)
             didEvaluateDrawingPanLockForCurrentDrag = false
             isSubmittingPlacement = false
             placementSubmitErrorMessage = nil
@@ -2049,7 +2278,7 @@ struct TradingChartView: View {
                 centerIndex: calculateCenterCandleIndex(),
                 candleCount: chartData.candles.count
             )
-            isDrawingPanLockActive = false
+            placementState.setDrawingPanLocked(false)
             didEvaluateDrawingPanLockForCurrentDrag = false
             placementSubmitErrorMessage = nil
 
@@ -2078,7 +2307,8 @@ struct TradingChartView: View {
             placementState.resetDrawingInteraction()
             placementState.clearMarkerEditSession()
             liveDrawingGuidePoint = nil
-            isDrawingPanLockActive = false
+            clearDrawingGuideDragState()
+            placementState.setDrawingPanLocked(false)
             didEvaluateDrawingPanLockForCurrentDrag = false
             isSubmittingPlacement = false
             placementSubmitErrorMessage = nil
@@ -2569,6 +2799,15 @@ struct TradingChartView: View {
                 }
 
                 let location = value.location
+                let coordinateSystem = createCoordinateSystem(geometry: geometry)
+                if isDefaultChartDrawingContextEnabled,
+                   hitTestEditableDrawing(
+                    at: location,
+                    coordinateSystem: coordinateSystem,
+                    intent: .reenterEditing
+                   ) != nil {
+                    return
+                }
                 let totalOffset = gestureState.panOffset.width
                 let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
 
@@ -2619,38 +2858,62 @@ struct TradingChartView: View {
 
     /// During placement mode, tapping the chart interacts with the placement state
     /// based on the currently active placement action state.
-    private func placementToolTapGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                guard isMarkerPlacementMode else { return }
-                guard shouldUpdateLiveDrawingGuidePoint(with: value) else { return }
-                updateLiveDrawingGuidePoint(location: value.location, coordinateSystem: coordinateSystem)
-            }
+    private func drawingInteractionTapGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
+        SpatialTapGesture()
             .onEnded { value in
-                guard isMarkerPlacementMode else { return }
-
-                // Must be a tap (not a drag)
-                let dragDistance = sqrt(
-                    pow(value.translation.width, 2) +
-                    pow(value.translation.height, 2)
-                )
-                guard dragDistance < 15 else { return }
+                guard activeInteractiveDrawingState != nil else { return }
 
                 let location = value.location
-                let tappedPrice = coordinateSystem.price(atYPosition: location.y)
-                let tappedCandleIndex = coordinateSystem.candleIndex(atXPosition: location.x)
-                let tappedTime = resolvedPlacementTapTime(
-                    candleIndex: tappedCandleIndex,
+                let commitPoint = resolvedPlacementCommitPoint(
+                    fallbackLocation: location,
                     coordinateSystem: coordinateSystem
                 )
+                clearDrawingGuideDragState()
+                clearDrawingHandleDragState()
 
                 handlePlacementToolTap(
-                    price: tappedPrice,
-                    time: tappedTime,
-                    candleIndex: tappedCandleIndex,
+                    price: commitPoint.price,
+                    time: commitPoint.time,
+                    candleIndex: commitPoint.candleIndex,
                     location: location,
                     coordinateSystem: coordinateSystem
                 )
+            }
+    }
+
+    private func drawingInteractionDragGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard activeInteractiveDrawingState != nil else { return }
+                if shouldUpdateLiveDrawingGuidePoint(with: value) {
+                    updateLiveDrawingGuidePoint(value: value, coordinateSystem: coordinateSystem)
+                    return
+                }
+
+                _ = updateActiveDrawingHandleIfNeeded(
+                    with: value,
+                    coordinateSystem: coordinateSystem
+                )
+            }
+            .onEnded { value in
+                guard activeInteractiveDrawingState != nil else { return }
+
+                let dragDistance = hypot(value.translation.width, value.translation.height)
+                let didDragEditingHandle =
+                    drawingHandleDragOrigin != nil
+                    && dragDistance >= drawingHandleDragActivationDistance
+                let isGuideDrag = isDrawingPointPlacementActive && dragDistance >= drawingGuideDragActivationDistance
+                if didDragEditingHandle {
+                    clearDrawingHandleDragState()
+                    activeInteractiveDrawingState?.setSelectedDrawingHandle(nil)
+                    return
+                }
+                if isGuideDrag {
+                    clearDrawingGuideDragState()
+                    return
+                }
+                clearDrawingGuideDragState()
+                clearDrawingHandleDragState()
             }
     }
 
@@ -2663,16 +2926,19 @@ struct TradingChartView: View {
         location: CGPoint,
         coordinateSystem: ChartCoordinateSystem
     ) {
+        guard let drawingState = activeInteractiveDrawingState else { return }
+
         let drawingTapContextEnabled =
-            placementState.activeTool == .draw
-            || placementState.drawingInteractionPhase != .idle
+            drawingState.activeDrawingWorkflowTool != nil
+            || drawingState.drawingInteractionPhase != .idle
+            || drawingStateHasEditableComponents(drawingState)
 
         let isPlacingDrawingPoint =
-            placementState.drawingInteractionPhase == .placingFirstPoint ||
-            placementState.drawingInteractionPhase == .placingSecondPoint
+            drawingState.drawingInteractionPhase == .placingFirstPoint ||
+            drawingState.drawingInteractionPhase == .placingSecondPoint
 
         let drawingHitIntent: DrawingHitIntent =
-            placementState.drawingInteractionPhase == .editing ? .maintainEditing : .reenterEditing
+            drawingState.drawingInteractionPhase == .editing ? .maintainEditing : .reenterEditing
 
         if drawingTapContextEnabled, !isPlacingDrawingPoint,
            let target = hitTestEditableDrawing(
@@ -2684,12 +2950,12 @@ struct TradingChartView: View {
             return
         }
 
-        if drawingTapContextEnabled, placementState.drawingInteractionPhase == .editing {
+        if drawingTapContextEnabled, drawingState.drawingInteractionPhase == .editing {
             lockCurrentDrawingEdits()
             return
         }
 
-        guard let activeTool = placementState.activeTool else { return }
+        guard let activeTool = drawingState.activeTool else { return }
 
         impactFeedback.impactOccurred(intensity: 0.6)
 
@@ -2724,37 +2990,17 @@ struct TradingChartView: View {
                         payload: .levelTp(LevelPayload(price: price, label: "TP"))
                     )
                 case MarkerToolOption.levelSupport.rawValue:
-                    placementState.upsertComponent(
-                        .levelSupport,
-                        payload: .levelSupport(LevelPayload(price: price, label: "Support"))
-                    )
+                    handleDrawingToolTap(tool: .support, drawingState: drawingState, price: price, time: time)
                 case MarkerToolOption.levelResistance.rawValue:
-                    placementState.upsertComponent(
-                        .levelResistance,
-                        payload: .levelResistance(LevelPayload(price: price, label: "Resistance"))
-                    )
+                    handleDrawingToolTap(tool: .resistance, drawingState: drawingState, price: price, time: time)
                 default:
                     break
                 }
             }
 
         case .draw:
-            // For trendline: first tap = start, second tap = end
-            if let subTool = placementState.activeSubTool,
-               subTool == MarkerToolOption.drawTrendline.rawValue {
-                handleTrendlineTap(
-                    price: price,
-                    time: time
-                )
-            } else if let subTool = placementState.activeSubTool,
-                      subTool == MarkerToolOption.drawHorizontalLine.rawValue {
-                handleHorizontalLineTap(price: price)
-            } else if let subTool = placementState.activeSubTool,
-                      subTool == MarkerToolOption.drawZone.rawValue {
-                handleZoneTap(
-                    price: price,
-                    time: time
-                )
+            if let tool = drawingState.activeDrawingWorkflowTool {
+                handleDrawingToolTap(tool: tool, drawingState: drawingState, price: price, time: time)
             }
 
         default:
@@ -2763,18 +3009,23 @@ struct TradingChartView: View {
         }
     }
 
-    @State private var liveDrawingGuidePoint: (time: Date, price: Double)?
+    private var liveDrawingGuidePoint: (time: Date, price: Double)? {
+        get { activeInteractiveDrawingState?.drawingGuidePoint }
+        nonmutating set { activeInteractiveDrawingState?.drawingGuidePoint = newValue }
+    }
 
     private enum EditableDrawingHitTarget {
         case trendline(UUID)
         case horizontalLine(UUID)
+        case support(UUID)
+        case resistance(UUID)
         case zone(UUID)
         case note(UUID)
         case emoji(UUID)
 
         var draftId: UUID {
             switch self {
-            case .trendline(let id), .horizontalLine(let id), .zone(let id), .note(let id), .emoji(let id):
+            case .trendline(let id), .horizontalLine(let id), .support(let id), .resistance(let id), .zone(let id), .note(let id), .emoji(let id):
                 return id
             }
         }
@@ -2785,36 +3036,61 @@ struct TradingChartView: View {
         case maintainEditing
     }
 
+    private func drawingStateHasEditableComponents(_ drawingState: MarkerPlacementState) -> Bool {
+        drawingState.components.contains { draft in
+            switch draft.componentType {
+            case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .textNote, .reactionEmoji, .levelSupport, .levelResistance:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     private func beginEditing(target: EditableDrawingHitTarget) {
+        guard let drawingState = activeInteractiveDrawingState else { return }
         switch target {
         case .trendline(let draftId):
-            placementState.beginEditingDrawing(draftId, tool: .trendline)
+            drawingState.beginEditingDrawing(draftId, tool: .trendline)
         case .horizontalLine(let draftId):
-            placementState.beginEditingDrawing(draftId, tool: .horizontalLine)
+            drawingState.beginEditingDrawing(draftId, tool: .horizontalLine)
+        case .support(let draftId):
+            drawingState.beginEditingDrawing(draftId, tool: .support)
+        case .resistance(let draftId):
+            drawingState.beginEditingDrawing(draftId, tool: .resistance)
         case .zone(let draftId):
-            placementState.beginEditingDrawing(draftId, tool: .zone)
+            drawingState.beginEditingDrawing(draftId, tool: .zone)
         case .note(let draftId):
-            placementState.beginEditingDrawing(draftId, tool: .note)
+            drawingState.beginEditingDrawing(draftId, tool: .note)
         case .emoji(let draftId):
-            placementState.beginEditingDrawing(draftId, tool: .emoji)
+            drawingState.beginEditingDrawing(draftId, tool: .emoji)
         }
         liveDrawingGuidePoint = nil
+        clearDrawingGuideDragState()
+        clearDrawingHandleDragState()
+        drawingState.setDrawingPanLocked(false)
         impactFeedback.impactOccurred(intensity: 0.6)
     }
 
     private func lockCurrentDrawingEdits() {
-        placementState.commitDrawingAndExit()
+        guard let drawingState = activeInteractiveDrawingState else { return }
+        drawingState.commitDrawingAndExit()
         liveDrawingGuidePoint = nil
-        isDrawingPanLockActive = false
+        clearDrawingGuideDragState()
+        clearDrawingHandleDragState()
+        drawingState.setDrawingPanLocked(false)
         didEvaluateDrawingPanLockForCurrentDrag = false
-        isDraggingDrawingControlHandle = false
+        drawingState.setSelectedDrawingHandle(nil)
     }
 
     private func shouldUpdateLiveDrawingGuidePoint(with value: DragGesture.Value) -> Bool {
-        guard placementState.activeTool == .draw else { return false }
+        guard let drawingState = activeInteractiveDrawingState else { return false }
+        guard drawingState.drawingSession.isPointPlacementActive else { return false }
+        guard let tool = drawingState.activeDrawingWorkflowTool else { return false }
+        guard MarkerDrawingToolRegistry.definition(for: tool).requiresGuidePlacement else { return false }
 
         let dragDistance = hypot(value.translation.width, value.translation.height)
-        switch placementState.drawingInteractionPhase {
+        switch drawingState.drawingInteractionPhase {
         case .placingFirstPoint, .placingSecondPoint:
             return dragDistance >= drawingGuideDragActivationDistance
         case .idle, .editing, .committing:
@@ -2823,15 +3099,14 @@ struct TradingChartView: View {
     }
 
     private var isDrawingPointPlacementActive: Bool {
-        guard placementState.activeTool == .draw else { return false }
-        return placementState.drawingInteractionPhase == .placingFirstPoint
-            || placementState.drawingInteractionPhase == .placingSecondPoint
+        activeInteractiveDrawingState?.drawingSession.isPointPlacementActive ?? false
     }
 
     private var isEmojiEditingActive: Bool {
-        guard placementState.drawingInteractionPhase == .editing,
-              let editingId = placementState.editingDrawingId,
-              let draft = placementState.components.first(where: { $0.id == editingId }) else {
+        guard let drawingState = activeInteractiveDrawingState,
+              drawingState.drawingInteractionPhase == .editing,
+              let editingId = drawingState.editingDrawingId,
+              let draft = drawingState.components.first(where: { $0.id == editingId }) else {
             return false
         }
         if isStyleOnlyReactionEmojiDraft(draft) {
@@ -2845,78 +3120,63 @@ struct TradingChartView: View {
 
     /// Ensures unfinished drawing interaction state is cleaned up when tools/tabs change.
     private func reconcileDrawingInteractionState() {
-        guard isMarkerPlacementMode else {
-            placementState.resetDrawingInteraction()
+        guard let drawingState = activeInteractiveDrawingState else {
             liveDrawingGuidePoint = nil
-            isDrawingPanLockActive = false
+            clearDrawingGuideDragState()
+            clearDrawingHandleDragState()
+            placementState.setDrawingPanLocked(false)
+            chartDrawingPlacementState.setDrawingPanLocked(false)
             didEvaluateDrawingPanLockForCurrentDrag = false
-            isDraggingDrawingControlHandle = false
+            placementState.setSelectedDrawingHandle(nil)
+            chartDrawingPlacementState.setSelectedDrawingHandle(nil)
             return
         }
 
-        let isDrawTool = placementState.activeTool == .draw
-        let isTrendlineTool = isDrawTool && placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue
-        let isHorizontalLineTool = isDrawTool && placementState.activeSubTool == MarkerToolOption.drawHorizontalLine.rawValue
-        let isZoneTool = isDrawTool && placementState.activeSubTool == MarkerToolOption.drawZone.rawValue
-
-        if !isDrawTool && placementState.drawingInteractionPhase != .editing {
-            placementState.resetDrawingInteraction()
-            liveDrawingGuidePoint = nil
-        } else if (isTrendlineTool || isHorizontalLineTool || isZoneTool) && placementState.drawingInteractionPhase == .idle {
-            placementState.drawingInteractionPhase = .placingFirstPoint
+        if drawingState.drawingInteractionPhase != .editing && drawingState.drawingInteractionPhase != .committing {
+            drawingState.setSelectedDrawingHandle(nil)
         }
 
-        if placementState.drawingInteractionPhase != .editing && placementState.drawingInteractionPhase != .committing {
-            isDraggingDrawingControlHandle = false
-        }
-
-        if placementState.drawingInteractionPhase == .idle || placementState.drawingInteractionPhase == .committing {
-            isDrawingPanLockActive = false
+        if drawingState.drawingInteractionPhase == .idle || drawingState.drawingInteractionPhase == .committing {
+            drawingState.setDrawingPanLocked(false)
             didEvaluateDrawingPanLockForCurrentDrag = false
+            clearDrawingHandleDragState()
+        } else if drawingState.drawingInteractionPhase == .editing,
+                  drawingState.drawingSession.selectedHandle == nil {
+            drawingState.setDrawingPanLocked(false)
         }
     }
 
-    /// Handle a trendline tap with deterministic two-point placement.
-    private func handleTrendlineTap(
+    private func handleDrawingToolTap(
+        tool: MarkerDrawingToolKind,
+        drawingState: MarkerPlacementState,
         price: Double,
         time: Date
     ) {
-        switch placementState.drawingInteractionPhase {
-        case .editing:
-            return
-        case .placingSecondPoint:
-            guard let firstTap = placementState.pendingDrawingFirstPoint else {
-                placementState.drawingInteractionPhase = .placingFirstPoint
-                return
-            }
-            let finalPoint = (time: time, price: price)
-            let finalPayload = MarkerComponentPayload.drawingTrendline(
-                TrendlinePayload(
-                    startTime: firstTap.time,
-                    startPrice: firstTap.price,
-                    endTime: finalPoint.time,
-                    endPrice: finalPoint.price
-                )
-            )
-            guard let draftId = placementState.addDrawingOverlayComponent(.drawingTrendline, payload: finalPayload) else {
-                HapticFeedback.light.trigger()
-                placementState.drawingInteractionPhase = .placingSecondPoint
-                return
-            }
-            placementState.beginDrawingCommit()
-            beginEditing(target: .trendline(draftId))
-        case .placingFirstPoint, .idle, .committing:
-            placementState.setDrawingFirstPoint(time: time, price: price)
-            liveDrawingGuidePoint = (time: time, price: price)
-        }
-    }
+        guard drawingState.drawingInteractionPhase != .editing else { return }
 
-    private func handleHorizontalLineTap(price: Double) {
-        switch placementState.drawingInteractionPhase {
-        case .editing:
-            return
-        case .placingFirstPoint, .placingSecondPoint, .idle, .committing:
-            guard let draftId = placementState.addDrawingOverlayComponent(
+        switch tool {
+        case .trendline:
+            if let firstTap = drawingState.pendingDrawingFirstPoint {
+                let finalPayload = MarkerComponentPayload.drawingTrendline(
+                    TrendlinePayload(
+                        startTime: firstTap.time,
+                        startPrice: firstTap.price,
+                        endTime: time,
+                        endPrice: price
+                    )
+                )
+                guard let draftId = drawingState.addDrawingOverlayComponent(.drawingTrendline, payload: finalPayload) else {
+                    HapticFeedback.light.trigger()
+                    return
+                }
+                drawingState.beginDrawingCommit()
+                beginEditing(target: .trendline(draftId))
+            } else {
+                drawingState.setDrawingFirstPoint(time: time, price: price)
+                liveDrawingGuidePoint = (time: time, price: price)
+            }
+        case .horizontalLine:
+            guard let draftId = drawingState.addDrawingOverlayComponent(
                 .drawingHorizontalLine,
                 payload: .drawingHorizontalLine(
                     HorizontalLinePayload(price: price, label: "Line")
@@ -2925,62 +3185,269 @@ struct TradingChartView: View {
                 HapticFeedback.light.trigger()
                 return
             }
-            placementState.beginDrawingCommit()
+            drawingState.beginDrawingCommit()
             beginEditing(target: .horizontalLine(draftId))
-        }
-    }
-
-    /// Handle a zone tap with deterministic two-point placement.
-    private func handleZoneTap(
-        price: Double,
-        time: Date
-    ) {
-        if let firstTap = placementState.pendingDrawingFirstPoint {
-            let finalPoint = (time: time, price: price)
-            guard let draftId = placementState.addDrawingOverlayComponent(
-                .drawingZone,
-                payload: .drawingZone(ZonePayload(
-                    topPrice: max(firstTap.price, finalPoint.price),
-                    bottomPrice: min(firstTap.price, finalPoint.price),
-                    startTime: firstTap.time,
-                    endTime: finalPoint.time
-                ))
-            ) else {
-                HapticFeedback.light.trigger()
-                placementState.drawingInteractionPhase = .placingSecondPoint
-                return
+        case .support:
+            drawingState.upsertComponent(
+                .levelSupport,
+                payload: .levelSupport(
+                    LevelPayload(
+                        price: price,
+                        label: drawingState.levelLabel(for: .levelSupport, fallback: "Support"),
+                        colorHex: drawingState.component(.levelSupport)?.payload.drawingColorHex
+                    )
+                )
+            )
+            if let draftId = drawingState.component(.levelSupport)?.id {
+                drawingState.beginDrawingCommit()
+                beginEditing(target: .support(draftId))
             }
-            placementState.beginDrawingCommit()
-            beginEditing(target: .zone(draftId))
-        } else {
-            placementState.setDrawingFirstPoint(time: time, price: price)
-            liveDrawingGuidePoint = (time: time, price: price)
+        case .resistance:
+            drawingState.upsertComponent(
+                .levelResistance,
+                payload: .levelResistance(
+                    LevelPayload(
+                        price: price,
+                        label: drawingState.levelLabel(for: .levelResistance, fallback: "Resistance"),
+                        colorHex: drawingState.component(.levelResistance)?.payload.drawingColorHex
+                    )
+                )
+            )
+            if let draftId = drawingState.component(.levelResistance)?.id {
+                drawingState.beginDrawingCommit()
+                beginEditing(target: .resistance(draftId))
+            }
+        case .zone:
+            if let firstTap = drawingState.pendingDrawingFirstPoint {
+                guard let draftId = drawingState.addDrawingOverlayComponent(
+                    .drawingZone,
+                    payload: .drawingZone(
+                        ZonePayload(
+                            topPrice: max(firstTap.price, price),
+                            bottomPrice: min(firstTap.price, price),
+                            startTime: firstTap.time,
+                            endTime: time
+                        )
+                    )
+                ) else {
+                    HapticFeedback.light.trigger()
+                    return
+                }
+                drawingState.beginDrawingCommit()
+                beginEditing(target: .zone(draftId))
+            } else {
+                drawingState.setDrawingFirstPoint(time: time, price: price)
+                liveDrawingGuidePoint = (time: time, price: price)
+            }
+        case .note, .emoji, .rayLine, .verticalLine, .crossLine, .parallelChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
+            break
         }
     }
 
     private func updateLiveDrawingGuidePoint(
-        location: CGPoint,
+        value: DragGesture.Value,
         coordinateSystem: ChartCoordinateSystem
     ) {
-        guard placementState.activeTool == .draw else { return }
-        guard let candleIndex = coordinateSystem.candleIndex(atXPosition: location.x),
-              let timestamp = coordinateSystem.timestamp(forCandleIndex: candleIndex) else {
+        guard let drawingState = activeInteractiveDrawingState,
+              let tool = drawingState.activeDrawingWorkflowTool else { return }
+        let definition = MarkerDrawingToolRegistry.definition(for: tool)
+        guard definition.requiresGuidePlacement else { return }
+
+        let dragOrigin = ensureDrawingGuideDragOrigin(coordinateSystem: coordinateSystem)
+        guard let dragOrigin else {
             return
         }
-        let price = coordinateSystem.price(atYPosition: location.y)
 
-        if placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue,
-           (placementState.drawingInteractionPhase == .placingFirstPoint ||
-            placementState.drawingInteractionPhase == .placingSecondPoint) {
-            liveDrawingGuidePoint = (time: timestamp, price: price)
-        } else if placementState.activeSubTool == MarkerToolOption.drawHorizontalLine.rawValue,
-                  placementState.drawingInteractionPhase == .placingFirstPoint {
-            liveDrawingGuidePoint = (time: timestamp, price: price)
-        } else if placementState.activeSubTool == MarkerToolOption.drawZone.rawValue,
-                  (placementState.drawingInteractionPhase == .placingFirstPoint ||
-                   placementState.pendingDrawingFirstPoint != nil) {
-            liveDrawingGuidePoint = (time: timestamp, price: price)
+        let width = max(1, coordinateSystem.chartSize.width)
+        let translatedX = min(max(0, dragOrigin.screenPoint.x + value.translation.width), width - 1)
+        let translatedY = dragOrigin.screenPoint.y + value.translation.height
+        let candleIndex = coordinateSystem.candleIndex(atXPosition: translatedX)
+        let timestamp = resolvedPlacementTapTime(
+            candleIndex: candleIndex,
+            coordinateSystem: coordinateSystem
+        )
+        let price = coordinateSystem.unclampedPrice(atYPosition: translatedY)
+
+        liveDrawingGuidePoint = (time: timestamp, price: price)
+    }
+
+    private func resolvedPlacementCommitPoint(
+        fallbackLocation: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> (time: Date, price: Double, candleIndex: Int?) {
+        if let drawingState = activeInteractiveDrawingState,
+           let tool = drawingState.activeDrawingWorkflowTool,
+           MarkerDrawingToolRegistry.definition(for: tool).requiresGuidePlacement,
+           let guidePoint = currentDrawingGuidePoint {
+            return (
+                time: guidePoint.time,
+                price: guidePoint.price,
+                candleIndex: coordinateSystem.candleIndex(forTimestamp: guidePoint.time)
+            )
         }
+
+        let tappedCandleIndex = coordinateSystem.candleIndex(atXPosition: fallbackLocation.x)
+        let tappedTime = resolvedPlacementTapTime(
+            candleIndex: tappedCandleIndex,
+            coordinateSystem: coordinateSystem
+        )
+        let tappedPrice = coordinateSystem.unclampedPrice(atYPosition: fallbackLocation.y)
+        return (time: tappedTime, price: tappedPrice, candleIndex: tappedCandleIndex)
+    }
+
+    private func ensureDrawingGuideDragOrigin(
+        coordinateSystem: ChartCoordinateSystem
+    ) -> (guidePoint: MarkerDrawingGuidePoint, screenPoint: CGPoint)? {
+        if let guidePoint = drawingGuideDragStartGuidePoint,
+           let screenPoint = drawingGuideDragStartScreenPoint {
+            return (guidePoint, screenPoint)
+        }
+
+        seedInitialDrawingGuidePointIfNeeded(
+            coordinateSystem: coordinateSystem,
+            size: coordinateSystem.chartSize
+        )
+
+        guard let guidePoint = currentDrawingGuidePoint.map({ MarkerDrawingGuidePoint(time: $0.time, price: $0.price) }),
+              let screenPoint = drawingGuideScreenPoint(
+                for: guidePoint,
+                coordinateSystem: coordinateSystem
+              ) else {
+            return nil
+        }
+
+        drawingGuideDragStartGuidePoint = guidePoint
+        drawingGuideDragStartScreenPoint = screenPoint
+        return (guidePoint, screenPoint)
+    }
+
+    private func drawingGuideScreenPoint(
+        for guidePoint: MarkerDrawingGuidePoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> CGPoint? {
+        let x: CGFloat
+        if let candleIndex = coordinateSystem.candleIndex(forTimestamp: guidePoint.time) {
+            x = coordinateSystem.xCenterPosition(forCandleIndex: candleIndex)
+        } else {
+            x = coordinateSystem.chartSize.width * 0.5
+        }
+        let y = coordinateSystem.yPosition(forPrice: guidePoint.price)
+        return CGPoint(x: x, y: y)
+    }
+
+    private func clearDrawingGuideDragState() {
+        drawingGuideDragStartScreenPoint = nil
+        drawingGuideDragStartGuidePoint = nil
+    }
+
+    @discardableResult
+    private func updateActiveDrawingHandleIfNeeded(
+        with value: DragGesture.Value,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> Bool {
+        guard let drawingState = activeInteractiveDrawingState,
+              drawingState.drawingInteractionPhase == .editing else { return false }
+
+        let dragDistance = hypot(value.translation.width, value.translation.height)
+        guard dragDistance >= drawingHandleDragActivationDistance else { return false }
+        guard let dragOrigin = ensureDrawingHandleDragOrigin(
+            startLocation: value.startLocation,
+            coordinateSystem: coordinateSystem
+        ) else {
+            return false
+        }
+
+        let translatedLocation = CGPoint(
+            x: dragOrigin.screenPoint.x + value.translation.width,
+            y: dragOrigin.screenPoint.y + value.translation.height
+        )
+        guard let draft = drawingState.components.first(where: { $0.id == dragOrigin.draftId }) else {
+            return false
+        }
+
+        drawingState.setSelectedDrawingHandle(dragOrigin.handle)
+
+        switch dragOrigin.handle {
+        case .center:
+            switch draft.payload {
+            case .drawingTrendline:
+                updateTrendlineHandle(
+                    draftId: dragOrigin.draftId,
+                    isStart: true,
+                    location: translatedLocation,
+                    coordinateSystem: coordinateSystem
+                )
+            case .drawingHorizontalLine:
+                updateHorizontalLineHandle(
+                    draftId: dragOrigin.draftId,
+                    location: translatedLocation,
+                    coordinateSystem: coordinateSystem
+                )
+            case .levelSupport:
+                updatePlacementLevelHandle(
+                    componentType: .levelSupport,
+                    draftId: dragOrigin.draftId,
+                    location: translatedLocation,
+                    coordinateSystem: coordinateSystem
+                )
+            case .levelResistance:
+                updatePlacementLevelHandle(
+                    componentType: .levelResistance,
+                    draftId: dragOrigin.draftId,
+                    location: translatedLocation,
+                    coordinateSystem: coordinateSystem
+                )
+            default:
+                return false
+            }
+        case .point(let index):
+            switch draft.payload {
+            case .drawingTrendline:
+                updateTrendlineHandle(
+                    draftId: dragOrigin.draftId,
+                    isStart: index == 0,
+                    location: translatedLocation,
+                    coordinateSystem: coordinateSystem
+                )
+            case .drawingZone:
+                updateZoneHandle(
+                    draftId: dragOrigin.draftId,
+                    isStart: index == 0,
+                    location: translatedLocation,
+                    coordinateSystem: coordinateSystem
+                )
+            default:
+                return false
+            }
+        case .annotation:
+            return false
+        }
+
+        return true
+    }
+
+    private func ensureDrawingHandleDragOrigin(
+        startLocation: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> DrawingHandleDragOrigin? {
+        if let drawingHandleDragOrigin {
+            return drawingHandleDragOrigin
+        }
+
+        guard let handleHit = activeDrawingHandleHitTarget(
+            at: startLocation,
+            coordinateSystem: coordinateSystem,
+            hitRadius: 24
+        ) else {
+            return nil
+        }
+
+        drawingHandleDragOrigin = handleHit
+        return handleHit
+    }
+
+    private func clearDrawingHandleDragState() {
+        drawingHandleDragOrigin = nil
     }
 
     private func resolvedPlacementTapTime(
@@ -3009,17 +3476,13 @@ struct TradingChartView: View {
         coordinateSystem: ChartCoordinateSystem,
         size: CGSize
     ) {
-        guard placementState.activeTool == .draw else { return }
-        guard placementState.drawingInteractionPhase == .placingFirstPoint else { return }
-        guard placementState.pendingDrawingFirstPoint == nil else { return }
+        guard let drawingState = activeInteractiveDrawingState,
+              let tool = drawingState.activeDrawingWorkflowTool else { return }
+        let definition = MarkerDrawingToolRegistry.definition(for: tool)
+        guard definition.requiresGuidePlacement else { return }
+        guard drawingState.drawingInteractionPhase == .placingFirstPoint else { return }
+        guard drawingState.pendingDrawingFirstPoint == nil else { return }
         guard liveDrawingGuidePoint == nil else { return }
-        guard
-            placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue ||
-            placementState.activeSubTool == MarkerToolOption.drawHorizontalLine.rawValue ||
-            placementState.activeSubTool == MarkerToolOption.drawZone.rawValue
-        else {
-            return
-        }
 
         let centerX = size.width * 0.5
         let centerY = size.height * 0.5
@@ -3031,29 +3494,26 @@ struct TradingChartView: View {
     }
 
     private var currentDrawingGuidePoint: (time: Date, price: Double)? {
-        if placementState.activeTool == .draw,
-           placementState.activeSubTool == MarkerToolOption.drawTrendline.rawValue {
-            if placementState.drawingInteractionPhase == .placingSecondPoint {
-                return liveDrawingGuidePoint ?? placementState.pendingDrawingFirstPoint
-            }
-            if placementState.drawingInteractionPhase == .placingFirstPoint {
+        guard let drawingState = activeInteractiveDrawingState,
+              let tool = drawingState.activeDrawingWorkflowTool else { return nil }
+        let definition = MarkerDrawingToolRegistry.definition(for: tool)
+        guard definition.requiresGuidePlacement else { return nil }
+
+        switch drawingState.drawingInteractionPhase {
+        case .placingFirstPoint:
+            return liveDrawingGuidePoint
+        case .placingSecondPoint:
+            return liveDrawingGuidePoint ?? drawingState.pendingDrawingFirstPoint
+        case .editing:
+            if drawingState.drawingSession.selectedHandle != nil,
+               tool.group == .pointSequence {
                 return liveDrawingGuidePoint
             }
-        }
-        if placementState.activeTool == .draw,
-           placementState.activeSubTool == MarkerToolOption.drawHorizontalLine.rawValue,
-           placementState.drawingInteractionPhase == .placingFirstPoint {
-            return liveDrawingGuidePoint
-        }
-        if placementState.activeTool == .draw,
-           placementState.activeSubTool == MarkerToolOption.drawZone.rawValue,
-           placementState.drawingInteractionPhase == .placingFirstPoint {
-            return liveDrawingGuidePoint
-        }
-        if placementState.activeTool == .draw,
-           placementState.activeSubTool == MarkerToolOption.drawZone.rawValue,
-           let firstTap = placementState.pendingDrawingFirstPoint {
-            return liveDrawingGuidePoint ?? firstTap
+            fallthrough
+        case .idle, .committing:
+            if let firstTap = drawingState.pendingDrawingFirstPoint {
+                return liveDrawingGuidePoint ?? firstTap
+            }
         }
         return nil
     }
@@ -3063,15 +3523,15 @@ struct TradingChartView: View {
         geometry: GeometryProxy,
         coordinateSystem: ChartCoordinateSystem
     ) -> some View {
-        if placementState.activeTool == .draw,
-           placementState.drawingInteractionPhase == .editing,
-           let editingDraftId = placementState.editingDrawingId {
+        if let drawingState = activeInteractiveDrawingState,
+           drawingState.drawingInteractionPhase == .editing,
+           let editingDraftId = drawingState.editingDrawingId {
             ZStack {
-                ForEach(placementState.drawingOverlayDrafts) { draft in
+                ForEach(drawingState.components) { draft in
                     if draft.id == editingDraftId {
                         switch draft.payload {
                         case .drawingTrendline(let payload):
-                            let trendlineColor = placementState.drawingColor(
+                            let trendlineColor = drawingState.drawingColor(
                                 for: draft.id,
                                 fallback: RLComponentType.drawingTrendline.color
                             )
@@ -3082,6 +3542,7 @@ struct TradingChartView: View {
                                 ) {
                                     drawingHandleView(
                                         at: centerPoint,
+                                        handle: .center,
                                         color: trendlineColor,
                                         size: 24
                                     ) { location in
@@ -3101,6 +3562,7 @@ struct TradingChartView: View {
                                 ) {
                                     drawingHandleView(
                                         at: startPoint,
+                                        handle: .point(0),
                                         color: trendlineColor,
                                         size: 24
                                     ) { location in
@@ -3119,6 +3581,7 @@ struct TradingChartView: View {
                                 ) {
                                     drawingHandleView(
                                         at: endPoint,
+                                        handle: .point(1),
                                         color: trendlineColor,
                                         size: 24
                                     ) { location in
@@ -3132,7 +3595,7 @@ struct TradingChartView: View {
                                 }
                             }
                         case .drawingHorizontalLine(let payload):
-                            let lineColor = placementState.drawingColor(
+                            let lineColor = drawingState.drawingColor(
                                 for: draft.id,
                                 fallback: RLComponentType.drawingHorizontalLine.color
                             )
@@ -3140,19 +3603,53 @@ struct TradingChartView: View {
                                 payload: payload,
                                 coordinateSystem: coordinateSystem
                             )
-                            drawingHandleView(
+                            horizontalGripHandleView(
                                 at: handlePoint,
                                 color: lineColor,
-                                size: 24
-                            ) { location in
-                                updateHorizontalLineHandle(
-                                    draftId: draft.id,
-                                    location: location,
-                                    coordinateSystem: coordinateSystem
-                                )
-                            }
+                                isActive: drawingState.drawingSession.selectedHandle != nil
+                            )
+                        case .levelSupport(let payload):
+                            let supportColor = drawingState.drawingColor(
+                                for: draft.id,
+                                fallback: RLComponentType.levelSupport.color
+                            )
+                            let handlePoint = horizontalLineHandlePoint(
+                                payload: HorizontalLinePayload(
+                                    price: payload.price,
+                                    label: payload.label,
+                                    colorHex: payload.colorHex,
+                                    lineStyle: payload.lineStyle,
+                                    lineWidth: payload.lineWidth
+                                ),
+                                coordinateSystem: coordinateSystem
+                            )
+                            horizontalGripHandleView(
+                                at: handlePoint,
+                                color: supportColor,
+                                isActive: drawingState.drawingSession.selectedHandle != nil
+                            )
+                        case .levelResistance(let payload):
+                            let resistanceColor = drawingState.drawingColor(
+                                for: draft.id,
+                                fallback: RLComponentType.levelResistance.color
+                            )
+                            let handlePoint = horizontalLineHandlePoint(
+                                payload: HorizontalLinePayload(
+                                    price: payload.price,
+                                    label: payload.label,
+                                    colorHex: payload.colorHex,
+                                    lineStyle: payload.lineStyle,
+                                    lineWidth: payload.lineWidth
+                                ),
+                                coordinateSystem: coordinateSystem
+                            )
+                            horizontalGripHandleView(
+                                at: handlePoint,
+                                color: resistanceColor,
+                                isActive: drawingState.drawingSession.selectedHandle != nil
+                            )
                         case .drawingZone(let payload):
-                            let zoneColor = placementState.drawingColor(
+                            let zoneColor = drawingState.drawingColor(
                                 for: draft.id,
                                 fallback: RLComponentType.drawingZone.color
                             )
@@ -3164,6 +3661,7 @@ struct TradingChartView: View {
                                ) {
                                 drawingHandleView(
                                     at: topLeft,
+                                    handle: .point(0),
                                     color: zoneColor,
                                     size: 24
                                 ) { location in
@@ -3183,6 +3681,7 @@ struct TradingChartView: View {
                                ) {
                                 drawingHandleView(
                                     at: bottomRight,
+                                    handle: .point(1),
                                     color: zoneColor,
                                     size: 24
                                 ) { location in
@@ -3221,31 +3720,53 @@ struct TradingChartView: View {
         )
     }
 
+    @ViewBuilder
     private func drawingHandleView(
         at point: CGPoint,
+        handle _: MarkerDrawingHandle,
         color: Color,
         size: CGFloat,
-        onChanged: @escaping (CGPoint) -> Void
+        onChanged _: @escaping (CGPoint) -> Void
     ) -> some View {
-        Circle()
-            .fill(AppColors.surfaceBlack85)
-            .overlay(
-                Circle()
-                    .stroke(color.opacity(0.9), lineWidth: 1.4)
-            )
-            .frame(width: size, height: size)
-            .position(point)
-            .contentShape(Circle())
-            .highPriorityGesture(
-                DragGesture(minimumDistance: drawingHandleDragActivationDistance)
-                    .onChanged { value in
-                        isDraggingDrawingControlHandle = true
-                        onChanged(value.location)
+        if point.x.isFinite, point.y.isFinite {
+            Circle()
+                .fill(AppColors.surfaceBlack85)
+                .overlay(
+                    Circle()
+                        .stroke(color.opacity(0.9), lineWidth: 1.4)
+                )
+                .frame(width: size, height: size)
+                .position(point)
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder
+    private func horizontalGripHandleView(
+        at point: CGPoint,
+        color: Color,
+        isActive: Bool
+    ) -> some View {
+        if point.x.isFinite, point.y.isFinite {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(isActive ? 0.5 : 0.32))
+                .frame(width: 40, height: 20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(color.opacity(0.58), lineWidth: 1)
+                )
+                .overlay(
+                    VStack(spacing: 2) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Rectangle()
+                                .fill(AppColors.surfaceWhite60)
+                                .frame(width: 20, height: 1)
+                        }
                     }
-                    .onEnded { _ in
-                        isDraggingDrawingControlHandle = false
-                    }
-            )
+                )
+                .position(point)
+                .allowsHitTesting(false)
+        }
     }
 
     private func horizontalTrendlineCenterHandlePoint(
@@ -3286,7 +3807,8 @@ struct TradingChartView: View {
         location: CGPoint,
         coordinateSystem: ChartCoordinateSystem
     ) {
-        guard let draft = placementState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
+        guard let drawingState = activeInteractiveDrawingState,
+              let draft = drawingState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
               case let .drawingTrendline(payload) = draft.payload else {
             return
         }
@@ -3297,7 +3819,7 @@ struct TradingChartView: View {
             coordinateSystem: coordinateSystem,
             fallback: fallbackTime
         )
-        let resolvedPrice = coordinateSystem.price(atYPosition: location.y)
+        let resolvedPrice = coordinateSystem.unclampedPrice(atYPosition: location.y)
 
         let updatedPayload: TrendlinePayload
         if isHorizontallyLockedTrendline(payload) {
@@ -3306,7 +3828,9 @@ struct TradingChartView: View {
                 startPrice: resolvedPrice,
                 endTime: payload.endTime,
                 endPrice: resolvedPrice,
-                colorHex: payload.colorHex
+                colorHex: payload.colorHex,
+                lineStyle: payload.lineStyle,
+                lineWidth: payload.lineWidth
             )
         } else if isStart {
             updatedPayload = TrendlinePayload(
@@ -3314,7 +3838,9 @@ struct TradingChartView: View {
                 startPrice: resolvedPrice,
                 endTime: payload.endTime,
                 endPrice: payload.endPrice,
-                colorHex: payload.colorHex
+                colorHex: payload.colorHex,
+                lineStyle: payload.lineStyle,
+                lineWidth: payload.lineWidth
             )
         } else {
             updatedPayload = TrendlinePayload(
@@ -3322,11 +3848,14 @@ struct TradingChartView: View {
                 startPrice: payload.startPrice,
                 endTime: resolvedTime,
                 endPrice: resolvedPrice,
-                colorHex: payload.colorHex
+                colorHex: payload.colorHex,
+                lineStyle: payload.lineStyle,
+                lineWidth: payload.lineWidth
             )
         }
 
-        placementState.updateComponent(id: draftId, payload: .drawingTrendline(updatedPayload))
+        liveDrawingGuidePoint = (time: resolvedTime, price: resolvedPrice)
+        drawingState.updateComponent(id: draftId, payload: .drawingTrendline(updatedPayload))
     }
 
     private func isHorizontallyLockedTrendline(_ payload: TrendlinePayload) -> Bool {
@@ -3338,22 +3867,72 @@ struct TradingChartView: View {
         location: CGPoint,
         coordinateSystem: ChartCoordinateSystem
     ) {
-        guard let draft = placementState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
+        guard let drawingState = activeInteractiveDrawingState,
+              let draft = drawingState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
               case let .drawingHorizontalLine(payload) = draft.payload else {
             return
         }
 
-        let resolvedPrice = coordinateSystem.price(atYPosition: location.y)
-        placementState.updateComponent(
+        let resolvedPrice = coordinateSystem.unclampedPrice(atYPosition: location.y)
+        liveDrawingGuidePoint = nil
+        drawingState.updateComponent(
             id: draftId,
             payload: .drawingHorizontalLine(
                 HorizontalLinePayload(
                     price: resolvedPrice,
                     label: payload.label,
-                    colorHex: payload.colorHex
+                    colorHex: payload.colorHex,
+                    lineStyle: payload.lineStyle,
+                    lineWidth: payload.lineWidth
                 )
             )
         )
+    }
+
+    private func updatePlacementLevelHandle(
+        componentType: RLComponentType,
+        draftId: UUID,
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
+        guard let drawingState = activeInteractiveDrawingState,
+              let draft = drawingState.components.first(where: { $0.id == draftId }) else {
+            return
+        }
+
+        let resolvedPrice = coordinateSystem.unclampedPrice(atYPosition: location.y)
+        liveDrawingGuidePoint = nil
+
+        switch draft.payload {
+        case let .levelSupport(payload) where componentType == .levelSupport:
+            drawingState.updateComponent(
+                id: draftId,
+                payload: .levelSupport(
+                    LevelPayload(
+                        price: resolvedPrice,
+                        label: payload.label,
+                        colorHex: payload.colorHex,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .levelResistance(payload) where componentType == .levelResistance:
+            drawingState.updateComponent(
+                id: draftId,
+                payload: .levelResistance(
+                    LevelPayload(
+                        price: resolvedPrice,
+                        label: payload.label,
+                        colorHex: payload.colorHex,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        default:
+            break
+        }
     }
 
     private func updateZoneHandle(
@@ -3362,12 +3941,13 @@ struct TradingChartView: View {
         location: CGPoint,
         coordinateSystem: ChartCoordinateSystem
     ) {
-        guard let draft = placementState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
+        guard let drawingState = activeInteractiveDrawingState,
+              let draft = drawingState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
               case let .drawingZone(payload) = draft.payload else {
             return
         }
 
-        let resolvedPrice = coordinateSystem.price(atYPosition: location.y)
+        let resolvedPrice = coordinateSystem.unclampedPrice(atYPosition: location.y)
         let fallbackTime = isStart ? payload.startTime : payload.endTime
         let resolvedTime = resolveHandleTime(
             locationX: location.x,
@@ -3382,7 +3962,9 @@ struct TradingChartView: View {
                 bottomPrice: min(resolvedPrice, payload.bottomPrice),
                 startTime: resolvedTime,
                 endTime: payload.endTime,
-                colorHex: payload.colorHex
+                colorHex: payload.colorHex,
+                lineStyle: payload.lineStyle,
+                lineWidth: payload.lineWidth
             )
         } else {
             updatedPayload = ZonePayload(
@@ -3390,11 +3972,14 @@ struct TradingChartView: View {
                 bottomPrice: min(payload.topPrice, resolvedPrice),
                 startTime: payload.startTime,
                 endTime: resolvedTime,
-                colorHex: payload.colorHex
+                colorHex: payload.colorHex,
+                lineStyle: payload.lineStyle,
+                lineWidth: payload.lineWidth
             )
         }
 
-        placementState.updateComponent(id: draftId, payload: .drawingZone(updatedPayload))
+        liveDrawingGuidePoint = (time: resolvedTime, price: resolvedPrice)
+        drawingState.updateComponent(id: draftId, payload: .drawingZone(updatedPayload))
     }
 
     private func resolveHandleTime(
@@ -3409,17 +3994,19 @@ struct TradingChartView: View {
         return timestamp
     }
 
-    private func isTapOnActiveDrawingHandle(
-        location: CGPoint,
-        coordinateSystem: ChartCoordinateSystem
-    ) -> Bool {
-        guard placementState.drawingInteractionPhase == .editing,
-              let editingId = placementState.editingDrawingId,
-              let draft = placementState.drawingOverlayDrafts.first(where: { $0.id == editingId }) else {
-            return false
+    private func activeDrawingHandleHitTarget(
+        at location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem,
+        hitRadius: CGFloat
+    ) -> DrawingHandleDragOrigin? {
+        guard let drawingState = activeInteractiveDrawingState,
+              drawingState.drawingInteractionPhase == .editing,
+              let editingId = drawingState.editingDrawingId,
+              let draft = drawingState.components.first(where: { $0.id == editingId }) else {
+            return nil
         }
 
-        let hitRadius: CGFloat = 16
+        let candidates: [(handle: MarkerDrawingHandle, point: CGPoint)]
 
         switch draft.payload {
         case .drawingTrendline(let payload):
@@ -3428,53 +4015,140 @@ struct TradingChartView: View {
                    payload: payload,
                    coordinateSystem: coordinateSystem
                ) {
-                return hypot(location.x - centerPoint.x, location.y - centerPoint.y) <= hitRadius
-            }
-            let points = [
-                drawingHandlePoint(
-                    time: payload.startTime,
-                    price: payload.startPrice,
-                    coordinateSystem: coordinateSystem
-                ),
-                drawingHandlePoint(
-                    time: payload.endTime,
-                    price: payload.endPrice,
-                    coordinateSystem: coordinateSystem
-                ),
-            ]
-            return points.compactMap { $0 }.contains { point in
-                hypot(location.x - point.x, location.y - point.y) <= hitRadius
+                candidates = [(.center, centerPoint)]
+            } else {
+                candidates = [
+                    drawingHandlePoint(
+                        time: payload.startTime,
+                        price: payload.startPrice,
+                        coordinateSystem: coordinateSystem
+                    ).map { (.point(0), $0) },
+                    drawingHandlePoint(
+                        time: payload.endTime,
+                        price: payload.endPrice,
+                        coordinateSystem: coordinateSystem
+                    ).map { (.point(1), $0) },
+                ].compactMap { $0 }
             }
 
         case .drawingHorizontalLine(let payload):
-            let point = horizontalLineHandlePoint(
-                payload: payload,
-                coordinateSystem: coordinateSystem
-            )
-            return hypot(location.x - point.x, location.y - point.y) <= hitRadius
+            candidates = [
+                (
+                    .center,
+                    horizontalLineHandlePoint(
+                        payload: payload,
+                        coordinateSystem: coordinateSystem
+                    )
+                )
+            ]
+
+        case .levelSupport(let payload), .levelResistance(let payload):
+            candidates = [
+                (
+                    .center,
+                    horizontalLineHandlePoint(
+                        payload: HorizontalLinePayload(
+                            price: payload.price,
+                            label: payload.label,
+                            colorHex: payload.colorHex,
+                            lineStyle: payload.lineStyle,
+                            lineWidth: payload.lineWidth
+                        ),
+                        coordinateSystem: coordinateSystem
+                    )
+                )
+            ]
 
         case .drawingZone(let payload):
-            let startPoint: CGPoint? = payload.startTime.flatMap { startTime in
-                drawingHandlePoint(
-                    time: startTime,
-                    price: payload.topPrice,
-                    coordinateSystem: coordinateSystem
-                )
-            }
-            let endPoint: CGPoint? = payload.endTime.flatMap { endTime in
-                drawingHandlePoint(
-                    time: endTime,
-                    price: payload.bottomPrice,
-                    coordinateSystem: coordinateSystem
-                )
-            }
-            return [startPoint, endPoint].compactMap { $0 }.contains { point in
-                hypot(location.x - point.x, location.y - point.y) <= hitRadius
-            }
+            candidates = [
+                payload.startTime.flatMap { startTime in
+                    drawingHandlePoint(
+                        time: startTime,
+                        price: payload.topPrice,
+                        coordinateSystem: coordinateSystem
+                    ).map { (.point(0), $0) }
+                },
+                payload.endTime.flatMap { endTime in
+                    drawingHandlePoint(
+                        time: endTime,
+                        price: payload.bottomPrice,
+                        coordinateSystem: coordinateSystem
+                    ).map { (.point(1), $0) }
+                },
+            ].compactMap { $0 }
 
         default:
-            return false
+            return nil
         }
+
+        return candidates
+            .map { candidate in
+                (
+                    origin: DrawingHandleDragOrigin(
+                        draftId: editingId,
+                        handle: candidate.handle,
+                        screenPoint: candidate.point
+                    ),
+                    distance: hypot(location.x - candidate.point.x, location.y - candidate.point.y)
+                )
+            }
+            .filter { $0.distance <= hitRadius }
+            .min { $0.distance < $1.distance }?
+            .origin
+    }
+
+    private func isTapOnActiveDrawingHandle(
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> Bool {
+        activeDrawingHandleHitTarget(
+            at: location,
+            coordinateSystem: coordinateSystem,
+            hitRadius: 18
+        ) != nil
+    }
+
+    private func distanceFromPoint(_ point: CGPoint, toSegmentStart start: CGPoint, end: CGPoint) -> CGFloat {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+        guard lengthSquared > 0 else {
+            return hypot(point.x - start.x, point.y - start.y)
+        }
+
+        let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+        let projection = CGPoint(x: start.x + t * dx, y: start.y + t * dy)
+        return hypot(point.x - projection.x, point.y - projection.y)
+    }
+
+    private func expandedZoneHitRect(
+        payload: ZonePayload,
+        coordinateSystem: ChartCoordinateSystem,
+        inset: CGFloat
+    ) -> CGRect? {
+        guard
+            let startTime = payload.startTime,
+            let endTime = payload.endTime,
+            let startPoint = drawingHandlePoint(
+                time: startTime,
+                price: payload.topPrice,
+                coordinateSystem: coordinateSystem
+            ),
+            let endPoint = drawingHandlePoint(
+                time: endTime,
+                price: payload.bottomPrice,
+                coordinateSystem: coordinateSystem
+            )
+        else {
+            return nil
+        }
+
+        return CGRect(
+            x: min(startPoint.x, endPoint.x),
+            y: min(startPoint.y, endPoint.y),
+            width: abs(endPoint.x - startPoint.x),
+            height: abs(endPoint.y - startPoint.y)
+        ).insetBy(dx: -inset, dy: -inset)
     }
 
     private func hitTestEditableDrawing(
@@ -3482,30 +4156,39 @@ struct TradingChartView: View {
         coordinateSystem: ChartCoordinateSystem,
         intent: DrawingHitIntent = .reenterEditing
     ) -> EditableDrawingHitTarget? {
+        guard let drawingState = activeInteractiveDrawingState else { return nil }
+
         let handleHitRadius: CGFloat
         let noteHitRadius: CGFloat
         let emojiHitRadius: CGFloat
+        let lineBodyHitRadius: CGFloat
 
         switch intent {
         case .reenterEditing:
             handleHitRadius = 18
             noteHitRadius = 32
             emojiHitRadius = 28
+            lineBodyHitRadius = 14
         case .maintainEditing:
-            handleHitRadius = 24
+            handleHitRadius = 18
             noteHitRadius = 42
             emojiHitRadius = 36
+            lineBodyHitRadius = 14
         }
 
-        if placementState.drawingInteractionPhase == .editing,
+        if drawingState.drawingInteractionPhase == .editing,
            isTapOnActiveDrawingHandle(location: location, coordinateSystem: coordinateSystem),
-           let editingId = placementState.editingDrawingId,
-           let editingDraft = placementState.components.first(where: { $0.id == editingId }) {
+           let editingId = drawingState.editingDrawingId,
+           let editingDraft = drawingState.components.first(where: { $0.id == editingId }) {
             switch editingDraft.payload {
             case .drawingTrendline:
                 return .trendline(editingId)
             case .drawingHorizontalLine:
                 return .horizontalLine(editingId)
+            case .levelSupport:
+                return .support(editingId)
+            case .levelResistance:
+                return .resistance(editingId)
             case .drawingZone:
                 return .zone(editingId)
             case .note:
@@ -3519,7 +4202,7 @@ struct TradingChartView: View {
             }
         }
 
-        for draft in placementState.components.reversed() {
+        for draft in drawingState.components.reversed() {
             if isStyleOnlyReactionEmojiDraft(draft) {
                 continue
             }
@@ -3557,6 +4240,9 @@ struct TradingChartView: View {
                 if nearStart || nearEnd {
                     return .trendline(draft.id)
                 }
+                if distanceFromPoint(location, toSegmentStart: startPoint, end: endPoint) <= lineBodyHitRadius {
+                    return .trendline(draft.id)
+                }
 
             case .drawingHorizontalLine(let payload):
                 if intent == .maintainEditing {
@@ -3568,6 +4254,51 @@ struct TradingChartView: View {
                 )
                 if hypot(location.x - handlePoint.x, location.y - handlePoint.y) <= handleHitRadius {
                     return .horizontalLine(draft.id)
+                }
+                if abs(location.y - handlePoint.y) <= lineBodyHitRadius {
+                    return .horizontalLine(draft.id)
+                }
+
+            case .levelSupport(let payload):
+                if intent == .maintainEditing {
+                    continue
+                }
+                let handlePoint = horizontalLineHandlePoint(
+                    payload: HorizontalLinePayload(
+                        price: payload.price,
+                        label: payload.label,
+                        colorHex: payload.colorHex,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    ),
+                    coordinateSystem: coordinateSystem
+                )
+                if hypot(location.x - handlePoint.x, location.y - handlePoint.y) <= handleHitRadius {
+                    return .support(draft.id)
+                }
+                if abs(location.y - handlePoint.y) <= lineBodyHitRadius {
+                    return .support(draft.id)
+                }
+
+            case .levelResistance(let payload):
+                if intent == .maintainEditing {
+                    continue
+                }
+                let handlePoint = horizontalLineHandlePoint(
+                    payload: HorizontalLinePayload(
+                        price: payload.price,
+                        label: payload.label,
+                        colorHex: payload.colorHex,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    ),
+                    coordinateSystem: coordinateSystem
+                )
+                if hypot(location.x - handlePoint.x, location.y - handlePoint.y) <= handleHitRadius {
+                    return .resistance(draft.id)
+                }
+                if abs(location.y - handlePoint.y) <= lineBodyHitRadius {
+                    return .resistance(draft.id)
                 }
 
             case .drawingZone(let payload):
@@ -3593,6 +4324,14 @@ struct TradingChartView: View {
                 if [startPoint, endPoint].compactMap({ $0 }).contains(where: { point in
                     hypot(location.x - point.x, location.y - point.y) <= handleHitRadius
                 }) {
+                    return .zone(draft.id)
+                }
+                if let zoneRect = expandedZoneHitRect(
+                    payload: payload,
+                    coordinateSystem: coordinateSystem,
+                    inset: lineBodyHitRadius
+                ),
+                   zoneRect.contains(location) {
                     return .zone(draft.id)
                 }
 
@@ -3631,22 +4370,27 @@ struct TradingChartView: View {
     }
 
     private func isStyleOnlyReactionEmojiDraft(_ draft: MarkerComponentDraft) -> Bool {
-        placementState.intent == .reaction && draft.componentType == .reactionEmoji
+        activeInteractiveDrawingState?.intent == .reaction && draft.componentType == .reactionEmoji
     }
 
     private func shouldLockChartPanForDrawingGesture(
         at startLocation: CGPoint,
         coordinateSystem: ChartCoordinateSystem
     ) -> Bool {
-        guard isMarkerPlacementMode else { return false }
+        guard let drawingState = activeInteractiveDrawingState else { return false }
         let drawingContextEnabled =
-            placementState.activeTool == .draw
-            || placementState.drawingInteractionPhase != .idle
+            drawingState.activeDrawingWorkflowTool != nil
+            || drawingState.drawingInteractionPhase != .idle
+            || drawingStateHasEditableComponents(drawingState)
         guard drawingContextEnabled else { return false }
 
-        guard placementState.drawingInteractionPhase == .editing else { return false }
+        guard drawingState.drawingInteractionPhase == .editing else { return false }
 
-        if isTapOnActiveDrawingHandle(location: startLocation, coordinateSystem: coordinateSystem) {
+        if activeDrawingHandleHitTarget(
+            at: startLocation,
+            coordinateSystem: coordinateSystem,
+            hitRadius: 24
+        ) != nil {
             return true
         }
 
@@ -3660,9 +4404,10 @@ struct TradingChartView: View {
         location: CGPoint,
         coordinateSystem: ChartCoordinateSystem
     ) -> Bool {
-        guard placementState.drawingInteractionPhase == .editing,
-              let editingId = placementState.editingDrawingId,
-              let draft = placementState.components.first(where: { $0.id == editingId }) else {
+        guard let drawingState = activeInteractiveDrawingState,
+              drawingState.drawingInteractionPhase == .editing,
+              let editingId = drawingState.editingDrawingId,
+              let draft = drawingState.components.first(where: { $0.id == editingId }) else {
             return false
         }
 
@@ -3701,7 +4446,7 @@ struct TradingChartView: View {
         coordinateSystem: ChartCoordinateSystem
     ) -> CGPoint? {
         guard
-            let anchor = placementState.anchorDraft,
+            let anchor = activeInteractiveDrawingState?.anchorDraft,
             let anchorPrice = anchor.payload.levelPrice
         else {
             return nil
@@ -3744,18 +4489,18 @@ struct TradingChartView: View {
                     return
                 }
 
-                if isMarkerPlacementMode {
+                if let drawingState = activeInteractiveDrawingState {
                     if isDrawingPointPlacementActive || isEmojiEditingActive {
-                        isDrawingPanLockActive = true
+                        drawingState.setDrawingPanLocked(true)
                         return
                     }
 
                     if !didEvaluateDrawingPanLockForCurrentDrag {
                         didEvaluateDrawingPanLockForCurrentDrag = true
-                        isDrawingPanLockActive = shouldLockChartPanForDrawingGesture(
+                        drawingState.setDrawingPanLocked(shouldLockChartPanForDrawingGesture(
                             at: value.startLocation,
                             coordinateSystem: coordinateSystem
-                        )
+                        ))
                     }
 
                     if isDrawingPanLockActive {
@@ -3799,7 +4544,7 @@ struct TradingChartView: View {
                 } else if isDrawingPointPlacementActive || isEmojiEditingActive {
                     lastDragTranslation = .zero
                     dragState = .zero
-                    isDrawingPanLockActive = false
+                    activeInteractiveDrawingState?.setDrawingPanLocked(false)
                     didEvaluateDrawingPanLockForCurrentDrag = false
                     return
                 } else if !isDrawingPanLockActive &&
@@ -3821,7 +4566,7 @@ struct TradingChartView: View {
                 
                 lastDragTranslation = .zero
                 dragState = .zero
-                isDrawingPanLockActive = false
+                activeInteractiveDrawingState?.setDrawingPanLocked(false)
                 didEvaluateDrawingPanLockForCurrentDrag = false
                 isChartPanning = false
                 syncSelectedMarkerGuideState(
@@ -3985,8 +4730,12 @@ struct TradingChartView: View {
     
     // MARK: - Axis Overlays
 
-    private var axisPanelBackground: Color {
+    private var xAxisPanelBackground: Color {
         AppColors.systemBlack
+    }
+
+    private var yAxisPanelBaseBackground: Color {
+        AppColors.chartPanelBackgroundInset
     }
 
     /// True when the bottom panel currently renders its own x-axis label strip.
@@ -3997,11 +4746,13 @@ struct TradingChartView: View {
     private var yAxisPanelBackground: some View {
         ZStack {
             Rectangle()
-                .fill(axisPanelBackground.opacity(0.92))
+                .fill(yAxisPanelBaseBackground)
+            Rectangle()
+                .fill(AppColors.surfaceBlack50.opacity(0.55))
             LinearGradient(
                 colors: [
-                    AppColors.surfaceWhite04.opacity(0.16),
-                    AppColors.surfaceWhite0015.opacity(0.08),
+                    AppColors.surfaceWhite04.opacity(0.18),
+                    AppColors.surfaceWhite0015.opacity(0.06),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -4023,25 +4774,246 @@ struct TradingChartView: View {
                 }
 
                 Rectangle()
-                    .fill(axisPanelBackground)
+                    .fill(xAxisPanelBackground)
                     .frame(height: bottomAreaHeight)
                     .edgesIgnoringSafeArea(.bottom)
             }
 
             if shouldShowMainXAxisLabels,
                !crosshairManager.isActive,
+               !isInteractiveDrawingSessionActive,
                gestureState.markerPlacementGuide.isActive,
-               let timestamp = gestureState.markerPlacementGuide.timestamp {
+               let timestamp = gestureState.markerPlacementGuide.timestamp,
+               gestureState.markerPlacementGuide.x.isFinite {
                 MarkerXAxisTimeIndicator(
                     timestamp: timestamp,
                     xPosition: gestureState.markerPlacementGuide.x,
                     chartHeight: geometry.size.height,
                     timeframe: chartViewModel.currentTimeframe,
+                    showsMainXAxisLabels: shouldShowMainXAxisLabels,
                     timeZone: axisTimeZone
                 )
             }
         }
         .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func horizontalDrawingAxisLabelsOverlay(
+        geometry: GeometryProxy,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> some View {
+        let items = combinedHorizontalAxisPriceLabels()
+        let plotHeight = max(
+            0,
+            geometry.size.height
+                - xAxisReservedBandHeight(
+                    chartHeight: geometry.size.height,
+                    includeLabelStrip: !panelOwnsBottomXAxisStrip
+                )
+        )
+
+        if !items.isEmpty {
+            ZStack {
+                ForEach(items) { item in
+                    let y = coordinateSystem.yPosition(forPrice: item.price)
+                    if y.isFinite, y >= 0, y <= plotHeight {
+                        horizontalAxisPriceLabelView(
+                            label: item.text,
+                            price: item.price,
+                            color: item.color
+                        )
+                        .position(
+                            x: geometry.size.width - (yAxisWidth * 0.5),
+                            y: y
+                        )
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func drawingGuideAxisOverlay(
+        geometry: GeometryProxy,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> AnyView {
+        guard shouldShowDrawingGuideAxisIndicators,
+              let guidePoint = currentDrawingGuidePoint else {
+            return AnyView(EmptyView())
+        }
+
+        let guideY = coordinateSystem.yPosition(forPrice: guidePoint.price)
+        guard guideY.isFinite else {
+            return AnyView(EmptyView())
+        }
+
+        let guideX: CGFloat
+        if let guideIndex = coordinateSystem.candleIndex(forTimestamp: guidePoint.time) {
+            guideX = coordinateSystem.xCenterPosition(forCandleIndex: guideIndex)
+        } else {
+            guideX = geometry.size.width * 0.5
+        }
+        guard guideX.isFinite else {
+            return AnyView(EmptyView())
+        }
+
+        let timeLabelY = CrosshairTimeLabel.mainChartCenterY(
+            chartHeight: geometry.size.height,
+            showsMainXAxisLabels: !panelOwnsBottomXAxisStrip
+        )
+        guard timeLabelY.isFinite else {
+            return AnyView(EmptyView())
+        }
+
+        return AnyView(
+            ZStack {
+                drawingGuidePriceLabel(price: guidePoint.price)
+                .position(x: geometry.size.width - 35, y: guideY)
+
+                CrosshairTimeLabel(
+                    timestamp: guidePoint.time,
+                    timeframe: chartViewModel.currentTimeframe,
+                    timeZone: axisTimeZone
+                )
+                .position(x: guideX, y: timeLabelY)
+            }
+            .allowsHitTesting(false)
+        )
+    }
+
+    private func drawingGuidePriceLabel(price: Double) -> some View {
+        Text(chartData.formatPrice(price))
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .foregroundColor(.black)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(AppColors.statusHighlight95)
+                    .shadow(color: AppColors.statusHighlight40, radius: 3, x: 0, y: 1)
+            )
+    }
+
+    private func combinedHorizontalAxisPriceLabels() -> [HorizontalAxisPriceLabelItem] {
+        var items: [HorizontalAxisPriceLabelItem] = []
+
+        if let drawingState = activeInteractiveDrawingState {
+            items.append(contentsOf: horizontalAxisPriceLabels(from: drawingState))
+        }
+
+        if !markerOverlayComponents.isEmpty {
+            items.append(contentsOf: horizontalAxisPriceLabels(from: markerOverlayComponents))
+        }
+
+        var seen = Set<String>()
+        return items.filter { item in
+            seen.insert(item.id).inserted
+        }
+    }
+
+    private func horizontalAxisPriceLabels(
+        from state: MarkerPlacementState
+    ) -> [HorizontalAxisPriceLabelItem] {
+        state.components.compactMap { draft in
+            switch draft.payload {
+            case let .drawingHorizontalLine(payload):
+                return HorizontalAxisPriceLabelItem(
+                    id: draft.id.uuidString,
+                    text: resolvedHorizontalAxisLabel(payload.label, fallback: "Line"),
+                    price: payload.price,
+                    color: state.drawingColor(
+                        for: draft.id,
+                        fallback: RLComponentType.drawingHorizontalLine.color
+                    )
+                )
+            case let .levelSupport(payload):
+                return HorizontalAxisPriceLabelItem(
+                    id: draft.id.uuidString,
+                    text: resolvedHorizontalAxisLabel(payload.label, fallback: "Support"),
+                    price: payload.price,
+                    color: state.drawingColor(
+                        for: draft.id,
+                        fallback: RLComponentType.levelSupport.color
+                    )
+                )
+            case let .levelResistance(payload):
+                return HorizontalAxisPriceLabelItem(
+                    id: draft.id.uuidString,
+                    text: resolvedHorizontalAxisLabel(payload.label, fallback: "Resistance"),
+                    price: payload.price,
+                    color: state.drawingColor(
+                        for: draft.id,
+                        fallback: RLComponentType.levelResistance.color
+                    )
+                )
+            default:
+                return nil
+            }
+        }
+    }
+
+    private func horizontalAxisPriceLabels(
+        from components: [RLMarkerComponentDTO]
+    ) -> [HorizontalAxisPriceLabelItem] {
+        components.compactMap { component in
+            let fallbackColor = component.componentTypeEnum?.color ?? AppColors.surfaceWhite70
+            let resolvedColor = Color(hex: component.payload.drawingColorHex ?? "") ?? fallbackColor
+
+            switch component.payload {
+            case let .drawingHorizontalLine(payload):
+                return HorizontalAxisPriceLabelItem(
+                    id: component.id.uuidString,
+                    text: resolvedHorizontalAxisLabel(payload.label, fallback: "Line"),
+                    price: payload.price,
+                    color: resolvedColor
+                )
+            case let .levelSupport(payload):
+                return HorizontalAxisPriceLabelItem(
+                    id: component.id.uuidString,
+                    text: resolvedHorizontalAxisLabel(payload.label, fallback: "Support"),
+                    price: payload.price,
+                    color: resolvedColor
+                )
+            case let .levelResistance(payload):
+                return HorizontalAxisPriceLabelItem(
+                    id: component.id.uuidString,
+                    text: resolvedHorizontalAxisLabel(payload.label, fallback: "Resistance"),
+                    price: payload.price,
+                    color: resolvedColor
+                )
+            default:
+                return nil
+            }
+        }
+    }
+
+    private func resolvedHorizontalAxisLabel(
+        _ raw: String?,
+        fallback: String
+    ) -> String {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
+    private func horizontalAxisPriceLabelView(
+        label: String,
+        price: Double,
+        color: Color
+    ) -> some View {
+        HStack(spacing: 3) {
+            Text(label)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+            Text(chartData.formatPrice(price))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(0.88))
+        )
     }
     
     @ViewBuilder
@@ -4050,7 +5022,7 @@ struct TradingChartView: View {
             drawXAxisLabels(context: context, size: size)
         }
         .frame(height: ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
-        .background(axisPanelBackground)
+        .background(xAxisPanelBackground)
     }
     
     private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {
@@ -4089,6 +5061,23 @@ struct TradingChartView: View {
             .frame(height: 60)
             AppColors.systemWhite
         }
+    }
+
+    private func plotAreaMask(geometry: GeometryProxy) -> some View {
+        let xAxisReservedHeight = xAxisReservedBandHeight(
+            chartHeight: geometry.size.height,
+            includeLabelStrip: !panelOwnsBottomXAxisStrip
+        )
+        let plotWidth = max(0, geometry.size.width - yAxisWidth)
+        let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
+
+        return Color.clear
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .overlay(alignment: .topLeading) {
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: plotWidth, height: plotHeight)
+            }
     }
 
     // MARK: - Y-Axis Overlay
@@ -4154,11 +5143,40 @@ struct TradingChartView: View {
     func chartInfoBox(geometry: GeometryProxy) -> some View {
         let topInset = geometry.safeAreaInsets.top
         let topPadding = topInset > 0 ? topInset + 62 : 124
+        let availablePanelWidth = max(132, geometry.size.width - yAxisWidth - 16)
+        let intrinsicPanelWidth = chartInfoBaseContentWidth > 0
+            ? chartInfoBaseContentWidth + 20
+            : 132
+        let chartInfoPanelWidth = min(intrinsicPanelWidth, availablePanelWidth)
 
         VStack {
             HStack {
-                chartInfoContent
-                    .allowsHitTesting(false)
+                VStack(alignment: .leading, spacing: 8) {
+                    chartInfoContent(panelWidth: chartInfoPanelWidth)
+                        .allowsHitTesting(false)
+
+                    if isMarkerPlacementMode, !placementState.placementChecklistItems.isEmpty {
+                        MarkerPlacementChecklistPanel(
+                            placementState: placementState,
+                            panelWidth: min(196, max(156, (geometry.size.width - yAxisWidth) * 0.30))
+                        )
+                    }
+
+                    if let marker = viewingInfoMarker {
+                        MarkerViewingInfoBox(
+                            marker: marker,
+                            chartWidth: geometry.size.width,
+                            yAxisWidth: yAxisWidth,
+                            isCollapsed: $isViewingInfoPanelCollapsed,
+                            formatPrice: { price in chartData.formatPrice(price) },
+                            isSubmittingPollVote: isSubmittingViewingPollVote,
+                            submittingPollVoteOptionId: viewingPollVoteOptionId,
+                            onVote: { markerId, optionId in
+                                handleViewingPollVote(markerId: markerId, optionId: optionId)
+                            }
+                        )
+                    }
+                }
                 Spacer()
             }
             .padding(.leading, 8)
@@ -4169,19 +5187,40 @@ struct TradingChartView: View {
     }
     
     @ViewBuilder
-    private var chartInfoContent: some View {
+    private func chartInfoContent(panelWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            chartInfoPrimaryRows
+            ActiveIndicatorsLegendView(
+                indicatorManager: indicatorManager,
+                drawings: chartInfoLegendDrawings,
+                formatPrice: { price in chartData.formatPrice(price) }
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(width: panelWidth, alignment: .leading)
+        .background(OverlayPanelChrome.background(cornerRadius: 10, showsBorder: false))
+    }
+
+    private var chartInfoPrimaryRows: some View {
         VStack(alignment: .leading, spacing: 4) {
             symbolTimeframeRow
             providerRow
             priceRow
-            ActiveIndicatorsLegendView(indicatorManager: indicatorManager)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(AppColors.sheetBackground.opacity(0.84))
-        )
+        .fixedSize(horizontal: true, vertical: true)
+        .measureSize { size in
+            let measuredWidth = ceil(size.width)
+            guard measuredWidth.isFinite, measuredWidth > 0 else { return }
+            if abs(chartInfoBaseContentWidth - measuredWidth) > 0.5 {
+                chartInfoBaseContentWidth = measuredWidth
+            }
+        }
+    }
+
+    private var chartInfoLegendDrawings: [ChartDrawing] {
+        guard !controlViewModel.isMarkerViewingMode else { return [] }
+        return chartViewModel.chartDrawingManager.activeDrawings
     }
 
     private var viewingInfoMarker: ChartMarkerUI? {
@@ -4190,31 +5229,6 @@ struct TradingChartView: View {
             return nil
         }
         return markerManager.markers.first(where: { $0.id == selected.id }) ?? selected
-    }
-
-    @ViewBuilder
-    private func viewingMarkerInfoOverlay(marker: ChartMarkerUI, geometry: GeometryProxy) -> some View {
-        VStack {
-            Spacer(minLength: 0)
-            HStack(alignment: .bottom, spacing: 0) {
-                MarkerViewingInfoBox(
-                    marker: marker,
-                    chartWidth: geometry.size.width,
-                    yAxisWidth: yAxisWidth,
-                    isCollapsed: $isViewingInfoPanelCollapsed,
-                    formatPrice: { price in chartData.formatPrice(price) },
-                    isSubmittingPollVote: isSubmittingViewingPollVote,
-                    submittingPollVoteOptionId: viewingPollVoteOptionId,
-                    onVote: { markerId, optionId in
-                        handleViewingPollVote(markerId: markerId, optionId: optionId)
-                    }
-                )
-                Spacer(minLength: 0)
-            }
-            .padding(.leading, 6)
-            .padding(.bottom, bottomInfoPanelsPadding(geometry: geometry))
-        }
-        .transition(.move(edge: .leading).combined(with: .opacity))
     }
 
     private func bottomInfoPanelsPadding(geometry: GeometryProxy) -> CGFloat {
@@ -4243,6 +5257,341 @@ struct TradingChartView: View {
             ? (baseBand + ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
             : baseBand
     }
+
+    private var selectedDrawingToolbarDraft: MarkerComponentDraft? {
+        guard !controlViewModel.isMarkerViewingMode,
+              let drawingState = activeInteractiveDrawingState,
+              drawingState.drawingInteractionPhase == .editing,
+              let draft = drawingState.activeDrawingDraft else {
+            return nil
+        }
+        return isStyleOnlyReactionEmojiDraft(draft) ? nil : draft
+    }
+
+    private var shouldShowSelectedDrawingToolbar: Bool {
+        selectedDrawingToolbarDraft != nil
+    }
+
+    private var drawingToolbarColorHexes: [String] {
+        ["#10B981", "#38BDF8", "#F59E0B", "#F43F5E", "#8B5CF6", "#94A3B8"]
+    }
+
+    @ViewBuilder
+    private func selectedDrawingToolbar(geometry: GeometryProxy) -> some View {
+        if let draft = selectedDrawingToolbarDraft,
+           let drawingState = activeInteractiveDrawingState {
+            let bottomAreaHeight = geometry.size.height * 0.085 + 34
+            let panelPadding = ChartPanelReserveCalculator.normalizedPanelReserve(
+                totalPanelReserve: indicatorPanelBottomPadding,
+                bottomBoundaryLabelReserve: panelBottomBoundaryLabelReserve
+            )
+            let toolbarWidth = max(280, geometry.size.width - yAxisWidth - 16)
+
+            VStack {
+                Spacer()
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: draft.componentType.icon)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppColors.surfaceWhite90)
+
+                            Text(draft.componentType.displayName)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppColors.surfaceWhite94)
+
+                            Spacer(minLength: 0)
+                        }
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(drawingToolbarColorHexes, id: \.self) { hex in
+                                    drawingColorSwatchButton(
+                                        hex: hex,
+                                        isSelected: drawingState.drawingColorHex(for: draft.id) == hex,
+                                        draftId: draft.id,
+                                        drawingState: drawingState
+                                    )
+                                }
+
+                                if supportsSelectedDrawingLineStyle(draft) {
+                                    ForEach(MarkerDrawingLineStyle.allCases, id: \.self) { style in
+                                        drawingLineStyleButton(
+                                            style: style,
+                                            isSelected: drawingState.drawingLineStyle(
+                                                for: draft.id,
+                                                fallback: defaultLineStyle(for: draft.componentType)
+                                            ) == style,
+                                            draftId: draft.id,
+                                            drawingState: drawingState
+                                        )
+                                    }
+                                }
+
+                                if supportsSelectedDrawingLabelEditing(draft) {
+                                    drawingToolbarActionButton(icon: "character.cursor.ibeam", title: "Label") {
+                                        openDrawingTextEditor(for: draft)
+                                    }
+                                }
+
+                                if supportsSelectedDrawingNoteEditing(draft) {
+                                    drawingToolbarActionButton(icon: "text.cursor", title: "Text") {
+                                        openDrawingTextEditor(for: draft)
+                                    }
+                                }
+
+                                if supportsSelectedDrawingEmojiEditing(draft) {
+                                    drawingToolbarActionButton(icon: "face.smiling", title: "Emoji") {
+                                        openDrawingTextEditor(for: draft)
+                                    }
+                                }
+
+                                drawingToolbarActionButton(
+                                    icon: "trash",
+                                    title: "Delete",
+                                    foreground: AppColors.statusNegative85
+                                ) {
+                                    drawingState.removeComponent(id: draft.id)
+                                    drawingState.commitDrawingAndExit()
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(width: toolbarWidth, alignment: .leading)
+                    .background(OverlayPanelChrome.background(cornerRadius: 12))
+                    .padding(.leading, 8)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.bottom, bottomAreaHeight + panelPadding)
+            }
+        }
+    }
+
+    private func supportsSelectedDrawingLineStyle(_ draft: MarkerComponentDraft) -> Bool {
+        switch draft.componentType {
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .levelSupport, .levelResistance:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func supportsSelectedDrawingLabelEditing(_ draft: MarkerComponentDraft) -> Bool {
+        switch draft.componentType {
+        case .drawingHorizontalLine, .levelSupport, .levelResistance:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func supportsSelectedDrawingNoteEditing(_ draft: MarkerComponentDraft) -> Bool {
+        draft.componentType == .textNote
+    }
+
+    private func supportsSelectedDrawingEmojiEditing(_ draft: MarkerComponentDraft) -> Bool {
+        draft.componentType == .reactionEmoji
+    }
+
+    private func defaultLineStyle(for componentType: RLComponentType) -> MarkerDrawingLineStyle {
+        switch componentType {
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .levelSupport, .levelResistance:
+            return .dashed
+        default:
+            return .solid
+        }
+    }
+
+    private func drawingColorSwatchButton(
+        hex: String,
+        isSelected: Bool,
+        draftId: UUID,
+        drawingState: MarkerPlacementState
+    ) -> some View {
+        let color = Color(hex: hex) ?? AppColors.surfaceWhite70
+        return Button {
+            drawingState.setDrawingColorHex(hex, for: draftId)
+        } label: {
+            Circle()
+                .fill(color)
+                .frame(width: 18, height: 18)
+                .overlay(
+                    Circle()
+                        .stroke(isSelected ? AppColors.surfaceWhite95 : AppColors.surfaceWhite12, lineWidth: isSelected ? 2 : 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func drawingLineStyleButton(
+        style: MarkerDrawingLineStyle,
+        isSelected: Bool,
+        draftId: UUID,
+        drawingState: MarkerPlacementState
+    ) -> some View {
+        Button {
+            drawingState.setDrawingLineStyle(style, for: draftId)
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isSelected ? AppColors.surfaceWhite12 : AppColors.surfaceWhite04)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(isSelected ? AppColors.surfaceWhite50 : AppColors.surfaceWhite12, lineWidth: 1)
+                    )
+
+                Path { path in
+                    path.move(to: CGPoint(x: 6, y: 14))
+                    path.addLine(to: CGPoint(x: 26, y: 14))
+                }
+                .stroke(AppColors.surfaceWhite84, style: StrokeStyle(lineWidth: 2, dash: style.dashPattern))
+            }
+            .frame(width: 32, height: 28)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func drawingToolbarActionButton(
+        icon: String,
+        title: String,
+        foreground: Color = AppColors.surfaceWhite84,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundColor(foreground)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(AppColors.surfaceWhite08)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openDrawingTextEditor(for draft: MarkerComponentDraft) {
+        switch draft.payload {
+        case let .drawingHorizontalLine(payload):
+            drawingTextEditorContext = DrawingTextEditorContext(
+                draftId: draft.id,
+                title: "Edit Label",
+                placeholder: "Line label",
+                initialValue: payload.label ?? "",
+                kind: .lineLabel
+            )
+        case let .levelSupport(payload):
+            drawingTextEditorContext = DrawingTextEditorContext(
+                draftId: draft.id,
+                title: "Edit Label",
+                placeholder: "Support label",
+                initialValue: payload.label ?? "",
+                kind: .levelLabel
+            )
+        case let .levelResistance(payload):
+            drawingTextEditorContext = DrawingTextEditorContext(
+                draftId: draft.id,
+                title: "Edit Label",
+                placeholder: "Resistance label",
+                initialValue: payload.label ?? "",
+                kind: .levelLabel
+            )
+        case let .note(payload):
+            drawingTextEditorContext = DrawingTextEditorContext(
+                draftId: draft.id,
+                title: "Edit Note",
+                placeholder: "Add your context",
+                initialValue: payload.text,
+                kind: .note
+            )
+        case let .reactionEmoji(payload):
+            drawingTextEditorContext = DrawingTextEditorContext(
+                draftId: draft.id,
+                title: "Edit Emoji",
+                placeholder: "Emoji",
+                initialValue: payload.emoji,
+                kind: .emoji
+            )
+        default:
+            drawingTextEditorContext = nil
+        }
+    }
+
+    private func applyDrawingTextEditorValue(_ value: String, context: DrawingTextEditorContext) {
+        guard let drawingState = activeInteractiveDrawingState,
+              let draft = drawingState.components.first(where: { $0.id == context.draftId }) else {
+            return
+        }
+
+        switch (context.kind, draft.payload) {
+        case (.lineLabel, .drawingHorizontalLine):
+            drawingState.setHorizontalLineLabel(value, for: draft.id)
+
+        case let (.levelLabel, .levelSupport(payload)):
+            let trimmed = String(value.trimmingCharacters(in: .whitespacesAndNewlines).prefix(15))
+            drawingState.updateComponent(
+                id: draft.id,
+                payload: .levelSupport(
+                    LevelPayload(
+                        price: payload.price,
+                        label: trimmed.isEmpty ? nil : trimmed,
+                        colorHex: payload.colorHex,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+
+        case let (.levelLabel, .levelResistance(payload)):
+            let trimmed = String(value.trimmingCharacters(in: .whitespacesAndNewlines).prefix(15))
+            drawingState.updateComponent(
+                id: draft.id,
+                payload: .levelResistance(
+                    LevelPayload(
+                        price: payload.price,
+                        label: trimmed.isEmpty ? nil : trimmed,
+                        colorHex: payload.colorHex,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+
+        case let (.note, .note(payload)):
+            drawingState.updateComponent(
+                id: draft.id,
+                payload: .note(
+                    NotePayload(
+                        text: value,
+                        offsetX: payload.offsetX,
+                        offsetY: payload.offsetY
+                    )
+                )
+            )
+
+        case let (.emoji, .reactionEmoji(payload)):
+            drawingState.updateComponent(
+                id: draft.id,
+                payload: .reactionEmoji(
+                    EmojiPayload(
+                        emoji: value.trimmingCharacters(in: .whitespacesAndNewlines),
+                        offsetX: payload.offsetX,
+                        offsetY: payload.offsetY
+                    )
+                )
+            )
+
+        default:
+            break
+        }
+    }
     
     @ViewBuilder
     private var symbolTimeframeRow: some View {
@@ -4251,6 +5600,7 @@ struct TradingChartView: View {
                 Text(symbol.ticker)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
+                    .lineLimit(1)
             } else {
                 Text("—")
                     .font(.system(size: 14, weight: .bold))
@@ -4272,6 +5622,7 @@ struct TradingChartView: View {
                 Text(symbol.providerDisplayLabel)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(AppColors.surfaceWhite85)
+                    .lineLimit(1)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(AppColors.statusInfo24)
@@ -4548,8 +5899,10 @@ struct TradingChartView: View {
 
         // Guide line drawn BEFORE markers so markers occlude it (todo 38 — no dashes inside marker body)
         if !crosshairManager.isActive,
+           !isInteractiveDrawingSessionActive,
            gestureState.markerPlacementGuide.isActive,
-           gestureState.markerPlacementGuide.timestamp != nil {
+           gestureState.markerPlacementGuide.timestamp != nil,
+           gestureState.markerPlacementGuide.x.isFinite {
             let guideX = gestureState.markerPlacementGuide.x
             let guidePath = Path { path in
                 path.move(to: CGPoint(x: guideX, y: 0))
@@ -4557,7 +5910,7 @@ struct TradingChartView: View {
             }
             drawingContext.stroke(
                 guidePath,
-                with: .color(AppColors.statusInfo50),
+                with: .color(placementGuideLineColor.opacity(0.55)),
                 style: StrokeStyle(lineWidth: 2, dash: [5, 5])
             )
         }
@@ -4955,70 +6308,72 @@ struct PlacementLineDragOverlay: View {
     private var handleCenterX: CGFloat { chartWidth / 2 }
 
     var body: some View {
-        ZStack {
-            // Horizontal dashed line
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: lineY))
-                path.addLine(to: CGPoint(x: chartWidth - 60, y: lineY))
-            }
-            .stroke(markerIntent.color, style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
-            .allowsHitTesting(false)
-
-            // Drag handle centered
-            RoundedRectangle(cornerRadius: 4)
-                .fill(markerIntent.color.opacity(isDragging ? 0.5 : 0.35))
-                .frame(width: 40, height: 20)
-                .overlay(
-                    VStack(spacing: 2) {
-                        ForEach(0..<3, id: \.self) { _ in
-                            Rectangle()
-                                .fill(AppColors.surfaceWhite60)
-                                .frame(width: 20, height: 1)
-                        }
-                    }
-                )
-                .position(x: handleCenterX, y: lineY)
+        if lineY.isFinite {
+            ZStack {
+                // Horizontal dashed line
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: lineY))
+                    path.addLine(to: CGPoint(x: chartWidth - 60, y: lineY))
+                }
+                .stroke(markerIntent.color, style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
                 .allowsHitTesting(false)
 
-            // Price + type label near Y-axis
-            HStack(spacing: 3) {
-                Text(markerIntent == .setup ? "Entry" : markerIntent.displayName)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                Text(chartData.formatPrice(effectivePrice))
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(markerIntent.color.opacity(0.85))
-            .cornerRadius(4)
-            .position(x: chartWidth - 45, y: lineY)
-            .allowsHitTesting(false)
-
-            // Invisible drag hit area
-            Color.clear
-                .contentShape(Rectangle())
-                .frame(width: chartWidth, height: 44)
-                .position(x: chartWidth / 2, y: lineY)
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            if !isDragging {
-                                isDragging = true
-                                dragStartY = coordinateSystem.yPosition(forPrice: effectivePrice)
-                                dragStartPrice = effectivePrice
-                                haptic.impactOccurred()
+                // Drag handle centered
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(markerIntent.color.opacity(isDragging ? 0.5 : 0.35))
+                    .frame(width: 40, height: 20)
+                    .overlay(
+                        VStack(spacing: 2) {
+                            ForEach(0..<3, id: \.self) { _ in
+                                Rectangle()
+                                    .fill(AppColors.surfaceWhite60)
+                                    .frame(width: 20, height: 1)
                             }
-                            let newY = dragStartY + value.translation.height
-                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            linePrice = newPrice
                         }
-                        .onEnded { _ in
-                            isDragging = false
-                        }
-                )
+                    )
+                    .position(x: handleCenterX, y: lineY)
+                    .allowsHitTesting(false)
+
+                // Price + type label near Y-axis
+                HStack(spacing: 3) {
+                    Text(markerIntent == .setup ? "Entry" : markerIntent.displayName)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    Text(chartData.formatPrice(effectivePrice))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(markerIntent.color.opacity(0.85))
+                .cornerRadius(4)
+                .position(x: chartWidth - 45, y: lineY)
+                .allowsHitTesting(false)
+
+                // Invisible drag hit area
+                Color.clear
+                    .contentShape(Rectangle())
+                    .frame(width: chartWidth, height: 44)
+                    .position(x: chartWidth / 2, y: lineY)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                if !isDragging {
+                                    isDragging = true
+                                    dragStartY = coordinateSystem.yPosition(forPrice: effectivePrice)
+                                    dragStartPrice = effectivePrice
+                                    haptic.impactOccurred()
+                                }
+                                let newY = dragStartY + value.translation.height
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                linePrice = newPrice
+                            }
+                            .onEnded { _ in
+                                isDragging = false
+                            }
+                    )
+            }
+            .frame(width: chartWidth, height: chartHeight)
         }
-        .frame(width: chartWidth, height: chartHeight)
     }
 }
 
@@ -5096,73 +6451,75 @@ struct PlacementSupportResistanceOverlay: View {
         let y = coordinateSystem.yPosition(forPrice: price)
         let isActive = draggingLineType == componentType
 
-        Path { path in
-            path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: chartWidth - 60, y: y))
-        }
-        .stroke(
-            color.opacity(0.82),
-            style: StrokeStyle(
-                lineWidth: isActive ? 2.5 : 1.5,
-                dash: [6, 3]
+        if y.isFinite {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: chartWidth - 60, y: y))
+            }
+            .stroke(
+                color.opacity(0.82),
+                style: StrokeStyle(
+                    lineWidth: isActive ? 2.5 : 1.5,
+                    dash: [6, 3]
+                )
             )
-        )
-        .allowsHitTesting(false)
-
-        HStack(spacing: 3) {
-            Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-            Text(chartData.formatPrice(price))
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .background(color.opacity(0.88))
-        .cornerRadius(4)
-        .position(x: chartWidth - 40, y: y)
-        .allowsHitTesting(false)
-
-        RoundedRectangle(cornerRadius: 4)
-            .fill(color.opacity(isActive ? 0.5 : 0.3))
-            .frame(width: 40, height: 20)
-            .overlay(
-                VStack(spacing: 2) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        Rectangle()
-                            .fill(AppColors.surfaceWhite60)
-                            .frame(width: 20, height: 1)
-                    }
-                }
-            )
-            .position(x: chartWidth / 2, y: y)
             .allowsHitTesting(false)
 
-        Color.clear
-            .contentShape(Rectangle())
-            .frame(width: chartWidth, height: 44)
-            .position(x: chartWidth / 2, y: y)
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        if draggingLineType != componentType {
-                            draggingLineType = componentType
-                            dragStartYByType[componentType] = coordinateSystem.yPosition(forPrice: price)
-                            haptic.impactOccurred()
-                        }
+            HStack(spacing: 3) {
+                Text(label)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                Text(chartData.formatPrice(price))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.88))
+            .cornerRadius(4)
+            .position(x: chartWidth - 40, y: y)
+            .allowsHitTesting(false)
 
-                        let startY = dragStartYByType[componentType] ?? coordinateSystem.yPosition(forPrice: price)
-                        let newY = startY + value.translation.height
-                        let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                        upsertPlacementLevel(componentType, price: newPrice)
-                    }
-                    .onEnded { _ in
-                        dragStartYByType.removeValue(forKey: componentType)
-                        if draggingLineType == componentType {
-                            draggingLineType = nil
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(isActive ? 0.5 : 0.3))
+                .frame(width: 40, height: 20)
+                .overlay(
+                    VStack(spacing: 2) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Rectangle()
+                                .fill(AppColors.surfaceWhite60)
+                                .frame(width: 20, height: 1)
                         }
                     }
-            )
+                )
+                .position(x: chartWidth / 2, y: y)
+                .allowsHitTesting(false)
+
+            Color.clear
+                .contentShape(Rectangle())
+                .frame(width: chartWidth, height: 44)
+                .position(x: chartWidth / 2, y: y)
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if draggingLineType != componentType {
+                                draggingLineType = componentType
+                                dragStartYByType[componentType] = coordinateSystem.yPosition(forPrice: price)
+                                haptic.impactOccurred()
+                            }
+
+                            let startY = dragStartYByType[componentType] ?? coordinateSystem.yPosition(forPrice: price)
+                            let newY = startY + value.translation.height
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                            upsertPlacementLevel(componentType, price: newPrice)
+                        }
+                        .onEnded { _ in
+                            dragStartYByType.removeValue(forKey: componentType)
+                            if draggingLineType == componentType {
+                                draggingLineType = nil
+                            }
+                        }
+                )
+        }
     }
 
     private func upsertPlacementLevel(_ componentType: RLComponentType, price: Double) {
@@ -5260,23 +6617,25 @@ struct PredictionPlacementOverlay: View {
         let tpY = coordinateSystem.yPosition(forPrice: state.takeProfitPrice)
         let slY = coordinateSystem.yPosition(forPrice: state.stopLossPrice)
 
-        // Green fill between entry and TP
-        let tpTop = min(entryY, tpY)
-        let tpHeight = abs(entryY - tpY)
-        Rectangle()
-            .fill(AppColors.statusPositive06)
-            .frame(width: chartWidth - 60, height: max(0, tpHeight))
-            .position(x: (chartWidth - 60) / 2, y: tpTop + tpHeight / 2)
-            .allowsHitTesting(false)
+        if entryY.isFinite, tpY.isFinite {
+            let tpTop = min(entryY, tpY)
+            let tpHeight = abs(entryY - tpY)
+            Rectangle()
+                .fill(AppColors.statusPositive06)
+                .frame(width: chartWidth - 60, height: max(0, tpHeight))
+                .position(x: (chartWidth - 60) / 2, y: tpTop + tpHeight / 2)
+                .allowsHitTesting(false)
+        }
 
-        // Red fill between entry and SL
-        let slTop = min(entryY, slY)
-        let slHeight = abs(entryY - slY)
-        Rectangle()
-            .fill(AppColors.statusNegative.opacity(0.06))
-            .frame(width: chartWidth - 60, height: max(0, slHeight))
-            .position(x: (chartWidth - 60) / 2, y: slTop + slHeight / 2)
-            .allowsHitTesting(false)
+        if entryY.isFinite, slY.isFinite {
+            let slTop = min(entryY, slY)
+            let slHeight = abs(entryY - slY)
+            Rectangle()
+                .fill(AppColors.statusNegative.opacity(0.06))
+                .frame(width: chartWidth - 60, height: max(0, slHeight))
+                .position(x: (chartWidth - 60) / 2, y: slTop + slHeight / 2)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: - Price Line
@@ -5287,31 +6646,31 @@ struct PredictionPlacementOverlay: View {
     private func priceLine(price: Double, color: Color, label: String, isDashed: Bool, lineWidth: CGFloat) -> some View {
         let y = coordinateSystem.yPosition(forPrice: price)
 
-        // Line
-        Path { path in
-            path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: chartWidth - 60, y: y))
-        }
-        .stroke(color.opacity(0.8), style: StrokeStyle(
-            lineWidth: lineWidth,
-            dash: isDashed ? [6, 3] : []
-        ))
-        .allowsHitTesting(false)
+        if y.isFinite {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: chartWidth - 60, y: y))
+            }
+            .stroke(color.opacity(0.8), style: StrokeStyle(
+                lineWidth: lineWidth,
+                dash: isDashed ? [6, 3] : []
+            ))
+            .allowsHitTesting(false)
 
-        // Price + label near Y-axis
-        HStack(spacing: 3) {
-            Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-            Text(chartData.formatPrice(price))
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            HStack(spacing: 3) {
+                Text(label)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                Text(chartData.formatPrice(price))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.85))
+            .cornerRadius(4)
+            .position(x: chartWidth - 40, y: y)
+            .allowsHitTesting(false)
         }
-        .foregroundColor(.white)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .background(color.opacity(0.85))
-        .cornerRadius(4)
-        .position(x: chartWidth - 40, y: y)
-        .allowsHitTesting(false)
     }
 
     // MARK: - Drag Handle
@@ -5321,73 +6680,69 @@ struct PredictionPlacementOverlay: View {
         let y = coordinateSystem.yPosition(forPrice: price)
         let isActive = draggingLine == lineType
 
-        // Visible handle centered
-        RoundedRectangle(cornerRadius: 4)
-            .fill(color.opacity(isActive ? 0.5 : 0.3))
-            .frame(width: 40, height: 20)
-            .overlay(
-                VStack(spacing: 2) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        Rectangle()
-                            .fill(AppColors.surfaceWhite60)
-                            .frame(width: 20, height: 1)
-                    }
-                }
-            )
-            .position(x: handleCenterX, y: y)
-            .allowsHitTesting(false)
-
-        // Invisible drag hit area
-        Color.clear
-            .contentShape(Rectangle())
-            .frame(width: chartWidth, height: 44)
-            .position(x: chartWidth / 2, y: y)
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        if draggingLine != lineType {
-                            draggingLine = lineType
-                            dragStartY = coordinateSystem.yPosition(forPrice: price)
-                            dragStartPrice = price
-                            haptic.impactOccurred()
+        if y.isFinite {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(isActive ? 0.5 : 0.3))
+                .frame(width: 40, height: 20)
+                .overlay(
+                    VStack(spacing: 2) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Rectangle()
+                                .fill(AppColors.surfaceWhite60)
+                                .frame(width: 20, height: 1)
                         }
-                        let newY = dragStartY + value.translation.height
-                        let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                    }
+                )
+                .position(x: handleCenterX, y: y)
+                .allowsHitTesting(false)
 
-                        // Auto-swap: when dragged line crosses entry, flip the other line
-                        // to the opposite side to form a proper trade
-                        if var p = placement {
-                            let entry = p.entryPrice
-                            let wasLong = p.takeProfitPrice > entry
-
-                            switch lineType {
-                            case .entry:
-                                break
-                            case .takeProfit:
-                                p.takeProfitPrice = newPrice
-                                let nowLong = newPrice > entry
-                                // If direction flipped, mirror SL to opposite side
-                                if wasLong != nowLong {
-                                    let slOffset = abs(p.stopLossPrice - entry)
-                                    p.stopLossPrice = nowLong ? entry - slOffset : entry + slOffset
-                                }
-                            case .stopLoss:
-                                p.stopLossPrice = newPrice
-                                let nowLong = p.takeProfitPrice > entry
-                                let slCrossedToTPSide = (newPrice > entry) == nowLong
-                                // If SL crossed to same side as TP, flip TP to other side
-                                if slCrossedToTPSide {
-                                    let tpOffset = abs(p.takeProfitPrice - entry)
-                                    p.takeProfitPrice = newPrice > entry ? entry - tpOffset : entry + tpOffset
-                                }
+            Color.clear
+                .contentShape(Rectangle())
+                .frame(width: chartWidth, height: 44)
+                .position(x: chartWidth / 2, y: y)
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if draggingLine != lineType {
+                                draggingLine = lineType
+                                dragStartY = coordinateSystem.yPosition(forPrice: price)
+                                dragStartPrice = price
+                                haptic.impactOccurred()
                             }
-                            placement = p
+                            let newY = dragStartY + value.translation.height
+                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+
+                            if var p = placement {
+                                let entry = p.entryPrice
+                                let wasLong = p.takeProfitPrice > entry
+
+                                switch lineType {
+                                case .entry:
+                                    break
+                                case .takeProfit:
+                                    p.takeProfitPrice = newPrice
+                                    let nowLong = newPrice > entry
+                                    if wasLong != nowLong {
+                                        let slOffset = abs(p.stopLossPrice - entry)
+                                        p.stopLossPrice = nowLong ? entry - slOffset : entry + slOffset
+                                    }
+                                case .stopLoss:
+                                    p.stopLossPrice = newPrice
+                                    let nowLong = p.takeProfitPrice > entry
+                                    let slCrossedToTPSide = (newPrice > entry) == nowLong
+                                    if slCrossedToTPSide {
+                                        let tpOffset = abs(p.takeProfitPrice - entry)
+                                        p.takeProfitPrice = newPrice > entry ? entry - tpOffset : entry + tpOffset
+                                    }
+                                }
+                                placement = p
+                            }
                         }
-                    }
-                    .onEnded { _ in
-                        draggingLine = nil
-                    }
-            )
+                        .onEnded { _ in
+                            draggingLine = nil
+                        }
+                )
+        }
     }
 }
 
@@ -5412,41 +6767,43 @@ struct DraggableMarkerLineOverlay: View {
     private var lineY: CGFloat { coordinateSystem.yPosition(forPrice: effectivePrice) }
 
     var body: some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .frame(width: chartWidth, height: chartHeight)
-            .overlay(
-                Color.clear
-                    .contentShape(Rectangle())
-                    .frame(width: chartWidth, height: 44)
-                    .position(x: chartWidth / 2, y: lineY)
-                    .highPriorityGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                if !isDragging {
-                                    isDragging = true
-                                    dragStartY = coordinateSystem.yPosition(forPrice: currentPrice)
-                                    dragStartPrice = currentPrice
+        if lineY.isFinite {
+            Color.clear
+                .contentShape(Rectangle())
+                .frame(width: chartWidth, height: chartHeight)
+                .overlay(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .frame(width: chartWidth, height: 44)
+                        .position(x: chartWidth / 2, y: lineY)
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    if !isDragging {
+                                        isDragging = true
+                                        dragStartY = coordinateSystem.yPosition(forPrice: currentPrice)
+                                        dragStartPrice = currentPrice
+                                    }
+                                    let newY = dragStartY + value.translation.height
+                                    let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                    dragPrice = newPrice
                                 }
-                                let newY = dragStartY + value.translation.height
-                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                                dragPrice = newPrice
-                            }
-                            .onEnded { value in
-                                let newY = dragStartY + value.translation.height
-                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                                Task {
-                                    await markerManager.updateMarker(
-                                        id: marker.id,
-                                        horizontalLinePrice: newPrice,
-                                        horizontalLineType: levelType
-                                    )
+                                .onEnded { value in
+                                    let newY = dragStartY + value.translation.height
+                                    let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                    Task {
+                                        await markerManager.updateMarker(
+                                            id: marker.id,
+                                            horizontalLinePrice: newPrice,
+                                            horizontalLineType: levelType
+                                        )
+                                    }
+                                    dragPrice = nil
+                                    isDragging = false
                                 }
-                                dragPrice = nil
-                                isDragging = false
-                            }
-                    )
-            )
+                        )
+                )
+        }
     }
 }
 
@@ -5497,53 +6854,56 @@ struct DraggablePredictionLinesOverlay: View {
         .frame(width: chartWidth, height: chartHeight)
     }
 
+    @ViewBuilder
     private func draggableStrip(price: Double, lineKind: DragLineKind) -> some View {
         let y = coordinateSystem.yPosition(forPrice: price)
-        return Color.clear
-            .contentShape(Rectangle())
-            .frame(width: chartWidth, height: 44)
-            .position(x: chartWidth / 2, y: y)
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        switch lineKind {
-                        case .takeProfit:
-                            if dragTakeProfitPrice == nil { takeProfitDragStartY = y }
-                            let newY = takeProfitDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            dragTakeProfitPrice = newPrice
-                        case .stopLoss:
-                            if dragStopLossPrice == nil { stopLossDragStartY = y }
-                            let newY = stopLossDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            dragStopLossPrice = newPrice
-                        case .entry:
-                            if dragEntryPrice == nil { entryDragStartY = y }
-                            let newY = entryDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            dragEntryPrice = newPrice
+        if y.isFinite {
+            Color.clear
+                .contentShape(Rectangle())
+                .frame(width: chartWidth, height: 44)
+                .position(x: chartWidth / 2, y: y)
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            switch lineKind {
+                            case .takeProfit:
+                                if dragTakeProfitPrice == nil { takeProfitDragStartY = y }
+                                let newY = takeProfitDragStartY + value.translation.height
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                dragTakeProfitPrice = newPrice
+                            case .stopLoss:
+                                if dragStopLossPrice == nil { stopLossDragStartY = y }
+                                let newY = stopLossDragStartY + value.translation.height
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                dragStopLossPrice = newPrice
+                            case .entry:
+                                if dragEntryPrice == nil { entryDragStartY = y }
+                                let newY = entryDragStartY + value.translation.height
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                dragEntryPrice = newPrice
+                            }
                         }
-                    }
-                    .onEnded { value in
-                        switch lineKind {
-                        case .takeProfit:
-                            let newY = takeProfitDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            Task { await markerManager.updateMarker(id: marker.id, targetPrice: newPrice) }
-                            dragTakeProfitPrice = nil
-                        case .stopLoss:
-                            let newY = stopLossDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            Task { await markerManager.updateMarker(id: marker.id, stopLossPrice: newPrice) }
-                            dragStopLossPrice = nil
-                        case .entry:
-                            let newY = entryDragStartY + value.translation.height
-                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            Task { await markerManager.updateMarker(id: marker.id, horizontalLinePrice: newPrice) }
-                            dragEntryPrice = nil
+                        .onEnded { value in
+                            switch lineKind {
+                            case .takeProfit:
+                                let newY = takeProfitDragStartY + value.translation.height
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                Task { await markerManager.updateMarker(id: marker.id, targetPrice: newPrice) }
+                                dragTakeProfitPrice = nil
+                            case .stopLoss:
+                                let newY = stopLossDragStartY + value.translation.height
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                Task { await markerManager.updateMarker(id: marker.id, stopLossPrice: newPrice) }
+                                dragStopLossPrice = nil
+                            case .entry:
+                                let newY = entryDragStartY + value.translation.height
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                Task { await markerManager.updateMarker(id: marker.id, horizontalLinePrice: newPrice) }
+                                dragEntryPrice = nil
+                            }
                         }
-                    }
-            )
+                )
+        }
     }
 }
 
@@ -5957,7 +7317,10 @@ struct MarkerDrawingOverlay: View {
         context.stroke(
             path,
             with: .color(trendlineColor.opacity(0.68)),
-            style: StrokeStyle(lineWidth: 2.0, dash: [8, 5])
+            style: StrokeStyle(
+                lineWidth: CGFloat(payload.lineWidth ?? 2.0),
+                dash: (payload.lineStyle ?? .dashed).dashPattern
+            )
         )
     }
 
@@ -5975,10 +7338,18 @@ struct MarkerDrawingOverlay: View {
         path.addLine(to: CGPoint(x: endX, y: y))
 
         let lineColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingHorizontalLine.color
+        let lineStyle = payload.lineStyle ?? .dashed
+        let lineWidth = resolvedIndicatorLineWidth(
+            for: lineStyle,
+            preferredWidth: CGFloat(payload.lineWidth ?? defaultIndicatorLineWidth(for: lineStyle))
+        )
         context.stroke(
             path,
-            with: .color(lineColor.opacity(0.72)),
-            style: StrokeStyle(lineWidth: 2.0, dash: [8, 5])
+            with: .color(lineColor.opacity(0.8)),
+            style: StrokeStyle(
+                lineWidth: lineWidth,
+                dash: lineStyle.dashPattern
+            )
         )
     }
 
@@ -6020,13 +7391,30 @@ struct MarkerDrawingOverlay: View {
         context.stroke(
             Path(rect),
             with: .color(zoneColor.opacity(0.55)),
-            style: StrokeStyle(lineWidth: 1.4, dash: [6, 4])
+            style: StrokeStyle(
+                lineWidth: CGFloat(payload.lineWidth ?? 1.4),
+                dash: (payload.lineStyle ?? .dashed).dashPattern
+            )
         )
     }
 
     private func xPosition(for timestamp: Date) -> CGFloat? {
         guard let index = coordinateSystem.candleIndex(forTimestamp: timestamp) else { return nil }
         return coordinateSystem.xCenterPosition(forCandleIndex: index)
+    }
+
+    private func defaultIndicatorLineWidth(for lineStyle: MarkerDrawingLineStyle) -> Double {
+        lineStyle == .solid ? 2.0 : 1.5
+    }
+
+    private func resolvedIndicatorLineWidth(
+        for lineStyle: MarkerDrawingLineStyle,
+        preferredWidth: CGFloat
+    ) -> CGFloat {
+        if lineStyle == .solid {
+            return max(preferredWidth, 2.0)
+        }
+        return max(preferredWidth, 1.5)
     }
 }
 
@@ -6132,33 +7520,35 @@ struct PredictionTargetLineOverlay: View {
         // FIXED: Capture initial position on drag start to prevent feedback loop
         GeometryReader { geo in
             let currentY = coordinateSystem.yPosition(forPrice: currentTargetPrice)
-            
-            Color.clear
-                .contentShape(Rectangle())
-                .frame(width: geo.size.width, height: 60)
-                .position(x: geo.size.width / 2, y: currentY)
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            if !isDragging {
-                                // FIXED: Capture starting position on first touch
-                                isDragging = true
-                                dragStartY = currentY
-                                dragStartPrice = currentTargetPrice
-                            }
-                            
-                            // FIXED: Calculate new Y based on drag translation from START position
-                            // This prevents the feedback loop where changing price changes Y
-                            let newY = dragStartY + value.translation.height
 
-                            // Convert to price (unclamped so lines can go beyond visible range)
-                            let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
-                            self.targetPrice = newPrice
-                        }
-                        .onEnded { _ in
-                            isDragging = false
-                        }
-                )
+            if currentY.isFinite {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .frame(width: geo.size.width, height: 60)
+                    .position(x: geo.size.width / 2, y: currentY)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                if !isDragging {
+                                    // FIXED: Capture starting position on first touch
+                                    isDragging = true
+                                    dragStartY = currentY
+                                    dragStartPrice = currentTargetPrice
+                                }
+
+                                // FIXED: Calculate new Y based on drag translation from START position
+                                // This prevents the feedback loop where changing price changes Y
+                                let newY = dragStartY + value.translation.height
+
+                                // Convert to price (unclamped so lines can go beyond visible range)
+                                let newPrice = coordinateSystem.unclampedPrice(atYPosition: newY)
+                                self.targetPrice = newPrice
+                            }
+                            .onEnded { _ in
+                                isDragging = false
+                            }
+                    )
+            }
         }
     }
 }
@@ -6209,5 +7599,54 @@ struct StaticTargetLineOverlay: View {
             )
         }
         .allowsHitTesting(false)
+    }
+}
+
+private struct DrawingTextEditorSheet: View {
+    let context: DrawingTextEditorContext
+    let onSave: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var value: String
+
+    init(context: DrawingTextEditorContext, onSave: @escaping (String) -> Void) {
+        self.context = context
+        self.onSave = onSave
+        _value = State(initialValue: context.initialValue)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(context.title) {
+                    if context.kind == .note {
+                        TextEditor(text: $value)
+                            .frame(minHeight: 120)
+                    } else {
+                        TextField(context.placeholder, text: $value)
+                            .textInputAutocapitalization(.never)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(AppColors.systemBlack)
+            .navigationTitle(context.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(value)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(context.kind == .note ? 280 : 180)])
     }
 }

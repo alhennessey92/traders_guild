@@ -216,16 +216,26 @@ struct MarkerPlanFixesTests {
     func prePlacementSnapshotRetainsMirrorSourceAndAttachesIndicators() {
         var activeBeforePlacement = ActiveIndicators()
         activeBeforePlacement.rsi = RSIConfig(period: 14)
+        let mirroredDrawings = [
+            ChartDrawing(
+                type: .horizontalLine,
+                points: [ChartDrawingPoint(time: Date(timeIntervalSince1970: 1_700_000_000), price: 42000)],
+                colorHex: "#10B981",
+                note: "Line"
+            )
+        ]
 
         var snapshot = PlacementIndicatorSnapshot()
-        snapshot.captureIfNeeded(from: activeBeforePlacement)
+        snapshot.captureIfNeeded(from: activeBeforePlacement, drawings: mirroredDrawings)
 
         #expect(snapshot.didCapture)
         #expect(snapshot.payloads.contains { $0.name.uppercased().contains("RSI") })
+        #expect(snapshot.drawings.count == 1)
 
         // A second capture attempt should not overwrite the first snapshot.
-        snapshot.captureIfNeeded(from: ActiveIndicators())
+        snapshot.captureIfNeeded(from: ActiveIndicators(), drawings: [])
         #expect(snapshot.payloads.contains { $0.name.uppercased().contains("RSI") })
+        #expect(snapshot.drawings.count == 1)
 
         let state = MarkerPlacementState()
         let result = state.attachActiveChartIndicators(snapshot.payloads)
@@ -234,6 +244,10 @@ struct MarkerPlanFixesTests {
             guard case let .indicator(payload) = draft.payload else { return false }
             return payload.name.uppercased().contains("RSI")
         })
+
+        let drawingResult = state.attachActiveChartDrawings(snapshot.drawings)
+        #expect(drawingResult.added == 1)
+        #expect(state.components.contains { $0.componentType == .drawingHorizontalLine })
     }
 
     @Test
@@ -245,6 +259,30 @@ struct MarkerPlanFixesTests {
         let labels = ActiveIndicatorsLegendComposer.labels(from: active)
         #expect(labels.contains("RSI(14)"))
         #expect(labels.contains("MACD(12,26,9)"))
+    }
+
+    @Test
+    func drawingLegendSummaryIncludesLineAndAnnotationEntries() {
+        let drawings = [
+            ChartDrawing(
+                type: .supportLevel,
+                points: [ChartDrawingPoint(time: Date(timeIntervalSince1970: 1_700_000_000), price: 101.25)],
+                colorHex: "#10B981",
+                note: "Support"
+            ),
+            ChartDrawing(
+                type: .emoji,
+                colorHex: "#F59E0B",
+                emoji: "🔥"
+            ),
+        ]
+
+        let labels = ChartDrawingsLegendComposer.labels(from: drawings) { price in
+            String(format: "%.2f", price)
+        }
+
+        #expect(labels.contains("Support 101.25"))
+        #expect(labels.contains("🔥"))
     }
 
     @Test

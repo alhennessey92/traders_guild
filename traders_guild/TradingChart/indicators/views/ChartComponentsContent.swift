@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ChartComponentsContent: View {
+    let placementState: MarkerPlacementState
     let indicatorManager: IndicatorManager
     let drawingManager: ChartDrawingManager
     let timeframeLinkManager: ChartTimeframeLinkManager
@@ -17,6 +18,7 @@ struct ChartComponentsContent: View {
     @StateObject private var adapter: ChartComponentsAdapter
 
     init(
+        placementState: MarkerPlacementState,
         indicatorManager: IndicatorManager,
         drawingManager: ChartDrawingManager,
         timeframeLinkManager: ChartTimeframeLinkManager,
@@ -30,6 +32,7 @@ struct ChartComponentsContent: View {
         anchorTime: Date?,
         anchorPrice: Double?
     ) {
+        self.placementState = placementState
         self.indicatorManager = indicatorManager
         self.drawingManager = drawingManager
         self.timeframeLinkManager = timeframeLinkManager
@@ -45,6 +48,7 @@ struct ChartComponentsContent: View {
 
         _adapter = StateObject(
             wrappedValue: ChartComponentsAdapter(
+                placementState: placementState,
                 indicatorManager: indicatorManager,
                 drawingManager: drawingManager,
                 timeframeLinkManager: timeframeLinkManager,

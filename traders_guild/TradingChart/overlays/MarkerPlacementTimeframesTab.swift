@@ -8,6 +8,7 @@ struct MarkerPlacementTimeframesTab: View {
     var symbolId: UUID?
     var guildId: UUID?
     var mirrorSourceIndicators: [IndicatorPayload] = []
+    var mirrorSourceDrawings: [ChartDrawing] = []
     var showsTitleHeader: Bool = true
     var showsMirrorButton: Bool = false
 
@@ -106,7 +107,7 @@ struct MarkerPlacementTimeframesTab: View {
                     Text("Mirror Chart Setup")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(.white)
-                    Text("Copy current chart indicators to this marker")
+                    Text("Copy current chart indicators and drawings to this marker")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                 }
@@ -125,8 +126,8 @@ struct MarkerPlacementTimeframesTab: View {
             )
         }
         .buttonStyle(.plain)
-        .opacity(mirrorSourceIndicators.isEmpty ? 0.55 : 1)
-        .disabled(mirrorSourceIndicators.isEmpty)
+        .opacity((mirrorSourceIndicators.isEmpty && mirrorSourceDrawings.isEmpty) ? 0.55 : 1)
+        .disabled(mirrorSourceIndicators.isEmpty && mirrorSourceDrawings.isEmpty)
     }
 
     private var allTimeframesSection: some View {
@@ -355,15 +356,27 @@ struct MarkerPlacementTimeframesTab: View {
     }
 
     private func mirrorChartSetup() {
-        let result = placementState.attachActiveChartIndicators(mirrorSourceIndicators)
-        if result.added > 0 {
-            mirrorInfoMessage = "Mirrored \(result.added) indicator\(result.added == 1 ? "" : "s") from chart."
+        let indicatorResult = placementState.attachActiveChartIndicators(mirrorSourceIndicators)
+        let drawingResult = placementState.attachActiveChartDrawings(mirrorSourceDrawings)
+        let totalAdded = indicatorResult.added + drawingResult.added
+
+        if totalAdded > 0 {
+            var mirroredParts: [String] = []
+            if indicatorResult.added > 0 {
+                mirroredParts.append("\(indicatorResult.added) indicator\(indicatorResult.added == 1 ? "" : "s")")
+            }
+            if drawingResult.added > 0 {
+                mirroredParts.append("\(drawingResult.added) drawing\(drawingResult.added == 1 ? "" : "s")")
+            }
+            mirrorInfoMessage = "Mirrored \(mirroredParts.joined(separator: " and ")) from chart."
         } else {
-            mirrorInfoMessage = "No new chart indicators to mirror."
+            mirrorInfoMessage = "No new chart indicators or drawings to mirror."
         }
 
-        if result.blockedByLimit {
-            limitWarning = placementState.limitMessage(for: .indicatorPanels)
+        if indicatorResult.blockedByLimit || drawingResult.blockedByLimit {
+            limitWarning = drawingResult.blockedByLimit
+                ? placementState.limitMessage(for: .drawingOverlays)
+                : placementState.limitMessage(for: .indicatorPanels)
             HapticFeedback.light.trigger()
         } else {
             limitWarning = nil

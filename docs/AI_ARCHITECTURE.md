@@ -1140,7 +1140,7 @@ This also includes making sure requirements are shown for any form, highlighting
 
 176. Need a full audit again of the chat system, making sure all options, edits, settings, are in place and working. Want to introduce a like option / emoji reaction to chat messages, and a option to reference someones message like a reply that displays it like a caption with their own message. All of this can come from long pressing the message and choosing options, so need a better UI for it. Also need a major revamp of the attachments section, better UI/styling for each option and a much better process in applying, feels very disjointed and tricky to attach a image with a caption, camers doesnt work etc... Attaching markers is good, but all others need to be better. 
 
-177. The big one. Need to review the drawing/ pattern section of the app. Currently not working great, needs to be a super smooth experience that is intuitive to the user to complete the process of adding a drawing or pattern.
+177. [FIXED] The big one. Need to review the drawing/ pattern section of the app. Currently not working great, needs to be a super smooth experience that is intuitive to the user to complete the process of adding a drawing or pattern.
 
 Process for most drawings is as follows
 On selecting drawing to add, a crosshair is shown with price and time labels on respective axis, user drags this to first position, can drag from any drag position on chart, chart is locked in this state
@@ -1151,3 +1151,24 @@ At this point the process continues for how many points the drawing requires, mo
 If user taps the drawing, circles appear at each point which can be dragged individually to move them to any position and adjust drawing.
 If user taps anywhere on chart the drawing mode deactivates and the chart is free to move
 At no point by tapping the chart does the point/drawing move to that position, tapping the chart is only ever to save/set the drawing point
+Make sure you run through all drawing options and make improve them the way they should, obviously the above affects trendlines, zones etc... Horizontal lines like the custom one, support and resistance, works like any other horizontal line we have in place, user can drag vertically with handle and tapping the chart saves in position. Annotations get added to chart, can drag around and tapping chart saves them
+
+178. alert marker needs select severity as required and vertical line same color as severity.
+
+179. bottom x axis time indicator needs generalising for when markers selected, crosshairs etc. Like the price indicator has a generic yellow box black writing, the x axis needs a generic look for gneeral situations, thinking white or grey with black writing, something generic but easy to view, its height needs to be generalised as well, top of rectangle should run at top of x axis. Can also remove the little triangle if still present
+
+180. drawings added to chart need to be added to the chart info box and need to be carried over/available to be added to markers via the mirror chart setup
+
+181. drawings not being carried across and available to add to markers for mirror chart setup button in marker placmeent mode. However when i add a marker and select it to go into the viewing mode the drawings fromt the default chart still appear and are editable
+
+182. Need some form of UI on screen while drawings are selected to edit them - color, delete, adjust text, perhaps we could run it along the bottom, just above the x axis in a fixed width box like the marker info box, but not that high, just high enough to show icons etc... and dont allow it to be collapsible, it could hold the icons to adjust the coloring, line type, delete button, text button etc... for all types of drawings, only shows when drawing selected.
+
+183. Due to now no 182 i think the checklist should be move to under the chart info box on top left, and try to reduce its width further removing the req and tim sections and incorporating required state into the icons on left, maybe give a yellow alert warning for required or similar. In terms of the marker info box, i think it too needs to go under the chart info box, still allowing the collapse handle, and obviously needs to be greatly reduced in width
+
+184. the marker info box needs to be lower in the chart, closer to the top of the x axis
+
+185. the background for the chart info box needs to be similar to background of the toolbar
+
+186. Drawings are appearing over the y and x axis
+
+187. when adding trendline its adding a blue price indicator label on y axis with anchor icon over the top of the yellow price indicator, this is not needed.

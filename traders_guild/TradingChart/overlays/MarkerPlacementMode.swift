@@ -145,29 +145,6 @@ enum MarkerPlacementLimitType {
     case timeframeLinks
 }
 
-enum MarkerDrawingWorkflowTool: Equatable {
-    case trendline
-    case horizontalLine
-    case zone
-    case note
-    case emoji
-
-    var title: String {
-        switch self {
-        case .trendline:
-            return "Trendline"
-        case .horizontalLine:
-            return "Horizontal Line"
-        case .zone:
-            return "Zone"
-        case .note:
-            return "Note"
-        case .emoji:
-            return "Emoji"
-        }
-    }
-}
-
 enum DrawingInteractionPhase: String {
     case idle
     case placingFirstPoint
@@ -200,16 +177,71 @@ final class MarkerPlacementState: ObservableObject {
     @Published var alertSeverity: MarkerAlertSeverity?
     @Published var newsURL: String = ""
     @Published var isChecklistCollapsed: Bool = false
-    /// Placement-local color overrides for drawing drafts (trendline/zone).
-    /// Phase 3 persists these into payload/back-end fields.
+    /// Placement-local color overrides keep UI edits stable while payloads are replaced.
     @Published var drawingColorOverrides: [UUID: String] = [:]
     /// Placement-local emoji scale while editing (interaction-only, non-persisted).
     @Published var emojiScaleOverrides: [UUID: CGFloat] = [:]
-    @Published var drawingInteractionPhase: DrawingInteractionPhase = .idle
-    @Published var pendingDrawingFirstPoint: (time: Date, price: Double)?
-    @Published var editingDrawingId: UUID?
+    @Published var drawingSession: MarkerDrawingSession = .inactive
     @Published var editingMarkerId: UUID?
     @Published var isAnchorLocked: Bool = false
+
+    var drawingInteractionPhase: DrawingInteractionPhase {
+        get { drawingSession.drawingInteractionPhase }
+        set {
+            switch newValue {
+            case .idle:
+                drawingSession.phase = .idle
+                drawingSession.committedPoints = []
+            case .placingFirstPoint:
+                drawingSession.phase = .placing(stepIndex: 0)
+                if drawingSession.committedPoints.count > 1 {
+                    drawingSession.committedPoints = Array(drawingSession.committedPoints.prefix(1))
+                }
+            case .placingSecondPoint:
+                drawingSession.phase = .placing(stepIndex: 1)
+            case .editing:
+                drawingSession.phase = .editing
+            case .committing:
+                drawingSession.phase = .committing
+            }
+        }
+    }
+
+    var pendingDrawingFirstPoint: (time: Date, price: Double)? {
+        get {
+            guard let first = drawingSession.committedPoints.first else { return nil }
+            return (time: first.time, price: first.price)
+        }
+        set {
+            guard let newValue else {
+                drawingSession.committedPoints = []
+                return
+            }
+            let nextPoint = MarkerDrawingGuidePoint(time: newValue.time, price: newValue.price)
+            if drawingSession.committedPoints.isEmpty {
+                drawingSession.committedPoints = [nextPoint]
+            } else {
+                drawingSession.committedPoints[0] = nextPoint
+            }
+        }
+    }
+
+    var editingDrawingId: UUID? {
+        get { drawingSession.editingDraftId }
+        set { drawingSession.editingDraftId = newValue }
+    }
+
+    var drawingGuidePoint: (time: Date, price: Double)? {
+        get {
+            guard let point = drawingSession.guidePoint else { return nil }
+            return (time: point.time, price: point.price)
+        }
+        set {
+            drawingSession.guidePoint = newValue.map {
+                MarkerDrawingGuidePoint(time: $0.time, price: $0.price)
+            }
+        }
+    }
 
     var isEditingExistingMarker: Bool {
         editingMarkerId != nil
@@ -237,74 +269,59 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     var activeDrawingWorkflowTool: MarkerDrawingWorkflowTool? {
-        if let activeSubTool {
-            if activeSubTool == MarkerToolOption.drawTrendline.rawValue {
-                return .trendline
-            }
-            if activeSubTool == MarkerToolOption.drawHorizontalLine.rawValue {
-                return .horizontalLine
-            }
-            if activeSubTool == MarkerToolOption.drawZone.rawValue {
-                return .zone
-            }
+        if let sessionTool = drawingSession.tool {
+            return sessionTool
+        }
+
+        if let activeSubTool,
+           let mappedTool = MarkerDrawingToolKind.from(activeSubTool: activeSubTool) {
+            return mappedTool
         }
 
         guard let activeDrawingDraft else { return nil }
-        switch activeDrawingDraft.payload {
-        case .drawingTrendline:
-            return .trendline
-        case .drawingHorizontalLine:
-            return .horizontalLine
-        case .drawingZone:
-            return .zone
-        case .note:
-            return .note
-        case .reactionEmoji:
-            return .emoji
-        default:
-            return nil
-        }
+        return MarkerDrawingToolKind.from(componentType: activeDrawingDraft.componentType)
     }
 
     var isDrawingWorkflowActive: Bool {
-        if drawingInteractionPhase != .idle {
+        if drawingSession.isActive {
             return true
         }
-        if editingDrawingId != nil {
-            return true
-        }
-        return activeTool == .draw
+        return activeTool == .draw || activeTool == .levels
     }
 
     var shouldShowDrawingDiscardAction: Bool {
-        if isDrawingWorkflowActive {
-            if activeDrawingWorkflowTool != nil || pendingDrawingFirstPoint != nil {
-                return true
-            }
+        if !isDrawingWorkflowActive {
+            return false
         }
-        return activeLevelComponentTypeForCurrentSelection != nil
+        return activeDrawingWorkflowTool != nil
+            || pendingDrawingFirstPoint != nil
+            || activeLevelComponentTypeForCurrentSelection != nil
     }
 
     var toolbarInstructionText: String? {
         if let tool = activeDrawingWorkflowTool {
+            let definition = MarkerDrawingToolRegistry.definition(for: tool)
             switch drawingInteractionPhase {
             case .placingFirstPoint:
-                return "\(tool.title): tap 1st point"
+                return definition.placementInstruction(for: 0)
             case .placingSecondPoint:
-                return "\(tool.title): tap 2nd point"
+                return definition.placementInstruction(for: 1)
             case .editing:
                 if tool == .note || tool == .emoji {
-                    return "\(tool.title): drag, tap chart"
+                    return "\(tool.title): drag to place, tap chart to save"
                 }
-                if tool == .horizontalLine,
+                if (tool == .horizontalLine || tool == .support || tool == .resistance),
                    let draft = activeDrawingDraft {
-                    let lineLabel = horizontalLineLabel(for: draft.id, fallback: "Line")
-                    return "\(lineLabel): drag up/down, tap"
+                    let lineLabel = levelOrHorizontalLabel(for: draft, fallback: tool.defaultLabel ?? tool.title)
+                    return "\(lineLabel): drag handle, tap chart to save"
                 }
-                return "\(tool.title): drag points, tap"
+                return "\(tool.title): drag handles, tap chart to save"
             case .committing:
                 return "Saving..."
             case .idle:
+                if definition.requiresGuidePlacement {
+                    return definition.placementInstruction(for: 0)
+                }
                 return "\(tool.title) ready"
             }
         }
@@ -313,10 +330,10 @@ final class MarkerPlacementState: ObservableObject {
             switch activeSubTool {
             case MarkerToolOption.levelSupport.rawValue:
                 let supportLabel = levelLabel(for: .levelSupport, fallback: "Support")
-                return "\(supportLabel): drag or tap chart"
+                return "\(supportLabel): drag to position, tap to set"
             case MarkerToolOption.levelResistance.rawValue:
                 let resistanceLabel = levelLabel(for: .levelResistance, fallback: "Resistance")
-                return "\(resistanceLabel): drag or tap chart"
+                return "\(resistanceLabel): drag to position, tap to set"
             default:
                 break
             }
@@ -909,6 +926,39 @@ final class MarkerPlacementState: ObservableObject {
         return (added, blockedByLimit)
     }
 
+    @discardableResult
+    func attachActiveChartDrawings(_ drawings: [ChartDrawing]) -> (added: Int, blockedByLimit: Bool) {
+        let anchorTime = anchorDraft?.payload.anchorTime ?? Date()
+        let anchorPrice = anchorDraft?.payload.levelPrice ?? 0
+        var added = 0
+        var blockedByLimit = false
+
+        for drawing in drawings where drawing.isVisible {
+            let draft = ChartDrawingBridge.markerDraft(
+                from: drawing,
+                anchorTime: anchorTime,
+                anchorPrice: anchorPrice
+            )
+
+            if components.contains(where: { $0.id == draft.id }) {
+                continue
+            }
+
+            if isDrawingOverlayComponent(draft.componentType), !canAddDrawing {
+                blockedByLimit = true
+                continue
+            }
+
+            components.append(draft)
+            if let normalized = normalizedDrawingColorHex(from: draft.payload) {
+                drawingColorOverrides[draft.id] = normalized
+            }
+            added += 1
+        }
+
+        return (added, blockedByLimit)
+    }
+
     func upsertComponent(_ componentType: RLComponentType, payload: MarkerComponentPayload) {
         if componentType == .anchor, isAnchorLocked {
             return
@@ -971,7 +1021,7 @@ final class MarkerPlacementState: ObservableObject {
         setComponentPayload(at: index, to: payload)
         if let normalized = normalizedDrawingColorHex(from: payload) {
             drawingColorOverrides[id] = normalized
-        } else if componentType.isDrawing {
+        } else if isStyledDrawingComponent(componentType) {
             drawingColorOverrides.removeValue(forKey: id)
         }
     }
@@ -995,7 +1045,9 @@ final class MarkerPlacementState: ObservableObject {
                         startPrice: payload.startPrice,
                         endTime: payload.endTime,
                         endPrice: payload.endPrice,
-                        colorHex: normalized
+                        colorHex: normalized,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
                     )
                 )
             )
@@ -1006,7 +1058,9 @@ final class MarkerPlacementState: ObservableObject {
                     HorizontalLinePayload(
                         price: payload.price,
                         label: payload.label,
-                        colorHex: normalized
+                        colorHex: normalized,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
                     )
                 )
             )
@@ -1019,7 +1073,35 @@ final class MarkerPlacementState: ObservableObject {
                         bottomPrice: payload.bottomPrice,
                         startTime: payload.startTime,
                         endTime: payload.endTime,
-                        colorHex: normalized
+                        colorHex: normalized,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .levelSupport(payload):
+            setComponentPayload(
+                at: index,
+                to: .levelSupport(
+                    LevelPayload(
+                        price: payload.price,
+                        label: payload.label,
+                        colorHex: normalized,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .levelResistance(payload):
+            setComponentPayload(
+                at: index,
+                to: .levelResistance(
+                    LevelPayload(
+                        price: payload.price,
+                        label: payload.label,
+                        colorHex: normalized,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
                     )
                 )
             )
@@ -1041,6 +1123,89 @@ final class MarkerPlacementState: ObservableObject {
         }
         guard let draft = components.first(where: { $0.id == draftId }) else { return nil }
         return normalizedDrawingColorHex(from: draft.payload)
+    }
+
+    func drawingLineStyle(for draftId: UUID, fallback: MarkerDrawingLineStyle = .dashed) -> MarkerDrawingLineStyle {
+        guard let draft = components.first(where: { $0.id == draftId }) else { return fallback }
+        return draft.payload.drawingLineStyle ?? fallback
+    }
+
+    func setDrawingLineStyle(_ lineStyle: MarkerDrawingLineStyle, for draftId: UUID) {
+        guard let draft = components.first(where: { $0.id == draftId }) else { return }
+
+        switch draft.payload {
+        case let .drawingTrendline(payload):
+            updateComponent(
+                id: draftId,
+                payload: .drawingTrendline(
+                    TrendlinePayload(
+                        startTime: payload.startTime,
+                        startPrice: payload.startPrice,
+                        endTime: payload.endTime,
+                        endPrice: payload.endPrice,
+                        colorHex: payload.colorHex,
+                        lineStyle: lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .drawingHorizontalLine(payload):
+            updateComponent(
+                id: draftId,
+                payload: .drawingHorizontalLine(
+                    HorizontalLinePayload(
+                        price: payload.price,
+                        label: payload.label,
+                        colorHex: payload.colorHex,
+                        lineStyle: lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .drawingZone(payload):
+            updateComponent(
+                id: draftId,
+                payload: .drawingZone(
+                    ZonePayload(
+                        topPrice: payload.topPrice,
+                        bottomPrice: payload.bottomPrice,
+                        startTime: payload.startTime,
+                        endTime: payload.endTime,
+                        colorHex: payload.colorHex,
+                        lineStyle: lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .levelSupport(payload):
+            updateComponent(
+                id: draftId,
+                payload: .levelSupport(
+                    LevelPayload(
+                        price: payload.price,
+                        label: payload.label,
+                        colorHex: payload.colorHex,
+                        lineStyle: lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .levelResistance(payload):
+            updateComponent(
+                id: draftId,
+                payload: .levelResistance(
+                    LevelPayload(
+                        price: payload.price,
+                        label: payload.label,
+                        colorHex: payload.colorHex,
+                        lineStyle: lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        default:
+            break
+        }
     }
 
     func drawingColor(for draftId: UUID, fallback: Color) -> Color {
@@ -1068,7 +1233,7 @@ final class MarkerPlacementState: ObservableObject {
 
     func setHorizontalLineLabel(_ label: String, for draftId: UUID) {
         guard let draft = components.first(where: { $0.id == draftId }) else { return }
-        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = String(label.trimmingCharacters(in: .whitespacesAndNewlines).prefix(15))
         switch draft.payload {
         case .drawingHorizontalLine(let payload):
             updateComponent(
@@ -1077,7 +1242,9 @@ final class MarkerPlacementState: ObservableObject {
                     HorizontalLinePayload(
                         price: payload.price,
                         label: trimmed.isEmpty ? nil : trimmed,
-                        colorHex: payload.colorHex
+                        colorHex: payload.colorHex,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
                     )
                 )
             )
@@ -1185,9 +1352,7 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     func resetDrawingInteraction() {
-        drawingInteractionPhase = .idle
-        pendingDrawingFirstPoint = nil
-        editingDrawingId = nil
+        drawingSession = .inactive
     }
 
     func prepareForInteractiveDrawing() {
@@ -1196,27 +1361,53 @@ final class MarkerPlacementState: ObservableObject {
 
     func startDrawingWorkflow(tool: MarkerDrawingWorkflowTool) {
         prepareForInteractiveDrawing()
-        activeTool = .draw
-        activeSubTool = drawingSubToolRawValue(for: tool)
-        drawingInteractionPhase = .placingFirstPoint
-        pendingDrawingFirstPoint = nil
-        editingDrawingId = nil
+        let definition = MarkerDrawingToolRegistry.definition(for: tool)
+        activeTool = definition.preferredToolGroup
+        activeSubTool = definition.preferredSubToolRawValue
+        drawingSession = MarkerDrawingSession(
+            tool: tool,
+            phase: definition.requiresGuidePlacement ? .placing(stepIndex: 0) : .editing,
+            committedPoints: [],
+            guidePoint: nil,
+            editingDraftId: nil,
+            selectedHandle: nil,
+            isPanLocked: definition.requiresGuidePlacement
+        )
     }
 
     func setDrawingFirstPoint(time: Date, price: Double) {
-        pendingDrawingFirstPoint = (time: time, price: price)
-        drawingInteractionPhase = .placingSecondPoint
+        let firstPoint = MarkerDrawingGuidePoint(time: time, price: price)
+        if drawingSession.committedPoints.isEmpty {
+            drawingSession.committedPoints = [firstPoint]
+        } else {
+            drawingSession.committedPoints[0] = firstPoint
+        }
+        drawingSession.phase = .placing(stepIndex: 1)
+        drawingSession.isPanLocked = true
     }
 
     func beginDrawingCommit() {
-        drawingInteractionPhase = .committing
+        drawingSession.phase = .committing
+    }
+
+    func setDrawingGuidePoint(_ point: MarkerDrawingGuidePoint?) {
+        drawingSession.guidePoint = point
+    }
+
+    func setDrawingPanLocked(_ isLocked: Bool) {
+        drawingSession.isPanLocked = isLocked
+    }
+
+    func setSelectedDrawingHandle(_ handle: MarkerDrawingHandle?) {
+        drawingSession.selectedHandle = handle
+        if drawingSession.drawingInteractionPhase == .editing {
+            drawingSession.isPanLocked = handle != nil
+        }
     }
 
     func commitDrawingAndExit() {
-        drawingInteractionPhase = .idle
-        pendingDrawingFirstPoint = nil
-        editingDrawingId = nil
-        if activeTool == .draw {
+        drawingSession = .inactive
+        if activeTool == .draw || activeTool == .levels {
             activeTool = nil
             activeSubTool = nil
         }
@@ -1245,8 +1436,85 @@ final class MarkerPlacementState: ObservableObject {
         startDrawingWorkflow(tool: .trendline)
     }
 
+    @discardableResult
+    func activateImmediateHorizontalDrawing(tool: MarkerDrawingWorkflowTool) -> UUID? {
+        prepareForInteractiveDrawing()
+
+        let definition = MarkerDrawingToolRegistry.definition(for: tool)
+        activeTool = definition.preferredToolGroup
+        activeSubTool = definition.preferredSubToolRawValue
+
+        let anchorPrice = anchorDraft?.payload.levelPrice ?? 0
+
+        switch tool {
+        case .horizontalLine:
+            guard canAddDrawing else { return nil }
+            let draftId = addDrawingOverlayComponent(
+                .drawingHorizontalLine,
+                payload: .drawingHorizontalLine(
+                    HorizontalLinePayload(
+                        price: anchorPrice,
+                        label: tool.defaultLabel
+                    )
+                )
+            )
+            if let draftId {
+                beginEditingDrawing(draftId, tool: tool)
+            }
+            return draftId
+
+        case .support:
+            let existingColor = component(.levelSupport)?.payload.drawingColorHex
+            let existingStyle = component(.levelSupport)?.payload.drawingLineStyle
+            let existingWidth = component(.levelSupport)?.payload.drawingLineWidth
+            upsertComponent(
+                .levelSupport,
+                payload: .levelSupport(
+                    LevelPayload(
+                        price: componentPrice(.levelSupport) ?? anchorPrice,
+                        label: levelLabel(for: .levelSupport, fallback: tool.defaultLabel ?? "Support"),
+                        colorHex: existingColor,
+                        lineStyle: existingStyle,
+                        lineWidth: existingWidth
+                    )
+                )
+            )
+            if let draftId = component(.levelSupport)?.id {
+                beginEditingDrawing(draftId, tool: tool)
+                return draftId
+            }
+            return nil
+
+        case .resistance:
+            let existingColor = component(.levelResistance)?.payload.drawingColorHex
+            let existingStyle = component(.levelResistance)?.payload.drawingLineStyle
+            let existingWidth = component(.levelResistance)?.payload.drawingLineWidth
+            upsertComponent(
+                .levelResistance,
+                payload: .levelResistance(
+                    LevelPayload(
+                        price: componentPrice(.levelResistance) ?? anchorPrice,
+                        label: levelLabel(for: .levelResistance, fallback: tool.defaultLabel ?? "Resistance"),
+                        colorHex: existingColor,
+                        lineStyle: existingStyle,
+                        lineWidth: existingWidth
+                    )
+                )
+            )
+            if let draftId = component(.levelResistance)?.id {
+                beginEditingDrawing(draftId, tool: tool)
+                return draftId
+            }
+            return nil
+
+        default:
+            startDrawingWorkflow(tool: tool)
+            return nil
+        }
+    }
+
     func beginHorizontalLinePlacement() {
-        startDrawingWorkflow(tool: .horizontalLine)
+        _ = activateImmediateHorizontalDrawing(tool: .horizontalLine)
     }
 
     func beginZonePlacement() {
@@ -1255,13 +1523,24 @@ final class MarkerPlacementState: ObservableObject {
 
     func beginEditingDrawing(_ draftId: UUID, tool: MarkerDrawingWorkflowTool? = nil) {
         prepareForInteractiveDrawing()
-        activeTool = .draw
         if let tool {
-            activeSubTool = drawingSubToolRawValue(for: tool)
+            let definition = MarkerDrawingToolRegistry.definition(for: tool)
+            activeTool = definition.preferredToolGroup
+            activeSubTool = definition.preferredSubToolRawValue
+            drawingSession.tool = tool
+        } else if let existingTool = activeDrawingWorkflowTool {
+            let definition = MarkerDrawingToolRegistry.definition(for: existingTool)
+            activeTool = definition.preferredToolGroup
+            activeSubTool = definition.preferredSubToolRawValue
+        } else {
+            activeTool = .draw
         }
-        drawingInteractionPhase = .editing
-        editingDrawingId = draftId
-        pendingDrawingFirstPoint = nil
+        drawingSession.phase = .editing
+        drawingSession.editingDraftId = draftId
+        drawingSession.committedPoints = []
+        drawingSession.guidePoint = nil
+        drawingSession.selectedHandle = nil
+        drawingSession.isPanLocked = false
     }
 
     func availableGroups() -> [MarkerToolGroup] {
@@ -1344,17 +1623,15 @@ final class MarkerPlacementState: ObservableObject {
             let value = componentPrice(.levelTp) ?? fallback
             upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: value, label: "TP")))
         case .levelSupport:
-            let value = componentPrice(.levelSupport) ?? anchorPrice
-            upsertComponent(.levelSupport, payload: .levelSupport(LevelPayload(price: value, label: "Support")))
+            _ = activateImmediateHorizontalDrawing(tool: .support)
         case .levelResistance:
-            let value = componentPrice(.levelResistance) ?? anchorPrice
-            upsertComponent(.levelResistance, payload: .levelResistance(LevelPayload(price: value, label: "Resistance")))
+            _ = activateImmediateHorizontalDrawing(tool: .resistance)
         case .drawTrendline:
-            break
+            startDrawingWorkflow(tool: .trendline)
         case .drawHorizontalLine:
-            break
+            _ = activateImmediateHorizontalDrawing(tool: .horizontalLine)
         case .drawZone:
-            break
+            startDrawingWorkflow(tool: .zone)
         case .indicatorRSI:
             _ = upsertIndicator(name: "RSI", settings: nil)
         case .indicatorMACD:
@@ -1373,6 +1650,9 @@ final class MarkerPlacementState: ObservableObject {
                 ? "Add your context"
                 : note.trimmingCharacters(in: .whitespacesAndNewlines)
             upsertComponent(.textNote, payload: .note(NotePayload(text: text)))
+            if let draftId = component(.textNote)?.id {
+                beginEditingDrawing(draftId, tool: .note)
+            }
         case .timeframe1m:
             _ = upsertTimeframeLink("1m")
         case .timeframe5m:
@@ -1391,21 +1671,33 @@ final class MarkerPlacementState: ObservableObject {
                 ? "High-priority alert"
                 : note.trimmingCharacters(in: .whitespacesAndNewlines)
             upsertComponent(.textNote, payload: .note(NotePayload(text: text)))
+            if let draftId = component(.textNote)?.id {
+                beginEditingDrawing(draftId, tool: .note)
+            }
         case .styleEmojiIdea:
             if component(.reactionEmoji) == nil && !canAddDrawing {
                 return
             }
             upsertComponent(.reactionEmoji, payload: .reactionEmoji(EmojiPayload(emoji: "🎯")))
+            if let draftId = component(.reactionEmoji)?.id {
+                beginEditingDrawing(draftId, tool: .emoji)
+            }
         case .styleEmojiFire:
             if component(.reactionEmoji) == nil && !canAddDrawing {
                 return
             }
             upsertComponent(.reactionEmoji, payload: .reactionEmoji(EmojiPayload(emoji: "🔥")))
+            if let draftId = component(.reactionEmoji)?.id {
+                beginEditingDrawing(draftId, tool: .emoji)
+            }
         case .styleEmojiBearish:
             if component(.reactionEmoji) == nil && !canAddDrawing {
                 return
             }
             upsertComponent(.reactionEmoji, payload: .reactionEmoji(EmojiPayload(emoji: "🐻")))
+            if let draftId = component(.reactionEmoji)?.id {
+                beginEditingDrawing(draftId, tool: .emoji)
+            }
         }
     }
 
@@ -1573,9 +1865,13 @@ final class MarkerPlacementState: ObservableObject {
             return MarkerToolOption.drawTrendline.rawValue
         case .horizontalLine:
             return MarkerToolOption.drawHorizontalLine.rawValue
+        case .support:
+            return MarkerToolOption.levelSupport.rawValue
+        case .resistance:
+            return MarkerToolOption.levelResistance.rawValue
         case .zone:
             return MarkerToolOption.drawZone.rawValue
-        case .note, .emoji:
+        case .note, .emoji, .rayLine, .verticalLine, .crossLine, .parallelChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
             return nil
         }
     }
@@ -1596,13 +1892,26 @@ final class MarkerPlacementState: ObservableObject {
         }
     }
 
-    private func levelLabel(for componentType: RLComponentType, fallback: String) -> String {
+    func levelLabel(for componentType: RLComponentType, fallback: String) -> String {
         guard let component = component(componentType) else { return fallback }
         switch component.payload {
         case .levelSupport(let payload):
             let label = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return label.isEmpty ? fallback : label
         case .levelResistance(let payload):
+            let label = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return label.isEmpty ? fallback : label
+        default:
+            return fallback
+        }
+    }
+
+    private func levelOrHorizontalLabel(for draft: MarkerComponentDraft, fallback: String) -> String {
+        switch draft.payload {
+        case .drawingHorizontalLine(let payload):
+            let label = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return label.isEmpty ? fallback : label
+        case .levelSupport(let payload), .levelResistance(let payload):
             let label = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return label.isEmpty ? fallback : label
         default:
@@ -1665,6 +1974,10 @@ final class MarkerPlacementState: ObservableObject {
         MarkerPlacementChecklistItem(id: id, title: title, isRequired: isRequired, isComplete: isComplete)
     }
 
+    private func isStyledDrawingComponent(_ componentType: RLComponentType) -> Bool {
+        componentType.isDrawing || componentType == .levelSupport || componentType == .levelResistance
+    }
+
     private func isDrawingOverlayComponent(_ componentType: RLComponentType) -> Bool {
         if componentType == .reactionEmoji {
             return intent != .reaction
@@ -1684,7 +1997,9 @@ final class MarkerPlacementState: ObservableObject {
                     startPrice: incomingPayload.startPrice,
                     endTime: incomingPayload.endTime,
                     endPrice: incomingPayload.endPrice,
-                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex
+                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex,
+                    lineStyle: incomingPayload.lineStyle ?? existingPayload.lineStyle,
+                    lineWidth: incomingPayload.lineWidth ?? existingPayload.lineWidth
                 )
             )
         case let (.drawingHorizontalLine(existingPayload), .drawingHorizontalLine(incomingPayload)):
@@ -1692,7 +2007,9 @@ final class MarkerPlacementState: ObservableObject {
                 HorizontalLinePayload(
                     price: incomingPayload.price,
                     label: incomingPayload.label ?? existingPayload.label,
-                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex
+                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex,
+                    lineStyle: incomingPayload.lineStyle ?? existingPayload.lineStyle,
+                    lineWidth: incomingPayload.lineWidth ?? existingPayload.lineWidth
                 )
             )
         case let (.drawingZone(existingPayload), .drawingZone(incomingPayload)):
@@ -1702,7 +2019,29 @@ final class MarkerPlacementState: ObservableObject {
                     bottomPrice: incomingPayload.bottomPrice,
                     startTime: incomingPayload.startTime,
                     endTime: incomingPayload.endTime,
-                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex
+                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex,
+                    lineStyle: incomingPayload.lineStyle ?? existingPayload.lineStyle,
+                    lineWidth: incomingPayload.lineWidth ?? existingPayload.lineWidth
+                )
+            )
+        case let (.levelSupport(existingPayload), .levelSupport(incomingPayload)):
+            return .levelSupport(
+                LevelPayload(
+                    price: incomingPayload.price,
+                    label: incomingPayload.label ?? existingPayload.label,
+                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex,
+                    lineStyle: incomingPayload.lineStyle ?? existingPayload.lineStyle,
+                    lineWidth: incomingPayload.lineWidth ?? existingPayload.lineWidth
+                )
+            )
+        case let (.levelResistance(existingPayload), .levelResistance(incomingPayload)):
+            return .levelResistance(
+                LevelPayload(
+                    price: incomingPayload.price,
+                    label: incomingPayload.label ?? existingPayload.label,
+                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex,
+                    lineStyle: incomingPayload.lineStyle ?? existingPayload.lineStyle,
+                    lineWidth: incomingPayload.lineWidth ?? existingPayload.lineWidth
                 )
             )
         case let (.note(existingPayload), .note(incomingPayload)):
@@ -1752,6 +2091,10 @@ final class MarkerPlacementState: ObservableObject {
 
     private func normalizedDrawingColorHex(from payload: MarkerComponentPayload) -> String? {
         switch payload {
+        case let .levelSupport(value):
+            return normalizedHexColor(value.colorHex)
+        case let .levelResistance(value):
+            return normalizedHexColor(value.colorHex)
         case let .drawingTrendline(value):
             return normalizedHexColor(value.colorHex)
         case let .drawingHorizontalLine(value):

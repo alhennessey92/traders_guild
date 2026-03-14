@@ -1,20 +1,28 @@
 import Foundation
 
-/// Captures a stable indicator payload snapshot when placement mode begins.
-/// This allows "Mirror Chart Setup" to keep using pre-placement indicators
-/// even after temporary placement indicators are applied to the live chart.
-struct PlacementIndicatorSnapshot {
+/// Captures a stable chart context snapshot when placement mode begins.
+/// This keeps mirror-chart setup pinned to the pre-placement chart, even while
+/// temporary placement overlays are being shown on the live chart.
+struct ChartMirrorContextSnapshot {
     private(set) var didCapture = false
-    private(set) var payloads: [IndicatorPayload] = []
+    private(set) var indicators: [IndicatorPayload] = []
+    private(set) var drawings: [ChartDrawing] = []
 
-    mutating func captureIfNeeded(from activeIndicators: ActiveIndicators) {
+    // Backwards-compatible alias used by older tests/helpers.
+    var payloads: [IndicatorPayload] { indicators }
+
+    mutating func captureIfNeeded(from activeIndicators: ActiveIndicators, drawings activeDrawings: [ChartDrawing]) {
         guard !didCapture else { return }
-        payloads = MarkerPlacementIndicatorFactory.activePayloads(from: activeIndicators)
+        indicators = MarkerPlacementIndicatorFactory.activePayloads(from: activeIndicators)
+        drawings = activeDrawings
         didCapture = true
     }
 
     mutating func reset() {
         didCapture = false
-        payloads = []
+        indicators = []
+        drawings = []
     }
 }
+
+typealias PlacementIndicatorSnapshot = ChartMirrorContextSnapshot

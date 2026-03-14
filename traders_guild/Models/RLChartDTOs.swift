@@ -356,6 +356,23 @@ struct AnchorPayload: Codable {
 struct LevelPayload: Codable {
     let price: Double
     let label: String?
+    let colorHex: String?
+    let lineStyle: MarkerDrawingLineStyle?
+    let lineWidth: Double?
+
+    init(
+        price: Double,
+        label: String? = nil,
+        colorHex: String? = nil,
+        lineStyle: MarkerDrawingLineStyle? = nil,
+        lineWidth: Double? = nil
+    ) {
+        self.price = price
+        self.label = label
+        self.colorHex = colorHex
+        self.lineStyle = lineStyle
+        self.lineWidth = lineWidth
+    }
 }
 
 struct TrendlinePayload: Codable {
@@ -364,19 +381,25 @@ struct TrendlinePayload: Codable {
     let endTime: Date
     let endPrice: Double
     let colorHex: String?
+    let lineStyle: MarkerDrawingLineStyle?
+    let lineWidth: Double?
 
     init(
         startTime: Date,
         startPrice: Double,
         endTime: Date,
         endPrice: Double,
-        colorHex: String? = nil
+        colorHex: String? = nil,
+        lineStyle: MarkerDrawingLineStyle? = nil,
+        lineWidth: Double? = nil
     ) {
         self.startTime = startTime
         self.startPrice = startPrice
         self.endTime = endTime
         self.endPrice = endPrice
         self.colorHex = colorHex
+        self.lineStyle = lineStyle
+        self.lineWidth = lineWidth
     }
 }
 
@@ -384,11 +407,21 @@ struct HorizontalLinePayload: Codable {
     let price: Double
     let label: String?
     let colorHex: String?
+    let lineStyle: MarkerDrawingLineStyle?
+    let lineWidth: Double?
 
-    init(price: Double, label: String? = nil, colorHex: String? = nil) {
+    init(
+        price: Double,
+        label: String? = nil,
+        colorHex: String? = nil,
+        lineStyle: MarkerDrawingLineStyle? = nil,
+        lineWidth: Double? = nil
+    ) {
         self.price = price
         self.label = label
         self.colorHex = colorHex
+        self.lineStyle = lineStyle
+        self.lineWidth = lineWidth
     }
 }
 
@@ -398,19 +431,25 @@ struct ZonePayload: Codable {
     let startTime: Date?
     let endTime: Date?
     let colorHex: String?
+    let lineStyle: MarkerDrawingLineStyle?
+    let lineWidth: Double?
 
     init(
         topPrice: Double,
         bottomPrice: Double,
         startTime: Date?,
         endTime: Date?,
-        colorHex: String? = nil
+        colorHex: String? = nil,
+        lineStyle: MarkerDrawingLineStyle? = nil,
+        lineWidth: Double? = nil
     ) {
         self.topPrice = topPrice
         self.bottomPrice = bottomPrice
         self.startTime = startTime
         self.endTime = endTime
         self.colorHex = colorHex
+        self.lineStyle = lineStyle
+        self.lineWidth = lineWidth
     }
 }
 
@@ -603,6 +642,63 @@ extension MarkerComponentPayload {
             return payload.emoji
         }
         return nil
+    }
+
+    var drawingColorHex: String? {
+        switch self {
+        case .levelEntry(let payload),
+             .levelSl(let payload),
+             .levelTp(let payload),
+             .levelSupport(let payload),
+             .levelResistance(let payload):
+            return payload.colorHex
+        case .drawingTrendline(let payload):
+            return payload.colorHex
+        case .drawingHorizontalLine(let payload):
+            return payload.colorHex
+        case .drawingZone(let payload):
+            return payload.colorHex
+        default:
+            return nil
+        }
+    }
+
+    var drawingLineStyle: MarkerDrawingLineStyle? {
+        switch self {
+        case .levelEntry(let payload),
+             .levelSl(let payload),
+             .levelTp(let payload),
+             .levelSupport(let payload),
+             .levelResistance(let payload):
+            return payload.lineStyle
+        case .drawingTrendline(let payload):
+            return payload.lineStyle
+        case .drawingHorizontalLine(let payload):
+            return payload.lineStyle
+        case .drawingZone(let payload):
+            return payload.lineStyle
+        default:
+            return nil
+        }
+    }
+
+    var drawingLineWidth: Double? {
+        switch self {
+        case .levelEntry(let payload),
+             .levelSl(let payload),
+             .levelTp(let payload),
+             .levelSupport(let payload),
+             .levelResistance(let payload):
+            return payload.lineWidth
+        case .drawingTrendline(let payload):
+            return payload.lineWidth
+        case .drawingHorizontalLine(let payload):
+            return payload.lineWidth
+        case .drawingZone(let payload):
+            return payload.lineWidth
+        default:
+            return nil
+        }
     }
 }
 

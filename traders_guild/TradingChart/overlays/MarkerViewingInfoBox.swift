@@ -12,7 +12,7 @@ struct MarkerViewingInfoBox: View {
     let onVote: (UUID, UUID) -> Void
 
     private var expandedWidth: CGFloat {
-        max(240, chartWidth - yAxisWidth - 12)
+        min(max(220, chartWidth * 0.34), max(244, chartWidth - yAxisWidth - 12))
     }
 
     var body: some View {

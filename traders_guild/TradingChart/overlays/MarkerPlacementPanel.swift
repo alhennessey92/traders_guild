@@ -3,6 +3,7 @@ import SwiftUI
 struct MarkerPlacementPanel: View {
     @ObservedObject var placementState: MarkerPlacementState
     let activeChartIndicators: [IndicatorPayload]
+    let activeChartDrawings: [ChartDrawing]
     let currentChartTimeframe: RLChartTimeframe?
     let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     let onBeginInteractiveDrawing: (() -> Void)?
@@ -15,6 +16,7 @@ struct MarkerPlacementPanel: View {
     init(
         placementState: MarkerPlacementState,
         activeChartIndicators: [IndicatorPayload] = [],
+        activeChartDrawings: [ChartDrawing] = [],
         currentChartTimeframe: RLChartTimeframe? = nil,
         onSelectTimeframe: ((RLChartTimeframe) -> Void)? = nil,
         onBeginInteractiveDrawing: (() -> Void)? = nil,
@@ -26,6 +28,7 @@ struct MarkerPlacementPanel: View {
     ) {
         self.placementState = placementState
         self.activeChartIndicators = activeChartIndicators
+        self.activeChartDrawings = activeChartDrawings
         self.currentChartTimeframe = currentChartTimeframe
         self.onSelectTimeframe = onSelectTimeframe
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
@@ -46,6 +49,7 @@ struct MarkerPlacementPanel: View {
                     adapter: MarkerComponentsAdapter(
                         placementState: placementState,
                         activeChartIndicators: activeChartIndicators,
+                        activeChartDrawings: activeChartDrawings,
                         currentChartTimeframe: currentChartTimeframe,
                         onSelectTimeframeAction: onSelectTimeframe,
                         onBeginInteractiveDrawing: onBeginInteractiveDrawing,

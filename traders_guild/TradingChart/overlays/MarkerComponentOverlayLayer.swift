@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// Renders a marker's components (levels, trendlines, zones) as temporary overlays
-/// on the chart when a marker is selected and its detail view is open.
-/// Uses solid lines (not dashed like GhostPreviewLayer) to differentiate from placement preview.
+/// Renders a marker's components as read-only overlays when a marker is selected.
 struct MarkerComponentOverlayLayer: View {
     let components: [RLMarkerComponentDTO]
     let yForPrice: (Double) -> CGFloat?
@@ -11,93 +9,232 @@ struct MarkerComponentOverlayLayer: View {
     var formatPrice: ((Double) -> String)?
 
     var body: some View {
-        Canvas { context, size in
-            drawHorizontalLines(context: context)
-            drawTrendlines(context: context)
-            drawZones(context: context)
+        ZStack(alignment: .topLeading) {
+            Canvas { context, _ in
+                drawLevels(context: context)
+                drawHorizontalLines(context: context)
+                drawTrendlines(context: context)
+                drawZones(context: context)
+            }
+            .allowsHitTesting(false)
         }
-        .allowsHitTesting(false)
     }
 
-    // MARK: - Computed Helpers
-
-    private var trendlineComponents: [RLMarkerComponentDTO] {
-        components.filter { $0.componentTypeEnum == .drawingTrendline }
+    private var levelComponents: [RLMarkerComponentDTO] {
+        components.filter { $0.componentTypeEnum?.isLevel ?? false }
     }
 
     private var horizontalLineComponents: [RLMarkerComponentDTO] {
         components.filter { $0.componentTypeEnum == .drawingHorizontalLine }
     }
 
+    private var trendlineComponents: [RLMarkerComponentDTO] {
+        components.filter { $0.componentTypeEnum == .drawingTrendline }
+    }
+
     private var zoneComponents: [RLMarkerComponentDTO] {
         components.filter { $0.componentTypeEnum == .drawingZone }
     }
 
-    // MARK: - Canvas Drawing
+    private var labeledComponents: [RLMarkerComponentDTO] {
+        components.filter { component in
+            switch component.payload {
+            case .levelSupport, .levelResistance, .drawingHorizontalLine:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private func drawLevels(context: GraphicsContext) {
+        for component in levelComponents {
+            guard let price = component.payload.levelPrice,
+                  let y = yForPrice(price),
+                  y.isFinite else {
+                continue
+            }
+
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: max(0, width - 60), y: y))
+
+            context.stroke(
+                path,
+                with: .color(componentColor(component).opacity(0.8)),
+                style: drawingStrokeStyle(
+                    lineStyle: component.payload.drawingLineStyle ?? .dashed,
+                    lineWidth: resolvedIndicatorLineWidth(
+                        for: component.payload.drawingLineStyle ?? .dashed,
+                        preferredWidth: CGFloat(
+                            component.payload.drawingLineWidth
+                            ?? defaultIndicatorLineWidth(for: component.payload.drawingLineStyle ?? .dashed)
+                        )
+                    )
+                )
+            )
+        }
+    }
 
     private func drawHorizontalLines(context: GraphicsContext) {
         for component in horizontalLineComponents {
-            guard case let .drawingHorizontalLine(payload) = component.payload else { continue }
-            guard let y = yForPrice(payload.price) else { continue }
+            guard case let .drawingHorizontalLine(payload) = component.payload,
+                  let y = yForPrice(payload.price),
+                  y.isFinite else {
+                continue
+            }
 
             let startX: CGFloat = 0
             let endX = max(0, width - 60)
             var path = Path()
             path.move(to: CGPoint(x: startX, y: y))
             path.addLine(to: CGPoint(x: endX, y: y))
+            let lineStyle = payload.lineStyle ?? .dashed
+            let lineWidth = resolvedIndicatorLineWidth(
+                for: lineStyle,
+                preferredWidth: CGFloat(payload.lineWidth ?? defaultIndicatorLineWidth(for: lineStyle))
+            )
 
-            let lineColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingHorizontalLine.color
             context.stroke(
                 path,
-                with: .color(lineColor.opacity(0.72)),
-                style: StrokeStyle(lineWidth: 1.8, dash: [8, 5])
+                with: .color(componentColor(component).opacity(0.8)),
+                style: drawingStrokeStyle(
+                    lineStyle: lineStyle,
+                    lineWidth: lineWidth
+                )
             )
         }
     }
 
     private func drawTrendlines(context: GraphicsContext) {
         for component in trendlineComponents {
-            guard case let .drawingTrendline(payload) = component.payload else { continue }
-            guard let startY = yForPrice(payload.startPrice),
-                  let endY = yForPrice(payload.endPrice) else { continue }
+            guard case let .drawingTrendline(payload) = component.payload,
+                  let startY = yForPrice(payload.startPrice),
+                  let endY = yForPrice(payload.endPrice),
+                  startY.isFinite,
+                  endY.isFinite else {
+                continue
+            }
 
             let startX = xForTime?(payload.startTime) ?? width * 0.2
             let endX = xForTime?(payload.endTime) ?? width * 0.8
+            guard startX.isFinite, endX.isFinite else { continue }
 
             var path = Path()
             path.move(to: CGPoint(x: startX, y: startY))
             path.addLine(to: CGPoint(x: endX, y: endY))
-            let trendlineColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingTrendline.color
+
             context.stroke(
                 path,
-                with: .color(trendlineColor.opacity(0.7)),
-                style: StrokeStyle(lineWidth: 1.8)
+                with: .color(componentColor(component).opacity(0.72)),
+                style: drawingStrokeStyle(
+                    lineStyle: payload.lineStyle ?? .dashed,
+                    lineWidth: CGFloat(payload.lineWidth ?? 1.8)
+                )
             )
         }
     }
 
     private func drawZones(context: GraphicsContext) {
         for component in zoneComponents {
-            guard case let .drawingZone(payload) = component.payload else { continue }
-            guard let topY = yForPrice(payload.topPrice),
-                  let bottomY = yForPrice(payload.bottomPrice) else { continue }
+            guard case let .drawingZone(payload) = component.payload,
+                  let topY = yForPrice(payload.topPrice),
+                  let bottomY = yForPrice(payload.bottomPrice),
+                  topY.isFinite,
+                  bottomY.isFinite else {
+                continue
+            }
 
             let startX = (payload.startTime.flatMap { xForTime?($0) }) ?? width * 0.2
             let endX = (payload.endTime.flatMap { xForTime?($0) }) ?? width * 0.8
+            guard startX.isFinite, endX.isFinite else { continue }
             let rect = CGRect(
                 x: min(startX, endX),
                 y: min(topY, bottomY),
                 width: abs(endX - startX),
                 height: max(2, abs(bottomY - topY))
             )
-            let zoneColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingZone.color
+            let color = componentColor(component)
 
-            context.fill(Path(rect), with: .color(zoneColor.opacity(0.15)))
+            context.fill(Path(rect), with: .color(color.opacity(0.15)))
             context.stroke(
                 Path(rect),
-                with: .color(zoneColor.opacity(0.5)),
-                style: StrokeStyle(lineWidth: 1.2)
+                with: .color(color.opacity(0.55)),
+                style: drawingStrokeStyle(
+                    lineStyle: payload.lineStyle ?? .dashed,
+                    lineWidth: CGFloat(payload.lineWidth ?? 1.2)
+                )
             )
         }
+    }
+
+    private func drawingStrokeStyle(
+        lineStyle: MarkerDrawingLineStyle,
+        lineWidth: CGFloat
+    ) -> StrokeStyle {
+        StrokeStyle(lineWidth: lineWidth, dash: lineStyle.dashPattern)
+    }
+
+    private func defaultIndicatorLineWidth(for lineStyle: MarkerDrawingLineStyle) -> Double {
+        lineStyle == .solid ? 2.0 : 1.5
+    }
+
+    private func resolvedIndicatorLineWidth(
+        for lineStyle: MarkerDrawingLineStyle,
+        preferredWidth: CGFloat
+    ) -> CGFloat {
+        if lineStyle == .solid {
+            return max(preferredWidth, 2.0)
+        }
+        return max(preferredWidth, 1.5)
+    }
+
+    private func componentColor(_ component: RLMarkerComponentDTO) -> Color {
+        if let hex = component.payload.drawingColorHex,
+           let resolved = Color(hex: hex) {
+            return resolved
+        }
+        return component.componentTypeEnum?.color ?? AppColors.surfaceWhite70
+    }
+
+    private func labelInfo(for component: RLMarkerComponentDTO) -> (text: String, price: Double)? {
+        switch component.payload {
+        case .levelSupport(let payload):
+            return (resolvedLabel(payload.label, fallback: "Support"), payload.price)
+        case .levelResistance(let payload):
+            return (resolvedLabel(payload.label, fallback: "Resistance"), payload.price)
+        case .drawingHorizontalLine(let payload):
+            return (resolvedLabel(payload.label, fallback: "Line"), payload.price)
+        default:
+            return nil
+        }
+    }
+
+    private func resolvedLabel(_ raw: String?, fallback: String) -> String {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
+    private func priceLabelView(label: String, price: Double, color: Color, y: CGFloat) -> some View {
+        HStack(spacing: 3) {
+            Text(label)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+            Text(formattedPrice(price))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.88))
+        .cornerRadius(4)
+        .position(x: width - 40, y: y)
+        .allowsHitTesting(false)
+    }
+
+    private func formattedPrice(_ price: Double) -> String {
+        if let formatPrice {
+            return formatPrice(price)
+        }
+        return String(format: "%.4f", price)
     }
 }

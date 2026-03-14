@@ -601,22 +601,28 @@ struct MarkerXAxisTimeIndicator: View {
     let xPosition: CGFloat
     let chartHeight: CGFloat
     let timeframe: RLChartTimeframe
+    var showsMainXAxisLabels: Bool = true
     var timeZone: TimeZone = .current
 
     private var timeLabelY: CGFloat {
-        let bottomAreaHeight = chartHeight * 0.085
-        // Position directly on the x-axis line
-        return chartHeight - bottomAreaHeight
+        CrosshairTimeLabel.mainChartCenterY(
+            chartHeight: chartHeight,
+            showsMainXAxisLabels: showsMainXAxisLabels
+        )
     }
 
     var body: some View {
-        CrosshairTimeLabel(
-            timestamp: timestamp,
-            timeframe: timeframe,
-            timeZone: timeZone,
-            style: .markerPlacement
-        )
-            .position(x: xPosition, y: timeLabelY)
+        Group {
+            if xPosition.isFinite, timeLabelY.isFinite {
+                CrosshairTimeLabel(
+                    timestamp: timestamp,
+                    timeframe: timeframe,
+                    timeZone: timeZone,
+                    style: .markerPlacement
+                )
+                .position(x: xPosition, y: timeLabelY)
+            }
+        }
         .allowsHitTesting(false)
     }
 }

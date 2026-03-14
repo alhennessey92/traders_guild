@@ -10,6 +10,7 @@ struct GhostPreviewLayer: View {
     let guidePoint: (time: Date, price: Double)?
     let drawingInteractionPhase: DrawingInteractionPhase
     let editingDrawingId: UUID?
+    let showsInfoPanels: Bool
     /// Optional price formatter — uses symbol-appropriate decimal places when provided.
     var formatPrice: ((Double) -> String)?
     @State private var annotationDragStartOffsets: [UUID: CGPoint] = [:]
@@ -25,6 +26,7 @@ struct GhostPreviewLayer: View {
         guidePoint: (time: Date, price: Double)? = nil,
         drawingInteractionPhase: DrawingInteractionPhase = .idle,
         editingDrawingId: UUID? = nil,
+        showsInfoPanels: Bool = true,
         formatPrice: ((Double) -> String)? = nil
     ) {
         self.placementState = placementState
@@ -36,6 +38,7 @@ struct GhostPreviewLayer: View {
         self.guidePoint = guidePoint
         self.drawingInteractionPhase = drawingInteractionPhase
         self.editingDrawingId = editingDrawingId
+        self.showsInfoPanels = showsInfoPanels
         self.formatPrice = formatPrice
     }
 
@@ -51,22 +54,6 @@ struct GhostPreviewLayer: View {
                 drawGuideCrosshair(context: context, size: size)
             }
             .allowsHitTesting(false)
-
-            // SwiftUI overlay for price labels (crisp text rendering)
-            ForEach(placementState.components.filter { $0.componentType.isLevel }, id: \.id) { draft in
-                if shouldRenderLevelLabel(for: draft.componentType),
-                   let price = draft.payload.levelPrice,
-                   let y = yForPrice(price) {
-                    let isFixedSetupEntry = placementState.intent == .setup && draft.componentType == .levelEntry
-                    priceLabelView(
-                        label: draft.componentType.shortLabel,
-                        price: price,
-                        color: draft.componentType.color,
-                        y: y,
-                        isFixed: isFixedSetupEntry
-                    )
-                }
-            }
 
             if shouldShowInfoPanels {
                 VStack {
@@ -85,37 +72,6 @@ struct GhostPreviewLayer: View {
         }
     }
 
-    // MARK: - Price Label (SwiftUI overlay for crisp text)
-
-    private func priceLabelView(label: String, price: Double, color: Color, y: CGFloat, isFixed: Bool) -> some View {
-        HStack(spacing: 0) {
-            Spacer()
-            HStack(spacing: 4) {
-                Text(label)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(color)
-                if isFixed {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(AppColors.surfaceWhite82)
-                }
-                Text(formattedPrice(price))
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite90)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(
-                Capsule()
-                    .fill(AppColors.surfaceBlack70)
-                    .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 0.8))
-            )
-            .padding(.trailing, 64) // offset from right edge to stay left of Y-axis
-        }
-        .position(x: width / 2, y: y)
-        .allowsHitTesting(false)
-    }
-
     // MARK: - Canvas Drawing
 
     private func drawLevels(context: GraphicsContext) {
@@ -123,17 +79,28 @@ struct GhostPreviewLayer: View {
             guard shouldRenderSetupCoreLevelLine(for: draft.componentType) else { continue }
             guard let price = draft.payload.levelPrice, let y = yForPrice(price) else { continue }
             let isFixedSetupEntry = placementState.intent == .setup && draft.componentType == .levelEntry
+            let lineColor = drawingColor(for: draft)
+            let lineStyle = draft.payload.drawingLineStyle ?? (isFixedSetupEntry ? .solid : .dashed)
+            let lineWidth = CGFloat(
+                draft.payload.drawingLineWidth
+                ?? defaultIndicatorLineWidth(for: lineStyle, isFixed: isFixedSetupEntry)
+            )
 
             var path = Path()
             path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: width, y: y))
+            path.addLine(to: CGPoint(x: max(0, width - 60), y: y))
 
             context.stroke(
                 path,
-                with: .color(color(for: draft.componentType).opacity(isFixedSetupEntry ? 0.72 : 0.58)),
-                style: isFixedSetupEntry
-                    ? StrokeStyle(lineWidth: 1.8)
-                    : StrokeStyle(lineWidth: 1.6, dash: [8, 6])
+                with: .color(lineColor.opacity(isFixedSetupEntry ? 0.84 : 0.8)),
+                style: StrokeStyle(
+                    lineWidth: resolvedIndicatorLineWidth(
+                        for: lineStyle,
+                        preferredWidth: lineWidth,
+                        isFixed: isFixedSetupEntry
+                    ),
+                    dash: lineStyle.dashPattern
+                )
             )
         }
     }
@@ -152,9 +119,9 @@ struct GhostPreviewLayer: View {
                 drawHorizontalLine(
                     context: context,
                     y: startY,
-                    price: payload.startPrice,
-                    label: "Line",
                     color: trendlineColor,
+                    lineStyle: payload.lineStyle ?? .dashed,
+                    lineWidth: CGFloat(payload.lineWidth ?? 2.0),
                     isEditing: drawingInteractionPhase == .editing && editingDrawingId == trendline.id
                 )
                 continue
@@ -169,14 +136,17 @@ struct GhostPreviewLayer: View {
             context.stroke(
                 path,
                 with: .color(trendlineColor.opacity(0.64)),
-                style: StrokeStyle(lineWidth: 2.0, dash: [10, 6])
+                style: StrokeStyle(
+                    lineWidth: CGFloat(payload.lineWidth ?? 2.0),
+                    dash: (payload.lineStyle ?? .dashed).dashPattern
+                )
             )
 
             if drawingInteractionPhase == .editing, editingDrawingId == trendline.id {
                 context.stroke(
                     path,
                     with: .color(trendlineColor.opacity(0.92)),
-                    style: StrokeStyle(lineWidth: 2.8)
+                    style: StrokeStyle(lineWidth: CGFloat(max(payload.lineWidth ?? 2.0, 2.4)))
                 )
                 drawControlHandle(
                     context: context,
@@ -202,16 +172,15 @@ struct GhostPreviewLayer: View {
                 for: line.id,
                 fallback: RLComponentType.drawingHorizontalLine.color
             )
-            let resolvedLabel: String = {
-                let trimmed = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                return trimmed.isEmpty ? "Line" : trimmed
-            }()
             drawHorizontalLine(
                 context: context,
                 y: y,
-                price: payload.price,
-                label: resolvedLabel,
                 color: lineColor,
+                lineStyle: payload.lineStyle ?? .dashed,
+                lineWidth: CGFloat(
+                    payload.lineWidth
+                    ?? defaultIndicatorLineWidth(for: payload.lineStyle ?? .dashed)
+                ),
                 isEditing: drawingInteractionPhase == .editing && editingDrawingId == line.id
             )
         }
@@ -220,9 +189,9 @@ struct GhostPreviewLayer: View {
     private func drawHorizontalLine(
         context: GraphicsContext,
         y: CGFloat,
-        price: Double,
-        label: String,
         color: Color,
+        lineStyle: MarkerDrawingLineStyle,
+        lineWidth: CGFloat,
         isEditing: Bool
     ) {
         let startX: CGFloat = 0
@@ -230,56 +199,20 @@ struct GhostPreviewLayer: View {
         var path = Path()
         path.move(to: CGPoint(x: startX, y: y))
         path.addLine(to: CGPoint(x: endX, y: y))
+        let resolvedLineWidth = resolvedIndicatorLineWidth(
+            for: lineStyle,
+            preferredWidth: lineWidth,
+            isFixed: lineStyle == .solid
+        )
         context.stroke(
             path,
-            with: .color(color.opacity(isEditing ? 0.92 : 0.64)),
-            style: StrokeStyle(lineWidth: isEditing ? 2.6 : 2.0, dash: [10, 6])
-        )
-
-        drawHorizontalLineLabel(
-            context: context,
-            y: y,
-            price: price,
-            label: label,
-            color: color
-        )
-
-        if isEditing {
-            drawControlHandle(
-                context: context,
-                center: CGPoint(x: (startX + endX) * 0.5, y: y),
-                color: color,
-                size: 20
+            with: .color(color.opacity(isEditing ? 0.9 : 0.8)),
+            style: StrokeStyle(
+                lineWidth: isEditing ? max(resolvedLineWidth, 2.4) : resolvedLineWidth,
+                dash: lineStyle.dashPattern
             )
-        }
-    }
-
-    private func drawHorizontalLineLabel(
-        context: GraphicsContext,
-        y: CGFloat,
-        price: Double,
-        label: String,
-        color: Color
-    ) {
-        let displayText = "\(label) \(formattedPrice(price))"
-        let estimatedWidth = max(52, CGFloat(displayText.count) * 5.6 + 10)
-        let labelX = max(10 + estimatedWidth / 2, width - 38)
-
-        let labelRect = CGRect(
-            x: labelX - estimatedWidth / 2,
-            y: y - 11,
-            width: estimatedWidth,
-            height: 22
         )
 
-        let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
-        context.fill(roundedPath, with: .color(color.opacity(0.88)))
-        context.draw(
-            Text(displayText)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white),
-            at: CGPoint(x: labelX, y: y)
-        )
     }
 
     private func drawZones(context: GraphicsContext) {
@@ -304,7 +237,10 @@ struct GhostPreviewLayer: View {
             context.stroke(
                 Path(rect),
                 with: .color(zoneColor.opacity(0.55)),
-                style: StrokeStyle(lineWidth: 1.4, dash: [6, 5])
+                style: StrokeStyle(
+                    lineWidth: CGFloat(payload.lineWidth ?? 1.4),
+                    dash: (payload.lineStyle ?? .dashed).dashPattern
+                )
             )
 
             if drawingInteractionPhase == .editing, editingDrawingId == zone.id {
@@ -365,19 +301,33 @@ struct GhostPreviewLayer: View {
     }
 
     private func drawGuideCrosshair(context: GraphicsContext, size: CGSize) {
-        guard drawingInteractionPhase == .placingFirstPoint || drawingInteractionPhase == .placingSecondPoint,
+        let activeTool = placementState.activeDrawingWorkflowTool
+        let toolRequiresGuide = activeTool.map { MarkerDrawingToolRegistry.definition(for: $0).requiresGuidePlacement } ?? false
+        let shouldShowGuide = (
+            toolRequiresGuide
+            && (drawingInteractionPhase == .placingFirstPoint || drawingInteractionPhase == .placingSecondPoint)
+        )
+            || (
+                drawingInteractionPhase == .editing
+                && placementState.drawingSession.selectedHandle != nil
+                && activeTool?.group == .pointSequence
+            )
+
+        guard shouldShowGuide,
               let guidePoint,
-              let y = yForPrice(guidePoint.price) else {
+              let y = yForPrice(guidePoint.price),
+              y.isFinite else {
             return
         }
 
         let x = xForTime?(guidePoint.time) ?? size.width / 2
+        guard x.isFinite else { return }
 
         var crosshair = Path()
-        crosshair.move(to: CGPoint(x: x, y: 0))
-        crosshair.addLine(to: CGPoint(x: x, y: size.height))
-        crosshair.move(to: CGPoint(x: 0, y: y))
-        crosshair.addLine(to: CGPoint(x: size.width, y: y))
+        crosshair.move(to: CGPoint(x: x, y: -2))
+        crosshair.addLine(to: CGPoint(x: x, y: size.height + 2))
+        crosshair.move(to: CGPoint(x: -2, y: y))
+        crosshair.addLine(to: CGPoint(x: size.width + 2, y: y))
         context.stroke(
             crosshair,
             with: .color(AppColors.surfaceWhite22),
@@ -390,6 +340,24 @@ struct GhostPreviewLayer: View {
             color: .white,
             size: 14
         )
+    }
+
+    private func defaultIndicatorLineWidth(for lineStyle: MarkerDrawingLineStyle, isFixed: Bool = false) -> Double {
+        if isFixed || lineStyle == .solid {
+            return 2.0
+        }
+        return 1.5
+    }
+
+    private func resolvedIndicatorLineWidth(
+        for lineStyle: MarkerDrawingLineStyle,
+        preferredWidth: CGFloat,
+        isFixed: Bool = false
+    ) -> CGFloat {
+        if isFixed || lineStyle == .solid {
+            return max(preferredWidth, 2.0)
+        }
+        return max(preferredWidth, 1.5)
     }
 
     private func drawControlHandle(context: GraphicsContext, center: CGPoint, color: Color, size: CGFloat) {
@@ -411,6 +379,10 @@ struct GhostPreviewLayer: View {
 
     private func color(for componentType: RLComponentType) -> Color {
         componentType.color
+    }
+
+    private func drawingColor(for draft: MarkerComponentDraft) -> Color {
+        placementState.drawingColor(for: draft.id, fallback: color(for: draft.componentType))
     }
 
     private var shouldShowSetupInfoPanel: Bool {
@@ -439,10 +411,25 @@ struct GhostPreviewLayer: View {
     }
 
     private func shouldRenderLevelLabel(for componentType: RLComponentType) -> Bool {
-        if componentType == .levelSupport || componentType == .levelResistance {
-            return false
+        return shouldRenderPriceLabel(for: componentType)
+    }
+
+    private func shouldRenderPriceLabel(for componentType: RLComponentType) -> Bool {
+        componentType == .drawingHorizontalLine || shouldRenderSetupCoreLevelLine(for: componentType)
+    }
+
+    private func resolvedLevelLabel(for draft: MarkerComponentDraft) -> String {
+        switch draft.payload {
+        case .levelSupport(let payload):
+            return (payload.label?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? payload.label! : "Support")
+        case .levelResistance(let payload):
+            return (payload.label?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? payload.label! : "Resistance")
+        case .drawingHorizontalLine(let payload):
+            let trimmed = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? "Line" : trimmed
+        default:
+            return draft.componentType.shortLabel
         }
-        return shouldRenderSetupCoreLevelLine(for: componentType)
     }
 
     private func shouldRenderSetupCoreLevelLine(for componentType: RLComponentType) -> Bool {
@@ -456,36 +443,38 @@ struct GhostPreviewLayer: View {
             let offset = annotationOffset(for: draft.payload)
             let x = anchorPoint.x + CGFloat(offset.x)
             let y = anchorPoint.y + CGFloat(offset.y)
-            let isSelectedForEditing = drawingInteractionPhase == .editing && editingDrawingId == draft.id
+            if x.isFinite, y.isFinite {
+                let isSelectedForEditing = drawingInteractionPhase == .editing && editingDrawingId == draft.id
 
-            switch draft.payload {
-            case .note(let payload):
-                if isSelectedForEditing {
-                    annotationNoteView(text: payload.text, isSelected: true)
-                        .position(x: x, y: y)
-                        .highPriorityGesture(annotationDragGesture(draftId: draft.id, payload: draft.payload))
-                        .allowsHitTesting(true)
-                } else {
-                    annotationNoteView(text: payload.text, isSelected: false)
-                        .position(x: x, y: y)
-                        .allowsHitTesting(false)
+                switch draft.payload {
+                case .note(let payload):
+                    if isSelectedForEditing {
+                        annotationNoteView(text: payload.text, isSelected: true)
+                            .position(x: x, y: y)
+                            .highPriorityGesture(annotationDragGesture(draftId: draft.id, payload: draft.payload))
+                            .allowsHitTesting(true)
+                    } else {
+                        annotationNoteView(text: payload.text, isSelected: false)
+                            .position(x: x, y: y)
+                            .allowsHitTesting(false)
+                    }
+                case .reactionEmoji(let payload):
+                    if isSelectedForEditing {
+                        annotationEmojiView(emoji: payload.emoji, isSelected: true)
+                            .scaleEffect(placementState.emojiScale(for: draft.id))
+                            .position(x: x, y: y)
+                            .highPriorityGesture(annotationDragGesture(draftId: draft.id, payload: draft.payload))
+                            .simultaneousGesture(annotationEmojiScaleGesture(draftId: draft.id))
+                            .allowsHitTesting(true)
+                    } else {
+                        annotationEmojiView(emoji: payload.emoji, isSelected: false)
+                            .scaleEffect(placementState.emojiScale(for: draft.id))
+                            .position(x: x, y: y)
+                            .allowsHitTesting(false)
+                    }
+                default:
+                    EmptyView()
                 }
-            case .reactionEmoji(let payload):
-                if isSelectedForEditing {
-                    annotationEmojiView(emoji: payload.emoji, isSelected: true)
-                        .scaleEffect(placementState.emojiScale(for: draft.id))
-                        .position(x: x, y: y)
-                        .highPriorityGesture(annotationDragGesture(draftId: draft.id, payload: draft.payload))
-                        .simultaneousGesture(annotationEmojiScaleGesture(draftId: draft.id))
-                        .allowsHitTesting(true)
-                } else {
-                    annotationEmojiView(emoji: payload.emoji, isSelected: false)
-                        .scaleEffect(placementState.emojiScale(for: draft.id))
-                        .position(x: x, y: y)
-                        .allowsHitTesting(false)
-                }
-            default:
-                EmptyView()
             }
         }
     }
@@ -592,10 +581,12 @@ struct GhostPreviewLayer: View {
     private var annotationAnchorPoint: CGPoint? {
         guard let anchor = placementState.anchorDraft,
               let anchorPrice = anchor.payload.levelPrice,
-              let anchorY = yForPrice(anchorPrice) else {
+              let anchorY = yForPrice(anchorPrice),
+              anchorY.isFinite else {
             return nil
         }
         let anchorX = xForTime?(anchor.payload.anchorTime ?? Date()) ?? width * 0.5
+        guard anchorX.isFinite else { return nil }
         return CGPoint(x: anchorX, y: anchorY)
     }
 
@@ -660,7 +651,7 @@ struct GhostPreviewLayer: View {
     }
 
     private var shouldShowInfoPanels: Bool {
-        shouldShowChecklistPanel
+        showsInfoPanels && shouldShowChecklistPanel
     }
 
     private var shouldShowChecklistPanel: Bool {
@@ -668,6 +659,33 @@ struct GhostPreviewLayer: View {
     }
 
     private var checklistPanel: some View {
+        MarkerPlacementChecklistPanel(
+            placementState: placementState,
+            panelWidth: infoPanelWidth
+        )
+    }
+
+    private func formattedPrice(_ price: Double) -> String {
+        if let formatPrice {
+            return formatPrice(price)
+        }
+        // Fallback: auto-detect appropriate decimal places
+        if price >= 100 {
+            return String(format: "%.2f", price)
+        } else if price >= 1 {
+            return String(format: "%.4f", price)
+        } else {
+            return String(format: "%.5f", price)
+        }
+    }
+
+}
+
+struct MarkerPlacementChecklistPanel: View {
+    @ObservedObject var placementState: MarkerPlacementState
+    var panelWidth: CGFloat = 188
+
+    var body: some View {
         Group {
             if placementState.isChecklistCollapsed {
                 collapsedChecklistStrip
@@ -675,6 +693,7 @@ struct GhostPreviewLayer: View {
                 expandedChecklistPanel
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: placementState.isChecklistCollapsed)
     }
 
     private var expandedChecklistPanel: some View {
@@ -707,7 +726,7 @@ struct GhostPreviewLayer: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .frame(width: infoPanelWidth, alignment: .leading)
+        .frame(width: panelWidth, alignment: .leading)
         .background(OverlayPanelChrome.background(cornerRadius: 12))
     }
 
@@ -737,9 +756,10 @@ struct GhostPreviewLayer: View {
 
     private func checklistRow(_ item: MarkerPlacementChecklistItem) -> some View {
         HStack(alignment: .top, spacing: 7) {
-            Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
+            Image(systemName: statusIcon(for: item))
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(item.isComplete ? AppColors.statusPositive95 : AppColors.surfaceWhite50)
+                .foregroundColor(statusColor(for: item))
+                .frame(width: 12)
 
             Text(item.title)
                 .font(.system(size: 9.5, weight: item.isRequired ? .semibold : .regular))
@@ -747,13 +767,21 @@ struct GhostPreviewLayer: View {
                 .multilineTextAlignment(.leading)
                 .lineLimit(5)
                 .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 6)
-
-            Text(item.isRequired ? "REQ" : "TIP")
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(item.isRequired ? AppColors.statusWarning95 : AppColors.greyText)
         }
+    }
+
+    private func statusIcon(for item: MarkerPlacementChecklistItem) -> String {
+        if item.isComplete {
+            return "checkmark.circle.fill"
+        }
+        return item.isRequired ? "exclamationmark.triangle.fill" : "circle"
+    }
+
+    private func statusColor(for item: MarkerPlacementChecklistItem) -> Color {
+        if item.isComplete {
+            return AppColors.statusPositive95
+        }
+        return item.isRequired ? AppColors.statusWarning95 : AppColors.surfaceWhite50
     }
 
     private func toggleChecklistPanel() {
@@ -761,19 +789,4 @@ struct GhostPreviewLayer: View {
             placementState.isChecklistCollapsed.toggle()
         }
     }
-
-    private func formattedPrice(_ price: Double) -> String {
-        if let formatPrice {
-            return formatPrice(price)
-        }
-        // Fallback: auto-detect appropriate decimal places
-        if price >= 100 {
-            return String(format: "%.2f", price)
-        } else if price >= 1 {
-            return String(format: "%.4f", price)
-        } else {
-            return String(format: "%.5f", price)
-        }
-    }
-
 }
