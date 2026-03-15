@@ -48,6 +48,10 @@ struct MarkerComponentOverlayLayer: View {
     }
 
     private func drawLevels(context: GraphicsContext) {
+        let lineEndX = ChartAxisMetrics.horizontalLineEndX(
+            totalWidth: width,
+            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+        )
         for component in levelComponents {
             guard let price = component.payload.levelPrice,
                   let y = yForPrice(price),
@@ -57,7 +61,7 @@ struct MarkerComponentOverlayLayer: View {
 
             var path = Path()
             path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: max(0, width - 60), y: y))
+            path.addLine(to: CGPoint(x: lineEndX, y: y))
 
             context.stroke(
                 path,
@@ -77,6 +81,10 @@ struct MarkerComponentOverlayLayer: View {
     }
 
     private func drawHorizontalLines(context: GraphicsContext) {
+        let endX = ChartAxisMetrics.horizontalLineEndX(
+            totalWidth: width,
+            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+        )
         for component in horizontalLineComponents {
             guard case let .drawingHorizontalLine(payload) = component.payload,
                   let y = yForPrice(payload.price),
@@ -85,7 +93,6 @@ struct MarkerComponentOverlayLayer: View {
             }
 
             let startX: CGFloat = 0
-            let endX = max(0, width - 60)
             var path = Path()
             path.move(to: CGPoint(x: startX, y: y))
             path.addLine(to: CGPoint(x: endX, y: y))
@@ -218,16 +225,27 @@ struct MarkerComponentOverlayLayer: View {
     private func priceLabelView(label: String, price: Double, color: Color, y: CGFloat) -> some View {
         HStack(spacing: 3) {
             Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .font(.system(size: ChartAxisMetrics.horizontalLabelFontSize, weight: .bold, design: .monospaced))
             Text(formattedPrice(price))
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
         }
         .foregroundColor(.white)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
+        .padding(.horizontal, ChartAxisMetrics.horizontalPriceChipHorizontalPadding)
+        .padding(.vertical, ChartAxisMetrics.horizontalPriceChipVerticalPadding)
+        .frame(width: ChartAxisMetrics.horizontalLabeledChipWidth)
         .background(color.opacity(0.88))
-        .cornerRadius(4)
-        .position(x: width - 40, y: y)
+        .cornerRadius(ChartAxisMetrics.horizontalPriceChipCornerRadius)
+        .position(
+            x: ChartAxisMetrics.trailingLabelCenterX(
+                totalWidth: width,
+                width: ChartAxisMetrics.horizontalLabeledChipWidth
+            ),
+            y: y
+        )
         .allowsHitTesting(false)
     }
 

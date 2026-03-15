@@ -72,6 +72,23 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func drawingDefaultsMatchUpdatedHorizontalAndLevelPalette() {
+        #expect(ChartDrawingType.horizontalLine.defaultColorHex == "#9CA3AF")
+        #expect(ChartDrawingType.supportLevel.defaultColorHex == "#7C3AED")
+        #expect(ChartDrawingType.resistanceLevel.defaultColorHex == "#DC2626")
+
+        let expectedColors: [(RLComponentType, Color)] = [
+            (.drawingHorizontalLine, Color(hex: "#9CA3AF") ?? .gray),
+            (.levelSupport, Color(hex: "#7C3AED") ?? .purple),
+            (.levelResistance, Color(hex: "#DC2626") ?? .red),
+        ]
+
+        for (componentType, expectedColor) in expectedColors {
+            #expect(colorDistance(rgba(componentType.color), rgba(expectedColor)) < 0.02)
+        }
+    }
+
+    @Test
     func displayableComponentCountOnlyIncludesSurfacedTypes() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let components: [RLMarkerComponentDTO] = [
@@ -313,6 +330,86 @@ struct MarkerPlanFixesTests {
             timeframePanelHeights: []
         )
         #expect(bottomBoundaryStrip == 0)
+    }
+
+    @Test
+    func timeframePanelSourcesStayIsolatedAcrossModeSwitches() {
+        let manager = TimeframePanelManager()
+
+        manager.replacePanels(
+            for: .chartDefaults,
+            backendValues: ["1h"],
+            symbolId: nil,
+            guildId: nil
+        )
+
+        guard let chartPanel = manager.panels(for: .chartDefaults).first else {
+            Issue.record("Expected chart-default timeframe panel")
+            return
+        }
+
+        chartPanel.collapse()
+
+        manager.replacePanels(
+            for: .markerPlacement,
+            backendValues: ["4h"],
+            symbolId: nil,
+            guildId: nil,
+            resetPresentationState: true
+        )
+
+        let chartPanels = manager.panels(for: .chartDefaults)
+        let placementPanels = manager.panels(for: .markerPlacement)
+
+        #expect(chartPanels.count == 1)
+        #expect(chartPanels.first?.timeframe == .h1)
+        #expect(chartPanels.first?.isCollapsed == true)
+        #expect(placementPanels.count == 1)
+        #expect(placementPanels.first?.timeframe == .h4)
+        #expect(placementPanels.first?.isCollapsed == false)
+        #expect(abs((placementPanels.first?.currentHeight ?? 0) - TimeframePanelManager.defaultPanelHeight) < 0.001)
+    }
+
+    @Test
+    func removedCollapsedPanelDoesNotPoisonNewTimeframeEntryState() {
+        let manager = TimeframePanelManager()
+
+        manager.replacePanels(
+            for: .markerPlacement,
+            backendValues: ["1h"],
+            symbolId: nil,
+            guildId: nil,
+            resetPresentationState: true
+        )
+
+        guard let existingPanel = manager.panels(for: .markerPlacement).first else {
+            Issue.record("Expected placement timeframe panel")
+            return
+        }
+
+        existingPanel.collapse()
+        #expect(existingPanel.isCollapsed)
+        #expect(existingPanel.currentHeight == 0)
+
+        manager.replacePanels(
+            for: .markerPlacement,
+            backendValues: [],
+            symbolId: nil,
+            guildId: nil
+        )
+        manager.replacePanels(
+            for: .markerPlacement,
+            backendValues: ["4h", "1d"],
+            symbolId: nil,
+            guildId: nil
+        )
+
+        let replacementPanels = manager.panels(for: .markerPlacement)
+        #expect(replacementPanels.count == 2)
+        #expect(replacementPanels.allSatisfy { !$0.isCollapsed })
+        #expect(replacementPanels.allSatisfy {
+            abs($0.currentHeight - TimeframePanelManager.defaultPanelHeight) < 0.001
+        })
     }
 
     @Test

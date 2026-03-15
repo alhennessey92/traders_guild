@@ -75,6 +75,10 @@ struct GhostPreviewLayer: View {
     // MARK: - Canvas Drawing
 
     private func drawLevels(context: GraphicsContext) {
+        let lineEndX = ChartAxisMetrics.horizontalLineEndX(
+            totalWidth: width,
+            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+        )
         for draft in placementState.components where draft.componentType.isLevel {
             guard shouldRenderSetupCoreLevelLine(for: draft.componentType) else { continue }
             guard let price = draft.payload.levelPrice, let y = yForPrice(price) else { continue }
@@ -88,7 +92,7 @@ struct GhostPreviewLayer: View {
 
             var path = Path()
             path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: max(0, width - 60), y: y))
+            path.addLine(to: CGPoint(x: lineEndX, y: y))
 
             context.stroke(
                 path,
@@ -195,7 +199,10 @@ struct GhostPreviewLayer: View {
         isEditing: Bool
     ) {
         let startX: CGFloat = 0
-        let endX: CGFloat = max(0, width - 60)
+        let endX = ChartAxisMetrics.horizontalLineEndX(
+            totalWidth: width,
+            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+        )
         var path = Path()
         path.move(to: CGPoint(x: startX, y: y))
         path.addLine(to: CGPoint(x: endX, y: y))
@@ -507,20 +514,7 @@ struct GhostPreviewLayer: View {
 
     private func annotationEmojiView(emoji: String, isSelected: Bool) -> some View {
         Text(emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "🎯" : emoji)
-            .font(.system(size: 23))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.systemBlack.opacity(isSelected ? 0.8 : 0.66))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(
-                                RLComponentType.reactionEmoji.color.opacity(isSelected ? 0.92 : 0.55),
-                                lineWidth: isSelected ? 1.4 : 1
-                            )
-                    )
-            )
+            .font(.system(size: isSelected ? 26 : 24))
             .shadow(
                 color: RLComponentType.reactionEmoji.color.opacity(isSelected ? 0.35 : 0),
                 radius: isSelected ? 6 : 0,

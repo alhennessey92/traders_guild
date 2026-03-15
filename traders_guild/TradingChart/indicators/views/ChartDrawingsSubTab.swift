@@ -166,111 +166,102 @@ struct ChartDrawingsSubTab: View {
     }
 
     private var noteAnnotationCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "text.bubble")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(RLComponentType.textNote.color)
-
-                Text("Text Note")
-                    .font(.caption)
-                    .foregroundColor(.white)
-
-                Spacer(minLength: 0)
-
-                if let drawing = textNoteDrawing {
-                    Button("Remove") {
-                        drawingManager.removeDrawing(id: drawing.id)
-                        infoMessage = nil
-                        limitWarning = nil
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(AppColors.statusNegative85)
-                    .buttonStyle(.plain)
-                } else {
-                    Button("Add") {
-                        addTextNote()
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(AppColors.statusInfo90)
-                    .buttonStyle(.plain)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            catalogRow(
+                title: "Text Note",
+                subtitle: textNoteDrawing == nil
+                    ? "Add anchored context to the chart"
+                    : "Edit the note inline below",
+                icon: "text.bubble",
+                tint: RLComponentType.textNote.color
+            ) {
+                addTextNote()
             }
 
             if let drawing = textNoteDrawing {
-                TextField(
-                    "Write annotation",
-                    text: noteBinding(for: drawing.id, fallback: drawing.note ?? "")
-                )
-                .textFieldStyle(.plain)
-                .font(.caption)
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.whiteText.opacity(0.07))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                        )
-                )
+                annotationEditorCard {
+                    TextField(
+                        "Write annotation",
+                        text: noteBinding(for: drawing.id, fallback: drawing.note ?? "")
+                    )
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(AppColors.whiteText.opacity(0.07))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                            )
+                    )
+                }
+
+                annotationRemoveButton("Remove Note") {
+                    drawingManager.removeDrawing(id: drawing.id)
+                    infoMessage = nil
+                    limitWarning = nil
+                }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(overlayCardBackground)
     }
 
     private var emojiAnnotationCard: some View {
         let currentEmoji = emojiDrawing?.emoji
 
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "face.smiling")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(RLComponentType.reactionEmoji.color)
+        return VStack(alignment: .leading, spacing: 8) {
+            catalogRow(
+                title: "Emoji",
+                subtitle: currentEmoji == nil
+                    ? "Add a single emoji annotation"
+                    : "Choose the emoji below",
+                icon: "face.smiling",
+                tint: RLComponentType.reactionEmoji.color
+            ) {
+                setAnnotationEmoji(currentEmoji ?? (annotationEmojis.first ?? "🎯"))
+            }
 
-                Text("Emoji")
-                    .font(.caption)
-                    .foregroundColor(.white)
+            if currentEmoji != nil {
+                annotationEditorCard {
+                    let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(annotationEmojis, id: \.self) { emoji in
+                            let isSelected = currentEmoji == emoji
+                            Button {
+                                setAnnotationEmoji(emoji)
+                            } label: {
+                                Text(emoji)
+                                    .font(.system(size: 18))
+                                    .frame(height: 30)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(AppColors.whiteText.opacity(isSelected ? 0.14 : 0.08))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(
+                                                AppColors.surfaceWhite70.opacity(isSelected ? 0.85 : 0.18),
+                                                lineWidth: isSelected ? 1.5 : 1
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
 
-                Spacer(minLength: 0)
-
-                if let drawing = emojiDrawing {
-                    Button("Remove") {
+                annotationRemoveButton("Remove Emoji") {
+                    if let drawing = emojiDrawing {
                         drawingManager.removeDrawing(id: drawing.id)
                         infoMessage = nil
                         limitWarning = nil
                     }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(AppColors.statusNegative85)
-                    .buttonStyle(.plain)
-                }
-            }
-
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(annotationEmojis, id: \.self) { emoji in
-                    Button {
-                        setAnnotationEmoji(emoji)
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 18))
-                            .frame(height: 30)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(currentEmoji == emoji ? AppColors.statusInfo22 : AppColors.whiteText.opacity(0.08))
-                            )
-                    }
-                    .buttonStyle(.plain)
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(overlayCardBackground)
     }
 
     private var overlayCardBackground: some View {
@@ -280,6 +271,28 @@ struct ChartDrawingsSubTab: View {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
             )
+    }
+
+    private func annotationEditorCard<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            content()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(overlayCardBackground)
+    }
+
+    private func annotationRemoveButton(
+        _ title: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(title, action: action)
+            .font(.caption2.weight(.semibold))
+            .foregroundColor(AppColors.statusNegative85)
+            .buttonStyle(.plain)
+            .padding(.leading, 4)
     }
 
     private var patternsSubTab: some View {

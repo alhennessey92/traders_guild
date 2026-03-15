@@ -8,9 +8,6 @@ protocol ComponentsHostAdapter {
     var activeChartDrawings: [ChartDrawing] { get }
     var currentChartTimeframe: RLChartTimeframe? { get }
     var onBeginInteractiveDrawing: (() -> Void)? { get }
-    var timeframePanelManager: TimeframePanelManager? { get }
-    var symbolId: UUID? { get }
-    var guildId: UUID? { get }
     var showsMirrorButtons: Bool { get }
 
     func selectTimeframe(_ timeframe: RLChartTimeframe)
@@ -30,9 +27,6 @@ struct UnifiedComponentsHostView<Adapter: ComponentsHostAdapter>: View {
                 adapter.selectTimeframe(timeframe)
             },
             onBeginInteractiveDrawing: adapter.onBeginInteractiveDrawing,
-            timeframePanelManager: adapter.timeframePanelManager,
-            symbolId: adapter.symbolId,
-            guildId: adapter.guildId,
             showsMirrorButtons: adapter.showsMirrorButtons
         )
     }
@@ -46,9 +40,6 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
     let currentChartTimeframe: RLChartTimeframe?
     let onSelectTimeframeAction: ((RLChartTimeframe) -> Void)?
     let onBeginInteractiveDrawing: (() -> Void)?
-    let timeframePanelManager: TimeframePanelManager?
-    let symbolId: UUID?
-    let guildId: UUID?
     let showsMirrorButtons: Bool
 
     init(
@@ -58,9 +49,6 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
         currentChartTimeframe: RLChartTimeframe?,
         onSelectTimeframeAction: ((RLChartTimeframe) -> Void)?,
         onBeginInteractiveDrawing: (() -> Void)?,
-        timeframePanelManager: TimeframePanelManager?,
-        symbolId: UUID?,
-        guildId: UUID?,
         showsMirrorButtons: Bool = true
     ) {
         self.placementState = placementState
@@ -69,9 +57,6 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
         self.currentChartTimeframe = currentChartTimeframe
         self.onSelectTimeframeAction = onSelectTimeframeAction
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
-        self.timeframePanelManager = timeframePanelManager
-        self.symbolId = symbolId
-        self.guildId = guildId
         self.showsMirrorButtons = showsMirrorButtons
     }
 
@@ -91,9 +76,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
     private let onSelectTimeframeAction: ((RLChartTimeframe) -> Void)?
 
     var onBeginInteractiveDrawing: (() -> Void)?
-    var timeframePanelManager: TimeframePanelManager?
     private(set) var symbolId: UUID?
-    private(set) var guildId: UUID?
     private(set) var currentChartTimeframe: RLChartTimeframe?
     private var anchorTime: Date
     private var anchorPrice: Double
@@ -126,9 +109,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         onSelectTimeframeAction: ((RLChartTimeframe) -> Void)?,
         onRecalculate: @escaping () -> Void,
         onBeginInteractiveDrawing: (() -> Void)?,
-        timeframePanelManager: TimeframePanelManager?,
         symbolId: UUID?,
-        guildId: UUID?,
         anchorTime: Date?,
         anchorPrice: Double?
     ) {
@@ -140,9 +121,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         self.onSelectTimeframeAction = onSelectTimeframeAction
         self.onRecalculate = onRecalculate
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
-        self.timeframePanelManager = timeframePanelManager
         self.symbolId = symbolId
-        self.guildId = guildId
         self.anchorTime = anchorTime ?? Date()
         self.anchorPrice = anchorPrice ?? 0
 
@@ -150,11 +129,6 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         placementState.intent = .analysis
         setupSubscriptions()
         syncFromHost()
-        reconcileTimeframePanels(
-            previousLinks: [],
-            currentLinks: timeframeLinkManager.linkedTimeframes,
-            forceReload: true
-        )
     }
 
     func selectTimeframe(_ timeframe: RLChartTimeframe) {
@@ -164,49 +138,29 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
 
     func updateContext(
         currentChartTimeframe: RLChartTimeframe?,
-        timeframePanelManager: TimeframePanelManager?,
         symbolId: UUID?,
-        guildId: UUID?,
         anchorTime: Date?,
         anchorPrice: Double?
     ) {
-        let previousPanelManager = self.timeframePanelManager
-        let previousGuildId = self.guildId
         let previousTimeframe = self.currentChartTimeframe
         let previousSymbol = self.symbolId
 
         self.currentChartTimeframe = currentChartTimeframe
-        self.timeframePanelManager = timeframePanelManager
-        self.guildId = guildId
         if let anchorTime { self.anchorTime = anchorTime }
         if let anchorPrice { self.anchorPrice = anchorPrice }
 
         self.symbolId = symbolId
-        var previousLinks = timeframeLinkManager.linkedTimeframes
         let didSwitchSymbol = previousSymbol != symbolId
-        let didChangePanelManager = previousPanelManager !== timeframePanelManager
-        let didChangeGuild = previousGuildId != guildId
         let didChangeTimeframe = previousTimeframe != currentChartTimeframe
 
-        guard didSwitchSymbol || didChangePanelManager || didChangeGuild || didChangeTimeframe else {
+        guard didSwitchSymbol || didChangeTimeframe else {
             return
         }
 
         if previousSymbol != symbolId {
-            timeframePanelManager?.clearAll()
             timeframeLinkManager.symbolId = symbolId
             syncFromHost()
-            previousLinks = []
         }
-        if didChangePanelManager {
-            previousLinks = []
-        }
-
-        reconcileTimeframePanels(
-            previousLinks: previousLinks,
-            currentLinks: timeframeLinkManager.linkedTimeframes,
-            forceReload: didSwitchSymbol || didChangePanelManager || didChangeGuild || didChangeTimeframe
-        )
     }
 
     private func setupSubscriptions() {
@@ -305,7 +259,6 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         if timeframeSyncSignature(for: oldLinks) != timeframeSyncSignature(for: newLinks) {
             timeframeLinkManager.setLinkedTimeframes(newLinks)
             let currentLinks = timeframeLinkManager.linkedTimeframes
-            reconcileTimeframePanels(previousLinks: oldLinks, currentLinks: currentLinks)
             if oldLinks != currentLinks {
                 // Keep Active tab and linked-timeframe drafts aligned with the persisted chart link state.
                 syncFromHost()
@@ -404,31 +357,6 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
                 componentType: .timeframeLink,
                 payload: .timeframeLink(TimeframeLinkPayload(timeframe: normalized, note: nil))
             )
-        }
-    }
-
-    private func reconcileTimeframePanels(
-        previousLinks: [String],
-        currentLinks: [String],
-        forceReload: Bool = false
-    ) {
-        guard let timeframePanelManager else { return }
-
-        let previousFrames = Set(previousLinks.compactMap { RLChartTimeframe.fromBackendString($0) })
-        let currentFrames = Set(currentLinks.compactMap { RLChartTimeframe.fromBackendString($0) })
-
-        for timeframe in previousFrames.subtracting(currentFrames) {
-            timeframePanelManager.removePanel(timeframe: timeframe)
-        }
-
-        if let symbolId, let guildId {
-            for timeframe in currentFrames.subtracting(previousFrames) {
-                timeframePanelManager.addPanel(timeframe: timeframe, symbolId: symbolId, guildId: guildId)
-            }
-
-            if forceReload || !timeframePanelManager.panels.isEmpty {
-                timeframePanelManager.reloadAll(symbolId: symbolId, guildId: guildId)
-            }
         }
     }
 }

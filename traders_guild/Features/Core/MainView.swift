@@ -85,8 +85,6 @@ struct MainView: View {
 
     // MARK: - Timeframe Panel State
     @StateObject private var timeframePanelManager = TimeframePanelManager()
-    @State private var tfPanel1Height: CGFloat = 140
-    @State private var tfPanel2Height: CGFloat = 140
     @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
     
@@ -120,14 +118,7 @@ struct MainView: View {
     }
 
     private var timeframePanelHeights: [CGFloat] {
-        let count = timeframePanelManager.activePanelCount
-        if count >= 2 {
-            return [tfPanel1Height, tfPanel2Height]
-        }
-        if count == 1 {
-            return [tfPanel1Height]
-        }
-        return []
+        timeframePanelManager.panels.map(\.currentHeight)
     }
 
     /// Calculate total height of active indicator panels for bottom padding.
@@ -166,6 +157,40 @@ struct MainView: View {
     private var bottomControlsPadding: CGFloat {
         // Base padding for minimized bottom sheet + indicator panels
         return chartPanelsTotalHeight + 100
+    }
+
+    private var activeTimeframePanelSource: TimeframePanelSource {
+        if chartControlVM.isMarkerPlacementMode {
+            return .markerPlacement
+        }
+        if chartViewModel.selectedMarkerForSheet != nil {
+            return .markerViewing
+        }
+        return .chartDefaults
+    }
+
+    private var placementTimeframeFingerprint: String {
+        placementState.timeframeLinkDrafts
+            .compactMap { draft -> String? in
+                guard case let .timeframeLink(payload) = draft.payload else { return nil }
+                return payload.timeframe.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            }
+            .sorted()
+            .joined(separator: "|")
+    }
+
+    private var viewingTimeframeFingerprint: String {
+        guard let marker = chartViewModel.selectedMarkerForSheet else { return "" }
+        return marker.marker.components
+            .compactMap { component -> String? in
+                guard component.componentTypeEnum == .timeframeLink,
+                      case let .timeframeLink(payload) = component.payload else {
+                    return nil
+                }
+                return payload.timeframe.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            }
+            .sorted()
+            .joined(separator: "|")
     }
 
     private func indicatorPanelHeight(for panelType: PanelIndicatorType) -> CGFloat {
@@ -226,9 +251,7 @@ struct MainView: View {
                             intentColor: activeMarkerIntentColor,
                             baseCandleWidth: 12,
                             candleSpacing: 4,
-                            indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count,
-                            panel1Height: $tfPanel1Height,
-                            panel2Height: $tfPanel2Height
+                            indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count
                         )
 
                         // Indicator panels
@@ -398,6 +421,10 @@ struct MainView: View {
                 
                 // Initialize chart with data
                 await chartViewModel.initialize()
+                syncTimeframePanelsForCurrentMode(
+                    resetPlacementSource: true,
+                    resetViewingSource: true
+                )
                 
                 rlAppState.chartDidBecomeReady()
             }
@@ -412,6 +439,10 @@ struct MainView: View {
                         await rightDrawerViewModel.preloadData(for: guildId, appState: rlAppState)
                         
                         await chartViewModel.initialize()
+                        syncTimeframePanelsForCurrentMode(
+                            resetPlacementSource: true,
+                            resetViewingSource: true
+                        )
                         rlAppState.chartDidBecomeReady()
                     }
                 }
@@ -423,6 +454,7 @@ struct MainView: View {
                         selectedDetent = .fraction(0.35)
                     }
                 }
+                syncTimeframePanelsForCurrentMode(resetPlacementSource: isPlacing)
             }
             .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { oldId, newId in
                 chartControlVM.isMarkerViewingMode = (newId != nil)
@@ -432,6 +464,20 @@ struct MainView: View {
                         selectedDetent = .fraction(0.11)
                     }
                 }
+            }
+            .onChange(of: chartViewModel.currentSymbol?.id) { _, _ in
+                syncTimeframePanelsForCurrentMode()
+            }
+            .onChange(of: chartViewModel.chartTimeframeLinkManager.linkedTimeframes) { _, _ in
+                syncChartDefaultTimeframePanels()
+            }
+            .onChange(of: placementTimeframeFingerprint) { _, _ in
+                guard chartControlVM.isMarkerPlacementMode else { return }
+                syncPlacementTimeframePanels()
+            }
+            .onChange(of: viewingTimeframeFingerprint) { _, _ in
+                guard chartViewModel.selectedMarkerForSheet != nil else { return }
+                syncViewingTimeframePanels()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {
@@ -986,11 +1032,7 @@ struct MainView: View {
                 indicatorManager: chartViewModel.indicatorManager,
                 candles: chartDataManager.candles
             )
-            if chartControlVM.isMarkerPlacementMode {
-                populateTimeframePanelsForPlacement()
-            } else {
-                populateTimeframePanelsForChart()
-            }
+            syncTimeframePanelsForCurrentMode()
             return
         }
 
@@ -1000,51 +1042,65 @@ struct MainView: View {
             candles: chartDataManager.candles
         )
 
-        // Populate timeframe panels from marker's linked timeframes
-        populateTimeframePanels(for: marker)
+        syncTimeframePanelsForCurrentMode(resetViewingSource: true)
     }
 
-    private func populateTimeframePanels(for marker: ChartMarkerUI) {
-        let linkedValues = marker.marker.components.compactMap { component -> String? in
+    private func syncTimeframePanelsForCurrentMode(
+        resetPlacementSource: Bool = false,
+        resetViewingSource: Bool = false
+    ) {
+        syncChartDefaultTimeframePanels()
+        syncPlacementTimeframePanels(resetPresentationState: resetPlacementSource)
+        syncViewingTimeframePanels(resetPresentationState: resetViewingSource)
+        timeframePanelManager.setActiveSource(activeTimeframePanelSource)
+    }
+
+    private func syncChartDefaultTimeframePanels() {
+        syncTimeframePanels(
+            source: .chartDefaults,
+            backendValues: chartViewModel.chartTimeframeLinkManager.linkedTimeframes
+        )
+    }
+
+    private func syncPlacementTimeframePanels(resetPresentationState: Bool = false) {
+        let linkedValues = placementState.timeframeLinkDrafts.compactMap { draft -> String? in
+            guard case .timeframeLink(let payload) = draft.payload else { return nil }
+            return payload.timeframe
+        }
+        syncTimeframePanels(
+            source: .markerPlacement,
+            backendValues: linkedValues,
+            resetPresentationState: resetPresentationState
+        )
+    }
+
+    private func syncViewingTimeframePanels(resetPresentationState: Bool = false) {
+        let linkedValues = chartViewModel.selectedMarkerForSheet?.marker.components.compactMap { component -> String? in
             guard component.componentTypeEnum == .timeframeLink,
                   case .timeframeLink(let payload) = component.payload else {
                 return nil
             }
             return payload.timeframe
-        }
-        populateTimeframePanels(fromBackendValues: linkedValues)
+        } ?? []
+        syncTimeframePanels(
+            source: .markerViewing,
+            backendValues: linkedValues,
+            resetPresentationState: resetPresentationState
+        )
     }
 
-    private func populateTimeframePanelsForChart() {
-        populateTimeframePanels(fromBackendValues: chartViewModel.chartTimeframeLinkManager.linkedTimeframes)
-    }
-
-    private func populateTimeframePanelsForPlacement() {
-        let linkedValues = placementState.timeframeLinkDrafts.compactMap { draft -> String? in
-            guard case .timeframeLink(let payload) = draft.payload else { return nil }
-            return payload.timeframe
-        }
-        populateTimeframePanels(fromBackendValues: linkedValues)
-    }
-
-    private func populateTimeframePanels(fromBackendValues values: [String]) {
-        timeframePanelManager.clearAll()
-
-        guard let symbolId = chartViewModel.currentSymbol?.id,
-              let guildId = rlAppState.currentGuild?.id else { return }
-
-        var inserted = Set<RLChartTimeframe>()
-        for value in values {
-            guard let timeframe = RLChartTimeframe.fromBackendString(value),
-                  inserted.insert(timeframe).inserted else {
-                continue
-            }
-            timeframePanelManager.addPanel(timeframe: timeframe, symbolId: symbolId, guildId: guildId)
-        }
-
-        if !timeframePanelManager.panels.isEmpty {
-            timeframePanelManager.reloadAll(symbolId: symbolId, guildId: guildId)
-        }
+    private func syncTimeframePanels(
+        source: TimeframePanelSource,
+        backendValues: [String],
+        resetPresentationState: Bool = false
+    ) {
+        timeframePanelManager.replacePanels(
+            for: source,
+            backendValues: backendValues,
+            symbolId: chartViewModel.currentSymbol?.id,
+            guildId: rlAppState.currentGuild?.id,
+            resetPresentationState: resetPresentationState
+        )
     }
     
     
@@ -2203,9 +2259,7 @@ struct ChartBottomSheet: View {
                     selectedDetent = .fraction(0.11)
                 }
             },
-            timeframePanelManager: timeframePanelManager,
             symbolId: chartViewModel.currentSymbol?.id,
-            guildId: rlAppState.currentGuild?.id,
             anchorTime: latestCandle?.timestamp,
             anchorPrice: latestCandle?.close
         )
@@ -2249,10 +2303,7 @@ struct ChartBottomSheet: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     selectedDetent = .fraction(0.11)
                 }
-            },
-            timeframePanelManager: timeframePanelManager,
-            symbolId: chartViewModel.currentSymbol?.id,
-            guildId: rlAppState.currentGuild?.id
+            }
         )
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -2404,7 +2455,6 @@ struct ChartBottomSheet: View {
                 )
             }
             applyPlacementIndicatorsToChart()
-            syncPlacementTimeframePanels()
             return
         }
 
@@ -2413,60 +2463,11 @@ struct ChartBottomSheet: View {
             chartViewModel.indicatorManager.recalculateIndicators(candles: chartViewModel.dataManager.candles)
             placementIndicatorSnapshot.reset()
         }
-
-        if let marker = chartViewModel.selectedMarkerForSheet {
-            populateTimeframePanelsFromMarker(marker)
-        } else {
-            restoreChartLinkedTimeframePanels()
-        }
     }
 
     private func applyPlacementIndicatorsToChart() {
         chartViewModel.indicatorManager.applyMarkerIndicators(placementIndicatorComponents)
         chartViewModel.indicatorManager.recalculateIndicators(candles: chartViewModel.dataManager.candles)
-    }
-
-    private func restoreChartLinkedTimeframePanels() {
-        syncTimeframePanels(fromBackendValues: chartViewModel.chartTimeframeLinkManager.linkedTimeframes)
-    }
-
-    private func syncPlacementTimeframePanels() {
-        let linkedValues = placementState.timeframeLinkDrafts.compactMap { draft -> String? in
-            guard case .timeframeLink(let payload) = draft.payload else { return nil }
-            return payload.timeframe
-        }
-        syncTimeframePanels(fromBackendValues: linkedValues)
-    }
-
-    private func populateTimeframePanelsFromMarker(_ marker: ChartMarkerUI) {
-        let linkedValues = marker.components.compactMap { component -> String? in
-            guard component.componentTypeEnum == .timeframeLink,
-                  case .timeframeLink(let payload) = component.payload else {
-                return nil
-            }
-            return payload.timeframe
-        }
-        syncTimeframePanels(fromBackendValues: linkedValues)
-    }
-
-    private func syncTimeframePanels(fromBackendValues values: [String]) {
-        timeframePanelManager.clearAll()
-
-        guard let symbolId = chartViewModel.currentSymbol?.id,
-              let guildId = rlAppState.currentGuild?.id else { return }
-
-        var inserted = Set<RLChartTimeframe>()
-        for value in values {
-            guard let timeframe = RLChartTimeframe.fromBackendString(value),
-                  inserted.insert(timeframe).inserted else {
-                continue
-            }
-            timeframePanelManager.addPanel(timeframe: timeframe, symbolId: symbolId, guildId: guildId)
-        }
-
-        if !timeframePanelManager.panels.isEmpty {
-            timeframePanelManager.reloadAll(symbolId: symbolId, guildId: guildId)
-        }
     }
 
     private func refreshViewingIndicatorsIfNeeded() {

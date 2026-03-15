@@ -13,15 +13,15 @@ struct TimeframePanelView: View {
 
     // MARK: - Properties
 
-    @ObservedObject var dataManager: TimeframePanelDataManager
-    @ObservedObject var gestureState: TimeframePanelGestureState
+    @ObservedObject var entry: TimeframePanelEntry
+    @ObservedObject private var dataManager: TimeframePanelDataManager
+    @ObservedObject private var gestureState: TimeframePanelGestureState
 
     let markerTimestamp: Date
     let intentColor: Color
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
 
-    @Binding var panelHeight: CGFloat
     var minPanelHeight: CGFloat = 80
     var maxPanelHeight: CGFloat = 250
     var isBottomPanel: Bool = false
@@ -32,10 +32,16 @@ struct TimeframePanelView: View {
     @State private var dragStartHeight: CGFloat = 0
     @State private var lastDragTranslation: CGSize = .zero
     @State private var hasCenteredOnMarker = false
-    @State private var isCollapsed = false
-    @State private var expandedPanelHeight: CGFloat = 0
 
     // MARK: - Computed
+
+    private var panelHeight: CGFloat {
+        entry.currentHeight
+    }
+
+    private var isCollapsed: Bool {
+        entry.isCollapsed
+    }
 
     private var actualCandleWidth: CGFloat {
         baseCandleWidth * gestureState.candleWidthScale
@@ -51,6 +57,28 @@ struct TimeframePanelView: View {
 
     private var markerCandleIndex: Int? {
         dataManager.markerCandleIndex(for: markerTimestamp)
+    }
+
+    init(
+        entry: TimeframePanelEntry,
+        markerTimestamp: Date,
+        intentColor: Color,
+        baseCandleWidth: CGFloat,
+        candleSpacing: CGFloat,
+        minPanelHeight: CGFloat = 80,
+        maxPanelHeight: CGFloat = 250,
+        isBottomPanel: Bool = false
+    ) {
+        self._entry = ObservedObject(wrappedValue: entry)
+        self._dataManager = ObservedObject(wrappedValue: entry.dataManager)
+        self._gestureState = ObservedObject(wrappedValue: entry.gestureState)
+        self.markerTimestamp = markerTimestamp
+        self.intentColor = intentColor
+        self.baseCandleWidth = baseCandleWidth
+        self.candleSpacing = candleSpacing
+        self.minPanelHeight = minPanelHeight
+        self.maxPanelHeight = maxPanelHeight
+        self.isBottomPanel = isBottomPanel
     }
 
     // MARK: - Body
@@ -70,8 +98,14 @@ struct TimeframePanelView: View {
             }
         }
         .background(AppColors.chartPanelBackgroundMuted)
+        .onAppear {
+            entry.clampPresentation(minHeight: minPanelHeight, maxHeight: maxPanelHeight)
+        }
         .onChange(of: dataManager.candles.count) { _, _ in
             centerOnMarkerIfNeeded()
+        }
+        .onChange(of: maxPanelHeight) { _, newValue in
+            entry.clampPresentation(minHeight: minPanelHeight, maxHeight: newValue)
         }
     }
 
@@ -152,7 +186,7 @@ struct TimeframePanelView: View {
                     if !isDraggingHandle {
                         isDraggingHandle = true
                         dragStartHeight = isCollapsed
-                            ? max(minPanelHeight, expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight)
+                            ? max(minPanelHeight, entry.expandedHeight > 0 ? entry.expandedHeight : minPanelHeight)
                             : panelHeight
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
@@ -163,11 +197,7 @@ struct TimeframePanelView: View {
                         return
                     }
                     let newHeight = min(maxPanelHeight, max(minPanelHeight, rawHeight))
-                    if isCollapsed {
-                        expandPanel()
-                    }
-                    panelHeight = newHeight
-                    expandedPanelHeight = newHeight
+                    entry.setHeight(newHeight, minHeight: minPanelHeight, maxHeight: maxPanelHeight)
                 }
                 .onEnded { _ in
                     isDraggingHandle = false
@@ -192,17 +222,11 @@ struct TimeframePanelView: View {
     }
 
     private func collapsePanel() {
-        guard !isCollapsed else { return }
-        expandedPanelHeight = max(minPanelHeight, panelHeight)
-        panelHeight = 0
-        isCollapsed = true
+        entry.collapse(minHeight: minPanelHeight)
     }
 
     private func expandPanel() {
-        guard isCollapsed else { return }
-        let restoredHeight = expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight
-        panelHeight = min(maxPanelHeight, max(minPanelHeight, restoredHeight))
-        isCollapsed = false
+        entry.expand(minHeight: minPanelHeight, maxHeight: maxPanelHeight)
     }
 
     // MARK: - Candle Content

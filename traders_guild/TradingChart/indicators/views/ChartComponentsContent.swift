@@ -9,9 +9,7 @@ struct ChartComponentsContent: View {
     let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     let onRecalculate: () -> Void
     let onBeginInteractiveDrawing: (() -> Void)?
-    let timeframePanelManager: TimeframePanelManager?
     let symbolId: UUID?
-    let guildId: UUID?
     let anchorTime: Date?
     let anchorPrice: Double?
 
@@ -26,9 +24,7 @@ struct ChartComponentsContent: View {
         onSelectTimeframe: ((RLChartTimeframe) -> Void)?,
         onRecalculate: @escaping () -> Void,
         onBeginInteractiveDrawing: (() -> Void)? = nil,
-        timeframePanelManager: TimeframePanelManager?,
         symbolId: UUID?,
-        guildId: UUID?,
         anchorTime: Date?,
         anchorPrice: Double?
     ) {
@@ -40,9 +36,7 @@ struct ChartComponentsContent: View {
         self.onSelectTimeframe = onSelectTimeframe
         self.onRecalculate = onRecalculate
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
-        self.timeframePanelManager = timeframePanelManager
         self.symbolId = symbolId
-        self.guildId = guildId
         self.anchorTime = anchorTime
         self.anchorPrice = anchorPrice
 
@@ -56,9 +50,7 @@ struct ChartComponentsContent: View {
                 onSelectTimeframeAction: onSelectTimeframe,
                 onRecalculate: onRecalculate,
                 onBeginInteractiveDrawing: onBeginInteractiveDrawing,
-                timeframePanelManager: timeframePanelManager,
                 symbolId: symbolId,
-                guildId: guildId,
                 anchorTime: anchorTime,
                 anchorPrice: anchorPrice
             )
@@ -76,9 +68,6 @@ struct ChartComponentsContent: View {
             .onChange(of: symbolId) {
                 refreshAdapterContext()
             }
-            .onChange(of: guildId) {
-                refreshAdapterContext()
-            }
             .onChange(of: anchorTime) {
                 refreshAdapterContext()
             }
@@ -90,9 +79,7 @@ struct ChartComponentsContent: View {
     private func refreshAdapterContext() {
         adapter.updateContext(
             currentChartTimeframe: currentChartTimeframe,
-            timeframePanelManager: timeframePanelManager,
             symbolId: symbolId,
-            guildId: guildId,
             anchorTime: anchorTime,
             anchorPrice: anchorPrice
         )

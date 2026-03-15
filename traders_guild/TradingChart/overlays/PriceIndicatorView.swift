@@ -48,7 +48,13 @@ struct PriceIndicatorView: View {
                 // Use Canvas for synchronized drawing - no animation lag
                 Canvas { context, size in
                     let y = indicatorYPosition
-                    let lineEndX = size.width - 60
+                    let labelRect = ChartAxisMetrics.labelRect(
+                        totalWidth: size.width,
+                        centerY: y,
+                        width: ChartAxisMetrics.currentPriceChipWidth,
+                        height: ChartAxisMetrics.currentPriceChipHeight
+                    )
+                    let lineEndX = labelRect.maxX
                     
                     // Draw horizontal dashed line
                     let linePath = Path { path in
@@ -62,22 +68,15 @@ struct PriceIndicatorView: View {
                     )
                     
                     // Draw price label background
-                    let labelX = size.width - 35
-                    let labelRect = CGRect(
-                        x: labelX - 35,
-                        y: y - 11,
-                        width: 70,
-                        height: 22
-                    )
-                    let roundedPath = Path(roundedRect: labelRect, cornerRadius: 4)
+                    let roundedPath = Path(roundedRect: labelRect, cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
                     context.fill(roundedPath, with: .color(.yellow))
                     
                     // Draw price text
                     let text = Text(formattedPrice)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(.black)
                     
-                    context.draw(text, at: CGPoint(x: labelX, y: y))
+                    context.draw(text, at: CGPoint(x: labelRect.midX, y: y))
                 }
                 // NO animation - this was causing the lag!
                 // The line and label are now drawn in the same Canvas pass
@@ -158,7 +157,7 @@ struct PriceLevelsView: View {
                     
                     Path { path in
                         path.move(to: CGPoint(x: 0, y: y))
-                        path.addLine(to: CGPoint(x: geometry.size.width - 60, y: y))
+                        path.addLine(to: CGPoint(x: ChartAxisMetrics.horizontalLineEndX(totalWidth: geometry.size.width), y: y))
                     }
                     .stroke(level.color, style: level.lineStyle)
                     
@@ -224,5 +223,3 @@ struct VolumeIndicatorView: View {
         }
     }
 }
-
-

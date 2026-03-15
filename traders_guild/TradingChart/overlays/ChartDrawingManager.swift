@@ -58,13 +58,13 @@ enum ChartDrawingType: String, Codable, CaseIterable, Hashable {
         case .trendline:
             return "#14B8A6"
         case .horizontalLine:
-            return "#7C3AED"
+            return "#9CA3AF"
         case .zone:
             return "#22C55E"
         case .supportLevel:
             return "#7C3AED"
         case .resistanceLevel:
-            return "#DB2777"
+            return "#DC2626"
         case .textNote:
             return "#6B7280"
         case .emoji:

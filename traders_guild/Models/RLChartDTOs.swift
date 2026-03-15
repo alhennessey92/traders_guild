@@ -332,9 +332,9 @@ enum RLComponentType: String, Codable, CaseIterable {
         case .levelSl: return Color(hex: "#DC2626") ?? .red
         case .levelTp: return Color(hex: "#0EA5E9") ?? .cyan
         case .levelSupport: return Color(hex: "#7C3AED") ?? .purple
-        case .levelResistance: return Color(hex: "#DB2777") ?? .pink
+        case .levelResistance: return Color(hex: "#DC2626") ?? .red
         case .drawingTrendline: return Color(hex: "#14B8A6") ?? .teal
-        case .drawingHorizontalLine: return Color(hex: "#7C3AED") ?? .purple
+        case .drawingHorizontalLine: return Color(hex: "#9CA3AF") ?? .gray
         case .drawingZone: return Color(hex: "#22C55E") ?? .green
         case .indicator: return Color(hex: "#F59E0B") ?? .orange
         case .linkURL: return Color(hex: "#EC4899") ?? .pink

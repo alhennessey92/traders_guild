@@ -623,113 +623,104 @@ struct MarkerPlacementDrawingsTab: View {
     }
 
     private var noteAnnotationCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "text.bubble")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(RLComponentType.textNote.color)
-
-                Text("Text Note")
-                    .font(.caption)
-                    .foregroundColor(.white)
-
-                Spacer(minLength: 0)
-
-                if textNoteDraft != nil {
-                    Button("Remove") {
-                        placementState.removeComponent(.textNote)
-                        infoMessage = nil
-                        limitWarning = nil
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(AppColors.statusNegative85)
-                    .buttonStyle(.plain)
-                } else {
-                    Button("Add") {
-                        addTextNote()
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(placementState.intent.color)
-                    .buttonStyle(.plain)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            toolCard(
+                title: "Text Note",
+                subtitle: textNoteDraft == nil
+                    ? "Add an anchored text annotation."
+                    : "Edit the note inline below.",
+                icon: "text.bubble",
+                isActive: textNoteDraft != nil,
+                actionTitle: textNoteDraft == nil ? "Activate" : "Edit"
+            ) {
+                addTextNote()
             }
 
             if let noteDraft = textNoteDraft,
                case let .note(payload) = noteDraft.payload {
-                TextField(
-                    "Write annotation",
-                    text: noteBinding(for: noteDraft.id, fallback: payload.text),
-                    axis: .vertical
-                )
-                .textFieldStyle(.plain)
-                .font(.caption)
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.whiteText.opacity(0.07))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                        )
-                )
+                annotationEditorCard {
+                    TextField(
+                        "Write annotation",
+                        text: noteBinding(for: noteDraft.id, fallback: payload.text),
+                        axis: .vertical
+                    )
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(AppColors.whiteText.opacity(0.07))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                            )
+                    )
+                }
+
+                annotationRemoveButton("Remove Note") {
+                    placementState.removeComponent(.textNote)
+                    infoMessage = nil
+                    limitWarning = nil
+                }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(overlayCardBackground)
     }
 
     private var emojiAnnotationCard: some View {
         let currentEmoji = currentEmojiValue
 
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "face.smiling")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(RLComponentType.reactionEmoji.color)
-
-                Text("Emoji")
-                    .font(.caption)
-                    .foregroundColor(.white)
-
-                Spacer(minLength: 0)
-
-                if currentEmoji != nil {
-                    Button("Remove") {
-                        placementState.removeComponent(.reactionEmoji)
-                        infoMessage = nil
-                        limitWarning = nil
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(AppColors.statusNegative85)
-                    .buttonStyle(.plain)
-                }
+        return VStack(alignment: .leading, spacing: 8) {
+            toolCard(
+                title: "Emoji",
+                subtitle: currentEmoji == nil
+                    ? "Pick a single emoji anchored to this marker."
+                    : "Choose the emoji below.",
+                icon: "face.smiling",
+                isActive: currentEmoji != nil,
+                actionTitle: currentEmoji == nil ? "Activate" : "Edit"
+            ) {
+                setAnnotationEmoji(currentEmoji ?? (annotationEmojis.first ?? "🎯"))
             }
 
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(annotationEmojis, id: \.self) { emoji in
-                    Button {
-                        setAnnotationEmoji(emoji)
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 18))
-                            .frame(height: 30)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(currentEmoji == emoji ? placementState.intent.color.opacity(0.35) : AppColors.whiteText.opacity(0.08))
-                            )
+            if currentEmoji != nil {
+                annotationEditorCard {
+                    let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(annotationEmojis, id: \.self) { emoji in
+                            let isSelected = currentEmoji == emoji
+                            Button {
+                                setAnnotationEmoji(emoji)
+                            } label: {
+                                Text(emoji)
+                                    .font(.system(size: 18))
+                                    .frame(height: 30)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(AppColors.whiteText.opacity(isSelected ? 0.14 : 0.08))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(
+                                                AppColors.surfaceWhite70.opacity(isSelected ? 0.85 : 0.18),
+                                                lineWidth: isSelected ? 1.5 : 1
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
+                }
+
+                annotationRemoveButton("Remove Emoji") {
+                    placementState.removeComponent(.reactionEmoji)
+                    infoMessage = nil
+                    limitWarning = nil
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(overlayCardBackground)
     }
 
     private var patternsSubTab: some View {
@@ -801,6 +792,28 @@ struct MarkerPlacementDrawingsTab: View {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
             )
+    }
+
+    private func annotationEditorCard<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            content()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(overlayCardBackground)
+    }
+
+    private func annotationRemoveButton(
+        _ title: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(title, action: action)
+            .font(.caption2.weight(.semibold))
+            .foregroundColor(AppColors.statusNegative85)
+            .buttonStyle(.plain)
+            .padding(.leading, 4)
     }
 
     private var drawingColorEditorSheet: some View {

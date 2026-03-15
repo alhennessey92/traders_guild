@@ -25,9 +25,6 @@ struct MarkerPlacementComponentsTab: View {
     let currentChartTimeframe: RLChartTimeframe?
     let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     let onBeginInteractiveDrawing: (() -> Void)?
-    var timeframePanelManager: TimeframePanelManager?
-    var symbolId: UUID?
-    var guildId: UUID?
     var showsMirrorButtons: Bool = true
 
     @State private var selectedSubTab: MarkerComponentSubTab = .active
@@ -138,9 +135,6 @@ struct MarkerPlacementComponentsTab: View {
                 placementState: placementState,
                 currentChartTimeframe: currentChartTimeframe,
                 onSelectTimeframe: onSelectTimeframe,
-                timeframePanelManager: timeframePanelManager,
-                symbolId: symbolId,
-                guildId: guildId,
                 mirrorSourceIndicators: activeChartIndicators,
                 mirrorSourceDrawings: activeChartDrawings,
                 showsTitleHeader: false,
@@ -388,9 +382,6 @@ struct MarkerPlacementComponentsTab: View {
     private func removeTimeframeDraftButton(_ draft: MarkerComponentDraft) -> some View {
         Button {
             placementState.removeComponent(id: draft.id)
-            if let timeframe = timeframeValue(for: draft) {
-                timeframePanelManager?.removePanel(timeframe: timeframe)
-            }
             infoMessage = nil
             limitWarning = nil
         } label: {

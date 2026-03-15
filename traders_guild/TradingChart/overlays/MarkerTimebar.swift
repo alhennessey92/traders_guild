@@ -160,7 +160,7 @@ enum ChartXAxisLabelEngine {
         size: CGSize,
         input: Input,
         style: ChartXAxisLabelStyle,
-        rightClipMargin: CGFloat = 60
+        rightClipMargin: CGFloat = ChartAxisMetrics.yAxisLaneWidth
     ) {
         var ctx = context
         let clipRect = CGRect(x: 0, y: 0, width: size.width - rightClipMargin, height: size.height)
@@ -603,12 +603,13 @@ struct MarkerXAxisTimeIndicator: View {
     let timeframe: RLChartTimeframe
     var showsMainXAxisLabels: Bool = true
     var timeZone: TimeZone = .current
+    private let placementYOffset: CGFloat = 8
 
     private var timeLabelY: CGFloat {
         CrosshairTimeLabel.mainChartCenterY(
             chartHeight: chartHeight,
             showsMainXAxisLabels: showsMainXAxisLabels
-        )
+        ) + placementYOffset
     }
 
     var body: some View {
