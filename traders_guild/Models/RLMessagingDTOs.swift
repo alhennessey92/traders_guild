@@ -15,6 +15,33 @@
 
 import Foundation
 
+struct RLMessageReplyPreviewDTO: Codable, Equatable, Hashable {
+    let messageId: UUID
+    let authorUsername: String
+    let authorDisplayName: String?
+    let contentPreview: String
+    let attachmentType: String?
+    let attachmentName: String?
+    let isDeleted: Bool
+}
+
+struct RLMessageReactionDTO: Codable, Equatable, Hashable {
+    let emoji: String
+    let count: Int
+    var reactedByCurrentUser: Bool
+}
+
+struct RLReactionAggregateDTO: Codable, Equatable, Hashable {
+    let emoji: String
+    let count: Int
+}
+
+struct RLMessageReactionReactorsDTO: Codable, Equatable, Hashable {
+    let emoji: String
+    let count: Int
+    let reactors: [RLGuildMemberDTO]
+}
+
 // MARK: - Chatroom Message
 
 /// Individual chatroom message response
@@ -33,6 +60,8 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let replyPreview: RLMessageReplyPreviewDTO?
+    var reactions: [RLMessageReactionDTO]
     
     // MARK: - Hashable
     
@@ -43,7 +72,9 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
     static func == (lhs: RLChatroomMessageDTO, rhs: RLChatroomMessageDTO) -> Bool {
         lhs.id == rhs.id &&
         lhs.content == rhs.content &&
-        lhs.isEdited == rhs.isEdited
+        lhs.isEdited == rhs.isEdited &&
+        lhs.replyPreview == rhs.replyPreview &&
+        lhs.reactions == rhs.reactions
     }
     
     // MARK: - Convenience
@@ -236,6 +267,8 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let replyPreview: RLMessageReplyPreviewDTO?
+    var reactions: [RLMessageReactionDTO]
     
     // MARK: - Hashable
     
@@ -247,7 +280,9 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.id == rhs.id &&
         lhs.content == rhs.content &&
         lhs.isEdited == rhs.isEdited &&
-        lhs.isRead == rhs.isRead
+        lhs.isRead == rhs.isRead &&
+        lhs.replyPreview == rhs.replyPreview &&
+        lhs.reactions == rhs.reactions
     }
     
     // MARK: - Convenience
@@ -377,12 +412,20 @@ struct RLSendMessageRequest: Codable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let replyToMessageId: UUID?
 
-    init(content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) {
+    init(
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
+    ) {
         self.content = content
         self.attachmentUrl = attachmentUrl
         self.attachmentType = attachmentType
         self.attachmentName = attachmentName
+        self.replyToMessageId = replyToMessageId
     }
 }
 
@@ -420,6 +463,10 @@ struct RLUpdateChatroomSettingsRequest: Codable {
     }
 }
 
+struct RLToggleMessageReactionRequest: Codable {
+    let emoji: String
+}
+
 // MARK: - WebSocket Message Types
 
 /// WebSocket message types for real-time updates
@@ -427,6 +474,7 @@ enum WSMessageType: String, Codable {
     case newMessage = "new_message"
     case messageEdited = "message_edited"
     case messageDeleted = "message_deleted"
+    case messageReactionUpdated = "message_reaction_updated"
     case typing = "typing"
     case presence = "presence"
     case unreadUpdate = "unread_update"
@@ -473,6 +521,21 @@ struct WSMemberSuspendedPayload: Codable {
     let userId: String
     let suspendedUntil: String?
     let action: String  // "suspended" or "unsuspended"
+}
+
+struct WSMessageReactionUpdatedPayload: Codable {
+    let messageId: String
+    let chatroomId: String?
+    let threadId: String?
+    let chatId: String?
+    let markerId: String?
+    let actorUserId: String
+    let action: String
+    let reactions: [RLReactionAggregateDTO]
+}
+
+struct WSMessageDeletedPayload: Codable {
+    let messageId: String
 }
 
 /// Incoming WebSocket message wrapper

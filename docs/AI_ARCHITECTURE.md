@@ -1120,9 +1120,7 @@ These are all the steps to the current drawings, need to make sure its vital, on
 167. [FIXED] Need a full audit of the owner, admin and moderator panel to bring it more into line with the rest of the UI in the app. This includes headers, text boxes, buttons etc
 This also includes making sure requirements are shown for any form, highlighting areas users need to fill to complete the form.
 
-168. When rotation is on it’s turning the app and then bugging out, need to stop this. App should be fixed at all times in portrait mode 
 
-169. Need to investigate why bottom chat text boxes are jumping when showing keyboard 
 
 170. [FIXED] Need to audit all sub tab sections of the app . Looking at sub tabs in sections not the main tabs in bottom bar, the sub tabs in each section, the coloring is off, first layer the main layer needs to be the standard blue, then next hierarchical layer down another color and so on, this needs to be throughout the app so first layer is blue, second layer maybe dark blue etc... whatever neutral colors that are the same throughout. Make it look nice but consistent across the app. This is mostly done but want to make sure the color scheme is good and cant be improved, each layer of the sub tabs should have a slightly different shade.
 
@@ -1132,13 +1130,13 @@ This also includes making sure requirements are shown for any form, highlighting
 
 173. [FIXED] Crosshair time indicator still running above the x axis not not it, and needs a better color, for its entire use throuhgout the app, to make it more readable
 
-174. crosshair time indicator resorting back to old look when panel is active, need to check this
+174. [FIXED] crosshair time indicator resorting back to old look when panel is active, need to check this
 
-175. Need to show direction of latest candle in y axis when out of scope, so user can see which direction it is in
 
-143. Lines need a little more work in marker placement mode, when adding support/resistance lines, shouldnt be able to move them by tapping on chart, only movable by dragging, tapping the chart moves out of line editing mode, same for horizontal line, should have a drag handle like support and resistance and tapping chart exits line editing mode. Have to click line again to show handle and drag. Also whe viewing them in marker viewing mode the support indicator and resistance indicator are getting lost on the right side so you cant see the prices, they should extend out into the chart, same for horizontal line, it doesnt show the price indicator at all, should extend from right of screen out left into chart. Should be a character cap on title for horizontal line, so its not craxy long, maybe 10-15 max
 
-176. Need a full audit again of the chat system, making sure all options, edits, settings, are in place and working. Want to introduce a like option / emoji reaction to chat messages, and a option to reference someones message like a reply that displays it like a caption with their own message. All of this can come from long pressing the message and choosing options, so need a better UI for it. Also need a major revamp of the attachments section, better UI/styling for each option and a much better process in applying, feels very disjointed and tricky to attach a image with a caption, camera doesnt work etc... Attaching markers is good, but all others need to be better. 
+143. [FIXED] Lines need a little more work in marker placement mode, when adding support/resistance lines, shouldnt be able to move them by tapping on chart, only movable by dragging, tapping the chart moves out of line editing mode, same for horizontal line, should have a drag handle like support and resistance and tapping chart exits line editing mode. Have to click line again to show handle and drag. Also whe viewing them in marker viewing mode the support indicator and resistance indicator are getting lost on the right side so you cant see the prices, they should extend out into the chart, same for horizontal line, it doesnt show the price indicator at all, should extend from right of screen out left into chart. Should be a character cap on title for horizontal line, so its not craxy long, maybe 10-15 max
+
+
 
 177. [FIXED] The big one. Need to review the drawing/ pattern section of the app. Currently not working great, needs to be a super smooth experience that is intuitive to the user to complete the process of adding a drawing or pattern.
 
@@ -1187,6 +1185,26 @@ Make sure you run through all drawing options and make improve them the way they
 
 194. Need to make the timeframe panel move with the user relative to their marker if timeframe set with marker or center of screen if in default chart. For marker timeframe this is easy as the marker is set and user can pan horizontally to see timeframe candles. If its default chart then need to mark screen center relative on timeframe panel, and as user panns the main chart the marker point moves in timeframe chart.
 
-195. Mirror chart setup doesnt look at timeframe active on chart
+195. Mirror chart setup doesnt look at timeframe active on chart and mirror to marker palcement. Also when mirroring if emoji is being mirrored it moves when user taps screen so cant get out of emoji placement if you understand me. Sometimes the emoji gets copied over with mirror setup even if deleted from default chart
 
 196. Need some form of line at bottom of timeframe to distinguish between timeframe x axis and main chart x axis
+
+197. [FIXED] Updating chart info box with components is sluggish, can take a bit or different actions in other sections for it to update if component removed from chart
+
+175. [FIXED] Need to show direction of latest candle in y axis when out of scope, so user can see which direction it is in
+
+176. [FIXED] Need a full audit again of the chat system, making sure all options, edits, settings, are in place and working. Want to introduce a like option / emoji reaction to chat messages, and a option to reference someones message like a reply that displays it like a caption with their own message. All of this can come from long pressing the message and choosing options, so need a better UI for it. Also need a major revamp of the attachments section, better UI/styling for each option and a much better process in applying, feels very disjointed and tricky to attach a image with a caption, camera doesnt work etc... Also images being added to the chat need their background/container message view to be the size of the image, almost like a small border round it, at the moment the image is there but theres a lot of space around it that looks bad, so it all needs to be nicely contained in the message. When there is a caption on the message as well there needs to be more of a distinguish between them - border or different color etc... make it look good
+
+168. When rotation is on it’s turning the app and then bugging out, need to stop this. App should be fixed at all times in portrait mode 
+
+169. Need to investigate why bottom chat text boxes are jumping when showing keyboard 
+
+
+
+170. Sometimes a timeframe active on chart is unable to be removed, clicking - red button in active tab does nothing
+
+171. no 175 said about showing direction of latest candle when panning vertically past it, but when panning up the label should show at the bottom signalling the latest candle is below, but its set behind the chart buttons, and needs to be made narrower so only as wide as the y axis - showing in a yellow box like current price label a arrow in direction to latest candle. This needs to also happen the other way around showing at the top of the y axis but not covered by the toolbar.
+
+172. Need to change the y axis background so its similar to the top toolbar background, i want almost a clear background mask that blurs the content behind, however we do this with the top toolbar.
+
+173. Looking at no 176 we already updated the chat interface/functionality but a lot still needs doing and checking. For one, sometimes when selecting the + button for adding attachments i cant cancel/remove the popup option sheet, o should be able to do this via swiping down or tapping the chat background. When long clicking on the message bubble for options sometimes it gets caught in a loop and starts opening and closing infinitely, also the UI for this popup needs improving. When selecting textbox to enter message, its getting hidden by the keyboard, should sit on top of keybaord to see what typing. Likes/emojie reactions on messages dont appear on the mesage, appear off of it in middle of screen. When adding images etc... the image should fit to the bubble so only a small border round it, not a massive amount of the bubble should show. Basically need again a full audit of the chat section to make sure all polished etc...

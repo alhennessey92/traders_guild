@@ -357,6 +357,8 @@ class MarkerManager: ObservableObject {
             handleMarkerLiked(message)
         case "marker_commented":
             handleMarkerCommented(message)
+        case "message_reaction_updated":
+            handleCommentReactionUpdated(message)
         case "tracking_state_changed":
             handleTrackingStateChanged(message)
         default:
@@ -444,6 +446,37 @@ class MarkerManager: ObservableObject {
                 commentCount: payload.commentCount
             )
         )
+    }
+
+    private func handleCommentReactionUpdated(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSMessageReactionUpdatedPayload.self),
+              let markerId = UUID(uuidString: payload.markerId ?? ""),
+              let commentId = UUID(uuidString: payload.messageId),
+              let markerIndex = markers.firstIndex(where: { $0.id == markerId }),
+              let commentIndex = markers[markerIndex].comments.firstIndex(where: { $0.id == commentId }) else { return }
+
+        let existingByEmoji = Dictionary(
+            uniqueKeysWithValues: markers[markerIndex].comments[commentIndex].reactions.map { ($0.emoji, $0) }
+        )
+        let updatedComment = {
+            var comment = markers[markerIndex].comments[commentIndex]
+            comment.reactions = payload.reactions.map { reaction in
+                RLMessageReactionDTO(
+                    emoji: reaction.emoji,
+                    count: reaction.count,
+                    reactedByCurrentUser: existingByEmoji[reaction.emoji]?.reactedByCurrentUser ?? false
+                )
+            }
+            return comment
+        }()
+
+        var updatedComments = markers[markerIndex].comments
+        updatedComments[commentIndex] = updatedComment
+        let updatedMarker = markers[markerIndex].withMarker(
+            markers[markerIndex].marker.updating(comments: updatedComments)
+        )
+        markers[markerIndex] = updatedMarker
+        syncSelectedMarker(updatedMarker)
     }
 
     private func handleTrackingStateChanged(_ message: WSIncomingMessage) {
@@ -1155,7 +1188,8 @@ class MarkerManager: ObservableObject {
         content: String,
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
-        attachmentName: String? = nil
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
     ) async {
         guard let index = markerIndex(for: markerId) else { return }
         
@@ -1197,7 +1231,8 @@ class MarkerManager: ObservableObject {
                 content: content,
                 attachmentUrl: attachmentUrl,
                 attachmentType: attachmentType,
-                attachmentName: attachmentName
+                attachmentName: attachmentName,
+                replyToMessageId: replyToMessageId
             )
             
             guard let latestIndex = markerIndex(for: markerId) else { return }
@@ -1232,6 +1267,43 @@ class MarkerManager: ObservableObject {
             syncSelectedMarker(updated)
             print("Failed to add comment: \(error)")
         }
+    }
+
+    func toggleCommentReaction(markerId: UUID, commentId: UUID, emoji: String) async throws {
+        guard let markerIndex = markerIndex(for: markerId),
+              let commentIndex = markers[markerIndex].comments.firstIndex(where: { $0.id == commentId }),
+              let api else { return }
+
+        let updatedComment = try await api.toggleMarkerCommentReaction(
+            guildId: currentGuildId,
+            markerId: markerId,
+            commentId: commentId,
+            emoji: emoji
+        )
+
+        var updatedComments = markers[markerIndex].comments
+        updatedComments[commentIndex] = updatedComment
+        let updatedMarker = markers[markerIndex].withMarker(
+            markers[markerIndex].marker.updating(comments: updatedComments)
+        )
+        markers[markerIndex] = updatedMarker
+        syncSelectedMarker(updatedMarker)
+    }
+
+    func fetchCommentReactionReactors(
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        guard let api else {
+            throw APIError.badRequest("Marker API is not configured")
+        }
+        return try await api.getMarkerCommentReactionReactors(
+            guildId: currentGuildId,
+            markerId: markerId,
+            commentId: commentId,
+            emoji: emoji
+        )
     }
     
     @discardableResult

@@ -17,16 +17,20 @@ struct ImprovedChartSheetChatView: View {
     @ObservedObject var chartViewModel: ChartViewModel
     @ObservedObject var chartChatManager: ChartChatManager
     @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var chatSurfaceOverlayCoordinator: ChatSurfaceOverlayCoordinator
     @Binding var selectedDetent: PresentationDetent
     
     // Message input state - shared with parent footer
     @Binding var messageText: String
+    @Binding var replyDraft: ChatReplyDraft?
+    var onBackgroundTap: (() -> Void)? = nil
     
     @State private var showEditSheet = false
     @State private var messageToEdit: RLChartChatMessageDTO? = nil
     @State private var showReportReasonSheet = false
     @State private var messageToReport: RLChartChatMessageDTO? = nil
     @State private var selectedAuthor: RLGuildMemberDTO? = nil
+    @State private var reactionReactorsState = ChatReactionReactorsState()
     
     var body: some View {
         ZStack {
@@ -163,7 +167,6 @@ struct ImprovedChartSheetChatView: View {
                     ForEach(chartChatManager.messages) { message in
                         ChartMessageRow(
                             message: message,
-                            chartChatManager: chartChatManager,
                             onAuthorTap: { member in
                                 selectedAuthor = member
                             },
@@ -173,6 +176,15 @@ struct ImprovedChartSheetChatView: View {
                             onEdit: {
                                 messageToEdit = message
                                 showEditSheet = true
+                            },
+                            onReply: {
+                                replyDraft = ChatReplyDraft(message: message)
+                            },
+                            onReactionSelected: { emoji in
+                                Task { await toggleReaction(message, emoji: emoji) }
+                            },
+                            onVisibleReactionTap: {
+                                presentReactionReactors(message, reactions: message.reactions)
                             },
                             onReport: {
                                 messageToReport = message
@@ -188,6 +200,10 @@ struct ImprovedChartSheetChatView: View {
                 .padding(.bottom, 20)
             }
             .scrollDismissesKeyboard(.interactively)
+            .onTapGesture {
+                chatSurfaceOverlayCoordinator.dismissAll()
+                onBackgroundTap?()
+            }
             .onChange(of: chartChatManager.messages.count) { _ in
                 if let lastMessage = chartChatManager.messages.last {
                     withAnimation(.easeOut(duration: 0.2)) {
@@ -202,8 +218,37 @@ struct ImprovedChartSheetChatView: View {
             }
             .background(ChatBackground())
         }
+        .overlay {
+            ChatSurfaceOverlayHost(
+                messages: chartChatManager.messages,
+                reactorsState: reactionReactorsState,
+                onQuickReactionSelected: { message, emoji in
+                    Task { await toggleReaction(message, emoji: emoji) }
+                },
+                onReply: { message in
+                    replyDraft = ChatReplyDraft(message: message)
+                },
+                onEdit: { message in
+                    messageToEdit = message
+                    showEditSheet = true
+                },
+                onDelete: { message in
+                    Task { await deleteMessage(message) }
+                },
+                onCopy: { _ in
+                    rlAppState.showSuccess("Copied to clipboard")
+                },
+                onReport: { message in
+                    messageToReport = message
+                    showReportReasonSheet = true
+                },
+                onFetchReactors: { message, emoji in
+                    fetchReactorsForEmoji(messageId: message.id, emoji: emoji)
+                }
+            )
+        }
     }
-    
+
     // MARK: - Message Actions
     
     private func deleteMessage(_ message: RLChartChatMessageDTO) async {
@@ -243,16 +288,61 @@ struct ImprovedChartSheetChatView: View {
             rlAppState.showError(error, title: "Failed to Report", style: .toast)
         }
     }
+
+    private func toggleReaction(_ message: RLChartChatMessageDTO, emoji: String) async {
+        do {
+            try await chartChatManager.toggleReaction(messageId: message.id, emoji: emoji)
+        } catch {
+            rlAppState.showError(error, title: "Failed to Update Reaction", style: .toast)
+        }
+    }
+
+    private func presentReactionReactors(_ message: RLChartChatMessageDTO, reactions: [RLMessageReactionDTO]) {
+        chatSurfaceOverlayCoordinator.presentReactionReactors(for: message.id, reactions: reactions)
+
+        if reactionReactorsState.messageID != message.id {
+            reactionReactorsState = ChatReactionReactorsState(messageID: message.id)
+        }
+    }
+
+    private func fetchReactorsForEmoji(messageId: UUID, emoji: String) {
+        if reactionReactorsState.messageID == messageId,
+           reactionReactorsState.response(for: emoji) != nil {
+            return
+        }
+
+        reactionReactorsState.loadingEmojis.insert(emoji)
+
+        Task {
+            do {
+                let response = try await chartChatManager.fetchReactionReactors(
+                    messageId: messageId,
+                    emoji: emoji
+                )
+                await MainActor.run {
+                    reactionReactorsState.responses[emoji] = response
+                    reactionReactorsState.loadingEmojis.remove(emoji)
+                }
+            } catch {
+                await MainActor.run {
+                    reactionReactorsState.loadingEmojis.remove(emoji)
+                    rlAppState.showError(error, title: "Failed to Load Reactions", style: .toast)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Chart Message Row (Using Unified ChatMessageBubble)
 
 struct ChartMessageRow: View {
     let message: RLChartChatMessageDTO
-    @ObservedObject var chartChatManager: ChartChatManager
     let onAuthorTap: (RLGuildMemberDTO) -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
+    let onReply: () -> Void
+    let onReactionSelected: (String) -> Void
+    let onVisibleReactionTap: () -> Void
     let onReport: () -> Void
     
     @EnvironmentObject var rlAppState: RLAppState
@@ -280,6 +370,9 @@ struct ChartMessageRow: View {
             onDelete: canDeleteMessage ? onDelete : nil,
             onReport: !message.isCurrentUserMessage ? onReport : nil,
             onCopy: { rlAppState.showSuccess("Copied to clipboard") },
+            onReply: onReply,
+            onToggleReaction: onReactionSelected,
+            onVisibleReactionTap: onVisibleReactionTap,
             onMarkerShareTap: { payload in
                 NotificationCenter.default.post(
                     name: .openSharedMarker,
@@ -290,9 +383,6 @@ struct ChartMessageRow: View {
         )
     }
 }
-
-
-
 
 
 

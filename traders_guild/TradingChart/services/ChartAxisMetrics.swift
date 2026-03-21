@@ -13,6 +13,9 @@ enum ChartAxisMetrics {
     static let horizontalLabeledChipWidth: CGFloat = 100
 
     static let currentPriceChipWidth: CGFloat = 76
+    static let directionalPriceChipWidth: CGFloat = 94
+    static let directionalArrowChipWidth: CGFloat = 36
+    static let directionalArrowChipHeight: CGFloat = 28
     static let currentPriceChipHeight: CGFloat = 24
 
     static func plotWidth(totalWidth: CGFloat) -> CGFloat {

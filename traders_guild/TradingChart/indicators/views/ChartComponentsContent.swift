@@ -1,19 +1,11 @@
 import SwiftUI
 
 struct ChartComponentsContent: View {
-    let placementState: MarkerPlacementState
-    let indicatorManager: IndicatorManager
-    let drawingManager: ChartDrawingManager
-    let timeframeLinkManager: ChartTimeframeLinkManager
+    @StateObject private var adapter: ChartComponentsAdapter
     let currentChartTimeframe: RLChartTimeframe?
-    let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
-    let onRecalculate: () -> Void
-    let onBeginInteractiveDrawing: (() -> Void)?
     let symbolId: UUID?
     let anchorTime: Date?
     let anchorPrice: Double?
-
-    @StateObject private var adapter: ChartComponentsAdapter
 
     init(
         placementState: MarkerPlacementState,
@@ -28,18 +20,10 @@ struct ChartComponentsContent: View {
         anchorTime: Date?,
         anchorPrice: Double?
     ) {
-        self.placementState = placementState
-        self.indicatorManager = indicatorManager
-        self.drawingManager = drawingManager
-        self.timeframeLinkManager = timeframeLinkManager
         self.currentChartTimeframe = currentChartTimeframe
-        self.onSelectTimeframe = onSelectTimeframe
-        self.onRecalculate = onRecalculate
-        self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
         self.symbolId = symbolId
         self.anchorTime = anchorTime
         self.anchorPrice = anchorPrice
-
         _adapter = StateObject(
             wrappedValue: ChartComponentsAdapter(
                 placementState: placementState,
@@ -59,24 +43,24 @@ struct ChartComponentsContent: View {
 
     var body: some View {
         UnifiedComponentsHostView(adapter: adapter)
-            .padding(.horizontal, 2)
-            .padding(.vertical, 6)
-            .onAppear(perform: refreshAdapterContext)
-            .onChange(of: currentChartTimeframe) {
-                refreshAdapterContext()
-            }
-            .onChange(of: symbolId) {
-                refreshAdapterContext()
-            }
-            .onChange(of: anchorTime) {
-                refreshAdapterContext()
-            }
-            .onChange(of: anchorPrice) {
-                refreshAdapterContext()
-            }
+        .padding(.horizontal, 2)
+        .padding(.vertical, 6)
+        .onAppear(perform: updateAdapterContext)
+        .onChange(of: currentChartTimeframe) { _, _ in
+            updateAdapterContext()
+        }
+        .onChange(of: symbolId) { _, _ in
+            updateAdapterContext()
+        }
+        .onChange(of: anchorTime) { _, _ in
+            updateAdapterContext()
+        }
+        .onChange(of: anchorPrice) { _, _ in
+            updateAdapterContext()
+        }
     }
 
-    private func refreshAdapterContext() {
+    private func updateAdapterContext() {
         adapter.updateContext(
             currentChartTimeframe: currentChartTimeframe,
             symbolId: symbolId,

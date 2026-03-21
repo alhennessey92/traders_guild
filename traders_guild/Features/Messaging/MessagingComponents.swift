@@ -213,19 +213,43 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable {
     }
 }
 
+struct ChatReplyDraft: Equatable, Identifiable {
+    let messageId: UUID
+    let authorDisplayName: String
+    let contentPreview: String
+    let attachmentType: String?
+    let attachmentName: String?
+
+    var id: UUID { messageId }
+
+    var accessoryText: String {
+        if let attachmentName, !attachmentName.isEmpty {
+            return attachmentName
+        }
+        return contentPreview
+    }
+}
+
 struct ChatComposerPayload: Equatable {
     let text: String
-    let attachments: [ChatAttachmentDraft]
+    let attachment: ChatAttachmentDraft?
     let markerShareDraft: ChatMarkerLinkDraft?
+    let replyDraft: ChatReplyDraft?
+
+    var attachments: [ChatAttachmentDraft] {
+        attachment.map { [$0] } ?? []
+    }
 
     init(
         text: String,
-        attachments: [ChatAttachmentDraft],
-        markerShareDraft: ChatMarkerLinkDraft? = nil
+        attachment: ChatAttachmentDraft?,
+        markerShareDraft: ChatMarkerLinkDraft? = nil,
+        replyDraft: ChatReplyDraft? = nil
     ) {
         self.text = text
-        self.attachments = attachments
+        self.attachment = attachment
         self.markerShareDraft = markerShareDraft
+        self.replyDraft = replyDraft
     }
 
     var hasBodyContent: Bool {
@@ -236,6 +260,22 @@ struct ChatComposerPayload: Equatable {
         let note = text.isEmpty ? fallback : text
         guard let markerShareDraft else { return note }
         return MarkerShareCodec.buildMessage(note: note, payload: markerShareDraft.payload)
+    }
+}
+
+extension ChatReplyDraft {
+    init<Message: RLChatMessageDisplayable>(message: Message) {
+        self.messageId = message.id
+        self.authorDisplayName = message.authorUsername
+        if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self.contentPreview = message.content
+        } else if let attachmentName = message.attachmentName, !attachmentName.isEmpty {
+            self.contentPreview = attachmentName
+        } else {
+            self.contentPreview = "Attachment"
+        }
+        self.attachmentType = message.attachmentType
+        self.attachmentName = message.attachmentName
     }
 }
 
@@ -430,6 +470,7 @@ enum MarkerShareCodec {
 
 struct ChatInputFooter: View {
     @Binding var messageText: String
+    var replyDraft: Binding<ChatReplyDraft?>? = nil
     let placeholder: String
     let isSending: Bool
     let onSend: (ChatComposerPayload) -> Void
@@ -443,6 +484,10 @@ struct ChatInputFooter: View {
     /// Optional leading accessory view (e.g. back button in chart chat)
     var leadingAccessory: AnyView? = nil
 
+    /// Optional binding to observe/control attachment panel visibility from parent views.
+    /// Parents can use this to dismiss the panel when the chat background is tapped.
+    var isActionPanelVisible: Binding<Bool>? = nil
+
     @EnvironmentObject private var appState: RLAppState
 
     @FocusState private var isInputFocused: Bool
@@ -450,10 +495,11 @@ struct ChatInputFooter: View {
     @StateObject private var speechService = SpeechRecognitionService()
 
     @State private var showActionPanel = false
+    @State private var showCameraPicker = false
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMarkerPicker = false
-    @State private var pendingAttachments: [ChatAttachmentDraft] = []
+    @State private var selectedAttachment: ChatAttachmentDraft? = nil
     @State private var selectedMarkerDraft: ChatMarkerLinkDraft? = nil
     @State private var markerDrafts: [ChatMarkerLinkDraft] = []
     @State private var isLoadingMarkerDrafts = false
@@ -465,7 +511,7 @@ struct ChatInputFooter: View {
                 recordingIndicator
             }
 
-            if !pendingAttachments.isEmpty || selectedMarkerDraft != nil {
+            if replyDraft?.wrappedValue != nil || selectedAttachment != nil || selectedMarkerDraft != nil {
                 attachmentDraftRow
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -476,6 +522,16 @@ struct ChatInputFooter: View {
             if showActionPanel {
                 attachmentActionPanel
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .gesture(
+                        DragGesture(minimumDistance: 20)
+                            .onEnded { value in
+                                if value.translation.height > 40 {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        showActionPanel = false
+                                    }
+                                }
+                            }
+                    )
             }
 
             Divider()
@@ -557,6 +613,16 @@ struct ChatInputFooter: View {
         }
         .background(AppColors.sheetBackground)
         .compositingGroup()
+        .onChange(of: showActionPanel) { _, newValue in
+            isActionPanelVisible?.wrappedValue = newValue
+        }
+        .onChange(of: isActionPanelVisible?.wrappedValue) { _, newValue in
+            if let newValue, newValue != showActionPanel {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    showActionPanel = newValue
+                }
+            }
+        }
         .onChange(of: speechService.transcribedText) { _, newValue in
             if !newValue.isEmpty {
                 if messageText.isEmpty {
@@ -582,10 +648,21 @@ struct ChatInputFooter: View {
                     appendAttachments(selected)
                 },
                 onCancel: { showPhotoPicker = false },
-                selectionLimit: max(1, 10 - pendingAttachments.count)
+                selectionLimit: 1
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showCameraPicker) {
+            SharedImagePicker(sourceType: .camera) { image in
+                showCameraPicker = false
+                guard let data = image.jpegData(compressionQuality: 0.85) else { return }
+                selectedAttachment = ChatAttachmentDraft(
+                    data: data,
+                    filename: "camera-\(UUID().uuidString.prefix(8)).jpg",
+                    mimeType: "image/jpeg"
+                )
+            }
         }
         .sheet(isPresented: $showDocumentPicker) {
             DocumentPickerView(
@@ -594,7 +671,7 @@ struct ChatInputFooter: View {
                     appendAttachments(selected)
                 },
                 onCancel: { showDocumentPicker = false },
-                selectionLimit: max(1, 10 - pendingAttachments.count)
+                selectionLimit: 1
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -638,7 +715,7 @@ struct ChatInputFooter: View {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showActionPanel = false
                 }
-                showPhotoPicker = true
+                showCameraPicker = true
             }
 
             actionPanelButton(icon: "photo.on.rectangle.angled", label: "Photos") {
@@ -774,7 +851,7 @@ struct ChatInputFooter: View {
 
     private var canSend: Bool {
         !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !pendingAttachments.isEmpty ||
+        selectedAttachment != nil ||
         selectedMarkerDraft != nil
     }
 
@@ -782,27 +859,34 @@ struct ChatInputFooter: View {
 
     private var attachmentDraftRow: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let replyDraft = replyDraft?.wrappedValue {
+                replyPreviewChip(for: replyDraft)
+            }
+
             HStack {
                 Text(draftSummaryText)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(AppColors.whiteText)
                 Spacer(minLength: 8)
 
-                Button {
-                    HapticFeedback.light.trigger()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        showActionPanel = true
+                if selectedAttachment == nil {
+                    Button {
+                        HapticFeedback.light.trigger()
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showActionPanel = true
+                        }
+                    } label: {
+                        Text("Attach")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(AppColors.accentColor)
                     }
-                } label: {
-                    Text("Add more")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(AppColors.accentColor)
                 }
 
                 Button("Remove all") {
                     withAnimation {
-                        pendingAttachments = []
+                        selectedAttachment = nil
                         selectedMarkerDraft = nil
+                        replyDraft?.wrappedValue = nil
                     }
                 }
                 .font(.caption.weight(.semibold))
@@ -811,11 +895,11 @@ struct ChatInputFooter: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
+                    if let selectedAttachment {
+                        attachmentPreviewChip(for: selectedAttachment)
+                    }
                     if let selectedMarkerDraft {
                         markerPreviewChip(for: selectedMarkerDraft)
-                    }
-                    ForEach(pendingAttachments) { attachment in
-                        attachmentPreviewChip(for: attachment)
                     }
                 }
             }
@@ -833,13 +917,23 @@ struct ChatInputFooter: View {
     }
 
     private var draftSummaryText: String {
-        switch (pendingAttachments.count, selectedMarkerDraft != nil) {
-        case (0, true):
+        switch (selectedAttachment != nil, selectedMarkerDraft != nil, replyDraft?.wrappedValue != nil) {
+        case (false, false, true):
+            return "Reply ready"
+        case (false, true, false):
             return "1 marker link ready"
-        case (let count, false):
-            return "\(count) attachment\(count == 1 ? "" : "s") ready"
-        case (let count, true):
-            return "\(count) attachment\(count == 1 ? "" : "s") + marker link ready"
+        case (true, false, false):
+            return "1 attachment ready"
+        case (true, true, false):
+            return "1 attachment + marker link ready"
+        case (true, false, true):
+            return "Reply + attachment ready"
+        case (false, true, true):
+            return "Reply + marker link ready"
+        case (true, true, true):
+            return "Reply + attachment + marker link ready"
+        case (false, false, false):
+            return "Draft ready"
         }
     }
 
@@ -877,7 +971,7 @@ struct ChatInputFooter: View {
             )
 
             Button {
-                withAnimation { pendingAttachments.removeAll { $0.id == attachment.id } }
+                withAnimation { selectedAttachment = nil }
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
@@ -886,6 +980,46 @@ struct ChatInputFooter: View {
             }
             .offset(x: 4, y: -4)
         }
+    }
+
+    private func replyPreviewChip(for replyDraft: ChatReplyDraft) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.caption)
+                .foregroundColor(AppColors.accentColor.opacity(0.92))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(replyDraft.authorDisplayName)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(AppColors.accentColor)
+                Text(replyDraft.accessoryText)
+                    .font(.caption)
+                    .foregroundColor(AppColors.whiteText.opacity(0.92))
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            Button {
+                withAnimation {
+                    self.replyDraft?.wrappedValue = nil
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .background(AppColors.surfaceBlack45, in: Circle())
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppColors.surfaceWhite08)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AppColors.surfaceWhite20, lineWidth: 1)
+                )
+        )
     }
 
     private func markerPreviewChip(for marker: ChatMarkerLinkDraft) -> some View {
@@ -931,17 +1065,30 @@ struct ChatInputFooter: View {
     // MARK: - Helpers
 
     private func appendAttachments(_ selected: [(Data, String, String)]) {
-        let maxCount = 10
-        let existingSignatures = Set(pendingAttachments.map { "\($0.filename.lowercased())-\($0.data.count)" })
-        var mutableSignatures = existingSignatures
-        for (data, filename, mimeType) in selected {
-            guard pendingAttachments.count < maxCount else { break }
-            let signature = "\(filename.lowercased())-\(data.count)"
-            if mutableSignatures.contains(signature) { continue }
-            mutableSignatures.insert(signature)
-            pendingAttachments.append(
-                ChatAttachmentDraft(data: data, filename: filename, mimeType: mimeType)
-            )
+        guard selectedAttachment == nil,
+              let first = selected.first else { return }
+        selectedAttachment = ChatAttachmentDraft(
+            data: first.0,
+            filename: first.1,
+            mimeType: first.2
+        )
+    }
+
+    private func setReplyDraft(_ value: ChatReplyDraft?) {
+        replyDraft?.wrappedValue = value
+    }
+
+    private func currentReplyDraft() -> ChatReplyDraft? {
+        replyDraft?.wrappedValue
+    }
+
+    private func clearComposerDrafts() {
+        messageText = ""
+        selectedAttachment = nil
+        selectedMarkerDraft = nil
+        setReplyDraft(nil)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            showActionPanel = false
         }
     }
 
@@ -976,22 +1123,18 @@ struct ChatInputFooter: View {
 
     private func sendComposedMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isSending, (!pendingAttachments.isEmpty || !trimmed.isEmpty || selectedMarkerDraft != nil) else { return }
+        guard !isSending, (selectedAttachment != nil || !trimmed.isEmpty || selectedMarkerDraft != nil || currentReplyDraft() != nil) else { return }
 
         onSend(
             ChatComposerPayload(
                 text: trimmed,
-                attachments: pendingAttachments,
-                markerShareDraft: selectedMarkerDraft
+                attachment: selectedAttachment,
+                markerShareDraft: selectedMarkerDraft,
+                replyDraft: currentReplyDraft()
             )
         )
 
-        messageText = ""
-        pendingAttachments = []
-        selectedMarkerDraft = nil
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            showActionPanel = false
-        }
+        clearComposerDrafts()
     }
 }
 
@@ -1445,6 +1588,8 @@ protocol RLChatMessageDisplayable: Identifiable {
     var attachmentUrl: String? { get }
     var attachmentType: String? { get }
     var attachmentName: String? { get }
+    var replyPreview: RLMessageReplyPreviewDTO? { get }
+    var reactions: [RLMessageReactionDTO] { get }
 }
 
 // MARK: - ================================================================================================
@@ -1471,11 +1616,13 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     let onDelete: (() -> Void)?
     let onReport: (() -> Void)?
     let onCopy: (() -> Void)?
+    let onReply: (() -> Void)?
+    let onToggleReaction: ((String) -> Void)?
+    let onVisibleReactionTap: (() -> Void)?
     let onMarkerShareTap: ((MarkerSharePayloadV1) -> Void)?
     
-    @EnvironmentObject var appState: RLAppState
-    @State private var showDeleteConfirmation = false
-    
+    @EnvironmentObject var chatSurfaceOverlayCoordinator: ChatSurfaceOverlayCoordinator
+
     init(
         message: Message,
         context: ChatContext,
@@ -1486,6 +1633,9 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         onDelete: (() -> Void)? = nil,
         onReport: (() -> Void)? = nil,
         onCopy: (() -> Void)? = nil,
+        onReply: (() -> Void)? = nil,
+        onToggleReaction: ((String) -> Void)? = nil,
+        onVisibleReactionTap: (() -> Void)? = nil,
         onMarkerShareTap: ((MarkerSharePayloadV1) -> Void)? = nil
     ) {
         self.message = message
@@ -1497,6 +1647,9 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         self.onDelete = onDelete
         self.onReport = onReport
         self.onCopy = onCopy
+        self.onReply = onReply
+        self.onToggleReaction = onToggleReaction
+        self.onVisibleReactionTap = onVisibleReactionTap
         self.onMarkerShareTap = onMarkerShareTap
     }
 
@@ -1518,25 +1671,36 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                     userInfoHeader
                 }
                 
-                // Message bubble
-                messageBubbleContent
-                    .contextMenu { contextMenuItems }
-                
-                // Timestamp and status row
-                timestampRow
+                bubbleStack
             }
             
             if !message.isCurrentUserMessage {
                 Spacer()
             }
         }
-        .alert("Delete Message", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                onDelete?()
+    }
+
+    private var bubbleStack: some View {
+        VStack(
+            alignment: message.isCurrentUserMessage ? .trailing : .leading,
+            spacing: 4
+        ) {
+            bubbleChrome
+            timestampRow
+        }
+    }
+
+    private var bubbleChrome: some View {
+        VStack(alignment: message.isCurrentUserMessage ? .trailing : .leading, spacing: -6) {
+            messageBubbleContent
+                .onLongPressGesture(minimumDuration: 0.4) {
+                    HapticFeedback.medium.trigger()
+                    chatSurfaceOverlayCoordinator.presentActions(for: message.id)
+                }
+
+            if !message.reactions.isEmpty {
+                reactionCluster
             }
-        } message: {
-            Text("Are you sure you want to delete this message? This cannot be undone.")
         }
     }
     
@@ -1609,8 +1773,38 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     }
     
     // MARK: - Message Bubble Content
+
+    /// Whether the text content is just the attachment filename (should be hidden for images).
+    private var textIsJustFilename: Bool {
+        let trimmedText = displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmedText.isEmpty && trimmedText == message.attachmentName
+    }
+
+    /// Whether this message contains only an image attachment with no text content.
+    private var isImageOnlyMessage: Bool {
+        let hasImage = message.attachmentType?.hasPrefix("image/") == true
+            && message.attachmentUrl?.isEmpty == false
+        let trimmedText = displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasText = (!trimmedText.isEmpty && !textIsJustFilename) || message.isEdited
+        let hasReply = message.replyPreview != nil
+        let hasMarkerShare = markerShareContent != nil
+        return hasImage && !hasText && !hasReply && !hasMarkerShare
+    }
+
+    /// Whether this message has an image with accompanying text (caption).
+    private var isImageWithCaptionMessage: Bool {
+        let hasImage = message.attachmentType?.hasPrefix("image/") == true
+            && message.attachmentUrl?.isEmpty == false
+        let trimmedText = displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return hasImage && !trimmedText.isEmpty && !textIsJustFilename
+    }
+
     private var messageBubbleContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: isImageOnlyMessage ? 0 : 6) {
+            if let replyPreview = message.replyPreview {
+                replyPreviewView(replyPreview)
+            }
+
             // Attachment preview (if present)
             if let attachmentUrl = message.attachmentUrl, !attachmentUrl.isEmpty {
                 attachmentView(url: attachmentUrl, type: message.attachmentType, name: message.attachmentName)
@@ -1626,11 +1820,11 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                 )
             }
 
-            // Text content + edited indicator
-            if !displayMessageText.isEmpty || message.isEdited {
+            // Text content + edited indicator (hide filename-only text for image messages)
+            if (!displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !textIsJustFilename) || message.isEdited {
                 HStack(spacing: 8) {
-                    if !displayMessageText.isEmpty {
-                        Text(displayMessageText)
+                    if !displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !textIsJustFilename {
+                        Text(displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines))
                             .font(.subheadline)
                             .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
                     }
@@ -1641,16 +1835,47 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                             .foregroundColor(message.isCurrentUserMessage ? AppColors.surfaceWhite70 : .secondary)
                     }
                 }
+                .padding(.horizontal, isImageWithCaptionMessage ? 8 : 0)
+                .padding(.bottom, isImageWithCaptionMessage ? 4 : 0)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(isImageOnlyMessage ? 2 : 0)
+        .padding(.horizontal, isImageOnlyMessage ? 0 : (isImageWithCaptionMessage ? 3 : 12))
+        .padding(.vertical, isImageOnlyMessage ? 0 : (isImageWithCaptionMessage ? 3 : 8))
         .background(
             message.isCurrentUserMessage ?
             AppColors.accentDarkColor :
             AppColors.surfaceGray20
         )
         .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
+    }
+
+    private func replyPreviewView(_ preview: RLMessageReplyPreviewDTO) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Capsule()
+                .fill(message.isCurrentUserMessage ? AppColors.surfaceWhite24 : AppColors.accentColor.opacity(0.55))
+                .frame(width: 3)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(preview.authorDisplayName ?? preview.authorUsername)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(message.isCurrentUserMessage ? AppColors.surfaceWhite82 : AppColors.accentColor)
+                Text(preview.contentPreview)
+                    .font(.caption)
+                    .foregroundColor(message.isCurrentUserMessage ? AppColors.surfaceWhite92 : AppColors.whiteText.opacity(0.9))
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(message.isCurrentUserMessage ? AppColors.surfaceBlack45 : AppColors.surfaceBlack30)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(message.isCurrentUserMessage ? AppColors.surfaceWhite12 : AppColors.surfaceWhite08, lineWidth: 1)
+                )
+        )
     }
 
     // MARK: - Attachment View
@@ -1666,8 +1891,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 220, maxHeight: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .frame(maxWidth: 232)
                 case .failure:
                     fileAttachmentRow(name: name, type: type)
                 case .empty:
@@ -1740,41 +1964,499 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             }
         }
     }
+
+    private var reactionCluster: some View {
+        FlowLayout(spacing: 4) {
+            ForEach(message.reactions, id: \.emoji) { reaction in
+                Button {
+                    onVisibleReactionTap?()
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(reaction.emoji)
+                            .font(.caption)
+                        if reaction.count >= 2 {
+                            Text("\(reaction.count)")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(AppColors.surfaceWhite88)
+                        }
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(
+                                reaction.reactedByCurrentUser
+                                    ? AppColors.accentDarkColor
+                                    : AppColors.surfaceBlack85
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(
+                                        reaction.reactedByCurrentUser
+                                            ? AppColors.accentColor.opacity(0.7)
+                                            : AppColors.surfaceWhite15,
+                                        lineWidth: 1
+                                    )
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
     
-    // MARK: - Context Menu
-    @ViewBuilder
-    private var contextMenuItems: some View {
-        if message.canEdit, let editAction = onEdit {
-            Button {
-                editAction()
-            } label: {
-                Label("Edit", systemImage: "pencil")
+}
+
+extension RLMessageReactionDTO {
+    var compactBubbleCountText: String? {
+        count > 2 ? "\(count)" : nil
+    }
+}
+
+struct ChatSurfaceOverlayHost<Message: RLChatMessageDisplayable>: View {
+    let messages: [Message]
+    let reactorsState: ChatReactionReactorsState
+    let onQuickReactionSelected: ((Message, String) -> Void)?
+    let onReply: ((Message) -> Void)?
+    let onEdit: ((Message) -> Void)?
+    let onDelete: ((Message) -> Void)?
+    let onCopy: ((Message) -> Void)?
+    let onReport: ((Message) -> Void)?
+    let onFetchReactors: ((Message, String) -> Void)?
+
+    @EnvironmentObject private var appState: RLAppState
+    @EnvironmentObject private var chatSurfaceOverlayCoordinator: ChatSurfaceOverlayCoordinator
+    @State private var pendingDeleteMessageID: UUID?
+
+    var body: some View {
+        Group {
+            if let presentation = chatSurfaceOverlayCoordinator.presentation,
+               let message = resolvedMessage(for: presentation) {
+                ZStack {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Color.black.opacity(0.45))
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            chatSurfaceOverlayCoordinator.dismissOverlay()
+                        }
+
+                    switch presentation {
+                    case .messageActions:
+                        ChatCenteredMessageActionCard(
+                            authorUsername: message.authorUsername,
+                            previewText: previewText(for: message),
+                            currentUserReactions: Set(message.reactions.filter(\.reactedByCurrentUser).map(\.emoji)),
+                            canEdit: message.canEdit && onEdit != nil,
+                            canDelete: message.canDelete && onDelete != nil,
+                            canReport: !message.isCurrentUserMessage && onReport != nil,
+                            canReply: onReply != nil,
+                            onEmojiSelected: { emoji in
+                                onQuickReactionSelected?(message, emoji)
+                                chatSurfaceOverlayCoordinator.dismissOverlay()
+                            },
+                            onReply: {
+                                onReply?(message)
+                                chatSurfaceOverlayCoordinator.dismissOverlay()
+                            },
+                            onEdit: {
+                                onEdit?(message)
+                                chatSurfaceOverlayCoordinator.dismissOverlay()
+                            },
+                            onDelete: {
+                                pendingDeleteMessageID = message.id
+                            },
+                            onCopy: {
+                                UIPasteboard.general.string = previewText(for: message)
+                                onCopy?(message)
+                                chatSurfaceOverlayCoordinator.dismissOverlay()
+                            },
+                            onReport: {
+                                onReport?(message)
+                                chatSurfaceOverlayCoordinator.dismissOverlay()
+                            }
+                        )
+                        .frame(maxWidth: 340)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 24)
+                    case .reactionReactors(let messageID, let reactions):
+                        ChatReactionReactorsCard(
+                            reactions: reactions,
+                            reactorsState: reactorsState.matches(messageID: messageID)
+                                ? reactorsState
+                                : ChatReactionReactorsState(messageID: messageID),
+                            onSelectEmoji: { emoji in
+                                onFetchReactors?(message, emoji)
+                            }
+                        )
+                        .frame(maxWidth: 340)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 24)
+                    }
+                }
+                .zIndex(10_000)
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                .animation(.spring(response: 0.3, dampingFraction: 0.82), value: chatSurfaceOverlayCoordinator.presentation)
             }
         }
-        
-        if message.canDelete, let deleteAction = onDelete {
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                Label("Delete", systemImage: "trash")
+        .alert("Delete Message", isPresented: deleteConfirmationBinding) {
+            Button("Cancel", role: .cancel) {
+                pendingDeleteMessageID = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let messageID = pendingDeleteMessageID,
+                   let message = messages.first(where: { $0.id == messageID }) {
+                    onDelete?(message)
+                }
+                pendingDeleteMessageID = nil
+                chatSurfaceOverlayCoordinator.dismissOverlay()
+            }
+        } message: {
+            Text("Are you sure you want to delete this message? This cannot be undone.")
+        }
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteMessageID != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDeleteMessageID = nil
+                }
+            }
+        )
+    }
+
+    private func resolvedMessage(for presentation: ChatSurfaceOverlayPresentation) -> Message? {
+        switch presentation {
+        case .messageActions(let messageID):
+            return messages.first(where: { $0.id == messageID })
+        case .reactionReactors(let messageID, _):
+            return messages.first(where: { $0.id == messageID })
+        }
+    }
+
+    private func previewText(for message: Message) -> String {
+        if let markerShare = MarkerShareCodec.extract(from: message.content) {
+            let visibleText = markerShare.visibleText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !visibleText.isEmpty {
+                return visibleText
             }
         }
-        
-        Button {
-            UIPasteboard.general.string = displayMessageText.isEmpty ? message.content : displayMessageText
-            onCopy?()
-        } label: {
-            Label("Copy", systemImage: "doc.on.doc")
+
+        let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
         }
-        
-        if !message.isCurrentUserMessage, let reportAction = onReport {
-            Divider()
-            Button(role: .destructive) {
-                reportAction()
-            } label: {
-                Label("Report", systemImage: "exclamationmark.triangle")
+
+        if let attachmentName = message.attachmentName, !attachmentName.isEmpty {
+            return attachmentName
+        }
+
+        return "Attachment"
+    }
+}
+
+private struct ChatCenteredMessageActionCard: View {
+    let authorUsername: String
+    let previewText: String
+    let currentUserReactions: Set<String>
+    let canEdit: Bool
+    let canDelete: Bool
+    let canReport: Bool
+    let canReply: Bool
+    let onEmojiSelected: (String) -> Void
+    let onReply: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let onCopy: () -> Void
+    let onReport: () -> Void
+
+    private let quickEmojis = ["👍", "🔥", "😂", "🎯", "👀"]
+    @State private var tappedEmoji: String?
+
+    private var actionItems: [(title: String, icon: String, destructive: Bool, action: () -> Void)] {
+        var items: [(String, String, Bool, () -> Void)] = []
+        if canReply {
+            items.append(("Reply", "arrowshape.turn.up.left.fill", false, onReply))
+        }
+        if canEdit {
+            items.append(("Edit", "pencil", false, onEdit))
+        }
+        items.append(("Copy", "doc.on.doc", false, onCopy))
+        if canDelete {
+            items.append(("Delete", "trash", true, onDelete))
+        }
+        if canReport {
+            items.append(("Report", "exclamationmark.triangle", true, onReport))
+        }
+        return items
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Message preview — accent bar style
+            HStack(spacing: 10) {
+                Capsule()
+                    .fill(AppColors.accentColor.opacity(0.6))
+                    .frame(width: 3, height: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("@\(authorUsername)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.surfaceWhite60)
+                    Text(previewText)
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.whiteText.opacity(0.9))
+                        .lineLimit(2)
+                }
+            }
+            .padding(.horizontal, 4)
+
+            // Quick reaction emoji row
+            HStack(spacing: 8) {
+                ForEach(quickEmojis, id: \.self) { emoji in
+                    let isAlreadyReacted = currentUserReactions.contains(emoji)
+                    Button {
+                        tappedEmoji = emoji
+                        HapticFeedback.light.trigger()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            onEmojiSelected(emoji)
+                        }
+                    } label: {
+                        Text(emoji)
+                            .font(.title2)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(isAlreadyReacted ? AppColors.accentDarkColor.opacity(0.4) : AppColors.surfaceWhite06)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(isAlreadyReacted ? AppColors.accentColor.opacity(0.7) : AppColors.surfaceWhite12, lineWidth: isAlreadyReacted ? 1.5 : 1)
+                                    )
+                            )
+                            .scaleEffect(tappedEmoji == emoji ? 1.25 : 1.0)
+                            .animation(.spring(response: 0.25, dampingFraction: 0.5), value: tappedEmoji)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Divider
+            Rectangle()
+                .fill(AppColors.surfaceWhite08)
+                .frame(height: 1)
+                .padding(.horizontal, 4)
+
+            // Action buttons
+            VStack(spacing: 2) {
+                ForEach(Array(actionItems.enumerated()), id: \.offset) { entry in
+                    let item = entry.element
+                    actionButton(
+                        title: item.title,
+                        systemImage: item.icon,
+                        action: item.action,
+                        isDestructive: item.destructive
+                    )
+                }
             }
         }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(AppColors.surfaceBlack85.opacity(0.7))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                )
+        )
+        .shadow(color: Color.black.opacity(0.4), radius: 28, x: 0, y: 14)
+    }
+
+    private func actionButton(
+        title: String,
+        systemImage: String,
+        action: @escaping () -> Void,
+        isDestructive: Bool = false
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.subheadline)
+                    .frame(width: 20)
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                if !isDestructive {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(AppColors.surfaceWhite30)
+                }
+            }
+            .foregroundColor(isDestructive ? AppColors.bearCandleRed : AppColors.whiteText)
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.clear)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ChatReactionReactorsCard: View {
+    let reactions: [RLMessageReactionDTO]
+    let reactorsState: ChatReactionReactorsState
+    let onSelectEmoji: (String) -> Void
+
+    @EnvironmentObject private var appState: RLAppState
+    @State private var selectedEmoji: String?
+
+    private var activeEmoji: String? {
+        selectedEmoji ?? reactions.first?.emoji
+    }
+
+    private var totalCount: Int {
+        reactions.reduce(0) { $0 + $1.count }
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            // Header
+            HStack {
+                Text("Reactions")
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+                Text("\(totalCount)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.surfaceWhite60)
+            }
+
+            // Emoji tabs — scrollable row
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(reactions, id: \.emoji) { reaction in
+                        let isSelected = activeEmoji == reaction.emoji
+                        Button {
+                            selectedEmoji = reaction.emoji
+                            onSelectEmoji(reaction.emoji)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(reaction.emoji)
+                                    .font(.callout)
+                                Text("\(reaction.count)")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundColor(isSelected ? AppColors.whiteText : AppColors.surfaceWhite70)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? AppColors.accentDarkColor : AppColors.surfaceWhite06)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(isSelected ? AppColors.accentColor.opacity(0.7) : AppColors.surfaceWhite12, lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Reactors list for selected emoji
+            if let emoji = activeEmoji {
+                if reactorsState.isLoading(emoji: emoji) {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(AppColors.surfaceWhite60)
+                        Spacer()
+                    }
+                    .padding(.vertical, 20)
+                } else if let response = reactorsState.response(for: emoji), !response.reactors.isEmpty {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(response.reactors, id: \.membershipId) { reactor in
+                                reactorRow(reactor, emoji: emoji)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 280)
+                } else {
+                    Text("No reactors to show yet.")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.surfaceWhite50)
+                        .padding(.vertical, 12)
+                }
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(AppColors.surfaceBlack85.opacity(0.7))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                )
+        )
+        .shadow(color: Color.black.opacity(0.4), radius: 28, x: 0, y: 14)
+        .onAppear {
+            // Auto-fetch the first emoji's reactors
+            if let first = reactions.first?.emoji {
+                onSelectEmoji(first)
+            }
+        }
+    }
+
+    private func reactorRow(_ reactor: RLGuildMemberDTO, emoji: String) -> some View {
+        HStack(spacing: 10) {
+            // Emoji indicator
+            Text(emoji)
+                .font(.caption)
+
+            ChatAvatar(
+                initials: reactor.initials,
+                avatarURL: reactor.avatarUrl,
+                isOnline: appState.effectiveOnlineStatus(userId: reactor.userId, fallback: reactor.isOnline),
+                size: 32
+            )
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(reactor.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText)
+                Text("@\(reactor.username)")
+                    .font(.caption2)
+                    .foregroundColor(AppColors.surfaceWhite50)
+            }
+
+            Spacer()
+
+            Text(reactor.memberRole.displayName)
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(reactor.memberRole.color)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(AppColors.surfaceWhite06)
+        )
     }
 }
 
@@ -2380,3 +3062,4 @@ struct RLDMSettingsView: View {
         }
     }
 }
+

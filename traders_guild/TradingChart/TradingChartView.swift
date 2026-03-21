@@ -388,6 +388,7 @@ struct TradingChartView: View {
     
     /// Observe indicator changes directly so chart overlays redraw reliably.
     @ObservedObject private var indicatorManager: IndicatorManager
+    @ObservedObject private var chartDrawingManager: ChartDrawingManager
     
     /// Shorthand accessor for data manager
     /// This computed property lets us keep using "chartData" throughout the file
@@ -549,6 +550,7 @@ struct TradingChartView: View {
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
         self._indicatorManager = ObservedObject(wrappedValue: chartViewModel.indicatorManager)
+        self._chartDrawingManager = ObservedObject(wrappedValue: chartViewModel.chartDrawingManager)
         self._chartDrawingPlacementState = ObservedObject(wrappedValue: chartViewModel.chartComponentsPlacementState)
         self.gestureState = gestureState
         self.placementState = placementState
@@ -1144,7 +1146,7 @@ struct TradingChartView: View {
 
             if !shouldHideCurrentPriceIndicator {
                 priceIndicatorView(geometry: geometry)
-                    .mask(topFadeMask(geometry: geometry))
+                    .mask(priceIndicatorMask(geometry: geometry))
             }
 
             chartInfoBox(geometry: geometry)
@@ -1336,8 +1338,26 @@ struct TradingChartView: View {
             verticalOffset: clampedVerticalOffset(chartHeight: geometry.size.height),
             chartHeight: geometry.size.height,
             priceRange: chartData.priceRange,
-            chartData: chartData
+            chartData: chartData,
+            latestCandle: chartData.candles.last,
+            topExclusionHeight: priceIndicatorTopExclusionHeight(geometry: geometry),
+            bottomExclusionHeight: priceIndicatorBottomExclusionHeight(geometry: geometry)
         )
+    }
+
+    private func priceIndicatorTopExclusionHeight(geometry: GeometryProxy) -> CGFloat {
+        let topInset = geometry.safeAreaInsets.top
+        return topInset > 0 ? topInset + 52 : 114
+    }
+
+    private func priceIndicatorBottomExclusionHeight(geometry: GeometryProxy) -> CGFloat {
+        let panelPadding = ChartPanelReserveCalculator.normalizedPanelReserve(
+            totalPanelReserve: indicatorPanelBottomPadding,
+            bottomBoundaryLabelReserve: panelBottomBoundaryLabelReserve
+        )
+        let controlsBottomPadding = geometry.size.height * 0.085 + 34 + panelPadding
+        let controlRowHeight: CGFloat = 28
+        return controlsBottomPadding + controlRowHeight
     }
     
     @ViewBuilder
@@ -4746,10 +4766,6 @@ struct TradingChartView: View {
         AppColors.systemBlack
     }
 
-    private var yAxisPanelBaseBackground: Color {
-        AppColors.chartPanelBackgroundInset
-    }
-
     /// True when the bottom panel currently renders its own x-axis label strip.
     private var panelOwnsBottomXAxisStrip: Bool {
         panelBottomBoundaryLabelReserve > 0
@@ -4758,17 +4774,14 @@ struct TradingChartView: View {
     private var yAxisPanelBackground: some View {
         ZStack {
             Rectangle()
-                .fill(yAxisPanelBaseBackground)
+                .fill(.ultraThinMaterial)
             Rectangle()
-                .fill(AppColors.surfaceBlack50.opacity(0.55))
-            LinearGradient(
-                colors: [
-                    AppColors.surfaceWhite04.opacity(0.18),
-                    AppColors.surfaceWhite0015.opacity(0.06),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+                .fill(AppColors.surfaceBlack50)
+        }
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(AppColors.surfaceWhite18)
+                .frame(width: 1)
         }
     }
     
@@ -5104,6 +5117,21 @@ struct TradingChartView: View {
             }
     }
 
+    private func priceIndicatorMask(geometry: GeometryProxy) -> some View {
+        let topExclusion = priceIndicatorTopExclusionHeight(geometry: geometry)
+        let bottomExclusion = priceIndicatorBottomExclusionHeight(geometry: geometry)
+        let visibleHeight = max(0, geometry.size.height - topExclusion - bottomExclusion)
+
+        return Color.clear
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .overlay(alignment: .topLeading) {
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: geometry.size.width, height: visibleHeight)
+                    .offset(y: topExclusion)
+            }
+    }
+
     // MARK: - Y-Axis Overlay
 
     @ViewBuilder
@@ -5244,7 +5272,7 @@ struct TradingChartView: View {
 
     private var chartInfoLegendDrawings: [ChartDrawing] {
         guard !controlViewModel.isMarkerViewingMode else { return [] }
-        return chartViewModel.chartDrawingManager.activeDrawings
+        return chartDrawingManager.activeDrawings
     }
 
     private var viewingInfoMarker: ChartMarkerUI? {

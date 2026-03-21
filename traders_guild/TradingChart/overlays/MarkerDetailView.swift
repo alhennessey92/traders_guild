@@ -519,13 +519,16 @@ struct CommentsView: View {
     @Binding var comments: [RLMarkerCommentDTO]
     @ObservedObject var markerManager: MarkerManager
     @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var chatSurfaceOverlayCoordinator: ChatSurfaceOverlayCoordinator
     
     @State private var commentText: String = ""
+    @State private var replyDraft: ChatReplyDraft? = nil
     @State private var isSendingComment: Bool = false
     @FocusState private var isCommentInputFocused: Bool
     @State private var showReportCommentReasonSheet: Bool = false
     @State private var commentToReport: RLMarkerCommentDTO? = nil
     @State private var selectedProfileMember: RLGuildMemberDTO? = nil
+    @State private var reactionReactorsState = ChatReactionReactorsState()
     
     @Binding var selectedDetent: PresentationDetent
     
@@ -547,6 +550,15 @@ struct CommentsView: View {
     private var participantCount: Int {
         let participantIds = Set(comments.map { $0.author.userId }).union([liveMarker.author.userId])
         return max(1, participantIds.count)
+    }
+
+    private var actionPanelVisibility: Binding<Bool> {
+        Binding(
+            get: { chatSurfaceOverlayCoordinator.isComposerActionPanelVisible },
+            set: { isVisible in
+                chatSurfaceOverlayCoordinator.setComposerActionPanelVisible(isVisible)
+            }
+        )
     }
     
     var body: some View {
@@ -573,6 +585,13 @@ struct CommentsView: View {
                             ForEach(sortedComments) { comment in
                                 MarkerCommentRow(
                                     comment: comment,
+                                    onReply: { replyDraft = ChatReplyDraft(message: comment) },
+                                    onReactionSelected: { emoji in
+                                        Task { await toggleReaction(comment, emoji: emoji) }
+                                    },
+                                    onVisibleReactionTap: {
+                                        presentReactionReactors(comment, reactions: comment.reactions)
+                                    },
                                     onAuthorTap: { member in
                                         selectedProfileMember = member
                                     },
@@ -598,6 +617,7 @@ struct CommentsView: View {
                 .scrollDismissesKeyboard(.interactively)
                 .onTapGesture {
                     isCommentInputFocused = false
+                    chatSurfaceOverlayCoordinator.dismissAll()
                 }
                 .onChange(of: comments.count) { _ in
                     if let lastComment = sortedComments.last {
@@ -625,15 +645,43 @@ struct CommentsView: View {
                 .background(ChatBackground())
             }
         }
+        .overlay {
+            ChatSurfaceOverlayHost(
+                messages: sortedComments,
+                reactorsState: reactionReactorsState,
+                onQuickReactionSelected: { comment, emoji in
+                    Task { await toggleReaction(comment, emoji: emoji) }
+                },
+                onReply: { comment in
+                    replyDraft = ChatReplyDraft(message: comment)
+                },
+                onEdit: nil,
+                onDelete: { comment in
+                    handleDeleteComment(comment)
+                },
+                onCopy: { _ in
+                    rlAppState.showSuccess("Copied to clipboard")
+                },
+                onReport: { comment in
+                    commentToReport = comment
+                    showReportCommentReasonSheet = true
+                },
+                onFetchReactors: { comment, emoji in
+                    fetchReactorsForEmoji(commentId: comment.id, emoji: emoji)
+                }
+            )
+        }
         .safeAreaInset(edge: .bottom) {
             MarkerCommentInputFooter(
                 commentText: $commentText,
+                replyDraft: $replyDraft,
                 isInputFocused: _isCommentInputFocused,
                 isSending: isSendingComment,
                 onSend: { payload in
                     handleAddComment(payload)
                 },
-                selectedDetent: $selectedDetent
+                selectedDetent: $selectedDetent,
+                isActionPanelVisible: actionPanelVisibility
             )
         }
         .background(AppColors.sheetBackground)
@@ -694,7 +742,7 @@ struct CommentsView: View {
     
     private func handleAddComment(_ payload: ChatComposerPayload) {
         let trimmed = payload.text
-        guard !trimmed.isEmpty || !payload.attachments.isEmpty else { return }
+        guard !trimmed.isEmpty || !payload.attachments.isEmpty || payload.replyDraft != nil else { return }
 
         HapticFeedback.light.trigger()
         
@@ -711,8 +759,13 @@ struct CommentsView: View {
 
         // Add comment through marker manager (optimistic update happens there)
         Task {
-            await markerManager.addComment(markerId: marker.id, content: trimmed)
+            await markerManager.addComment(
+                markerId: marker.id,
+                content: trimmed,
+                replyToMessageId: payload.replyDraft?.messageId
+            )
             isSendingComment = false
+            replyDraft = nil
         }
     }
 
@@ -741,12 +794,62 @@ struct CommentsView: View {
                     content: content,
                     attachmentUrl: upload.attachmentUrl,
                     attachmentType: upload.attachmentType,
-                    attachmentName: upload.attachmentName
+                    attachmentName: upload.attachmentName,
+                    replyToMessageId: replyDraft?.messageId
                 )
                 isFirstMessage = false
             }
+            replyDraft = nil
         } catch {
             rlAppState.showError(error, title: "Failed to Send Attachment", style: .toast)
+        }
+    }
+
+    private func toggleReaction(_ comment: RLMarkerCommentDTO, emoji: String) async {
+        do {
+            try await markerManager.toggleCommentReaction(
+                markerId: marker.id,
+                commentId: comment.id,
+                emoji: emoji
+            )
+        } catch {
+            rlAppState.showError(error, title: "Failed to Update Reaction", style: .toast)
+        }
+    }
+
+    private func presentReactionReactors(_ comment: RLMarkerCommentDTO, reactions: [RLMessageReactionDTO]) {
+        chatSurfaceOverlayCoordinator.presentReactionReactors(for: comment.id, reactions: reactions)
+
+        if reactionReactorsState.messageID != comment.id {
+            reactionReactorsState = ChatReactionReactorsState(messageID: comment.id)
+        }
+    }
+
+    private func fetchReactorsForEmoji(commentId: UUID, emoji: String) {
+        if reactionReactorsState.messageID == commentId,
+           reactionReactorsState.response(for: emoji) != nil {
+            return
+        }
+
+        reactionReactorsState.loadingEmojis.insert(emoji)
+
+        Task {
+            do {
+                let response = try await markerManager.fetchCommentReactionReactors(
+                    markerId: marker.id,
+                    commentId: commentId,
+                    emoji: emoji
+                )
+                await MainActor.run {
+                    reactionReactorsState.responses[emoji] = response
+                    reactionReactorsState.loadingEmojis.remove(emoji)
+                }
+            } catch {
+                await MainActor.run {
+                    reactionReactorsState.loadingEmojis.remove(emoji)
+                    rlAppState.showError(error, title: "Failed to Load Reactions", style: .toast)
+                }
+            }
         }
     }
     
@@ -795,19 +898,23 @@ struct CommentsView: View {
 
 struct MarkerCommentInputFooter: View {
     @Binding var commentText: String
+    @Binding var replyDraft: ChatReplyDraft?
     @FocusState var isInputFocused: Bool
     let isSending: Bool
     let onSend: (ChatComposerPayload) -> Void
     @Binding var selectedDetent: PresentationDetent
+    var isActionPanelVisible: Binding<Bool>? = nil
     
     var body: some View {
         ChatInputFooter(
             messageText: $commentText,
+            replyDraft: $replyDraft,
             placeholder: "Add a comment...",
             isSending: isSending,
             onSend: onSend,
             selectedDetent: $selectedDetent,
-            expandedDetent: .fraction(0.9)
+            expandedDetent: .fraction(0.9),
+            isActionPanelVisible: isActionPanelVisible
         )
     }
 }
@@ -816,6 +923,9 @@ struct MarkerCommentInputFooter: View {
 
 struct MarkerCommentRow: View {
     let comment: RLMarkerCommentDTO
+    let onReply: () -> Void
+    let onReactionSelected: (String) -> Void
+    let onVisibleReactionTap: () -> Void
     var onAuthorTap: ((RLGuildMemberDTO) -> Void)? = nil
     let onReport: () -> Void
     var onDelete: (() -> Void)? = nil
@@ -830,7 +940,10 @@ struct MarkerCommentRow: View {
             onAuthorTap: { onAuthorTap?(comment.author) },
             onDelete: onDelete,
             onReport: !comment.isCurrentUserMessage ? onReport : nil,
-            onCopy: { rlAppState.showSuccess("Copied to clipboard") }
+            onCopy: { rlAppState.showSuccess("Copied to clipboard") },
+            onReply: onReply,
+            onToggleReaction: onReactionSelected,
+            onVisibleReactionTap: onVisibleReactionTap
         )
     }
 }

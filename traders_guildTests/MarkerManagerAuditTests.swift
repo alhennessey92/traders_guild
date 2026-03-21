@@ -389,11 +389,12 @@ struct MessagingMarkerShareTests {
 
         let payload = ChatComposerPayload(
             text: "",
-            attachments: [ChatAttachmentDraft(data: Data([0x01]), filename: "chart.png", mimeType: "image/png")],
+            attachment: ChatAttachmentDraft(data: Data([0x01]), filename: "chart.png", mimeType: "image/png"),
             markerShareDraft: draft
         )
 
         #expect(payload.hasBodyContent)
+        #expect(payload.attachments.count == 1)
 
         let outbound = payload.encodedContent(fallback: "chart.png")
         let extracted = MarkerShareCodec.extract(from: outbound)

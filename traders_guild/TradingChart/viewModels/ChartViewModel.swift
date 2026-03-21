@@ -453,8 +453,9 @@ class ChartViewModel: ObservableObject {
 
         let anchorTime = dataManager.candles.last?.timestamp ?? Date()
         let anchorPrice = dataManager.candles.last?.close ?? 0
-        let preservedComponents = chartComponentsPlacementState.components.filter { draft in
-            draft.componentType != .anchor && !isChartDrawingPlacementComponent(draft.componentType)
+
+        let preservedNonDrawingComponents = chartComponentsPlacementState.components.filter {
+            $0.componentType != .anchor && !isChartDrawingPlacementComponent($0.componentType)
         }
 
         var nextComponents: [MarkerComponentDraft] = [
@@ -469,7 +470,7 @@ class ChartViewModel: ObservableObject {
                 )
             )
         ]
-        nextComponents.append(contentsOf: preservedComponents)
+        nextComponents.append(contentsOf: preservedNonDrawingComponents)
         nextComponents.append(contentsOf: chartDrawingManager.drawings.map {
             ChartDrawingBridge.markerDraft(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
         })
@@ -482,6 +483,7 @@ class ChartViewModel: ObservableObject {
         defer { isApplyingChartDrawingPlacementToManager = false }
         let anchorTime = dataManager.candles.last?.timestamp ?? Date()
         let anchorPrice = dataManager.candles.last?.close ?? 0
+
         chartDrawingManager.setDrawings(
             chartComponentsPlacementState.components.compactMap {
                 ChartDrawingBridge.chartDrawing(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)

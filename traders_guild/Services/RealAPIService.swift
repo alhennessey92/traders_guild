@@ -1650,13 +1650,15 @@ extension RealAPIService {
         content: String,
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
-        attachmentName: String? = nil
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
     ) async throws -> RLChatroomMessageDTO {
         let body = RLSendMessageRequest(
             content: content,
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
-            attachmentName: attachmentName
+            attachmentName: attachmentName,
+            replyToMessageId: replyToMessageId
         )
         return try await request(
             "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages",
@@ -1696,6 +1698,37 @@ extension RealAPIService {
             "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)",
             service: .core,
             method: "DELETE",
+            auth: true
+        )
+    }
+
+    func toggleChatroomMessageReaction(
+        guildId: UUID,
+        chatroomId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLChatroomMessageDTO {
+        let body = RLToggleMessageReactionRequest(emoji: emoji)
+        return try await request(
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)/reactions",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    func getChatroomMessageReactionReactors(
+        guildId: UUID,
+        chatroomId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        let encodedEmoji = emoji.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? emoji
+        return try await request(
+            "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages/\(messageId.uuidString)/reactions?emoji=\(encodedEmoji)",
+            service: .core,
+            method: "GET",
             auth: true
         )
     }
@@ -1849,13 +1882,15 @@ extension RealAPIService {
         content: String,
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
-        attachmentName: String? = nil
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
     ) async throws -> RLDMMessageDTO {
         let body = RLSendMessageRequest(
             content: content,
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
-            attachmentName: attachmentName
+            attachmentName: attachmentName,
+            replyToMessageId: replyToMessageId
         )
         return try await request(
             "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages",
@@ -1895,6 +1930,37 @@ extension RealAPIService {
             "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)",
             service: .core,
             method: "DELETE",
+            auth: true
+        )
+    }
+
+    func toggleDMMessageReaction(
+        guildId: UUID,
+        threadId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLDMMessageDTO {
+        let body = RLToggleMessageReactionRequest(emoji: emoji)
+        return try await request(
+            "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)/reactions",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    func getDMMessageReactionReactors(
+        guildId: UUID,
+        threadId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        let encodedEmoji = emoji.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? emoji
+        return try await request(
+            "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages/\(messageId.uuidString)/reactions?emoji=\(encodedEmoji)",
+            service: .core,
+            method: "GET",
             auth: true
         )
     }
@@ -2997,13 +3063,15 @@ extension RealAPIService {
         content: String,
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
-        attachmentName: String? = nil
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
     ) async throws -> RLMarkerCommentDTO {
         let body = RLCreateMarkerCommentRequest(
             content: content,
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
-            attachmentName: attachmentName
+            attachmentName: attachmentName,
+            replyToMessageId: replyToMessageId
         )
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments",
@@ -3043,6 +3111,37 @@ extension RealAPIService {
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)",
             service: .chart,
             method: "DELETE",
+            auth: true
+        )
+    }
+
+    func toggleMarkerCommentReaction(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMarkerCommentDTO {
+        let body = RLToggleMessageReactionRequest(emoji: emoji)
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)/reactions",
+            service: .chart,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    func getMarkerCommentReactionReactors(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        let encodedEmoji = emoji.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? emoji
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/comments/\(commentId.uuidString)/reactions?emoji=\(encodedEmoji)",
+            service: .chart,
+            method: "GET",
             auth: true
         )
     }
@@ -3114,13 +3213,15 @@ extension RealAPIService {
         content: String,
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
-        attachmentName: String? = nil
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
     ) async throws -> RLChartChatMessageDTO {
         let body = RLSendChartChatMessageRequest(
             content: content,
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
-            attachmentName: attachmentName
+            attachmentName: attachmentName,
+            replyToMessageId: replyToMessageId
         )
         return try await request(
             "/chart/chart-chats/\(chatId.uuidString)/messages",
@@ -3158,6 +3259,35 @@ extension RealAPIService {
             "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)",
             service: .chart,
             method: "DELETE",
+            auth: true
+        )
+    }
+
+    func toggleChartChatMessageReaction(
+        chatId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLChartChatMessageDTO {
+        let body = RLToggleMessageReactionRequest(emoji: emoji)
+        return try await request(
+            "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)/reactions",
+            service: .chart,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    func getChartChatMessageReactionReactors(
+        chatId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        let encodedEmoji = emoji.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? emoji
+        return try await request(
+            "/chart/chart-chats/\(chatId.uuidString)/messages/\(messageId.uuidString)/reactions?emoji=\(encodedEmoji)",
+            service: .chart,
+            method: "GET",
             auth: true
         )
     }

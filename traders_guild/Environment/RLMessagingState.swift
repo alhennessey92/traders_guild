@@ -45,6 +45,7 @@ class RLMessagingManager: ObservableObject {
     let incomingMessageSubject = PassthroughSubject<IncomingMessageType, Never>()
     let editedMessageSubject = PassthroughSubject<IncomingMessageType, Never>()
     let deletedMessageSubject = PassthroughSubject<UUID, Never>()
+    let reactionUpdatedSubject = PassthroughSubject<WSMessageReactionUpdatedPayload, Never>()
     
     init(appState: RLAppState? = nil) {
         self.appState = appState
@@ -205,10 +206,15 @@ struct RLMessagingSheet: View {
     // Message state
     @State private var chatroomMessages: [RLChatroomMessageDTO] = []
     @State private var dmMessages: [RLDMMessageDTO] = []
+    @State private var replyDraft: ChatReplyDraft? = nil
     @State private var isLoadingMessages = false
     @State private var hasMoreMessages = false
     @State private var nextCursor: String? = nil
     @State private var isLoadingMore = false
+    @State private var editTarget: MessagingEditTarget? = nil
+    @State private var reportTarget: MessagingReportTarget? = nil
+    @State private var reactionReactorsState = ChatReactionReactorsState()
+    @StateObject private var chatSurfaceOverlayCoordinator = ChatSurfaceOverlayCoordinator()
 
     // Profile state
     @State private var profileExtendedProfile: RLUserProfileDTO? = nil
@@ -217,6 +223,52 @@ struct RLMessagingSheet: View {
     @State private var profileAwards: [RLUserAwardDTO] = []
     @State private var profileAwardsSummary: RLAwardsSummaryDTO? = nil
     @State private var isProfileLoading: Bool = false
+
+    private var actionPanelVisibility: Binding<Bool> {
+        Binding(
+            get: { chatSurfaceOverlayCoordinator.isComposerActionPanelVisible },
+            set: { isVisible in
+                chatSurfaceOverlayCoordinator.setComposerActionPanelVisible(isVisible)
+            }
+        )
+    }
+
+    private enum MessagingEditTarget: Identifiable {
+        case chatroom(RLChatroomMessageDTO)
+        case dm(RLDMMessageDTO)
+
+        var id: UUID {
+            switch self {
+            case .chatroom(let message):
+                return message.id
+            case .dm(let message):
+                return message.id
+            }
+        }
+
+        var originalContent: String {
+            switch self {
+            case .chatroom(let message):
+                return message.content
+            case .dm(let message):
+                return message.content
+            }
+        }
+    }
+
+    private enum MessagingReportTarget: Identifiable {
+        case chatroom(RLChatroomMessageDTO)
+        case dm(RLDMMessageDTO)
+
+        var id: UUID {
+            switch self {
+            case .chatroom(let message):
+                return message.id
+            case .dm(let message):
+                return message.id
+            }
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -249,6 +301,7 @@ struct RLMessagingSheet: View {
         }
         .animation(.easeInOut(duration: 0.3), value: showUserProfile)
         .animation(.easeInOut(duration: 0.3), value: showSettings)
+        .environmentObject(chatSurfaceOverlayCoordinator)
     }
     
     // MARK: - Mark as Read Function
@@ -331,6 +384,8 @@ struct RLMessagingSheet: View {
                 RLChatroomFooterView(
                     chatroom: resolvedChatroom(for: chatroom),
                     messageText: $messageText,
+                    replyDraft: $replyDraft,
+                    isActionPanelVisible: actionPanelVisibility,
                     onMessageSent: { message in
                         chatroomMessages.append(message)
                     }
@@ -339,6 +394,8 @@ struct RLMessagingSheet: View {
                 RLDMFooterView(
                     thread: thread,
                     messageText: $messageText,
+                    replyDraft: $replyDraft,
+                    isActionPanelVisible: actionPanelVisibility,
                     onMessageSent: { message in
                         dmMessages.append(message)
                     }
@@ -354,6 +411,7 @@ struct RLMessagingSheet: View {
             }
         )
         .task(id: contentType.id) {
+            chatSurfaceOverlayCoordinator.dismissAll()
             resetMessageState()
             await loadMessages()
         }
@@ -381,6 +439,81 @@ struct RLMessagingSheet: View {
                     dmMessages.append(message)
                 }
             }
+        }
+        .onReceive(messagingManager.editedMessageSubject) { edited in
+            switch edited {
+            case .chatroom(let message):
+                guard case .chatroom(let chatroom) = contentType,
+                      message.chatroomId == chatroom.id,
+                      let index = chatroomMessages.firstIndex(where: { $0.id == message.id }) else { return }
+                chatroomMessages[index] = message
+            case .dm(let message):
+                guard case .dmThread(let thread) = contentType,
+                      message.dmId == thread.id,
+                      let index = dmMessages.firstIndex(where: { $0.id == message.id }) else { return }
+                dmMessages[index] = message
+            }
+        }
+        .onReceive(messagingManager.deletedMessageSubject) { deletedId in
+            switch contentType {
+            case .chatroom:
+                chatroomMessages.removeAll { $0.id == deletedId }
+            case .dmThread:
+                dmMessages.removeAll { $0.id == deletedId }
+            }
+        }
+        .onReceive(messagingManager.reactionUpdatedSubject) { payload in
+            guard let messageId = UUID(uuidString: payload.messageId) else { return }
+            switch contentType {
+            case .chatroom:
+                guard let index = chatroomMessages.firstIndex(where: { $0.id == messageId }) else { return }
+                chatroomMessages[index].reactions = mergeReactions(
+                    current: chatroomMessages[index].reactions,
+                    incoming: payload.reactions
+                )
+            case .dmThread:
+                guard let index = dmMessages.firstIndex(where: { $0.id == messageId }) else { return }
+                dmMessages[index].reactions = mergeReactions(
+                    current: dmMessages[index].reactions,
+                    incoming: payload.reactions
+                )
+            }
+        }
+        .sheet(item: $editTarget) { target in
+            UnifiedEditMessageSheet(originalContent: target.originalContent) { newContent in
+                switch target {
+                case .chatroom(let message):
+                    try await appState.editChatroomMessage(
+                        chatroomId: message.chatroomId,
+                        messageId: message.id,
+                        content: newContent
+                    )
+                case .dm(let message):
+                    try await appState.editDMMessage(
+                        threadId: message.dmId,
+                        messageId: message.id,
+                        content: newContent
+                    )
+                }
+                appState.showSuccess("Message updated")
+            }
+        }
+        .sheet(item: $reportTarget) { target in
+            ReportReasonSheet(
+                title: "Why are you reporting this message?",
+                includeScam: false,
+                onReasonSelected: { reason in
+                    Task {
+                        await reportMessage(target, reason: reason)
+                        await MainActor.run {
+                            reportTarget = nil
+                        }
+                    }
+                },
+                onCancel: {
+                    reportTarget = nil
+                }
+            )
         }
     }
 
@@ -489,6 +622,13 @@ struct RLMessagingSheet: View {
                         ForEach(chatroomMessages) { message in
                             RLChatroomMessageView(
                                 message: message,
+                                onReply: { replyDraft = ChatReplyDraft(message: message) },
+                                onReactionSelected: { emoji in
+                                    Task { await toggleChatroomReaction(messageId: message.id, emoji: emoji) }
+                                },
+                                onVisibleReactionTap: {
+                                    presentReactionReactors(messageId: message.id, reactions: message.reactions)
+                                },
                                 onAvatarTap: {
                                     selectedChatroomUser = message.author
                                     showUserProfile = true
@@ -500,6 +640,13 @@ struct RLMessagingSheet: View {
                         ForEach(dmMessages) { message in
                             RLDMMessageView(
                                 message: message,
+                                onReply: { replyDraft = ChatReplyDraft(message: message) },
+                                onReactionSelected: { emoji in
+                                    Task { await toggleDMReaction(messageId: message.id, emoji: emoji) }
+                                },
+                                onVisibleReactionTap: {
+                                    presentReactionReactors(messageId: message.id, reactions: message.reactions)
+                                },
                                 onAuthorTap: {
                                     showUserProfile = true
                                 }
@@ -511,6 +658,15 @@ struct RLMessagingSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
+            .onTapGesture {
+                chatSurfaceOverlayCoordinator.dismissAll()
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil,
+                    from: nil,
+                    for: nil
+                )
+            }
             .onChange(of: chatroomMessages.count) { _, _ in
                 guard !isLoadingMore else { return }
                 scrollToBottom(proxy: proxy)
@@ -521,8 +677,65 @@ struct RLMessagingSheet: View {
             }
         }
         .overlay {
-            if isLoadingMessages {
-                ProgressView()
+            ZStack {
+                switch contentType {
+                case .chatroom:
+                    ChatSurfaceOverlayHost(
+                        messages: chatroomMessages,
+                        reactorsState: reactionReactorsState,
+                        onQuickReactionSelected: { message, emoji in
+                            Task { await toggleChatroomReaction(messageId: message.id, emoji: emoji) }
+                        },
+                        onReply: { message in
+                            replyDraft = ChatReplyDraft(message: message)
+                        },
+                        onEdit: { message in
+                            editTarget = .chatroom(message)
+                        },
+                        onDelete: { message in
+                            Task { await deleteChatroomMessage(message) }
+                        },
+                        onCopy: { _ in
+                            appState.showSuccess("Copied to clipboard")
+                        },
+                        onReport: { message in
+                            reportTarget = .chatroom(message)
+                        },
+                        onFetchReactors: { message, emoji in
+                            fetchReactorsForEmoji(messageId: message.id, emoji: emoji)
+                        }
+                    )
+                case .dmThread:
+                    ChatSurfaceOverlayHost(
+                        messages: dmMessages,
+                        reactorsState: reactionReactorsState,
+                        onQuickReactionSelected: { message, emoji in
+                            Task { await toggleDMReaction(messageId: message.id, emoji: emoji) }
+                        },
+                        onReply: { message in
+                            replyDraft = ChatReplyDraft(message: message)
+                        },
+                        onEdit: { message in
+                            editTarget = .dm(message)
+                        },
+                        onDelete: { message in
+                            Task { await deleteDMMessage(message) }
+                        },
+                        onCopy: { _ in
+                            appState.showSuccess("Copied to clipboard")
+                        },
+                        onReport: { message in
+                            reportTarget = .dm(message)
+                        },
+                        onFetchReactors: { message, emoji in
+                            fetchReactorsForEmoji(messageId: message.id, emoji: emoji)
+                        }
+                    )
+                }
+
+                if isLoadingMessages {
+                    ProgressView()
+                }
             }
         }
     }
@@ -607,13 +820,153 @@ struct RLMessagingSheet: View {
         messages.sorted { $0.timestamp < $1.timestamp }
     }
 
+    private func toggleChatroomReaction(messageId: UUID, emoji: String) async {
+        guard case .chatroom(let chatroom) = contentType else { return }
+        do {
+            let updated = try await appState.toggleChatroomMessageReaction(
+                chatroomId: chatroom.id,
+                messageId: messageId,
+                emoji: emoji
+            )
+            if let index = chatroomMessages.firstIndex(where: { $0.id == updated.id }) {
+                chatroomMessages[index] = updated
+            }
+        } catch { }
+    }
+
+    private func toggleDMReaction(messageId: UUID, emoji: String) async {
+        guard case .dmThread(let thread) = contentType else { return }
+        do {
+            let updated = try await appState.toggleDMMessageReaction(
+                threadId: thread.id,
+                messageId: messageId,
+                emoji: emoji
+            )
+            if let index = dmMessages.firstIndex(where: { $0.id == updated.id }) {
+                dmMessages[index] = updated
+            }
+        } catch { }
+    }
+
+    private func mergeReactions(
+        current: [RLMessageReactionDTO],
+        incoming: [RLReactionAggregateDTO]
+    ) -> [RLMessageReactionDTO] {
+        let currentByEmoji = Dictionary(uniqueKeysWithValues: current.map { ($0.emoji, $0) })
+        return incoming.map { reaction in
+            RLMessageReactionDTO(
+                emoji: reaction.emoji,
+                count: reaction.count,
+                reactedByCurrentUser: currentByEmoji[reaction.emoji]?.reactedByCurrentUser ?? false
+            )
+        }
+    }
+
+    private func presentReactionReactors(messageId: UUID, reactions: [RLMessageReactionDTO]) {
+        chatSurfaceOverlayCoordinator.presentReactionReactors(for: messageId, reactions: reactions)
+
+        // Reset state for new message
+        if reactionReactorsState.messageID != messageId {
+            reactionReactorsState = ChatReactionReactorsState(messageID: messageId)
+        }
+    }
+
+    private func fetchReactorsForEmoji(messageId: UUID, emoji: String) {
+        // Already fetched
+        if reactionReactorsState.messageID == messageId,
+           reactionReactorsState.response(for: emoji) != nil {
+            return
+        }
+
+        // Mark as loading
+        reactionReactorsState.loadingEmojis.insert(emoji)
+
+        Task {
+            do {
+                let response: RLMessageReactionReactorsDTO
+                switch contentType {
+                case .chatroom(let chatroom):
+                    response = try await appState.fetchChatroomMessageReactionReactors(
+                        chatroomId: chatroom.id,
+                        messageId: messageId,
+                        emoji: emoji
+                    )
+                case .dmThread(let thread):
+                    response = try await appState.fetchDMMessageReactionReactors(
+                        threadId: thread.id,
+                        messageId: messageId,
+                        emoji: emoji
+                    )
+                }
+
+                await MainActor.run {
+                    reactionReactorsState.responses[emoji] = response
+                    reactionReactorsState.loadingEmojis.remove(emoji)
+                }
+            } catch {
+                await MainActor.run {
+                    reactionReactorsState.loadingEmojis.remove(emoji)
+                    appState.showError(error, title: "Failed to Load Reactions", style: .toast)
+                }
+            }
+        }
+    }
+
+    private func deleteChatroomMessage(_ message: RLChatroomMessageDTO) async {
+        do {
+            try await appState.deleteChatroomMessage(
+                chatroomId: message.chatroomId,
+                messageId: message.id
+            )
+        } catch { }
+    }
+
+    private func deleteDMMessage(_ message: RLDMMessageDTO) async {
+        do {
+            try await appState.deleteDMMessage(
+                threadId: message.dmId,
+                messageId: message.id
+            )
+        } catch { }
+    }
+
+    private func reportMessage(_ target: MessagingReportTarget, reason: String) async {
+        guard let guildId = appState.currentGuild?.id else { return }
+        HapticFeedback.medium.trigger()
+        do {
+            switch target {
+            case .chatroom(let message):
+                _ = try await appState.realApi.reportChatroomMessage(
+                    guildId: guildId,
+                    chatroomId: message.chatroomId,
+                    messageId: message.id,
+                    reason: reason
+                )
+            case .dm(let message):
+                _ = try await appState.realApi.reportDMMessage(
+                    guildId: guildId,
+                    threadId: message.dmId,
+                    messageId: message.id,
+                    reason: reason
+                )
+            }
+            appState.showSuccess("Report submitted")
+        } catch {
+            appState.showError(error, title: "Failed to Report", style: .toast)
+        }
+    }
+
     private func resetMessageState() {
         chatroomMessages = []
         dmMessages = []
+        replyDraft = nil
         hasMoreMessages = false
         nextCursor = nil
         hasMarkedAsRead = false
         lastChatroomMetadataSignature = nil
+        editTarget = nil
+        reportTarget = nil
+        reactionReactorsState = ChatReactionReactorsState()
     }
 
     private func initializeMetadataSignature() {
@@ -838,6 +1191,8 @@ struct RLMessagingSheet: View {
 struct RLChatroomFooterView: View {
     let chatroom: RLGuildChatroomDTO
     @Binding var messageText: String
+    @Binding var replyDraft: ChatReplyDraft?
+    var isActionPanelVisible: Binding<Bool>? = nil
     let onMessageSent: (RLChatroomMessageDTO) -> Void
 
     @EnvironmentObject var appState: RLAppState
@@ -846,12 +1201,14 @@ struct RLChatroomFooterView: View {
     var body: some View {
         ChatInputFooter(
             messageText: $messageText,
+            replyDraft: $replyDraft,
             placeholder: "Message #\(chatroom.name.lowercased().replacingOccurrences(of: " ", with: "-"))...",
             isSending: isSending,
             onSend: { payload in
                 Task { await sendComposedMessage(payload) }
             },
-            allowsMarkerLinkAttachment: true
+            allowsMarkerLinkAttachment: true,
+            isActionPanelVisible: isActionPanelVisible
         )
     }
 
@@ -874,11 +1231,14 @@ struct RLChatroomFooterView: View {
         do {
             let message = try await appState.sendChatroomMessage(
                 chatroomId: chatroom.id,
-                content: payload.encodedContent()
+                content: payload.encodedContent(),
+                replyToMessageId: payload.replyDraft?.messageId
             )
             onMessageSent(message)
+            replyDraft = nil
         } catch {
             messageText = payload.text
+            replyDraft = payload.replyDraft
         }
     }
 
@@ -916,11 +1276,13 @@ struct RLChatroomFooterView: View {
                     content: content,
                     attachmentUrl: upload.attachmentUrl,
                     attachmentType: upload.attachmentType,
-                    attachmentName: upload.attachmentName
+                    attachmentName: upload.attachmentName,
+                    replyToMessageId: payload.replyDraft?.messageId
                 )
                 onMessageSent(message)
                 isFirstMessage = false
             }
+            replyDraft = nil
         } catch {
             appState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
@@ -931,6 +1293,8 @@ struct RLChatroomFooterView: View {
 struct RLDMFooterView: View {
     let thread: RLDMThreadDTO
     @Binding var messageText: String
+    @Binding var replyDraft: ChatReplyDraft?
+    var isActionPanelVisible: Binding<Bool>? = nil
     let onMessageSent: (RLDMMessageDTO) -> Void
 
     @EnvironmentObject var appState: RLAppState
@@ -939,12 +1303,14 @@ struct RLDMFooterView: View {
     var body: some View {
         ChatInputFooter(
             messageText: $messageText,
+            replyDraft: $replyDraft,
             placeholder: "Message \(thread.participant.username.lowercased())...",
             isSending: isSending,
             onSend: { payload in
                 Task { await sendComposedMessage(payload) }
             },
-            allowsMarkerLinkAttachment: true
+            allowsMarkerLinkAttachment: true,
+            isActionPanelVisible: isActionPanelVisible
         )
     }
 
@@ -967,11 +1333,14 @@ struct RLDMFooterView: View {
         do {
             let message = try await appState.sendDMMessage(
                 threadId: thread.id,
-                content: payload.encodedContent()
+                content: payload.encodedContent(),
+                replyToMessageId: payload.replyDraft?.messageId
             )
             onMessageSent(message)
+            replyDraft = nil
         } catch {
             messageText = payload.text
+            replyDraft = payload.replyDraft
         }
     }
 
@@ -1010,11 +1379,13 @@ struct RLDMFooterView: View {
                     content: content,
                     attachmentUrl: upload.attachmentUrl,
                     attachmentType: upload.attachmentType,
-                    attachmentName: upload.attachmentName
+                    attachmentName: upload.attachmentName,
+                    replyToMessageId: payload.replyDraft?.messageId
                 )
                 onMessageSent(message)
                 isFirstMessage = false
             }
+            replyDraft = nil
         } catch {
             appState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
@@ -1024,12 +1395,12 @@ struct RLDMFooterView: View {
 // MARK: - Chatroom Message View (Using RLChatMessageBubble)
 struct RLChatroomMessageView: View {
     let message: RLChatroomMessageDTO
+    let onReply: () -> Void
+    let onReactionSelected: (String) -> Void
+    let onVisibleReactionTap: () -> Void
     let onAvatarTap: () -> Void
     
-    @EnvironmentObject var appState: RLAppState
     @EnvironmentObject var rlMessagingManager: RLMessagingManager
-    @State private var showEditSheet = false
-    @State private var showReportReasonSheet = false
     
     var body: some View {
         RLChatMessageBubble(
@@ -1037,10 +1408,9 @@ struct RLChatroomMessageView: View {
             context: .guildChatroom,
             onAvatarTap: onAvatarTap,
             onAuthorTap: onAvatarTap,
-            onEdit: message.canEdit ? { showEditSheet = true } : nil,
-            onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
-            onReport: !message.isCurrentUserMessage ? { showReportReasonSheet = true } : nil,
-            onCopy: { appState.showSuccess("Copied to clipboard") },
+            onReply: onReply,
+            onToggleReaction: onReactionSelected,
+            onVisibleReactionTap: onVisibleReactionTap,
             onMarkerShareTap: { payload in
                 rlMessagingManager.closeMessage()
                 NotificationCenter.default.post(
@@ -1050,72 +1420,30 @@ struct RLChatroomMessageView: View {
                 )
             }
         )
-        .sheet(isPresented: $showEditSheet) {
-            UnifiedEditMessageSheet(originalContent: message.content) { newContent in
-                try await appState.editChatroomMessage(
-                    chatroomId: message.chatroomId,
-                    messageId: message.id,
-                    content: newContent
-                )
-                appState.showSuccess("Message updated")
-            }
-        }
-        .sheet(isPresented: $showReportReasonSheet) {
-            ReportReasonSheet(
-                title: "Why are you reporting this message?",
-                includeScam: false,
-                onReasonSelected: { reason in
-                    Task {
-                        await reportMessage(reason: reason)
-                        await MainActor.run { showReportReasonSheet = false }
-                    }
-                },
-                onCancel: { showReportReasonSheet = false }
-            )
-        }
-    }
-    
-    private func deleteMessage() async {
-        do {
-            try await appState.deleteChatroomMessage(
-                chatroomId: message.chatroomId,
-                messageId: message.id
-            )
-            appState.showSuccess("Message deleted")
-        } catch {
-            appState.showError(error, title: "Failed to Delete Message")
-        }
-    }
-    
-    private func reportMessage(reason: String) async {
-        guard let guildId = appState.currentGuild?.id else { return }
-        HapticFeedback.medium.trigger()
-        do {
-            _ = try await appState.realApi.reportChatroomMessage(
-                guildId: guildId,
-                chatroomId: message.chatroomId,
-                messageId: message.id,
-                reason: reason
-            )
-            appState.showSuccess("Report submitted")
-        } catch {
-            appState.showError(error, title: "Failed to Report", style: .toast)
-        }
     }
 }
 
 // MARK: - DM Message View (Using RLChatMessageBubble)
 struct RLDMMessageView: View {
     let message: RLDMMessageDTO
+    let onReply: () -> Void
+    let onReactionSelected: (String) -> Void
+    let onVisibleReactionTap: () -> Void
     let onAuthorTap: (() -> Void)?
 
-    @EnvironmentObject var appState: RLAppState
     @EnvironmentObject var rlMessagingManager: RLMessagingManager
-    @State private var showEditSheet = false
-    @State private var showReportReasonSheet = false
 
-    init(message: RLDMMessageDTO, onAuthorTap: (() -> Void)? = nil) {
+    init(
+        message: RLDMMessageDTO,
+        onReply: @escaping () -> Void,
+        onReactionSelected: @escaping (String) -> Void,
+        onVisibleReactionTap: @escaping () -> Void,
+        onAuthorTap: (() -> Void)? = nil
+    ) {
         self.message = message
+        self.onReply = onReply
+        self.onReactionSelected = onReactionSelected
+        self.onVisibleReactionTap = onVisibleReactionTap
         self.onAuthorTap = onAuthorTap
     }
 
@@ -1125,10 +1453,9 @@ struct RLDMMessageView: View {
             context: .directMessage,
             isRead: message.isRead,
             onAuthorTap: onAuthorTap,
-            onEdit: message.canEdit ? { showEditSheet = true } : nil,
-            onDelete: message.canDelete ? { Task { await deleteMessage() } } : nil,
-            onReport: !message.isCurrentUserMessage ? { showReportReasonSheet = true } : nil,
-            onCopy: { appState.showSuccess("Copied to clipboard") },
+            onReply: onReply,
+            onToggleReaction: onReactionSelected,
+            onVisibleReactionTap: onVisibleReactionTap,
             onMarkerShareTap: { payload in
                 rlMessagingManager.closeMessage()
                 NotificationCenter.default.post(
@@ -1138,57 +1465,6 @@ struct RLDMMessageView: View {
                 )
             }
         )
-        .sheet(isPresented: $showEditSheet) {
-            UnifiedEditMessageSheet(originalContent: message.content) { newContent in
-                try await appState.editDMMessage(
-                    threadId: message.dmId,
-                    messageId: message.id,
-                    content: newContent
-                )
-                appState.showSuccess("Message updated")
-            }
-        }
-        .sheet(isPresented: $showReportReasonSheet) {
-            ReportReasonSheet(
-                title: "Why are you reporting this message?",
-                includeScam: false,
-                onReasonSelected: { reason in
-                    Task {
-                        await reportMessage(reason: reason)
-                        await MainActor.run { showReportReasonSheet = false }
-                    }
-                },
-                onCancel: { showReportReasonSheet = false }
-            )
-        }
-    }
-
-    private func deleteMessage() async {
-        do {
-            try await appState.deleteDMMessage(
-                threadId: message.dmId,
-                messageId: message.id
-            )
-            appState.showSuccess("Message deleted")
-        } catch {
-            appState.showError(error, title: "Failed to Delete Message")
-        }
-    }
-
-    private func reportMessage(reason: String) async {
-        guard let guildId = appState.currentGuild?.id else { return }
-        HapticFeedback.medium.trigger()
-        do {
-            _ = try await appState.realApi.reportDMMessage(
-                guildId: guildId,
-                threadId: message.dmId,
-                messageId: message.id,
-                reason: reason
-            )
-            appState.showSuccess("Report submitted")
-        } catch {
-            appState.showError(error, title: "Failed to Report", style: .toast)
-        }
     }
 }
 
@@ -1309,6 +1585,9 @@ extension RLMessagingManager {
             
         case .messageDeleted:
             handleMessageDeleted(wsMessage)
+
+        case .messageReactionUpdated:
+            handleReactionUpdated(wsMessage)
             
         case .typing:
             handleTyping(wsMessage)
@@ -1352,11 +1631,15 @@ extension RLMessagingManager {
     
     private func handleMessageDeleted(_ wsMessage: WSIncomingMessage) {
         // Payload usually contains { "message_id": "uuid" }
-        guard let dict = wsMessage.payload as? [String: Any],
-              let idString = dict["message_id"] as? String,
-              let uuid = UUID(uuidString: idString) else { return }
+        guard let payload = wsMessage.payload(as: WSMessageDeletedPayload.self),
+              let uuid = UUID(uuidString: payload.messageId) else { return }
         
         self.deletedMessageSubject.send(uuid)
+    }
+
+    private func handleReactionUpdated(_ wsMessage: WSIncomingMessage) {
+        guard let payload = wsMessage.payload(as: WSMessageReactionUpdatedPayload.self) else { return }
+        reactionUpdatedSubject.send(payload)
     }
     
     private func handleTyping(_ wsMessage: WSIncomingMessage) {

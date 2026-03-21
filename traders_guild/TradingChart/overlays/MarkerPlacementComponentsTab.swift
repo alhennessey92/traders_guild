@@ -381,7 +381,9 @@ struct MarkerPlacementComponentsTab: View {
 
     private func removeTimeframeDraftButton(_ draft: MarkerComponentDraft) -> some View {
         Button {
-            placementState.removeComponent(id: draft.id)
+            if let timeframe = timeframeBackendValue(for: draft) {
+                placementState.removeTimeframeLink(timeframe)
+            }
             infoMessage = nil
             limitWarning = nil
         } label: {

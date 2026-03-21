@@ -1756,7 +1756,9 @@ struct ChartBottomSheet: View {
 
     // Chat state - managed here since parent handles input
     @StateObject private var chartChatManager: ChartChatManager
+    @StateObject private var chatSurfaceOverlayCoordinator = ChatSurfaceOverlayCoordinator()
     @State private var chatMessageText: String = ""
+    @State private var chartReplyDraft: ChatReplyDraft? = nil
     @State private var isSendingChartMessage = false
     @State private var markerDetailTab: MarkerViewingTab = .general
     @State private var placementIndicatorSnapshot = PlacementIndicatorSnapshot()
@@ -1814,7 +1816,18 @@ struct ChartBottomSheet: View {
     }
 
     private var shouldIgnoreKeyboardSafeArea: Bool {
-        !(isMarkerDetailActive && markerDetailTab == .chat)
+        if isMarkerDetailActive && markerDetailTab == .chat { return false }
+        if selectedView == .chat && isExpanded { return false }
+        return true
+    }
+
+    private var chatActionPanelVisibility: Binding<Bool> {
+        Binding(
+            get: { chatSurfaceOverlayCoordinator.isComposerActionPanelVisible },
+            set: { isVisible in
+                chatSurfaceOverlayCoordinator.setComposerActionPanelVisible(isVisible)
+            }
+        )
     }
 
     var body: some View {
@@ -1880,6 +1893,7 @@ struct ChartBottomSheet: View {
         .animation(.easeInOut(duration: 0.3), value: selectedView)
         .animation(.easeInOut(duration: 0.3), value: isMarkerDetailActive)
         .ignoresSafeArea(.keyboard, edges: shouldIgnoreKeyboardSafeArea ? .bottom : [])
+        .environmentObject(chatSurfaceOverlayCoordinator)
         .onAppear {
             chartChatManager.configure(with: rlAppState)
         }
@@ -1890,11 +1904,13 @@ struct ChartBottomSheet: View {
             loadChatForCurrentSymbol()
         }
         .onChange(of: selectedView) { newView in
+            chatSurfaceOverlayCoordinator.dismissAll()
             if newView == .chat {
                 loadChatForCurrentSymbol()
             }
         }
         .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { _, newId in
+            chatSurfaceOverlayCoordinator.dismissAll()
             if newId != nil {
                 markerDetailTab = .general
                 // Keep sheet at closed state (0.11) — user drags up to expand
@@ -1934,6 +1950,7 @@ struct ChartBottomSheet: View {
     private var chatInputFooter: some View {
         ChatInputFooter(
             messageText: $chatMessageText,
+            replyDraft: $chartReplyDraft,
             placeholder: "Message #\(chartChatManager.activeChartChat?.symbolTicker.lowercased() ?? "chat")...",
             isSending: isSendingChartMessage,
             onSend: { payload in
@@ -1946,6 +1963,7 @@ struct ChartBottomSheet: View {
             expandedDetent: .fraction(0.9),
             leadingAccessory: AnyView(
                 Button(action: {
+                    chatSurfaceOverlayCoordinator.dismissAll()
                     withAnimation(.easeInOut(duration: 0.25)) {
                         selectedView = .symbol
                     }
@@ -1958,7 +1976,8 @@ struct ChartBottomSheet: View {
                         .clipShape(Circle())
                         .shadow(color: AppColors.surfaceWhite30, radius: 1, x: 0, y: 0)
                 }
-            )
+            ),
+            isActionPanelVisible: chatActionPanelVisibility
         )
     }
 
@@ -1977,8 +1996,12 @@ struct ChartBottomSheet: View {
         guard payload.hasBodyContent else { return }
 
         do {
-            try await chartChatManager.sendMessage(content: payload.encodedContent())
+            try await chartChatManager.sendMessage(
+                content: payload.encodedContent(),
+                replyToMessageId: payload.replyDraft?.messageId
+            )
             HapticFeedback.light.trigger()
+            chartReplyDraft = nil
         } catch {
             rlAppState.showError(error, title: "Failed to Send Message", style: .toast)
         }
@@ -2017,11 +2040,13 @@ struct ChartBottomSheet: View {
                     content: content,
                     attachmentUrl: upload.attachmentUrl,
                     attachmentType: upload.attachmentType,
-                    attachmentName: upload.attachmentName
+                    attachmentName: upload.attachmentName,
+                    replyToMessageId: payload.replyDraft?.messageId
                 )
                 isFirstMessage = false
             }
             HapticFeedback.light.trigger()
+            chartReplyDraft = nil
         } catch {
             rlAppState.showError(error, title: "Failed to Send Attachment", style: .toast)
         }
@@ -2315,7 +2340,17 @@ struct ChartBottomSheet: View {
             chartViewModel: chartViewModel,
             chartChatManager: chartChatManager,
             selectedDetent: $selectedDetent,
-            messageText: $chatMessageText
+            messageText: $chatMessageText,
+            replyDraft: $chartReplyDraft,
+            onBackgroundTap: {
+                chatSurfaceOverlayCoordinator.dismissAll()
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil,
+                    from: nil,
+                    for: nil
+                )
+            }
         )
         .environmentObject(rlAppState)
     }

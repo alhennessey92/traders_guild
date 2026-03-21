@@ -1,6 +1,12 @@
 import SwiftUI
 import Combine
 
+struct ChartComponentsSnapshot {
+    let activeChartIndicators: [IndicatorPayload]
+    let activeChartDrawings: [ChartDrawing]
+    let currentChartTimeframe: RLChartTimeframe?
+}
+
 @MainActor
 protocol ComponentsHostAdapter {
     var placementState: MarkerPlacementState { get }
@@ -77,19 +83,22 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
 
     var onBeginInteractiveDrawing: (() -> Void)?
     private(set) var symbolId: UUID?
-    private(set) var currentChartTimeframe: RLChartTimeframe?
+    @Published private(set) var snapshot: ChartComponentsSnapshot
     private var anchorTime: Date
     private var anchorPrice: Double
 
     var showsMirrorButtons: Bool { false }
 
     var activeChartIndicators: [IndicatorPayload] {
-        MarkerPlacementIndicatorFactory.activePayloads(from: indicatorManager.activeIndicators)
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        snapshot.activeChartIndicators
     }
 
     var activeChartDrawings: [ChartDrawing] {
-        drawingManager.activeDrawings
+        snapshot.activeChartDrawings
+    }
+
+    var currentChartTimeframe: RLChartTimeframe? {
+        snapshot.currentChartTimeframe
     }
 
     private var cancellables = Set<AnyCancellable>()
@@ -117,13 +126,17 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         self.indicatorManager = indicatorManager
         self.drawingManager = drawingManager
         self.timeframeLinkManager = timeframeLinkManager
-        self.currentChartTimeframe = currentChartTimeframe
         self.onSelectTimeframeAction = onSelectTimeframeAction
         self.onRecalculate = onRecalculate
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
         self.symbolId = symbolId
         self.anchorTime = anchorTime ?? Date()
         self.anchorPrice = anchorPrice ?? 0
+        self.snapshot = ChartComponentsSnapshot(
+            activeChartIndicators: Self.makeIndicatorPayloads(from: indicatorManager),
+            activeChartDrawings: drawingManager.activeDrawings,
+            currentChartTimeframe: currentChartTimeframe
+        )
 
         timeframeLinkManager.symbolId = symbolId
         placementState.intent = .analysis
@@ -132,7 +145,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
     }
 
     func selectTimeframe(_ timeframe: RLChartTimeframe) {
-        currentChartTimeframe = timeframe
+        updateSnapshot(currentChartTimeframe: timeframe)
         onSelectTimeframeAction?(timeframe)
     }
 
@@ -142,14 +155,14 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         anchorTime: Date?,
         anchorPrice: Double?
     ) {
-        let previousTimeframe = self.currentChartTimeframe
+        let previousTimeframe = snapshot.currentChartTimeframe
         let previousSymbol = self.symbolId
 
-        self.currentChartTimeframe = currentChartTimeframe
         if let anchorTime { self.anchorTime = anchorTime }
         if let anchorPrice { self.anchorPrice = anchorPrice }
 
         self.symbolId = symbolId
+        updateSnapshot(currentChartTimeframe: currentChartTimeframe)
         let didSwitchSymbol = previousSymbol != symbolId
         let didChangeTimeframe = previousTimeframe != currentChartTimeframe
 
@@ -168,6 +181,16 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
             .dropFirst()
             .sink { [weak self] _ in
                 guard let self, !self.isApplyingToHost else { return }
+                self.refreshSnapshot()
+                self.scheduleSyncFromHost()
+            }
+            .store(in: &cancellables)
+
+        drawingManager.$drawings
+            .dropFirst()
+            .sink { [weak self] _ in
+                guard let self, !self.isApplyingToHost else { return }
+                self.refreshSnapshot()
                 self.scheduleSyncFromHost()
             }
             .store(in: &cancellables)
@@ -176,6 +199,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
             .dropFirst()
             .sink { [weak self] _ in
                 guard let self, !self.isApplyingToHost else { return }
+                self.refreshSnapshot()
                 self.scheduleSyncFromHost()
             }
             .store(in: &cancellables)
@@ -210,13 +234,14 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
     }
 
     private func syncFromHostIfNeeded() {
-        guard !isApplyingToHost else { return }
+        guard !isApplyingToHost, !applyToHostScheduled else { return }
         syncFromHost()
     }
 
     private func syncFromHost() {
         isSyncingFromHost = true
         defer { isSyncingFromHost = false }
+        refreshSnapshot()
 
         let preservedDrawingComponents = placementState.components.filter {
             isChartDrawingPlacementComponent($0.componentType)
@@ -264,6 +289,8 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
                 syncFromHost()
             }
         }
+
+        refreshSnapshot()
     }
 
     private func applyIndicatorPayloads(_ payloads: [IndicatorPayload]) {
@@ -348,7 +375,12 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
     }
 
     private func timeframeDraftsFromHost() -> [MarkerComponentDraft] {
-        timeframeLinkManager.linkedTimeframes.map { backendValue in
+        let linkedTimeframes = timeframeLinkManager.linkedTimeframes.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
+        timeframeIDsByBackend = timeframeIDsByBackend.filter { linkedTimeframes.contains($0.key) }
+
+        return linkedTimeframes.map { backendValue in
             let normalized = backendValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let id = timeframeIDsByBackend[normalized] ?? UUID()
             timeframeIDsByBackend[normalized] = id
@@ -358,5 +390,22 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
                 payload: .timeframeLink(TimeframeLinkPayload(timeframe: normalized, note: nil))
             )
         }
+    }
+
+    private func refreshSnapshot() {
+        updateSnapshot(currentChartTimeframe: snapshot.currentChartTimeframe)
+    }
+
+    private func updateSnapshot(currentChartTimeframe: RLChartTimeframe?) {
+        snapshot = ChartComponentsSnapshot(
+            activeChartIndicators: Self.makeIndicatorPayloads(from: indicatorManager),
+            activeChartDrawings: drawingManager.activeDrawings,
+            currentChartTimeframe: currentChartTimeframe
+        )
+    }
+
+    private static func makeIndicatorPayloads(from indicatorManager: IndicatorManager) -> [IndicatorPayload] {
+        MarkerPlacementIndicatorFactory.activePayloads(from: indicatorManager.activeIndicators)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }

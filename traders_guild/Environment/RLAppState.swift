@@ -2106,7 +2106,14 @@ class RLAppState: ObservableObject {
     }
     
     /// Send a chatroom message
-    func sendChatroomMessage(chatroomId: UUID, content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) async throws -> RLChatroomMessageDTO {
+    func sendChatroomMessage(
+        chatroomId: UUID,
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
+    ) async throws -> RLChatroomMessageDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
@@ -2117,7 +2124,8 @@ class RLAppState: ObservableObject {
                 content: content,
                 attachmentUrl: attachmentUrl,
                 attachmentType: attachmentType,
-                attachmentName: attachmentName
+                attachmentName: attachmentName,
+                replyToMessageId: replyToMessageId
             )
         } catch {
             showError(error, title: "Failed to Send Message", style: .toast)
@@ -2165,6 +2173,43 @@ class RLAppState: ObservableObject {
             showError(error, title: "Failed to Delete Message", style: .toast)
             throw error
         }
+    }
+
+    func toggleChatroomMessageReaction(
+        chatroomId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLChatroomMessageDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.toggleChatroomMessageReaction(
+                guildId: guild.id,
+                chatroomId: chatroomId,
+                messageId: messageId,
+                emoji: emoji
+            )
+        } catch {
+            showError(error, title: "Failed to Update Reaction", style: .toast)
+            throw error
+        }
+    }
+
+    func fetchChatroomMessageReactionReactors(
+        chatroomId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        return try await realApi.getChatroomMessageReactionReactors(
+            guildId: guild.id,
+            chatroomId: chatroomId,
+            messageId: messageId,
+            emoji: emoji
+        )
     }
     
     /// Mark chatroom as read
@@ -2359,7 +2404,14 @@ class RLAppState: ObservableObject {
     }
     
     /// Send a DM message
-    func sendDMMessage(threadId: UUID, content: String, attachmentUrl: String? = nil, attachmentType: String? = nil, attachmentName: String? = nil) async throws -> RLDMMessageDTO {
+    func sendDMMessage(
+        threadId: UUID,
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
+    ) async throws -> RLDMMessageDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
@@ -2370,7 +2422,8 @@ class RLAppState: ObservableObject {
                 content: content,
                 attachmentUrl: attachmentUrl,
                 attachmentType: attachmentType,
-                attachmentName: attachmentName
+                attachmentName: attachmentName,
+                replyToMessageId: replyToMessageId
             )
         } catch {
             showError(error, title: "Failed to Send Message", style: .toast)
@@ -2418,6 +2471,43 @@ class RLAppState: ObservableObject {
             showError(error, title: "Failed to Delete Message", style: .toast)
             throw error
         }
+    }
+
+    func toggleDMMessageReaction(
+        threadId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLDMMessageDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        do {
+            return try await realApi.toggleDMMessageReaction(
+                guildId: guild.id,
+                threadId: threadId,
+                messageId: messageId,
+                emoji: emoji
+            )
+        } catch {
+            showError(error, title: "Failed to Update Reaction", style: .toast)
+            throw error
+        }
+    }
+
+    func fetchDMMessageReactionReactors(
+        threadId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        guard let guild = currentGuild else {
+            throw RLAppError.noGuildSelected
+        }
+        return try await realApi.getDMMessageReactionReactors(
+            guildId: guild.id,
+            threadId: threadId,
+            messageId: messageId,
+            emoji: emoji
+        )
     }
     
     /// Mark DM as read
@@ -2913,13 +3003,56 @@ class RLAppState: ObservableObject {
     }
     
     /// Send a message to a chart chat
-    func sendChartChatMessage(chatId: UUID, content: String) async throws -> RLChartChatMessageDTO {
+    func sendChartChatMessage(
+        chatId: UUID,
+        content: String,
+        attachmentUrl: String? = nil,
+        attachmentType: String? = nil,
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
+    ) async throws -> RLChartChatMessageDTO {
         do {
-            return try await realApi.sendChartChatMessage(chatId: chatId, content: content)
+            return try await realApi.sendChartChatMessage(
+                chatId: chatId,
+                content: content,
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName,
+                replyToMessageId: replyToMessageId
+            )
         } catch {
             showError(error, title: "Failed to Send Message", style: .toast)
             throw error
         }
+    }
+
+    func toggleChartChatMessageReaction(
+        chatId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLChartChatMessageDTO {
+        do {
+            return try await realApi.toggleChartChatMessageReaction(
+                chatId: chatId,
+                messageId: messageId,
+                emoji: emoji
+            )
+        } catch {
+            showError(error, title: "Failed to Update Reaction", style: .toast)
+            throw error
+        }
+    }
+
+    func fetchChartChatMessageReactionReactors(
+        chatId: UUID,
+        messageId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        try await realApi.getChartChatMessageReactionReactors(
+            chatId: chatId,
+            messageId: messageId,
+            emoji: emoji
+        )
     }
 
     // =============================================================================================

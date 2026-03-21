@@ -160,9 +160,8 @@ struct MarkerPlacementTimeframesTab: View {
     private func timeframeRow(_ timeframe: RLChartTimeframe) -> some View {
         let backendValue = timeframe.toBackendString()
         let isLinked = placementState.isTimeframeLinked(backendValue)
-        let canAttach = placementState.canAddTimeframe || isLinked
         let isActive = timeframe == currentChartTimeframe
-        let canToggle = isLinked || canAttach
+        let canToggleLink = placementState.canAddTimeframe || isLinked
 
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
@@ -176,20 +175,21 @@ struct MarkerPlacementTimeframesTab: View {
                 }
 
                 HStack(spacing: 6) {
-                    Text(isLinked ? "Tap row to unlink" : "Tap row to link")
+                    Text(isLinked ? "Linked supporting panel" : "Add as supporting panel")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
-                    if isActive {
-                        statusBadge(
-                            title: "ACTIVE",
-                            textColor: AppColors.statusPositive95,
-                            fillColor: AppColors.statusPositive20
-                        )
-                    }
                 }
             }
 
             Spacer(minLength: 0)
+
+            if isActive {
+                statusBadge(
+                    title: "ACTIVE",
+                    textColor: AppColors.statusPositive95,
+                    fillColor: AppColors.statusPositive20
+                )
+            }
 
             if !isActive {
                 Button {
@@ -202,13 +202,39 @@ struct MarkerPlacementTimeframesTab: View {
                 .buttonStyle(.plain)
             }
 
-            statusBadge(
-                title: isLinked ? "LINKED" : "UNLINKED",
-                textColor: isLinked ? .white : AppColors.greyText,
-                fillColor: isLinked
-                    ? placementState.intent.color.opacity(0.42)
-                    : AppColors.whiteText.opacity(0.09)
-            )
+            Button {
+                toggleTimeframeLink(timeframe)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isLinked ? "minus.circle.fill" : "plus.circle.fill")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(isLinked ? "Unlink" : "Link")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundColor(isLinked ? .white : AppColors.surfaceWhite88)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(
+                            isLinked
+                                ? placementState.intent.color.opacity(0.42)
+                                : AppColors.whiteText.opacity(0.09)
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    isLinked
+                                        ? placementState.intent.color.opacity(0.72)
+                                        : AppColors.whiteText.opacity(0.12),
+                                    lineWidth: 1
+                                )
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canToggleLink)
+            .opacity(canToggleLink ? 1 : 0.45)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -225,12 +251,6 @@ struct MarkerPlacementTimeframesTab: View {
                         )
                 )
         )
-        .contentShape(RoundedRectangle(cornerRadius: 10))
-        .onTapGesture {
-            guard canToggle else { return }
-            toggleTimeframeLink(timeframe)
-        }
-        .opacity(canToggle ? 1 : 0.45)
     }
 
     @ViewBuilder
@@ -242,23 +262,31 @@ struct MarkerPlacementTimeframesTab: View {
             let isActive = timeframe == currentChartTimeframe
 
             HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(displayShortName)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.white)
-                    Text(displayName)
-                        .font(.caption2)
-                        .foregroundColor(AppColors.greyText)
+                // Tappable label area — navigates to timeframe
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(displayShortName)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text(displayName)
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if isActive {
+                        statusBadge(
+                            title: "ACTIVE",
+                            textColor: AppColors.statusPositive95,
+                            fillColor: AppColors.statusPositive20
+                        )
+                    }
                 }
-
-                Spacer(minLength: 0)
-
-                if isActive {
-                    statusBadge(
-                        title: "ACTIVE",
-                        textColor: AppColors.statusPositive95,
-                        fillColor: AppColors.statusPositive20
-                    )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard let timeframe else { return }
+                    selectTimeframe(timeframe)
                 }
 
                 if let timeframe, !isActive {
@@ -268,18 +296,22 @@ struct MarkerPlacementTimeframesTab: View {
                         Image(systemName: "arrow.up.right.circle.fill")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(placementState.intent.color.opacity(0.95))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
 
                 Button {
-                    placementState.removeComponent(id: draft.id)
+                    placementState.removeTimeframeLink(payload.timeframe)
                     limitWarning = nil
                     contextInfoMessage = nil
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(AppColors.statusNegative85)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -293,11 +325,6 @@ struct MarkerPlacementTimeframesTab: View {
                             .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
                 )
             )
-            .contentShape(RoundedRectangle(cornerRadius: 10))
-            .onTapGesture {
-                guard let timeframe else { return }
-                selectTimeframe(timeframe)
-            }
         }
     }
 
@@ -324,11 +351,13 @@ struct MarkerPlacementTimeframesTab: View {
         if placementState.isTimeframeLinked(backendValue) {
             placementState.removeTimeframeLink(backendValue)
             limitWarning = nil
+            contextInfoMessage = "Removed \(timeframe.shortName) linked panel."
             return
         }
 
         if placementState.upsertTimeframeLink(backendValue) {
             limitWarning = nil
+            contextInfoMessage = "Linked \(timeframe.shortName) panel."
             return
         }
 

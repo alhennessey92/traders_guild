@@ -79,13 +79,46 @@ class ChartChatManager: ObservableObject {
                 messages[index] = edited
             }
         case "message_deleted":
-            if let payload = message.payload as? [String: Any],
-               let messageIdStr = (payload as? [String: Any])?["message_id"] as? String,
-               let messageId = UUID(uuidString: messageIdStr) {
+            if let payload = message.payload(as: WSMessageDeletedPayload.self),
+               let messageId = UUID(uuidString: payload.messageId) {
                 messages.removeAll { $0.id == messageId }
             }
+        case "message_reaction_updated":
+            handleReactionUpdated(message)
         default:
             break
+        }
+    }
+
+    private func handleReactionUpdated(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSMessageReactionUpdatedPayload.self),
+              let messageId = UUID(uuidString: payload.messageId),
+              let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+
+        let existingByEmoji = Dictionary(uniqueKeysWithValues: messages[index].reactions.map { ($0.emoji, $0) })
+        let currentUserId = appState?.currentUser?.id.uuidString.lowercased()
+        let actorUserId = payload.actorUserId.lowercased()
+        let didCurrentUserAct = currentUserId == actorUserId
+        let toggledEmoji = existingByEmoji.keys.first { emoji in
+            let previousCount = existingByEmoji[emoji]?.count ?? 0
+            let updatedCount = payload.reactions.first(where: { $0.emoji == emoji })?.count ?? 0
+            return previousCount != updatedCount
+        } ?? payload.reactions.first(where: { existingByEmoji[$0.emoji] == nil })?.emoji
+
+        messages[index].reactions = payload.reactions.map { reaction in
+            let wasReacted = existingByEmoji[reaction.emoji]?.reactedByCurrentUser ?? false
+            let reactedByCurrentUser: Bool
+            if didCurrentUserAct, toggledEmoji == reaction.emoji {
+                reactedByCurrentUser = payload.action == "added"
+            } else {
+                reactedByCurrentUser = wasReacted
+            }
+
+            return RLMessageReactionDTO(
+                emoji: reaction.emoji,
+                count: reaction.count,
+                reactedByCurrentUser: reactedByCurrentUser
+            )
         }
     }
 
@@ -162,7 +195,8 @@ class ChartChatManager: ObservableObject {
         content: String,
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
-        attachmentName: String? = nil
+        attachmentName: String? = nil,
+        replyToMessageId: UUID? = nil
     ) async throws {
         guard let chat = activeChartChat else { return }
         
@@ -172,7 +206,8 @@ class ChartChatManager: ObservableObject {
             content: content,
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
-            attachmentName: attachmentName
+            attachmentName: attachmentName,
+            replyToMessageId: replyToMessageId
         )
         
         // Add to local messages
@@ -199,13 +234,36 @@ class ChartChatManager: ObservableObject {
     func deleteMessage(messageId: UUID) async throws {
         guard let chat = activeChartChat else { return }
         
-        try await api.deleteChartChatMessage(
+        _ = try await api.deleteChartChatMessage(
             chatId: chat.id,
             messageId: messageId
         )
         
         // Remove from local messages
         messages.removeAll { $0.id == messageId }
+    }
+
+    func toggleReaction(messageId: UUID, emoji: String) async throws {
+        guard let chat = activeChartChat else { return }
+        let updatedMessage = try await api.toggleChartChatMessageReaction(
+            chatId: chat.id,
+            messageId: messageId,
+            emoji: emoji
+        )
+        if let index = messages.firstIndex(where: { $0.id == updatedMessage.id }) {
+            messages[index] = updatedMessage
+        }
+    }
+
+    func fetchReactionReactors(messageId: UUID, emoji: String) async throws -> RLMessageReactionReactorsDTO {
+        guard let chat = activeChartChat else {
+            throw APIError.badRequest("Chart chat is not available")
+        }
+        return try await api.getChartChatMessageReactionReactors(
+            chatId: chat.id,
+            messageId: messageId,
+            emoji: emoji
+        )
     }
     
     /// Close the active chart chat
