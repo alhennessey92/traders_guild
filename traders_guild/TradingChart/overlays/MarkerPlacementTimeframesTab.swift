@@ -203,7 +203,9 @@ struct MarkerPlacementTimeframesTab: View {
             }
 
             Button {
-                toggleTimeframeLink(timeframe)
+                withAnimation(.none) {
+                    toggleTimeframeLink(timeframe)
+                }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: isLinked ? "minus.circle.fill" : "plus.circle.fill")
@@ -235,6 +237,7 @@ struct MarkerPlacementTimeframesTab: View {
             .buttonStyle(.plain)
             .disabled(!canToggleLink)
             .opacity(canToggleLink ? 1 : 0.45)
+            .transaction { $0.animation = nil }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -251,6 +254,7 @@ struct MarkerPlacementTimeframesTab: View {
                         )
                 )
         )
+        .transaction { $0.animation = nil }
     }
 
     @ViewBuilder
@@ -377,7 +381,22 @@ struct MarkerPlacementTimeframesTab: View {
     private func mirrorChartSetup() {
         let indicatorResult = placementState.attachActiveChartIndicators(mirrorSourceIndicators)
         let drawingResult = placementState.attachActiveChartDrawings(mirrorSourceDrawings)
-        let totalAdded = indicatorResult.added + drawingResult.added
+
+        // Mirror the active chart timeframe as a linked panel
+        var timeframeAdded = false
+        if let timeframe = currentChartTimeframe {
+            let backendValue = timeframe.toBackendString()
+            if !placementState.isTimeframeLinked(backendValue) {
+                if placementState.upsertTimeframeLink(backendValue) {
+                    timeframeAdded = true
+                }
+            }
+        }
+
+        // Clear any active drawing workflow to prevent emoji placement getting stuck
+        placementState.commitDrawingAndExit()
+
+        let totalAdded = indicatorResult.added + drawingResult.added + (timeframeAdded ? 1 : 0)
 
         if totalAdded > 0 {
             var mirroredParts: [String] = []
@@ -387,7 +406,10 @@ struct MarkerPlacementTimeframesTab: View {
             if drawingResult.added > 0 {
                 mirroredParts.append("\(drawingResult.added) drawing\(drawingResult.added == 1 ? "" : "s")")
             }
-            mirrorInfoMessage = "Mirrored \(mirroredParts.joined(separator: " and ")) from chart."
+            if timeframeAdded {
+                mirroredParts.append("timeframe panel")
+            }
+            mirrorInfoMessage = "Mirrored \(mirroredParts.joined(separator: ", ")) from chart."
         } else {
             mirrorInfoMessage = "No new chart indicators or drawings to mirror."
         }

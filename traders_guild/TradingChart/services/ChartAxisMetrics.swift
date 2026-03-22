@@ -12,7 +12,7 @@ enum ChartAxisMetrics {
     static let horizontalChipTrailingInset: CGFloat = 6
     static let horizontalLabeledChipWidth: CGFloat = 100
 
-    static let currentPriceChipWidth: CGFloat = 76
+    static let currentPriceChipWidth: CGFloat = 66
     static let directionalPriceChipWidth: CGFloat = 94
     static let directionalArrowChipWidth: CGFloat = 36
     static let directionalArrowChipHeight: CGFloat = 28

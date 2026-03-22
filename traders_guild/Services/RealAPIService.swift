@@ -1641,6 +1641,30 @@ extension RealAPIService {
             auth: true
         )
     }
+
+    /// Search chatroom messages across the guild.
+    /// GET /guilds/{guild_id}/messages/search
+    func searchMessages(
+        guildId: UUID,
+        query: String,
+        chatroomId: UUID? = nil,
+        limit: Int = 20,
+        cursor: String? = nil
+    ) async throws -> RLMessageSearchResponseDTO {
+        var path = "/messaging/guilds/\(guildId.uuidString)/messages/search?query=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)&limit=\(limit)"
+        if let chatroomId {
+            path += "&chatroom_id=\(chatroomId.uuidString)"
+        }
+        if let cursor {
+            path += "&before=\(cursor)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
     
     /// Send a message to a chatroom
     /// POST /guilds/{guild_id}/chatrooms/{chatroom_id}/messages

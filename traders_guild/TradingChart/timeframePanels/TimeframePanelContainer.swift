@@ -18,6 +18,10 @@ struct TimeframePanelContainer: View {
     let intentColor: Color
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
+    var mainChartVisibleStart: Date? = nil
+    var mainChartVisibleEnd: Date? = nil
+    var mainChartTimeframeSeconds: TimeInterval = 0
+    var showMarkerLine: Bool = false
     var indicatorPanelCount: Int = 0
 
     // MARK: - Computed
@@ -45,6 +49,10 @@ struct TimeframePanelContainer: View {
                         intentColor: intentColor,
                         baseCandleWidth: baseCandleWidth,
                         candleSpacing: candleSpacing,
+                        mainChartVisibleStart: mainChartVisibleStart,
+                        mainChartVisibleEnd: mainChartVisibleEnd,
+                        mainChartTimeframeSeconds: mainChartTimeframeSeconds,
+                        showMarkerLine: showMarkerLine,
                         minPanelHeight: TimeframePanelManager.minPanelHeight,
                         maxPanelHeight: adjustedMaxHeight,
                         isBottomPanel: isBottom

@@ -97,6 +97,35 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
         }
         return updated
     }
+
+    /// Create a pending (optimistic) message for immediate display before server confirmation.
+    static func pending(
+        chatroomId: UUID,
+        content: String,
+        author: RLGuildMemberDTO,
+        replyPreview: RLMessageReplyPreviewDTO? = nil
+    ) -> RLChatroomMessageDTO {
+        let now = Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return RLChatroomMessageDTO(
+            id: UUID(),
+            chatroomId: chatroomId,
+            author: author,
+            content: content,
+            timestamp: now,
+            timestampFormatted: formatter.string(from: now),
+            isEdited: false,
+            isCurrentUserMessage: true,
+            canEdit: true,
+            canDelete: true,
+            attachmentUrl: nil,
+            attachmentType: nil,
+            attachmentName: nil,
+            replyPreview: replyPreview,
+            reactions: []
+        )
+    }
 }
 
 // MARK: - Guild Chatroom
@@ -303,6 +332,36 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
             return self
         }
         return updated
+    }
+
+    /// Create a pending (optimistic) message for immediate display before server confirmation.
+    static func pending(
+        dmId: UUID,
+        content: String,
+        author: RLGuildMemberDTO,
+        replyPreview: RLMessageReplyPreviewDTO? = nil
+    ) -> RLDMMessageDTO {
+        let now = Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return RLDMMessageDTO(
+            id: UUID(),
+            dmId: dmId,
+            author: author,
+            content: content,
+            timestamp: now,
+            timestampFormatted: formatter.string(from: now),
+            isEdited: false,
+            isCurrentUserMessage: true,
+            canEdit: true,
+            canDelete: true,
+            isRead: false,
+            attachmentUrl: nil,
+            attachmentType: nil,
+            attachmentName: nil,
+            replyPreview: replyPreview,
+            reactions: []
+        )
     }
 }
 
@@ -780,3 +839,24 @@ extension RLGuildChatroomDTO {
     ]
 }
 #endif
+
+// MARK: - Message Search
+
+/// Individual message search result with chatroom context.
+/// Backend: MessageSearchResultResponse
+struct RLMessageSearchResultDTO: Codable, Identifiable {
+    let message: RLChatroomMessageDTO
+    let chatroomId: UUID
+    let chatroomName: String
+
+    var id: UUID { message.id }
+}
+
+/// Paginated message search response.
+/// Backend: MessageSearchResponse
+struct RLMessageSearchResponseDTO: Codable {
+    let results: [RLMessageSearchResultDTO]
+    let totalCount: Int
+    let hasMore: Bool
+    let nextCursor: String?
+}

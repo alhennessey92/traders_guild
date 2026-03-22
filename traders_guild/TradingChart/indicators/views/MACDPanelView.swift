@@ -50,7 +50,14 @@ struct MACDPanelView: View {
     private var totalOffset: CGFloat {
         gestureState.panOffset.width
     }
-    
+
+    private var macdHeaderLabel: String {
+        if let config = macdConfig {
+            return "MACD \(config.fastPeriod) \(config.slowPeriod) \(config.signalPeriod)"
+        }
+        return "MACD"
+    }
+
     // MARK: - Body
     
     var body: some View {
@@ -112,22 +119,30 @@ struct MACDPanelView: View {
             Rectangle()
                 .fill(AppColors.chartIndicatorHandleFill)
 
-            HStack(spacing: 8) {
-                Capsule()
-                    .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
-                    .frame(width: 36, height: 5)
+            // Capsule always centered
+            Capsule()
+                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
+                .frame(width: 36, height: 5)
+
+            // Panel label left-aligned
+            HStack(spacing: 4) {
+                (Text(macdHeaderLabel)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                 + Text("  Indicator")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(AppColors.surfaceWhite50))
+                    .lineLimit(1)
 
                 if isCollapsed {
-                    Text("MACD")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite80)
-                        .lineLimit(1)
-
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(AppColors.surfaceWhite80)
                 }
+
+                Spacer()
             }
+            .padding(.leading, 10)
         }
         .frame(height: 22)
         .contentShape(Rectangle())
@@ -483,43 +498,39 @@ struct MACDPanelView: View {
     
     private var panelHeaderOverlay: some View {
         VStack {
-            HStack(spacing: 6) {
-                Text(macdConfig?.shortLabel ?? "MACD")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite80)
-                
-                if let latest = indicatorManager.latestMACD {
+            if let latest = indicatorManager.latestMACD {
+                HStack(spacing: 6) {
                     Circle()
                         .fill(macdConfig?.color.color ?? .cyan)
-                        .frame(width: 6, height: 6)
+                        .frame(width: 5, height: 5)
                     Text(formatMACDValue(latest.macdLine))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(macdConfig?.color.color ?? .cyan)
-                    
+
                     Circle()
                         .fill(macdConfig?.signalColor.color ?? .orange)
-                        .frame(width: 6, height: 6)
+                        .frame(width: 5, height: 5)
                     Text(formatMACDValue(latest.signalLine))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(macdConfig?.signalColor.color ?? .orange)
-                    
+
                     Text("H:")
                         .font(.system(size: 9))
                         .foregroundColor(.gray)
                     Text(formatMACDValue(latest.histogram))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(latest.isHistogramPositive ? .green : .red)
-                    
+
                     if latest.crossoverType != .neutral {
                         macdConditionBadge(crossover: latest.crossoverType)
                     }
+
+                    Spacer()
                 }
-                
-                Spacer()
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-            
+
             Spacer()
         }
     }

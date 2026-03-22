@@ -353,15 +353,15 @@ struct PriceAxisHelper {
         let assetClass = symbol.assetClassEnum ?? .forex
         switch assetClass {
         case .forex:
-            return symbol.ticker.contains("JPY") ? 3 : 5
+            return symbol.ticker.contains("JPY") ? 3 : 4
         case .crypto:
             let avgPrice = (priceRange.min + priceRange.max) / 2
             if avgPrice > 1000 {
                 return 2
             } else if avgPrice > 1 {
-                return 4
+                return 3
             } else {
-                return 6
+                return 4
             }
         case .stocks, .commodities, .futures:
             return 2

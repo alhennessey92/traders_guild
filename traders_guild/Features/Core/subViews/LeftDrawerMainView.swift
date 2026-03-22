@@ -317,7 +317,7 @@ struct MainDrawerView: View {
         var items: [(icon: String, title: String, state: DrawerNavigationState)] = [
             ("megaphone.fill", "Announcements", .announcements),
             ("bell.fill", "Notifications", .notifications),
-            ("chart.line.uptrend.xyaxis", "Today's Top Markers", .topMarkers),
+            ("target", "Markers", .topMarkers),
             ("trophy.fill", "Leaderboard", .leaderboard),
             ("star.fill", "Watchlists", .guildWatchlist),
             ("calendar.badge.clock", "Events", .events),
@@ -646,7 +646,7 @@ struct SectionDrawerView: View {
         case .main: return ""
         case .announcements: return "Announcements"
         case .notifications: return "Notifications"
-        case .topMarkers: return "Top Markers"
+        case .topMarkers: return "Markers"
         case .leaderboard: return "Leaderboard"
         case .guildWatchlist: return "Watchlist"
         case .events: return "Events"

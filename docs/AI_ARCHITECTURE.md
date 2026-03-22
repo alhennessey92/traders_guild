@@ -1185,9 +1185,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 194. Need to make the timeframe panel move with the user relative to their marker if timeframe set with marker or center of screen if in default chart. For marker timeframe this is easy as the marker is set and user can pan horizontally to see timeframe candles. If its default chart then need to mark screen center relative on timeframe panel, and as user panns the main chart the marker point moves in timeframe chart.
 
-195. Mirror chart setup doesnt look at timeframe active on chart and mirror to marker palcement. Also when mirroring if emoji is being mirrored it moves when user taps screen so cant get out of emoji placement if you understand me. Sometimes the emoji gets copied over with mirror setup even if deleted from default chart
 
-196. Need some form of line at bottom of timeframe to distinguish between timeframe x axis and main chart x axis
 
 197. [FIXED] Updating chart info box with components is sluggish, can take a bit or different actions in other sections for it to update if component removed from chart
 
@@ -1195,16 +1193,60 @@ Make sure you run through all drawing options and make improve them the way they
 
 176. [FIXED] Need a full audit again of the chat system, making sure all options, edits, settings, are in place and working. Want to introduce a like option / emoji reaction to chat messages, and a option to reference someones message like a reply that displays it like a caption with their own message. All of this can come from long pressing the message and choosing options, so need a better UI for it. Also need a major revamp of the attachments section, better UI/styling for each option and a much better process in applying, feels very disjointed and tricky to attach a image with a caption, camera doesnt work etc... Also images being added to the chat need their background/container message view to be the size of the image, almost like a small border round it, at the moment the image is there but theres a lot of space around it that looks bad, so it all needs to be nicely contained in the message. When there is a caption on the message as well there needs to be more of a distinguish between them - border or different color etc... make it look good
 
-168. When rotation is on it’s turning the app and then bugging out, need to stop this. App should be fixed at all times in portrait mode 
-
-169. Need to investigate why bottom chat text boxes are jumping when showing keyboard 
 
 
 
-170. Sometimes a timeframe active on chart is unable to be removed, clicking - red button in active tab does nothing
 
-171. no 175 said about showing direction of latest candle when panning vertically past it, but when panning up the label should show at the bottom signalling the latest candle is below, but its set behind the chart buttons, and needs to be made narrower so only as wide as the y axis - showing in a yellow box like current price label a arrow in direction to latest candle. This needs to also happen the other way around showing at the top of the y axis but not covered by the toolbar.
+170. [FIXED] Sometimes a timeframe active on chart is unable to be removed, clicking - red button in active tab does nothing
 
-172. Need to change the y axis background so its similar to the top toolbar background, i want almost a clear background mask that blurs the content behind, however we do this with the top toolbar.
+171. [FIXED] no 175 said about showing direction of latest candle when panning vertically past it, but when panning up the label should show at the bottom signalling the latest candle is below, but its set behind the chart buttons, and needs to be made narrower so only as wide as the y axis - showing in a yellow box like current price label a arrow in direction to latest candle. This needs to also happen the other way around showing at the top of the y axis but not covered by the toolbar.
 
-173. Looking at no 176 we already updated the chat interface/functionality but a lot still needs doing and checking. For one, sometimes when selecting the + button for adding attachments i cant cancel/remove the popup option sheet, o should be able to do this via swiping down or tapping the chat background. When long clicking on the message bubble for options sometimes it gets caught in a loop and starts opening and closing infinitely, also the UI for this popup needs improving. When selecting textbox to enter message, its getting hidden by the keyboard, should sit on top of keybaord to see what typing. Likes/emojie reactions on messages dont appear on the mesage, appear off of it in middle of screen. When adding images etc... the image should fit to the bubble so only a small border round it, not a massive amount of the bubble should show. Basically need again a full audit of the chat section to make sure all polished etc...
+172. [FIXED] Need to change the y axis background so its similar to the top toolbar background, i want almost a clear background mask that blurs the content behind, however we do this with the top toolbar.
+
+173. [FIXED] Looking at no 176 we already updated the chat interface/functionality but a lot still needs doing and checking. For one, sometimes when selecting the + button for adding attachments i cant cancel/remove the popup option sheet, o should be able to do this via swiping down or tapping the chat background. When long clicking on the message bubble for options sometimes it gets caught in a loop and starts opening and closing infinitely, also the UI for this popup needs improving. When selecting textbox to enter message, its getting hidden by the keyboard, should sit on top of keybaord to see what typing. Likes/emojie reactions on messages dont appear on the mesage, appear off of it in middle of screen. When adding images etc... the image should fit to the bubble so only a small border round it, not a massive amount of the bubble should show. Basically need again a full audit of the chat section to make sure all polished etc...
+
+
+195. Mirror chart setup doesnt look at timeframe active on chart and mirror to marker palcement. Also when mirroring if emoji is being mirrored it moves when user taps screen so cant get out of emoji placement if you understand me. Sometimes the emoji gets copied over with mirror setup even if deleted from default chart
+
+196. Need some form of line/border at bottom of timeframe and any other panel to distinguish between timeframe x axis and main chart x axis
+
+
+197. When rotation is on it’s turning the app and then bugging out, need to stop this. App should be fixed at all times in portrait mode 
+
+198. Need to investigate why bottom chat text boxes are jumping when showing keyboard 
+
+199. When adding indicators no longer being shown option box automatically for style and variables etc for each indicator, this happens in both marker placement mode and default chart mode
+
+200. When adding/removing indicator/timeframe in marker placement mode and default chart mode the button acts weird, the transition between added and unadded - linked and unlinked is slow and fades too much making it look weird, needs addressing
+
+201. Need to adjust the emoji section in marker placement mode and emoji section in reactions for chat etc... to display all the default emojis available in a better more concise format, at the moment we only allow a few and they may not be significant. We need all possible emoji options that are available to th user.
+
+202. Need a major review of the authentication and register/login section of the app working out what has been implemented and what is remaining, this goes down to signing up and logging in using alternative options such as apple, google accounts etc... forgetting passwords etc... making sure all relevant authentication such as faceid etc... are all implemented, everything we need for this section fo the app
+
+203. Need to adjust the timeframe panels to show current price when not set for a marker - i.e. set in default chart, so user can see current price marker etc... Could expand this to show vertical pinpoint lines aswell that can be relevant in the timeframe
+
+204. Would be nice if we can allow the timeframe panel to pan like the indicator panels
+
+205. Look to reduce decimal number after most if not all symbols, dont need to go to 5 or 6 decimal place
+
+206. Price indicators need to be reviewed stick too far out into chart especially the main yellow price indicator - look to reduce width padding
+
+207. Y axis needs a review dont like the border, chart background should morph seemlesly into y axis, but obiously content that goes into y axis is hidden/blurred
+
+208. Emoji marker needs its icon changed relative to when its changed, especially real time when changing and same for when editing marker the icon on the chart needs to change realtime
+
+209. When editing a marker the selected marker reverts to a faded out marker like the other markers, it should stay stand out like when selected
+
+210. When editing a marker the place marker button in bottom right needs to change to a green accent look to signal a save button - in accordance with the paletter look multi color
+
+211. Can afford to give more width padding to marker tab bottom left in edit/marker placement mode, only a little
+
+212. May adjust the todays top markers section to just Markers with target icon etc... This allows more scope to add sections for active markers etc... So can now keep the today section but add a sub tab section for all relevant filters for markers of the day - Active, Symbol, friends, mine etc. Then add a active section with green background like in components listing all active markers - again with sub tab headings. Could also have a top section of friends and mine and weekly etc Whatever feels and works best
+
+213. Need to make sure there is a x axis time for most recent candle whatever happens
+
+214. Concerning panels - the draw handle needs to remain center in whatever state, would prefer text to move to the left side and symbolise if it is a timeframe panel, rsi panel etc...with basic settings
+
+215. When adding a zone and trendline drawing, after placing first point if move second point to most recent candle the point springs off to the left and struggle to get back, weird bug i noticed
+
+

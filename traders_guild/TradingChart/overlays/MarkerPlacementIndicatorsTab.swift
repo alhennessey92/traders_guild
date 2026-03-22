@@ -315,16 +315,20 @@ struct MarkerPlacementIndicatorsTab: View {
             Spacer(minLength: 0)
 
             Button {
-                toggleIndicator(item)
+                withAnimation(.none) {
+                    toggleIndicator(item)
+                }
             } label: {
                 Image(systemName: isAttached ? "minus.circle.fill" : "plus.circle.fill")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(isAttached ? AppColors.statusNegative85 : placementState.intent.color)
                     .frame(width: 28, height: 28)
+                    .contentTransition(.identity)
             }
             .buttonStyle(.plain)
             .opacity((!isAttached && !canAttach) ? 0.45 : 1)
             .disabled(!isAttached && !canAttach)
+            .transaction { $0.animation = nil }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -344,9 +348,12 @@ struct MarkerPlacementIndicatorsTab: View {
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture {
             if !isAttached && canAttach {
-                toggleIndicator(item)
+                withAnimation(.none) {
+                    toggleIndicator(item)
+                }
             }
         }
+        .transaction { $0.animation = nil }
     }
 
     private func indicatorModeBadge(isPanel: Bool) -> some View {
@@ -402,6 +409,10 @@ struct MarkerPlacementIndicatorsTab: View {
         if placementState.upsertIndicator(name: item.payloadName, settings: item.defaultSettings) {
             infoMessage = "Added \(item.title)."
             limitWarning = nil
+            // Auto-open settings editor for newly added indicator
+            if let attached = attachedIndicator(for: item) {
+                openSettingsEditor(item: item, payload: attached.payload)
+            }
         } else {
             limitWarning = placementState.limitMessage(for: .indicatorPanels)
             HapticFeedback.light.trigger()

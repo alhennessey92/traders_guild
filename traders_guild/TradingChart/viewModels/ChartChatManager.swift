@@ -145,18 +145,19 @@ class ChartChatManager: ObservableObject {
             activeChartChat = cachedChat
             subscribeToChat(cachedChat.id)
             await loadMessages(chatId: cachedChat.id)
+            await markChatAsRead(chatId: cachedChat.id)
             return
         }
-        
+
         isLoadingChat = true
-        
+
         do {
             // Fetch or create chart chat from RealAPIService
             let chartChat = try await api.getOrCreateChartChat(
                 guildId: guildId,
                 symbolId: symbol.id
             )
-            
+
             chatCache[cacheKey] = chartChat
             activeChartChat = chartChat
 
@@ -165,12 +166,15 @@ class ChartChatManager: ObservableObject {
 
             // Load messages for this chat
             await loadMessages(chatId: chartChat.id)
-            
+
+            // Mark as read now that the user is viewing
+            await markChatAsRead(chatId: chartChat.id)
+
         } catch {
             print("⚠️ Failed to open chart chat: \(error)")
             appState?.showError(error, title: "Failed to Open Chat", style: .toast)
         }
-        
+
         isLoadingChat = false
     }
     
@@ -190,6 +194,16 @@ class ChartChatManager: ObservableObject {
         }
     }
     
+    /// Mark a chart chat as read (resets unread count on backend).
+    private func markChatAsRead(chatId: UUID) async {
+        do {
+            try await api.markChartChatRead(chatId: chatId)
+        } catch {
+            // Non-critical — don't surface to user
+            print("⚠️ Failed to mark chart chat as read: \(error)")
+        }
+    }
+
     /// Send a new message to the active chart chat
     func sendMessage(
         content: String,

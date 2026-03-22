@@ -232,13 +232,9 @@ struct ChatReplyDraft: Equatable, Identifiable {
 
 struct ChatComposerPayload: Equatable {
     let text: String
-    let attachment: ChatAttachmentDraft?
+    let attachments: [ChatAttachmentDraft]
     let markerShareDraft: ChatMarkerLinkDraft?
     let replyDraft: ChatReplyDraft?
-
-    var attachments: [ChatAttachmentDraft] {
-        attachment.map { [$0] } ?? []
-    }
 
     init(
         text: String,
@@ -247,7 +243,19 @@ struct ChatComposerPayload: Equatable {
         replyDraft: ChatReplyDraft? = nil
     ) {
         self.text = text
-        self.attachment = attachment
+        self.attachments = attachment.map { [$0] } ?? []
+        self.markerShareDraft = markerShareDraft
+        self.replyDraft = replyDraft
+    }
+
+    init(
+        text: String,
+        attachments: [ChatAttachmentDraft],
+        markerShareDraft: ChatMarkerLinkDraft? = nil,
+        replyDraft: ChatReplyDraft? = nil
+    ) {
+        self.text = text
+        self.attachments = attachments
         self.markerShareDraft = markerShareDraft
         self.replyDraft = replyDraft
     }
@@ -488,6 +496,9 @@ struct ChatInputFooter: View {
     /// Parents can use this to dismiss the panel when the chat background is tapped.
     var isActionPanelVisible: Binding<Bool>? = nil
 
+    /// Guild members available for @mention autocomplete. Pass non-empty to enable mentions.
+    var mentionCandidates: [RLGuildMemberDTO] = []
+
     @EnvironmentObject private var appState: RLAppState
 
     @FocusState private var isInputFocused: Bool
@@ -499,11 +510,32 @@ struct ChatInputFooter: View {
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMarkerPicker = false
-    @State private var selectedAttachment: ChatAttachmentDraft? = nil
+    @State private var selectedAttachments: [ChatAttachmentDraft] = []
     @State private var selectedMarkerDraft: ChatMarkerLinkDraft? = nil
     @State private var markerDrafts: [ChatMarkerLinkDraft] = []
     @State private var isLoadingMarkerDrafts = false
     @State private var markerPickerError: String? = nil
+
+    /// The partial @mention query extracted from the current cursor position
+    private var mentionQuery: String? {
+        guard !mentionCandidates.isEmpty else { return nil }
+        // Find the last @mention being typed
+        guard let atRange = messageText.range(of: "@", options: .backwards) else { return nil }
+        let afterAt = String(messageText[atRange.upperBound...])
+        // Must be at the end of text with no spaces (still typing the mention)
+        guard !afterAt.contains(" ") else { return nil }
+        return afterAt.lowercased()
+    }
+
+    private var mentionSuggestions: [RLGuildMemberDTO] {
+        guard let query = mentionQuery else { return [] }
+        let currentUserId = appState.currentUser?.id
+        let filtered = mentionCandidates.filter { member in
+            member.userId != currentUserId &&
+            member.username.lowercased().hasPrefix(query)
+        }
+        return Array(filtered.prefix(5))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -511,7 +543,7 @@ struct ChatInputFooter: View {
                 recordingIndicator
             }
 
-            if replyDraft?.wrappedValue != nil || selectedAttachment != nil || selectedMarkerDraft != nil {
+            if hasDraftContent {
                 attachmentDraftRow
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -532,6 +564,43 @@ struct ChatInputFooter: View {
                                 }
                             }
                     )
+            }
+
+            // @mention autocomplete suggestions
+            if !mentionSuggestions.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(mentionSuggestions, id: \.userId) { member in
+                        Button {
+                            insertMention(member)
+                        } label: {
+                            HStack(spacing: 10) {
+                                ChatAvatar(
+                                    initials: member.initials,
+                                    avatarURL: member.avatarUrl,
+                                    isOnline: member.isOnline,
+                                    size: 28
+                                )
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(member.username)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(AppColors.whiteText)
+                                    if !member.displayName.isEmpty, member.displayName != member.username {
+                                        Text(member.displayName)
+                                            .font(.caption2)
+                                            .foregroundColor(AppColors.greyText)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .background(AppColors.surfaceGray10)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             Divider()
@@ -648,7 +717,7 @@ struct ChatInputFooter: View {
                     appendAttachments(selected)
                 },
                 onCancel: { showPhotoPicker = false },
-                selectionLimit: 1
+                selectionLimit: 5
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -657,11 +726,11 @@ struct ChatInputFooter: View {
             SharedImagePicker(sourceType: .camera) { image in
                 showCameraPicker = false
                 guard let data = image.jpegData(compressionQuality: 0.85) else { return }
-                selectedAttachment = ChatAttachmentDraft(
+                selectedAttachments.append(ChatAttachmentDraft(
                     data: data,
                     filename: "camera-\(UUID().uuidString.prefix(8)).jpg",
                     mimeType: "image/jpeg"
-                )
+                ))
             }
         }
         .sheet(isPresented: $showDocumentPicker) {
@@ -671,7 +740,7 @@ struct ChatInputFooter: View {
                     appendAttachments(selected)
                 },
                 onCancel: { showDocumentPicker = false },
-                selectionLimit: 1
+                selectionLimit: 5
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -849,9 +918,13 @@ struct ChatInputFooter: View {
         .compositingGroup()
     }
 
+    private var hasDraftContent: Bool {
+        replyDraft?.wrappedValue != nil || !selectedAttachments.isEmpty || selectedMarkerDraft != nil
+    }
+
     private var canSend: Bool {
         !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        selectedAttachment != nil ||
+        !selectedAttachments.isEmpty ||
         selectedMarkerDraft != nil
     }
 
@@ -869,7 +942,7 @@ struct ChatInputFooter: View {
                     .foregroundColor(AppColors.whiteText)
                 Spacer(minLength: 8)
 
-                if selectedAttachment == nil {
+                if selectedAttachments.count < 5 {
                     Button {
                         HapticFeedback.light.trigger()
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -884,7 +957,7 @@ struct ChatInputFooter: View {
 
                 Button("Remove all") {
                     withAnimation {
-                        selectedAttachment = nil
+                        selectedAttachments = []
                         selectedMarkerDraft = nil
                         replyDraft?.wrappedValue = nil
                     }
@@ -895,8 +968,8 @@ struct ChatInputFooter: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    if let selectedAttachment {
-                        attachmentPreviewChip(for: selectedAttachment)
+                    ForEach(Array(selectedAttachments.enumerated()), id: \.offset) { index, attachment in
+                        attachmentPreviewChip(for: attachment, at: index)
                     }
                     if let selectedMarkerDraft {
                         markerPreviewChip(for: selectedMarkerDraft)
@@ -917,28 +990,34 @@ struct ChatInputFooter: View {
     }
 
     private var draftSummaryText: String {
-        switch (selectedAttachment != nil, selectedMarkerDraft != nil, replyDraft?.wrappedValue != nil) {
+        let attachCount = selectedAttachments.count
+        let hasAttach = attachCount > 0
+        let hasMarker = selectedMarkerDraft != nil
+        let hasReply = replyDraft?.wrappedValue != nil
+        let attachLabel = attachCount == 1 ? "1 attachment" : "\(attachCount) attachments"
+
+        switch (hasAttach, hasMarker, hasReply) {
         case (false, false, true):
             return "Reply ready"
         case (false, true, false):
             return "1 marker link ready"
         case (true, false, false):
-            return "1 attachment ready"
+            return "\(attachLabel) ready"
         case (true, true, false):
-            return "1 attachment + marker link ready"
+            return "\(attachLabel) + marker link ready"
         case (true, false, true):
-            return "Reply + attachment ready"
+            return "Reply + \(attachLabel) ready"
         case (false, true, true):
             return "Reply + marker link ready"
         case (true, true, true):
-            return "Reply + attachment + marker link ready"
+            return "Reply + \(attachLabel) + marker link ready"
         case (false, false, false):
             return "Draft ready"
         }
     }
 
     @ViewBuilder
-    private func attachmentPreviewChip(for attachment: ChatAttachmentDraft) -> some View {
+    private func attachmentPreviewChip(for attachment: ChatAttachmentDraft, at index: Int) -> some View {
         ZStack(alignment: .topTrailing) {
             Group {
                 if attachment.isImage, let image = UIImage(data: attachment.data) {
@@ -971,7 +1050,7 @@ struct ChatInputFooter: View {
             )
 
             Button {
-                withAnimation { selectedAttachment = nil }
+                withAnimation { let _ = selectedAttachments.remove(at: index) }
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
@@ -1065,13 +1144,12 @@ struct ChatInputFooter: View {
     // MARK: - Helpers
 
     private func appendAttachments(_ selected: [(Data, String, String)]) {
-        guard selectedAttachment == nil,
-              let first = selected.first else { return }
-        selectedAttachment = ChatAttachmentDraft(
-            data: first.0,
-            filename: first.1,
-            mimeType: first.2
-        )
+        let remaining = 5 - selectedAttachments.count
+        guard remaining > 0 else { return }
+        let toAdd = selected.prefix(remaining).map {
+            ChatAttachmentDraft(data: $0.0, filename: $0.1, mimeType: $0.2)
+        }
+        selectedAttachments.append(contentsOf: toAdd)
     }
 
     private func setReplyDraft(_ value: ChatReplyDraft?) {
@@ -1084,7 +1162,7 @@ struct ChatInputFooter: View {
 
     private func clearComposerDrafts() {
         messageText = ""
-        selectedAttachment = nil
+        selectedAttachments = []
         selectedMarkerDraft = nil
         setReplyDraft(nil)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -1123,18 +1201,25 @@ struct ChatInputFooter: View {
 
     private func sendComposedMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isSending, (selectedAttachment != nil || !trimmed.isEmpty || selectedMarkerDraft != nil || currentReplyDraft() != nil) else { return }
+        guard !isSending, (!selectedAttachments.isEmpty || !trimmed.isEmpty || selectedMarkerDraft != nil || currentReplyDraft() != nil) else { return }
 
         onSend(
             ChatComposerPayload(
                 text: trimmed,
-                attachment: selectedAttachment,
+                attachments: selectedAttachments,
                 markerShareDraft: selectedMarkerDraft,
                 replyDraft: currentReplyDraft()
             )
         )
 
         clearComposerDrafts()
+    }
+
+    /// Insert selected @mention into the text, replacing the partial @query
+    private func insertMention(_ member: RLGuildMemberDTO) {
+        // Find the last @ and replace everything after it with the full username + space
+        guard let atRange = messageText.range(of: "@", options: .backwards) else { return }
+        messageText = String(messageText[messageText.startIndex..<atRange.lowerBound]) + "@\(member.username) "
     }
 }
 
@@ -1251,29 +1336,24 @@ struct ChatBackground: View {
 // MARK: - ================================================================================================
 
 /// Unified loading view for chat
+/// Thin wrapper around UnifiedLoadingState for chat-specific loading.
+/// Uses the design-system component for consistent styling.
 struct ChatLoadingView: View {
     var message: String = "Loading messages..."
-    
+
     var body: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.2)
-                .tint(AppColors.accentColor)
-            
-            Text(message)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        UnifiedLoadingState(message: message)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-/// Unified empty state view for chat
+/// Thin wrapper around UnifiedEmptyState for chat-specific empty states.
+/// Uses the design-system component for consistent styling.
 struct ChatEmptyStateView: View {
     let icon: String
     let title: String
     let subtitle: String
-    
+
     init(
         icon: String = "bubble.left.and.bubble.right",
         title: String = "No messages yet",
@@ -1283,33 +1363,472 @@ struct ChatEmptyStateView: View {
         self.title = title
         self.subtitle = subtitle
     }
-    
+
     var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(AppColors.accentColor.opacity(0.1))
-                    .frame(width: 80, height: 80)
-                
-                Image(systemName: icon)
-                    .font(.system(size: 32))
-                    .foregroundColor(AppColors.accentColor.opacity(0.6))
+        UnifiedEmptyState(
+            icon: icon,
+            title: title,
+            subtitle: subtitle
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Wrapper to make URL usable with .sheet(item:)
+private struct IdentifiableURL: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+// MARK: - ================================================================================================
+// MARK: - FULL-SCREEN IMAGE VIEWER
+// MARK: - ================================================================================================
+
+/// Full-screen image viewer with pinch-to-zoom and dismiss gesture.
+/// Presented as a sheet when tapping an image attachment in chat.
+struct ChatFullScreenImageViewer: View {
+    let imageUrl: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    var body: some View {
+        NavigationStack {
+            GeometryReader { geometry in
+                AsyncImage(url: imageUrl) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: geometry.size.width, maxHeight: geometry.size.height)
+                            .scaleEffect(scale)
+                            .offset(offset)
+                            .gesture(
+                                MagnifyGesture()
+                                    .onChanged { value in
+                                        scale = lastScale * value.magnification
+                                    }
+                                    .onEnded { _ in
+                                        lastScale = max(scale, 1.0)
+                                        scale = max(scale, 1.0)
+                                        if scale <= 1.0 {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                offset = .zero
+                                                lastOffset = .zero
+                                            }
+                                        }
+                                    }
+                            )
+                            .simultaneousGesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        if scale > 1.0 {
+                                            offset = CGSize(
+                                                width: lastOffset.width + value.translation.width,
+                                                height: lastOffset.height + value.translation.height
+                                            )
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        lastOffset = offset
+                                    }
+                            )
+                            .onTapGesture(count: 2) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    if scale > 1.0 {
+                                        scale = 1.0
+                                        lastScale = 1.0
+                                        offset = .zero
+                                        lastOffset = .zero
+                                    } else {
+                                        scale = 3.0
+                                        lastScale = 3.0
+                                    }
+                                }
+                            }
+                    case .failure:
+                        VStack(spacing: 12) {
+                            Image(systemName: "photo.badge.exclamationmark")
+                                .font(.system(size: 40))
+                                .foregroundColor(AppColors.greyText)
+                            Text("Failed to load image")
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                    case .empty:
+                        ProgressView()
+                            .scaleEffect(1.2)
+                            .tint(.white)
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            
-            VStack(spacing: 6) {
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.whiteText)
-                
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.greyText)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+            .background(Color.black)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                }
+            }
+            .toolbarBackground(.hidden, for: .navigationBar)
+        }
+        .presentationBackground(.black)
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - LINKED TEXT (URL DETECTION)
+// MARK: - ================================================================================================
+
+/// Text view that auto-detects URLs (tappable) and @mentions (highlighted).
+/// Falls back to plain Text if no URLs or mentions are found for performance.
+struct LinkedText: View {
+    let text: String
+    let foregroundColor: Color
+
+    private static let mentionRegex = try! NSRegularExpression(
+        pattern: #"(?:^|(?<=\s))@([a-zA-Z0-9_-]{1,30})(?=\s|$|[.,!?;:])"#
+    )
+    private static let boldRegex = try! NSRegularExpression(pattern: #"\*\*(.+?)\*\*"#)
+    private static let italicRegex = try! NSRegularExpression(pattern: #"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"#)
+    private static let codeRegex = try! NSRegularExpression(pattern: #"`([^`]+)`"#)
+
+    init(_ text: String, foregroundColor: Color = .primary) {
+        self.text = text
+        self.foregroundColor = foregroundColor
+    }
+
+    var body: some View {
+        if let attributed = Self.buildAttributedString(text: text, baseColor: foregroundColor) {
+            Text(attributed)
+                .font(.subheadline)
+                .tint(AppColors.accentColor)
+        } else {
+            Text(text)
+                .font(.subheadline)
+                .foregroundColor(foregroundColor)
+        }
+    }
+
+    /// Represents a styled segment of parsed message text.
+    private enum TextSegment {
+        case plain(String)
+        case bold(String)
+        case italic(String)
+        case code(String)
+        case link(String, URL)
+        case mention(String)
+    }
+
+    private static func buildAttributedString(text: String, baseColor: Color) -> AttributedString? {
+        let nsString = text as NSString
+        let fullRange = NSRange(location: 0, length: nsString.length)
+
+        // Detect URLs
+        let urlDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let urlMatches = urlDetector?.matches(in: text, range: fullRange) ?? []
+
+        // Detect @mentions
+        let mentionMatches = mentionRegex.matches(in: text, range: fullRange)
+
+        // Detect markdown
+        let boldMatches = boldRegex.matches(in: text, range: fullRange)
+        let italicMatches = italicRegex.matches(in: text, range: fullRange)
+        let codeMatches = codeRegex.matches(in: text, range: fullRange)
+
+        let hasFormatting = !urlMatches.isEmpty || !mentionMatches.isEmpty ||
+                           !boldMatches.isEmpty || !italicMatches.isEmpty || !codeMatches.isEmpty
+        guard hasFormatting else { return nil }
+
+        // Build a list of non-overlapping styled ranges, sorted by location.
+        // Priority: URL > code > bold > italic > mention
+        struct StyledRange {
+            let range: NSRange
+            let segment: (NSString) -> TextSegment
+        }
+
+        var candidates: [StyledRange] = []
+
+        for match in urlMatches {
+            guard let url = match.url else { continue }
+            candidates.append(StyledRange(range: match.range) { ns in
+                .link(ns.substring(with: match.range), url)
+            })
+        }
+        for match in codeMatches {
+            let innerRange = match.range(at: 1)
+            candidates.append(StyledRange(range: match.range) { ns in
+                .code(ns.substring(with: innerRange))
+            })
+        }
+        for match in boldMatches {
+            let innerRange = match.range(at: 1)
+            candidates.append(StyledRange(range: match.range) { ns in
+                .bold(ns.substring(with: innerRange))
+            })
+        }
+        for match in italicMatches {
+            let innerRange = match.range(at: 1)
+            candidates.append(StyledRange(range: match.range) { ns in
+                .italic(ns.substring(with: innerRange))
+            })
+        }
+        for match in mentionMatches {
+            candidates.append(StyledRange(range: match.range) { ns in
+                .mention(ns.substring(with: match.range))
+            })
+        }
+
+        // Remove overlapping ranges (keep higher-priority / earlier ones)
+        candidates.sort { $0.range.location < $1.range.location }
+        var accepted: [StyledRange] = []
+        var lastEnd = 0
+        for c in candidates {
+            if c.range.location >= lastEnd {
+                accepted.append(c)
+                lastEnd = c.range.location + c.range.length
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        // Build segments
+        var segments: [TextSegment] = []
+        var cursor = 0
+        for sr in accepted {
+            if sr.range.location > cursor {
+                segments.append(.plain(nsString.substring(with: NSRange(location: cursor, length: sr.range.location - cursor))))
+            }
+            segments.append(sr.segment(nsString))
+            cursor = sr.range.location + sr.range.length
+        }
+        if cursor < nsString.length {
+            segments.append(.plain(nsString.substring(from: cursor)))
+        }
+
+        // Build AttributedString
+        var result = AttributedString()
+        for segment in segments {
+            var part: AttributedString
+            switch segment {
+            case .plain(let s):
+                part = AttributedString(s)
+                part.foregroundColor = baseColor
+            case .bold(let s):
+                part = AttributedString(s)
+                part.foregroundColor = baseColor
+                part.font = .subheadline.weight(.bold)
+            case .italic(let s):
+                part = AttributedString(s)
+                part.foregroundColor = baseColor
+                part.font = .subheadline.italic()
+            case .code(let s):
+                part = AttributedString(s)
+                part.foregroundColor = AppColors.accentColor
+                part.font = .system(.caption, design: .monospaced).weight(.medium)
+            case .link(let s, let url):
+                part = AttributedString(s)
+                part.link = url
+                part.underlineStyle = .single
+            case .mention(let s):
+                part = AttributedString(s)
+                part.foregroundColor = AppColors.accentColor
+                part.font = .subheadline.weight(.semibold)
+            }
+            result.append(part)
+        }
+
+        return result
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - DATE SEPARATOR & MESSAGE GROUPING
+// MARK: - ================================================================================================
+
+/// Date separator header shown between messages from different days
+struct ChatDateSeparator: View {
+    let date: Date
+
+    private var displayText: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return "Today"
+        } else if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        } else if calendar.isDate(date, equalTo: Date(), toGranularity: .year) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEEE, MMM d"
+            return formatter.string(from: date)
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d, yyyy"
+            return formatter.string(from: date)
+        }
+    }
+
+    var body: some View {
+        HStack {
+            line
+            Text(displayText)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(AppColors.greyText)
+                .padding(.horizontal, 10)
+            line
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var line: some View {
+        Rectangle()
+            .fill(AppColors.surfaceWhite15)
+            .frame(height: 0.5)
+    }
+}
+
+/// Determines whether a message should show its header (avatar + user info) or be grouped with the previous message.
+/// Messages are grouped when: same author, within 2 minutes, and on the same calendar day.
+enum ChatMessageGrouping {
+    static func shouldShowHeader<Message: RLChatMessageDisplayable>(
+        message: Message,
+        previousMessage: Message?
+    ) -> Bool {
+        guard let prev = previousMessage else { return true }
+        guard prev.authorUserId == message.authorUserId else { return true }
+        guard abs(message.timestamp.timeIntervalSince(prev.timestamp)) < 120 else { return true }
+        guard Calendar.current.isDate(message.timestamp, inSameDayAs: prev.timestamp) else { return true }
+        return false
+    }
+
+    static func shouldShowDateSeparator<Message: RLChatMessageDisplayable>(
+        message: Message,
+        previousMessage: Message?
+    ) -> Bool {
+        guard let prev = previousMessage else { return true }
+        return !Calendar.current.isDate(message.timestamp, inSameDayAs: prev.timestamp)
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - SCROLL TO BOTTOM BUTTON
+// MARK: - ================================================================================================
+
+/// Floating button that appears when user scrolls away from the bottom of the chat.
+/// Shows unread count badge when new messages arrive while scrolled up.
+struct ChatScrollToBottomButton: View {
+    let unreadCount: Int
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            ZStack(alignment: .topTrailing) {
+                Circle()
+                    .fill(AppColors.surfaceGray20)
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppColors.whiteText)
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(AppColors.surfaceWhite15, lineWidth: 1)
+                    )
+
+                if unreadCount > 0 {
+                    Text("\(unreadCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(AppColors.accentColor)
+                        .clipShape(Capsule())
+                        .offset(x: 6, y: -6)
+                }
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - TYPING INDICATOR BUBBLE
+// MARK: - ================================================================================================
+
+/// Animated typing indicator with bouncing dots, shown inline below the last message.
+struct TypingIndicatorBubble: View {
+    var username: String? = nil
+    @State private var dotOffset: [CGFloat] = [0, 0, 0]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                if let username {
+                    Text(username)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(AppColors.surfaceWhite50)
+                            .frame(width: 6, height: 6)
+                            .offset(y: dotOffset[index])
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    ChatBubbleShape.bubbleShape(isFromCurrentUser: false)
+                        .fill(AppColors.surfaceGray20)
+                )
+            }
+
+            Spacer()
+        }
+        .onAppear { startAnimation() }
+    }
+
+    private func startAnimation() {
+        for i in 0..<3 {
+            withAnimation(
+                .easeInOut(duration: 0.4)
+                .repeatForever(autoreverses: true)
+                .delay(Double(i) * 0.15)
+            ) {
+                dotOffset[i] = -4
+            }
+        }
+    }
+}
+
+/// Typing indicator for chatrooms — shows who is typing from the set of active typing user IDs.
+struct ChatroomTypingIndicator: View {
+    let typingUsernames: [String]
+
+    var body: some View {
+        if !typingUsernames.isEmpty {
+            let label = typingUsernames.count == 1
+                ? typingUsernames[0]
+                : typingUsernames.count == 2
+                    ? "\(typingUsernames[0]) and \(typingUsernames[1])"
+                    : "\(typingUsernames[0]) and \(typingUsernames.count - 1) others"
+
+            TypingIndicatorBubble(username: label)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
     }
 }
 
@@ -1560,6 +2079,202 @@ extension View {
 }
 
 // MARK: - ================================================================================================
+// MARK: - CHAT SEARCH VIEW
+// MARK: - ================================================================================================
+
+/// Search view for finding messages across guild chatrooms.
+struct ChatSearchView: View {
+    @EnvironmentObject var appState: RLAppState
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var searchText = ""
+    @State private var results: [RLMessageSearchResultDTO] = []
+    @State private var isSearching = false
+    @State private var totalCount = 0
+    @State private var hasMore = false
+    @State private var nextCursor: String? = nil
+    @State private var searchTask: Task<Void, Never>? = nil
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search bar
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Search messages...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .foregroundColor(.white)
+                        .autocorrectionDisabled()
+                    if !searchText.isEmpty {
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.surfaceGray20)
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                Divider().background(AppColors.surfaceGray30)
+
+                // Results
+                if isSearching && results.isEmpty {
+                    UnifiedLoadingState(message: "Searching...")
+                        .frame(maxHeight: .infinity)
+                } else if results.isEmpty && !searchText.isEmpty {
+                    UnifiedEmptyState(
+                        icon: "magnifyingglass",
+                        title: "No results",
+                        subtitle: "Try a different search term"
+                    )
+                    .frame(maxHeight: .infinity)
+                } else if results.isEmpty {
+                    UnifiedEmptyState(
+                        icon: "magnifyingglass",
+                        title: "Search messages",
+                        subtitle: "Find past messages across all chatrooms"
+                    )
+                    .frame(maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(results) { result in
+                            searchResultRow(result)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+
+                        if hasMore {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .onAppear { loadMore() }
+                                .listRowBackground(Color.clear)
+                        }
+
+                        if totalCount > 0 {
+                            Text("\(totalCount) results found")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity)
+                                .listRowBackground(Color.clear)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(
+                ZStack {
+                    Color.clear.background(.ultraThinMaterial)
+                    AppColors.sheetBackground
+                }
+            )
+            .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                        .foregroundColor(AppColors.accentColor)
+                }
+            }
+            .onChange(of: searchText) { _, newValue in
+                performDebouncedSearch(newValue)
+            }
+        }
+    }
+
+    private func searchResultRow(_ result: RLMessageSearchResultDTO) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Chatroom context
+            HStack(spacing: 4) {
+                Image(systemName: "number")
+                    .font(.caption2)
+                    .foregroundColor(AppColors.accentColor)
+                Text(result.chatroomName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(AppColors.accentColor)
+                Spacer()
+                Text(result.message.timestampFormatted)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            // Author
+            Text(result.message.author.username)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(AppColors.surfaceWhite70)
+
+            // Message content with highlighted search term
+            Text(result.message.content)
+                .font(.subheadline)
+                .foregroundColor(.white)
+                .lineLimit(3)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.surfaceGray20.opacity(0.5))
+        )
+    }
+
+    private func performDebouncedSearch(_ query: String) {
+        searchTask?.cancel()
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
+            results = []
+            totalCount = 0
+            hasMore = false
+            nextCursor = nil
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            await search(query: query, reset: true)
+        }
+    }
+
+    private func search(query: String, reset: Bool) async {
+        guard let guildId = appState.currentGuild?.id else { return }
+        if reset {
+            isSearching = true
+            nextCursor = nil
+        }
+        do {
+            let response = try await appState.realApi.searchMessages(
+                guildId: guildId,
+                query: query,
+                cursor: reset ? nil : nextCursor
+            )
+            await MainActor.run {
+                if reset {
+                    results = response.results
+                } else {
+                    results.append(contentsOf: response.results)
+                }
+                totalCount = response.totalCount
+                hasMore = response.hasMore
+                nextCursor = response.nextCursor
+                isSearching = false
+            }
+        } catch {
+            await MainActor.run { isSearching = false }
+        }
+    }
+
+    private func loadMore() {
+        guard hasMore, !isSearching else { return }
+        Task { await search(query: searchText, reset: false) }
+    }
+}
+
+// MARK: - ================================================================================================
 // MARK: - RL MESSAGE PROTOCOL (for RLAppState-based messaging)
 // MARK: - ================================================================================================
 
@@ -1567,6 +2282,7 @@ extension View {
 protocol RLChatMessageDisplayable: Identifiable {
     var id: UUID { get }
     var content: String { get }
+    var timestamp: Date { get }
     var timestampFormatted: String { get }
     var isEdited: Bool { get }
     var isCurrentUserMessage: Bool { get }
@@ -1574,6 +2290,7 @@ protocol RLChatMessageDisplayable: Identifiable {
     var canDelete: Bool { get }
 
     // Author info
+    var authorUserId: UUID { get }
     var authorUsername: String { get }
     var authorInitials: String { get }
     var authorAvatarUrl: String? { get }
@@ -1610,6 +2327,8 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     let message: Message
     let context: ChatContext
     let isRead: Bool
+    let isPending: Bool
+    let isGrouped: Bool
     let onAvatarTap: (() -> Void)?
     let onAuthorTap: (() -> Void)?
     let onEdit: (() -> Void)?
@@ -1620,13 +2339,16 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     let onToggleReaction: ((String) -> Void)?
     let onVisibleReactionTap: (() -> Void)?
     let onMarkerShareTap: ((MarkerSharePayloadV1) -> Void)?
-    
+
     @EnvironmentObject var chatSurfaceOverlayCoordinator: ChatSurfaceOverlayCoordinator
+    @State private var fullScreenImageUrl: URL? = nil
 
     init(
         message: Message,
         context: ChatContext,
         isRead: Bool = false,
+        isPending: Bool = false,
+        isGrouped: Bool = false,
         onAvatarTap: (() -> Void)? = nil,
         onAuthorTap: (() -> Void)? = nil,
         onEdit: (() -> Void)? = nil,
@@ -1641,6 +2363,8 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         self.message = message
         self.context = context
         self.isRead = isRead
+        self.isPending = isPending
+        self.isGrouped = isGrouped
         self.onAvatarTap = onAvatarTap
         self.onAuthorTap = onAuthorTap
         self.onEdit = onEdit
@@ -1662,22 +2386,28 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             if message.isCurrentUserMessage {
                 Spacer()
             } else if context.showsAvatar {
-                avatarView
+                if isGrouped {
+                    // Invisible spacer matching avatar width to keep alignment
+                    Color.clear.frame(width: 32, height: 1)
+                } else {
+                    avatarView
+                }
             }
-            
+
             VStack(alignment: message.isCurrentUserMessage ? .trailing : .leading, spacing: 4) {
-                // User info header (for group chats, non-current user)
-                if !message.isCurrentUserMessage && context.showsUserInfoHeader {
+                // User info header (for group chats, non-current user) — hidden when grouped
+                if !message.isCurrentUserMessage && context.showsUserInfoHeader && !isGrouped {
                     userInfoHeader
                 }
-                
+
                 bubbleStack
             }
-            
+
             if !message.isCurrentUserMessage {
                 Spacer()
             }
         }
+        .opacity(isPending ? 0.6 : 1.0)
     }
 
     private var bubbleStack: some View {
@@ -1824,9 +2554,10 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             if (!displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !textIsJustFilename) || message.isEdited {
                 HStack(spacing: 8) {
                     if !displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !textIsJustFilename {
-                        Text(displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines))
-                            .font(.subheadline)
-                            .foregroundColor(message.isCurrentUserMessage ? .white : .primary)
+                        LinkedText(
+                            displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines),
+                            foregroundColor: message.isCurrentUserMessage ? .white : .primary
+                        )
                     }
 
                     if message.isEdited {
@@ -1884,7 +2615,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         let isImage = type?.hasPrefix("image/") == true
 
         if isImage, let imageUrl = URL(string: url) {
-            // Image attachment — show inline preview
+            // Image attachment — show inline preview, tap for full-screen
             AsyncImage(url: imageUrl) { phase in
                 switch phase {
                 case .success(let image):
@@ -1892,6 +2623,10 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: 232)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .onTapGesture {
+                            fullScreenImageUrl = imageUrl
+                        }
                 case .failure:
                     fileAttachmentRow(name: name, type: type)
                 case .empty:
@@ -1900,6 +2635,12 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                 @unknown default:
                     EmptyView()
                 }
+            }
+            .sheet(item: Binding(
+                get: { fullScreenImageUrl.map { IdentifiableURL(url: $0) } },
+                set: { fullScreenImageUrl = $0?.url }
+            )) { item in
+                ChatFullScreenImageViewer(imageUrl: item.url)
             }
         } else {
             // Non-image attachment — show file row
@@ -1955,12 +2696,24 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             Text(message.timestampFormatted)
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            
-            // Read receipt for DMs
-            if context.showsReadReceipts && message.isCurrentUserMessage {
-                Image(systemName: isRead ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(.caption2)
-                    .foregroundColor(isRead ? AppColors.accentColor : .secondary)
+
+            // Delivery status for current user's messages
+            if message.isCurrentUserMessage {
+                if isPending {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
+                } else if context.showsReadReceipts {
+                    // DMs: sent → read (single → double checkmark)
+                    Image(systemName: isRead ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(.caption2)
+                        .foregroundColor(isRead ? AppColors.accentColor : .secondary)
+                } else {
+                    // Chatrooms: just show sent checkmark
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.secondary)
+                }
             }
         }
     }
@@ -2173,7 +2926,11 @@ private struct ChatCenteredMessageActionCard: View {
     let onCopy: () -> Void
     let onReport: () -> Void
 
-    private let quickEmojis = ["👍", "🔥", "😂", "🎯", "👀"]
+    private let quickEmojis = [
+        "👍", "🔥", "🚀", "🐂", "🐻", "📈", "📉", "😂", "🎯", "👀",
+        "❤️", "😍", "🤣", "😮", "😢", "😡", "🎉", "💯", "🙌", "💪",
+        "🤔", "👎", "✅", "❌", "💰", "💎", "⚡", "🧠", "🛑", "🏆",
+    ]
     @State private var tappedEmoji: String?
 
     private var actionItems: [(title: String, icon: String, destructive: Bool, action: () -> Void)] {
@@ -2214,33 +2971,34 @@ private struct ChatCenteredMessageActionCard: View {
             }
             .padding(.horizontal, 4)
 
-            // Quick reaction emoji row
-            HStack(spacing: 8) {
-                ForEach(quickEmojis, id: \.self) { emoji in
-                    let isAlreadyReacted = currentUserReactions.contains(emoji)
-                    Button {
-                        tappedEmoji = emoji
-                        HapticFeedback.light.trigger()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            onEmojiSelected(emoji)
+            // Quick reaction emoji row (scrollable for expanded set)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(quickEmojis, id: \.self) { emoji in
+                        let isAlreadyReacted = currentUserReactions.contains(emoji)
+                        Button {
+                            tappedEmoji = emoji
+                            HapticFeedback.light.trigger()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                onEmojiSelected(emoji)
+                            }
+                        } label: {
+                            Text(emoji)
+                                .font(.title2)
+                                .frame(width: 48, height: 48)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(isAlreadyReacted ? AppColors.accentDarkColor.opacity(0.4) : AppColors.surfaceWhite06)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(isAlreadyReacted ? AppColors.accentColor.opacity(0.7) : AppColors.surfaceWhite12, lineWidth: isAlreadyReacted ? 1.5 : 1)
+                                        )
+                                )
+                                .scaleEffect(tappedEmoji == emoji ? 1.25 : 1.0)
+                                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: tappedEmoji)
                         }
-                    } label: {
-                        Text(emoji)
-                            .font(.title2)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(isAlreadyReacted ? AppColors.accentDarkColor.opacity(0.4) : AppColors.surfaceWhite06)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .stroke(isAlreadyReacted ? AppColors.accentColor.opacity(0.7) : AppColors.surfaceWhite12, lineWidth: isAlreadyReacted ? 1.5 : 1)
-                                    )
-                            )
-                            .scaleEffect(tappedEmoji == emoji ? 1.25 : 1.0)
-                            .animation(.spring(response: 0.25, dampingFraction: 0.5), value: tappedEmoji)
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -2523,6 +3281,7 @@ private struct MarkerShareCard: View {
 // MARK: - ================================================================================================
 
 extension RLChatroomMessageDTO: RLChatMessageDisplayable {
+    var authorUserId: UUID { author.userId }
     var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }
@@ -2535,6 +3294,7 @@ extension RLChatroomMessageDTO: RLChatMessageDisplayable {
 }
 
 extension RLDMMessageDTO: RLChatMessageDisplayable {
+    var authorUserId: UUID { author.userId }
     var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }
@@ -2547,6 +3307,7 @@ extension RLDMMessageDTO: RLChatMessageDisplayable {
 }
 
 extension RLChartChatMessageDTO: RLChatMessageDisplayable {
+    var authorUserId: UUID { author.userId }
     var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }
@@ -2559,6 +3320,7 @@ extension RLChartChatMessageDTO: RLChatMessageDisplayable {
 }
 
 extension RLMarkerCommentDTO: RLChatMessageDisplayable {
+    var authorUserId: UUID { author.userId }
     var authorUsername: String { author.username }
     var authorInitials: String { author.initials }
     var authorAvatarUrl: String? { author.avatarUrl }

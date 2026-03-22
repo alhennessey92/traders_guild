@@ -140,7 +140,19 @@ struct ImprovedChartSheetChatView: View {
             }
             
             Spacer()
-            
+
+            // Unread badge
+            if chat.hasUnread {
+                Text("\(chat.unreadCount)")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(AppColors.accentColor)
+                    .clipShape(Capsule())
+            }
+
             // Active users pill - using unified component
             ActiveUsersPill(count: chat.activeUserCount)
         }
@@ -164,9 +176,16 @@ struct ImprovedChartSheetChatView: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 12) {
-                    ForEach(chartChatManager.messages) { message in
+                    ForEach(Array(chartChatManager.messages.enumerated()), id: \.element.id) { index, message in
+                        let previousMessage = index > 0 ? chartChatManager.messages[index - 1] : nil
+
+                        if ChatMessageGrouping.shouldShowDateSeparator(message: message, previousMessage: previousMessage) {
+                            ChatDateSeparator(date: message.timestamp)
+                        }
+
                         ChartMessageRow(
                             message: message,
+                            isGrouped: !ChatMessageGrouping.shouldShowHeader(message: message, previousMessage: previousMessage),
                             onAuthorTap: { member in
                                 selectedAuthor = member
                             },
@@ -337,6 +356,7 @@ struct ImprovedChartSheetChatView: View {
 
 struct ChartMessageRow: View {
     let message: RLChartChatMessageDTO
+    let isGrouped: Bool
     let onAuthorTap: (RLGuildMemberDTO) -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
@@ -344,6 +364,28 @@ struct ChartMessageRow: View {
     let onReactionSelected: (String) -> Void
     let onVisibleReactionTap: () -> Void
     let onReport: () -> Void
+
+    init(
+        message: RLChartChatMessageDTO,
+        isGrouped: Bool = false,
+        onAuthorTap: @escaping (RLGuildMemberDTO) -> Void,
+        onDelete: @escaping () -> Void,
+        onEdit: @escaping () -> Void,
+        onReply: @escaping () -> Void,
+        onReactionSelected: @escaping (String) -> Void,
+        onVisibleReactionTap: @escaping () -> Void,
+        onReport: @escaping () -> Void
+    ) {
+        self.message = message
+        self.isGrouped = isGrouped
+        self.onAuthorTap = onAuthorTap
+        self.onDelete = onDelete
+        self.onEdit = onEdit
+        self.onReply = onReply
+        self.onReactionSelected = onReactionSelected
+        self.onVisibleReactionTap = onVisibleReactionTap
+        self.onReport = onReport
+    }
     
     @EnvironmentObject var rlAppState: RLAppState
     
@@ -364,6 +406,7 @@ struct ChartMessageRow: View {
         RLChatMessageBubble(
             message: message,
             context: .chartChat,
+            isGrouped: isGrouped,
             onAvatarTap: { onAuthorTap(message.author) },
             onAuthorTap: { onAuthorTap(message.author) },
             onEdit: canEditMessage ? onEdit : nil,

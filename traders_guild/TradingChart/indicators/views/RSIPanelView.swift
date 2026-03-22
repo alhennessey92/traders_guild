@@ -94,7 +94,7 @@ struct RSIPanelView: View {
     }
 
     private var panelDisplayName: String {
-        rsiConfig?.label ?? "RSI 14"
+        (rsiConfig?.label ?? "RSI 14") + " Indicator"
     }
     
     // MARK: - Body
@@ -116,6 +116,12 @@ struct RSIPanelView: View {
                 }
             }
         }
+        .overlay(
+            Rectangle()
+                .fill(AppColors.surfaceGray30)
+                .frame(height: 1),
+            alignment: .bottom
+        )
         .background(AppColors.chartPanelBackgroundMuted)
     }
 
@@ -161,22 +167,30 @@ struct RSIPanelView: View {
             Rectangle()
                 .fill(AppColors.chartIndicatorHandleFill)
 
-            HStack(spacing: 8) {
-                Capsule()
-                    .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
-                    .frame(width: 36, height: 5)
+            // Capsule always centered
+            Capsule()
+                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
+                .frame(width: 36, height: 5)
+
+            // Panel label left-aligned
+            HStack(spacing: 4) {
+                (Text(rsiConfig?.label ?? "RSI 14")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                 + Text("  Indicator")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(AppColors.surfaceWhite50))
+                    .lineLimit(1)
 
                 if isCollapsed {
-                    Text(panelDisplayName)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite80)
-                        .lineLimit(1)
-
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(AppColors.surfaceWhite80)
                 }
+
+                Spacer()
             }
+            .padding(.leading, 10)
         }
         .frame(height: 22)
         .contentShape(Rectangle())
@@ -347,22 +361,14 @@ struct RSIPanelView: View {
             if let latest = indicatorManager.latestRSI {
                 let condition = rsiCondition(for: latest.value)
                 IndicatorPanelHeaderRow(
-                    title: rsiConfig?.label ?? "RSI 14",
+                    title: "",
                     valueText: String(format: "%.1f", latest.value),
-                    valueColor: rsiValueColor(latest.value),
+                    valueColor: condition.label.isEmpty ? AppColors.surfaceWhite90 : condition.color,
                     badgeText: condition.label.isEmpty ? nil : condition.label,
                     badgeColor: condition.label.isEmpty ? nil : condition.color
                 )
-            } else {
-                IndicatorPanelHeaderRow(
-                    title: rsiConfig?.label ?? "RSI 14",
-                    valueText: nil,
-                    valueColor: AppColors.surfaceWhite90,
-                    badgeText: nil,
-                    badgeColor: nil
-                )
             }
-            
+
             Spacer()
         }
     }

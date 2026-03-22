@@ -50,7 +50,14 @@ struct StochasticPanelView: View {
     private var totalOffset: CGFloat {
         gestureState.panOffset.width
     }
-    
+
+    private var stochHeaderLabel: String {
+        if let config = stochConfig {
+            return "Stoch \(config.kPeriod) \(config.dPeriod) \(config.smoothK)"
+        }
+        return "Stochastic"
+    }
+
     // MARK: - Body
     
     var body: some View {
@@ -112,22 +119,30 @@ struct StochasticPanelView: View {
             Rectangle()
                 .fill(AppColors.chartIndicatorHandleFill)
 
-            HStack(spacing: 8) {
-                Capsule()
-                    .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
-                    .frame(width: 36, height: 5)
+            // Capsule always centered
+            Capsule()
+                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
+                .frame(width: 36, height: 5)
+
+            // Panel label left-aligned
+            HStack(spacing: 4) {
+                (Text(stochHeaderLabel)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                 + Text("  Indicator")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(AppColors.surfaceWhite50))
+                    .lineLimit(1)
 
                 if isCollapsed {
-                    Text("Stochastic")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite80)
-                        .lineLimit(1)
-
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(AppColors.surfaceWhite80)
                 }
+
+                Spacer()
             }
+            .padding(.leading, 10)
         }
         .frame(height: 22)
         .contentShape(Rectangle())
@@ -453,34 +468,30 @@ struct StochasticPanelView: View {
     
     private var panelHeaderOverlay: some View {
         VStack {
-            HStack(spacing: 6) {
-                Text(stochConfig?.shortLabel ?? "Stochastic")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite80)
-                
-                if let latest = indicatorManager.latestStochastic {
+            if let latest = indicatorManager.latestStochastic {
+                HStack(spacing: 6) {
                     Text("%K:")
                         .font(.system(size: 9))
                         .foregroundColor(.gray)
                     Text(String(format: "%.1f", latest.kValue))
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(stochConfig?.color.color ?? .yellow)
-                    
+
                     Text("%D:")
                         .font(.system(size: 9))
                         .foregroundColor(.gray)
                     Text(String(format: "%.1f", latest.dValue))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(stochConfig?.dColor.color ?? .red)
-                    
+
                     stochConditionBadge(value: latest.kValue)
+
+                    Spacer()
                 }
-                
-                Spacer()
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-            
+
             Spacer()
         }
     }

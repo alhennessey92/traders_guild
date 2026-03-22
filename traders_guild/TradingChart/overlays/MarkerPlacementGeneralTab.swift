@@ -42,11 +42,44 @@ struct MarkerPlacementGeneralTab: View {
         ),
     ]
 
-    private let reactionEmojis: [String] = [
-        "🎯", "🔥", "🐻", "🐂", "✅", "❌",
-        "🚀", "⚡", "💡", "📉", "📈", "⏳",
-        "🧠", "💰", "🛑", "🎉", "👀", "📝",
-        "😬", "🤔", "🙌", "💥", "🔍", "📌",
+    private static let emojiCategories: [(title: String, emojis: [String])] = [
+        ("Trading", [
+            "🎯", "🔥", "🐻", "🐂", "✅", "❌",
+            "🚀", "⚡", "💡", "📉", "📈", "⏳",
+            "🧠", "💰", "🛑", "🎉", "👀", "📝",
+            "😬", "🤔", "🙌", "💥", "🔍", "📌",
+        ]),
+        ("Smileys", [
+            "😀", "😃", "😄", "😁", "😆", "😅",
+            "🤣", "😂", "🙂", "😉", "😊", "😇",
+            "🥰", "😍", "🤩", "😘", "😎", "🤓",
+            "😏", "😬", "😮", "😲", "😳", "🥺",
+            "😢", "😭", "😤", "😡", "🤬", "😈",
+            "💀", "☠️", "🤡", "👻", "😱", "🫣",
+        ]),
+        ("Hands & People", [
+            "👍", "👎", "👊", "✊", "🤞", "✌️",
+            "🤘", "👌", "🤌", "👏", "🙌", "🤝",
+            "🙏", "💪", "🫡", "🫶", "🤷", "🤦",
+            "💃", "🕺", "🧑‍💻", "🧑‍🔬", "🧑‍🚀", "🏆",
+        ]),
+        ("Objects & Symbols", [
+            "💎", "💵", "💴", "💶", "💷", "💲",
+            "📊", "📈", "📉", "🏦", "🏛️", "⚖️",
+            "🔔", "🔕", "📣", "📢", "🎪", "🎰",
+            "⏰", "⏱️", "📅", "🗓️", "🔑", "🔒",
+            "⚠️", "🚨", "💣", "🧨", "🪙", "🏅",
+        ]),
+        ("Nature & Animals", [
+            "🐻", "🐂", "🦅", "🐋", "🦈", "🐺",
+            "🦁", "🐍", "🦊", "🐉", "🦄", "🐝",
+            "🌙", "⭐", "🌟", "☀️", "🌈", "🌊",
+            "🔥", "❄️", "💨", "⚡", "🌪️", "🌋",
+        ]),
+        ("Flags", [
+            "🏳️", "🏴", "🚩", "🏁", "🇺🇸", "🇬🇧",
+            "🇪🇺", "🇯🇵", "🇨🇳", "🇦🇺", "🇨🇦", "🇨🇭",
+        ]),
     ]
 
     var body: some View {
@@ -288,36 +321,47 @@ struct MarkerPlacementGeneralTab: View {
 
         case .reaction:
             let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(reactionEmojis, id: \.self) { emoji in
-                    Button {
-                        placementState.upsertComponent(
-                            .reactionEmoji,
-                            payload: .reactionEmoji(EmojiPayload(emoji: emoji))
-                        )
-                        HapticFeedback.light.trigger()
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 19))
-                            .frame(height: 34)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(currentReactionEmoji == emoji ? placementState.intent.color.opacity(0.35) : AppColors.whiteText.opacity(0.07))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(
-                                                currentReactionEmoji == emoji
-                                                    ? placementState.intent.color.opacity(0.6)
-                                                    : AppColors.whiteText.opacity(0.08),
-                                                lineWidth: 1
-                                            )
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Self.emojiCategories, id: \.title) { category in
+                        Text(category.title)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(AppColors.greyText)
+                            .textCase(.uppercase)
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            ForEach(category.emojis, id: \.self) { emoji in
+                                Button {
+                                    placementState.upsertComponent(
+                                        .reactionEmoji,
+                                        payload: .reactionEmoji(EmojiPayload(emoji: emoji))
                                     )
-                            )
+                                    HapticFeedback.light.trigger()
+                                } label: {
+                                    Text(emoji)
+                                        .font(.system(size: 19))
+                                        .frame(height: 34)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(currentReactionEmoji == emoji ? placementState.intent.color.opacity(0.35) : AppColors.whiteText.opacity(0.07))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(
+                                                            currentReactionEmoji == emoji
+                                                                ? placementState.intent.color.opacity(0.6)
+                                                                : AppColors.whiteText.opacity(0.08),
+                                                            lineWidth: 1
+                                                        )
+                                                )
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
             }
+            .frame(maxHeight: 220)
 
         case .personal:
             Text("No additional requirements")

@@ -31,7 +31,8 @@ class TimeframePanelGestureState: ObservableObject {
         let maxLeftOffset = chartWidth * 0.5
         let maxRightOffset = -(totalContentWidth - chartWidth * 0.5)
 
-        let newOffset = accumulatedOffset.width + translationX
+        // translationX is incremental (delta since last frame), so add to current panOffset
+        let newOffset = panOffset.width + translationX
         panOffset.width = min(maxLeftOffset, max(maxRightOffset, newOffset))
     }
 

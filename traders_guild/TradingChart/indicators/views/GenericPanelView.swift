@@ -48,12 +48,24 @@ struct GenericIndicatorPanelView: View {
         gestureState.panOffset.width
     }
     
-    private var panelTitle: String {
+    private var panelTitleBase: String {
         switch panelType {
-        case .cci: return indicatorManager.activeIndicators.cci?.label ?? "CCI"
-        case .williamsR: return indicatorManager.activeIndicators.williamsR?.label ?? "%R"
-        case .atr: return indicatorManager.activeIndicators.atr?.label ?? "ATR"
-        case .volume: return indicatorManager.activeIndicators.volume?.label ?? "Volume"
+        case .cci:
+            if let config = indicatorManager.activeIndicators.cci {
+                return "CCI \(config.period)"
+            }
+            return "CCI"
+        case .williamsR:
+            if let config = indicatorManager.activeIndicators.williamsR {
+                return "%R \(config.period)"
+            }
+            return "%R"
+        case .atr:
+            if let config = indicatorManager.activeIndicators.atr {
+                return "ATR \(config.period)"
+            }
+            return "ATR"
+        case .volume: return "Volume"
         default: return panelType.displayName
         }
     }
@@ -95,6 +107,12 @@ struct GenericIndicatorPanelView: View {
                 }
             }
         }
+        .overlay(
+            Rectangle()
+                .fill(AppColors.surfaceGray30)
+                .frame(height: 1),
+            alignment: .bottom
+        )
         .background(AppColors.chartPanelBackgroundMuted)
     }
 
@@ -140,22 +158,30 @@ struct GenericIndicatorPanelView: View {
             Rectangle()
                 .fill(AppColors.chartIndicatorHandleFill)
 
-            HStack(spacing: 8) {
-                Capsule()
-                    .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
-                    .frame(width: 36, height: 5)
+            // Capsule always centered
+            Capsule()
+                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
+                .frame(width: 36, height: 5)
+
+            // Panel label left-aligned
+            HStack(spacing: 4) {
+                (Text(panelTitleBase)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                 + Text("  Indicator")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(AppColors.surfaceWhite50))
+                    .lineLimit(1)
 
                 if isCollapsed {
-                    Text(panelTitle)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite80)
-                        .lineLimit(1)
-
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(AppColors.surfaceWhite80)
                 }
+
+                Spacer()
             }
+            .padding(.leading, 10)
         }
         .frame(height: 22)
         .contentShape(Rectangle())
@@ -327,7 +353,7 @@ struct GenericIndicatorPanelView: View {
         VStack {
             let headerState = panelHeaderState
             IndicatorPanelHeaderRow(
-                title: panelTitle,
+                title: "",
                 valueText: headerState.valueText,
                 valueColor: headerState.valueColor,
                 badgeText: headerState.badgeText,
@@ -345,10 +371,31 @@ struct GenericIndicatorPanelView: View {
             }
             let condition = cciCondition(for: latest.value)
             return (
-                formatValue(latest.value),
+                String(format: "%.1f", latest.value),
                 condition.label.isEmpty ? AppColors.surfaceWhite90 : condition.color,
                 condition.label.isEmpty ? nil : condition.label,
                 condition.label.isEmpty ? nil : condition.color
+            )
+        case .williamsR:
+            guard let latest = indicatorManager.latestWilliamsR else {
+                return (nil, AppColors.surfaceWhite90, nil, nil)
+            }
+            return (
+                String(format: "%.1f", latest.value),
+                AppColors.surfaceWhite90,
+                nil, nil
+            )
+        case .atr:
+            guard let latest = indicatorManager.latestATR else {
+                return (nil, AppColors.surfaceWhite90, nil, nil)
+            }
+            let formatted = abs(latest.value) >= 1
+                ? String(format: "%.2f", latest.value)
+                : String(format: "%.4f", latest.value)
+            return (
+                formatted,
+                AppColors.surfaceWhite90,
+                nil, nil
             )
         case .volume:
             guard let latest = indicatorManager.volumeData.last else {
@@ -358,17 +405,19 @@ struct GenericIndicatorPanelView: View {
             let badgeColor = condition == .bullish
                 ? (volumeConfig?.bullishColor.color ?? .green)
                 : (volumeConfig?.bearishColor.color ?? .red)
+            let formatted = latest.volume >= 1_000_000
+                ? String(format: "%.1fM", latest.volume / 1_000_000)
+                : latest.volume >= 1_000
+                    ? String(format: "%.1fK", latest.volume / 1_000)
+                    : String(format: "%.0f", latest.volume)
             return (
-                formatValue(latest.volume),
+                formatted,
                 badgeColor,
                 condition.label,
                 badgeColor
             )
         default:
-            guard let currentValue = getCurrentValue() else {
-                return (nil, AppColors.surfaceWhite90, nil, nil)
-            }
-            return (formatValue(currentValue), lineColor, nil, nil)
+            return (nil, AppColors.surfaceWhite90, nil, nil)
         }
     }
     

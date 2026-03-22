@@ -54,6 +54,39 @@ struct ChartSettingsView: View {
                     .font(.caption)
                 }
 
+                // MARK: - Viewport Window
+                Section(header: Text("Timeframe Panel Viewport")) {
+                    Toggle("Show Viewport Window", isOn: $settings.showViewportWindow)
+                        .tint(.cyan)
+
+                    if settings.showViewportWindow {
+                        Picker("Style", selection: $settings.viewportWindowStyle) {
+                            ForEach(ViewportWindowStyle.allCases) { style in
+                                Text(style.rawValue).tag(style)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Opacity")
+                                Spacer()
+                                Text("\(Int(settings.viewportWindowOpacity * 100))%")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+
+                            Slider(value: $settings.viewportWindowOpacity, in: 0.1...0.7, step: 0.05)
+                                .tint(.cyan)
+                        }
+                        .padding(.vertical, 2)
+
+                        Text("Shows which part of the main chart is visible in higher-timeframe panels")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 Section(header: Text("Marker Layout")) {
                     markerLayoutSliderRow(
                         title: "Candle Distance",

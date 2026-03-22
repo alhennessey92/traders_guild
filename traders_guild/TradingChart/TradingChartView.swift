@@ -1794,10 +1794,15 @@ struct TradingChartView: View {
                             placementState.isValid
                                 ? AnyShapeStyle(
                                     LinearGradient(
-                                        colors: [
-                                            placementState.intent.color.opacity(0.96),
-                                            placementState.intent.color.opacity(0.74),
-                                        ],
+                                        colors: placementState.isEditingExistingMarker
+                                            ? [
+                                                AppColors.statusPositive70.opacity(0.96),
+                                                AppColors.statusPositive70.opacity(0.74),
+                                              ]
+                                            : [
+                                                placementState.intent.color.opacity(0.96),
+                                                placementState.intent.color.opacity(0.74),
+                                              ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -1809,7 +1814,9 @@ struct TradingChartView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(
                             placementState.isValid
-                                ? placementState.intent.color.opacity(0.72)
+                                ? (placementState.isEditingExistingMarker
+                                    ? AppColors.statusPositive70.opacity(0.72)
+                                    : placementState.intent.color.opacity(0.72))
                                 : AppColors.whiteText.opacity(0.16),
                             lineWidth: 1
                         )
@@ -3293,7 +3300,11 @@ struct TradingChartView: View {
         let width = max(1, coordinateSystem.chartSize.width)
         let translatedX = min(max(0, dragOrigin.screenPoint.x + value.translation.width), width - 1)
         let translatedY = dragOrigin.screenPoint.y + value.translation.height
-        let candleIndex = coordinateSystem.candleIndex(atXPosition: translatedX)
+        var candleIndex = coordinateSystem.candleIndex(atXPosition: translatedX)
+        // Clamp to last candle when dragging past the most recent candle edge
+        if candleIndex == nil, !chartData.candles.isEmpty {
+            candleIndex = chartData.candles.count - 1
+        }
         let timestamp = resolvedPlacementTapTime(
             candleIndex: candleIndex,
             coordinateSystem: coordinateSystem
@@ -3318,7 +3329,11 @@ struct TradingChartView: View {
             )
         }
 
-        let tappedCandleIndex = coordinateSystem.candleIndex(atXPosition: fallbackLocation.x)
+        var tappedCandleIndex = coordinateSystem.candleIndex(atXPosition: fallbackLocation.x)
+        // Clamp to last candle when tapping past the most recent candle edge
+        if tappedCandleIndex == nil, !chartData.candles.isEmpty {
+            tappedCandleIndex = chartData.candles.count - 1
+        }
         let tappedTime = resolvedPlacementTapTime(
             candleIndex: tappedCandleIndex,
             coordinateSystem: coordinateSystem
@@ -4778,11 +4793,6 @@ struct TradingChartView: View {
             Rectangle()
                 .fill(AppColors.surfaceBlack50)
         }
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(AppColors.surfaceWhite18)
-                .frame(width: 1)
-        }
     }
     
     @ViewBuilder
@@ -6058,10 +6068,20 @@ struct TradingChartView: View {
             selectedMarkerId: markerManager.selectedMarker?.id ?? tappedMarkerId,
             selectedMarkerScale: selectionScale,
             selectedMarkerRotation: selectionRotation,
-            dimmed: controlViewModel.isMarkerPlacementMode
+            dimmed: controlViewModel.isMarkerPlacementMode,
+            editingEmojiOverride: editingEmojiOverrideForMarkers
         )
     }
-    
+
+    private var editingEmojiOverrideForMarkers: (markerId: UUID, emoji: String)? {
+        guard let markerId = placementState.editingMarkerId,
+              placementState.intent == .reaction,
+              case let .reactionEmoji(payload)? = placementState.component(.reactionEmoji)?.payload else {
+            return nil
+        }
+        return (markerId: markerId, emoji: payload.emoji)
+    }
+
     private func drawGrid(context: GraphicsContext, size: CGSize) {
         guard chartSettings.showGridLines else { return }
 

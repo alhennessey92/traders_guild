@@ -125,6 +125,31 @@ class RLAppState: ObservableObject {
     var hasSelectedGuild: Bool {
         currentGuild != nil && currentMembership != nil
     }
+
+    /// Current user as a GuildMemberDTO — useful for creating optimistic/pending messages.
+    var currentGuildMember: RLGuildMemberDTO? {
+        guard let user = currentUser, let membership = currentMembership else { return nil }
+        return RLGuildMemberDTO(
+            membershipId: membership.id,
+            role: membership.role,
+            reputation: membership.reputation,
+            contributionScore: membership.contributionScore,
+            dateJoined: membership.dateJoined,
+            accuracyRate: membership.accuracyRate,
+            mutedUntil: nil,
+            suspendedUntil: nil,
+            userId: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+            isOnline: true,
+            globalReputation: user.globalReputation,
+            isFriend: false,
+            friendshipStatus: nil,
+            isBlocked: false,
+            isBlockedBy: false
+        )
+    }
     
     // ================================================================================================
     // MARK: - UI State

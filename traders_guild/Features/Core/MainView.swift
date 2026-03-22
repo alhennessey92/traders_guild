@@ -113,6 +113,50 @@ struct MainView: View {
         return placementState.intent.color
     }
 
+    // MARK: - Main Chart Viewport (for timeframe panel window overlay)
+
+    private var mainChartVisibleStartDate: Date? {
+        let candles = chartViewModel.dataManager.candles
+        guard candles.count >= 2 else { return candles.first?.timestamp }
+        let mainTotalCandleWidth = 12.0 * chartGestureState.candleWidthScale + 4.0
+        let fractionalStart = max(0, -chartGestureState.panOffset.width / mainTotalCandleWidth)
+        return interpolatedTimestamp(at: fractionalStart, in: candles)
+    }
+
+    private var mainChartVisibleEndDate: Date? {
+        let candles = chartViewModel.dataManager.candles
+        guard candles.count >= 2 else { return candles.last?.timestamp }
+        let mainTotalCandleWidth = 12.0 * chartGestureState.candleWidthScale + 4.0
+        let fractionalStart = max(0, -chartGestureState.panOffset.width / mainTotalCandleWidth)
+        let screenWidth = UIScreen.main.bounds.width
+        let fractionalEnd = fractionalStart + screenWidth / mainTotalCandleWidth
+        return interpolatedTimestamp(at: fractionalEnd, in: candles)
+    }
+
+    /// Interpolates a timestamp for a fractional candle index (e.g. 5.3 = 30% between candle 5 and 6)
+    private func interpolatedTimestamp(at fractionalIndex: CGFloat, in candles: [RLCandleDTO]) -> Date {
+        let idx = Int(fractionalIndex)
+        let frac = fractionalIndex - CGFloat(idx)
+
+        if idx < 0 {
+            // Extrapolate before first candle
+            let interval = chartViewModel.currentTimeframe.seconds
+            return candles[0].timestamp.addingTimeInterval(-Double(-fractionalIndex) * interval)
+        }
+        if idx >= candles.count - 1 {
+            // Extrapolate after last candle
+            let interval = chartViewModel.currentTimeframe.seconds
+            let overshoot = fractionalIndex - CGFloat(candles.count - 1)
+            return candles[candles.count - 1].timestamp.addingTimeInterval(Double(overshoot) * interval)
+        }
+
+        // Interpolate between candle[idx] and candle[idx+1]
+        let t0 = candles[idx].timestamp.timeIntervalSince1970
+        let t1 = candles[idx + 1].timestamp.timeIntervalSince1970
+        let interpolated = t0 + Double(frac) * (t1 - t0)
+        return Date(timeIntervalSince1970: interpolated)
+    }
+
     private var indicatorPanelHeights: [CGFloat] {
         chartViewModel.indicatorManager.activeIndicators.activePanelTypes.map(indicatorPanelHeight(for:))
     }
@@ -251,6 +295,10 @@ struct MainView: View {
                             intentColor: activeMarkerIntentColor,
                             baseCandleWidth: 12,
                             candleSpacing: 4,
+                            mainChartVisibleStart: mainChartVisibleStartDate,
+                            mainChartVisibleEnd: mainChartVisibleEndDate,
+                            mainChartTimeframeSeconds: chartViewModel.currentTimeframe.seconds,
+                            showMarkerLine: chartViewModel.selectedMarkerForSheet != nil || placementState.anchorDraft != nil,
                             indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count
                         )
 
@@ -1892,6 +1940,7 @@ struct ChartBottomSheet: View {
         }
         .animation(.easeInOut(duration: 0.3), value: selectedView)
         .animation(.easeInOut(duration: 0.3), value: isMarkerDetailActive)
+        .animation(nil, value: shouldIgnoreKeyboardSafeArea)
         .ignoresSafeArea(.keyboard, edges: shouldIgnoreKeyboardSafeArea ? .bottom : [])
         .environmentObject(chatSurfaceOverlayCoordinator)
         .onAppear {
@@ -2246,7 +2295,7 @@ struct ChartBottomSheet: View {
                     .opacity(placementState.isValid ? 1.0 : 0.55)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.top, isExpanded ? 16 : 0)
             .padding(.bottom, 2)
         }

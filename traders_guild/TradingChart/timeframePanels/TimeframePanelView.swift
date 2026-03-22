@@ -3,8 +3,8 @@
 //  traders_guild
 //
 //  Timeframe snapshot panel — displays OHLCV candles for a linked timeframe
-//  with the marker's time position indicated. Supports independent pan/pinch.
-//  Matches indicator panel UI pattern (RSIPanelView structure).
+//  with the marker's time position indicated. Supports independent pan/pinch
+//  (not linked to main chart). Matches indicator panel UI pattern.
 //
 
 import SwiftUI
@@ -21,6 +21,10 @@ struct TimeframePanelView: View {
     let intentColor: Color
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
+    var mainChartVisibleStart: Date? = nil
+    var mainChartVisibleEnd: Date? = nil
+    var mainChartTimeframeSeconds: TimeInterval = 0
+    var showMarkerLine: Bool = false
 
     var minPanelHeight: CGFloat = 80
     var maxPanelHeight: CGFloat = 250
@@ -65,6 +69,10 @@ struct TimeframePanelView: View {
         intentColor: Color,
         baseCandleWidth: CGFloat,
         candleSpacing: CGFloat,
+        mainChartVisibleStart: Date? = nil,
+        mainChartVisibleEnd: Date? = nil,
+        mainChartTimeframeSeconds: TimeInterval = 0,
+        showMarkerLine: Bool = false,
         minPanelHeight: CGFloat = 80,
         maxPanelHeight: CGFloat = 250,
         isBottomPanel: Bool = false
@@ -76,6 +84,10 @@ struct TimeframePanelView: View {
         self.intentColor = intentColor
         self.baseCandleWidth = baseCandleWidth
         self.candleSpacing = candleSpacing
+        self.mainChartVisibleStart = mainChartVisibleStart
+        self.mainChartVisibleEnd = mainChartVisibleEnd
+        self.mainChartTimeframeSeconds = mainChartTimeframeSeconds
+        self.showMarkerLine = showMarkerLine
         self.minPanelHeight = minPanelHeight
         self.maxPanelHeight = maxPanelHeight
         self.isBottomPanel = isBottomPanel
@@ -90,13 +102,20 @@ struct TimeframePanelView: View {
             if !isCollapsed {
                 candleContentArea
                     .frame(height: panelHeight)
+                    .contentShape(Rectangle())
                     .gesture(panGesture)
-                    .gesture(pinchGesture)
+                    .simultaneousGesture(pinchGesture)
                 if isBottomPanel {
                     xAxisLabels
                 }
             }
         }
+        .overlay(
+            Rectangle()
+                .fill(AppColors.surfaceGray30)
+                .frame(height: 1),
+            alignment: .bottom
+        )
         .background(AppColors.chartPanelBackgroundMuted)
         .onAppear {
             entry.clampPresentation(minHeight: minPanelHeight, maxHeight: maxPanelHeight)
@@ -161,22 +180,30 @@ struct TimeframePanelView: View {
             Rectangle()
                 .fill(AppColors.chartIndicatorHandleFill)
 
-            HStack(spacing: 8) {
-                Capsule()
-                    .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
-                    .frame(width: 36, height: 5)
+            // Capsule always centered
+            Capsule()
+                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
+                .frame(width: 36, height: 5)
+
+            // Panel label left-aligned
+            HStack(spacing: 4) {
+                (Text(dataManager.timeframe.shortName)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                 + Text("  Timeframe")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(AppColors.surfaceWhite50))
+                    .lineLimit(1)
 
                 if isCollapsed {
-                    Text(dataManager.timeframe.shortName)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite80)
-                        .lineLimit(1)
-
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(AppColors.surfaceWhite80)
                 }
+
+                Spacer()
             }
+            .padding(.leading, 10)
         }
         .frame(height: 22)
         .contentShape(Rectangle())
@@ -232,6 +259,7 @@ struct TimeframePanelView: View {
     // MARK: - Candle Content
 
     private var candleContentArea: some View {
+        // Force SwiftUI to re-render when gesture state changes
         let _ = gestureState.panOffset.width
         let _ = gestureState.candleWidthScale
 
@@ -292,6 +320,156 @@ struct TimeframePanelView: View {
             priceRange: priceRange,
             drawableHeight: drawableHeight, topPadding: topPadding
         )
+
+        // Draw current price line (latest candle close)
+        if let lastCandle = candles.last {
+            let currentPrice = lastCandle.close
+            let normalizedPrice = (currentPrice - priceRange.min) / (priceRange.max - priceRange.min)
+            let y = topPadding + drawableHeight * (1.0 - CGFloat(normalizedPrice))
+            if y >= topPadding && y <= topPadding + drawableHeight {
+                let linePath = Path { path in
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
+                }
+                context.stroke(
+                    linePath,
+                    with: .color(AppColors.statusHighlight80.opacity(0.6)),
+                    style: StrokeStyle(lineWidth: 0.8, dash: [4, 3])
+                )
+            }
+        }
+
+        // Draw main chart viewport window
+        drawMainChartViewport(context: context, size: size, candles: candles)
+    }
+
+    // MARK: - Main Chart Viewport Window
+
+    private func drawMainChartViewport(context: GraphicsContext, size: CGSize, candles: [RLCandleDTO]) {
+        let settings = ChartSettings.shared
+        guard settings.showViewportWindow else { return }
+
+        // Only show viewport when this panel is a HIGHER timeframe than the main chart
+        let panelSeconds = dataManager.timeframe.seconds
+        guard mainChartTimeframeSeconds > 0, panelSeconds > mainChartTimeframeSeconds else { return }
+
+        guard let visStart = mainChartVisibleStart,
+              let visEnd = mainChartVisibleEnd,
+              candles.count >= 2 else { return }
+
+        // Interpolate fractional X positions for smooth movement
+        let leftX = interpolatedX(for: visStart, in: candles)
+        let rightX = interpolatedX(for: visEnd, in: candles)
+
+        guard rightX > leftX else { return }
+
+        // Clamp to visible area
+        let clampedLeft = max(0, leftX)
+        let clampedRight = min(size.width, rightX)
+        guard clampedRight > clampedLeft else { return }
+
+        let viewportRect = CGRect(
+            x: clampedLeft,
+            y: 0,
+            width: clampedRight - clampedLeft,
+            height: size.height
+        )
+
+        let opacity = settings.viewportWindowOpacity
+
+        switch settings.viewportWindowStyle {
+        case .dimmed:
+            // Dim regions outside the viewport
+            if clampedLeft > 0 {
+                let leftDim = CGRect(x: 0, y: 0, width: clampedLeft, height: size.height)
+                context.fill(Path(leftDim), with: .color(Color.black.opacity(opacity)))
+            }
+            if clampedRight < size.width {
+                let rightDim = CGRect(x: clampedRight, y: 0, width: size.width - clampedRight, height: size.height)
+                context.fill(Path(rightDim), with: .color(Color.black.opacity(opacity)))
+            }
+            // Subtle border
+            context.stroke(
+                Path(viewportRect),
+                with: .color(AppColors.surfaceWhite40.opacity(0.5)),
+                style: StrokeStyle(lineWidth: 1)
+            )
+
+        case .bordered:
+            // Just a border, no dim
+            context.stroke(
+                Path(viewportRect),
+                with: .color(AppColors.surfaceWhite40.opacity(opacity + 0.3)),
+                style: StrokeStyle(lineWidth: 1.5)
+            )
+            // Thin top/bottom accent lines
+            let topLine = Path { p in
+                p.move(to: CGPoint(x: clampedLeft, y: 0))
+                p.addLine(to: CGPoint(x: clampedRight, y: 0))
+            }
+            let bottomLine = Path { p in
+                p.move(to: CGPoint(x: clampedLeft, y: size.height))
+                p.addLine(to: CGPoint(x: clampedRight, y: size.height))
+            }
+            context.stroke(topLine, with: .color(AppColors.statusInfo40.opacity(0.4)), style: StrokeStyle(lineWidth: 2))
+            context.stroke(bottomLine, with: .color(AppColors.statusInfo40.opacity(0.4)), style: StrokeStyle(lineWidth: 2))
+
+        case .tinted:
+            // Light tinted fill inside the viewport
+            context.fill(
+                Path(viewportRect),
+                with: .color(AppColors.statusInfo40.opacity(opacity * 0.4))
+            )
+            context.stroke(
+                Path(viewportRect),
+                with: .color(AppColors.statusInfo40.opacity(opacity + 0.1)),
+                style: StrokeStyle(lineWidth: 1)
+            )
+        }
+    }
+
+    /// Interpolates a smooth fractional X position for a given date within the candle array.
+    /// This avoids snapping to discrete candle boundaries, producing fluid movement.
+    private func interpolatedX(for date: Date, in candles: [RLCandleDTO]) -> CGFloat {
+        let targetTime = date.timeIntervalSince1970
+
+        // Before first candle
+        if targetTime <= candles.first!.timestamp.timeIntervalSince1970 {
+            let fraction = (targetTime - candles.first!.timestamp.timeIntervalSince1970) / dataManager.timeframe.seconds
+            return CGFloat(fraction) * totalCandleWidth + totalOffset
+        }
+
+        // After last candle — cap extrapolation to 1 candle beyond the last
+        if targetTime >= candles.last!.timestamp.timeIntervalSince1970 {
+            let lastIdx = CGFloat(candles.count - 1)
+            let fraction = (targetTime - candles.last!.timestamp.timeIntervalSince1970) / dataManager.timeframe.seconds
+            let cappedFraction = min(CGFloat(fraction), 1.0)
+            return (lastIdx + cappedFraction) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+        }
+
+        // Binary search for the surrounding candles
+        var lo = 0
+        var hi = candles.count - 1
+        while lo < hi - 1 {
+            let mid = (lo + hi) / 2
+            if candles[mid].timestamp.timeIntervalSince1970 <= targetTime {
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+
+        let t0 = candles[lo].timestamp.timeIntervalSince1970
+        let t1 = candles[hi].timestamp.timeIntervalSince1970
+        let fraction: CGFloat
+        if t1 > t0 {
+            fraction = CGFloat((targetTime - t0) / (t1 - t0))
+        } else {
+            fraction = 0
+        }
+
+        let interpolatedIndex = CGFloat(lo) + fraction
+        return interpolatedIndex * totalCandleWidth + totalOffset + actualCandleWidth / 2
     }
 
     private func drawCandlesticks(
@@ -360,6 +538,8 @@ struct TimeframePanelView: View {
         drawableHeight: CGFloat,
         topPadding: CGFloat
     ) {
+        // Only draw marker line when there's an actual marker context (not default chart mode)
+        guard showMarkerLine else { return }
         guard let markerIndex = markerCandleIndex else { return }
 
         let x = CGFloat(markerIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
@@ -420,14 +600,25 @@ struct TimeframePanelView: View {
 
     private var panelHeaderOverlay: some View {
         VStack {
+            let latestClose = dataManager.candles.last?.close
             IndicatorPanelHeaderRow(
-                title: dataManager.timeframe.shortName,
-                valueText: dataManager.latestClose.map { formatAxisPrice($0) },
+                title: "",
+                valueText: latestClose.map { formatPrice($0) },
                 valueColor: .white,
                 badgeText: "SNAPSHOT",
                 badgeColor: intentColor
             )
             Spacer()
+        }
+    }
+
+    private func formatPrice(_ value: Double) -> String {
+        if value >= 1000 {
+            return String(format: "%.2f", value)
+        } else if value >= 1 {
+            return String(format: "%.4f", value)
+        } else {
+            return String(format: "%.6f", value)
         }
     }
 

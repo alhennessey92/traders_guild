@@ -10,14 +10,42 @@
 import SwiftUI
 
 // MARK: - ================================================================================================
-// MARK: - TOP MARKERS TAB DEFINITION
+// MARK: - TAB DEFINITIONS
 // MARK: - ================================================================================================
 
-/// Tab enum conforming to UnifiedTabItem for use with UnifiedTabBar
-enum TopMarkersTab: String, CaseIterable, UnifiedTabItem {
+/// Primary section tabs
+enum MarkerSectionTab: String, CaseIterable, UnifiedTabItem {
+    case active = "Active"
     case today = "Today"
+    case thisWeek = "This Week"
+    case thisMonth = "This Month"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .active: return "bolt.fill"
+        case .today: return "flame.fill"
+        case .thisWeek: return "calendar"
+        case .thisMonth: return "calendar.badge.clock"
+        }
+    }
+
+    /// Time window in hours for data fetch
+    var timeWindowHours: Int {
+        switch self {
+        case .active: return 168
+        case .today: return 24
+        case .thisWeek: return 168
+        case .thisMonth: return 720
+        }
+    }
+}
+
+/// Sub-tab for filtering within each section
+enum MarkerSubTab: String, CaseIterable, UnifiedTabItem {
+    case all = "All"
     case bySymbol = "Symbol"
-    case byAssetClass = "Asset Class"
     case friends = "Friends"
     case mine = "Mine"
 
@@ -25,22 +53,10 @@ enum TopMarkersTab: String, CaseIterable, UnifiedTabItem {
 
     var icon: String {
         switch self {
-        case .today: return "flame.fill"
+        case .all: return "square.grid.2x2.fill"
         case .bySymbol: return "chart.line.uptrend.xyaxis"
-        case .byAssetClass: return "square.grid.2x2.fill"
         case .friends: return "person.2.fill"
         case .mine: return "person.fill"
-        }
-    }
-
-    /// Time window in hours for each tab's data fetch
-    var timeWindowHours: Int {
-        switch self {
-        case .today: return 24
-        case .bySymbol: return 168
-        case .byAssetClass: return 168
-        case .friends: return 168
-        case .mine: return 720
         }
     }
 }
@@ -52,49 +68,79 @@ enum TopMarkersTab: String, CaseIterable, UnifiedTabItem {
 struct TopMarkersView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var rlAppState: RLAppState
-    
+
     // Tab state
-    @State private var selectedTab: TopMarkersTab = .today
-    
+    @State private var selectedSection: MarkerSectionTab = .today
+    @State private var selectedSubTab: MarkerSubTab = .all
+
     // Loading state
     @State private var isLoading: Bool = false
     @State private var hasLoaded: Bool = false
-    
+
     // Selection feedback
     @State private var likedMarkerId: UUID? = nil
-    
+
     /// Callback when user wants to navigate to a marker on the chart
     var onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
-    
+
+    // MARK: - Computed Data
+
+    private var followingAuthorIds: Set<UUID> {
+        Set(leftDrawerViewModel.followingMarkers.map(\.authorId))
+    }
+
+    /// Markers for the currently selected primary section
+    private var markersForSection: [RLTopMarkerDTO] {
+        switch selectedSection {
+        case .active:
+            return leftDrawerViewModel.trendingMarkers.filter { $0.setupSummary?.trackingState == "active" }
+        case .today:
+            return leftDrawerViewModel.trendingMarkers
+        case .thisWeek:
+            // symbolGroupedMarkers covers the weekly window
+            return leftDrawerViewModel.symbolGroupedMarkers.values.flatMap { $0 }
+        case .thisMonth:
+            return leftDrawerViewModel.myMarkers + leftDrawerViewModel.followingMarkers
+        }
+    }
+
+    private var showGreenBorder: Bool {
+        selectedSection == .active
+    }
+
+    // MARK: - Body
+
     var body: some View {
         VStack(spacing: 0) {
-            // Tab selector - OUTSIDE ScrollView (truly fixed)
+            // Primary tabs — fixed at top
             UnifiedTabBar(
-                selectedTab: $selectedTab,
+                selectedTab: $selectedSection,
                 size: .compact,
                 theme: .blue,
-                countForTab: { tab in getCountForTab(tab) },
+                countForTab: { tab in countForSection(tab) },
                 spacing: 6
             )
             .padding(.horizontal, 12)
             .padding(.top, 4)
+            .padding(.bottom, 8)
+
+            // Sub-tabs — fixed below primary
+            UnifiedTabBar(
+                selectedTab: $selectedSubTab,
+                size: .compact,
+                theme: .subTab,
+                spacing: 6
+            )
+            .padding(.horizontal, 12)
             .padding(.bottom, 12)
-            
-            // Scrollable content with pull to refresh
+
+            // Scrollable content
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 12) {
-                    switch selectedTab {
-                    case .today:
-                        todayMarkersContent
-                    case .bySymbol:
-                        bySymbolMarkersContent
-                    case .byAssetClass:
-                        assetClassMarkersContent
-                    case .friends:
-                        friendsMarkersContent
-                    case .mine:
-                        myMarkersContent
-                    }
+                    filteredMarkerList(
+                        markers: markersForSection,
+                        subTab: selectedSubTab
+                    )
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 20)
@@ -106,159 +152,72 @@ struct TopMarkersView: View {
         .task {
             await loadMarkersIfNeeded()
         }
-    }
-    
-    // MARK: - Refresh
-    
-    private func refreshMarkers() async {
-        guard let guild = rlAppState.currentGuild else { return }
-        await leftDrawerViewModel.refreshTopMarkers(for: guild.id, rlAppState: rlAppState, timeWindowHours: selectedTab.timeWindowHours)
-    }
-    
-    // MARK: - Tab Counts
-    
-    private func getCountForTab(_ tab: TopMarkersTab) -> Int {
-        switch tab {
-        case .today: return leftDrawerViewModel.trendingMarkers.count
-        case .bySymbol: return leftDrawerViewModel.symbolGroupedMarkers.reduce(0) { $0 + $1.value.count }
-        case .byAssetClass: return leftDrawerViewModel.symbolGroupedMarkers.values.flatMap { $0 }.count
-        case .friends: return leftDrawerViewModel.followingMarkers.count
-        case .mine: return leftDrawerViewModel.myMarkers.count
-        }
-    }
-    
-    // MARK: - Load Data
-    
-    private func loadMarkersIfNeeded() async {
-        guard !hasLoaded else { return }
-        guard let guildId = rlAppState.currentGuild?.id else { return }
-        
-        isLoading = true
-        await leftDrawerViewModel.loadTopMarkers(for: guildId, rlAppState: rlAppState, timeWindowHours: selectedTab.timeWindowHours)
-        isLoading = false
-        hasLoaded = true
-    }
-    
-    // MARK: - Today's Markers Content (24h window)
-
-    private var todayMarkersContent: some View {
-        Group {
-            if isLoading {
-                UnifiedLoadingState(message: "Loading today's markers...")
-            } else if leftDrawerViewModel.trendingMarkers.isEmpty {
-                UnifiedEmptyState(
-                    icon: "flame",
-                    title: "No Markers Today",
-                    subtitle: "Be the first to place a marker today!"
+        .onChange(of: selectedSection) { _, newSection in
+            Task {
+                guard let guildId = rlAppState.currentGuild?.id else { return }
+                isLoading = true
+                await leftDrawerViewModel.loadTopMarkers(
+                    for: guildId,
+                    rlAppState: rlAppState,
+                    timeWindowHours: newSection.timeWindowHours
                 )
-                .padding(.top, 40)
-            } else {
-                LazyVStack(spacing: 10) {
-                    ForEach(leftDrawerViewModel.trendingMarkers) { marker in
-                        TopMarkerCard(
-                            marker: marker,
-                            showMyBadge: marker.isCurrentUserMarker,
-                            likedMarkerId: $likedMarkerId,
-                            onLike: { handleLike(marker: marker) },
-                            onTap: { handleMarkerTap(marker: marker) }
-                        )
-                    }
-                }
+                isLoading = false
             }
         }
     }
-    
-    // MARK: - By Symbol Markers Content (weekly, grouped by symbol)
 
-    private var bySymbolMarkersContent: some View {
-        Group {
-            if isLoading {
-                UnifiedLoadingState(message: "Loading markers...")
-            } else if leftDrawerViewModel.symbolGroupedMarkers.isEmpty {
-                UnifiedEmptyState(
-                    icon: "chart.line.uptrend.xyaxis",
-                    title: "No Markers by Symbol",
-                    subtitle: "Markers will be grouped by symbol"
-                )
+    // MARK: - Section Counts
+
+    private func countForSection(_ tab: MarkerSectionTab) -> Int {
+        switch tab {
+        case .active:
+            return leftDrawerViewModel.trendingMarkers.filter { $0.setupSummary?.trackingState == "active" }.count
+        case .today:
+            return leftDrawerViewModel.trendingMarkers.count
+        case .thisWeek:
+            return leftDrawerViewModel.symbolGroupedMarkers.values.reduce(0) { $0 + $1.count }
+        case .thisMonth:
+            return (leftDrawerViewModel.myMarkers + leftDrawerViewModel.followingMarkers).count
+        }
+    }
+
+    // MARK: - Filtered Marker List
+
+    @ViewBuilder
+    private func filteredMarkerList(
+        markers: [RLTopMarkerDTO],
+        subTab: MarkerSubTab
+    ) -> some View {
+        if isLoading {
+            UnifiedLoadingState(message: "Loading markers...")
                 .padding(.top, 40)
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(Array(leftDrawerViewModel.symbolGroupedMarkers.keys.sorted()), id: \.self) { symbolTicker in
-                        if let markers = leftDrawerViewModel.symbolGroupedMarkers[symbolTicker] {
-                            SymbolMarkerGroup(
-                                symbolTicker: symbolTicker,
-                                markers: markers,
-                                likedMarkerId: $likedMarkerId,
-                                onLike: { marker in handleLike(marker: marker) },
-                                onTap: { marker in handleMarkerTap(marker: marker) }
-                            )
+        } else {
+            let filtered = filterMarkers(markers, by: subTab)
+            if subTab == .bySymbol {
+                // Grouped by symbol view
+                let grouped = Dictionary(grouping: filtered) { $0.symbolTicker }
+                if grouped.isEmpty {
+                    emptyStateForSection
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(Array(grouped.keys.sorted()), id: \.self) { symbolTicker in
+                            if let symbolMarkers = grouped[symbolTicker] {
+                                SymbolMarkerGroup(
+                                    symbolTicker: symbolTicker,
+                                    markers: symbolMarkers,
+                                    likedMarkerId: $likedMarkerId,
+                                    onLike: { marker in handleLike(marker: marker) },
+                                    onTap: { marker in handleMarkerTap(marker: marker) }
+                                )
+                            }
                         }
                     }
                 }
-            }
-        }
-    }
-
-    // MARK: - Asset Class Markers Content (weekly, grouped by Forex, Crypto, etc.)
-
-    /// Pre-computed grouping to avoid recomputation on every render
-    private var markersGroupedByAssetClass: [(assetClass: RLAssetClass, markers: [RLTopMarkerDTO])] {
-        let allMarkers = leftDrawerViewModel.symbolGroupedMarkers.values.flatMap { $0 }
-        let grouped = Dictionary(grouping: allMarkers) { marker -> RLAssetClass in
-            RLAssetClass.fromBackendString(marker.symbolAssetClass) ?? .forex
-        }
-        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
-        
-        return orderedClasses.compactMap { assetClass in
-            guard let markers = grouped[assetClass], !markers.isEmpty else { return nil }
-            let topMarkers = Array(markers.sorted { $0.likeCount > $1.likeCount }.prefix(5))
-            return (assetClass: assetClass, markers: topMarkers)
-        }
-    }
-    
-    private var assetClassMarkersContent: some View {
-        Group {
-            if isLoading {
-                UnifiedLoadingState(message: "Loading markers...")
-            } else if leftDrawerViewModel.symbolGroupedMarkers.isEmpty {
-                UnifiedEmptyState(
-                    icon: "chart.line.uptrend.xyaxis",
-                    title: "No Markers by Symbol",
-                    subtitle: "Markers will be grouped by asset class"
-                )
-                .padding(.top, 40)
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(markersGroupedByAssetClass, id: \.assetClass) { group in
-                        AssetClassMarkerGroup(
-                            assetClass: group.assetClass,
-                            markers: group.markers,
-                            likedMarkerId: $likedMarkerId,
-                            onLike: { marker in handleLike(marker: marker) },
-                            onTap: { marker in handleMarkerTap(marker: marker) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-    
-    // MARK: - Friends Markers Content (weekly)
-
-    private var friendsMarkersContent: some View {
-        Group {
-            if isLoading {
-                UnifiedLoadingState(message: "Loading markers...")
-            } else if leftDrawerViewModel.followingMarkers.isEmpty {
-                UnifiedEmptyState(
-                    icon: "person.2",
-                    title: "No Markers from Friends",
-                    subtitle: "Follow traders to see their markers here"
-                )
-                .padding(.top, 40)
+            } else if filtered.isEmpty {
+                emptyStateForSection
             } else {
                 LazyVStack(spacing: 10) {
-                    ForEach(leftDrawerViewModel.followingMarkers) { marker in
+                    ForEach(filtered) { marker in
                         TopMarkerCard(
                             marker: marker,
                             showMyBadge: marker.isCurrentUserMarker,
@@ -266,69 +225,106 @@ struct TopMarkersView: View {
                             onLike: { handleLike(marker: marker) },
                             onTap: { handleMarkerTap(marker: marker) }
                         )
-                    }
-                }
-            }
-        }
-    }
-    
-    // MARK: - My Markers Content
-    
-    private var myMarkersContent: some View {
-        Group {
-            if isLoading {
-                UnifiedLoadingState(message: "Loading markers...")
-            } else if leftDrawerViewModel.myMarkers.isEmpty {
-                UnifiedEmptyState(
-                    icon: "mappin.and.ellipse",
-                    title: "No Markers Yet",
-                    subtitle: "Place markers on charts to see them here"
-                )
-                .padding(.top, 40)
-            } else {
-                LazyVStack(spacing: 10) {
-                    ForEach(leftDrawerViewModel.myMarkers) { marker in
-                        TopMarkerCard(
-                            marker: marker,
-                            showMyBadge: true,
-                            likedMarkerId: $likedMarkerId,
-                            onLike: { handleLike(marker: marker) },
-                            onTap: { handleMarkerTap(marker: marker) }
+                        .overlay(
+                            showGreenBorder
+                                ? RoundedRectangle(cornerRadius: 12)
+                                    .stroke(AppColors.statusPositive70.opacity(0.3), lineWidth: 1)
+                                : nil
                         )
                     }
                 }
             }
         }
     }
-    
+
+    private var emptyStateForSection: some View {
+        let (icon, title, subtitle): (String, String, String) = {
+            switch selectedSection {
+            case .active:
+                return ("bolt", "No Active Markers", "Markers with active tracking will appear here")
+            case .today:
+                return ("flame", "No Markers Today", "Be the first to place a marker today!")
+            case .thisWeek:
+                return ("calendar", "No Markers This Week", "Place markers on charts to see them here")
+            case .thisMonth:
+                return ("calendar.badge.clock", "No Markers This Month", "Place markers on charts to see them here")
+            }
+        }()
+
+        return UnifiedEmptyState(icon: icon, title: title, subtitle: subtitle)
+            .padding(.top, 40)
+    }
+
+    // MARK: - Filter Logic
+
+    private func filterMarkers(_ markers: [RLTopMarkerDTO], by subTab: MarkerSubTab) -> [RLTopMarkerDTO] {
+        switch subTab {
+        case .all:
+            return markers
+        case .bySymbol:
+            return markers // grouping handled in the view
+        case .friends:
+            return markers.filter { followingAuthorIds.contains($0.authorId) }
+        case .mine:
+            return markers.filter { $0.isCurrentUserMarker }
+        }
+    }
+
+    // MARK: - Refresh
+
+    private func refreshMarkers() async {
+        guard let guild = rlAppState.currentGuild else { return }
+        await leftDrawerViewModel.refreshTopMarkers(
+            for: guild.id,
+            rlAppState: rlAppState,
+            timeWindowHours: selectedSection.timeWindowHours
+        )
+    }
+
+    // MARK: - Load Data
+
+    private func loadMarkersIfNeeded() async {
+        guard !hasLoaded else { return }
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+
+        isLoading = true
+        await leftDrawerViewModel.loadTopMarkers(
+            for: guildId,
+            rlAppState: rlAppState,
+            timeWindowHours: selectedSection.timeWindowHours
+        )
+        isLoading = false
+        hasLoaded = true
+    }
+
     // MARK: - Actions
-    
+
     private func handleLike(marker: RLTopMarkerDTO) {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred()
-        
+
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             likedMarkerId = marker.id
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             likedMarkerId = nil
         }
-        
+
         Task {
             await leftDrawerViewModel.toggleMarkerLike(markerId: marker.id, rlAppState: rlAppState)
         }
     }
-    
+
     private func handleMarkerTap(marker: RLTopMarkerDTO) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
-        
+
         if let onNavigate = onNavigateToMarker {
             onNavigate(marker)
             return
         }
-        
+
         leftDrawerViewModel.requestNavigationToMarker(marker)
     }
 }

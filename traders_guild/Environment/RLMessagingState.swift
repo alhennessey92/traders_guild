@@ -198,6 +198,7 @@ struct RLMessagingSheet: View {
     @State private var showUserProfile = false
     @State private var selectedChatroomUser: RLGuildMemberDTO? = nil
     @State private var showSettings = false
+    @State private var showSearch = false
     @State private var hasMarkedAsRead = false
     @State private var typingWorkItem: DispatchWorkItem? = nil
     @State private var hasSentTyping: Bool = false
@@ -215,6 +216,13 @@ struct RLMessagingSheet: View {
     @State private var reportTarget: MessagingReportTarget? = nil
     @State private var reactionReactorsState = ChatReactionReactorsState()
     @StateObject private var chatSurfaceOverlayCoordinator = ChatSurfaceOverlayCoordinator()
+
+    // Scroll tracking
+    @State private var isNearBottom = true
+    @State private var newMessageCount = 0
+
+    // Optimistic sending — track pending message IDs for delivery status indicator
+    @State private var pendingMessageIds: Set<UUID> = []
 
     // Profile state
     @State private var profileExtendedProfile: RLUserProfileDTO? = nil
@@ -360,6 +368,19 @@ struct RLMessagingSheet: View {
                     
                     Spacer()
                     
+                    // Search button (chatrooms only)
+                    if case .chatroom = contentType {
+                        Button {
+                            showSearch = true
+                            HapticFeedback.light.trigger()
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(AppColors.whiteText.opacity(0.6))
+                                .frame(width: 32, height: 32)
+                        }
+                    }
+
                     // Close button
                     ChatDismissButton {
                         messagingManager.closeMessage()
@@ -370,10 +391,10 @@ struct RLMessagingSheet: View {
                 .padding(.top, 20)
                 .padding(.bottom, 16)
                 .background(AppColors.sheetBackground)
-                
+
                 Divider()
             }
-            
+
             // Messages list
             messagesListView
             Divider()
@@ -386,8 +407,25 @@ struct RLMessagingSheet: View {
                     messageText: $messageText,
                     replyDraft: $replyDraft,
                     isActionPanelVisible: actionPanelVisibility,
+                    mentionCandidates: rightDrawerViewModel.guildMembers,
                     onMessageSent: { message in
                         chatroomMessages.append(message)
+                    },
+                    onPendingMessage: { pending in
+                        pendingMessageIds.insert(pending.id)
+                        chatroomMessages.append(pending)
+                    },
+                    onMessageConfirmed: { pendingId, confirmed in
+                        pendingMessageIds.remove(pendingId)
+                        if let idx = chatroomMessages.firstIndex(where: { $0.id == pendingId }) {
+                            chatroomMessages[idx] = confirmed
+                        } else {
+                            chatroomMessages.append(confirmed)
+                        }
+                    },
+                    onSendFailed: { pendingId in
+                        pendingMessageIds.remove(pendingId)
+                        chatroomMessages.removeAll { $0.id == pendingId }
                     }
                 )
             case .dmThread(let thread):
@@ -398,6 +436,22 @@ struct RLMessagingSheet: View {
                     isActionPanelVisible: actionPanelVisibility,
                     onMessageSent: { message in
                         dmMessages.append(message)
+                    },
+                    onPendingMessage: { pending in
+                        pendingMessageIds.insert(pending.id)
+                        dmMessages.append(pending)
+                    },
+                    onMessageConfirmed: { pendingId, confirmed in
+                        pendingMessageIds.remove(pendingId)
+                        if let idx = dmMessages.firstIndex(where: { $0.id == pendingId }) {
+                            dmMessages[idx] = confirmed
+                        } else {
+                            dmMessages.append(confirmed)
+                        }
+                    },
+                    onSendFailed: { pendingId in
+                        pendingMessageIds.remove(pendingId)
+                        dmMessages.removeAll { $0.id == pendingId }
                     }
                 )
             }
@@ -515,6 +569,10 @@ struct RLMessagingSheet: View {
                 }
             )
         }
+        .sheet(isPresented: $showSearch) {
+            ChatSearchView()
+                .environmentObject(appState)
+        }
     }
 
     private func handleTypingChange(_ text: String) {
@@ -600,28 +658,72 @@ struct RLMessagingSheet: View {
         let threadUserId = thread.participant.userId.uuidString.lowercased()
         return typingUsers.contains(threadUserId)
     }
-    
+
+    /// Typing usernames for the current chatroom, excluding the current user.
+    private var chatroomTypingUsernames: [String] {
+        let currentUserId = appState.currentUser?.id.uuidString.lowercased()
+        let typingIds = messagingManager.activeTypingUsers.filter { $0 != currentUserId }
+        guard !typingIds.isEmpty else { return [] }
+        return typingIds.compactMap { uid in
+            rightDrawerViewModel.guildMembers.first { $0.userId.uuidString.lowercased() == uid }?.username
+        }
+    }
+
+    @ViewBuilder
+    private var typingIndicatorView: some View {
+        switch contentType {
+        case .chatroom:
+            let usernames = chatroomTypingUsernames
+            if !usernames.isEmpty {
+                ChatroomTypingIndicator(typingUsernames: usernames)
+                    .animation(.easeInOut(duration: 0.2), value: usernames.count)
+            }
+        case .dmThread(let thread):
+            if isTypingForCurrentDM(thread) {
+                TypingIndicatorBubble(username: thread.participant.username)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .animation(.easeInOut(duration: 0.2), value: true)
+            }
+        }
+    }
+
     // MARK: - Messages List
     
     private var messagesListView: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    // Load more button
+                    // Auto-prefetch sentinel — triggers when scrolled near top
                     if hasMoreMessages {
-                        Button("Load earlier messages") {
-                            Task { await loadMoreMessages() }
+                        Group {
+                            if isLoadingMore {
+                                ProgressView()
+                                    .tint(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                            } else {
+                                Color.clear
+                                    .frame(height: 1)
+                                    .onAppear {
+                                        Task { await loadMoreMessages() }
+                                    }
+                            }
                         }
-                        .font(.caption)
-                        .foregroundColor(AppColors.accentColor)
-                        .padding(.vertical, 8)
                     }
                     
                     switch contentType {
                     case .chatroom:
-                        ForEach(chatroomMessages) { message in
+                        ForEach(Array(chatroomMessages.enumerated()), id: \.element.id) { index, message in
+                            let previousMessage = index > 0 ? chatroomMessages[index - 1] : nil
+
+                            if ChatMessageGrouping.shouldShowDateSeparator(message: message, previousMessage: previousMessage) {
+                                ChatDateSeparator(date: message.timestamp)
+                            }
+
                             RLChatroomMessageView(
                                 message: message,
+                                isGrouped: !ChatMessageGrouping.shouldShowHeader(message: message, previousMessage: previousMessage),
+                                isPending: pendingMessageIds.contains(message.id),
                                 onReply: { replyDraft = ChatReplyDraft(message: message) },
                                 onReactionSelected: { emoji in
                                     Task { await toggleChatroomReaction(messageId: message.id, emoji: emoji) }
@@ -637,9 +739,17 @@ struct RLMessagingSheet: View {
                             .id(message.id)
                         }
                     case .dmThread:
-                        ForEach(dmMessages) { message in
+                        ForEach(Array(dmMessages.enumerated()), id: \.element.id) { index, message in
+                            let previousMessage = index > 0 ? dmMessages[index - 1] : nil
+
+                            if ChatMessageGrouping.shouldShowDateSeparator(message: message, previousMessage: previousMessage) {
+                                ChatDateSeparator(date: message.timestamp)
+                            }
+
                             RLDMMessageView(
                                 message: message,
+                                isGrouped: !ChatMessageGrouping.shouldShowHeader(message: message, previousMessage: previousMessage),
+                                isPending: pendingMessageIds.contains(message.id),
                                 onReply: { replyDraft = ChatReplyDraft(message: message) },
                                 onReactionSelected: { emoji in
                                     Task { await toggleDMReaction(messageId: message.id, emoji: emoji) }
@@ -651,9 +761,18 @@ struct RLMessagingSheet: View {
                                     showUserProfile = true
                                 }
                             )
-                                .id(message.id)
+                            .id(message.id)
                         }
                     }
+                    // Typing indicator
+                    typingIndicatorView
+
+                    // Bottom anchor for scroll tracking
+                    Color.clear
+                        .frame(height: 1)
+                        .id("bottomAnchor")
+                        .onAppear { isNearBottom = true; newMessageCount = 0 }
+                        .onDisappear { isNearBottom = false }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -669,11 +788,31 @@ struct RLMessagingSheet: View {
             }
             .onChange(of: chatroomMessages.count) { _, _ in
                 guard !isLoadingMore else { return }
-                scrollToBottom(proxy: proxy)
+                if isNearBottom {
+                    scrollToBottom(proxy: proxy)
+                } else {
+                    newMessageCount += 1
+                }
             }
             .onChange(of: dmMessages.count) { _, _ in
                 guard !isLoadingMore else { return }
-                scrollToBottom(proxy: proxy)
+                if isNearBottom {
+                    scrollToBottom(proxy: proxy)
+                } else {
+                    newMessageCount += 1
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !isNearBottom {
+                    ChatScrollToBottomButton(unreadCount: newMessageCount) {
+                        newMessageCount = 0
+                        scrollToBottom(proxy: proxy)
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 8)
+                    .transition(.scale.combined(with: .opacity))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isNearBottom)
+                }
             }
         }
         .overlay {
@@ -831,7 +970,9 @@ struct RLMessagingSheet: View {
             if let index = chatroomMessages.firstIndex(where: { $0.id == updated.id }) {
                 chatroomMessages[index] = updated
             }
-        } catch { }
+        } catch {
+            appState.showError(error, title: "Reaction Failed", style: .toast)
+        }
     }
 
     private func toggleDMReaction(messageId: UUID, emoji: String) async {
@@ -845,7 +986,9 @@ struct RLMessagingSheet: View {
             if let index = dmMessages.firstIndex(where: { $0.id == updated.id }) {
                 dmMessages[index] = updated
             }
-        } catch { }
+        } catch {
+            appState.showError(error, title: "Reaction Failed", style: .toast)
+        }
     }
 
     private func mergeReactions(
@@ -918,7 +1061,9 @@ struct RLMessagingSheet: View {
                 chatroomId: message.chatroomId,
                 messageId: message.id
             )
-        } catch { }
+        } catch {
+            appState.showError(error, title: "Failed to Delete", style: .toast)
+        }
     }
 
     private func deleteDMMessage(_ message: RLDMMessageDTO) async {
@@ -927,7 +1072,9 @@ struct RLMessagingSheet: View {
                 threadId: message.dmId,
                 messageId: message.id
             )
-        } catch { }
+        } catch {
+            appState.showError(error, title: "Failed to Delete", style: .toast)
+        }
     }
 
     private func reportMessage(_ target: MessagingReportTarget, reason: String) async {
@@ -967,6 +1114,7 @@ struct RLMessagingSheet: View {
         editTarget = nil
         reportTarget = nil
         reactionReactorsState = ChatReactionReactorsState()
+        pendingMessageIds = []
     }
 
     private func initializeMetadataSignature() {
@@ -1193,7 +1341,11 @@ struct RLChatroomFooterView: View {
     @Binding var messageText: String
     @Binding var replyDraft: ChatReplyDraft?
     var isActionPanelVisible: Binding<Bool>? = nil
+    var mentionCandidates: [RLGuildMemberDTO] = []
     let onMessageSent: (RLChatroomMessageDTO) -> Void
+    var onPendingMessage: ((RLChatroomMessageDTO) -> Void)? = nil
+    var onMessageConfirmed: ((UUID, RLChatroomMessageDTO) -> Void)? = nil
+    var onSendFailed: ((UUID) -> Void)? = nil
 
     @EnvironmentObject var appState: RLAppState
     @State private var isSending: Bool = false
@@ -1208,7 +1360,8 @@ struct RLChatroomFooterView: View {
                 Task { await sendComposedMessage(payload) }
             },
             allowsMarkerLinkAttachment: true,
-            isActionPanelVisible: isActionPanelVisible
+            isActionPanelVisible: isActionPanelVisible,
+            mentionCandidates: mentionCandidates
         )
     }
 
@@ -1225,20 +1378,44 @@ struct RLChatroomFooterView: View {
 
         guard payload.hasBodyContent else { return }
 
-        isSending = true
-        defer { isSending = false }
+        // Optimistic insert — show the message immediately
+        let currentMember = appState.currentGuildMember
+        let pendingMsg: RLChatroomMessageDTO? = currentMember.map {
+            .pending(
+                chatroomId: chatroom.id,
+                content: payload.encodedContent(),
+                author: $0,
+                replyPreview: nil
+            )
+        }
+        if let pendingMsg {
+            onPendingMessage?(pendingMsg)
+        }
+        let pendingId = pendingMsg?.id
+
+        // Clear input immediately for optimistic UX
+        let savedText = payload.text
+        let savedReply = payload.replyDraft
+        replyDraft = nil
 
         do {
             let message = try await appState.sendChatroomMessage(
                 chatroomId: chatroom.id,
                 content: payload.encodedContent(),
-                replyToMessageId: payload.replyDraft?.messageId
+                replyToMessageId: savedReply?.messageId
             )
-            onMessageSent(message)
-            replyDraft = nil
+            if let pendingId {
+                onMessageConfirmed?(pendingId, message)
+            } else {
+                onMessageSent(message)
+            }
         } catch {
-            messageText = payload.text
-            replyDraft = payload.replyDraft
+            if let pendingId {
+                onSendFailed?(pendingId)
+            }
+            messageText = savedText
+            replyDraft = savedReply
+            appState.showError(error, title: "Failed to Send Message", style: .toast)
         }
     }
 
@@ -1296,6 +1473,9 @@ struct RLDMFooterView: View {
     @Binding var replyDraft: ChatReplyDraft?
     var isActionPanelVisible: Binding<Bool>? = nil
     let onMessageSent: (RLDMMessageDTO) -> Void
+    var onPendingMessage: ((RLDMMessageDTO) -> Void)? = nil
+    var onMessageConfirmed: ((UUID, RLDMMessageDTO) -> Void)? = nil
+    var onSendFailed: ((UUID) -> Void)? = nil
 
     @EnvironmentObject var appState: RLAppState
     @State private var isSending: Bool = false
@@ -1327,20 +1507,43 @@ struct RLDMFooterView: View {
 
         guard payload.hasBodyContent else { return }
 
-        isSending = true
-        defer { isSending = false }
+        // Optimistic insert
+        let currentMember = appState.currentGuildMember
+        let pendingMsg: RLDMMessageDTO? = currentMember.map {
+            .pending(
+                dmId: thread.id,
+                content: payload.encodedContent(),
+                author: $0,
+                replyPreview: nil
+            )
+        }
+        if let pendingMsg {
+            onPendingMessage?(pendingMsg)
+        }
+        let pendingId = pendingMsg?.id
+
+        let savedText = payload.text
+        let savedReply = payload.replyDraft
+        replyDraft = nil
 
         do {
             let message = try await appState.sendDMMessage(
                 threadId: thread.id,
                 content: payload.encodedContent(),
-                replyToMessageId: payload.replyDraft?.messageId
+                replyToMessageId: savedReply?.messageId
             )
-            onMessageSent(message)
-            replyDraft = nil
+            if let pendingId {
+                onMessageConfirmed?(pendingId, message)
+            } else {
+                onMessageSent(message)
+            }
         } catch {
-            messageText = payload.text
-            replyDraft = payload.replyDraft
+            if let pendingId {
+                onSendFailed?(pendingId)
+            }
+            messageText = savedText
+            replyDraft = savedReply
+            appState.showError(error, title: "Failed to Send Message", style: .toast)
         }
     }
 
@@ -1395,17 +1598,39 @@ struct RLDMFooterView: View {
 // MARK: - Chatroom Message View (Using RLChatMessageBubble)
 struct RLChatroomMessageView: View {
     let message: RLChatroomMessageDTO
+    let isGrouped: Bool
+    let isPending: Bool
     let onReply: () -> Void
     let onReactionSelected: (String) -> Void
     let onVisibleReactionTap: () -> Void
     let onAvatarTap: () -> Void
-    
+
+    init(
+        message: RLChatroomMessageDTO,
+        isGrouped: Bool = false,
+        isPending: Bool = false,
+        onReply: @escaping () -> Void,
+        onReactionSelected: @escaping (String) -> Void,
+        onVisibleReactionTap: @escaping () -> Void,
+        onAvatarTap: @escaping () -> Void
+    ) {
+        self.message = message
+        self.isGrouped = isGrouped
+        self.isPending = isPending
+        self.onReply = onReply
+        self.onReactionSelected = onReactionSelected
+        self.onVisibleReactionTap = onVisibleReactionTap
+        self.onAvatarTap = onAvatarTap
+    }
+
     @EnvironmentObject var rlMessagingManager: RLMessagingManager
-    
+
     var body: some View {
         RLChatMessageBubble(
             message: message,
             context: .guildChatroom,
+            isPending: isPending,
+            isGrouped: isGrouped,
             onAvatarTap: onAvatarTap,
             onAuthorTap: onAvatarTap,
             onReply: onReply,
@@ -1426,6 +1651,8 @@ struct RLChatroomMessageView: View {
 // MARK: - DM Message View (Using RLChatMessageBubble)
 struct RLDMMessageView: View {
     let message: RLDMMessageDTO
+    let isGrouped: Bool
+    let isPending: Bool
     let onReply: () -> Void
     let onReactionSelected: (String) -> Void
     let onVisibleReactionTap: () -> Void
@@ -1435,12 +1662,16 @@ struct RLDMMessageView: View {
 
     init(
         message: RLDMMessageDTO,
+        isGrouped: Bool = false,
+        isPending: Bool = false,
         onReply: @escaping () -> Void,
         onReactionSelected: @escaping (String) -> Void,
         onVisibleReactionTap: @escaping () -> Void,
         onAuthorTap: (() -> Void)? = nil
     ) {
         self.message = message
+        self.isGrouped = isGrouped
+        self.isPending = isPending
         self.onReply = onReply
         self.onReactionSelected = onReactionSelected
         self.onVisibleReactionTap = onVisibleReactionTap
@@ -1452,6 +1683,8 @@ struct RLDMMessageView: View {
             message: message,
             context: .directMessage,
             isRead: message.isRead,
+            isPending: isPending,
+            isGrouped: isGrouped,
             onAuthorTap: onAuthorTap,
             onReply: onReply,
             onToggleReaction: onReactionSelected,

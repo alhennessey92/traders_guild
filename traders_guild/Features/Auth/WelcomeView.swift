@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct WelcomeView: View {
     @Binding var path: [RLSignupStep]
@@ -11,6 +12,8 @@ struct WelcomeView: View {
     @EnvironmentObject var RLAppState: RLAppState
 
     @State private var opacity: Double = 0
+    @State private var isAppleSignInLoading = false
+    private let appleSignInCoordinator = AppleSignInCoordinator()
 
     var body: some View {
         ZStack {
@@ -41,15 +44,16 @@ struct WelcomeView: View {
 
                 VStack(spacing: 10) {
                     Button {
-                        RLAppState.showInfo("Apple sign-in will be enabled in an upcoming release.")
+                        handleAppleSignIn()
                     } label: {
                         LoginButton(
-                            title: "Sign in with Apple",
+                            title: isAppleSignInLoading ? "Signing in..." : "Sign in with Apple",
                             iconName: "apple.logo",
                             backgroundColor: AppColors.whiteText.opacity(0.8),
                             foregroundColor: AppColors.gradientBackgroundDark
                         )
                     }
+                    .disabled(isAppleSignInLoading)
 
                     HStack(alignment: .center) {
                         Rectangle()
@@ -130,6 +134,29 @@ struct WelcomeView: View {
         .onAppear {
             withAnimation(.easeIn(duration: 0.5)) {
                 opacity = 1
+            }
+        }
+    }
+
+    private func handleAppleSignIn() {
+        isAppleSignInLoading = true
+        Task {
+            do {
+                let result = try await appleSignInCoordinator.signIn()
+                // TODO: Send result.identityToken and result.authorizationCode to backend
+                // for verification and account creation/login via:
+                // try await RLAppState.loginWithApple(identityToken: result.identityToken, authCode: result.authorizationCode)
+                await MainActor.run {
+                    isAppleSignInLoading = false
+                    RLAppState.showInfo("Apple sign-in authenticated successfully. Backend integration pending.")
+                }
+            } catch let error as AppleSignInCoordinator.AppleSignInError where error == .cancelled {
+                await MainActor.run { isAppleSignInLoading = false }
+            } catch {
+                await MainActor.run {
+                    isAppleSignInLoading = false
+                    RLAppState.showError(error)
+                }
             }
         }
     }

@@ -302,6 +302,36 @@ enum ChartXAxisLabelEngine {
             seenBuckets.insert(bucket)
         }
 
+        // Ensure the most recent candle always has a time label
+        let lastIndex = input.candles.count - 1
+        if lastIndex >= visibleStartIndex && lastIndex <= visibleEndIndex {
+            let lastX = xPosition(for: lastIndex, input: input)
+            let minDistance: CGFloat = input.minSpacing * 0.6
+            let tooClose = labels.contains { abs($0.x - lastX) < minDistance }
+            if !tooClose && lastX >= -50 && lastX <= input.width + 50 {
+                let lastCandle = input.candles[lastIndex]
+                labels.append(
+                    ChartXAxisLabel(
+                        text: formatLabel(
+                            lastCandle.timestamp,
+                            timeframe: input.timeframe,
+                            kind: .secondary,
+                            timeZone: input.timeZone,
+                            locale: input.locale
+                        ),
+                        x: lastX,
+                        kind: .secondary,
+                        isTodayBoundary: false,
+                        isHourBoundary: isHourBoundary(
+                            lastCandle.timestamp,
+                            timeframe: input.timeframe,
+                            calendar: calendar
+                        )
+                    )
+                )
+            }
+        }
+
         let sorted = labels.sorted { $0.x < $1.x }
         labelsCache.setObject(LabelsCacheValue(sorted), forKey: cacheKey)
         return sorted

@@ -1862,9 +1862,11 @@ struct ChartMarkerSystem {
         selectedMarkerScale: CGFloat = 1.5,
         selectedMarkerRotation: CGFloat = 0,
         chartData: ChartDataManager? = nil,
-        dimmed: Bool = false
+        dimmed: Bool = false,
+        editingEmojiOverride: (markerId: UUID, emoji: String)? = nil
     ) {
         var markerContext = context
+        let isDimmed = dimmed
         if dimmed {
             markerContext.opacity = 0.25
         }
@@ -1963,14 +1965,19 @@ struct ChartMarkerSystem {
         }
 
         for rendered in glyphQueue {
+            // Use original undimmed context for selected markers so they stay at full opacity
+            let drawContext = (isDimmed && rendered.isSelected) ? context : markerContext
+            let emojiOverride: String? = (editingEmojiOverride != nil && rendered.marker.id == editingEmojiOverride?.markerId)
+                ? editingEmojiOverride?.emoji : nil
             drawSingleMarker(
-                context: markerContext,
+                context: drawContext,
                 marker: rendered.marker,
                 position: rendered.position,
                 isBelow: rendered.marker.positionedBelow,
                 scale: rendered.scale,
                 isSelected: rendered.isSelected,
-                rotation: rendered.rotation
+                rotation: rendered.rotation,
+                emojiOverride: emojiOverride
             )
         }
     }
@@ -2012,7 +2019,8 @@ struct ChartMarkerSystem {
         isBelow: Bool,
         scale: CGFloat = 1.0,
         isSelected: Bool = false,
-        rotation: CGFloat = 0
+        rotation: CGFloat = 0,
+        emojiOverride: String? = nil
     ) {
         var drawContext = context
         if rotation != 0 {
@@ -2068,7 +2076,7 @@ struct ChartMarkerSystem {
 
         // 5. Icon — palette rendering via pre-resolved SwiftUI symbols
         let iconSize = MarkerVisualSpec.iconSize(for: diameter, intent: marker.intent)
-        if marker.intent == .reaction, let iconChar = marker.selectedEmoji {
+        if marker.intent == .reaction, let iconChar = emojiOverride ?? marker.selectedEmoji {
             let iconColor = MarkerVisualSpec.iconPrimaryColor(for: marker.intent, severity: markerSeverity)
             drawContext.draw(
                 Text(iconChar)

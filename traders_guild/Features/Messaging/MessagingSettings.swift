@@ -8,20 +8,15 @@
 import SwiftUI
 
 // MARK: - Settings Components
+/// Settings section header — delegates to UnifiedSectionHeader for design-system consistency.
 struct SettingsSectionHeader: View {
     let title: String
-    
+
     var body: some View {
-        HStack {
-            Text(title.uppercased())
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(AppColors.greyText)
-            Spacer()
-        }
-        .padding(.horizontal, 25)
-        .padding(.top, 20)
-        .padding(.bottom, 12)
+        UnifiedSectionHeader(title: title)
+            .padding(.horizontal, 25)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
     }
 }
 
@@ -44,33 +39,42 @@ struct SettingsToggleRow: View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(iconColor.opacity(0.2))
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(iconColor.opacity(0.15))
+                    )
                     .frame(width: 36, height: 36)
                 Image(systemName: icon)
                     .font(.system(size: 16))
                     .foregroundColor(iconColor)
             }
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.subheadline)
                     .foregroundColor(AppColors.whiteText)
-                
+
                 if let subtitle = subtitle {
                     Text(subtitle)
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
                 }
             }
-            
+
             Spacer()
-            
+
             Toggle("", isOn: $isOn)
                 .labelsHidden()
                 .tint(AppColors.accentColor)
         }
         .padding(.horizontal, 25)
         .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .padding(.horizontal, 12)
+        )
     }
 }
 
@@ -94,27 +98,31 @@ struct SettingsButtonRow: View {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(iconColor.opacity(0.2))
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(iconColor.opacity(0.15))
+                        )
                         .frame(width: 36, height: 36)
                     Image(systemName: icon)
                         .font(.system(size: 16))
                         .foregroundColor(iconColor)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.subheadline)
                         .foregroundColor(AppColors.whiteText)
-                    
+
                     if let subtitle = subtitle {
                         Text(subtitle)
                             .font(.caption)
                             .foregroundColor(AppColors.greyText)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .fontWeight(.semibold)
@@ -122,6 +130,11 @@ struct SettingsButtonRow: View {
             }
             .padding(.horizontal, 25)
             .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .padding(.horizontal, 12)
+            )
         }
         .buttonStyle(PlainButtonStyle())
     }

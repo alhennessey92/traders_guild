@@ -117,21 +117,25 @@ struct RLUserDMRowView: View {
                         .font(.caption2)
                         .foregroundColor(AppColors.whiteText.opacity(0.5))
                     
-                    // Unread indicator
+                    // Unread badge (numbered, matching chatroom rows)
                     if thread.hasUnread {
-                        ZStack {
-                            Circle()
-                                .fill(AppColors.accentDarkColor)
-                                .frame(width: 10, height: 10)
-                            Circle()
-                                .stroke(AppColors.accentColor, lineWidth: 2)
-                                .frame(width: 10, height: 10)
-                        }
+                        Text("\(thread.unreadCount)")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppColors.accentColor)
+                            .clipShape(Capsule())
                     }
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.1 : 0.03))
+            )
         }
         .buttonStyle(PlainButtonStyle())
         .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
