@@ -18,6 +18,10 @@ class ChartViewModel: ObservableObject {
     let dataManager: ChartDataManager
     private var api: RealAPIService
     private var cancellables = Set<AnyCancellable>()
+    private var hasConfiguredRealtimeObservers = false
+    private var needsRealtimeResync = false
+    private var isPerformingRealtimeResync = false
+    private var lastRealtimeResyncAt: Date = .distantPast
     
     /// Current WebSocket channel subscriptions for real-time market data
     private var currentTickChannel: String?
@@ -28,7 +32,10 @@ class ChartViewModel: ObservableObject {
     func configure(appState: RLAppState, api: RealAPIService) {
         self.appState = appState
         self.api = api
+        guard !hasConfiguredRealtimeObservers else { return }
+        hasConfiguredRealtimeObservers = true
         setupRealTimeSubscriptions()
+        setupRealTimeConnectionObserver()
     }
     
     weak var markerManager: MarkerManager?
@@ -223,6 +230,7 @@ class ChartViewModel: ObservableObject {
 
             // Update candles
             dataManager.updateWithMarketData(chartData.candles)
+            reconcileCurrentCandleWithSymbolSnapshot(chartData.symbol)
 
             // Subscribe to real-time price ticks for this symbol/timeframe
             // (skipped when caller already subscribed to avoid double-subscribe)
@@ -546,6 +554,87 @@ class ChartViewModel: ObservableObject {
                 self?.handleRealTimeMessage(message)
             }
             .store(in: &cancellables)
+    }
+
+    private func setupRealTimeConnectionObserver() {
+        RealTimeService.shared.$connectionStatus
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                self?.handleRealTimeConnectionStatus(status)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleRealTimeConnectionStatus(_ status: RealTimeConnectionStatus) {
+        switch status {
+        case .connected:
+            guard needsRealtimeResync else { return }
+            Task { [weak self] in
+                await self?.resyncActiveChart(reason: "websocket_reconnected")
+            }
+        case .disconnected, .error:
+            if currentSymbol != nil, !dataManager.candles.isEmpty {
+                needsRealtimeResync = true
+            }
+        case .connecting:
+            break
+        }
+    }
+
+    func handleAppDidBecomeActive() async {
+        needsRealtimeResync = true
+        await resyncActiveChart(reason: "app_became_active")
+    }
+
+    private func resyncActiveChart(reason: String) async {
+        guard let symbol = currentSymbol,
+              let guildId = appState.currentGuild?.id else {
+            needsRealtimeResync = false
+            return
+        }
+
+        let now = Date()
+        guard !isPerformingRealtimeResync else { return }
+        guard now.timeIntervalSince(lastRealtimeResyncAt) >= 2 else {
+            needsRealtimeResync = false
+            return
+        }
+
+        isPerformingRealtimeResync = true
+        defer {
+            isPerformingRealtimeResync = false
+            lastRealtimeResyncAt = Date()
+        }
+
+        print("🔄 [Chart] Resyncing active chart (\(reason))")
+        subscribeToRealTimeTicks(guildId: guildId, symbolId: symbol.id, timeframe: currentTimeframe)
+        await loadChartData(
+            symbolId: symbol.id,
+            guildId: guildId,
+            timeframe: currentTimeframe,
+            skipSubscribe: true
+        )
+        indicatorManager.recalculateIndicators(candles: dataManager.candles)
+        needsRealtimeResync = false
+    }
+
+    private func reconcileCurrentCandleWithSymbolSnapshot(_ symbol: RLTradingSymbolDTO) {
+        guard let snapshotPrice = symbol.currentPrice else { return }
+        guard let snapshotTimestamp = symbol.marketStatusUpdatedAt else {
+            dataManager.currentPrice = snapshotPrice
+            return
+        }
+
+        if let lastCandleTimestamp = dataManager.candles.last?.timestamp,
+           snapshotTimestamp < lastCandleTimestamp {
+            return
+        }
+
+        dataManager.processRealTick(
+            price: snapshotPrice,
+            volume: 0,
+            timestamp: snapshotTimestamp
+        )
     }
     
     /// Handle incoming WebSocket messages for chart data

@@ -533,8 +533,13 @@ struct MainView: View {
                     if rlAppState.accessToken != nil {
                         rlAppState.connectRealTimeService()
                     }
-                    Task { await rlAppState.refreshCurrentGuildReputation() }
-                case .inactive, .background:
+                    Task {
+                        await chartViewModel.handleAppDidBecomeActive()
+                        await rlAppState.refreshCurrentGuildReputation()
+                    }
+                case .inactive:
+                    break
+                case .background:
                     rlAppState.disconnectRealTimeService()
                 @unknown default:
                     break
