@@ -36,19 +36,10 @@ struct SettingsToggleRow: View {
     }
     
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(iconColor.opacity(0.15))
-                    )
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .font(.system(size: 16))
-                    .foregroundColor(iconColor)
-            }
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundColor(iconColor)
+                .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -57,7 +48,7 @@ struct SettingsToggleRow: View {
 
                 if let subtitle = subtitle {
                     Text(subtitle)
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                 }
             }
@@ -68,12 +59,10 @@ struct SettingsToggleRow: View {
                 .labelsHidden()
                 .tint(AppColors.accentColor)
         }
-        .padding(.horizontal, 25)
-        .padding(.vertical, 12)
+        .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .padding(.horizontal, 12)
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.surfaceWhite03)
         )
     }
 }
@@ -95,19 +84,11 @@ struct SettingsButtonRow: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(iconColor.opacity(0.15))
-                        )
-                        .frame(width: 36, height: 36)
-                    Image(systemName: icon)
-                        .font(.system(size: 16))
-                        .foregroundColor(iconColor)
-                }
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundColor(iconColor)
+                    .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -116,7 +97,7 @@ struct SettingsButtonRow: View {
 
                     if let subtitle = subtitle {
                         Text(subtitle)
-                            .font(.caption)
+                            .font(.caption2)
                             .foregroundColor(AppColors.greyText)
                     }
                 }
@@ -128,15 +109,19 @@ struct SettingsButtonRow: View {
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.greyText)
             }
-            .padding(.horizontal, 25)
+            .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .padding(.horizontal, 12)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppColors.whiteText.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(AppColors.whiteText.opacity(0.1), lineWidth: 0.5)
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 16)
     }
 }
 

@@ -1206,47 +1206,47 @@ Make sure you run through all drawing options and make improve them the way they
 173. [FIXED] Looking at no 176 we already updated the chat interface/functionality but a lot still needs doing and checking. For one, sometimes when selecting the + button for adding attachments i cant cancel/remove the popup option sheet, o should be able to do this via swiping down or tapping the chat background. When long clicking on the message bubble for options sometimes it gets caught in a loop and starts opening and closing infinitely, also the UI for this popup needs improving. When selecting textbox to enter message, its getting hidden by the keyboard, should sit on top of keybaord to see what typing. Likes/emojie reactions on messages dont appear on the mesage, appear off of it in middle of screen. When adding images etc... the image should fit to the bubble so only a small border round it, not a massive amount of the bubble should show. Basically need again a full audit of the chat section to make sure all polished etc...
 
 
-195. Mirror chart setup doesnt look at timeframe active on chart and mirror to marker palcement. Also when mirroring if emoji is being mirrored it moves when user taps screen so cant get out of emoji placement if you understand me. Sometimes the emoji gets copied over with mirror setup even if deleted from default chart
+195. [FIXED] Mirror chart setup doesnt look at timeframe active on chart and mirror to marker palcement. Also when mirroring if emoji is being mirrored it moves when user taps screen so cant get out of emoji placement if you understand me. Sometimes the emoji gets copied over with mirror setup even if deleted from default chart
 
-196. Need some form of line/border at bottom of timeframe and any other panel to distinguish between timeframe x axis and main chart x axis
+196. [FIXED] Need some form of line/border at bottom of timeframe and any other panel to distinguish between timeframe x axis and main chart x axis
 
 
-197. When rotation is on it’s turning the app and then bugging out, need to stop this. App should be fixed at all times in portrait mode 
+197. [FIXED] When rotation is on it’s turning the app and then bugging out, need to stop this. App should be fixed at all times in portrait mode 
 
 198. Need to investigate why bottom chat text boxes are jumping when showing keyboard 
 
-199. When adding indicators no longer being shown option box automatically for style and variables etc for each indicator, this happens in both marker placement mode and default chart mode
+199. [FIXED] When adding indicators no longer being shown option box automatically for style and variables etc for each indicator, this happens in both marker placement mode and default chart mode
 
-200. When adding/removing indicator/timeframe in marker placement mode and default chart mode the button acts weird, the transition between added and unadded - linked and unlinked is slow and fades too much making it look weird, needs addressing
+200. [FIXED] When adding/removing indicator/timeframe in marker placement mode and default chart mode the button acts weird, the transition between added and unadded - linked and unlinked is slow and fades too much making it look weird, needs addressing
 
-201. Need to adjust the emoji section in marker placement mode and emoji section in reactions for chat etc... to display all the default emojis available in a better more concise format, at the moment we only allow a few and they may not be significant. We need all possible emoji options that are available to th user.
+201. [FIXED] Need to adjust the emoji section in marker placement mode and emoji section in reactions for chat etc... to display all the default emojis available in a better more concise format, at the moment we only allow a few and they may not be significant. We need all possible emoji options that are available to th user.
 
 202. Need a major review of the authentication and register/login section of the app working out what has been implemented and what is remaining, this goes down to signing up and logging in using alternative options such as apple, google accounts etc... forgetting passwords etc... making sure all relevant authentication such as faceid etc... are all implemented, everything we need for this section fo the app
 
-203. Need to adjust the timeframe panels to show current price when not set for a marker - i.e. set in default chart, so user can see current price marker etc... Could expand this to show vertical pinpoint lines aswell that can be relevant in the timeframe
+203. [FIXED] Need to adjust the timeframe panels to show current price when not set for a marker - i.e. set in default chart, so user can see current price marker etc... Could expand this to show vertical pinpoint lines aswell that can be relevant in the timeframe
 
-204. Would be nice if we can allow the timeframe panel to pan like the indicator panels
+204. [FIXED] Would be nice if we can allow the timeframe panel to pan like the indicator panels
 
-205. Look to reduce decimal number after most if not all symbols, dont need to go to 5 or 6 decimal place
+205. [FIXED] Look to reduce decimal number after most if not all symbols, dont need to go to 5 or 6 decimal place
 
-206. Price indicators need to be reviewed stick too far out into chart especially the main yellow price indicator - look to reduce width padding
+206. [FIXED] Price indicators need to be reviewed stick too far out into chart especially the main yellow price indicator - look to reduce width padding
 
-207. Y axis needs a review dont like the border, chart background should morph seemlesly into y axis, but obiously content that goes into y axis is hidden/blurred
+207. [FIXED] Y axis needs a review dont like the border, chart background should morph seemlesly into y axis, but obiously content that goes into y axis is hidden/blurred
 
 208. Emoji marker needs its icon changed relative to when its changed, especially real time when changing and same for when editing marker the icon on the chart needs to change realtime
 
 209. When editing a marker the selected marker reverts to a faded out marker like the other markers, it should stay stand out like when selected
 
-210. When editing a marker the place marker button in bottom right needs to change to a green accent look to signal a save button - in accordance with the paletter look multi color
+210. [FIXED] When editing a marker the place marker button in bottom right needs to change to a green accent look to signal a save button - in accordance with the paletter look multi color
 
-211. Can afford to give more width padding to marker tab bottom left in edit/marker placement mode, only a little
+211. [FIXED] Can afford to give more width padding to marker tab bottom left in edit/marker placement mode, only a little
 
-212. May adjust the todays top markers section to just Markers with target icon etc... This allows more scope to add sections for active markers etc... So can now keep the today section but add a sub tab section for all relevant filters for markers of the day - Active, Symbol, friends, mine etc. Then add a active section with green background like in components listing all active markers - again with sub tab headings. Could also have a top section of friends and mine and weekly etc Whatever feels and works best
+212. [FIXED] May adjust the todays top markers section to just Markers with target icon etc... This allows more scope to add sections for active markers etc... So can now keep the today section but add a sub tab section for all relevant filters for markers of the day - Active, Symbol, friends, mine etc. Then add a active section with green background like in components listing all active markers - again with sub tab headings. Could also have a top section of friends and mine and weekly etc Whatever feels and works best
 
-213. Need to make sure there is a x axis time for most recent candle whatever happens
+213. [FIXED] Need to make sure there is a x axis time for most recent candle whatever happens
 
-214. Concerning panels - the draw handle needs to remain center in whatever state, would prefer text to move to the left side and symbolise if it is a timeframe panel, rsi panel etc...with basic settings
+214. [FIXED] Concerning panels - the draw handle needs to remain center in whatever state, would prefer text to move to the left side and symbolise if it is a timeframe panel, rsi panel etc...with basic settings
 
-215. When adding a zone and trendline drawing, after placing first point if move second point to most recent candle the point springs off to the left and struggle to get back, weird bug i noticed
+215. [FIXED] When adding a zone and trendline drawing, after placing first point if move second point to most recent candle the point springs off to the left and struggle to get back, weird bug i noticed
 
 

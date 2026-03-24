@@ -72,17 +72,34 @@ struct traders_guildApp: App {
                     .environmentObject(rlAppState)
                     .environmentObject(rlMessagingManager)
             }
+            // Biometric enrollment sheet
+            .sheet(isPresented: $rlAppState.showBiometricEnrollment) {
+                BiometricEnrollmentView()
+                    .environmentObject(rlAppState)
+            }
             .onOpenURL { url in
                 guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
                 let path = components.path.lowercased()
                 let host = (components.host ?? "").lowercased()
                 let fullRoute = "\(host)\(path)"
-                let matchesResetPath = fullRoute.contains("reset-password") || fullRoute.contains("password/reset")
-                guard matchesResetPath else { return }
 
-                if let token = components.queryItems?.first(where: { $0.name.lowercased() == "token" })?.value,
-                   !token.isEmpty {
-                    rlAppState.setPendingPasswordResetToken(token)
+                // Handle password reset deep link
+                let matchesResetPath = fullRoute.contains("reset-password") || fullRoute.contains("password/reset")
+                if matchesResetPath {
+                    if let token = components.queryItems?.first(where: { $0.name.lowercased() == "token" })?.value,
+                       !token.isEmpty {
+                        rlAppState.setPendingPasswordResetToken(token)
+                    }
+                    return
+                }
+
+                // Handle email verification deep link
+                let matchesVerifyPath = fullRoute.contains("verify-email") || fullRoute.contains("email/verify")
+                if matchesVerifyPath {
+                    if let token = components.queryItems?.first(where: { $0.name.lowercased() == "token" })?.value,
+                       !token.isEmpty {
+                        rlAppState.setPendingEmailVerificationToken(token)
+                    }
                 }
             }
         }

@@ -1540,9 +1540,9 @@ struct DataPrivacyView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         // Privacy section
-                        VStack(spacing: 0) {
-                            SettingsSectionHeader(title: "Privacy")
-                            
+                        SettingsSectionHeader(title: "Privacy")
+
+                        VStack(alignment: .leading, spacing: 8) {
                             SettingsToggleRow(
                                 icon: "eye.fill",
                                 title: "Activity Visible",
@@ -1550,27 +1550,23 @@ struct DataPrivacyView: View {
                                 isOn: $activityVisible,
                                 iconColor: .blue
                             )
+                            .padding(.horizontal, 16)
                             .onChange(of: activityVisible) { _, newValue in
                                 updateUserSettings(activityVisible: newValue)
                             }
 
                             VStack(alignment: .leading, spacing: 10) {
-                                HStack(spacing: 12) {
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(AppColors.statusWarning20)
-                                            .frame(width: 36, height: 36)
-                                        Image(systemName: "paperplane.fill")
-                                            .font(.system(size: 16))
-                                            .foregroundColor(.orange)
-                                    }
+                                HStack(spacing: 10) {
+                                    Image(systemName: "paperplane.fill")
+                                        .foregroundColor(.orange)
+                                        .frame(width: 20)
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Direct Messages")
                                             .font(.subheadline)
                                             .foregroundColor(AppColors.whiteText)
                                         Text(dmPermissionMode.subtitle)
-                                            .font(.caption)
+                                            .font(.caption2)
                                             .foregroundColor(AppColors.greyText)
                                     }
                                     Spacer()
@@ -1583,19 +1579,26 @@ struct DataPrivacyView: View {
                                 }
                                 .pickerStyle(.segmented)
                             }
-                            .padding(.horizontal, 25)
-                            .padding(.vertical, 12)
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(AppColors.surfaceWhite03)
+                            )
+                            .padding(.horizontal, 16)
                             .onChange(of: dmPermissionMode) { _, newValue in
                                 updateUserSettings(dmPermissionMode: newValue)
                             }
                         }
-                        
+
                         Divider()
-                        
+                            .background(AppColors.whiteText.opacity(0.2))
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+
                         // Data section
-                        VStack(spacing: 0) {
-                            SettingsSectionHeader(title: "Data Usage")
-                            
+                        SettingsSectionHeader(title: "Data Usage")
+
+                        VStack(alignment: .leading, spacing: 8) {
                             SettingsToggleRow(
                                 icon: "chart.bar.fill",
                                 title: "Analytics",
@@ -1603,10 +1606,11 @@ struct DataPrivacyView: View {
                                 isOn: $dataAnalytics,
                                 iconColor: .green
                             )
+                            .padding(.horizontal, 16)
                             .onChange(of: dataAnalytics) { _, newValue in
                                 updateUserSettings(analyticsEnabled: newValue)
                             }
-                            
+
                             SettingsToggleRow(
                                 icon: "sparkles",
                                 title: "Personalized Content",
@@ -1614,17 +1618,21 @@ struct DataPrivacyView: View {
                                 isOn: $personalizedAds,
                                 iconColor: .purple
                             )
+                            .padding(.horizontal, 16)
                             .onChange(of: personalizedAds) { _, newValue in
                                 updateUserSettings(personalizedContentEnabled: newValue)
                             }
                         }
-                        
+
                         Divider()
-                        
+                            .background(AppColors.whiteText.opacity(0.2))
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+
                         // Data management section
-                        VStack(spacing: 0) {
-                            SettingsSectionHeader(title: "Data Management")
-                            
+                        SettingsSectionHeader(title: "Data Management")
+
+                        VStack(alignment: .leading, spacing: 8) {
                             SettingsButtonRow(
                                 icon: "arrow.down.doc.fill",
                                 title: "Download My Data",
@@ -1633,7 +1641,7 @@ struct DataPrivacyView: View {
                             ) {
                                 requestDataExport()
                             }
-                            
+
                             SettingsButtonRow(
                                 icon: "trash.fill",
                                 title: "Clear Local Data",
@@ -1658,8 +1666,22 @@ struct DataPrivacyView: View {
         .alert("Clear Local Data", isPresented: $showClearDataAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear", role: .destructive) {
-                // Clear cached data - implementation depends on app architecture
-                print("Clearing local data...")
+                // Clear URL cache
+                URLCache.shared.removeAllCachedResponses()
+                // Clear tmp directory
+                let tmp = FileManager.default.temporaryDirectory
+                if let files = try? FileManager.default.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil) {
+                    for file in files {
+                        try? FileManager.default.removeItem(at: file)
+                    }
+                }
+                // Clear Caches directory
+                if let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+                   let files = try? FileManager.default.contentsOfDirectory(at: cachesDir, includingPropertiesForKeys: nil) {
+                    for file in files {
+                        try? FileManager.default.removeItem(at: file)
+                    }
+                }
             }
         } message: {
             Text("This will remove all cached data from this device. Your account data will not be affected.")
@@ -2142,57 +2164,65 @@ struct CategoryChip: View {
 // ================================================================================================
 
 struct TermsPrivacyView: View {
+    @Environment(\.openURL) private var openURL
     let onBack: () -> Void
-    
+
     var body: some View {
         ZStack {
             AppColors.sheetBackground
                 .ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
                 SettingsSubViewHeader(title: "Terms & Privacy", onBack: onBack)
-                
+
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
                         SettingsButtonRow(
                             icon: "doc.text.fill",
                             title: "Terms of Service",
                             subtitle: "Review our terms and conditions",
                             iconColor: .blue
                         ) {
-                            // Open terms URL
+                            if let url = URL(string: "https://tradersguild.co/terms") {
+                                openURL(url)
+                            }
                         }
-                        
+
                         SettingsButtonRow(
                             icon: "hand.raised.fill",
                             title: "Privacy Policy",
                             subtitle: "Learn how we protect your data",
                             iconColor: .purple
                         ) {
-                            // Open privacy URL
+                            if let url = URL(string: "https://tradersguild.co/privacy") {
+                                openURL(url)
+                            }
                         }
-                        
+
                         SettingsButtonRow(
                             icon: "building.columns.fill",
                             title: "Community Guidelines",
                             subtitle: "Our rules for respectful interaction",
                             iconColor: .green
                         ) {
-                            // Open guidelines URL
+                            if let url = URL(string: "https://tradersguild.co/guidelines") {
+                                openURL(url)
+                            }
                         }
-                        
+
                         SettingsButtonRow(
                             icon: "gavel.fill",
                             title: "Legal Information",
                             subtitle: "Licenses and legal notices",
                             iconColor: .orange
                         ) {
-                            // Open legal URL
+                            if let url = URL(string: "https://tradersguild.co/legal") {
+                                openURL(url)
+                            }
                         }
                     }
-                    .padding(.horizontal, 25)
                     .padding(.top, 16)
-                    
+
                     Spacer(minLength: 100)
                 }
             }

@@ -13,7 +13,9 @@ struct WelcomeView: View {
 
     @State private var opacity: Double = 0
     @State private var isAppleSignInLoading = false
+    @State private var isBiometricLoading = false
     private let appleSignInCoordinator = AppleSignInCoordinator()
+    private let biometricManager = BiometricAuthManager.shared
 
     var body: some View {
         ZStack {
@@ -43,6 +45,21 @@ struct WelcomeView: View {
                 Spacer()
 
                 VStack(spacing: 10) {
+                    // Biometric login button (only if enabled and available)
+                    if biometricManager.canUseBiometricLogin {
+                        Button {
+                            handleBiometricLogin()
+                        } label: {
+                            LoginButton(
+                                title: isBiometricLoading ? "Signing in..." : "Sign in with \(biometricManager.biometricName)",
+                                iconName: biometricManager.biometricIconName,
+                                backgroundColor: AppColors.accentColor,
+                                foregroundColor: AppColors.whiteText
+                            )
+                        }
+                        .disabled(isBiometricLoading)
+                    }
+
                     Button {
                         handleAppleSignIn()
                     } label: {
@@ -138,17 +155,42 @@ struct WelcomeView: View {
         }
     }
 
+    private func handleBiometricLogin() {
+        isBiometricLoading = true
+        Task {
+            do {
+                try await RLAppState.loginWithBiometric()
+                await MainActor.run { isBiometricLoading = false }
+            } catch {
+                await MainActor.run {
+                    isBiometricLoading = false
+                    // Don't show error for user cancellation
+                    if case BiometricAuthManager.BiometricError.authenticationFailed = error {
+                        // User cancelled — silent
+                    } else {
+                        RLAppState.showError(error)
+                    }
+                }
+            }
+        }
+    }
+
     private func handleAppleSignIn() {
         isAppleSignInLoading = true
         Task {
             do {
                 let result = try await appleSignInCoordinator.signIn()
-                // TODO: Send result.identityToken and result.authorizationCode to backend
-                // for verification and account creation/login via:
-                // try await RLAppState.loginWithApple(identityToken: result.identityToken, authCode: result.authorizationCode)
+                let fullName = [result.fullName?.givenName, result.fullName?.familyName]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                try await RLAppState.loginWithApple(
+                    identityToken: result.identityToken,
+                    authorizationCode: result.authorizationCode,
+                    fullName: fullName.isEmpty ? nil : fullName,
+                    email: result.email
+                )
                 await MainActor.run {
                     isAppleSignInLoading = false
-                    RLAppState.showInfo("Apple sign-in authenticated successfully. Backend integration pending.")
                 }
             } catch let error as AppleSignInCoordinator.AppleSignInError where error == .cancelled {
                 await MainActor.run { isAppleSignInLoading = false }

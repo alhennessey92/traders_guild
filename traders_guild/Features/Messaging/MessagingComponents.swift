@@ -3436,9 +3436,9 @@ struct RLChatroomSettingsView: View {
                     Divider()
                     
                     // Quick Actions Section
-                    VStack(spacing: 0) {
-                        SettingsSectionHeader(title: "Quick Actions")
-                        
+                    SettingsSectionHeader(title: "Quick Actions")
+
+                    VStack(alignment: .leading, spacing: 8) {
                         SettingsToggleRow(
                             icon: "pin.fill",
                             title: "Pin Chatroom",
@@ -3458,14 +3458,18 @@ struct RLChatroomSettingsView: View {
                             ),
                             iconColor: .yellow
                         )
+                        .padding(.horizontal, 16)
                     }
-                    
+
                     Divider()
-                    
+                        .background(AppColors.whiteText.opacity(0.2))
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+
                     // Notifications Section
-                    VStack(spacing: 0) {
-                        SettingsSectionHeader(title: "Notifications")
-                        
+                    SettingsSectionHeader(title: "Notifications")
+
+                    VStack(alignment: .leading, spacing: 8) {
                         SettingsToggleRow(
                             icon: "bell.fill",
                             title: "Push Notifications",
@@ -3485,7 +3489,8 @@ struct RLChatroomSettingsView: View {
                             ),
                             iconColor: AppColors.accentColor
                         )
-                        
+                        .padding(.horizontal, 16)
+
                         SettingsButtonRow(
                             icon: "bell.slash.fill",
                             title: "Mute Chatroom",
@@ -3495,13 +3500,16 @@ struct RLChatroomSettingsView: View {
                             showMuteOptions = true
                         }
                     }
-                    
+
                     Divider()
-                    
+                        .background(AppColors.whiteText.opacity(0.2))
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+
                     // Privacy & Safety Section
-                    VStack(spacing: 0) {
-                        SettingsSectionHeader(title: "Privacy & Safety")
-                        
+                    SettingsSectionHeader(title: "Privacy & Safety")
+
+                    VStack(alignment: .leading, spacing: 8) {
                         SettingsButtonRow(
                             icon: "exclamationmark.triangle.fill",
                             title: "Report Chatroom",
@@ -3648,9 +3656,9 @@ struct RLDMSettingsView: View {
                     Divider()
                     
                     // Notifications Section
-                    VStack(spacing: 0) {
-                        SettingsSectionHeader(title: "Notifications")
-                        
+                    SettingsSectionHeader(title: "Notifications")
+
+                    VStack(alignment: .leading, spacing: 8) {
                         SettingsButtonRow(
                             icon: "bell.slash.fill",
                             title: "Mute Conversation",
@@ -3660,13 +3668,16 @@ struct RLDMSettingsView: View {
                             showMuteOptions = true
                         }
                     }
-                    
+
                     Divider()
-                    
+                        .background(AppColors.whiteText.opacity(0.2))
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+
                     // Privacy & Safety Section
-                    VStack(spacing: 0) {
-                        SettingsSectionHeader(title: "Privacy & Safety")
-                        
+                    SettingsSectionHeader(title: "Privacy & Safety")
+
+                    VStack(alignment: .leading, spacing: 8) {
                         if thread.isBlocked {
                             SettingsButtonRow(
                                 icon: "hand.raised.slash.fill",
@@ -3686,7 +3697,7 @@ struct RLDMSettingsView: View {
                                 showBlockConfirmation = true
                             }
                         }
-                        
+
                         SettingsButtonRow(
                             icon: "exclamationmark.triangle.fill",
                             title: "Report User",
@@ -3696,13 +3707,16 @@ struct RLDMSettingsView: View {
                             showReportOptions = true
                         }
                     }
-                    
+
                     Divider()
-                    
+                        .background(AppColors.whiteText.opacity(0.2))
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+
                     // Danger Zone
-                    VStack(spacing: 0) {
-                        SettingsSectionHeader(title: "Conversation")
-                        
+                    SettingsSectionHeader(title: "Conversation")
+
+                    VStack(alignment: .leading, spacing: 8) {
                         SettingsButtonRow(
                             icon: "trash.fill",
                             title: "Delete Conversation",

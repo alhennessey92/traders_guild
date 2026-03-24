@@ -60,6 +60,13 @@ struct TransitionView: View {
                 scale = 1.1
             }
 
+            // If session was already restored before this view appeared, dismiss immediately
+            if RLAppState.isSessionRestored {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    dismissIfNeeded()
+                }
+            }
+
             // Failsafe: never leave users trapped on transition if chart-ready signal is missed.
             DispatchQueue.main.asyncAfter(deadline: .now() + 7.0) {
                 guard !hasStartedDismiss else { return }

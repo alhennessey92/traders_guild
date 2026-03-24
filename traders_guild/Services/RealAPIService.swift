@@ -541,6 +541,47 @@ extension RealAPIService {
         )
     }
     
+    /// Login with Apple Sign In identity token
+    func loginWithApple(identityToken: String, authorizationCode: String, fullName: String?, email: String?) async throws -> RLLoginResponseDTO {
+        let requestBody = RLAppleSignInRequestDTO(
+            identityToken: identityToken,
+            authorizationCode: authorizationCode,
+            fullName: fullName,
+            email: email
+        )
+
+        let response: RLLoginResponseDTO = try await request(
+            "/auth/apple",
+            service: .auth,
+            method: "POST",
+            body: requestBody
+        )
+
+        setTokens(access: response.tokens.accessToken, refresh: response.tokens.refreshToken)
+        return response
+    }
+
+    /// Verify email with token
+    func verifyEmail(token: String) async throws -> RLEmailVerifyResponseDTO {
+        let requestBody = RLEmailVerifyRequestDTO(token: token)
+        return try await request(
+            "/auth/email/verify",
+            service: .auth,
+            method: "POST",
+            body: requestBody
+        )
+    }
+
+    /// Resend email verification link (requires auth)
+    func resendVerificationEmail() async throws -> RLPasswordForgotResponseDTO {
+        return try await request(
+            "/auth/email/resend-verification",
+            service: .auth,
+            method: "POST",
+            auth: true
+        )
+    }
+
     /// Refresh access token (manual call - usually automatic refresh handles this)
     func refreshAccessToken() async throws -> RLTokenDTO {
         try await performTokenRefresh()

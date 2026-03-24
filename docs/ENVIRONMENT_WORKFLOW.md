@@ -62,6 +62,27 @@ Scheme/env requirements for `traders_guild Prod K8s`:
 - Device: `TG_GATEWAY_BASE_URL_DEV_DEVICE=http://<mac-lan-ip>:30081/api/v1`
 - Device gateway exposure: `make kong-prod-port-forward-device MAC_LAN_IP=<mac-lan-ip>`
 
+## 3a) Hetzner Remote Validation
+
+When you want to test against the always-on Hetzner environment, skip local port-forwards and use the remote gateway directly.
+
+1. Confirm the remote Hetzner smoke checks are green.
+2. In Xcode select `traders_guild Hetzner Remote`.
+3. Run on simulator or device against `https://api-dev.tradersguild.co/api/v1`.
+
+Platform commands:
+
+```bash
+make status TARGET=hetzner
+make smoke TARGET=hetzner
+```
+
+Scheme/env requirements:
+
+- `TG_API_ROUTING_MODE=API_GATEWAY`
+- Simulator: `TG_GATEWAY_BASE_URL_DEV=https://api-dev.tradersguild.co/api/v1`
+- Device: `TG_GATEWAY_BASE_URL_DEV_DEVICE=https://api-dev.tradersguild.co/api/v1`
+
 ## 4) Access and Debugging
 
 For backend/platform observability and admin access, use the platform docs:

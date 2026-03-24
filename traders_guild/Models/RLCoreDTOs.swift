@@ -109,6 +109,25 @@ struct RLPasswordResetResponseDTO: Codable {
     let detail: String
 }
 
+/// Apple Sign In request DTO — sent to POST /auth/apple
+struct RLAppleSignInRequestDTO: Codable {
+    let identityToken: String        // backend: identity_token
+    let authorizationCode: String    // backend: authorization_code
+    let fullName: String?            // backend: full_name
+    let email: String?               // backend: email
+}
+
+/// Email verification request DTO — sent to POST /auth/email/verify
+struct RLEmailVerifyRequestDTO: Codable {
+    let token: String
+}
+
+/// Matches backend EmailVerifyResponse schema
+struct RLEmailVerifyResponseDTO: Codable {
+    let detail: String
+    let verified: Bool
+}
+
 
 // ================================================================================================
 // MARK: - App State Container
@@ -2326,5 +2345,5 @@ enum RLSignupStep: Hashable {
     case interests
     case guild
     case profile
-    
+    case emailVerification
 }

@@ -7,6 +7,7 @@ Use shared Xcode schemes to switch between local Compose and Kubernetes gateway 
 - `traders_guild Compose Dev`
 - `traders_guild Staging K8s`
 - `traders_guild Prod K8s`
+- `traders_guild Hetzner Remote`
 
 If a scheme does not show in Xcode:
 
@@ -40,6 +41,15 @@ Use scheme: `traders_guild Prod K8s`
 - Simulator gateway URL: `http://localhost:30081/api/v1`
 - Device gateway URL: `http://<YOUR_MAC_LAN_IP>:30081/api/v1`
   - Set via `TG_GATEWAY_BASE_URL_DEV_DEVICE`
+
+## Hetzner Remote Mode
+
+Use scheme: `traders_guild Hetzner Remote`
+
+- `TG_API_ROUTING_MODE=API_GATEWAY`
+- Simulator gateway URL: `https://api-dev.tradersguild.co/api/v1`
+- Device gateway URL: `https://api-dev.tradersguild.co/api/v1`
+- No local port-forward is required
 
 ## Validation Commands (Platform Repo)
 

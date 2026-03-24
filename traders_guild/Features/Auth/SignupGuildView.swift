@@ -617,7 +617,11 @@ struct SignupProfileSetupView: View {
 
                 HStack(spacing: 10) {
                     Button {
-                        rlAppState.completeOnboardingAndEnterApp()
+                        if rlAppState.currentUser?.isVerified == false {
+                            path.append(.emailVerification)
+                        } else {
+                            rlAppState.completeOnboardingAndEnterApp()
+                        }
                     } label: {
                         Text("Skip for now")
                             .font(.subheadline)
@@ -751,7 +755,12 @@ struct SignupProfileSetupView: View {
             // Error surfaced by RLAppState
         }
 
-        rlAppState.completeOnboardingAndEnterApp()
+        // Navigate to email verification step if user is not yet verified
+        if rlAppState.currentUser?.isVerified == false {
+            path.append(.emailVerification)
+        } else {
+            rlAppState.completeOnboardingAndEnterApp()
+        }
     }
 }
 

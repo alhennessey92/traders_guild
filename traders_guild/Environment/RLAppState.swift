@@ -80,6 +80,12 @@ class RLAppState: ObservableObject {
         }
     }
 
+    /// Public accessor for refresh token (used by biometric enrollment)
+    var currentRefreshToken: String? { refreshToken }
+
+    /// Whether to show biometric enrollment sheet after login
+    @Published var showBiometricEnrollment: Bool = false
+
     /// User settings (privacy/data preferences)
     @Published var userSettings: RLUserSettingsDTO?
 
@@ -174,6 +180,7 @@ class RLAppState: ObservableObject {
 
     /// Password reset token captured from deep-link.
     @Published var pendingPasswordResetToken: String?
+    @Published var pendingEmailVerificationToken: String?
     
     /// Flag to prevent race conditions during login/signup flow
     /// When true, external triggers (like onAppear) should NOT call openGuildSelector
@@ -476,7 +483,7 @@ class RLAppState: ObservableObject {
             
             isOnboardingFlowActive = false
             showSuccess("Welcome back, \(response.user.username)!")
-            
+
         } catch {
             isHandlingAuthFlow = false  // ← Clear flag on error
             showError(error, title: "Login Failed", style: .alert)
@@ -488,7 +495,150 @@ class RLAppState: ObservableObject {
     func login(email: String, password: String) async throws {
         try await login(identifier: email, password: password)
     }
-    
+
+    /// Login or register via Apple Sign In
+    func loginWithApple(identityToken: String, authorizationCode: String, fullName: String?, email: String?) async throws {
+        isLoading = true
+        isHandlingAuthFlow = true
+        defer { isLoading = false }
+
+        do {
+            let response = try await realApi.loginWithApple(
+                identityToken: identityToken,
+                authorizationCode: authorizationCode,
+                fullName: fullName,
+                email: email
+            )
+
+            self.accessToken = response.tokens.accessToken
+            self.refreshToken = response.tokens.refreshToken
+            self.currentUser = response.user
+            self.currentGuild = nil
+            self.currentMembership = nil
+            self.isSessionRestored = true
+
+            try await fetchUserGuilds()
+
+            if userGuilds.isEmpty {
+                showGuildSelectionSheet = true
+                showWarning("Please join a guild to continue")
+            } else {
+                showGuildSelectionSheet = true
+            }
+
+            subscribeToNotifications()
+            isOnboardingFlowActive = false
+            showSuccess("Welcome, \(response.user.displayName)!")
+
+        } catch {
+            isHandlingAuthFlow = false
+            showError(error, title: "Apple Sign In Failed", style: .alert)
+            throw error
+        }
+    }
+
+    /// Verify email address with token
+    func verifyEmail(token: String) async throws -> Bool {
+        let response = try await realApi.verifyEmail(token: token)
+        if response.verified, let user = currentUser {
+            // Re-encode with isVerified flipped to true, then decode back
+            var data = try JSONEncoder().encode(user)
+            if var dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                dict["isVerified"] = true
+                data = try JSONSerialization.data(withJSONObject: dict)
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                if let updated = try? decoder.decode(RLUserDTO.self, from: data) {
+                    self.currentUser = updated
+                }
+            }
+        }
+        return response.verified
+    }
+
+    /// Resend email verification link
+    func resendVerificationEmail() async throws {
+        _ = try await realApi.resendVerificationEmail()
+    }
+
+    // MARK: - Biometric Authentication
+
+    /// Offer biometric enrollment if available and not already set up
+    func offerBiometricEnrollmentIfNeeded() {
+        let manager = BiometricAuthManager.shared
+        guard manager.isBiometricAvailable,
+              !manager.isBiometricEnabled,
+              !UserDefaults.standard.bool(forKey: "traders_guild_biometric_declined") else {
+            return
+        }
+        // Delay so the guild selection sheet fully dismisses before presenting this sheet
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self = self, !self.showGuildSelectionSheet else { return }
+            self.showBiometricEnrollment = true
+        }
+    }
+
+    /// Attempt to restore session using biometric authentication
+    func loginWithBiometric() async throws {
+        let manager = BiometricAuthManager.shared
+        guard manager.canUseBiometricLogin else {
+            throw BiometricAuthManager.BiometricError.notAvailable
+        }
+
+        isLoading = true
+        isHandlingAuthFlow = true
+        defer { isLoading = false }
+
+        do {
+            // This triggers FaceID/TouchID and retrieves the token from Keychain
+            guard let storedRefreshToken = try await manager.retrieveBiometricRefreshToken() else {
+                isHandlingAuthFlow = false
+                throw BiometricAuthManager.BiometricError.authenticationFailed
+            }
+
+            // Use the refresh token to get new access tokens
+            realApi.setTokens(access: "", refresh: storedRefreshToken)
+            let refreshed = try await realApi.refreshAccessToken()
+
+            self.accessToken = refreshed.accessToken
+            self.refreshToken = refreshed.refreshToken
+            self.isSessionRestored = true
+
+            // Restore cached user
+            if let user = getUserFromKeychain() {
+                self.currentUser = user
+            }
+
+            // Fetch guilds
+            try await fetchUserGuilds()
+
+            if userGuilds.isEmpty {
+                showGuildSelectionSheet = true
+            } else {
+                showGuildSelectionSheet = true
+            }
+
+            // Update biometric token with the new refresh token
+            if let newRefresh = self.refreshToken {
+                try? manager.storeBiometricRefreshToken(newRefresh)
+            }
+
+            subscribeToNotifications()
+
+        } catch {
+            isHandlingAuthFlow = false
+            // Clear biometric on persistent failure
+            if case BiometricAuthManager.BiometricError.authenticationFailed = error {
+                // User cancelled — don't clear
+            } else {
+                // Token expired or invalid — clear biometric
+                manager.disableBiometric()
+            }
+            throw error
+        }
+    }
+
     /// Logout and clear session
     func logout() {
         // Unsubscribe from notifications
@@ -575,6 +725,10 @@ class RLAppState: ObservableObject {
 
     func setPendingPasswordResetToken(_ token: String?) {
         pendingPasswordResetToken = token
+    }
+
+    func setPendingEmailVerificationToken(_ token: String?) {
+        pendingEmailVerificationToken = token
     }
     
     /// Restore session from keychain
@@ -707,6 +861,9 @@ class RLAppState: ObservableObject {
         
         // Refresh current user's guild reputation from reputation-service so UI never shows stale 0
         Task { await refreshCurrentGuildReputation() }
+
+        // Offer biometric enrollment after guild selection (not during login, to avoid sheet conflicts)
+        offerBiometricEnrollmentIfNeeded()
     }
     
     /// Refreshes current user's guild reputation and accuracy from reputation-service and updates currentMembership.
@@ -2029,6 +2186,7 @@ class RLAppState: ObservableObject {
         clearUserFromKeychain()
         clearGuildFromKeychain()
         clearMembershipFromKeychain()
+        BiometricAuthManager.shared.disableBiometric()
     }
     
     

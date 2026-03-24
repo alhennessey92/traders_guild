@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var data = RLSignupData()
     @EnvironmentObject var RLAppState: RLAppState
     @State private var showResetFromDeepLink: Bool = false
+    @State private var showVerifyFromDeepLink: Bool = false
     
     
     //@EnvironmentObject var appState: AppState
@@ -40,6 +41,13 @@ struct ContentView: View {
                         SignupGuildView(data: $data, path: $path)
                     case .profile:
                         SignupProfileSetupView(data: $data, path: $path)
+                    case .emailVerification:
+                        EmailVerificationView(
+                            userEmail: data.email,
+                            onContinue: {
+                                RLAppState.completeOnboardingAndEnterApp()
+                            }
+                        )
                     }
                 }
         }
@@ -58,6 +66,23 @@ struct ContentView: View {
                     launchedFromDeepLink: true
                 )
                 .environmentObject(RLAppState)
+            }
+        }
+        .onChange(of: RLAppState.pendingEmailVerificationToken) { _, newValue in
+            if let token = newValue, !token.isEmpty {
+                Task {
+                    do {
+                        let verified = try await RLAppState.verifyEmail(token: token)
+                        if verified {
+                            RLAppState.showSuccess("Email verified successfully!")
+                        } else {
+                            RLAppState.showError(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid or expired verification token."]))
+                        }
+                    } catch {
+                        RLAppState.showError(error)
+                    }
+                    RLAppState.setPendingEmailVerificationToken(nil)
+                }
             }
         }
     }

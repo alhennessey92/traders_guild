@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import StoreKit
 
 
 struct UserSettingsSheetView: View {
@@ -216,53 +217,53 @@ struct UserSettingsSheetView: View {
             .padding(.horizontal, 25)
             .padding(.bottom, 10)
             .padding(.top, 20)
-            
+
             // Account & Profile
-            VStack(spacing: 0) {
-                SettingsSectionHeader(title: "Profile")
-                
-                if let user = rlAppState.currentUser {
-                    // User info display
-                    HStack(spacing: 12) {
-                        UnifiedMemberAvatar(
-                            username: user.displayName,
-                            avatarURL: user.avatarUrl,
-                            isOnline: user.isOnline,
-                            size: 50
-                        )
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(user.displayName)
-                                .font(.headline)
-                                .foregroundColor(AppColors.whiteText)
-                            
-                            Text("@\(user.username)")
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.greyText)
-                            
-                            Text(user.email)
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText.opacity(0.7))
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
+            SettingsSectionHeader(title: "Profile")
+
+            if let user = rlAppState.currentUser {
+                // User info display
+                HStack(spacing: 12) {
+                    UnifiedMemberAvatar(
+                        username: user.displayName,
+                        avatarURL: user.avatarUrl,
+                        isOnline: user.isOnline,
+                        size: 50
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(user.displayName)
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        Text("@\(user.username)")
+                            .font(.subheadline)
                             .foregroundColor(AppColors.greyText)
+
+                        Text(user.email)
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText.opacity(0.7))
                     }
-                    .padding()
-                    .background(AppColors.surfaceWhite03)
-                    .cornerRadius(12)
-                    .padding(.horizontal, 25)
-                    .padding(.bottom, 12)
-                    .onTapGesture {
-                        withAnimation {
-                            currentDestination = .editProfile
-                        }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .padding()
+                .background(AppColors.surfaceWhite03)
+                .cornerRadius(12)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .onTapGesture {
+                    withAnimation {
+                        currentDestination = .editProfile
                     }
                 }
-                
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
                 SettingsButtonRow(
                     icon: "person.fill",
                     title: "Edit Profile",
@@ -273,7 +274,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .editProfile
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "photo.fill",
                     title: "Change Avatar",
@@ -284,7 +285,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .avatarSelection
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "envelope.fill",
                     title: "Change Email",
@@ -295,7 +296,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .changeEmail
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "lock.fill",
                     title: "Change Password",
@@ -306,7 +307,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .changePassword
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "calendar",
                     title: "Date of Birth",
@@ -317,7 +318,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .dateOfBirth
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "chart.xyaxis.line",
                     title: "Trading Interests",
@@ -329,13 +330,16 @@ struct UserSettingsSheetView: View {
                     }
                 }
             }
-            
+
             Divider()
-            
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
             // Privacy section
-            VStack(spacing: 0) {
-                SettingsSectionHeader(title: "Privacy")
-                
+            SettingsSectionHeader(title: "Privacy")
+
+            VStack(alignment: .leading, spacing: 8) {
                 SettingsToggleRow(
                     icon: "circle.fill",
                     title: "Show Online Status",
@@ -343,10 +347,11 @@ struct UserSettingsSheetView: View {
                     isOn: $showGlobalOnlineStatus,
                     iconColor: AppColors.bullCandleGreen
                 )
+                .padding(.horizontal, 16)
                 .onChange(of: showGlobalOnlineStatus) { _, newValue in
                     updateUserSettings(showOnlineStatus: newValue)
                 }
-                
+
                 SettingsToggleRow(
                     icon: "person.badge.plus",
                     title: "Allow Friend Requests",
@@ -354,27 +359,23 @@ struct UserSettingsSheetView: View {
                     isOn: $allowFriendRequests,
                     iconColor: .blue
                 )
+                .padding(.horizontal, 16)
                 .onChange(of: allowFriendRequests) { _, newValue in
                     updateUserSettings(allowFriendRequests: newValue)
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(AppColors.statusWarning20)
-                                .frame(width: 36, height: 36)
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.orange)
-                        }
+                    HStack(spacing: 10) {
+                        Image(systemName: "paperplane.fill")
+                            .foregroundColor(.orange)
+                            .frame(width: 20)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Direct Messages")
                                 .font(.subheadline)
                                 .foregroundColor(AppColors.whiteText)
                             Text(dmPermissionMode.subtitle)
-                                .font(.caption)
+                                .font(.caption2)
                                 .foregroundColor(AppColors.greyText)
                         }
                         Spacer()
@@ -387,12 +388,16 @@ struct UserSettingsSheetView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                .padding(.horizontal, 25)
-                .padding(.vertical, 12)
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.surfaceWhite03)
+                )
+                .padding(.horizontal, 16)
                 .onChange(of: dmPermissionMode) { _, newValue in
                     updateUserSettings(dmPermissionMode: newValue)
                 }
-                
+
                 SettingsButtonRow(
                     icon: "hand.raised.fill",
                     title: "Blocked Users",
@@ -403,7 +408,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .blockedUsers
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "eye.slash.fill",
                     title: "Data & Privacy",
@@ -415,13 +420,16 @@ struct UserSettingsSheetView: View {
                     }
                 }
             }
-            
+
             Divider()
-            
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
             // Help & Support
-            VStack(spacing: 0) {
-                SettingsSectionHeader(title: "Help & Support")
-                
+            SettingsSectionHeader(title: "Help & Support")
+
+            VStack(alignment: .leading, spacing: 8) {
                 SettingsButtonRow(
                     icon: "questionmark.circle.fill",
                     title: "Help Center",
@@ -432,7 +440,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .helpCenter
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "envelope.fill",
                     title: "Contact Support",
@@ -443,7 +451,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .contactSupport
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "star.fill",
                     title: "Rate the App",
@@ -452,7 +460,7 @@ struct UserSettingsSheetView: View {
                 ) {
                     requestAppReview()
                 }
-                
+
                 SettingsButtonRow(
                     icon: "doc.text.fill",
                     title: "Terms & Privacy",
@@ -463,7 +471,7 @@ struct UserSettingsSheetView: View {
                         currentDestination = .termsPrivacy
                     }
                 }
-                
+
                 SettingsButtonRow(
                     icon: "info.circle.fill",
                     title: "About",
@@ -475,13 +483,16 @@ struct UserSettingsSheetView: View {
                     }
                 }
             }
-            
+
             Divider()
-            
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
             // Account Management
-            VStack(spacing: 0) {
-                SettingsSectionHeader(title: "Account Management")
-                
+            SettingsSectionHeader(title: "Account Management")
+
+            VStack(alignment: .leading, spacing: 8) {
                 SettingsButtonRow(
                     icon: "trash.fill",
                     title: "Delete Account",
@@ -576,9 +587,10 @@ struct UserSettingsSheetView: View {
     }
     
     private func requestAppReview() {
-        // This would normally use StoreKit to request a review
-        print("Requesting app review...")
-        // TODO: Implement StoreKit review request
+        if let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            SKStoreReviewController.requestReview(in: scene)
+        }
     }
 }
 

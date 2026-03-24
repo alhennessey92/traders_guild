@@ -43,7 +43,7 @@ struct ForgotPasswordView: View {
     }
 
     private var canRequestReset: Bool {
-        RLAuthValidator.isValidIdentifier(normalizedIdentifier) && !isSubmitting
+        RLAuthValidator.isValidIdentifier(normalizedIdentifier) && !isSubmitting && !requestSubmitted
     }
 
     private var canSubmitReset: Bool {
@@ -117,7 +117,7 @@ struct ForgotPasswordView: View {
 
         StandardTextFieldView(title: "Email or Username", text: $identifier)
             .padding(.bottom, 10)
-            .disabled(isSubmitting)
+            .disabled(isSubmitting || requestSubmitted)
 
         if requestSubmitted {
             Text("If the account exists, a reset link has been sent.")
@@ -137,9 +137,9 @@ struct ForgotPasswordView: View {
         .padding(.top, 16)
 
         StandardActionButtonFullWidth(
-            title: isSubmitting ? "Sending..." : "Send Reset Link",
-            backgroundColor: AppColors.whiteText,
-            foregroundColor: AppColors.gradientBackgroundDark
+            title: isSubmitting ? "Sending..." : (requestSubmitted ? "Reset Link Sent" : "Send Reset Link"),
+            backgroundColor: requestSubmitted ? AppColors.bullCandleGreen : AppColors.whiteText,
+            foregroundColor: requestSubmitted ? AppColors.whiteText : AppColors.gradientBackgroundDark
         ) {
             Task { await submitForgotRequest() }
         }
