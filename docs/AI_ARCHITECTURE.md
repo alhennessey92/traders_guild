@@ -1250,3 +1250,32 @@ Make sure you run through all drawing options and make improve them the way they
 215. [FIXED] When adding a zone and trendline drawing, after placing first point if move second point to most recent candle the point springs off to the left and struggle to get back, weird bug i noticed
 
 
+
+
+
+
+216. [FIXED] Coming back into the app don’t think we are auto subscribing to live tick for current candle seems to be 1 candle behind and no movement on price indicator. Also noticed when returning to app candles sometimes seem stuck in last candle we saw before leaving. Switching symbols and returning seems to fix it 
+
+217. [FIXED] Also sometimes behind the current candle by 1 candle or quite a bit went on one symbol and was 15 minutes behind, another symbol only 1 candle behind. Need to make sure at all cost we are up to date, it’s vital, even if we show error for not in time would be good to know 
+
+218. Setup marker not appearing in active marker tab
+
+219. Setup marker doesn’t seem to be watched for result no rep given or results processed. No results in the marker view for how it went etc. Needs a major audit/review
+
+220. Sometimes adding marker doesn’t always place on candle selected in marker placement mode 
+
+221. Still need to make sure the markers are position correctly on the chart. Sometimes appearing underneath when they should appear on top, always make sure markers arent obscuring candles and or other markers
+
+222. Claude - Contact support needs work, ui is rough and functionality not great, keyboard needs to be removable by tapping outside etc, send button not working etc…
+
+223. In settings user online status not always working as it should
+
+224. CODEX - When sending photos in chat they appear only as name, no image is appearing. Do we need to implement file storage on hetzner
+
+225. Dark space under bottom bar and x axis needs extending to bottom
+
+226. Claude - Implement a second theme, lighter, not white but almost a mid grey tone, allow users to switch from the settings
+
+227. Change resend token to be something better, more easier to relay back like a 5 string (7UY67)
+
+228. Need to have a look at timeframe panel, would be nice if they could update in realtime on the chart, including new candles, active candle, moving price indicator (tick)relative to current default chart etc... Also the main chart timeframe panel, still has the vertical marker view/icon on latest candle, this isnt ncessary as we have the window view, its only necessary when used in marker view mode to show where the marker is located

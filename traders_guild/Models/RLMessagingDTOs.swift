@@ -15,6 +15,68 @@
 
 import Foundation
 
+private enum WSDateParsing {
+    static func parse(_ rawValue: String) -> Date? {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = normalizeFractionalSeconds(in: trimmed)
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = isoFormatter.date(from: normalized) {
+            return date
+        }
+
+        isoFormatter.formatOptions = [.withInternetDateTime]
+        if let date = isoFormatter.date(from: normalized) {
+            return date
+        }
+
+        let noTimezoneFormats = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ss",
+        ]
+        let noTimezoneFormatter = DateFormatter()
+        noTimezoneFormatter.locale = Locale(identifier: "en_US_POSIX")
+        noTimezoneFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        for format in noTimezoneFormats {
+            noTimezoneFormatter.dateFormat = format
+            if let date = noTimezoneFormatter.date(from: normalized) {
+                return date
+            }
+        }
+
+        return nil
+    }
+
+    private static func normalizeFractionalSeconds(in rawValue: String) -> String {
+        guard let dotIndex = rawValue.firstIndex(of: ".") else {
+            return rawValue
+        }
+
+        guard let timezoneIndex = rawValue[dotIndex...].firstIndex(where: {
+            $0 == "Z" || $0 == "+" || $0 == "-"
+        }) else {
+            return rawValue
+        }
+
+        let fractionStart = rawValue.index(after: dotIndex)
+        let fraction = rawValue[fractionStart..<timezoneIndex]
+        guard !fraction.isEmpty else {
+            return rawValue
+        }
+
+        let cappedFraction: Substring
+        if fraction.count > 6 {
+            cappedFraction = fraction.prefix(6)
+        } else {
+            cappedFraction = fraction
+        }
+
+        return String(rawValue[..<dotIndex]) + "." + cappedFraction + String(rawValue[timezoneIndex...])
+    }
+}
+
 struct RLMessageReplyPreviewDTO: Codable, Equatable, Hashable {
     let messageId: UUID
     let authorUsername: String
@@ -619,25 +681,7 @@ struct WSIncomingMessage: Codable {
                 let container = try decoder.singleValueContainer()
                 let dateString = try container.decode(String.self)
 
-                // Try ISO8601 with fractional seconds (Python's default datetime format)
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                if let date = formatter.date(from: dateString) {
-                    return date
-                }
-
-                // Try ISO8601 without fractional seconds
-                formatter.formatOptions = [.withInternetDateTime]
-                if let date = formatter.date(from: dateString) {
-                    return date
-                }
-
-                // Try datetime without timezone
-                let noTZFormatter = DateFormatter()
-                noTZFormatter.locale = Locale(identifier: "en_US_POSIX")
-                noTZFormatter.timeZone = TimeZone(secondsFromGMT: 0)
-                noTZFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-                if let date = noTZFormatter.date(from: dateString) {
+                if let date = WSDateParsing.parse(dateString) {
                     return date
                 }
 

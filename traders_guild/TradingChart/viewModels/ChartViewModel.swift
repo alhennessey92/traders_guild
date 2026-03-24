@@ -22,6 +22,8 @@ class ChartViewModel: ObservableObject {
     private var needsRealtimeResync = false
     private var isPerformingRealtimeResync = false
     private var lastRealtimeResyncAt: Date = .distantPast
+    private var stalenessWatchdogTask: Task<Void, Never>?
+    private var lastRealtimeMarketEventAt: Date = .distantPast
     
     /// Current WebSocket channel subscriptions for real-time market data
     private var currentTickChannel: String?
@@ -36,6 +38,7 @@ class ChartViewModel: ObservableObject {
         hasConfiguredRealtimeObservers = true
         setupRealTimeSubscriptions()
         setupRealTimeConnectionObserver()
+        startStalenessWatchdog()
     }
     
     weak var markerManager: MarkerManager?
@@ -128,6 +131,10 @@ class ChartViewModel: ObservableObject {
         chartComponentsPlacementState.intent = .analysis
         setupChartDrawingPlacementSync()
         syncChartDrawingPlacementFromManager()
+    }
+
+    deinit {
+        stalenessWatchdogTask?.cancel()
     }
     
     // MARK: - Public Methods
@@ -231,6 +238,7 @@ class ChartViewModel: ObservableObject {
             // Update candles
             dataManager.updateWithMarketData(chartData.candles)
             reconcileCurrentCandleWithSymbolSnapshot(chartData.symbol)
+            noteRealtimeMarketEvent()
 
             // Subscribe to real-time price ticks for this symbol/timeframe
             // (skipped when caller already subscribed to avoid double-subscribe)
@@ -586,6 +594,37 @@ class ChartViewModel: ObservableObject {
         await resyncActiveChart(reason: "app_became_active")
     }
 
+    private func startStalenessWatchdog() {
+        guard stalenessWatchdogTask == nil else { return }
+
+        stalenessWatchdogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard let self else { return }
+                await self.handleRealtimeStalenessWatchdog()
+            }
+        }
+    }
+
+    private func handleRealtimeStalenessWatchdog() async {
+        guard let symbol = currentSymbol,
+              symbol.isMarketOpen ?? true,
+              appState.currentGuild?.id != nil,
+              !dataManager.candles.isEmpty,
+              !isLoadingData else {
+            return
+        }
+
+        let now = Date()
+        let inactivityThreshold: TimeInterval = currentTimeframe == .m1 ? 20 : 30
+        let hasGoneQuiet = now.timeIntervalSince(lastRealtimeMarketEventAt) >= inactivityThreshold
+        let currentBucketAge = now.timeIntervalSince(dataManager.candles.last?.timestamp ?? .distantPast)
+        let hasMissedABucketBoundary = currentBucketAge >= currentTimeframe.seconds + 5
+
+        guard hasGoneQuiet || hasMissedABucketBoundary else { return }
+        await resyncActiveChart(reason: hasMissedABucketBoundary ? "bucket_boundary_watchdog" : "market_stale_watchdog")
+    }
+
     private func resyncActiveChart(reason: String) async {
         guard let symbol = currentSymbol,
               let guildId = appState.currentGuild?.id else {
@@ -635,6 +674,11 @@ class ChartViewModel: ObservableObject {
             volume: 0,
             timestamp: snapshotTimestamp
         )
+        noteRealtimeMarketEvent()
+    }
+
+    private func noteRealtimeMarketEvent() {
+        lastRealtimeMarketEventAt = Date()
     }
     
     /// Handle incoming WebSocket messages for chart data
@@ -653,6 +697,7 @@ class ChartViewModel: ObservableObject {
                 volume: tickData.volume ?? 0,
                 timestamp: tickData.timestamp
             )
+            noteRealtimeMarketEvent()
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
         }
         // Handle completed candle messages (type: "candle_complete")
@@ -685,6 +730,19 @@ class ChartViewModel: ObservableObject {
                 markerManager?.recalculateCandleIndices(candles: dataManager.candles)
             }
 
+            noteRealtimeMarketEvent()
+            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+        }
+        else if message.type == "candle_update" {
+            guard let candlePayload = message.payload(as: MarketCandlePayload.self) else { return }
+            guard candlePayload.timeframe == currentTimeframe.toBackendString() else { return }
+
+            dataManager.processRealTick(
+                price: candlePayload.candle.close,
+                volume: candlePayload.candle.volume,
+                timestamp: candlePayload.candle.timestamp
+            )
+            noteRealtimeMarketEvent()
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
         }
     }
