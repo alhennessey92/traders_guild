@@ -205,6 +205,8 @@ class RLAppState: ObservableObject {
     // ================================================================================================
     
     init() {
+        print("🌐 App environment: mode=\(AppConfig.apiRoutingMode.rawValue) sessionNamespace=\(AppConfig.sessionStorageNamespace)")
+
         // Set up auth failure callback - called when token refresh fails
         realApi.onAuthenticationFailure = { [weak self] in
             self?.handleAuthenticationFailure()
@@ -228,23 +230,24 @@ class RLAppState: ObservableObject {
     /// Called automatically by RealAPIService when token refresh fails
     private func handleAuthenticationFailure() {
         print("🔐 Authentication failure - session expired, logging out...")
-        
-        // Clear local state without calling logout API (token is invalid anyway)
-        accessToken = nil
-        refreshToken = nil
-        currentUser = nil
-        currentGuild = nil
-        currentMembership = nil
-        userSettings = nil
-        userGuilds = []
-        showGuildSelectionSheet = false
-        isHandlingAuthFlow = false
-        isOnboardingFlowActive = false
-        pendingPasswordResetToken = nil
-        
-        clearAllKeychain()
-        resetChartReadyState()
-        
+
+        let hadVisibleSession =
+            isAuthenticated
+            || currentUser != nil
+            || currentGuild != nil
+            || currentMembership != nil
+            || hasCompletedInitialLoad
+        let isInteractiveAuthFlow =
+            isHandlingAuthFlow
+            || isOnboardingFlowActive
+            || pendingPasswordResetToken != nil
+
+        clearLocalSessionState(clearAlertState: true)
+
+        guard hadVisibleSession && !isInteractiveAuthFlow else {
+            return
+        }
+
         showError(
             title: "Session Expired",
             message: "Please log in again",
@@ -432,6 +435,7 @@ class RLAppState: ObservableObject {
     func login(identifier: String, password: String) async throws {
         isLoading = true
         errorMessage = nil
+        clearAlert()
         isHandlingAuthFlow = true  // ← Prevent race conditions
         
         defer {
@@ -464,17 +468,7 @@ class RLAppState: ObservableObject {
                 print("   [\(i)] \(g.guild.name)")
             }
             
-            // Handle guild selection
-            if userGuilds.isEmpty {
-                print("🔐 Login: No guilds - showing sheet")
-                showGuildSelectionSheet = true
-                isHandlingAuthFlow = false
-                showWarning("Please join a guild to continue")
-            } else {
-                print("🔐 Login: Guild selection required (\(userGuilds.count) guilds)")
-                showGuildSelectionSheet = true
-                isHandlingAuthFlow = false
-            }
+            try await completePostAuthGuildSetup(context: "Login")
 
             // Fetch notifications
             subscribeToNotifications()
@@ -518,13 +512,7 @@ class RLAppState: ObservableObject {
             self.isSessionRestored = true
 
             try await fetchUserGuilds()
-
-            if userGuilds.isEmpty {
-                showGuildSelectionSheet = true
-                showWarning("Please join a guild to continue")
-            } else {
-                showGuildSelectionSheet = true
-            }
+            try await completePostAuthGuildSetup(context: "Apple Sign In")
 
             subscribeToNotifications()
             isOnboardingFlowActive = false
@@ -612,12 +600,7 @@ class RLAppState: ObservableObject {
 
             // Fetch guilds
             try await fetchUserGuilds()
-
-            if userGuilds.isEmpty {
-                showGuildSelectionSheet = true
-            } else {
-                showGuildSelectionSheet = true
-            }
+            try await completePostAuthGuildSetup(context: "Biometric Login")
 
             // Update biometric token with the new refresh token
             if let newRefresh = self.refreshToken {
@@ -646,25 +629,8 @@ class RLAppState: ObservableObject {
         Task {
             await realApi.logout()
         }
-        
-        accessToken = nil
-        refreshToken = nil
-        currentUser = nil
-        currentGuild = nil
-        currentMembership = nil
-        userGuilds = []
-        showGuildSelectionSheet = false  // ← Make sure sheet is dismissed
-        isHandlingAuthFlow = false
-        isOnboardingFlowActive = false
-        pendingPasswordResetToken = nil
-        presenceByUserId.removeAll()
-        currentPresenceChannel = nil
-        
-        
-        
-        clearAllKeychain()
-        resetChartReadyState()
-        
+
+        clearLocalSessionState(clearAlertState: true)
         showInfo("You've been logged out")
     }
 
@@ -734,6 +700,7 @@ class RLAppState: ObservableObject {
     /// Restore session from keychain
     func restoreSession() async {
         print("🔄 restoreSession: Starting...")
+        print("🔄 restoreSession: Using session namespace \(AppConfig.sessionStorageNamespace)")
 
         // Do not let background restoration clobber an active auth/signup flow.
         if isAuthenticated || isHandlingAuthFlow || isOnboardingFlowActive {
@@ -904,7 +871,11 @@ class RLAppState: ObservableObject {
         
         do {
             try await fetchUserGuilds()
-            showGuildSelectionSheet = true
+            if userGuilds.isEmpty, isAuthenticated {
+                _ = try await assignOnboardingGuild(showTransition: false)
+            } else {
+                showGuildSelectionSheet = true
+            }
         } catch {
             showError(error, title: "Failed to load guilds", style: .toast)
         }
@@ -1034,6 +1005,17 @@ class RLAppState: ObservableObject {
             showError(error, title: "Failed to Assign Onboarding Guild", style: .toast)
             throw error
         }
+    }
+
+    private func completePostAuthGuildSetup(context: String) async throws {
+        if userGuilds.isEmpty {
+            print("🔐 \(context): No guilds found - assigning onboarding guild")
+            _ = try await assignOnboardingGuild(showTransition: false)
+        } else {
+            print("🔐 \(context): Guild selection required (\(userGuilds.count) guilds)")
+            showGuildSelectionSheet = true
+        }
+        isHandlingAuthFlow = false
     }
     
     /// Create a new guild - returns the combined guild with membership
@@ -1818,6 +1800,7 @@ class RLAppState: ObservableObject {
 
     /// Request password reset email (email or username identifier).
     func requestPasswordReset(identifier: String) async throws -> RLPasswordForgotResponseDTO {
+        clearAlert()
         do {
             return try await realApi.requestPasswordReset(identifier: identifier)
         } catch {
@@ -1828,6 +1811,7 @@ class RLAppState: ObservableObject {
 
     /// Verify reset token before showing reset form.
     func verifyPasswordResetToken(_ token: String) async throws -> RLPasswordResetVerifyResponseDTO {
+        clearAlert()
         do {
             return try await realApi.verifyPasswordResetToken(token)
         } catch {
@@ -1838,8 +1822,11 @@ class RLAppState: ObservableObject {
 
     /// Reset password with one-time token.
     func resetPassword(token: String, newPassword: String) async throws -> RLPasswordResetResponseDTO {
+        clearAlert()
         do {
-            return try await realApi.resetPassword(token: token, newPassword: newPassword)
+            let response = try await realApi.resetPassword(token: token, newPassword: newPassword)
+            clearLocalSessionState(clearAlertState: true)
+            return response
         } catch {
             showError(error, title: "Reset Password Failed", style: .alert)
             throw error
@@ -2102,8 +2089,34 @@ class RLAppState: ObservableObject {
     // ================================================================================================
     // MARK: - Keychain Persistence
     // ================================================================================================
+
+    private func clearLocalSessionState(clearAlertState: Bool) {
+        realApi.clearTokens()
+        accessToken = nil
+        refreshToken = nil
+        currentUser = nil
+        currentGuild = nil
+        currentMembership = nil
+        userSettings = nil
+        userGuilds = []
+        showGuildSelectionSheet = false
+        isHandlingAuthFlow = false
+        isOnboardingFlowActive = false
+        pendingPasswordResetToken = nil
+        presenceByUserId.removeAll()
+        currentPresenceChannel = nil
+
+        clearAllKeychain()
+        resetChartReadyState()
+
+        if clearAlertState {
+            clearAlert()
+        }
+    }
     
-    private let keychainPrefix = "traders_guild_"
+    private var keychainPrefix: String {
+        "traders_guild_\(AppConfig.sessionStorageNamespace)_"
+    }
     
     // Token
     private func saveTokenToKeychain(_ token: String) {

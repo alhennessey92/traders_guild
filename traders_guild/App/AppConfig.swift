@@ -64,6 +64,29 @@ struct AppConfig {
         )
     }
 
+    static var sessionStorageNamespace: String {
+        switch apiRoutingMode {
+        case .directServices:
+            #if DEBUG
+            #if targetEnvironment(simulator)
+            return "direct-simulator"
+            #else
+            return "direct-device"
+            #endif
+            #else
+            return "direct"
+            #endif
+        case .apiGateway:
+            let activeGatewayURL: String
+            #if DEBUG
+            activeGatewayURL = developmentGatewayBaseURL
+            #else
+            activeGatewayURL = productionGatewayBaseURL
+            #endif
+            return "gateway-\(sanitizedStorageComponent(from: activeGatewayURL))"
+        }
+    }
+
     private static func normalizedEnvURL(keys: [String], fallback: String) -> String {
         for key in keys {
             if let normalized = normalizedEnvValue(key: key) {
@@ -90,5 +113,29 @@ struct AppConfig {
         }
 
         return nil
+    }
+
+    private static func sanitizedStorageComponent(from urlString: String) -> String {
+        let fallback = urlString
+            .lowercased()
+            .replacingOccurrences(of: "https://", with: "")
+            .replacingOccurrences(of: "http://", with: "")
+            .replacingOccurrences(of: "/api/v1", with: "")
+
+        let components = URLComponents(string: urlString)
+        let host = components?.host ?? fallback
+        let portSuffix = components?.port.map { "-\($0)" } ?? ""
+        let rawValue = "\(host)\(portSuffix)"
+
+        let sanitized = rawValue
+            .lowercased()
+            .replacingOccurrences(
+                of: "[^a-z0-9]+",
+                with: "-",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+
+        return sanitized.isEmpty ? "unknown" : sanitized
     }
 }
