@@ -474,7 +474,7 @@ struct MarkerViewingGeneralTab: View {
                     HStack(spacing: 6) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
                             .font(.system(size: 10, weight: .semibold))
-                        Text("This result affected your accuracy rating")
+                        Text("This result affected your accuracy and reputation")
                             .font(.caption2)
                     }
                     .foregroundColor(outcome.isWin ? AppColors.statusPositive90 : AppColors.statusNegative85)

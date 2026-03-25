@@ -9,7 +9,11 @@ enum OverlayPanelChrome {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(.ultraThinMaterial)
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(AppColors.surfaceBlack50)
+                .fill(
+                    ThemeManager.shared.currentTheme == .midGrey
+                        ? AppColors.panelHeaderBackground.opacity(0.92)
+                        : AppColors.surfaceBlack50
+                )
         }
         .overlay {
             if showsBorder {

@@ -12,8 +12,9 @@ struct EmailVerificationView: View {
     @State private var isResending: Bool = false
     @State private var resendCooldown: Int = 0
     @State private var resendTimer: Timer?
-    @State private var verificationToken: String = ""
+    @State private var verificationCode: String = ""
     @State private var isVerifying: Bool = false
+    @FocusState private var codeFieldFocused: Bool
 
     let userEmail: String
     let onContinue: () -> Void
@@ -69,19 +70,67 @@ struct EmailVerificationView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
 
-                    Text("Or paste your verification token:")
+                    Text("Or enter your 5-character verification code:")
                         .font(AppFonts.smallNotice())
                         .foregroundColor(AppColors.greyText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 24)
                         .padding(.bottom, 8)
 
-                    StandardTextFieldView(title: "Verification Token", text: $verificationToken)
-                        .padding(.bottom, 12)
+                    // 5-character code input
+                    HStack(spacing: 10) {
+                        ForEach(0..<5, id: \.self) { index in
+                            let char = index < verificationCode.count
+                                ? String(verificationCode[verificationCode.index(verificationCode.startIndex, offsetBy: index)])
+                                : ""
+                            Text(char)
+                                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                                .foregroundColor(AppColors.whiteText)
+                                .frame(width: 48, height: 56)
+                                .background(AppColors.surfaceWhite05)
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(
+                                            index < verificationCode.count
+                                                ? AppColors.accentColor
+                                                : AppColors.surfaceWhite10,
+                                            lineWidth: index == verificationCode.count ? 2 : 1
+                                        )
+                                )
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 4)
+                    .onTapGesture { codeFieldFocused = true }
+                    .background(
+                        TextField("", text: $verificationCode)
+                            .focused($codeFieldFocused)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .keyboardType(.asciiCapable)
+                            .opacity(0)
+                            .onChange(of: verificationCode) { _, newValue in
+                                let filtered = String(newValue.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(5))
+                                if filtered != newValue {
+                                    verificationCode = filtered
+                                }
+                                if filtered.count == 5 {
+                                    verifyWithCode()
+                                }
+                            }
+                    )
 
-                    if !verificationToken.trimmingCharacters(in: .whitespaces).isEmpty {
+                    if !verificationCode.isEmpty && verificationCode.count < 5 {
+                        Text("\(5 - verificationCode.count) more character\(verificationCode.count == 4 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                            .padding(.bottom, 8)
+                    }
+
+                    if verificationCode.count == 5 {
                         Button {
-                            verifyWithToken()
+                            verifyWithCode()
                         } label: {
                             LoginButton(
                                 title: isVerifying ? "Verifying..." : "Verify Email",
@@ -166,9 +215,11 @@ struct EmailVerificationView: View {
         }
     }
 
-    private func verifyWithToken() {
-        let trimmed = verificationToken.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+    private func verifyWithCode() {
+        let trimmed = verificationCode.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count == 5 else { return }
+        guard !isVerifying else { return }
+        codeFieldFocused = false
         isVerifying = true
         Task {
             do {
@@ -179,12 +230,14 @@ struct EmailVerificationView: View {
                         RLAppState.showSuccess("Email verified successfully!")
                         onContinue()
                     } else {
-                        RLAppState.showError(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid or expired verification token. Please request a new one."]))
+                        verificationCode = ""
+                        RLAppState.showError(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid or expired code. Please request a new one."]))
                     }
                 }
             } catch {
                 await MainActor.run {
                     isVerifying = false
+                    verificationCode = ""
                     RLAppState.showError(error)
                 }
             }

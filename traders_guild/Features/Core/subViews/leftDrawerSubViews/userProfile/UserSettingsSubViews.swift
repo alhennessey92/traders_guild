@@ -1941,14 +1941,20 @@ struct FAQItem: View {
 struct ContactSupportView: View {
     @EnvironmentObject var rlAppState: RLAppState
     let onBack: () -> Void
-    
+
     @State private var category: String = "general"
     @State private var subject: String = ""
     @State private var message: String = ""
     @State private var includeDeviceInfo = true
     @State private var isSending = false
     @State private var showSuccessAlert = false
-    
+    @State private var errorMessage: String?
+    @FocusState private var focusedField: SupportField?
+
+    private enum SupportField {
+        case subject, message
+    }
+
     private let categories = [
         ("general", "General Question", "questionmark.circle.fill"),
         ("bug", "Report a Bug", "ant.fill"),
@@ -1973,32 +1979,32 @@ struct ContactSupportView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     SettingsSubViewHeader(title: "Contact Support", onBack: onBack)
-                    
+
                     VStack(spacing: 24) {
                         // Info text
                         VStack(spacing: 8) {
                             Image(systemName: "envelope.fill")
                                 .font(.system(size: 40))
                                 .foregroundColor(AppColors.accentColor)
-                            
+
                             Text("How can we help?")
                                 .font(.title3)
                                 .fontWeight(.semibold)
                                 .foregroundColor(AppColors.whiteText)
-                            
+
                             Text("We typically respond within 24 hours")
                                 .font(.caption)
                                 .foregroundColor(AppColors.greyText)
                         }
                         .padding(.top, 20)
-                        
+
                         // Category selection
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Category")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(AppColors.greyText)
-                            
+
                             LazyVGrid(columns: [
                                 GridItem(.flexible(), spacing: 12),
                                 GridItem(.flexible(), spacing: 12)
@@ -2014,7 +2020,7 @@ struct ContactSupportView: View {
                                 }
                             }
                         }
-                        
+
                         // Subject
                         SettingsTextField(
                             title: "Subject",
@@ -2022,14 +2028,15 @@ struct ContactSupportView: View {
                             text: $subject,
                             icon: "text.alignleft"
                         )
-                        
+                        .focused($focusedField, equals: .subject)
+
                         // Message
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Message")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(AppColors.greyText)
-                            
+
                             TextEditor(text: $message)
                                 .frame(minHeight: 150)
                                 .padding(12)
@@ -2040,7 +2047,8 @@ struct ContactSupportView: View {
                                         .stroke(AppColors.surfaceWhite10, lineWidth: 1)
                                 )
                                 .foregroundColor(AppColors.whiteText)
-                            
+                                .focused($focusedField, equals: .message)
+
                             HStack {
                                 Spacer()
                                 Text("\(message.count)/5000")
@@ -2048,7 +2056,22 @@ struct ContactSupportView: View {
                                     .foregroundColor(message.count > 5000 ? .red : AppColors.greyText)
                             }
                         }
-                        
+
+                        // Error message
+                        if let errorMessage {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                Text(errorMessage)
+                                    .font(.caption)
+                            }
+                            .foregroundColor(AppColors.statusNegative70)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(AppColors.statusNegative08)
+                            .cornerRadius(8)
+                        }
+
                         // Device info toggle
                         Toggle(isOn: $includeDeviceInfo) {
                             VStack(alignment: .leading, spacing: 4) {
@@ -2056,7 +2079,7 @@ struct ContactSupportView: View {
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                     .foregroundColor(AppColors.whiteText)
-                                
+
                                 Text("Helps us diagnose technical issues")
                                     .font(.caption)
                                     .foregroundColor(AppColors.greyText)
@@ -2066,7 +2089,7 @@ struct ContactSupportView: View {
                         .padding()
                         .background(AppColors.surfaceWhite03)
                         .cornerRadius(10)
-                        
+
                         // Send button
                         Button(action: sendTicket) {
                             HStack {
@@ -2088,10 +2111,23 @@ struct ContactSupportView: View {
                         .disabled(!isValid || isSending)
                     }
                     .padding(.horizontal, 25)
-                    
+
                     Spacer(minLength: 100)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        focusedField = nil
+                    }
+                    .foregroundColor(AppColors.accentColor)
+                }
+            }
+        }
+        .onTapGesture {
+            focusedField = nil
         }
         .alert("Message Sent", isPresented: $showSuccessAlert) {
             Button("OK") { onBack() }
@@ -2102,8 +2138,10 @@ struct ContactSupportView: View {
     
     private func sendTicket() {
         guard isValid else { return }
+        focusedField = nil
+        errorMessage = nil
         isSending = true
-        
+
         Task {
             do {
                 try await rlAppState.submitSupportTicket(
@@ -2112,7 +2150,7 @@ struct ContactSupportView: View {
                     message: message,
                     includeDeviceInfo: includeDeviceInfo
                 )
-                
+
                 await MainActor.run {
                     isSending = false
                     showSuccessAlert = true
@@ -2120,6 +2158,7 @@ struct ContactSupportView: View {
             } catch {
                 await MainActor.run {
                     isSending = false
+                    errorMessage = "Failed to send message. Please check your connection and try again."
                 }
                 print("Failed to send support ticket: \(error)")
             }

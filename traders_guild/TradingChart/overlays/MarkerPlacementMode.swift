@@ -408,14 +408,38 @@ final class MarkerPlacementState: ObservableObject {
         return abs(tp - entry) / pipStep
     }
 
+    var setupRiskPercent: Double? {
+        guard
+            intent == .setup,
+            let entry = setupEntryPrice,
+            let sl = componentPrice(.levelSl),
+            abs(entry) > .ulpOfOne
+        else {
+            return nil
+        }
+        return abs((sl - entry) / entry) * 100
+    }
+
+    var setupRewardPercent: Double? {
+        guard
+            intent == .setup,
+            let entry = setupEntryPrice,
+            let tp = componentPrice(.levelTp),
+            abs(entry) > .ulpOfOne
+        else {
+            return nil
+        }
+        return abs((tp - entry) / entry) * 100
+    }
+
     var estimatedTrackingRepLoss: Int? {
-        guard trackingEnabled, let riskPips = setupRiskPips else { return nil }
-        return clampedRepEstimate(Int(riskPips.rounded()), minimum: 5, maximum: 60)
+        guard trackingEnabled, let riskPercent = setupRiskPercent else { return nil }
+        return predictionReputationEstimate(pnlPercent: riskPercent, isWin: false)
     }
 
     var estimatedTrackingRepGain: Int? {
-        guard trackingEnabled, let rewardPips = setupRewardPips else { return nil }
-        return clampedRepEstimate(Int(rewardPips.rounded()), minimum: 5, maximum: 120)
+        guard trackingEnabled, let rewardPercent = setupRewardPercent else { return nil }
+        return predictionReputationEstimate(pnlPercent: rewardPercent, isWin: true)
     }
 
     var placementChecklistItems: [MarkerPlacementChecklistItem] {
@@ -462,7 +486,7 @@ final class MarkerPlacementState: ObservableObject {
             items.append(
                 checklistItem(
                     id: "setup_tracking_recommended",
-                    title: "Enable tracking for reputation impact",
+                    title: "Enable tracking for accuracy and reputation impact",
                     isRequired: false,
                     isComplete: trackingEnabled
                 )
@@ -1876,8 +1900,26 @@ final class MarkerPlacementState: ObservableObject {
         }
     }
 
-    private func clampedRepEstimate(_ value: Int, minimum: Int, maximum: Int) -> Int {
-        min(maximum, max(minimum, value))
+    private func predictionReputationEstimate(pnlPercent: Double, isWin: Bool) -> Int {
+        let magnitude = abs(pnlPercent)
+        let basePoints: Double
+
+        if isWin {
+            if magnitude < 1.0 {
+                basePoints = 25.0 + (magnitude * 10.0)
+            } else if magnitude < 3.0 {
+                basePoints = 35.0 + ((magnitude - 1.0) * 7.5)
+            } else if magnitude < 5.0 {
+                basePoints = 50.0 + ((magnitude - 3.0) * 12.5)
+            } else {
+                basePoints = 75.0
+            }
+        } else {
+            basePoints = max(-15.0, min(-5.0, -5.0 - (magnitude * 0.5)))
+        }
+
+        // Mirror the backend base prediction formula; server-side variance still applies later.
+        return max(1, Int(abs(basePoints).rounded()))
     }
 
     private var activeLevelComponentTypeForCurrentSelection: RLComponentType? {

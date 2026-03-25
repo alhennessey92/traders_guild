@@ -178,7 +178,7 @@ struct TimeframePanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(AppColors.chartIndicatorHandleFill)
+                .fill(AppColors.panelHeaderBackground)
 
             // Capsule always centered
             Capsule()
@@ -321,21 +321,40 @@ struct TimeframePanelView: View {
             drawableHeight: drawableHeight, topPadding: topPadding
         )
 
-        // Draw current price line (latest candle close)
-        if let lastCandle = candles.last {
-            let currentPrice = lastCandle.close
+        // Draw current price line + badge (live price or latest candle close)
+        if let currentPrice = dataManager.livePrice ?? candles.last?.close {
             let normalizedPrice = (currentPrice - priceRange.min) / (priceRange.max - priceRange.min)
             let y = topPadding + drawableHeight * (1.0 - CGFloat(normalizedPrice))
             if y >= topPadding && y <= topPadding + drawableHeight {
+                // Dashed price line
+                let lineEndX = size.width - 30
                 let linePath = Path { path in
                     path.move(to: CGPoint(x: 0, y: y))
-                    path.addLine(to: CGPoint(x: size.width, y: y))
+                    path.addLine(to: CGPoint(x: lineEndX, y: y))
                 }
                 context.stroke(
                     linePath,
                     with: .color(AppColors.statusHighlight80.opacity(0.6)),
                     style: StrokeStyle(lineWidth: 0.8, dash: [4, 3])
                 )
+
+                // Yellow price badge on right edge
+                let badgeWidth: CGFloat = 30
+                let badgeHeight: CGFloat = 14
+                let badgeX = size.width - badgeWidth
+                let badgeRect = CGRect(
+                    x: badgeX,
+                    y: y - badgeHeight / 2,
+                    width: badgeWidth,
+                    height: badgeHeight
+                )
+                let roundedBadge = Path(roundedRect: badgeRect, cornerRadius: 3)
+                context.fill(roundedBadge, with: .color(.yellow))
+
+                let priceText = Text(formatPrice(currentPrice))
+                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                    .foregroundColor(.black)
+                context.draw(priceText, at: CGPoint(x: badgeRect.midX, y: y))
             }
         }
 
@@ -600,12 +619,12 @@ struct TimeframePanelView: View {
 
     private var panelHeaderOverlay: some View {
         VStack {
-            let latestClose = dataManager.candles.last?.close
+            let latestPrice = dataManager.livePrice ?? dataManager.candles.last?.close
             IndicatorPanelHeaderRow(
                 title: "",
-                valueText: latestClose.map { formatPrice($0) },
+                valueText: latestPrice.map { formatPrice($0) },
                 valueColor: .white,
-                badgeText: "SNAPSHOT",
+                badgeText: dataManager.livePrice != nil ? "LIVE" : "SNAPSHOT",
                 badgeColor: intentColor
             )
             Spacer()
@@ -649,7 +668,7 @@ struct TimeframePanelView: View {
                 LinearGradient(
                     colors: [
                         AppColors.statusInfo15,
-                        AppColors.systemBlack,
+                        AppColors.xAxisBackground,
                     ],
                     startPoint: .top,
                     endPoint: .bottom

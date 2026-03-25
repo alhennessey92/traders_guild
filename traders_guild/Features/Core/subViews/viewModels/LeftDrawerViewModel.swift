@@ -13,6 +13,17 @@ import Combine
 
 @MainActor
 class LeftDrawerViewModel: ObservableObject {
+    private struct TopMarkersCacheEntry {
+        let response: RLTopMarkersListDTO
+        let refreshedAt: Date
+    }
+
+    private struct TopMarkersCacheContext {
+        let guildId: UUID
+        let timeWindowHours: Int
+    }
+
+    private static let topMarkersCacheTTL: TimeInterval = 300
     
     
     private weak var rlAppState: RLAppState?
@@ -77,7 +88,10 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var myMarkers: [RLTopMarkerDTO] = []
     @Published var topMarkersLastRefresh: Date?
     @Published var isLoadingTopMarkers: Bool = false
+    @Published var topMarkersCurrentTimeWindowHours: Int?
     
+    private var topMarkersCache: [String: TopMarkersCacheEntry] = [:]
+    private var currentTopMarkersContext: TopMarkersCacheContext?
 
 
     // ================================================================================================
@@ -625,9 +639,15 @@ class LeftDrawerViewModel: ObservableObject {
     
     /// Load all top markers data from API
     func loadTopMarkers(for guildId: UUID, rlAppState: RLAppState, timeWindowHours: Int = 48) async {
-        // Check cache freshness (5 minute cache)
-        if let lastRefresh = topMarkersLastRefresh,
-           Date().timeIntervalSince(lastRefresh) < 300 {
+        let cacheKey = topMarkersCacheKey(guildId: guildId, timeWindowHours: timeWindowHours)
+        if let entry = topMarkersCache[cacheKey],
+           Date().timeIntervalSince(entry.refreshedAt) < Self.topMarkersCacheTTL {
+            applyTopMarkersResponse(
+                entry.response,
+                refreshedAt: entry.refreshedAt,
+                guildId: guildId,
+                timeWindowHours: timeWindowHours
+            )
             return
         }
 
@@ -636,12 +656,14 @@ class LeftDrawerViewModel: ObservableObject {
 
         do {
             let response = try await rlAppState.realApi.getTopMarkers(guildId: guildId, timeWindowHours: timeWindowHours)
-
-            self.trendingMarkers = response.trending
-            self.symbolGroupedMarkers = response.bySymbol
-            self.followingMarkers = response.following
-            self.myMarkers = response.mine
-            self.topMarkersLastRefresh = Date()
+            let refreshedAt = Date()
+            topMarkersCache[cacheKey] = TopMarkersCacheEntry(response: response, refreshedAt: refreshedAt)
+            applyTopMarkersResponse(
+                response,
+                refreshedAt: refreshedAt,
+                guildId: guildId,
+                timeWindowHours: timeWindowHours
+            )
 
             print("✅ Loaded top markers - Trending: \(response.trending.count), Symbols: \(response.bySymbol.count), Following: \(response.following.count), Mine: \(response.mine.count)")
 
@@ -654,7 +676,11 @@ class LeftDrawerViewModel: ObservableObject {
 
     /// Force refresh top markers (bypasses cache)
     func refreshTopMarkers(for guildId: UUID, rlAppState: RLAppState, timeWindowHours: Int = 48) async {
-        topMarkersLastRefresh = nil
+        topMarkersCache.removeValue(forKey: topMarkersCacheKey(guildId: guildId, timeWindowHours: timeWindowHours))
+        if currentTopMarkersContext?.guildId == guildId,
+           currentTopMarkersContext?.timeWindowHours == timeWindowHours {
+            topMarkersLastRefresh = nil
+        }
         await loadTopMarkers(for: guildId, rlAppState: rlAppState, timeWindowHours: timeWindowHours)
     }
     
@@ -698,11 +724,14 @@ class LeftDrawerViewModel: ObservableObject {
     
     /// Clear top markers cache only
     func clearTopMarkersCache() {
+        topMarkersCache.removeAll()
         trendingMarkers = []
         symbolGroupedMarkers = [:]
         followingMarkers = []
         myMarkers = []
         topMarkersLastRefresh = nil
+        topMarkersCurrentTimeWindowHours = nil
+        currentTopMarkersContext = nil
     }
     
 
@@ -749,7 +778,7 @@ class LeftDrawerViewModel: ObservableObject {
     }()
     
     private func handleWebSocketNotification(_ message: WSIncomingMessage) {
-
+        handleTopMarkersRealtimeUpdate(message)
 
         switch message.type {
         case "notification":
@@ -793,6 +822,71 @@ class LeftDrawerViewModel: ObservableObject {
         default:
             break
         }
+    }
+
+    private func handleTopMarkersRealtimeUpdate(_ message: WSIncomingMessage) {
+        guard
+            let channel = message.channel,
+            channel.hasPrefix("guild:"),
+            channel.hasSuffix(":markers"),
+            let context = currentTopMarkersContext,
+            let rlAppStateRef,
+            let currentGuildId = rlAppStateRef.currentGuild?.id
+        else {
+            return
+        }
+
+        let expectedChannel = "guild:\(context.guildId.uuidString.lowercased()):markers"
+        guard
+            channel == expectedChannel,
+            currentGuildId == context.guildId
+        else {
+            return
+        }
+
+        switch message.type {
+        case "marker_created", "marker_updated", "marker_deleted", "tracking_state_changed":
+            invalidateTopMarkersCache(guildId: context.guildId)
+            Task { [weak self] in
+                guard let self else { return }
+                await self.loadTopMarkers(
+                    for: context.guildId,
+                    rlAppState: rlAppStateRef,
+                    timeWindowHours: context.timeWindowHours
+                )
+            }
+        default:
+            break
+        }
+    }
+
+    private func applyTopMarkersResponse(
+        _ response: RLTopMarkersListDTO,
+        refreshedAt: Date,
+        guildId: UUID,
+        timeWindowHours: Int
+    ) {
+        trendingMarkers = response.trending
+        symbolGroupedMarkers = response.bySymbol
+        followingMarkers = response.following
+        myMarkers = response.mine
+        topMarkersLastRefresh = refreshedAt
+        topMarkersCurrentTimeWindowHours = timeWindowHours
+        currentTopMarkersContext = TopMarkersCacheContext(
+            guildId: guildId,
+            timeWindowHours: timeWindowHours
+        )
+    }
+
+    private func topMarkersCacheKey(guildId: UUID, timeWindowHours: Int) -> String {
+        "\(guildId.uuidString.lowercased())|\(timeWindowHours)"
+    }
+
+    private func invalidateTopMarkersCache(guildId: UUID) {
+        topMarkersCache = topMarkersCache.filter { key, _ in
+            !key.hasPrefix(guildId.uuidString.lowercased())
+        }
+        topMarkersLastRefresh = nil
     }
 
     private func handleReputationUpdate(_ update: RLReputationUpdatePayload) {
@@ -1059,7 +1153,6 @@ extension RLGuildMemberDTO {
         )
     }
 }
-
 
 
 

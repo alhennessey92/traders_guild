@@ -399,7 +399,9 @@ class MarkerManager: ObservableObject {
         guard let index = markers.firstIndex(where: { $0.id == markerDTO.id }) else { return }
 
         // Preserve positioning — only update the DTO
-        markers[index] = markers[index].withMarker(markerDTO)
+        let updated = markers[index].withMarker(markerDTO)
+        markers[index] = updated
+        syncSelectedMarker(updated)
     }
 
     private func handleMarkerDeleted(_ message: WSIncomingMessage) {
@@ -484,9 +486,14 @@ class MarkerManager: ObservableObject {
               let markerId = UUID(uuidString: payload.markerId) else { return }
 
         if let index = markers.firstIndex(where: { $0.id == markerId }) {
-            let updated = markers[index].withMarker(
-                markers[index].marker.updating(trackingState: payload.newState)
-            )
+            let updated: ChartMarkerUI
+            if let markerDTO = payload.marker {
+                updated = markers[index].withMarker(markerDTO)
+            } else {
+                updated = markers[index].withMarker(
+                    markers[index].marker.updating(trackingState: payload.newState)
+                )
+            }
             markers[index] = updated
             syncSelectedMarker(updated)
             return
@@ -646,6 +653,7 @@ class MarkerManager: ObservableObject {
                 updated.stackIndex = marker.stackIndex
                 markers[idx] = updated
             }
+            NotificationCenter.default.post(name: .markerCreatedSuccessfully, object: nil)
             return true
         } catch {
             markers.removeAll { $0.id == tempId }
@@ -1488,17 +1496,18 @@ struct MarkerPositionCalculator {
         candleHighY: CGFloat,
         candleLowY: CGFloat,
         centerX: CGFloat,
-        priceScale: CGFloat = 1.0
+        priceScale: CGFloat = 1.0,
+        viewportHeight: CGFloat = 0
     ) -> CGPoint {
         let baseY: CGFloat
         let stackDirection: CGFloat
-        
+
         let dampenedBaseScale = dampenPriceScale(priceScale, dampening: 0.75)
         let scaledStackOffsetRaw = stackOffset * dampenPriceScale(priceScale, dampening: 0.5)
         let scaledStackOffset = Swift.max(hardMinimumStackSpacing, Swift.max(minStackSpacing, scaledStackOffsetRaw))
         let scaledBaseOffset = baseOffset * dampenedBaseScale
         let scaledTierOffset = offsetForTier(marker.proximityTier) * dampenedBaseScale
-        
+
         if marker.positionedBelow {
             baseY = candleLowY + scaledBaseOffset
             stackDirection = 1.0
@@ -1506,11 +1515,17 @@ struct MarkerPositionCalculator {
             baseY = candleHighY - scaledBaseOffset
             stackDirection = -1.0
         }
-        
+
         let stackOffsetValue = CGFloat(marker.stackIndex) * scaledStackOffset * stackDirection
         let tierOffset = scaledTierOffset * stackDirection
-        let markerY = baseY + stackOffsetValue + tierOffset
-        
+        var markerY = baseY + stackOffsetValue + tierOffset
+
+        // Clamp within viewport bounds if available, keeping markers visible
+        if viewportHeight > 0 {
+            let markerRadius = MarkerVisualSpec.baseCanvasDiameter / 2
+            markerY = Swift.max(markerRadius, Swift.min(markerY, viewportHeight - markerRadius))
+        }
+
         return CGPoint(x: centerX, y: markerY)
     }
     
@@ -1664,12 +1679,12 @@ struct MarkerPositionCalculator {
     ) -> Bool {
         var aboveCount = 0
         var belowCount = 0
-        
+
         for offset in -closeProximityRange...closeProximityRange {
             if offset == 0 { continue }
             let neighborIndex = candleIndex + offset
             let nearbyMarkers = existingMarkers.filter { $0.candleIndex == neighborIndex }
-            
+
             for marker in nearbyMarkers {
                 if marker.positionedBelow {
                     belowCount += 1
@@ -1678,19 +1693,16 @@ struct MarkerPositionCalculator {
                 }
             }
         }
-        
+
         if aboveCount != belowCount {
+            // Place on the less crowded side to reduce obscuring
             return aboveCount > belowCount
         }
-        
-        guard candleIndex >= 0 && candleIndex < candles.count else {
-            return false
-        }
-        
-        let candle = candles[candleIndex]
-        return candle.isBullish
+
+        // Default: prefer above (false) to avoid obscuring candle bodies
+        return false
     }
-    
+
     private static func determineSideForCandle(
         candleIndex: Int,
         candles: [RLCandleDTO],
@@ -1698,11 +1710,11 @@ struct MarkerPositionCalculator {
     ) -> Bool {
         var aboveCount = 0
         var belowCount = 0
-        
+
         for offset in -closeProximityRange...closeProximityRange {
             if offset == 0 { continue }
             let neighborIndex = candleIndex + offset
-            
+
             if let decision = existingDecisions[neighborIndex] {
                 if decision {
                     belowCount += 1
@@ -1711,17 +1723,13 @@ struct MarkerPositionCalculator {
                 }
             }
         }
-        
+
         if aboveCount != belowCount {
             return aboveCount > belowCount
         }
-        
-        guard candleIndex >= 0 && candleIndex < candles.count else {
-            return false
-        }
-        
-        let candle = candles[candleIndex]
-        return candle.isBullish
+
+        // Default: prefer above (false) to avoid obscuring candle bodies
+        return false
     }
     
     private static func calculateProximityTier(
@@ -1903,7 +1911,8 @@ struct ChartMarkerSystem {
                     candleHighY: candleHighY,
                     candleLowY: candleLowY,
                     centerX: centerX,
-                    priceScale: priceScale
+                    priceScale: priceScale,
+                    viewportHeight: chartSize.height
                 )
                 markerPositions.append((marker, position))
             }
@@ -2247,9 +2256,10 @@ struct ChartMarkerSystem {
                     candleHighY: candleHighY,
                     candleLowY: candleLowY,
                     centerX: centerX,
-                    priceScale: priceScale
+                    priceScale: priceScale,
+                    viewportHeight: chartSize.height
                 )
-                
+
                 let distance = hypot(location.x - position.x, location.y - position.y)
                 if distance <= hitRadius {
                     return marker

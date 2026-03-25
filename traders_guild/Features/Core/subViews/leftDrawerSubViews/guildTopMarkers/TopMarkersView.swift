@@ -93,7 +93,7 @@ struct TopMarkersView: View {
     private var markersForSection: [RLTopMarkerDTO] {
         switch selectedSection {
         case .active:
-            return leftDrawerViewModel.trendingMarkers.filter { $0.setupSummary?.trackingState == "active" }
+            return leftDrawerViewModel.trendingMarkers.filter(isLiveTrackedSetupMarker)
         case .today:
             return leftDrawerViewModel.trendingMarkers
         case .thisWeek:
@@ -152,6 +152,11 @@ struct TopMarkersView: View {
         .task {
             await loadMarkersIfNeeded()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .markerCreatedSuccessfully)) { _ in
+            Task {
+                await refreshMarkers()
+            }
+        }
         .onChange(of: selectedSection) { _, newSection in
             Task {
                 guard let guildId = rlAppState.currentGuild?.id else { return }
@@ -171,7 +176,7 @@ struct TopMarkersView: View {
     private func countForSection(_ tab: MarkerSectionTab) -> Int {
         switch tab {
         case .active:
-            return leftDrawerViewModel.trendingMarkers.filter { $0.setupSummary?.trackingState == "active" }.count
+            return leftDrawerViewModel.trendingMarkers.filter(isLiveTrackedSetupMarker).count
         case .today:
             return leftDrawerViewModel.trendingMarkers.count
         case .thisWeek:
@@ -326,6 +331,10 @@ struct TopMarkersView: View {
         }
 
         leftDrawerViewModel.requestNavigationToMarker(marker)
+    }
+
+    private func isLiveTrackedSetupMarker(_ marker: RLTopMarkerDTO) -> Bool {
+        marker.intentEnum == .setup && marker.trackingStateEnum?.isLive == true
     }
 }
 

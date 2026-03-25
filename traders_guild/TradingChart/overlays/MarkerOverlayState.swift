@@ -5,6 +5,7 @@ extension Notification.Name {
     static let markerOverlayApply = Notification.Name("marker.overlay.apply")
     static let markerOverlayClear = Notification.Name("marker.overlay.clear")
     static let placeMarkerRequested = Notification.Name("marker.placement.placeRequested")
+    static let markerCreatedSuccessfully = Notification.Name("marker.created.successfully")
 }
 
 @MainActor

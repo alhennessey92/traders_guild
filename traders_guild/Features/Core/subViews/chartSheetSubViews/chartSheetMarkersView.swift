@@ -183,6 +183,11 @@ struct chartSheetMarkersView: View {
         .task(id: reloadKey) {
             await loadActiveMarkers(forceRefresh: false)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .markerCreatedSuccessfully)) { _ in
+            Task {
+                await loadActiveMarkers(forceRefresh: true)
+            }
+        }
         .sheet(isPresented: $showMarkerSettingsSheet) {
             if let markerManager = chartViewModel.markerManager {
                 MarkerFilterSettingsSheet(
@@ -329,7 +334,7 @@ struct chartSheetMarkersView: View {
                     Image(systemName: "shield.checkered")
                         .foregroundColor(AppColors.statusWarning90)
                         .font(.caption)
-                    Text("Prediction markers affect your reputation. Set entry, SL, and TP when prompted.")
+                    Text("Prediction markers affect your accuracy and reputation. Set entry, SL, and TP when prompted.")
                         .font(.caption2)
                         .foregroundColor(.gray)
                     Spacer()

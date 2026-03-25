@@ -590,7 +590,7 @@ struct CrosshairInfoPopupCompact: View {
                 .padding(5)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(AppColors.surfaceBlack85)
+                        .fill(AppColors.infoBoxBackground)
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
                                 .stroke(AppColors.surfaceWhite15, lineWidth: 0.5)

@@ -2799,34 +2799,34 @@ class RLAppState: ObservableObject {
                       let userId = UUID(uuidString: userIdString),
                       let isOnline = message.payload(as: Bool.self) else { return }
                 guard self.shouldShowPresence else { return }
-                
+
                 // Update the Source of Truth map
                 self.presenceByUserId[userId] = isOnline
             }
             .store(in: &cancellables)
-        
+
         // 2. Manage subscription to the Guild Presence channel based on selected guild
         $currentGuild
             .map { $0?.id }
             .removeDuplicates()
             .sink { [weak self] guildId in
                 guard let self = self else { return }
-                
+
                 // Unsubscribe from old guild presence channel
                 if let existing = self.currentPresenceChannel {
                     RealTimeService.shared.unsubscribe(from: [existing], owner: "presence")
                     self.currentPresenceChannel = nil
                 }
-                
-                // Clear map on guild change
+
+                // Clear map on guild change — fallback to DTO isOnline until fresh events arrive
                 self.presenceByUserId.removeAll()
-                
+
                 // Subscribe to new guild presence
                 guard let guildId = guildId else { return }
                 guard self.shouldShowPresence else { return }
                 let channel = MessagingChannel.guildPresence(guildId).name
                 self.currentPresenceChannel = channel
-                
+
                 print("👀 [AppState] Subscribing to presence: \(channel)")
                 RealTimeService.shared.subscribe(to: [channel], owner: "presence")
             }
@@ -2853,6 +2853,24 @@ class RLAppState: ObservableObject {
                     print("👀 [AppState] Subscribing to presence: \(channel)")
                     RealTimeService.shared.subscribe(to: [channel], owner: "presence")
                 }
+            }
+            .store(in: &cancellables)
+
+        // 4. Clear stale presence data on WebSocket reconnection
+        // After reconnect, channels are re-subscribed automatically by RealTimeService.
+        // Clear the map so effectiveOnlineStatus falls back to DTO isOnline until fresh events arrive.
+        RealTimeService.shared.$connectionStatus
+            .removeDuplicates()
+            .scan((previous: RealTimeConnectionStatus.disconnected, current: RealTimeConnectionStatus.disconnected)) { state, newStatus in
+                (previous: state.current, current: newStatus)
+            }
+            .filter { $0.previous != .connected && $0.current == .connected }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self, self.shouldShowPresence else { return }
+                // Clear stale presence so we use fallback until fresh events arrive
+                self.presenceByUserId.removeAll()
+                print("👀 [AppState] WebSocket reconnected — cleared stale presence data")
             }
             .store(in: &cancellables)
     }

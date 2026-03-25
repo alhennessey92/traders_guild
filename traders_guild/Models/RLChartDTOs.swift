@@ -2057,6 +2057,7 @@ struct MarkerTrackingStateChangedPayload: Codable {
     let newState: String?
     let guildId: String
     let symbolId: String
+    let marker: RLChartMarkerDTO?
 }
 
 

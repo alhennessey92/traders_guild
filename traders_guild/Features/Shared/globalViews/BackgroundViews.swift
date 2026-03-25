@@ -9,7 +9,7 @@ import SwiftUI
 /// Background view that is completely isolated from animations
 struct StaticBackgroundView: View {
     @State private var patternOpacity: Double = 0
-    
+
     var body: some View {
         ZStack {
             // Base gradient
@@ -18,7 +18,7 @@ struct StaticBackgroundView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            
+
             // Pattern overlay - fades in smoothly
             PatternOverlay(patternType: .honeycomb, hexSize: 16)
                 .opacity(patternOpacity)
@@ -26,7 +26,7 @@ struct StaticBackgroundView: View {
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = 0.012
+                patternOpacity = ThemeManager.shared.currentTheme == .midGrey ? 0.05 : 0.012
             }
         }
     }
@@ -59,7 +59,7 @@ struct StaticAuthBackgroundView: View {
 
 struct StaticMessagingBackgroundView: View {
     @State private var patternOpacity: Double = 0
-    
+
     var body: some View {
         ZStack {
             // Base gradient
@@ -68,7 +68,7 @@ struct StaticMessagingBackgroundView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            
+
             // Pattern overlay - fades in smoothly
             PatternOverlay(patternType: .honeycomb, hexSize: 16)
                 .opacity(patternOpacity)
@@ -76,7 +76,7 @@ struct StaticMessagingBackgroundView: View {
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = 0.02
+                patternOpacity = ThemeManager.shared.currentTheme == .midGrey ? 0.06 : 0.02
             }
         }
     }
@@ -84,11 +84,9 @@ struct StaticMessagingBackgroundView: View {
 
 struct StaticPatternView: View {
     @State private var patternOpacity: Double = 0
-    
+
     var body: some View {
         ZStack {
-            
-            
             // Pattern overlay - fades in smoothly
             PatternOverlay(patternType: .honeycomb, hexSize: 16)
                 .opacity(patternOpacity)
@@ -96,7 +94,8 @@ struct StaticPatternView: View {
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = 0.02
+                // Mid-grey backgrounds are lighter so need higher opacity for visible contrast
+                patternOpacity = ThemeManager.shared.currentTheme == .midGrey ? 0.06 : 0.02
             }
         }
     }

@@ -41,6 +41,8 @@ struct IndicatorPanelHeaderRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.top, 4)
+        .padding(.bottom, 2)
+        .background(AppColors.panelHeaderBackground)
     }
 }
 
@@ -165,7 +167,7 @@ struct RSIPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(AppColors.chartIndicatorHandleFill)
+                .fill(AppColors.panelHeaderBackground)
 
             // Capsule always centered
             Capsule()
@@ -533,7 +535,7 @@ struct RSIPanelView: View {
                 drawXAxisLabels(context: context, size: size)
             }
             .frame(height: 24)
-            .background(AppColors.systemBlack)
+            .background(AppColors.xAxisBackground)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)

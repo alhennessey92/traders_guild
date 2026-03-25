@@ -9,23 +9,50 @@
 import SwiftUI
 
 enum AppColors {
-    // MARK: - Foundation Assets
+    // MARK: - Theme Helper
 
-    /// TGGradientBackground asset. Hex #010105 alpha 1.0.
-    static let tgGradientBackground = Color("TGGradientBackground")
-    /// TGGradientBackgroundMid asset. Hex #111111 alpha 1.0.
-    static let tgGradientBackgroundMid = Color("TGGradientBackgroundMid")
-    /// TGGradientBackgroundLight asset. Hex #000127 alpha 1.0.
-    static let tgGradientBackgroundLight = Color("TGGradientBackgroundLight")
+    private static var isMidGrey: Bool {
+        ThemeManager.shared.currentTheme == .midGrey
+    }
 
-    /// TGSheetBackground asset. Hex #1B1A1F alpha 1.0.
-    static let tgSheetBackground = Color("TGSheetBackground")
-    /// TGSheetDarkBackground asset. Hex #1F1E1A alpha 1.0.
-    static let tgSheetDarkBackground = Color("TGSheetDarkBackground")
-    /// TGDrawerBackground asset. Hex #00000A alpha 1.0.
-    static let tgDrawerBackground = Color("TGDrawerBackground")
-    /// TGToolbarBackground asset. Hex #00000E alpha 0.35.
-    static let tgToolbarBackground = Color("TGToolbarBackground")
+    // MARK: - Foundation Assets (theme-aware backgrounds)
+
+    /// TGGradientBackground. Dark: #010105, MidGrey: #181C28 (anchor — chat bg color).
+    static var tgGradientBackground: Color {
+        isMidGrey ? Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0)
+                  : Color("TGGradientBackground")
+    }
+    /// TGGradientBackgroundMid. Dark: #111111, MidGrey: same ratio dimmed.
+    static var tgGradientBackgroundMid: Color {
+        isMidGrey ? Color(red: 22.0 / 255, green: 26.0 / 255, blue: 36.0 / 255)
+                  : Color("TGGradientBackgroundMid")
+    }
+    /// TGGradientBackgroundLight. Dark: #000127, MidGrey: same ratio lifted.
+    static var tgGradientBackgroundLight: Color {
+        isMidGrey ? Color(red: 26.0 / 255, green: 30.0 / 255, blue: 42.0 / 255)
+                  : Color("TGGradientBackgroundLight")
+    }
+
+    /// TGSheetBackground. Dark: #1B1A1F, MidGrey: #181C28 (matches chat bg).
+    static var tgSheetBackground: Color {
+        isMidGrey ? Color(red: 24.0 / 255, green: 28.0 / 255, blue: 40.0 / 255)
+                  : Color("TGSheetBackground")
+    }
+    /// TGSheetDarkBackground. Dark: #1F1E1A, MidGrey: slightly darker.
+    static var tgSheetDarkBackground: Color {
+        isMidGrey ? Color(red: 22.0 / 255, green: 26.0 / 255, blue: 38.0 / 255)
+                  : Color("TGSheetDarkBackground")
+    }
+    /// TGDrawerBackground. Dark: #00000A, MidGrey: #171B27 (near-identical to chat/sheets).
+    static var tgDrawerBackground: Color {
+        isMidGrey ? Color(red: 23.0 / 255, green: 27.0 / 255, blue: 39.0 / 255)
+                  : Color("TGDrawerBackground")
+    }
+    /// TGToolbarBackground. Dark: #00000E/0.35, MidGrey: #181C28/0.55.
+    static var tgToolbarBackground: Color {
+        isMidGrey ? Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0).opacity(0.55)
+                  : Color("TGToolbarBackground")
+    }
 
     /// TGWhiteText asset. Hex #ECECEC alpha 1.0.
     static let tgWhiteText = Color("TGWhiteText")
@@ -48,12 +75,18 @@ enum AppColors {
     /// TGBear asset. Hex #A62C2B alpha 1.0.
     static let tgBear = Color("TGBear")
 
-    /// TGButtonSearchBackground asset. Hex #191921 alpha 1.0.
-    static let tgButtonSearchBackground = Color("TGButtonSearchBackground")
+    /// TGButtonSearchBackground. Dark: #191921, MidGrey: same ratio.
+    static var tgButtonSearchBackground: Color {
+        isMidGrey ? Color(red: 20.0 / 255, green: 24.0 / 255, blue: 34.0 / 255)
+                  : Color("TGButtonSearchBackground")
+    }
     /// TGUnhighlightedWhite asset. Hex #C3C3C3 alpha 1.0.
     static let tgUnhighlightedWhite = Color("TGUnhighlightedWhite")
-    /// TGFadedBackground asset. Hex #3F404D alpha 1.0.
-    static let tgFadedBackground = Color("TGFadedBackground")
+    /// TGFadedBackground. Dark: #3F404D, MidGrey: same ratio lifted.
+    static var tgFadedBackground: Color {
+        isMidGrey ? Color(red: 28.0 / 255, green: 32.0 / 255, blue: 46.0 / 255)
+                  : Color("TGFadedBackground")
+    }
     /// TGChartLogo asset. Hex #7A7878 alpha 1.0.
     static let tgChartLogo = Color("TGChartLogo")
     /// TGGreen asset. Hex #089B1C alpha 1.0.
@@ -300,12 +333,49 @@ enum AppColors {
     static let chartDeepSubTabGradientStart = Color(red: 0.08, green: 0.12, blue: 0.25)
     static let chartDeepSubTabGradientEnd = Color(red: 0.05, green: 0.08, blue: 0.18)
 
-    static let chartPanelBackground = Color(red: 20.0 / 255.0, green: 20.0 / 255.0, blue: 28.0 / 255.0)
-    static let chartPanelBackgroundMuted = Color(red: 20.0 / 255.0, green: 20.0 / 255.0, blue: 26.0 / 255.0)
-    static let chartPanelBackgroundInset = Color(red: 18.0 / 255.0, green: 18.0 / 255.0, blue: 28.0 / 255.0)
-    static let chartPanelBackgroundAlt = Color(red: 25.0 / 255.0, green: 25.0 / 255.0, blue: 33.0 / 255.0)
-    static let chartPanelBackgroundDeep = Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 12.0 / 255.0)
-    static let chartIndicatorHandleFill = Color(white: 0.08)
+    static var chartPanelBackground: Color {
+        isMidGrey ? Color(red: 24.0 / 255, green: 28.0 / 255, blue: 40.0 / 255)
+                  : Color(red: 20.0 / 255, green: 20.0 / 255, blue: 28.0 / 255)
+    }
+    static var chartPanelBackgroundMuted: Color {
+        isMidGrey ? Color(red: 23.0 / 255, green: 27.0 / 255, blue: 38.0 / 255)
+                  : Color(red: 20.0 / 255, green: 20.0 / 255, blue: 26.0 / 255)
+    }
+    static var chartPanelBackgroundInset: Color {
+        isMidGrey ? Color(red: 22.0 / 255, green: 26.0 / 255, blue: 36.0 / 255)
+                  : Color(red: 18.0 / 255, green: 18.0 / 255, blue: 28.0 / 255)
+    }
+    static var chartPanelBackgroundAlt: Color {
+        isMidGrey ? Color(red: 26.0 / 255, green: 30.0 / 255, blue: 42.0 / 255)
+                  : Color(red: 25.0 / 255, green: 25.0 / 255, blue: 33.0 / 255)
+    }
+    static var chartPanelBackgroundDeep: Color {
+        isMidGrey ? Color(red: 18.0 / 255, green: 22.0 / 255, blue: 32.0 / 255)
+                  : Color(red: 10.0 / 255, green: 10.0 / 255, blue: 12.0 / 255)
+    }
+    static var chartIndicatorHandleFill: Color {
+        isMidGrey ? Color(white: 0.10) : Color(white: 0.08)
+    }
+
+    // MARK: - Component-Level Theme Tokens
+
+    /// Info box background (crosshair OHLCV popup). Blends with chart background.
+    static var infoBoxBackground: Color {
+        isMidGrey ? Color(red: 22.0 / 255, green: 26.0 / 255, blue: 38.0 / 255).opacity(0.94)
+                  : Color.black.opacity(0.85)
+    }
+
+    /// Panel header background (indicator & timeframe panels). Subtle darker strip.
+    static var panelHeaderBackground: Color {
+        isMidGrey ? Color(red: 18.0 / 255, green: 22.0 / 255, blue: 32.0 / 255)
+                  : Color(red: 16.0 / 255, green: 16.0 / 255, blue: 22.0 / 255)
+    }
+
+    /// X-axis bottom area background. Dark: pure black, MidGrey: very dark blue-grey.
+    static var xAxisBackground: Color {
+        isMidGrey ? Color(red: 14.0 / 255, green: 18.0 / 255, blue: 26.0 / 255)
+                  : Color.black
+    }
 
     static let signupInterestBlue = Color(red: 0.4, green: 0.7, blue: 0.9)
     static let signupInterestGreen = Color(red: 0.5, green: 0.8, blue: 0.5)
@@ -335,14 +405,14 @@ enum AppColors {
 
     // MARK: - Backward-Compatible Aliases
 
-    static let gradientBackgroundDark = tgGradientBackground
-    static let gradientBackgroundMid = tgGradientBackgroundMid
-    static let gradientBackgroundLight = tgGradientBackgroundLight
+    static var gradientBackgroundDark: Color { tgGradientBackground }
+    static var gradientBackgroundMid: Color { tgGradientBackgroundMid }
+    static var gradientBackgroundLight: Color { tgGradientBackgroundLight }
 
-    static let sheetBackground = tgSheetBackground
-    static let sheetBackgroundDark = tgSheetDarkBackground
-    static let drawerBackground = tgDrawerBackground
-    static let toolbarBackground = tgToolbarBackground
+    static var sheetBackground: Color { tgSheetBackground }
+    static var sheetBackgroundDark: Color { tgSheetDarkBackground }
+    static var drawerBackground: Color { tgDrawerBackground }
+    static var toolbarBackground: Color { tgToolbarBackground }
 
     static let whiteText = tgWhiteText
     static let greyText = tgMidGrey
@@ -352,8 +422,8 @@ enum AppColors {
     static let bullCandleGreen = tgBull
     static let bearCandleRed = tgBear
 
-    static let unhighlightedTextBoxBackground = tgButtonSearchBackground
+    static var unhighlightedTextBoxBackground: Color { tgButtonSearchBackground }
     static let unhighlightedButtonBackground = tgUnhighlightedWhite
-    static let fadedBackground = tgFadedBackground
+    static var fadedBackground: Color { tgFadedBackground }
     static let chartLogo = tgChartLogo
 }

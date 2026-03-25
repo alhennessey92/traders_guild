@@ -1272,10 +1272,39 @@ Make sure you run through all drawing options and make improve them the way they
 
 224. CODEX - When sending photos in chat they appear only as name, no image is appearing. Do we need to implement file storage on hetzner
 
-225. Dark space under bottom bar and x axis needs extending to bottom
+225. [FIXED] Dark space under bottom bar and x axis needs extending to bottom
 
-226. Claude - Implement a second theme, lighter, not white but almost a mid grey tone, allow users to switch from the settings
+226. [FIXED] Claude - Implement a second theme, lighter, not white but almost a mid grey tone, allow users to switch from the settings
 
 227. Change resend token to be something better, more easier to relay back like a 5 string (7UY67)
 
 228. Need to have a look at timeframe panel, would be nice if they could update in realtime on the chart, including new candles, active candle, moving price indicator (tick)relative to current default chart etc... Also the main chart timeframe panel, still has the vertical marker view/icon on latest candle, this isnt ncessary as we have the window view, its only necessary when used in marker view mode to show where the marker is located
+
+
+
+
+
+229. [FIXED] need to make sure all components affected by theme such as bottom x axis section, chart info box, panel header background and any other component not yet touched are in accordance with new theme selection (mid grey) need to make it easy to add more themes if we want, so the actual different colors across the app for views are almost a configurable sub set of base color of theme
+
+
+230. [FIXED] Price indicators like tp and sl not appearing over the y axis
+
+231. Add tabs to announcements and events for relevant sections
+
+232. Support section still needs work need confirmation email etc and place for message to appear. Ui needs work minimum description etc
+
+233. Timeframe panel price indicator not live and very dim
+
+234. Setup marker still not in active tab
+
+235. Need to double check setup marker is correctly being watched for results as it’s not dealing out reputation and not reporting results in marker view mode. Also should fire a notification. In marker view mode should show some sort of result as to how the setup marker performed against the TP and SL
+
+236. Notifications need a full audit listing current areas notifications are triggered and areas we need to implement
+
+237. Reputation for personal, guild and global need a full audit. Again listing areas reputation is applied and areas we still need to apply to
+
+238. Need to review user permissions making sure things like user blocks, bans, suspended and muted are all applied to relevant areas and things like caps on chat message (50 per hour) for anti spam are in place and marker placement limits etc
+
+239. Crosshair info box needs proper reporting on indicators like stochs and macd etc
+
+240. Noticed sometimes when interacting with the app the music I am listening to gets paused, this should never happen music shouldn’t be interfered with by the app

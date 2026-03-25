@@ -770,6 +770,11 @@ struct TradingChartView: View {
 
     private var rootChartContainer: some View {
         ZStack {
+            if ThemeManager.shared.currentTheme == .midGrey {
+                AppColors.chartPanelBackgroundMuted
+                    .ignoresSafeArea()
+            }
+
             GeometryReader { geometry in
                 chartContent(geometry: geometry)
             }
@@ -1102,14 +1107,16 @@ struct TradingChartView: View {
         predictionPlacementActive: Bool
     ) -> some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    AppColors.surfaceWhite04,
-                    AppColors.surfaceWhite0015
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            if ThemeManager.shared.currentTheme == .dark {
+                LinearGradient(
+                    colors: [
+                        AppColors.surfaceWhite04,
+                        AppColors.surfaceWhite0015
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
 
             mainChartCanvas(geometry: geometry)
                 .mask(topFadeMask(geometry: geometry))
@@ -1120,20 +1127,21 @@ struct TradingChartView: View {
                     .zIndex(18)
             }
 
-            // Keep Y-axis above chart drawing but below price/placement overlays and x-axis layer.
+            // Keep Y-axis above all overlays including placement lines so labels aren't obscured.
             yAxisOverlay(geometry: geometry)
+                .zIndex(45)
 
             markerDrawingOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
                 .mask(plotAreaMask(geometry: geometry))
             if !isInteractiveDrawingSessionActive {
                 markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                    .mask(plotAreaMask(geometry: geometry))
+                    .mask(priceLinesFullWidthMask(geometry: geometry))
                 draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                    .mask(plotAreaMask(geometry: geometry))
+                    .mask(priceLinesFullWidthMask(geometry: geometry))
                 draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                    .mask(plotAreaMask(geometry: geometry))
+                    .mask(priceLinesFullWidthMask(geometry: geometry))
                 targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
-                    .mask(plotAreaMask(geometry: geometry))
+                    .mask(priceLinesFullWidthMask(geometry: geometry))
             }
 
             horizontalDrawingAxisLabelsOverlay(
@@ -1169,7 +1177,7 @@ struct TradingChartView: View {
                     placement: $predictionPlacement,
                     draggingLine: $draggingPredictionLine,
                     coordinateSystem: coordinateSystem,
-                    chartWidth: geometry.size.width,
+                    chartWidth: max(0, geometry.size.width - yAxisWidth),
                     chartHeight: geometry.size.height,
                     chartData: chartData
                 )
@@ -1416,7 +1424,8 @@ struct TradingChartView: View {
             coordinateSystem: coordinateSystem,
             chartWidth: geometry.size.width,
             chartHeight: geometry.size.height,
-            chartData: chartData
+            chartData: chartData,
+            isPredictionPlacementActive: isPredictionPlacementOverlayActive
         )
     }
 
@@ -2312,8 +2321,18 @@ struct TradingChartView: View {
     
     private func handleMarkerPlacementModeChange(oldValue: Bool, newValue: Bool) {
         if !oldValue && newValue {
+            // Prefer crosshair's target candle if active, otherwise fall back to center
+            let preferredIndex: Int
+            if crosshairManager.isActive,
+               let targetCandle = crosshairManager.targetCandle,
+               let idx = chartData.candles.firstIndex(where: { $0.timestamp == targetCandle.timestamp }) {
+                preferredIndex = idx
+            } else {
+                preferredIndex = calculateCenterCandleIndex()
+            }
+
             previewCandleIndex = MarkerPlacementPreviewIndexResolver.fixedPreviewIndex(
-                currentPreviewIndex: previewCandleIndex,
+                currentPreviewIndex: preferredIndex,
                 centerIndex: calculateCenterCandleIndex(),
                 candleCount: chartData.candles.count
             )
@@ -2332,7 +2351,7 @@ struct TradingChartView: View {
                     }
                 }
             } else {
-                // Initialize the on-chart placement state with anchor at current center candle
+                // Initialize the on-chart placement state with anchor at the selected candle
                 initializePlacementState()
 
                 // For prediction markers: immediately initialize 3-line system
@@ -4778,7 +4797,7 @@ struct TradingChartView: View {
     // MARK: - Axis Overlays
 
     private var xAxisPanelBackground: Color {
-        AppColors.systemBlack
+        AppColors.xAxisBackground
     }
 
     /// True when the bottom panel currently renders its own x-axis label strip.
@@ -4787,12 +4806,7 @@ struct TradingChartView: View {
     }
 
     private var yAxisPanelBackground: some View {
-        ZStack {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-            Rectangle()
-                .fill(AppColors.surfaceBlack50)
-        }
+        Color.clear
     }
     
     @ViewBuilder
@@ -4810,8 +4824,7 @@ struct TradingChartView: View {
 
                 Rectangle()
                     .fill(xAxisPanelBackground)
-                    .frame(height: bottomAreaHeight)
-                    .edgesIgnoringSafeArea(.bottom)
+                    .frame(height: bottomAreaHeight + geometry.safeAreaInsets.bottom)
             }
 
             if shouldShowMainXAxisLabels,
@@ -4830,6 +4843,7 @@ struct TradingChartView: View {
                 )
             }
         }
+        .ignoresSafeArea(edges: .bottom)
         .allowsHitTesting(false)
     }
 
@@ -5139,6 +5153,23 @@ struct TradingChartView: View {
                     .fill(Color.white)
                     .frame(width: geometry.size.width, height: visibleHeight)
                     .offset(y: topExclusion)
+            }
+    }
+
+    /// Mask for price lines (TP/SL) — full width (spans y-axis) but clips vertically to plot area.
+    private func priceLinesFullWidthMask(geometry: GeometryProxy) -> some View {
+        let xAxisReservedHeight = xAxisReservedBandHeight(
+            chartHeight: geometry.size.height,
+            includeLabelStrip: !panelOwnsBottomXAxisStrip
+        )
+        let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
+
+        return Color.clear
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .overlay(alignment: .topLeading) {
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: geometry.size.width, height: plotHeight)
             }
     }
 
@@ -5987,7 +6018,9 @@ struct TradingChartView: View {
     private func drawChart(context: GraphicsContext, size: CGSize) {
         var drawingContext = context
 
-        drawingContext.clip(to: Path(CGRect(origin: .zero, size: size)))
+        let xAxisBand = xAxisReservedBandHeight(chartHeight: size.height, includeLabelStrip: !panelOwnsBottomXAxisStrip)
+        let plotRect = CGRect(x: 0, y: 0, width: max(0, size.width - yAxisWidth), height: max(0, size.height - xAxisBand))
+        drawingContext.clip(to: Path(plotRect))
 
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
 
@@ -6799,11 +6832,13 @@ struct PredictionPlacementOverlay: View {
         let labelWidth = ChartAxisMetrics.horizontalLabeledChipWidth
         let labelCenterX = ChartAxisMetrics.trailingLabelCenterX(totalWidth: chartWidth, width: labelWidth)
         let lineEndX = ChartAxisMetrics.horizontalLineEndX(totalWidth: chartWidth, labelWidth: labelWidth)
+        // Stop the entry (solid) line before the label chip so it doesn't overlap the text
+        let effectiveEndX = isDashed ? lineEndX : (lineEndX - labelWidth - 4)
 
         if y.isFinite {
             Path { path in
                 path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: lineEndX, y: y))
+                path.addLine(to: CGPoint(x: effectiveEndX, y: y))
             }
             .stroke(color.opacity(0.8), style: StrokeStyle(
                 lineWidth: lineWidth,
@@ -7079,6 +7114,7 @@ struct MarkerPriceLinesOverlay: View {
     let chartWidth: CGFloat
     let chartHeight: CGFloat
     let chartData: ChartDataManager
+    var isPredictionPlacementActive: Bool = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -7094,7 +7130,9 @@ struct MarkerPriceLinesOverlay: View {
         guard let marker = selectedMarker else { return }
 
         // Prediction markers: show Entry (green) + TP (blue) + SL (red) with fill regions
+        // Skip when PredictionPlacementOverlay is active to avoid duplicate lines
         if marker.intent == .setup {
+            guard !isPredictionPlacementActive else { return }
             drawPredictionMarkerLines(context: context, size: size, marker: marker)
             drawSupplementalSetupLevels(context: context, size: size, marker: marker)
             return

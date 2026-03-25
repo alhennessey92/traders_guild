@@ -13,7 +13,8 @@ import SwiftUI
 struct traders_guildApp: App {
     
     @StateObject private var rlAppState = RLAppState()
-    
+    @StateObject private var themeManager = ThemeManager.shared
+
     // NEW: RL Messaging Manager for chatrooms and DMs (uses RLAppState)
     @StateObject private var rlMessagingManager = RLMessagingManager()
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
@@ -119,6 +120,7 @@ struct traders_guildApp: App {
             let _ = print("📱 → Showing MainView")
             MainView()
                 .preferredColorScheme(.dark)
+                .id(ThemeManager.shared.currentTheme)
                 
         } else {
             // Authenticated but no guild selected - show loading/waiting view

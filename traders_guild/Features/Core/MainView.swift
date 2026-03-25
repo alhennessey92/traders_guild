@@ -322,7 +322,7 @@ struct MainView: View {
                         // Keep bottom-sheet clearance. Mask only while an expanded bottom panel
                         // owns the x-axis strip; keep transparent when collapsed so controls remain visible.
                         Rectangle()
-                            .fill(chartPanelsBottomLabelStripReserve > 0 ? AppColors.systemBlack : Color.clear)
+                            .fill(chartPanelsBottomLabelStripReserve > 0 ? AppColors.xAxisBackground : Color.clear)
                             .frame(height: 100 + collapsedPanelXAxisClearance)
                             .allowsHitTesting(false)
                     }

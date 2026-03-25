@@ -426,6 +426,68 @@ struct UserSettingsSheetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
 
+            // Appearance
+            SettingsSectionHeader(title: "Appearance")
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: "paintbrush.fill")
+                        .foregroundColor(.cyan)
+                        .frame(width: 20)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Theme")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.whiteText)
+                        Text("Choose your preferred app theme")
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    Spacer()
+                }
+
+                HStack(spacing: 12) {
+                    ForEach(AppTheme.allCases, id: \.self) { theme in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                ThemeManager.shared.currentTheme = theme
+                            }
+                        } label: {
+                            VStack(spacing: 8) {
+                                Circle()
+                                    .fill(theme == .dark
+                                        ? Color(red: 0x01 / 255.0, green: 0x01 / 255.0, blue: 0x05 / 255.0)
+                                        : Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0))
+                                    .frame(width: 36, height: 36)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(ThemeManager.shared.currentTheme == theme
+                                                ? AppColors.accentColor : AppColors.surfaceWhite20,
+                                                lineWidth: ThemeManager.shared.currentTheme == theme ? 2.5 : 1)
+                                    )
+
+                                Text(theme.displayName)
+                                    .font(.caption)
+                                    .foregroundColor(ThemeManager.shared.currentTheme == theme
+                                        ? AppColors.whiteText : AppColors.greyText)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(AppColors.surfaceWhite03)
+            )
+            .padding(.horizontal, 16)
+
+            Divider()
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
             // Help & Support
             SettingsSectionHeader(title: "Help & Support")
 

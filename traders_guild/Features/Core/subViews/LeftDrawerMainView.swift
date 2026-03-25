@@ -177,7 +177,8 @@ struct LeftDrawerMainView: View {
                     Rectangle()
                         .fill(.ultraThinMaterial)
                         .ignoresSafeArea()
-                    AppColors.drawerBackground.opacity(0.6)
+                    AppColors.drawerBackground
+                        .opacity(ThemeManager.shared.currentTheme == .midGrey ? 0.92 : 0.6)
                 }
             )
             .overlay(
