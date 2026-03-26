@@ -1318,7 +1318,8 @@ private struct SetupTimelineNode: Identifiable {
 
 struct MarkerInfoContent: View {
     let marker: ChartMarkerUI
-    
+    var currentPrice: Double? = nil
+
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             // Price & Time info card
@@ -1440,6 +1441,25 @@ struct MarkerInfoContent: View {
                 if let outcome = MarkerPredictionProgress.outcomeDescription(for: marker.marker) {
                     setupOutcomeSection(outcome)
                 }
+
+                // Live progress strip for active setups
+                if let state = marker.trackingState, state.isLive,
+                   let entryPrice = marker.entryPrice ?? marker.horizontalLinePrice,
+                   let tpPrice = marker.targetPrice,
+                   let slPrice = marker.stopLossPrice,
+                   let price = currentPrice,
+                   let metrics = LiveSetupMetrics.compute(
+                       entryPrice: entryPrice,
+                       stopLossPrice: slPrice,
+                       targetPrice: tpPrice,
+                       currentPrice: price
+                   ) {
+                    DetailSetupProgressStrip(
+                        metrics: metrics,
+                        formatPrice: { String(format: "%.5f", $0) }
+                    )
+                }
+
                 // Level Ladder Card (replaces old prediction section for cleaner UX)
                 LevelLadderCard(
                     entryPrice: marker.entryPrice ?? marker.horizontalLinePrice ?? marker.price,
@@ -1484,6 +1504,27 @@ struct MarkerInfoContent: View {
                     Text(String(format: "%+.2f%%", pnl))
                         .font(.system(size: 22, weight: .heavy, design: .monospaced))
                         .foregroundColor(pnl >= 0 ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                }
+
+                if let repText = outcome.repChangeText {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "shield.lefthalf.filled")
+                                .font(.caption)
+                                .foregroundColor(marker.intent.color.opacity(0.95))
+                            Text("Rep Change")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        Spacer()
+                        Text(repText)
+                            .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                            .foregroundColor(
+                                (outcome.guildRepDelta ?? 0) >= 0
+                                    ? AppColors.statusPositive90
+                                    : AppColors.statusNegative85
+                            )
+                    }
                 }
 
                 if let triggerPrice = outcome.triggerPrice {

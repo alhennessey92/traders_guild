@@ -207,6 +207,25 @@ struct RLUserDTO: Codable, Identifiable, Equatable {
     var isActive: Bool {
         status == "active"
     }
+
+    func withGlobalReputation(_ newGlobalReputation: Int) -> RLUserDTO {
+        RLUserDTO(
+            id: id,
+            email: email,
+            username: username,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            globalReputation: newGlobalReputation,
+            isOnline: isOnline,
+            isVerified: isVerified,
+            isSuperuser: isSuperuser,
+            lastSeenAt: lastSeenAt,
+            createdAt: createdAt,
+            updatedAt: Date(),
+            dateOfBirth: dateOfBirth,
+            status: status
+        )
+    }
 }
 
 
@@ -274,6 +293,28 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
             ownerId: ownerId,
             isOpen: isOpen ?? self.isOpen,
             reputation: reputation,
+            memberCount: memberCount,
+            membersOnline: membersOnline,
+            ownerDisplayName: ownerDisplayName,
+            ownerUsername: ownerUsername,
+            ownerAvatarUrl: ownerAvatarUrl,
+            language: language,
+            location: location,
+            status: status,
+            dateCreated: dateCreated,
+            updatedAt: Date()
+        )
+    }
+
+    func withReputation(_ newReputation: Int) -> RLGuildDTO {
+        RLGuildDTO(
+            id: id,
+            name: name,
+            description: description,
+            imageUrl: imageUrl,
+            ownerId: ownerId,
+            isOpen: isOpen,
+            reputation: newReputation,
             memberCount: memberCount,
             membersOnline: membersOnline,
             ownerDisplayName: ownerDisplayName,
@@ -995,6 +1036,33 @@ struct RLGuildMemberDTO: Codable, Identifiable, Equatable, Hashable {
             isBlockedBy: isBlockedBy
         )
     }
+
+    func withPerformance(
+        guildReputation newGuildReputation: Int? = nil,
+        accuracyRate newAccuracyRate: Double? = nil,
+        globalReputation newGlobalReputation: Int? = nil
+    ) -> RLGuildMemberDTO {
+        RLGuildMemberDTO(
+            membershipId: membershipId,
+            role: role,
+            reputation: newGuildReputation ?? reputation,
+            contributionScore: contributionScore,
+            dateJoined: dateJoined,
+            accuracyRate: newAccuracyRate ?? accuracyRate,
+            mutedUntil: mutedUntil,
+            suspendedUntil: suspendedUntil,
+            userId: userId,
+            username: username,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            isOnline: isOnline,
+            globalReputation: newGlobalReputation ?? globalReputation,
+            isFriend: isFriend,
+            friendshipStatus: friendshipStatus,
+            isBlocked: isBlocked,
+            isBlockedBy: isBlockedBy
+        )
+    }
     
     /// Friendship status display text
     var friendshipStatusDisplay: String {
@@ -1398,6 +1466,20 @@ struct RLFriendDTO: Codable, Identifiable, Equatable, Hashable {
             return self
         }
         return updated
+    }
+
+    func withGlobalReputation(_ newGlobalReputation: Int) -> RLFriendDTO {
+        RLFriendDTO(
+            friendshipId: friendshipId,
+            membershipId: membershipId,
+            userId: userId,
+            username: username,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            isOnline: isOnline,
+            globalReputation: newGlobalReputation,
+            friendsSince: friendsSince
+        )
     }
 }
 

@@ -111,6 +111,7 @@ struct NotificationContractTests {
         #expect(WSMessageType(rawValue: "notification_deleted") == .notificationDeleted)
         #expect(WSMessageType(rawValue: "reputation_update") == .reputationUpdate)
         #expect(WSMessageType(rawValue: "accuracy_update") == .accuracyUpdate)
+        #expect(WSMessageType(rawValue: "member_performance_updated") == .memberPerformanceUpdated)
     }
 
     @Test func markerResultNotificationBuildsSharePayload() async throws {

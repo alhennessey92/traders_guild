@@ -76,6 +76,17 @@ struct UserGlobalSheetView: View {
         .task {
             await loadAllDataIfNeeded()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .reputationDidUpdate)) { _ in
+            Task { await loadAllData(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .accuracyDidUpdate)) { _ in
+            Task { await loadAllData(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard let userId = notification.userInfo?["userId"] as? UUID,
+                  userId == rlAppState.currentUser?.id else { return }
+            Task { await loadAllData(force: true) }
+        }
         .sheet(isPresented: $showGlobalReputationBreakdown) {
             NavigationStack {
                 GlobalReputationBreakdownSheetView()
@@ -171,7 +182,7 @@ struct UserGlobalSheetView: View {
                         Image(systemName: "target")
                             .font(.caption)
                             .foregroundColor(.green)
-                        Text(globalAccuracyData?.accuracyFormatted ?? "--")
+                        Text(globalAccuracyDisplay)
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(.green)
@@ -254,7 +265,7 @@ struct UserGlobalSheetView: View {
 
                 GlobalStatCard(
                     title: "Global Accuracy",
-                    value: globalAccuracyData?.accuracyFormatted ?? "--",
+                    value: globalAccuracyDisplay,
                     icon: "target",
                     color: .green
                 )
@@ -534,6 +545,7 @@ struct UserGlobalSheetView: View {
 
         do {
             globalAccuracyData = try await rlAppState.realApi.getMyGlobalAccuracy()
+            rlAppState.currentGlobalAccuracy = globalAccuracyData?.accuracyRate
         } catch {
             if isCancellationError(error) { return }
             errors.append("Global accuracy: \(error.localizedDescription)")
@@ -602,6 +614,16 @@ struct UserGlobalSheetView: View {
             return lastSeenAt.formatted(date: .abbreviated, time: .shortened)
         }
         return "Unknown"
+    }
+
+    private var globalAccuracyDisplay: String {
+        if let globalAccuracyData {
+            return globalAccuracyData.accuracyFormatted
+        }
+        if let currentGlobalAccuracy = rlAppState.currentGlobalAccuracy {
+            return "\(Int(currentGlobalAccuracy * 100))%"
+        }
+        return "--"
     }
 }
 

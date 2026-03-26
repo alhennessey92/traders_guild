@@ -109,7 +109,9 @@ enum MarkerPredictionProgress {
             triggerPrice: result.map { $0.triggerPrice },
             triggeredAtFormatted: result?.triggeredAtFormatted,
             pnl: result?.pnl,
-            isTracked: marker.trackingEnabled
+            isTracked: marker.trackingEnabled,
+            guildRepDelta: result?.guildRepDelta,
+            globalRepDelta: result?.globalRepDelta
         )
     }
 }
@@ -123,6 +125,8 @@ struct SetupOutcome {
     let triggeredAtFormatted: String?
     let pnl: Double?
     let isTracked: Bool
+    let guildRepDelta: Int?
+    let globalRepDelta: Int?
 
     var isWin: Bool { state == .tpHit }
     var isLoss: Bool { state == .slHit }
@@ -146,5 +150,67 @@ struct SetupOutcome {
         case .expired: return "clock.badge.xmark.fill"
         default: return "questionmark.circle"
         }
+    }
+
+    /// Formatted rep change string, e.g. "+25" or "-10"
+    var repChangeText: String? {
+        guard let delta = guildRepDelta else { return nil }
+        return delta >= 0 ? "+\(delta)" : "\(delta)"
+    }
+}
+
+// MARK: - Live Setup Metrics
+
+/// Computed metrics for displaying a live setup progress strip.
+/// Shared between MarkerActivityCard, MarkerViewingGeneralTab, and MarkerDetailView.
+struct LiveSetupMetrics {
+    let entryPrice: Double
+    let stopLossPrice: Double
+    let targetPrice: Double
+    let currentPrice: Double
+    let currentPnL: Double
+    let entryPosition: Double
+    let currentPosition: Double
+    let isLong: Bool
+    let isMovingTowardTarget: Bool
+
+    /// Compute metrics from setup prices and current market price.
+    /// Returns nil if prices are invalid or the setup direction can't be determined.
+    static func compute(
+        entryPrice: Double,
+        stopLossPrice: Double,
+        targetPrice: Double,
+        currentPrice: Double
+    ) -> LiveSetupMetrics? {
+        guard entryPrice > 0 else { return nil }
+
+        let isLong = targetPrice > entryPrice && stopLossPrice < entryPrice
+        let isShort = targetPrice < entryPrice && stopLossPrice > entryPrice
+        guard isLong || isShort else { return nil }
+
+        let rangeLow = min(stopLossPrice, targetPrice)
+        let rangeHigh = max(stopLossPrice, targetPrice)
+        guard rangeHigh > rangeLow else { return nil }
+
+        let clampedCurrent = min(max(currentPrice, rangeLow), rangeHigh)
+        let currentPnL = isLong
+            ? ((currentPrice - entryPrice) / entryPrice) * 100
+            : ((entryPrice - currentPrice) / entryPrice) * 100
+
+        let entryPosition = (entryPrice - rangeLow) / (rangeHigh - rangeLow)
+        let currentPosition = (clampedCurrent - rangeLow) / (rangeHigh - rangeLow)
+        let isMovingTowardTarget = isLong ? currentPrice >= entryPrice : currentPrice <= entryPrice
+
+        return LiveSetupMetrics(
+            entryPrice: entryPrice,
+            stopLossPrice: stopLossPrice,
+            targetPrice: targetPrice,
+            currentPrice: currentPrice,
+            currentPnL: currentPnL,
+            entryPosition: entryPosition,
+            currentPosition: currentPosition,
+            isLong: isLong,
+            isMovingTowardTarget: isMovingTowardTarget
+        )
     }
 }

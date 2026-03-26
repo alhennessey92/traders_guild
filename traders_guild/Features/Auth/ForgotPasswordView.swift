@@ -107,7 +107,7 @@ struct ForgotPasswordView: View {
 
     @ViewBuilder
     private var requestStepView: some View {
-        Text("Enter your email or username and we will send a secure reset link.")
+        Text("Enter your email or username and we will send a secure reset code.")
             .font(AppFonts.smallNotice())
             .foregroundColor(AppColors.greyText)
             .multilineTextAlignment(.leading)
@@ -120,7 +120,7 @@ struct ForgotPasswordView: View {
             .disabled(isSubmitting || requestSubmitted)
 
         if requestSubmitted {
-            Text("If the account exists, a reset link has been sent.")
+            Text("If the account exists, a reset code has been sent.")
                 .font(AppFonts.smallNotice())
                 .foregroundColor(.green)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -137,7 +137,7 @@ struct ForgotPasswordView: View {
         .padding(.top, 16)
 
         StandardActionButtonFullWidth(
-            title: isSubmitting ? "Sending..." : (requestSubmitted ? "Reset Link Sent" : "Send Reset Link"),
+                        title: isSubmitting ? "Sending..." : (requestSubmitted ? "Reset Code Sent" : "Send Reset Code"),
             backgroundColor: requestSubmitted ? AppColors.bullCandleGreen : AppColors.whiteText,
             foregroundColor: requestSubmitted ? AppColors.whiteText : AppColors.gradientBackgroundDark
         ) {
@@ -151,7 +151,7 @@ struct ForgotPasswordView: View {
             tokenIsValid = nil
             step = .reset
         } label: {
-            Text("Already have a reset token?")
+            Text("Already have a reset code?")
                 .font(AppFonts.smallNotice())
                 .foregroundColor(AppColors.accentColor)
                 .padding(.top, 12)
@@ -160,7 +160,7 @@ struct ForgotPasswordView: View {
 
     @ViewBuilder
     private var resetStepView: some View {
-        Text("Paste your reset token from email, then set a new password.")
+        Text("Enter your reset code from email, then set a new password.")
             .font(AppFonts.smallNotice())
             .foregroundColor(AppColors.greyText)
             .multilineTextAlignment(.leading)
@@ -168,7 +168,7 @@ struct ForgotPasswordView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 10)
 
-        StandardTextFieldView(title: "Reset Token", text: $token)
+        StandardTextFieldView(title: "Reset Code", text: $token)
             .padding(.bottom, 10)
             .disabled(isSubmitting || launchedFromDeepLink)
             .onChange(of: token) { _, _ in
@@ -192,7 +192,7 @@ struct ForgotPasswordView: View {
             .padding(.bottom, 6)
 
         if let tokenIsValid {
-            Text(tokenIsValid ? "Reset token verified." : "Reset token is invalid or expired.")
+            Text(tokenIsValid ? "Reset code verified." : "Reset code is invalid or expired.")
                 .font(AppFonts.smallNotice())
                 .foregroundColor(tokenIsValid ? .green : .orange)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -223,7 +223,7 @@ struct ForgotPasswordView: View {
             Button {
                 Task { await verifyTokenIfNeeded() }
             } label: {
-                Text(isVerifyingToken ? "Verifying..." : "Verify Token")
+                    Text(isVerifyingToken ? "Verifying..." : "Verify Code")
                     .font(AppFonts.smallNotice())
                     .foregroundColor(AppColors.accentColor)
             }

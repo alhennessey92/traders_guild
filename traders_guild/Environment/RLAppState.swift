@@ -25,6 +25,7 @@ class RLAppState: ObservableObject {
                 saveUserToKeychain(user)
             } else {
                 clearUserFromKeychain()
+                currentGlobalAccuracy = nil
             }
         }
     }
@@ -79,6 +80,9 @@ class RLAppState: ObservableObject {
             }
         }
     }
+
+    /// Live global accuracy for the current user, sourced from reputation-service.
+    @Published var currentGlobalAccuracy: Double?
 
     /// Public accessor for refresh token (used by biometric enrollment)
     var currentRefreshToken: String? { refreshToken }
@@ -859,6 +863,15 @@ class RLAppState: ObservableObject {
         let acc = newAccuracyRate ?? membership.accuracyRate
         if rep != membership.reputation || acc != membership.accuracyRate {
             currentMembership = membership.withReputation(rep, accuracyRate: acc)
+        }
+    }
+
+    func refreshCurrentGlobalAccuracy() async {
+        do {
+            let profile = try await realApi.getMyGlobalAccuracy()
+            currentGlobalAccuracy = profile.accuracyRate
+        } catch {
+            // Non-fatal; global accuracy is a live enhancement and should not block the UI.
         }
     }
     
@@ -3359,6 +3372,10 @@ extension Notification.Name {
     /// Posted when a user's trading accuracy changes via WebSocket (prediction win/loss).
     /// userInfo: ["guildId": String, "newAccuracyRate": Double, "totalPredictions": Int, "successfulPredictions": Int, "winStreak": Int, "isWin": Bool]
     static let accuracyDidUpdate = Notification.Name("accuracyDidUpdate")
+
+    /// Posted when a guild member's live reputation/accuracy snapshot changes.
+    /// userInfo mirrors RLGuildMemberPerformanceUpdatePayload plus parsed UUIDs where possible.
+    static let guildMemberPerformanceDidUpdate = Notification.Name("guildMemberPerformanceDidUpdate")
 
     /// Posted when marker activity should refresh after lifecycle or result events.
     /// userInfo: ["guildId": UUID?]

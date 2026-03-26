@@ -301,7 +301,7 @@ enum UnifiedTabTheme {
     case colored        // Per-tab colors (personal=yellow, guild=blue, etc.)
     case accent         // Uses AppColors.accentColor
     case componentsTabs  // Orange only for "Active" tab (index 0), blue for rest
-    case markerPrimary   // Green for "Add" (index 0), orange for "Active" (index 1), blue for rest
+    case markerPrimary   // Green for "Add" (index 0), blue for rest
 
     // Consistent blue gradient used for active/selected tabs
     static var consistentBlueGradient: LinearGradient {
@@ -370,9 +370,8 @@ enum UnifiedTabTheme {
             // Only "Active" tab (index 0) is orange, all others are blue
             return index == 0 ? UnifiedTabTheme.orangeGradient : UnifiedTabTheme.consistentBlueGradient
         case .markerPrimary:
-            // "Add" (index 0) = green, "Active" (index 1) = orange, rest = blue
+            // "Add" (index 0) = green, all others = blue
             if index == 0 { return UnifiedTabTheme.greenGradient }
-            if index == 1 { return UnifiedTabTheme.orangeGradient }
             return UnifiedTabTheme.consistentBlueGradient
         }
     }
@@ -394,7 +393,6 @@ enum UnifiedTabTheme {
             return index == 0 ? Color.orange.opacity(0.4) : AppColors.statusInfo40
         case .markerPrimary:
             if index == 0 { return AppColors.statusPositive40 }
-            if index == 1 { return Color.orange.opacity(0.4) }
             return AppColors.statusInfo40
         }
     }
@@ -2112,5 +2110,179 @@ struct ApproachingLevelChip: View {
                         )
                 )
         }
+    }
+}
+
+// MARK: - Detail Setup Progress Strip
+
+/// Expanded live setup progress visualization for marker detail views.
+/// Shows a taller progress bar with larger labels, current price indicator,
+/// live PNL, and approaching level status.
+struct DetailSetupProgressStrip: View {
+    let metrics: LiveSetupMetrics
+    let formatPrice: (Double) -> String
+
+    private var targetTint: Color { AppColors.statusInfo85 }
+    private var stopTint: Color { AppColors.statusNegative70 }
+    private var swingTint: Color { metrics.isMovingTowardTarget ? targetTint : stopTint }
+
+    private var entryPosition: CGFloat {
+        CGFloat(min(max(metrics.entryPosition, 0), 1))
+    }
+
+    private var currentPosition: CGFloat {
+        CGFloat(min(max(metrics.currentPosition, 0), 1))
+    }
+
+    private var riskRewardRatio: String? {
+        let reward = abs(metrics.targetPrice - metrics.entryPrice)
+        let risk = abs(metrics.entryPrice - metrics.stopLossPrice)
+        guard risk > 0 else { return nil }
+        return String(format: "%.1f", reward / risk)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Header: Live PNL + R:R badge
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Image(systemName: metrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(String(format: "%@%.2f%%", metrics.currentPnL >= 0 ? "+" : "", metrics.currentPnL))
+                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                }
+                .foregroundColor(swingTint)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(swingTint.opacity(0.15))
+                        .overlay(
+                            Capsule()
+                                .stroke(swingTint.opacity(0.3), lineWidth: 1)
+                        )
+                )
+
+                if let rr = riskRewardRatio {
+                    Text("R:R \(rr)")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(AppColors.surfaceWhite70)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(AppColors.surfaceWhite08)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(AppColors.surfaceWhite15, lineWidth: 1)
+                                )
+                        )
+                }
+
+                Spacer()
+
+                Text(formatPrice(metrics.currentPrice))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(swingTint)
+            }
+
+            // Progress bar
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let safeWidth = max(width, 1)
+                let entryX = safeWidth * entryPosition
+                let currentX = safeWidth * currentPosition
+                let swingStart = min(entryX, currentX)
+                let swingWidth = max(abs(currentX - entryX), 2)
+
+                ZStack(alignment: .leading) {
+                    // Background track
+                    Capsule()
+                        .fill(AppColors.surfaceWhite08)
+
+                    // SL/TP colored zones
+                    HStack(spacing: 0) {
+                        if metrics.isLong {
+                            Rectangle()
+                                .fill(stopTint.opacity(0.30))
+                                .frame(width: entryX)
+                            Rectangle()
+                                .fill(targetTint.opacity(0.30))
+                        } else {
+                            Rectangle()
+                                .fill(targetTint.opacity(0.30))
+                                .frame(width: entryX)
+                            Rectangle()
+                                .fill(stopTint.opacity(0.30))
+                        }
+                    }
+                    .clipShape(Capsule())
+
+                    // Swing indicator
+                    Capsule()
+                        .fill(swingTint)
+                        .frame(width: swingWidth)
+                        .offset(x: swingStart)
+
+                    // Entry marker line
+                    Capsule()
+                        .fill(AppColors.surfaceWhite85.opacity(0.65))
+                        .frame(width: 2)
+                        .offset(x: max(min(entryX - 1, safeWidth - 2), 0))
+
+                    // Current price dot
+                    Circle()
+                        .fill(swingTint)
+                        .frame(width: 14, height: 14)
+                        .overlay(
+                            Circle()
+                                .stroke(AppColors.systemBlack.opacity(0.55), lineWidth: 2)
+                        )
+                        .offset(x: max(min(currentX - 7, safeWidth - 14), 0), y: -1)
+                }
+            }
+            .frame(height: 12)
+
+            // Price labels
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("SL")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(stopTint.opacity(0.7))
+                    Text(formatPrice(metrics.stopLossPrice))
+                        .foregroundColor(stopTint)
+                }
+
+                Spacer()
+
+                VStack(spacing: 1) {
+                    Text("ENTRY")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(AppColors.surfaceWhite50)
+                    Text(formatPrice(metrics.entryPrice))
+                        .foregroundColor(AppColors.surfaceWhite70)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("TP")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(targetTint.opacity(0.7))
+                    Text(formatPrice(metrics.targetPrice))
+                        .foregroundColor(targetTint)
+                }
+            }
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.surfaceWhite04)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(swingTint.opacity(0.25), lineWidth: 1)
+                )
+        )
     }
 }

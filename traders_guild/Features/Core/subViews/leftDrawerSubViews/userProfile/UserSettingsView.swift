@@ -109,7 +109,10 @@ struct UserSettingsSheetView: View {
                 .environmentObject(rlAppState)
             
         case .helpCenter:
-            HelpCenterView(onBack: { currentDestination = nil })
+            HelpCenterView(
+                onBack: { currentDestination = nil },
+                onContactSupport: { currentDestination = .contactSupport }
+            )
             
         case .contactSupport:
             ContactSupportView(onBack: { currentDestination = nil })
@@ -664,4 +667,3 @@ struct UserSettingsSheetView: View {
         .environmentObject(RLAppState())
         .preferredColorScheme(.dark)
 }
-

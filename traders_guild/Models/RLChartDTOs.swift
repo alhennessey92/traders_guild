@@ -200,7 +200,7 @@ enum RLTrackingState: String, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .draft: return "Draft"
-        case .armed: return "Armed"
+        case .armed: return "Tracking"
         case .active: return "Active"
         case .tpHit: return "TP Hit"
         case .slHit: return "SL Hit"
@@ -1144,6 +1144,8 @@ struct RLPredictionResultDTO: Codable, Equatable, Hashable {
     let triggeredAt: Date
     let triggeredAtFormatted: String
     let pnl: Double?
+    let guildRepDelta: Int?
+    let globalRepDelta: Int?
 
     var isWin: Bool { resultType == "take_profit" }
     var displayLabel: String { isWin ? "TP Hit" : "SL Hit" }

@@ -93,6 +93,17 @@ struct UserProfileDetailView: View {
         .task {
             await loadProfileData()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .reputationDidUpdate)) { _ in
+            Task { await loadProfileData() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .accuracyDidUpdate)) { _ in
+            Task { await loadProfileData() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard let userId = notification.userInfo?["userId"] as? UUID,
+                  userId == rlAppState.currentUser?.id else { return }
+            Task { await loadProfileData() }
+        }
         .sheet(isPresented: $showGuildReputationBreakdown) {
             NavigationStack {
                 GuildReputationBreakdownSheetView()

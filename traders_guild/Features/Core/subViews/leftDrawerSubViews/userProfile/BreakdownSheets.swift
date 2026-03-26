@@ -6,6 +6,8 @@ struct GlobalReputationBreakdownSheetView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var profile: RLGlobalReputationDTO?
+    @State private var recentEvents: [RLReputationEventDTO] = []
+    @State private var lastUpdatedAt: Date?
 
     var body: some View {
         ScrollView {
@@ -40,6 +42,10 @@ struct GlobalReputationBreakdownSheetView: View {
                                     .foregroundColor(profile.weeklyDelta >= 0 ? .green : .red)
                             }
                         }
+                        HStack {
+                            Spacer()
+                            BreakdownFreshnessBadge(date: lastUpdatedAt)
+                        }
 
                         BreakdownDateBarChart(
                             points: reputationTrendPoints(
@@ -50,6 +56,24 @@ struct GlobalReputationBreakdownSheetView: View {
                         )
                         .padding(.top, 10)
                     }
+
+                    BreakdownCard(title: "Breakdown") {
+                        VStack(spacing: 10) {
+                            BreakdownBarRow(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: .green)
+                            BreakdownBarRow(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: .blue)
+                            if profile.breakdown.activityRep != 0 {
+                                BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: .cyan)
+                            }
+                            if profile.breakdown.penaltyRep != 0 {
+                                BreakdownBarRow(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: .red)
+                            }
+                        }
+                    }
+
+                    BreakdownRulesCard(
+                        title: "How Reputation Changes",
+                        rules: reputationRuleItems()
+                    )
 
                     BreakdownCard(title: "Guild Contributions") {
                         if profile.guildContributions.isEmpty {
@@ -77,6 +101,12 @@ struct GlobalReputationBreakdownSheetView: View {
                             BreakdownMetricRow(label: "Consecutive Active Days", value: "\(profile.consecutiveActiveDays)", valueColor: AppColors.whiteText)
                         }
                     }
+
+                    if !recentEvents.isEmpty {
+                        BreakdownCard(title: "Recent Impact") {
+                            BreakdownImpactList(events: recentEvents)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -85,6 +115,14 @@ struct GlobalReputationBreakdownSheetView: View {
         .background(BreakdownSheetBackground())
         .task { await loadData() }
         .refreshable { await loadData() }
+        .onReceive(NotificationCenter.default.publisher(for: .reputationDidUpdate)) { _ in
+            Task { await loadData() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard let userId = notification.userInfo?["userId"] as? UUID,
+                  userId == rlAppState.currentUser?.id else { return }
+            Task { await loadData() }
+        }
     }
 
     private func loadData() async {
@@ -93,7 +131,12 @@ struct GlobalReputationBreakdownSheetView: View {
         defer { isLoading = false }
 
         do {
-            profile = try await rlAppState.realApi.getMyGlobalReputation()
+            async let profileTask = rlAppState.realApi.getMyGlobalReputation()
+            async let historyTask = rlAppState.realApi.getReputationHistory(page: 1, pageSize: 10)
+            let (loadedProfile, history) = try await (profileTask, historyTask)
+            profile = loadedProfile
+            recentEvents = history.events.filter { $0.isVisibleActiveRuleEvent }
+            lastUpdatedAt = Date()
         } catch {
             if error is CancellationError { return }
             errorMessage = error.localizedDescription
@@ -107,6 +150,8 @@ struct GlobalAccuracyBreakdownSheetView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var profile: RLAccuracyProfileDTO?
+    @State private var recentPredictionEvents: [RLReputationEventDTO] = []
+    @State private var lastUpdatedAt: Date?
 
     var body: some View {
         ScrollView {
@@ -139,6 +184,11 @@ struct GlobalAccuracyBreakdownSheetView: View {
                             centeredBaseline: false
                         )
                         .padding(.top, 10)
+
+                        HStack {
+                            Spacer()
+                            BreakdownFreshnessBadge(date: lastUpdatedAt)
+                        }
                     }
 
                     BreakdownCard(title: "Performance") {
@@ -149,6 +199,11 @@ struct GlobalAccuracyBreakdownSheetView: View {
                             BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: .orange)
                         }
                     }
+
+                    BreakdownRulesCard(
+                        title: "How Accuracy Changes",
+                        rules: accuracyRuleItems()
+                    )
 
                     BreakdownCard(title: "Streaks") {
                         HStack(spacing: 8) {
@@ -171,6 +226,12 @@ struct GlobalAccuracyBreakdownSheetView: View {
                             }
                         }
                     }
+
+                    if !recentPredictionEvents.isEmpty {
+                        BreakdownCard(title: "Recent Impact") {
+                            BreakdownImpactList(events: recentPredictionEvents)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -179,6 +240,14 @@ struct GlobalAccuracyBreakdownSheetView: View {
         .background(BreakdownSheetBackground())
         .task { await loadData() }
         .refreshable { await loadData() }
+        .onReceive(NotificationCenter.default.publisher(for: .accuracyDidUpdate)) { _ in
+            Task { await loadData() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard let userId = notification.userInfo?["userId"] as? UUID,
+                  userId == rlAppState.currentUser?.id else { return }
+            Task { await loadData() }
+        }
     }
 
     private func loadData() async {
@@ -187,7 +256,12 @@ struct GlobalAccuracyBreakdownSheetView: View {
         defer { isLoading = false }
 
         do {
-            profile = try await rlAppState.realApi.getMyGlobalAccuracy()
+            async let profileTask = rlAppState.realApi.getMyGlobalAccuracy()
+            async let historyTask = rlAppState.realApi.getReputationHistory(page: 1, pageSize: 10)
+            let (loadedProfile, history) = try await (profileTask, historyTask)
+            profile = loadedProfile
+            recentPredictionEvents = history.events.filter(\.isPredictionEvent)
+            lastUpdatedAt = Date()
         } catch {
             if error is CancellationError { return }
             errorMessage = error.localizedDescription
@@ -202,6 +276,7 @@ struct GuildReputationBreakdownSheetView: View {
     @State private var errorMessage: String?
     @State private var profile: RLReputationProfileDTO?
     @State private var tiers: [RLReputationTierDTO] = []
+    @State private var lastUpdatedAt: Date?
 
     var body: some View {
         ScrollView {
@@ -238,6 +313,11 @@ struct GuildReputationBreakdownSheetView: View {
                             }
                         }
 
+                        HStack {
+                            Spacer()
+                            BreakdownFreshnessBadge(date: lastUpdatedAt)
+                        }
+
                         BreakdownDateBarChart(
                             points: reputationTrendPoints(
                                 from: profile.reputationTrend30d,
@@ -271,16 +351,30 @@ struct GuildReputationBreakdownSheetView: View {
 
                     BreakdownCard(title: "Breakdown") {
                         VStack(spacing: 10) {
+                            BreakdownBarRow(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: .green)
                             BreakdownBarRow(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: .blue)
-                            BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: .cyan)
+                            if profile.breakdown.activityRep != 0 {
+                                BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: .cyan)
+                            }
                             if profile.breakdown.penaltyRep != 0 {
                                 BreakdownBarRow(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: .red)
                             }
                         }
                     }
 
+                    BreakdownRulesCard(
+                        title: "How Reputation Changes",
+                        rules: reputationRuleItems()
+                    )
+
                     BreakdownCard(title: "Limits") {
                         BreakdownMetricRow(label: "Daily Social Cap Remaining", value: "\(Int(profile.dailySocialCapRemaining))", valueColor: AppColors.whiteText)
+                    }
+
+                    if !profile.recentEvents.isEmpty {
+                        BreakdownCard(title: "Recent Impact") {
+                            BreakdownImpactList(events: profile.recentEvents.filter { $0.isVisibleActiveRuleEvent })
+                        }
                     }
                 }
             }
@@ -290,6 +384,14 @@ struct GuildReputationBreakdownSheetView: View {
         .background(BreakdownSheetBackground())
         .task { await loadData() }
         .refreshable { await loadData() }
+        .onReceive(NotificationCenter.default.publisher(for: .reputationDidUpdate)) { _ in
+            Task { await loadData() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard let guildId = notification.userInfo?["guildId"] as? UUID,
+                  guildId == rlAppState.currentGuild?.id else { return }
+            Task { await loadData() }
+        }
     }
 
     private func loadData() async {
@@ -308,16 +410,13 @@ struct GuildReputationBreakdownSheetView: View {
             let (loadedProfile, loadedTiers) = try await (profileTask, tiersTask)
             profile = loadedProfile
             tiers = loadedTiers
+            lastUpdatedAt = Date()
         } catch {
             if error is CancellationError { return }
             errorMessage = error.localizedDescription
         }
     }
 
-    private func fraction(value: Int, total: Int) -> Double {
-        guard total != 0 else { return 0 }
-        return max(0, min(1, Double(abs(value)) / Double(abs(total))))
-    }
 }
 
 struct GuildAccuracyBreakdownSheetView: View {
@@ -326,6 +425,8 @@ struct GuildAccuracyBreakdownSheetView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var profile: RLAccuracyProfileDTO?
+    @State private var recentPredictionEvents: [RLReputationEventDTO] = []
+    @State private var lastUpdatedAt: Date?
 
     var body: some View {
         ScrollView {
@@ -358,6 +459,11 @@ struct GuildAccuracyBreakdownSheetView: View {
                             centeredBaseline: false
                         )
                         .padding(.top, 10)
+
+                        HStack {
+                            Spacer()
+                            BreakdownFreshnessBadge(date: lastUpdatedAt)
+                        }
                     }
 
                     BreakdownCard(title: "Performance") {
@@ -372,11 +478,36 @@ struct GuildAccuracyBreakdownSheetView: View {
                         }
                     }
 
+                    BreakdownRulesCard(
+                        title: "How Accuracy Changes",
+                        rules: accuracyRuleItems()
+                    )
+
                     BreakdownCard(title: "Streaks") {
                         HStack(spacing: 8) {
                             BreakdownMetricPill(label: "Win", value: "\(profile.winStreak)", tint: .green)
                             BreakdownMetricPill(label: "Loss", value: "\(profile.lossStreak)", tint: .red)
                             BreakdownMetricPill(label: "Best", value: "\(profile.bestWinStreak)", tint: .yellow)
+                        }
+                    }
+
+                    if let rollingAccuracy = profile.rollingAccuracyFormatted {
+                        BreakdownCard(title: "30-Day Rolling") {
+                            HStack(spacing: 12) {
+                                BreakdownMetricPill(label: "Accuracy", value: rollingAccuracy, tint: AppColors.accentColor)
+                                BreakdownMetricPill(label: "Wins", value: "\(profile.rollingWins30d)", tint: .green)
+                                BreakdownMetricPill(
+                                    label: "Losses",
+                                    value: "\(max(0, profile.rollingTotal30d - profile.rollingWins30d))",
+                                    tint: .red
+                                )
+                            }
+                        }
+                    }
+
+                    if !recentPredictionEvents.isEmpty {
+                        BreakdownCard(title: "Recent Impact") {
+                            BreakdownImpactList(events: recentPredictionEvents)
                         }
                     }
                 }
@@ -387,6 +518,14 @@ struct GuildAccuracyBreakdownSheetView: View {
         .background(BreakdownSheetBackground())
         .task { await loadData() }
         .refreshable { await loadData() }
+        .onReceive(NotificationCenter.default.publisher(for: .accuracyDidUpdate)) { _ in
+            Task { await loadData() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard let guildId = notification.userInfo?["guildId"] as? UUID,
+                  guildId == rlAppState.currentGuild?.id else { return }
+            Task { await loadData() }
+        }
     }
 
     private func loadData() async {
@@ -400,7 +539,12 @@ struct GuildAccuracyBreakdownSheetView: View {
         defer { isLoading = false }
 
         do {
-            profile = try await rlAppState.realApi.getMyGuildAccuracy(guildId: guildId)
+            async let profileTask = rlAppState.realApi.getMyGuildAccuracy(guildId: guildId)
+            async let historyTask = rlAppState.realApi.getReputationHistory(guildId: guildId, page: 1, pageSize: 10)
+            let (loadedProfile, history) = try await (profileTask, historyTask)
+            profile = loadedProfile
+            recentPredictionEvents = history.events.filter(\.isPredictionEvent)
+            lastUpdatedAt = Date()
         } catch {
             if error is CancellationError { return }
             errorMessage = error.localizedDescription
@@ -642,4 +786,161 @@ private func breakdownAccuracyColor(_ value: Double) -> Color {
     if value >= 0.5 { return .yellow }
     if value >= 0.3 { return .orange }
     return .red
+}
+
+private struct BreakdownRuleItem: Identifiable {
+    let title: String
+    let detail: String
+    let tint: Color
+
+    var id: String { title }
+}
+
+private func reputationRuleItems() -> [BreakdownRuleItem] {
+    [
+        BreakdownRuleItem(title: "Tracked setup result", detail: "Resolved TP and SL outcomes change reputation.", tint: .green),
+        BreakdownRuleItem(title: "Marker likes", detail: "Likes add reputation and unlikes remove part of it.", tint: .pink),
+        BreakdownRuleItem(title: "Marker comments", detail: "Comments on your marker add reputation while deleted comments reverse it.", tint: .blue),
+        BreakdownRuleItem(title: "Activity bonus", detail: "Daily participation and streak bonuses add reputation.", tint: .cyan),
+        BreakdownRuleItem(title: "Reports and decay", detail: "Moderation penalties and inactivity decay reduce reputation.", tint: .red),
+    ]
+}
+
+private func accuracyRuleItems() -> [BreakdownRuleItem] {
+    [
+        BreakdownRuleItem(title: "TP hit", detail: "A resolved tracked setup that hits TP counts as a win.", tint: .green),
+        BreakdownRuleItem(title: "SL hit", detail: "A resolved tracked setup that hits SL counts as a loss.", tint: .red),
+        BreakdownRuleItem(title: "Expired setup", detail: "Expired tracked setups do not change accuracy.", tint: .gray),
+    ]
+}
+
+private func fraction(value: Int, total: Int) -> Double {
+    guard total != 0 else { return 0 }
+    return max(0, min(1, Double(abs(value)) / Double(abs(total))))
+}
+
+private struct BreakdownRulesCard: View {
+    let title: String
+    let rules: [BreakdownRuleItem]
+
+    var body: some View {
+        BreakdownCard(title: title) {
+            VStack(spacing: 10) {
+                ForEach(rules) { rule in
+                    BreakdownRuleRow(rule: rule)
+                }
+            }
+        }
+    }
+}
+
+private struct BreakdownRuleRow: View {
+    let rule: BreakdownRuleItem
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(rule.tint)
+                .frame(width: 8, height: 8)
+                .padding(.top, 5)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(rule.title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+                Text(rule.detail)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct BreakdownImpactList: View {
+    let events: [RLReputationEventDTO]
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(events.prefix(6)) { event in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: event.eventIcon)
+                        .font(.caption)
+                        .foregroundColor(event.eventColor)
+                        .frame(width: 18, height: 18)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(event.displayEventType)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.whiteText)
+                        Text(relativeTime(for: event.createdAt))
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    Spacer()
+                    Text(event.pointsFormatted)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(event.isPositive ? .green : .red)
+                }
+            }
+        }
+    }
+
+    private func relativeTime(for date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+private struct BreakdownFreshnessBadge: View {
+    let date: Date?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(AppColors.accentColor)
+                .frame(width: 6, height: 6)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(AppColors.greyText)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(AppColors.surfaceWhite04)
+        )
+    }
+
+    private var label: String {
+        guard let date else { return "Live data" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return "Updated \(formatter.localizedString(for: date, relativeTo: Date()))"
+    }
+}
+
+private extension RLReputationEventDTO {
+    var isPredictionEvent: Bool {
+        eventType == "prediction_win" || eventType == "prediction_loss"
+    }
+
+    var isVisibleActiveRuleEvent: Bool {
+        switch eventType {
+        case "prediction_win",
+             "prediction_loss",
+             "marker_liked",
+             "marker_unliked",
+             "marker_commented",
+             "marker_comment_deleted",
+             "activity_bonus",
+             "streak_bonus",
+             "decay",
+             "report_penalty":
+            return true
+        default:
+            return false
+        }
+    }
 }

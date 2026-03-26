@@ -510,6 +510,20 @@ struct GuildUserDetailViewRL: View {
         .task {
             await loadProfileData()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard let userId = notification.userInfo?["userId"] as? UUID,
+                  userId == member.userId else { return }
+
+            if let newGuildReputation = notification.userInfo?["newGuildReputation"] as? Int,
+               let newGlobalReputation = notification.userInfo?["newGlobalReputation"] as? Int,
+               let newAccuracyRate = notification.userInfo?["newAccuracyRate"] as? Double {
+                member = member.withPerformance(
+                    guildReputation: newGuildReputation,
+                    accuracyRate: newAccuracyRate,
+                    globalReputation: newGlobalReputation
+                )
+            }
+        }
     }
     
     private func loadProfileData() async {

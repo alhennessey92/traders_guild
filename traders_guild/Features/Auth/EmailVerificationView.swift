@@ -42,7 +42,7 @@ struct EmailVerificationView: View {
                         .foregroundColor(AppColors.accentColor)
                         .padding(.bottom, 16)
 
-                    Text("We've sent a verification link to:")
+                    Text("We've sent a verification code to:")
                         .font(AppFonts.smallNotice())
                         .foregroundColor(AppColors.greyText)
                         .multilineTextAlignment(.center)
@@ -54,7 +54,7 @@ struct EmailVerificationView: View {
                         .padding(.top, 4)
                         .padding(.bottom, 20)
 
-                    Text("Check your inbox and click the link to verify your email. This unlocks full access to Traders Guild, including joining and creating guilds.")
+                    Text("Check your inbox and enter the 5-character code to verify your email. This unlocks full access to Traders Guild, including joining and creating guilds.")
                         .font(AppFonts.smallNotice())
                         .foregroundColor(AppColors.greyText)
                         .multilineTextAlignment(.center)

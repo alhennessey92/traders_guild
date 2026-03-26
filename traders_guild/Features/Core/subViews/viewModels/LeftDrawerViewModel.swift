@@ -944,6 +944,13 @@ class LeftDrawerViewModel: ObservableObject {
             }
             handleAccuracyUpdate(update)
 
+        case .memberPerformanceUpdated:
+            guard let update = message.payload(as: RLGuildMemberPerformanceUpdatePayload.self) else {
+                print("⚠️ Failed to decode member performance payload")
+                return
+            }
+            handleMemberPerformanceUpdate(update)
+
         default:
             break
         }
@@ -1030,19 +1037,12 @@ class LeftDrawerViewModel: ObservableObject {
         // Update in-memory state so UI reflects immediately
         if let membership = rlAppState?.currentMembership,
            update.guildId == membership.guildId.uuidString {
-            // Create updated membership with new reputation
-            let updated = RLGuildMembershipDTO(
-                id: membership.id,
-                userId: membership.userId,
-                guildId: membership.guildId,
-                role: membership.role,
-                reputation: update.newGuildReputation,
-                contributionScore: membership.contributionScore,
-                status: membership.status,
-                dateJoined: membership.dateJoined,
-                accuracyRate: membership.accuracyRate
-            )
-            rlAppState?.currentMembership = updated
+            rlAppState?.currentMembership = membership.withReputation(update.newGuildReputation)
+        }
+
+        if let currentUser = rlAppState?.currentUser,
+           update.userId == currentUser.id.uuidString {
+            rlAppState?.currentUser = currentUser.withGlobalReputation(update.newGlobalReputation)
         }
 
         // Notify observers for any reputation-dependent views
@@ -1067,19 +1067,9 @@ class LeftDrawerViewModel: ObservableObject {
         if let membership = rlAppState?.currentMembership,
            update.guildId == membership.guildId.uuidString,
            update.userId == rlAppState?.currentUser?.id.uuidString {
-            let updated = RLGuildMembershipDTO(
-                id: membership.id,
-                userId: membership.userId,
-                guildId: membership.guildId,
-                role: membership.role,
-                reputation: membership.reputation,
-                contributionScore: membership.contributionScore,
-                status: membership.status,
-                dateJoined: membership.dateJoined,
-                accuracyRate: update.newAccuracyRate
-            )
-            rlAppState?.currentMembership = updated
+            rlAppState?.currentMembership = membership.withReputation(membership.reputation, accuracyRate: update.newAccuracyRate)
         }
+        rlAppState?.currentGlobalAccuracy = update.newGlobalAccuracy
 
         // Notify observers for any accuracy-dependent views
         NotificationCenter.default.post(
@@ -1088,10 +1078,90 @@ class LeftDrawerViewModel: ObservableObject {
             userInfo: [
                 "guildId": update.guildId,
                 "newAccuracyRate": update.newAccuracyRate,
+                "newGlobalAccuracy": update.newGlobalAccuracy,
                 "totalPredictions": update.totalPredictions,
                 "successfulPredictions": update.successfulPredictions,
                 "winStreak": update.winStreak,
                 "isWin": update.isWin,
+            ]
+        )
+    }
+
+    private func handleMemberPerformanceUpdate(_ update: RLGuildMemberPerformanceUpdatePayload) {
+        guard
+            let guildId = UUID(uuidString: update.guildId),
+            let userId = UUID(uuidString: update.userId),
+            let membershipId = UUID(uuidString: update.membershipId)
+        else {
+            return
+        }
+
+        if let index = guildMembers.firstIndex(where: { $0.membershipId == membershipId || $0.userId == userId }) {
+            guildMembers[index] = guildMembers[index].withPerformance(
+                guildReputation: update.newGuildReputation,
+                accuracyRate: update.newAccuracyRate,
+                globalReputation: update.newGlobalReputation
+            )
+        }
+
+        if let index = friendsRL.firstIndex(where: { $0.userId == userId }) {
+            friendsRL[index] = friendsRL[index].withGlobalReputation(update.newGlobalReputation)
+        }
+
+        if let rlAppState = rlAppStateRef {
+            if let currentUser = rlAppState.currentUser, currentUser.id == userId {
+                rlAppState.currentUser = currentUser.withGlobalReputation(update.newGlobalReputation)
+                rlAppState.currentGlobalAccuracy = update.newGlobalAccuracy
+            }
+
+            if let membership = rlAppState.currentMembership, membership.id == membershipId {
+                rlAppState.currentMembership = membership.withReputation(
+                    update.newGuildReputation,
+                    accuracyRate: update.newAccuracyRate
+                )
+            }
+
+            if let currentGuild = rlAppState.currentGuild, currentGuild.id == guildId {
+                rlAppState.currentGuild = currentGuild.withReputation(update.guildReputation)
+            }
+
+            rlAppState.userGuilds = rlAppState.userGuilds.map { guildWithMembership in
+                guard guildWithMembership.guild.id == guildId else { return guildWithMembership }
+                let updatedGuild = guildWithMembership.guild.withReputation(update.guildReputation)
+                let updatedMembership = guildWithMembership.membership.id == membershipId
+                    ? guildWithMembership.membership.withReputation(update.newGuildReputation, accuracyRate: update.newAccuracyRate)
+                    : guildWithMembership.membership
+                return RLGuildWithMembership(guild: updatedGuild, membership: updatedMembership)
+            }
+        }
+
+        if update.eventType == "prediction_win" || update.eventType == "prediction_loss",
+           let rlAppState = rlAppStateRef,
+           rlAppState.currentGuild?.id == guildId {
+            Task { [weak self] in
+                guard let self else { return }
+                await self.refreshAccuracyLeaderboard(guildId: guildId, rlAppState: rlAppState)
+            }
+        }
+
+        NotificationCenter.default.post(
+            name: .guildMemberPerformanceDidUpdate,
+            object: nil,
+            userInfo: [
+                "guildId": guildId,
+                "userId": userId,
+                "membershipId": membershipId,
+                "eventType": update.eventType,
+                "newGuildReputation": update.newGuildReputation,
+                "newGlobalReputation": update.newGlobalReputation,
+                "newAccuracyRate": update.newAccuracyRate,
+                "newGlobalAccuracy": update.newGlobalAccuracy,
+                "totalPredictions": update.totalPredictions,
+                "successfulPredictions": update.successfulPredictions,
+                "guildReputation": update.guildReputation,
+                "guildTotalPredictions": update.guildTotalPredictions,
+                "guildCorrectPredictions": update.guildCorrectPredictions,
+                "guildAverageAccuracy": update.guildAverageAccuracy,
             ]
         )
     }
@@ -1288,5 +1358,4 @@ extension RLGuildMemberDTO {
         )
     }
 }
-
 

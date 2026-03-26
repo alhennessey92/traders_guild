@@ -179,6 +179,10 @@ struct chartSheetMarkersView: View {
             guard shouldRefresh(for: notification) else { return }
             Task { await loadMarkerActivity(forceRefresh: true) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard shouldRefresh(for: notification) else { return }
+            Task { await loadMarkerActivity(forceRefresh: true) }
+        }
         .sheet(isPresented: $showMarkerSettingsSheet) {
             if let markerManager = chartViewModel.markerManager {
                 MarkerFilterSettingsSheet(

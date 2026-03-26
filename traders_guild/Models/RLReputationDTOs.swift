@@ -81,6 +81,7 @@ struct RLReputationEventDTO: Codable, Identifiable, Equatable {
         case "marker_liked":      return "Marker Liked"
         case "marker_unliked":    return "Unlike"
         case "marker_commented":  return "Marker Comment"
+        case "marker_comment_deleted": return "Comment Removed"
         case "comment_liked":     return "Comment Liked"
         case "message_liked":     return "Message Liked"
         case "content_trending":  return "Trending Bonus"
@@ -99,6 +100,7 @@ struct RLReputationEventDTO: Codable, Identifiable, Equatable {
         case "marker_liked":      return "heart.fill"
         case "marker_unliked":    return "heart.slash"
         case "marker_commented":  return "bubble.left.fill"
+        case "marker_comment_deleted": return "bubble.left.and.exclamationmark.bubble.right.fill"
         case "comment_liked":     return "hand.thumbsup.fill"
         case "message_liked":     return "hand.thumbsup"
         case "content_trending":  return "flame.fill"
@@ -116,7 +118,8 @@ struct RLReputationEventDTO: Codable, Identifiable, Equatable {
         case "prediction_loss":                   return .red
         case "marker_liked", "comment_liked",
              "message_liked":                     return .pink
-        case "marker_unliked":                    return .gray
+        case "marker_unliked", "marker_comment_deleted":
+                                                   return .gray
         case "marker_commented":                  return .blue
         case "content_trending":                  return .orange
         case "activity_bonus", "streak_bonus":    return .cyan
@@ -141,8 +144,8 @@ struct RLReputationEventDTO: Codable, Identifiable, Equatable {
 // MARK: - Reputation Breakdown
 
 /// Breakdown of reputation by source category. Maps to backend ReputationBreakdownResponse.
-/// Reputation is contribution-based ONLY — no prediction performance.
 struct RLReputationBreakdownDTO: Codable, Equatable {
+    let predictionRep: Int
     let socialRep: Int
     let activityRep: Int
     let penaltyRep: Int
@@ -285,6 +288,7 @@ struct RLGlobalReputationDTO: Codable, Equatable {
     let userId: UUID
     let globalReputation: Int
     let tier: RLReputationTierDTO
+    let breakdown: RLReputationBreakdownDTO
     let guildContributions: [RLGuildContributionDTO]
     let modifiers: RLGlobalModifiersDTO
     let consecutiveActiveDays: Int
@@ -295,6 +299,7 @@ struct RLGlobalReputationDTO: Codable, Equatable {
         case userId
         case globalReputation
         case tier
+        case breakdown
         case guildContributions
         case modifiers
         case consecutiveActiveDays
@@ -313,6 +318,13 @@ struct RLGlobalReputationDTO: Codable, Equatable {
             icon: "circle.fill",
             colorHex: "#8E8E93",
             influenceBonus: 1.0
+        )
+        breakdown = try container.decodeIfPresent(RLReputationBreakdownDTO.self, forKey: .breakdown) ?? RLReputationBreakdownDTO(
+            predictionRep: 0,
+            socialRep: 0,
+            activityRep: 0,
+            penaltyRep: 0,
+            total: 0
         )
         guildContributions = try container.decodeIfPresent([RLGuildContributionDTO].self, forKey: .guildContributions) ?? []
         modifiers = try container.decodeIfPresent(RLGlobalModifiersDTO.self, forKey: .modifiers) ?? RLGlobalModifiersDTO(
@@ -572,6 +584,7 @@ struct RLAccuracyUpdatePayload: Codable, Equatable {
     let eventType: String
     let isWin: Bool
     let newAccuracyRate: Double
+    let newGlobalAccuracy: Double
     let totalPredictions: Int
     let successfulPredictions: Int
     let winStreak: Int
@@ -591,4 +604,23 @@ struct RLAccuracyUpdatePayload: Codable, Equatable {
     var resultColor: Color {
         isWin ? .green : .red
     }
+}
+
+struct RLGuildMemberPerformanceUpdatePayload: Codable, Equatable {
+    let guildId: String
+    let membershipId: String
+    let userId: String
+    let eventType: String
+    let newGuildReputation: Int
+    let newGlobalReputation: Int
+    let newAccuracyRate: Double
+    let newGlobalAccuracy: Double
+    let totalPredictions: Int
+    let successfulPredictions: Int
+    let tierLevel: Int
+    let tierColorHex: String
+    let guildReputation: Int
+    let guildTotalPredictions: Int
+    let guildCorrectPredictions: Int
+    let guildAverageAccuracy: Double
 }

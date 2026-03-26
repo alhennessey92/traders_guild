@@ -1678,6 +1678,7 @@ struct DataPrivacyView: View {
 
 struct HelpCenterView: View {
     let onBack: () -> Void
+    let onContactSupport: () -> Void
     
     @State private var searchText: String = ""
     @State private var expandedFAQ: String? = nil
@@ -1755,7 +1756,7 @@ struct HelpCenterView: View {
                                 .foregroundColor(AppColors.greyText)
                                 .multilineTextAlignment(.center)
                             
-                            Button(action: {}) {
+                            Button(action: onContactSupport) {
                                 HStack {
                                     Image(systemName: "envelope.fill")
                                     Text("Contact Support")
@@ -2678,4 +2679,3 @@ struct SettingsSecureField: View {
 
 // NOTE: SettingsSectionHeader, SettingsToggleRow, and SettingsButtonRow
 // are defined in MessagingSettings.swift and shared across the app.
-

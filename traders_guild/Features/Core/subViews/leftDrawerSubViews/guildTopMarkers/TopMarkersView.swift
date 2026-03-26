@@ -17,6 +17,7 @@ struct TopMarkersView: View {
     @State private var selectedScope: RLMarkerActivityScope = .guild
 
     @State private var activitySnapshots: [RLMarkerActivityTopTab: MarkerActivityFeedSnapshot] = [:]
+    @State private var symbolCache: [UUID: RLTradingSymbolDTO] = [:]
     @State private var cacheNamespace = ""
     @State private var isLoading = false
     @State private var hasLoaded = false
@@ -103,6 +104,10 @@ struct TopMarkersView: View {
             guard shouldRefresh(for: notification) else { return }
             Task { await loadActivity(forceRefresh: true) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard shouldRefresh(for: notification) else { return }
+            Task { await loadActivity(forceRefresh: true) }
+        }
     }
 
     @ViewBuilder
@@ -130,6 +135,7 @@ struct TopMarkersView: View {
                     MarkerActivityCard(
                         marker: marker,
                         showMyBadge: marker.isCurrentUserMarker,
+                        currentPrice: symbolCache[marker.symbolId]?.currentPrice,
                         likeAnimationMarkerId: likedMarkerId,
                         onLike: { handleLike(marker: marker) },
                         onTap: { handleMarkerTap(marker: marker) }
@@ -201,6 +207,7 @@ struct TopMarkersView: View {
             await MainActor.run {
                 cacheNamespace = reloadKey
                 activitySnapshots = [:]
+                symbolCache = [:]
                 hasLoaded = false
                 loadError = nil
             }
@@ -236,6 +243,8 @@ struct TopMarkersView: View {
                 loadError = nil
                 isLoading = false
             }
+
+            await loadLiveSymbols(for: Array(snapshot.markersByScope.values.joined()))
 
             Task {
                 await prefetchRemainingTabs(excluding: requestTab, guildId: guildId)
@@ -277,7 +286,35 @@ struct TopMarkersView: View {
                 await MainActor.run {
                     activitySnapshots[tab] = snapshot
                 }
+                await loadLiveSymbols(for: Array(snapshot.markersByScope.values.joined()))
             }
+        }
+    }
+
+    private func loadLiveSymbols(for markers: [RLMarkerActivityItemDTO], forceReload: Bool = false) async {
+        let uniqueSymbolIds = Set(markers.map(\.symbolId))
+        let symbolIdsToFetch = uniqueSymbolIds.filter { forceReload || symbolCache[$0] == nil }
+        guard !symbolIdsToFetch.isEmpty else { return }
+
+        var updates: [UUID: RLTradingSymbolDTO] = [:]
+        await withTaskGroup(of: (UUID, RLTradingSymbolDTO?).self) { group in
+            for symbolId in symbolIdsToFetch {
+                group.addTask {
+                    let symbol = try? await rlAppState.realApi.getSymbol(symbolId: symbolId)
+                    return (symbolId, symbol)
+                }
+            }
+
+            for await (symbolId, symbol) in group {
+                if let symbol {
+                    updates[symbolId] = symbol
+                }
+            }
+        }
+
+        guard !updates.isEmpty else { return }
+        await MainActor.run {
+            symbolCache.merge(updates) { _, newValue in newValue }
         }
     }
 
@@ -397,6 +434,24 @@ struct MarkerActivityCard: View {
         return (status == .approachingTP || status == .approachingSL) ? status : nil
     }
 
+    private var liveSetupMetrics: LiveSetupMetrics? {
+        guard marker.intentEnum == .setup,
+              let setupSummary = marker.setupSummary,
+              let trackingState,
+              trackingState.isLive,
+              let stopLossPrice = setupSummary.slPrice,
+              let targetPrice = setupSummary.tpPrice,
+              let currentPrice else { return nil }
+
+        let entryPrice = setupSummary.entryPrice ?? marker.price
+        return LiveSetupMetrics.compute(
+            entryPrice: entryPrice,
+            stopLossPrice: stopLossPrice,
+            targetPrice: targetPrice,
+            currentPrice: currentPrice
+        )
+    }
+
     private var outcome: SetupOutcome? {
         guard marker.intentEnum == .setup,
               let trackingState,
@@ -408,7 +463,9 @@ struct MarkerActivityCard: View {
             triggerPrice: marker.predictionResult?.triggerPrice,
             triggeredAtFormatted: marker.predictionResult?.triggeredAtFormatted,
             pnl: marker.predictionResult?.pnl,
-            isTracked: true
+            isTracked: true,
+            guildRepDelta: marker.predictionResult?.guildRepDelta,
+            globalRepDelta: marker.predictionResult?.globalRepDelta
         )
     }
 
@@ -542,6 +599,19 @@ struct MarkerActivityCard: View {
                                         )
                                     }
 
+                                    if let repText = outcome.repChangeText {
+                                        MarkerActivityMetaChip(
+                                            icon: "shield.lefthalf.filled",
+                                            text: "Rep \(repText)",
+                                            tint: (outcome.guildRepDelta ?? 0) >= 0
+                                                ? AppColors.statusPositive70
+                                                : AppColors.statusNegative70,
+                                            background: ((outcome.guildRepDelta ?? 0) >= 0
+                                                ? AppColors.statusPositive70
+                                                : AppColors.statusNegative70).opacity(0.15)
+                                        )
+                                    }
+
                                     if outcome.isExpired {
                                         MarkerActivityMetaChip(
                                             icon: "clock.badge.xmark",
@@ -558,6 +628,34 @@ struct MarkerActivityCard: View {
                                         .foregroundColor(AppColors.surfaceWhite70)
                                         .lineLimit(2)
                                 }
+                            }
+                            .padding(.top, 2)
+                        } else if let liveSetupMetrics {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 6) {
+                                    MarkerActivityMetaChip(
+                                        icon: liveSetupMetrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right",
+                                        text: "Live \(formatPnL(liveSetupMetrics.currentPnL))",
+                                        tint: liveSetupMetrics.isMovingTowardTarget
+                                            ? AppColors.statusInfo85
+                                            : AppColors.statusNegative70,
+                                        background: liveSetupMetrics.isMovingTowardTarget
+                                            ? AppColors.statusInfo15
+                                            : AppColors.statusNegative15
+                                    )
+
+                                    MarkerActivityMetaChip(
+                                        icon: "dollarsign.circle",
+                                        text: formatPrice(liveSetupMetrics.currentPrice),
+                                        tint: AppColors.surfaceWhite85,
+                                        background: AppColors.surfaceWhite08
+                                    )
+                                }
+
+                                LiveSetupProgressStrip(
+                                    metrics: liveSetupMetrics,
+                                    formatPrice: formatPrice(_:)
+                                )
                             }
                             .padding(.top, 2)
                         }
@@ -599,6 +697,96 @@ struct MarkerActivityCard: View {
             return String(format: "%.4f", price)
         }
         return String(format: "%.6f", price)
+    }
+}
+
+// LiveSetupMetrics is defined in MarkerPredictionProgress.swift
+
+private struct LiveSetupProgressStrip: View {
+    let metrics: LiveSetupMetrics
+    let formatPrice: (Double) -> String
+
+    private var targetTint: Color { AppColors.statusInfo85 }
+    private var stopTint: Color { AppColors.statusNegative70 }
+    private var swingTint: Color { metrics.isMovingTowardTarget ? targetTint : stopTint }
+
+    private var entryPosition: CGFloat {
+        CGFloat(min(max(metrics.entryPosition, 0), 1))
+    }
+
+    private var currentPosition: CGFloat {
+        CGFloat(min(max(metrics.currentPosition, 0), 1))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let safeWidth = max(width, 1)
+                let entryX = safeWidth * entryPosition
+                let currentX = safeWidth * currentPosition
+                let swingStart = min(entryX, currentX)
+                let swingWidth = max(abs(currentX - entryX), 2)
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(AppColors.surfaceWhite08)
+
+                    HStack(spacing: 0) {
+                        if metrics.isLong {
+                            Rectangle()
+                                .fill(stopTint.opacity(0.35))
+                                .frame(width: entryX)
+                            Rectangle()
+                                .fill(targetTint.opacity(0.35))
+                        } else {
+                            Rectangle()
+                                .fill(targetTint.opacity(0.35))
+                                .frame(width: entryX)
+                            Rectangle()
+                                .fill(stopTint.opacity(0.35))
+                        }
+                    }
+                    .clipShape(Capsule())
+
+                    Capsule()
+                        .fill(swingTint)
+                        .frame(width: swingWidth)
+                        .offset(x: swingStart)
+
+                    Capsule()
+                        .fill(AppColors.surfaceWhite85.opacity(0.65))
+                        .frame(width: 2)
+                        .offset(x: max(min(entryX - 1, safeWidth - 2), 0))
+
+                    Circle()
+                        .fill(swingTint)
+                        .frame(width: 10, height: 10)
+                        .overlay(
+                            Circle()
+                                .stroke(AppColors.systemBlack.opacity(0.55), lineWidth: 2)
+                        )
+                        .offset(x: max(min(currentX - 5, safeWidth - 10), 0), y: -1)
+                }
+            }
+            .frame(height: 8)
+
+            HStack {
+                Text("SL \(formatPrice(metrics.stopLossPrice))")
+                    .foregroundColor(stopTint)
+
+                Spacer()
+
+                Text("ENTRY \(formatPrice(metrics.entryPrice))")
+                    .foregroundColor(AppColors.surfaceWhite70)
+
+                Spacer()
+
+                Text("TP \(formatPrice(metrics.targetPrice))")
+                    .foregroundColor(targetTint)
+            }
+            .font(.system(size: 8, weight: .bold, design: .monospaced))
+        }
     }
 }
 

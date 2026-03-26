@@ -126,6 +126,7 @@ struct MarkerViewingGeneralTab: View {
         case .setup:
             VStack(spacing: 10) {
                 setupStatusBanner
+                liveProgressSection
                 readOnlyValueRow(
                     title: "Entry",
                     value: formattedPrice(setupEntryPrice),
@@ -430,11 +431,32 @@ struct MarkerViewingGeneralTab: View {
     private func setupStatusSubtitle(for state: RLTrackingState) -> String {
         switch state {
         case .draft: return "Setup is in draft"
-        case .armed: return "Monitoring for entry trigger"
+        case .armed: return "Tracking for entry trigger"
         case .active: return "Trade is live"
         case .tpHit: return "Target price was hit"
         case .slHit: return "Stop loss was hit"
         case .expired: return "Setup expired without trigger"
+        }
+    }
+
+    @ViewBuilder
+    private var liveProgressSection: some View {
+        let state = liveMarker.trackingState ?? .draft
+        if state.isLive,
+           let entryPrice = setupEntryPrice,
+           let tpPrice = setupTpPrice,
+           let slPrice = setupSlPrice,
+           let currentPrice = symbolDTO?.currentPrice,
+           let metrics = LiveSetupMetrics.compute(
+               entryPrice: entryPrice,
+               stopLossPrice: slPrice,
+               targetPrice: tpPrice,
+               currentPrice: currentPrice
+           ) {
+            DetailSetupProgressStrip(
+                metrics: metrics,
+                formatPrice: { formattedPrice($0) }
+            )
         }
     }
 
@@ -495,6 +517,27 @@ struct MarkerViewingGeneralTab: View {
                         .foregroundColor(pnl >= 0 ? AppColors.statusPositive90 : AppColors.statusNegative85)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
+                }
+
+                // Rep change
+                if let repText = outcome.repChangeText {
+                    HStack(spacing: 8) {
+                        Text("Rep Change")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer(minLength: 0)
+                        HStack(spacing: 4) {
+                            Image(systemName: "shield.lefthalf.filled")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(repText)
+                                .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                        }
+                        .foregroundColor(
+                            (outcome.guildRepDelta ?? 0) >= 0
+                                ? AppColors.statusPositive90
+                                : AppColors.statusNegative85
+                        )
+                    }
                 }
 
                 // Trigger price detail

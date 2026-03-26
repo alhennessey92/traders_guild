@@ -615,6 +615,7 @@ enum WSMessageType: String, Codable {
     case memberRoleChanged = "member_role_changed"
     case memberMuted = "member_muted"
     case memberSuspended = "member_suspended"
+    case memberPerformanceUpdated = "member_performance_updated"
 }
 
 // MARK: - Guild Event Payloads

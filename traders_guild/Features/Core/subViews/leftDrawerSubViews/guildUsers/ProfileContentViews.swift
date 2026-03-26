@@ -369,10 +369,26 @@ struct BreakdownEntryCard: View {
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText)
+                    HStack(spacing: 6) {
+                        Text(title)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.whiteText)
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(AppColors.accentColor)
+                                .frame(width: 6, height: 6)
+                            Text("Live")
+                                .font(.caption2)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(AppColors.surfaceWhite04)
+                        )
+                    }
                     Text(subtitle)
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)

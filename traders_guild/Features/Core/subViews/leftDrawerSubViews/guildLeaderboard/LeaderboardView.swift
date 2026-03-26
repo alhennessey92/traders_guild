@@ -204,6 +204,11 @@ struct LeaderboardListView: View {
         .task {
             await initialLoad()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
+            guard let guildId = notification.userInfo?["guildId"] as? UUID,
+                  let guildAverageAccuracy = notification.userInfo?["guildAverageAccuracy"] as? Double else { return }
+            joinedGuildAccuracy[guildId] = guildAverageAccuracy
+        }
     }
 }
 
