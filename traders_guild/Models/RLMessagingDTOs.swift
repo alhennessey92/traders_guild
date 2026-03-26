@@ -603,6 +603,13 @@ enum WSMessageType: String, Codable {
     case unsubscribed = "unsubscribed"
     case pong = "pong"
     case error = "error"
+    // Notification events
+    case notification = "notification"
+    case notificationStatsUpdate = "notification_stats_update"
+    case notificationRead = "notification_read"
+    case notificationDeleted = "notification_deleted"
+    case reputationUpdate = "reputation_update"
+    case accuracyUpdate = "accuracy_update"
     // Guild events
     case guildUpdated = "guild_updated"
     case memberRoleChanged = "member_role_changed"

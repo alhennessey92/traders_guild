@@ -73,6 +73,7 @@ struct MainView: View {
     @State private var showSheetOverlay: Bool = false
     @State private var dismissRightSheetsSignal: Bool = false
     @State private var dismissLeftSheetsSignal: Bool = false
+    @State private var pendingNotificationDrawerRoute: NotificationDrawerRoute? = nil
     
     // MARK: - Indicator Panel State
     @State private var rsiPanelHeight: CGFloat = 120
@@ -464,7 +465,28 @@ struct MainView: View {
                 notificationNavigationManager.configure(
                     rlAppState: rlAppState,
                     messagingManager: rlMessagingManager,
-                    rightDrawerViewModel: rightDrawerViewModel
+                    rightDrawerViewModel: rightDrawerViewModel,
+                    dismissOverlays: {
+                        dismissKeyboard()
+                        withAnimation(AnimationConstants.standard) {
+                            showLeftDrawer = false
+                            showRightDrawer = false
+                            showOverlay = false
+                            leftDragTranslation = 0
+                            rightDragTranslation = 0
+                        }
+                    },
+                    presentLeftDrawerRoute: { route in
+                        dismissKeyboard()
+                        pendingNotificationDrawerRoute = route
+                        withAnimation(AnimationConstants.standard) {
+                            showLeftDrawer = true
+                            showRightDrawer = false
+                            showOverlay = true
+                            leftDragTranslation = 0
+                            rightDragTranslation = 0
+                        }
+                    }
                 )
                 
                 // Initialize chart with data
@@ -534,6 +556,7 @@ struct MainView: View {
                         rlAppState.connectRealTimeService()
                     }
                     Task {
+                        _ = try? await rlAppState.fetchNotificationStats()
                         await chartViewModel.handleAppDidBecomeActive()
                         await rlAppState.refreshCurrentGuildReputation()
                     }
@@ -885,6 +908,7 @@ struct MainView: View {
             LeftDrawerMainView(
                 sheetOverlayVisible: $showSheetOverlay,
                 dismissSheetsSignal: $dismissLeftSheetsSignal,
+                notificationRoute: $pendingNotificationDrawerRoute,
                 onClose: {
                     dismissKeyboard()
                     withAnimation(AnimationConstants.standard) {

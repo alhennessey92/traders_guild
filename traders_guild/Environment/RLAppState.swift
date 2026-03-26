@@ -198,7 +198,11 @@ class RLAppState: ObservableObject {
     @Published var presenceByUserId: [UUID: Bool] = [:]
     private var currentPresenceChannel: String?
 
-    @Published var notificationStats: RLNotificationStatsDTO?
+    @Published var notificationStats: RLNotificationStatsDTO? {
+        didSet {
+            syncNotificationBadge()
+        }
+    }
     
     // ================================================================================================
     // MARK: - Initialization
@@ -385,6 +389,10 @@ class RLAppState: ObservableObject {
     
     func clearAlert() {
         currentAlert = nil
+    }
+
+    private func syncNotificationBadge() {
+        UIApplication.shared.applicationIconBadgeNumber = max(notificationStats?.unreadCount ?? 0, 0)
     }
     
     // ================================================================================================
@@ -2099,6 +2107,7 @@ class RLAppState: ObservableObject {
         currentMembership = nil
         userSettings = nil
         userGuilds = []
+        notificationStats = nil
         showGuildSelectionSheet = false
         isHandlingAuthFlow = false
         isOnboardingFlowActive = false
@@ -3350,6 +3359,10 @@ extension Notification.Name {
     /// Posted when a user's trading accuracy changes via WebSocket (prediction win/loss).
     /// userInfo: ["guildId": String, "newAccuracyRate": Double, "totalPredictions": Int, "successfulPredictions": Int, "winStreak": Int, "isWin": Bool]
     static let accuracyDidUpdate = Notification.Name("accuracyDidUpdate")
+
+    /// Posted when marker activity should refresh after lifecycle or result events.
+    /// userInfo: ["guildId": UUID?]
+    static let markerActivityDidChange = Notification.Name("markerActivityDidChange")
 
     /// Posted when a marker share card is tapped inside chat.
     /// userInfo: ["markerId": String, "symbolId": String, "timeframe": String, "candleTimestamp": Date, "symbolTicker": String?]

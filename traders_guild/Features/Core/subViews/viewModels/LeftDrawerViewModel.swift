@@ -232,12 +232,66 @@ class LeftDrawerViewModel: ObservableObject {
         var updated = userNotifications[index]
         updated.isRead = true
         userNotifications[index] = updated
+        applyLocalNotificationRead(notification: updated)
         print("✅ Updated notification cache: \(notificationId) -> isRead: true")
         
         // Fire-and-forget API call
         Task {
             await rlAppState?.markNotificationsAsRead(ids: [notificationId])
         }
+    }
+
+    private func applyNotificationStats(_ stats: RLNotificationStatsDTO) {
+        notificationStats = stats
+        rlAppStateRef?.notificationStats = stats
+    }
+
+    private func applyLocalNotificationRead(notification: RLNotificationDTO) {
+        guard let currentStats = notificationStats else { return }
+        let unreadCount = max(currentStats.unreadCount - 1, 0)
+        let personalCount = notification.isPersonal
+            ? max(currentStats.personalCount - 1, 0)
+            : currentStats.personalCount
+        let guildCount = notification.isPersonal
+            ? currentStats.guildCount
+            : max(currentStats.guildCount - 1, 0)
+        applyNotificationStats(
+            RLNotificationStatsDTO(
+                totalCount: currentStats.totalCount,
+                unreadCount: unreadCount,
+                personalCount: personalCount,
+                guildCount: guildCount
+            )
+        )
+    }
+
+    private func applyNotificationReadEvent(_ payload: RLNotificationReadEventDTO) {
+        let ids = Set(payload.notificationIds)
+        var newlyRead: [RLNotificationDTO] = []
+        userNotifications = userNotifications.map { notification in
+            guard ids.contains(notification.id), !notification.isRead else { return notification }
+            var updated = notification
+            updated.isRead = true
+            newlyRead.append(updated)
+            return updated
+        }
+
+        guard !newlyRead.isEmpty, let currentStats = notificationStats else { return }
+        let personalReads = newlyRead.filter(\.isPersonal).count
+        let guildReads = newlyRead.count - personalReads
+        applyNotificationStats(
+            RLNotificationStatsDTO(
+                totalCount: currentStats.totalCount,
+                unreadCount: max(currentStats.unreadCount - newlyRead.count, 0),
+                personalCount: max(currentStats.personalCount - personalReads, 0),
+                guildCount: max(currentStats.guildCount - guildReads, 0)
+            )
+        )
+    }
+
+    private func applyNotificationDeletedEvent(_ payload: RLNotificationDeletedEventDTO) {
+        let ids = Set(payload.notificationIds)
+        userNotifications.removeAll { ids.contains($0.id) }
     }
     
     // ================================================================================================
@@ -577,8 +631,10 @@ class LeftDrawerViewModel: ObservableObject {
     func refreshNotifications(rlAppState: RLAppState) async {
        do {
            let result = try await rlAppState.fetchNotifications(page: 1, pageSize: 50)
+           let stats = try await rlAppState.fetchNotificationStats()
            await MainActor.run {
                self.userNotifications = result.notifications
+               self.applyNotificationStats(stats)
            }
        } catch is CancellationError {
            print("📋 refreshNotifications: Cancelled")
@@ -609,6 +665,8 @@ class LeftDrawerViewModel: ObservableObject {
         guildTradingWatchlist = []
         personalTradingWatchlist = []
         userNotifications = []
+        notificationStats = nil
+        rlAppStateRef?.notificationStats = nil
         statistics = nil
         guildMembers = []
         guildMembersTotalCount = 0
@@ -796,7 +854,7 @@ class LeftDrawerViewModel: ObservableObject {
             // Also fetch stats for badges
             let stats = try await rlAppState.fetchNotificationStats()
             await MainActor.run {
-                self.notificationStats = stats
+                self.applyNotificationStats(stats)
             }
         } catch is CancellationError {
             print("📋 fetchNotifications: Cancelled")
@@ -826,8 +884,8 @@ class LeftDrawerViewModel: ObservableObject {
     private func handleWebSocketNotification(_ message: WSIncomingMessage) {
         handleTopMarkersRealtimeUpdate(message)
 
-        switch message.type {
-        case "notification":
+        switch WSMessageType(rawValue: message.type) {
+        case .notification:
             // New notification received in real-time
             // Use message.payload(as:) which uses the flexible custom date decoder
             // instead of JSONSerialization which crashes on AnyCodable payloads
@@ -841,15 +899,36 @@ class LeftDrawerViewModel: ObservableObject {
                 userNotifications.insert(notification, at: 0)
                 print("🔔 New real-time notification: \(notification.displayTitle)")
             }
+            if notification.type == .markerResult {
+                NotificationCenter.default.post(
+                    name: .markerActivityDidChange,
+                    object: nil,
+                    userInfo: ["guildId": rlAppStateRef?.currentGuild?.id as Any]
+                )
+            }
 
-        case "notification_stats_update":
+        case .notificationStatsUpdate:
             // Badge counts updated
             guard let stats = message.payload(as: RLNotificationStatsDTO.self) else { return }
 
-            notificationStats = stats
+            applyNotificationStats(stats)
             print("📊 Notification stats updated: \(stats.unreadCount) unread")
 
-        case "reputation_update":
+        case .notificationRead:
+            guard let payload = message.payload(as: RLNotificationReadEventDTO.self) else {
+                print("⚠️ Failed to decode notification_read payload")
+                return
+            }
+            applyNotificationReadEvent(payload)
+
+        case .notificationDeleted:
+            guard let payload = message.payload(as: RLNotificationDeletedEventDTO.self) else {
+                print("⚠️ Failed to decode notification_deleted payload")
+                return
+            }
+            applyNotificationDeletedEvent(payload)
+
+        case .reputationUpdate:
             // Real-time reputation change
             guard let update = message.payload(as: RLReputationUpdatePayload.self) else {
                 print("⚠️ Failed to decode reputation update payload")
@@ -857,7 +936,7 @@ class LeftDrawerViewModel: ObservableObject {
             }
             handleReputationUpdate(update)
 
-        case "accuracy_update":
+        case .accuracyUpdate:
             // Real-time trading accuracy change (prediction win/loss)
             guard let update = message.payload(as: RLAccuracyUpdatePayload.self) else {
                 print("⚠️ Failed to decode accuracy update payload")
@@ -892,6 +971,11 @@ class LeftDrawerViewModel: ObservableObject {
 
         switch message.type {
         case "marker_created", "marker_updated", "marker_deleted", "tracking_state_changed":
+            NotificationCenter.default.post(
+                name: .markerActivityDidChange,
+                object: nil,
+                userInfo: ["guildId": context.guildId]
+            )
             invalidateTopMarkersCache(guildId: context.guildId)
             Task { [weak self] in
                 guard let self else { return }
@@ -1204,9 +1288,5 @@ extension RLGuildMemberDTO {
         )
     }
 }
-
-
-
-
 
 

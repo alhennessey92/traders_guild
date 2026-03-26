@@ -3086,6 +3086,45 @@ extension RealAPIService {
         )
     }
 
+    /// Get marker activity feed for marker-management surfaces
+    /// GET /chart/guilds/{guild_id}/marker-activity
+    func getMarkerActivity(
+        guildId: UUID,
+        symbolId: UUID? = nil,
+        scope: RLMarkerActivityScope,
+        state: RLMarkerActivityState,
+        window: RLMarkerActivityWindow? = nil,
+        limit: Int = 50,
+        cursor: String? = nil
+    ) async throws -> RLMarkerActivityListDTO {
+        var queryItems = [
+            URLQueryItem(name: "scope", value: scope.rawValue),
+            URLQueryItem(name: "state", value: state.rawValue),
+            URLQueryItem(name: "limit", value: String(limit))
+        ]
+
+        if let symbolId {
+            queryItems.append(URLQueryItem(name: "symbol_id", value: symbolId.uuidString))
+        }
+        if let window {
+            queryItems.append(URLQueryItem(name: "window", value: window.rawValue))
+        }
+        if let cursor, !cursor.isEmpty {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+
+        var components = URLComponents()
+        components.queryItems = queryItems
+        let query = components.percentEncodedQuery.map { "?\($0)" } ?? ""
+
+        return try await request(
+            "/chart/guilds/\(guildId.uuidString)/marker-activity\(query)",
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
+
     /// Get markers placed by a specific user in a guild (for viewing other users' profiles)
     /// GET /chart/guilds/{guild_id}/users/{user_id}/markers
     func getUserMarkers(guildId: UUID, userId: UUID) async throws -> RLTopMarkersListDTO {

@@ -32,6 +32,12 @@ enum NotificationDestination: Equatable {
     
     /// Navigate to a guild announcement detail
     case announcement(announcementId: UUID)
+
+    /// Navigate to a guild event detail
+    case event(eventId: UUID)
+
+    /// Navigate to the admin reports screen
+    case adminReports(guildId: UUID?, reportId: UUID?)
 }
 
 // MARK: - Notification Type Enum
@@ -52,19 +58,25 @@ enum RLNotificationType: String, Codable, CaseIterable {
     case roleChanged = "role_changed"
     case memberKicked = "member_kicked"
     case memberMuted = "member_muted"
+    case memberUnmuted = "member_unmuted"
     case memberSuspended = "member_suspended"
+    case memberUnsuspended = "member_unsuspended"
     case membershipRequestSubmitted = "membership_request_submitted"
     case membershipRequestDecision = "membership_request_decision"
     case memberJoined = "member_joined"
     case markerResult = "marker_result"
+    case markerLike = "marker_like"
+    case markerComment = "marker_comment"
+    case contentReaction = "content_reaction"
+    case contentReport = "content_report"
     case reputationTierChange = "reputation_tier_change"
 
     /// Group for tab filtering
     var isPersonal: Bool {
         switch self {
-        case .dm, .chatroom, .friendRequest, .friendAccept, .mention, .markerResult, .reputationTierChange:
+        case .dm, .chatroom, .friendRequest, .friendAccept, .mention, .markerResult, .markerLike, .markerComment, .contentReaction, .reputationTierChange:
             return true
-        case .announcement, .event, .guildInvite, .memberBanned, .memberUnbanned, .roleChanged, .memberKicked, .memberMuted, .memberSuspended, .membershipRequestSubmitted, .membershipRequestDecision, .memberJoined:
+        case .announcement, .event, .guildInvite, .memberBanned, .memberUnbanned, .roleChanged, .memberKicked, .memberMuted, .memberUnmuted, .memberSuspended, .memberUnsuspended, .membershipRequestSubmitted, .membershipRequestDecision, .memberJoined, .contentReport:
             return false
         }
     }
@@ -79,9 +91,11 @@ enum RLNotificationType: String, Codable, CaseIterable {
 enum RLNotificationDestinationType: String, Codable {
     case userDM = "user_dm"
     case chatroom = "chatroom"
+    case symbolChart = "symbol_chart"
     case userProfile = "user_profile"
     case announcement = "announcement"
     case event = "event"
+    case adminReports = "admin_reports"
 }
 
 // MARK: - Notification Destination
@@ -91,9 +105,12 @@ enum RLNotificationDestinationType: String, Codable {
 struct RLNotificationDestination: Codable, Equatable {
     let type: RLNotificationDestinationType
     let userId: UUID?
+    let guildId: UUID?
+    let symbolId: UUID?
     let chatroomId: UUID?
     let announcementId: UUID?
     let eventId: UUID?
+    let reportId: UUID?
     
     /// Convert to the navigation enum used by NotificationNavigationManager
     var navigationDestination: NotificationDestination? {
@@ -104,6 +121,9 @@ struct RLNotificationDestination: Codable, Equatable {
         case .chatroom:
             guard let chatroomId = chatroomId else { return nil }
             return .chatroom(chatroomId: chatroomId)
+        case .symbolChart:
+            guard let symbolId = symbolId else { return nil }
+            return .symbolChart(symbolId: symbolId, ticker: "")
         case .userProfile:
             guard let userId = userId else { return nil }
             return .userProfile(userId: userId)
@@ -111,8 +131,10 @@ struct RLNotificationDestination: Codable, Equatable {
             guard let announcementId = announcementId else { return nil }
             return .announcement(announcementId: announcementId)
         case .event:
-            // TODO: Add event destination to NotificationDestination enum when ready
-            return nil
+            guard let eventId = eventId else { return nil }
+            return .event(eventId: eventId)
+        case .adminReports:
+            return .adminReports(guildId: guildId, reportId: reportId)
         }
     }
 }
@@ -194,11 +216,17 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         case .roleChanged:    return "arrow.up.arrow.down"
         case .memberKicked:   return "person.badge.minus"
         case .memberMuted:    return "speaker.slash.fill"
+        case .memberUnmuted:  return "speaker.wave.2.fill"
         case .memberSuspended: return "pause.circle.fill"
+        case .memberUnsuspended: return "play.circle.fill"
         case .membershipRequestSubmitted: return "person.badge.plus"
         case .membershipRequestDecision: return "checkmark.seal.fill"
         case .memberJoined: return "person.crop.circle.badge.checkmark"
         case .markerResult:   return "chart.line.uptrend.xyaxis"
+        case .markerLike:     return "heart.fill"
+        case .markerComment:  return "text.bubble.fill"
+        case .contentReaction: return "face.smiling.fill"
+        case .contentReport:  return "exclamationmark.bubble.fill"
         case .reputationTierChange: return "star.fill"
         case .none:           return "bell.fill"
         }
@@ -215,23 +243,62 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         case .guildInvite:                      return .indigo
         case .memberBanned, .memberKicked:      return .red
         case .memberUnbanned:                   return .green
+        case .memberUnmuted:                    return .green
         case .roleChanged:                      return .orange
         case .memberMuted:                      return .orange
         case .memberSuspended:                  return .red
+        case .memberUnsuspended:                return .green
         case .membershipRequestSubmitted:       return .indigo
         case .membershipRequestDecision:        return .blue
         case .memberJoined:                     return .green
         case .markerResult:                     return .green
+        case .markerLike:                       return .pink
+        case .markerComment:                    return .orange
+        case .contentReaction:                  return .teal
+        case .contentReport:                    return .red
         case .reputationTierChange:             return .yellow
         case .none:                             return .gray
         }
     }
+
+    private func stringDataValue(for key: String) -> String? {
+        data[key]?.stringValue
+    }
+
+    private func uuidDataValue(for key: String) -> UUID? {
+        guard let raw = stringDataValue(for: key) else { return nil }
+        return UUID(uuidString: raw)
+    }
+
+    private func dateDataValue(for key: String) -> Date? {
+        guard let raw = stringDataValue(for: key) else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: raw) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: raw)
+    }
     
     /// Sender avatar URL extracted from the data payload
     var senderAvatarURL: String? {
-        data["sender_avatar_url"]?.stringValue
-            ?? data["from_avatar_url"]?.stringValue
-            ?? data["friend_avatar_url"]?.stringValue
+        let preferredKeys = [
+            "sender_avatar_url",
+            "from_avatar_url",
+            "friend_avatar_url",
+            "liked_by_avatar_url",
+            "commenter_avatar_url",
+            "reactor_avatar_url"
+        ]
+
+        for key in preferredKeys {
+            if let value = stringDataValue(for: key) {
+                return value
+            }
+        }
+
+        return nil
     }
     
     /// Whether this is a guild invite notification with actionable accept/decline
@@ -241,14 +308,12 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
 
     /// Guild ID extracted from data payload (for guild invite actions)
     var guildId: UUID? {
-        guard let str = data["guild_id"]?.stringValue else { return nil }
-        return UUID(uuidString: str)
+        uuidDataValue(for: "guild_id")
     }
 
     /// Invite ID extracted from data payload (for guild invite actions)
     var inviteId: UUID? {
-        guard let str = data["invite_id"]?.stringValue else { return nil }
-        return UUID(uuidString: str)
+        uuidDataValue(for: "invite_id")
     }
 
     /// Guild name extracted from data payload
@@ -259,6 +324,25 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
     /// Whether this is a personal or guild notification
     var isPersonal: Bool {
         type?.isPersonal ?? true
+    }
+
+    var markerSharePayload: MarkerSharePayloadV1? {
+        guard let markerId = uuidDataValue(for: "marker_id"),
+              let symbolId = uuidDataValue(for: "symbol_id"),
+              let timeframe = stringDataValue(for: "timeframe"),
+              let candleTimestamp = dateDataValue(for: "candle_timestamp") else {
+            return nil
+        }
+
+        return MarkerSharePayloadV1(
+            markerId: markerId,
+            symbolId: symbolId,
+            symbolTicker: stringDataValue(for: "symbol_ticker"),
+            timeframe: timeframe,
+            candleTimestamp: candleTimestamp,
+            markerType: stringDataValue(for: "marker_type"),
+            intent: stringDataValue(for: "intent")
+        )
     }
     
     // MARK: - Equatable
@@ -291,6 +375,17 @@ struct RLNotificationStatsDTO: Codable, Equatable {
     let unreadCount: Int
     let personalCount: Int
     let guildCount: Int
+}
+
+struct RLNotificationReadEventDTO: Codable, Equatable {
+    let recipientId: UUID
+    let notificationIds: [UUID]
+    let readAt: Date
+}
+
+struct RLNotificationDeletedEventDTO: Codable, Equatable {
+    let recipientId: UUID
+    let notificationIds: [UUID]
 }
 
 

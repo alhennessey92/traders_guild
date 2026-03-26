@@ -1138,7 +1138,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
 /// Backend: ChartMarkerResponse
 // MARK: - Prediction Result
 
-struct RLPredictionResultDTO: Codable, Equatable {
+struct RLPredictionResultDTO: Codable, Equatable, Hashable {
     let resultType: String       // "take_profit" or "stop_loss"
     let triggerPrice: Double
     let triggeredAt: Date
@@ -1421,6 +1421,221 @@ struct RLTopMarkersListDTO: Codable {
     let following: [RLTopMarkerDTO]
     let mine: [RLTopMarkerDTO]
     let lastUpdated: Date
+}
+
+enum RLMarkerActivityScope: String, Codable, CaseIterable, UnifiedTabItem {
+    case personal = "personal"
+    case friends = "friends"
+    case guild = "guild"
+
+    var title: String {
+        switch self {
+        case .personal: return "Personal"
+        case .friends: return "Friends"
+        case .guild: return "Guild"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .personal: return "person.fill"
+        case .friends: return "person.2.fill"
+        case .guild: return "person.3.fill"
+        }
+    }
+}
+
+enum RLMarkerActivityState: String, Codable, CaseIterable {
+    case active = "active"
+    case resolved = "resolved"
+    case all = "all"
+
+    var title: String {
+        switch self {
+        case .active: return "Active"
+        case .resolved: return "Resolved"
+        case .all: return "All"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .active: return "bolt.fill"
+        case .resolved: return "checkmark.circle.fill"
+        case .all: return "tray.full.fill"
+        }
+    }
+}
+
+enum RLMarkerActivityWindow: String, Codable, CaseIterable {
+    case today = "today"
+    case week = "week"
+    case month = "month"
+
+    var title: String {
+        switch self {
+        case .today: return "Today"
+        case .week: return "This Week"
+        case .month: return "This Month"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .today: return "sun.max.fill"
+        case .week: return "calendar"
+        case .month: return "calendar.badge.clock"
+        }
+    }
+}
+
+enum RLMarkerActivityTopTab: String, Codable, CaseIterable, UnifiedTabItem {
+    case active = "active"
+    case today = "today"
+    case thisWeek = "this_week"
+    case thisMonth = "this_month"
+    case resolved = "resolved"
+
+    var title: String {
+        switch self {
+        case .active: return "Active"
+        case .today: return "Today"
+        case .thisWeek: return "This Week"
+        case .thisMonth: return "This Month"
+        case .resolved: return "Resolved"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .active: return "bolt.fill"
+        case .today: return "sun.max.fill"
+        case .thisWeek: return "calendar"
+        case .thisMonth: return "calendar.badge.clock"
+        case .resolved: return "checkmark.circle.fill"
+        }
+    }
+
+    var activityState: RLMarkerActivityState {
+        switch self {
+        case .active:
+            return .active
+        case .today, .thisWeek, .thisMonth:
+            return .all
+        case .resolved:
+            return .resolved
+        }
+    }
+
+    var activityWindow: RLMarkerActivityWindow? {
+        switch self {
+        case .active, .resolved:
+            return nil
+        case .today:
+            return .today
+        case .thisWeek:
+            return .week
+        case .thisMonth:
+            return .month
+        }
+    }
+
+    var isLifecycleTab: Bool {
+        self == .active || self == .resolved
+    }
+}
+
+struct RLMarkerActivityItemDTO: Codable, Identifiable, Equatable, Hashable {
+    let id: UUID
+    let symbolId: UUID
+    let symbolTicker: String
+    let symbolBrandColor: String?
+    let symbolAssetClass: String
+    let guildId: UUID
+
+    let authorId: UUID
+    let authorUsername: String
+    let authorInitials: String
+    let authorAvatarUrl: String?
+    let authorIsOnline: Bool
+    let authorReputation: Int
+    let authorAccuracyRate: Double?
+    let authorRole: String
+
+    let intent: String
+    let title: String?
+    let notePreview: String?
+    let createdAt: Date
+    let createdAtFormatted: String
+    let activityTimestamp: Date
+    let activityTimestampFormatted: String
+
+    let candleTimestamp: Date
+    let timeframe: String
+    let price: Double
+
+    let setupSummary: RLSetupSummaryDTO?
+    let predictionResult: RLPredictionResultDTO?
+
+    var likeCount: Int
+    var isLikedByCurrentUser: Bool
+    let commentCount: Int
+    let isCurrentUserMarker: Bool
+
+    var authorAccuracyFormatted: String? {
+        guard let rate = authorAccuracyRate else { return nil }
+        return "\(Int(rate * 100))%"
+    }
+
+    var intentEnum: RLMarkerIntent { RLMarkerIntent(rawValue: intent) ?? .analysis }
+
+    var trackingStateEnum: RLTrackingState? {
+        guard let rawState = setupSummary?.trackingState else { return nil }
+        return RLTrackingState(rawValue: rawState)
+    }
+}
+
+struct RLMarkerActivityListDTO: Codable {
+    let markers: [RLMarkerActivityItemDTO]
+    let totalCount: Int
+    let hasMore: Bool
+    let nextCursor: String?
+    let lastUpdated: Date
+}
+
+extension RLMarkerActivityItemDTO {
+    func asTopMarkerDTO() -> RLTopMarkerDTO {
+        RLTopMarkerDTO(
+            id: id,
+            symbolId: symbolId,
+            symbolTicker: symbolTicker,
+            symbolBrandColor: symbolBrandColor,
+            symbolAssetClass: symbolAssetClass,
+            guildId: guildId,
+            authorId: authorId,
+            authorUsername: authorUsername,
+            authorInitials: authorInitials,
+            authorAvatarUrl: authorAvatarUrl,
+            authorIsOnline: authorIsOnline,
+            authorReputation: authorReputation,
+            authorAccuracyRate: authorAccuracyRate,
+            authorRole: authorRole,
+            intent: intent,
+            title: title,
+            notePreview: notePreview,
+            createdAt: createdAt,
+            createdAtFormatted: createdAtFormatted,
+            candleTimestamp: candleTimestamp,
+            timeframe: timeframe,
+            price: price,
+            setupSummary: setupSummary,
+            likeCount: likeCount,
+            isLikedByCurrentUser: isLikedByCurrentUser,
+            commentCount: commentCount,
+            trendingScore: 0,
+            isCurrentUserMarker: isCurrentUserMarker
+        )
+    }
 }
 
 

@@ -1258,15 +1258,12 @@ Make sure you run through all drawing options and make improve them the way they
 
 217. [FIXED] Also sometimes behind the current candle by 1 candle or quite a bit went on one symbol and was 15 minutes behind, another symbol only 1 candle behind. Need to make sure at all cost we are up to date, it’s vital, even if we show error for not in time would be good to know 
 
-218. Setup marker not appearing in active marker tab
 
-219. Setup marker doesn’t seem to be watched for result no rep given or results processed. No results in the marker view for how it went etc. Needs a major audit/review
-
-220. Sometimes adding marker doesn’t always place on candle selected in marker placement mode 
+220. [FIXED] Sometimes adding marker doesn’t always place on candle selected in marker placement mode 
 
 221. Still need to make sure the markers are position correctly on the chart. Sometimes appearing underneath when they should appear on top, always make sure markers arent obscuring candles and or other markers
 
-222. Claude - Contact support needs work, ui is rough and functionality not great, keyboard needs to be removable by tapping outside etc, send button not working etc…
+222. [FIXED] Claude - Contact support needs work, ui is rough and functionality not great, keyboard needs to be removable by tapping outside etc, send button not working etc…
 
 223. In settings user online status not always working as it should
 
@@ -1299,7 +1296,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 235. Need to double check setup marker is correctly being watched for results as it’s not dealing out reputation and not reporting results in marker view mode. Also should fire a notification. In marker view mode should show some sort of result as to how the setup marker performed against the TP and SL
 
-236. Notifications need a full audit listing current areas notifications are triggered and areas we need to implement
+236. [Testing] Notifications need a full audit listing current areas notifications are triggered and areas we need to implement
 
 237. Reputation for personal, guild and global need a full audit. Again listing areas reputation is applied and areas we still need to apply to
 
@@ -1308,3 +1305,81 @@ Make sure you run through all drawing options and make improve them the way they
 239. Crosshair info box needs proper reporting on indicators like stochs and macd etc
 
 240. Noticed sometimes when interacting with the app the music I am listening to gets paused, this should never happen music shouldn’t be interfered with by the app
+
+241. Find here is the outline for how i want the marker tabs and sections to work in the bottom bar and the left drawer.
+	Bottom Bar marker tabs
+		Add 
+			Prediction
+			Trade
+			Analysis
+			Signals
+			Social	
+
+		Markers	
+			Active
+				Guild
+				Friends
+				Personal
+			Resolved
+				Guild
+				Friends
+				Personal
+			All
+				Today
+					Guild
+					Friends
+					Personal
+				This Week
+					Guild
+					Friends
+					Personal
+				This Month
+					Guild
+					Friends
+					Personal
+
+		Analysis (Preferably a universal section for all markers)
+
+	Left Drawer Marker Section
+		Today
+			Active
+				Guild
+				Friends
+				Personal
+			Resolved
+				Guild
+				Friends
+				Personal
+			All
+				Guild
+				Friends
+				Personal
+
+		This Week
+			Active
+				Guild
+				Friends
+				Personal
+			Resolved
+				Guild
+				Friends
+				Personal
+			All
+				Guild
+				Friends
+				Personal
+
+
+		This Month
+			Active
+				Guild
+				Friends
+				Personal
+			Resolved
+				Guild
+				Friends
+				Personal
+			All
+				Guild
+				Friends
+				Personal

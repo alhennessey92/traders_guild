@@ -117,6 +117,7 @@ struct LeftDrawerMainView: View {
 
     @Binding var sheetOverlayVisible: Bool
     @Binding var dismissSheetsSignal: Bool
+    @Binding var notificationRoute: NotificationDrawerRoute?
     let onClose: () -> Void
     
     
@@ -139,8 +140,8 @@ struct LeftDrawerMainView: View {
     }
     
     var body: some View {
-        if let user = rlAppState.currentUser,
-           let guild = rlAppState.currentGuild {
+        if rlAppState.currentUser != nil,
+           rlAppState.currentGuild != nil {
             ZStack {
                 // Main content that changes based on navigation state
                 if navigationState == .main {
@@ -229,6 +230,13 @@ struct LeftDrawerMainView: View {
                     dismissSheetsSignal = false
                 }
             }
+            .onChange(of: notificationRoute) { _, newValue in
+                guard let route = newValue else { return }
+                Task {
+                    await handleNotificationRoute(route)
+                    notificationRoute = nil
+                }
+            }
         } else {
             // Optional: Show error state if user/guild missing
             EmptyView()
@@ -263,6 +271,76 @@ struct LeftDrawerMainView: View {
             return [.large]
         case .manageGuildWatchlist:
             return [.large]
+        }
+    }
+
+    @MainActor
+    private func handleNotificationRoute(_ route: NotificationDrawerRoute) async {
+        do {
+            switch route {
+            case .announcement(let announcementId):
+                let announcement: RLGuildAnnouncementWithAuthorDTO
+                if let cached = leftDrawerViewModel.announcements.first(where: { $0.id == announcementId }) {
+                    announcement = cached
+                } else {
+                    announcement = try await rlAppState.realApi.getAnnouncement(announcementId: announcementId)
+                    if let guildId = rlAppState.currentGuild?.id, guildId == announcement.guildId {
+                        if let index = leftDrawerViewModel.announcements.firstIndex(where: { $0.id == announcementId }) {
+                            leftDrawerViewModel.announcements[index] = announcement
+                        } else {
+                            leftDrawerViewModel.announcements.insert(announcement, at: 0)
+                        }
+                    }
+                }
+                navigationState = .announcements
+                bottomSheetContent = .announcement(announcement)
+
+            case .event(let eventId):
+                guard let guildId = rlAppState.currentGuild?.id else {
+                    rlAppState.showInfo("Select a guild first")
+                    return
+                }
+                let event: RLGuildEventWithAuthorDTO?
+                if let cached = leftDrawerViewModel.upcomingEvents.first(where: { $0.id == eventId }) {
+                    event = cached
+                } else {
+                    let fetchedEvents = try await rlAppState.fetchGuildEvents(guildId: guildId)
+                    event = fetchedEvents.first(where: { $0.id == eventId })
+                }
+                guard let event else {
+                    rlAppState.showInfo("Event details are no longer available")
+                    return
+                }
+                if leftDrawerViewModel.upcomingEvents.contains(where: { $0.id == event.id }) == false {
+                    leftDrawerViewModel.upcomingEvents.insert(event, at: 0)
+                }
+                navigationState = .events
+                bottomSheetContent = .event(event)
+
+            case .currentUserProfile:
+                navigationState = .main
+                bottomSheetContent = .profile
+
+            case .guildMemberProfile(let userId):
+                guard let guildId = rlAppState.currentGuild?.id else {
+                    rlAppState.showInfo("Select a guild first")
+                    return
+                }
+                let member: RLGuildMemberDTO
+                if let cached = leftDrawerViewModel.guildMembers.first(where: { $0.userId == userId }) {
+                    member = cached
+                } else {
+                    member = try await rlAppState.fetchGuildMember(guildId: guildId, userId: userId)
+                }
+                navigationState = .userList
+                bottomSheetContent = .guildMemberRL(member)
+
+            case .adminReports:
+                navigationState = .adminPanel
+                bottomSheetContent = .manageReports
+            }
+        } catch {
+            rlAppState.showError(error, title: "Unable to Open Notification", style: .toast)
         }
     }
 }
@@ -314,22 +392,22 @@ struct MainDrawerView: View {
     
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
-    var menuItems: [(icon: String, title: String, state: DrawerNavigationState)] {
-        var items: [(icon: String, title: String, state: DrawerNavigationState)] = [
-            ("megaphone.fill", "Announcements", .announcements),
-            ("bell.fill", "Notifications", .notifications),
-            ("target", "Markers", .topMarkers),
-            ("trophy.fill", "Leaderboard", .leaderboard),
-            ("star.fill", "Watchlists", .guildWatchlist),
-            ("calendar.badge.clock", "Events", .events),
-            ("person.2.fill", "User List", .userList),
-            ("chart.bar.fill", "Statistics", .statistics)
+    var menuItems: [(icon: String, title: String, state: DrawerNavigationState, badgeCount: Int?)] {
+        var items: [(icon: String, title: String, state: DrawerNavigationState, badgeCount: Int?)] = [
+            ("megaphone.fill", "Announcements", .announcements, nil),
+            ("bell.fill", "Notifications", .notifications, leftDrawerViewModel.notificationStats?.unreadCount),
+            ("target", "Markers", .topMarkers, nil),
+            ("trophy.fill", "Leaderboard", .leaderboard, nil),
+            ("star.fill", "Watchlists", .guildWatchlist, nil),
+            ("calendar.badge.clock", "Events", .events, nil),
+            ("person.2.fill", "User List", .userList, nil),
+            ("chart.bar.fill", "Statistics", .statistics, nil)
         ]
         
         // Add Admin/Mod Panel for moderators and admins
         if rlAppState.canModerate {
             let panelTitle = rlAppState.isGuildOwner ? "Owner Panel" : (rlAppState.canAdmin ? "Admin Panel" : "Mod Panel")
-            items.append(("shield.checkered", panelTitle, .adminPanel))
+            items.append(("shield.checkered", panelTitle, .adminPanel, nil))
         }
         
         return items
@@ -472,6 +550,7 @@ struct MainDrawerView: View {
                         DrawerMenuButton(
                             icon: item.icon,
                             title: item.title,
+                            badgeCount: item.badgeCount,
                             action: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     navigationState = item.state
@@ -711,6 +790,7 @@ struct SectionDrawerView: View {
 struct DrawerMenuButton: View {
     let icon: String
     let title: String
+    let badgeCount: Int?
     let action: () -> Void
     
     var body: some View {
@@ -727,6 +807,16 @@ struct DrawerMenuButton: View {
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.whiteText)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let badgeCount, badgeCount > 0 {
+                    Text("\(badgeCount)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppColors.accentColor)
+                        .clipShape(Capsule())
+                }
                 
 //                Image(systemName: "chevron.right")
 //                    .font(.caption)
@@ -827,4 +917,3 @@ extension View {
         )
     }
 }
-

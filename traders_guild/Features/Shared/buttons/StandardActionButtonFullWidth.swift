@@ -9,27 +9,31 @@ struct StandardActionButtonFullWidth: View {
     let title: String
     let backgroundColor: Color
     let foregroundColor: Color
-    let action: (() -> Void) // ✅ default to nil
-    
-    
-    
+    var isLoading: Bool = false
+    var isDisabled: Bool = false
+    let action: (() -> Void)
+
     var body: some View {
         Button(action: action) {
-            
-            Text(title)
-                .font(.headline)
-                .scaleEffect(0.9)
-                .foregroundColor(foregroundColor)
-                .padding(.vertical, 14)      // vertical space, dynamic height
-                .padding(.horizontal)
-                .frame(maxWidth: .infinity)
-                .background(backgroundColor)
-    //          .cornerRadius(12)
-                .clipShape(Capsule())
-                .padding()
-                
-            
+            HStack {
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: foregroundColor))
+                        .scaleEffect(0.8)
+                } else {
+                    Text(title)
+                        .font(.headline)
+                        .scaleEffect(0.9)
+                }
+            }
+            .foregroundColor(foregroundColor)
+            .padding(.vertical, 14)
+            .padding(.horizontal)
+            .frame(maxWidth: .infinity)
+            .background(backgroundColor)
+            .clipShape(Capsule())
+            .padding()
         }
+        .disabled(isDisabled || isLoading)
     }
-    
 }

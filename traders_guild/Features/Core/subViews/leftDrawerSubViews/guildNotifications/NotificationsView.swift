@@ -91,7 +91,25 @@ struct NotificationsListView: View {
     // MARK: - Tab Counts
     
     private func getCountForTab(_ tab: NotificationTab) -> Int {
-        filteredNotifications(for: tab).count
+        if let stats = leftDrawerViewModel.notificationStats {
+            switch tab {
+            case .all:
+                return stats.unreadCount
+            case .guild:
+                return stats.guildCount
+            case .personal:
+                return stats.personalCount
+            }
+        }
+
+        switch tab {
+        case .all:
+            return leftDrawerViewModel.userNotifications.filter { !$0.isRead }.count
+        case .guild:
+            return filteredNotifications(for: .guild).filter { !$0.isRead }.count
+        case .personal:
+            return filteredNotifications(for: .personal).filter { !$0.isRead }.count
+        }
     }
     
     // MARK: - Filtered Notifications
@@ -330,6 +348,11 @@ struct NotificationCard: View {
         }, perform: {})
         .onAppear {
             recordNotificationView()
+        }
+        .onChange(of: notification.isRead) { _, isRead in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showAsUnread = !isRead
+            }
         }
         .onDisappear {
             markAsReadIfNeeded()
@@ -624,6 +647,5 @@ struct NavigationLoadingOverlay: View {
         }
     }
 }
-
 
 

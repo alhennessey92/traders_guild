@@ -2,17 +2,16 @@
 //  chartSheetMarkersView.swift
 //  traders_guild
 //
-//  Refactored marker sheet:
-//  - Mirrors indicator sheet structure and styling
-//  - Provides Add / Active / Analysis tabs
-//  - Active and Analysis are symbol-scoped and timeframe-aware
+//  Chart bottom-sheet marker management:
+//  Add | Markers | Analysis
+//  Markers -> Active | Today | This Week | This Month | Resolved
 //
 
 import SwiftUI
 
 enum MarkerSheetPrimaryTab: String, CaseIterable, UnifiedTabItem {
     case add = "Add"
-    case active = "Active"
+    case markers = "Markers"
     case analysis = "Analysis"
 
     var title: String { rawValue }
@@ -20,7 +19,7 @@ enum MarkerSheetPrimaryTab: String, CaseIterable, UnifiedTabItem {
     var icon: String {
         switch self {
         case .add: return "plus.circle.fill"
-        case .active: return "clock.arrow.circlepath"
+        case .markers: return "target"
         case .analysis: return "chart.bar.xaxis"
         }
     }
@@ -46,78 +45,28 @@ enum MarkerAddCategoryTab: String, CaseIterable, UnifiedTabItem {
     }
 }
 
-enum MarkerActivityScopeTab: String, CaseIterable, UnifiedTabItem {
-    case personal = "Personal"
-    case friends = "Friends"
-    case guild = "Guild"
-
-    var title: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .personal: return "person.fill"
-        case .friends: return "person.2.fill"
-        case .guild: return "person.3.fill"
-        }
-    }
-}
-
-private enum MarkerTimeSection: String, CaseIterable, Identifiable {
-    case today = "Today"
-    case thisWeek = "This Week"
-    case thisMonth = "This Month"
-    case older = "Older"
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .today: return "sun.max.fill"
-        case .thisWeek: return "calendar"
-        case .thisMonth: return "calendar.badge.clock"
-        case .older: return "clock.arrow.circlepath"
-        }
-    }
-
-    static func section(for date: Date) -> MarkerTimeSection {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return .today }
-        if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) { return .thisWeek }
-        if calendar.isDate(date, equalTo: Date(), toGranularity: .month) { return .thisMonth }
-        return .older
-    }
-}
-
-private struct MarkerTimeSectionGroup: Identifiable {
-    let section: MarkerTimeSection
-    let markers: [RLTopMarkerDTO]
-
-    var id: String { section.rawValue }
-}
-
-/// Marker content view for ChartBottomSheet
 struct chartSheetMarkersView: View {
     @EnvironmentObject private var rlAppState: RLAppState
 
     @ObservedObject var chartViewModel: ChartViewModel
     @ObservedObject var controlViewModel: ChartControlViewModel
 
-    /// Navigate to selected marker on chart
     var onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
-
-    /// Called when marker selection should collapse to compact detent
     var onMarkerSelection: (() -> Void)? = nil
 
     @State private var selectedPrimaryTab: MarkerSheetPrimaryTab = .add
     @State private var selectedAddCategory: MarkerAddCategoryTab = .prediction
-    @State private var selectedActivityScope: MarkerActivityScopeTab = .personal
+    @State private var selectedMarkerTopTab: RLMarkerActivityTopTab = .active
+    @State private var selectedScope: RLMarkerActivityScope = .guild
 
-    @State private var markerCacheByScope: [MarkerActivityScopeTab: [RLTopMarkerDTO]] = [:]
+    @State private var markerActivityCache: [RLMarkerActivityTopTab: MarkerActivityFeedSnapshot] = [:]
+    @State private var analysisSnapshot: MarkerActivityFeedSnapshot?
+    @State private var cacheNamespace = ""
     @State private var liveSymbol: RLTradingSymbolDTO?
 
-    @State private var isLoadingActive = false
-    @State private var isRefreshingActive = false
-    @State private var activeLoadError: String?
+    @State private var isLoadingActivity = false
+    @State private var isRefreshingActivity = false
+    @State private var activityLoadError: String?
     @State private var showMarkerSettingsSheet = false
 
     private var reloadKey: String {
@@ -125,6 +74,10 @@ struct chartSheetMarkersView: View {
         let guild = rlAppState.currentGuild?.id.uuidString ?? "none"
         let user = rlAppState.currentUser?.id.uuidString ?? "none"
         return "\(symbol)|\(guild)|\(user)"
+    }
+
+    private var visibleLoadKey: String {
+        "\(reloadKey)|\(selectedPrimaryTab.rawValue)|\(selectedMarkerTopTab.rawValue)"
     }
 
     private var currentSymbolLabel: String {
@@ -145,40 +98,12 @@ struct chartSheetMarkersView: View {
         liveSymbol?.currentPrice ?? chartViewModel.currentSymbol?.currentPrice
     }
 
-    private var scopedMarkers: [RLTopMarkerDTO] {
-        markers(for: selectedActivityScope)
+    private var selectedMarkers: [RLMarkerActivityItemDTO] {
+        markerActivityCache[selectedMarkerTopTab]?.markersByScope[selectedScope] ?? []
     }
 
-    private var liveMarkers: [RLTopMarkerDTO] {
-        scopedMarkers.filter { marker in
-            guard marker.intentEnum == .setup,
-                  let raw = marker.setupSummary?.trackingState,
-                  let state = RLTrackingState(rawValue: raw) else { return true }
-            return state.isLive || state == .draft
-        }
-    }
-
-    private var resolvedMarkers: [RLTopMarkerDTO] {
-        scopedMarkers.filter { marker in
-            guard marker.intentEnum == .setup,
-                  let raw = marker.setupSummary?.trackingState,
-                  let state = RLTrackingState(rawValue: raw) else { return false }
-            return state.isResolved
-        }
-    }
-
-    private func timeSectionGroups(from markers: [RLTopMarkerDTO]) -> [MarkerTimeSectionGroup] {
-        let grouped = Dictionary(grouping: markers) { marker in
-            MarkerTimeSection.section(for: marker.createdAt)
-        }
-
-        return MarkerTimeSection.allCases.compactMap { section in
-            guard let sectionMarkers = grouped[section], !sectionMarkers.isEmpty else { return nil }
-            return MarkerTimeSectionGroup(
-                section: section,
-                markers: sectionMarkers.sorted { $0.createdAt > $1.createdAt }
-            )
-        }
+    private var analysisMarkers: [RLMarkerActivityItemDTO] {
+        analysisSnapshot?.markersByScope[.guild] ?? []
     }
 
     var body: some View {
@@ -193,7 +118,8 @@ struct chartSheetMarkersView: View {
                 spacing: 6
             )
 
-            if selectedPrimaryTab == .add {
+            switch selectedPrimaryTab {
+            case .add:
                 UnifiedTabBar(
                     selectedTab: $selectedAddCategory,
                     size: .compact,
@@ -201,35 +127,57 @@ struct chartSheetMarkersView: View {
                     countForTab: { markerIntents(for: $0).count },
                     spacing: 6
                 )
-            } else {
+            case .markers:
                 UnifiedTabBar(
-                    selectedTab: $selectedActivityScope,
+                    selectedTab: $selectedMarkerTopTab,
                     size: .compact,
-                    theme: .subTab,
-                    countForTab: { markers(for: $0).count },
+                    theme: .componentsTabs,
+                    countForTab: { countForTopTab($0) },
                     spacing: 6
                 )
 
-                activitySummaryBadge
+                UnifiedTabBar(
+                    selectedTab: $selectedScope,
+                    size: .compact,
+                    theme: .subTab,
+                    countForTab: { countForScope($0, topTab: selectedMarkerTopTab) },
+                    spacing: 6
+                )
+
+                activitySummaryBadge(
+                    descriptor: selectedMarkerTopTab.title
+                )
+            case .analysis:
+                analysisSummaryBadge
             }
 
             content
 
-            if let activeLoadError,
-               !activeLoadError.isEmpty,
+            if let activityLoadError,
+               !activityLoadError.isEmpty,
                selectedPrimaryTab != .add,
-               scopedMarkers.isEmpty {
-                errorBanner(activeLoadError)
+               selectedPrimaryTab == .analysis ? analysisMarkers.isEmpty : selectedMarkers.isEmpty {
+                errorBanner(activityLoadError)
             }
         }
         .padding(.top, 15)
-        .task(id: reloadKey) {
-            await loadActiveMarkers(forceRefresh: false)
+        .task(id: visibleLoadKey) {
+            await loadMarkerActivity(forceRefresh: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: .markerCreatedSuccessfully)) { _ in
-            Task {
-                await loadActiveMarkers(forceRefresh: true)
-            }
+            Task { await loadMarkerActivity(forceRefresh: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .markerActivityDidChange)) { notification in
+            guard shouldRefresh(for: notification) else { return }
+            Task { await loadMarkerActivity(forceRefresh: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .reputationDidUpdate)) { notification in
+            guard shouldRefresh(for: notification) else { return }
+            Task { await loadMarkerActivity(forceRefresh: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .accuracyDidUpdate)) { notification in
+            guard shouldRefresh(for: notification) else { return }
+            Task { await loadMarkerActivity(forceRefresh: true) }
         }
         .sheet(isPresented: $showMarkerSettingsSheet) {
             if let markerManager = chartViewModel.markerManager {
@@ -295,11 +243,9 @@ struct chartSheetMarkersView: View {
             HStack(spacing: 10) {
                 if selectedPrimaryTab != .add {
                     Button {
-                        Task {
-                            await loadActiveMarkers(forceRefresh: true)
-                        }
+                        Task { await loadMarkerActivity(forceRefresh: true) }
                     } label: {
-                        if isRefreshingActive {
+                        if isRefreshingActivity {
                             ProgressView()
                                 .scaleEffect(0.8)
                                 .tint(.white)
@@ -313,7 +259,7 @@ struct chartSheetMarkersView: View {
                                 .clipShape(Circle())
                         }
                     }
-                    .disabled(isRefreshingActive || isLoadingActive)
+                    .disabled(isRefreshingActivity || isLoadingActivity)
                 }
 
                 MarkerSettingsButton {
@@ -349,10 +295,10 @@ struct chartSheetMarkersView: View {
         switch selectedPrimaryTab {
         case .add:
             return "Add markers quickly from grouped categories. Selecting one closes the sheet and starts placement."
-        case .active:
-            return "Activity timeline for \(currentSymbolLabel), including markers from all available timeframes."
+        case .markers:
+            return "Track live setups plus recent and resolved marker activity for \(currentSymbolLabel)."
         case .analysis:
-            return "Breakdown of active marker flow, timeframe coverage, and quick links for \(currentSymbolLabel)."
+            return "See one universal analysis view for all marker activity on \(currentSymbolLabel)."
         }
     }
 
@@ -361,14 +307,12 @@ struct chartSheetMarkersView: View {
         switch selectedPrimaryTab {
         case .add:
             addContent
-        case .active:
-            activeTimelineContent
+        case .markers:
+            markersContent
         case .analysis:
             analysisContent
         }
     }
-
-    // MARK: - Add Tab
 
     private var addContent: some View {
         VStack(spacing: 8) {
@@ -390,104 +334,48 @@ struct chartSheetMarkersView: View {
                 MarkerPlacementOptionRow(
                     intent: intent,
                     isActive: isMarkerPlacementActive(for: intent),
-                    onToggle: {
-                        togglePlacement(for: intent)
-                    }
+                    onToggle: { togglePlacement(for: intent) }
                 )
             }
         }
     }
 
-    // MARK: - Active Tab
-
     @ViewBuilder
-    private var activeTimelineContent: some View {
-        if isLoadingActive && scopedMarkers.isEmpty {
-            UnifiedLoadingState(message: "Loading active markers...")
+    private var markersContent: some View {
+        if isLoadingActivity && selectedMarkers.isEmpty {
+            UnifiedLoadingState(message: "Loading marker activity...")
                 .padding(.top, 24)
-        } else if scopedMarkers.isEmpty {
+        } else if selectedMarkers.isEmpty {
             UnifiedEmptyState(
-                icon: "mappin.and.ellipse",
-                title: "No active markers",
-                subtitle: "Markers for \(currentSymbolLabel) will appear here as they are placed."
+                icon: emptyStateIcon,
+                title: emptyStateTitle,
+                subtitle: emptyStateSubtitle
             )
             .padding(.top, 20)
         } else {
-            VStack(spacing: 16) {
-                let liveGroups = timeSectionGroups(from: liveMarkers)
-                let resolvedGroups = timeSectionGroups(from: resolvedMarkers)
-
-                if !liveMarkers.isEmpty {
-                    activeSection(
-                        title: "Live",
-                        icon: "bolt.fill",
-                        iconColor: .green,
-                        count: liveMarkers.count,
-                        groups: liveGroups
-                    )
-                }
-
-                if !resolvedMarkers.isEmpty {
-                    activeSection(
-                        title: "Resolved",
-                        icon: "checkmark.diamond.fill",
-                        iconColor: AppColors.surfaceGray90,
-                        count: resolvedMarkers.count,
-                        groups: resolvedGroups
+            LazyVStack(spacing: 10) {
+                ForEach(selectedMarkers) { marker in
+                    MarkerActivityCard(
+                        marker: marker,
+                        showMyBadge: marker.isCurrentUserMarker,
+                        currentPrice: activeSymbolPrice,
+                        onTap: { openMarker(marker) }
                     )
                 }
             }
         }
     }
-
-    private func activeSection(
-        title: String,
-        icon: String,
-        iconColor: Color,
-        count: Int,
-        groups: [MarkerTimeSectionGroup]
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption)
-                    .foregroundColor(iconColor)
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
-
-                Text("\(count)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(AppColors.surfaceWhite12))
-
-                Spacer()
-            }
-
-            ForEach(groups) { group in
-                MarkerTimeSectionCard(
-                    group: group,
-                    symbolPrice: activeSymbolPrice,
-                    onOpen: { marker in openMarker(marker) }
-                )
-            }
-        }
-    }
-
-    // MARK: - Analysis Tab
 
     @ViewBuilder
     private var analysisContent: some View {
-        if isLoadingActive && scopedMarkers.isEmpty {
+        if isLoadingActivity && analysisMarkers.isEmpty {
             UnifiedLoadingState(message: "Preparing marker analysis...")
                 .padding(.top, 24)
-        } else if scopedMarkers.isEmpty {
+        } else if analysisMarkers.isEmpty {
             UnifiedEmptyState(
                 icon: "chart.bar.xaxis",
                 title: "No marker analysis yet",
-                subtitle: "Place markers on \(currentSymbolLabel) to generate timeline analytics."
+                subtitle: "Place markers on \(currentSymbolLabel) to generate symbol activity."
             )
             .padding(.top, 20)
         } else {
@@ -500,7 +388,7 @@ struct chartSheetMarkersView: View {
                             BreakdownRow(
                                 title: row.key,
                                 count: row.value,
-                                total: scopedMarkers.count
+                                total: analysisMarkers.count
                             )
                         }
                     }
@@ -512,7 +400,7 @@ struct chartSheetMarkersView: View {
                             BreakdownRow(
                                 title: row.key,
                                 count: row.value,
-                                total: scopedMarkers.count
+                                total: analysisMarkers.count
                             )
                         }
                     }
@@ -520,12 +408,10 @@ struct chartSheetMarkersView: View {
 
                 analysisSectionCard(title: "Quick Links", icon: "link") {
                     VStack(spacing: 8) {
-                        ForEach(Array(scopedMarkers.prefix(8))) { marker in
+                        ForEach(Array(analysisMarkers.prefix(8))) { marker in
                             QuickLinkRow(
                                 marker: marker,
-                                onOpen: {
-                                    openMarker(marker)
-                                }
+                                onOpen: { openMarker(marker) }
                             )
                         }
                     }
@@ -534,57 +420,80 @@ struct chartSheetMarkersView: View {
         }
     }
 
-    // MARK: - Analysis Computed
+    private var emptyStateIcon: String {
+        switch selectedMarkerTopTab {
+        case .active: return "bolt"
+        case .today: return "sun.max"
+        case .thisWeek: return "calendar"
+        case .thisMonth: return "calendar.badge.clock"
+        case .resolved: return "checkmark.circle"
+        }
+    }
+
+    private var emptyStateTitle: String {
+        switch selectedMarkerTopTab {
+        case .active: return "No Active Markers"
+        case .today: return "No Markers Today"
+        case .thisWeek: return "No Markers This Week"
+        case .thisMonth: return "No Markers This Month"
+        case .resolved: return "No Resolved Markers"
+        }
+    }
+
+    private var emptyStateSubtitle: String {
+        switch selectedMarkerTopTab {
+        case .active:
+            return "Tracked setup markers for \(currentSymbolLabel) will appear here while they are being watched."
+        case .resolved:
+            return "Setups for \(currentSymbolLabel) move here when they hit TP, SL, or expire."
+        case .today, .thisWeek, .thisMonth:
+            return "All marker activity for \(currentSymbolLabel) in the selected time window will appear here."
+        }
+    }
 
     private var markerTypeBreakdown: [(key: String, value: Int)] {
-        let counts = Dictionary(grouping: scopedMarkers) { $0.intentEnum.displayName }
+        let counts = Dictionary(grouping: analysisMarkers) { $0.intentEnum.displayName }
             .mapValues(\.count)
         return counts.sorted { lhs, rhs in
-            if lhs.value == rhs.value {
-                return lhs.key < rhs.key
-            }
+            if lhs.value == rhs.value { return lhs.key < rhs.key }
             return lhs.value > rhs.value
         }
     }
 
     private var timeframeBreakdown: [(key: String, value: Int)] {
-        let counts = Dictionary(grouping: scopedMarkers) { marker in
+        let counts = Dictionary(grouping: analysisMarkers) { marker in
             timeframeLabel(marker.timeframe)
         }
         .mapValues(\.count)
 
         return counts.sorted { lhs, rhs in
-            if lhs.value == rhs.value {
-                return lhs.key < rhs.key
-            }
+            if lhs.value == rhs.value { return lhs.key < rhs.key }
             return lhs.value > rhs.value
         }
     }
 
     private var metricGrid: some View {
-        let total = scopedMarkers.count
-        let uniqueTimeframes = Set(scopedMarkers.map { timeframeLabel($0.timeframe) }).count
-        let candleGroups = Dictionary(grouping: scopedMarkers) { $0.candleTimestamp.timeIntervalSince1970 }
+        let total = analysisMarkers.count
+        let uniqueTimeframes = Set(analysisMarkers.map { timeframeLabel($0.timeframe) }).count
+        let candleGroups = Dictionary(grouping: analysisMarkers) { $0.candleTimestamp.timeIntervalSince1970 }
         let stackedCandles = candleGroups.values.filter { $0.count > 1 }.count
-        let predictionCount = scopedMarkers.filter { $0.intentEnum == .setup }.count
+        let predictionCount = analysisMarkers.filter { $0.intentEnum == .setup }.count
 
         return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
             AnalysisMetricCard(title: "Total", value: "\(total)", subtitle: "markers")
             AnalysisMetricCard(title: "Timeframes", value: "\(uniqueTimeframes)", subtitle: "covered")
             AnalysisMetricCard(title: "Stacks", value: "\(stackedCandles)", subtitle: "shared candles")
-            AnalysisMetricCard(title: "Predictions", value: "\(predictionCount)", subtitle: "active")
+            AnalysisMetricCard(title: "Predictions", value: "\(predictionCount)", subtitle: "setups")
         }
     }
 
-    // MARK: - Shared UI
-
-    private var activitySummaryBadge: some View {
+    private func activitySummaryBadge(descriptor: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.caption)
                 .foregroundColor(AppColors.statusInfo80)
 
-            Text("\(currentSymbolLabel) • \(scopedMarkers.count) markers • \(Set(scopedMarkers.map { timeframeLabel($0.timeframe) }).count) timeframes")
+            Text("\(currentSymbolLabel) • \(descriptor) • \(selectedScope.title) • \(summaryMarkerCount) markers")
                 .font(.caption2)
                 .foregroundColor(.gray)
                 .lineLimit(1)
@@ -592,6 +501,33 @@ struct chartSheetMarkersView: View {
             Spacer()
         }
         .padding(.horizontal, 2)
+    }
+
+    private var analysisSummaryBadge: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.caption)
+                .foregroundColor(AppColors.statusInfo80)
+
+            Text("\(currentSymbolLabel) • Guild • \(analysisMarkers.count) markers • \(Set(analysisMarkers.map { timeframeLabel($0.timeframe) }).count) timeframes")
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var summaryMarkerCount: Int {
+        switch selectedPrimaryTab {
+        case .add:
+            return 0
+        case .markers:
+            return countForScope(selectedScope, topTab: selectedMarkerTopTab)
+        case .analysis:
+            return analysisMarkers.count
+        }
     }
 
     private func analysisSectionCard<Content: View>(
@@ -639,8 +575,6 @@ struct chartSheetMarkersView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    // MARK: - Actions
-
     private func markerIntents(for category: MarkerAddCategoryTab) -> [RLMarkerIntent] {
         markerCategoryMap[category] ?? []
     }
@@ -649,13 +583,20 @@ struct chartSheetMarkersView: View {
         switch tab {
         case .add:
             return Set(markerCategoryMap.values.flatMap { $0 }).count
-        case .active, .analysis:
-            return scopedMarkers.count
+        case .markers:
+            return summaryMarkerCount
+        case .analysis:
+            return analysisMarkers.count
         }
     }
 
-    private func markers(for scope: MarkerActivityScopeTab) -> [RLTopMarkerDTO] {
-        markerCacheByScope[scope] ?? []
+    private func countForTopTab(_ topTab: RLMarkerActivityTopTab) -> Int {
+        countForScope(selectedScope, topTab: topTab)
+    }
+
+    private func countForScope(_ scope: RLMarkerActivityScope, topTab: RLMarkerActivityTopTab) -> Int {
+        let snapshot = markerActivityCache[topTab]
+        return snapshot?.totalCountByScope[scope] ?? snapshot?.markersByScope[scope]?.count ?? 0
     }
 
     private func isMarkerPlacementActive(for intent: RLMarkerIntent) -> Bool {
@@ -672,8 +613,8 @@ struct chartSheetMarkersView: View {
         onMarkerSelection?()
     }
 
-    private func openMarker(_ marker: RLTopMarkerDTO) {
-        onNavigateToMarker?(marker)
+    private func openMarker(_ marker: RLMarkerActivityItemDTO) {
+        onNavigateToMarker?(marker.asTopMarkerDTO())
         onMarkerSelection?()
     }
 
@@ -681,125 +622,192 @@ struct chartSheetMarkersView: View {
         RLChartTimeframe.fromBackendString(backendTimeframe)?.shortName ?? backendTimeframe.uppercased()
     }
 
-    private func dedupeMarkers(_ markers: [RLTopMarkerDTO]) -> [RLTopMarkerDTO] {
-        var map: [UUID: RLTopMarkerDTO] = [:]
-        for marker in markers {
-            if let existing = map[marker.id] {
-                map[marker.id] = existing.createdAt >= marker.createdAt ? existing : marker
-            } else {
-                map[marker.id] = marker
-            }
-        }
-        return Array(map.values)
-    }
-
-    private func loadActiveMarkers(forceRefresh: Bool) async {
+    private func loadMarkerActivity(forceRefresh: Bool) async {
         guard let guildId = rlAppState.currentGuild?.id,
-              let userId = rlAppState.currentUser?.id,
+              rlAppState.currentUser?.id != nil,
               let currentSymbol = chartViewModel.currentSymbol else {
             await MainActor.run {
-                markerCacheByScope = [:]
+                markerActivityCache = [:]
+                analysisSnapshot = nil
                 liveSymbol = chartViewModel.currentSymbol
-                activeLoadError = "Select a guild, user, and symbol to load marker activity."
-                isLoadingActive = false
-                isRefreshingActive = false
+                activityLoadError = "Select a guild, user, and symbol to load marker activity."
+                isLoadingActivity = false
+                isRefreshingActivity = false
             }
+            return
+        }
+
+        let requestPrimaryTab = selectedPrimaryTab
+        let requestTopTab = selectedMarkerTopTab
+        let requestSymbol = currentSymbol
+
+        if cacheNamespace != reloadKey {
+            await MainActor.run {
+                cacheNamespace = reloadKey
+                markerActivityCache = [:]
+                analysisSnapshot = nil
+            }
+        }
+
+        if selectedPrimaryTab == .add {
+            await MainActor.run {
+                liveSymbol = currentSymbol
+                isLoadingActivity = false
+                isRefreshingActivity = false
+            }
+            return
+        }
+
+        if requestPrimaryTab == .markers,
+           !forceRefresh,
+           markerActivityCache[requestTopTab] != nil,
+           liveSymbol != nil {
+            return
+        }
+
+        if requestPrimaryTab == .analysis,
+           !forceRefresh,
+           analysisSnapshot != nil,
+           liveSymbol != nil {
             return
         }
 
         if forceRefresh {
             await MainActor.run {
-                isRefreshingActive = true
-                activeLoadError = nil
+                isRefreshingActivity = true
+                activityLoadError = nil
             }
         } else {
             await MainActor.run {
-                isLoadingActive = true
-                activeLoadError = nil
+                isLoadingActivity = true
+                activityLoadError = nil
             }
         }
 
         do {
-            async let userMarkersTask: Result<RLTopMarkersListDTO, Error> = {
-                do {
-                    return .success(try await rlAppState.realApi.getUserMarkers(guildId: guildId, userId: userId))
-                } catch {
-                    return .failure(error)
+            let api = rlAppState.realApi
+            let refreshedSymbol = try? await api.getSymbol(symbolId: requestSymbol.id)
+
+            switch requestPrimaryTab {
+            case .markers:
+                let snapshot = try await MarkerActivityFeedLoader.loadTopTab(
+                    api: api,
+                    guildId: guildId,
+                    symbolId: requestSymbol.id,
+                    topTab: requestTopTab,
+                    scopes: Array(RLMarkerActivityScope.allCases),
+                    limit: 60
+                )
+
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run {
+                    markerActivityCache[requestTopTab] = snapshot
+                    liveSymbol = refreshedSymbol ?? requestSymbol
+                    activityLoadError = nil
+                    isLoadingActivity = false
+                    isRefreshingActivity = false
                 }
-            }()
-            async let topMarkersTask: Result<RLTopMarkersListDTO, Error> = {
-                do {
-                    return .success(try await rlAppState.realApi.getTopMarkers(guildId: guildId, timeWindowHours: 336))
-                } catch {
-                    return .failure(error)
+
+                Task {
+                    await prefetchRemainingTopTabs(
+                        excluding: requestTopTab,
+                        guildId: guildId,
+                        symbolId: requestSymbol.id
+                    )
                 }
-            }()
 
-            let userMarkersResult = await userMarkersTask
-            let topMarkersResult = await topMarkersTask
-            let freshSymbol = try? await rlAppState.realApi.getSymbol(symbolId: currentSymbol.id)
+            case .analysis:
+                let snapshot = try await MarkerActivityFeedLoader.loadScopes(
+                    api: api,
+                    guildId: guildId,
+                    symbolId: requestSymbol.id,
+                    state: .all,
+                    window: nil,
+                    scopes: [.guild],
+                    limit: 200,
+                    fetchAllPages: true
+                )
 
-            let userMarkersResponse = try? userMarkersResult.get()
-            let topMarkersResponse = try? topMarkersResult.get()
+                guard !Task.isCancelled else { return }
 
-            let mine = dedupeMarkers(
-                (userMarkersResponse?.mine ?? [])
-                + (topMarkersResponse?.mine ?? [])
-            ).filter { $0.symbolId == currentSymbol.id }
-
-            let friends = dedupeMarkers(
-                topMarkersResponse?.following ?? []
-            ).filter { $0.symbolId == currentSymbol.id }
-
-            let bySymbolMatches = (topMarkersResponse?.bySymbol.values.flatMap { $0 } ?? [])
-                .filter { $0.symbolId == currentSymbol.id }
-
-            let trendingMatches = (topMarkersResponse?.trending ?? [])
-                .filter { $0.symbolId == currentSymbol.id }
-
-            let guild = dedupeMarkers(bySymbolMatches + trendingMatches + friends + mine)
-
-            let userMarkersError: Error?
-            switch userMarkersResult {
-            case .failure(let error):
-                userMarkersError = error
-            case .success:
-                userMarkersError = nil
-            }
-
-            let topMarkersError: Error?
-            switch topMarkersResult {
-            case .failure(let error):
-                topMarkersError = error
-            case .success:
-                topMarkersError = nil
-            }
-
-            let personalMarkers = dedupeMarkers(mine).sorted { $0.createdAt > $1.createdAt }
-            let friendMarkers = dedupeMarkers(friends).sorted { $0.createdAt > $1.createdAt }
-            let guildMarkers = guild.sorted { $0.createdAt > $1.createdAt }
-
-            await MainActor.run {
-                markerCacheByScope[.personal] = personalMarkers
-                markerCacheByScope[.friends] = friendMarkers
-                markerCacheByScope[.guild] = guildMarkers
-                liveSymbol = freshSymbol ?? currentSymbol
-                if personalMarkers.isEmpty && friendMarkers.isEmpty && guildMarkers.isEmpty {
-                    activeLoadError = userMarkersError?.localizedDescription ?? topMarkersError?.localizedDescription
-                } else {
-                    activeLoadError = nil
+                await MainActor.run {
+                    analysisSnapshot = snapshot
+                    liveSymbol = refreshedSymbol ?? requestSymbol
+                    activityLoadError = nil
+                    isLoadingActivity = false
+                    isRefreshingActivity = false
                 }
+
+            case .add:
+                break
             }
         } catch {
+            guard !isCancellationError(error) else { return }
             await MainActor.run {
-                activeLoadError = error.localizedDescription
+                activityLoadError = error.localizedDescription
+                isLoadingActivity = false
+                isRefreshingActivity = false
             }
         }
+    }
 
-        await MainActor.run {
-            isLoadingActive = false
-            isRefreshingActive = false
+    private func prefetchRemainingTopTabs(
+        excluding activeTab: RLMarkerActivityTopTab,
+        guildId: UUID,
+        symbolId: UUID
+    ) async {
+        await withTaskGroup(of: (RLMarkerActivityTopTab, MarkerActivityFeedSnapshot?).self) { group in
+            for tab in RLMarkerActivityTopTab.allCases where tab != activeTab && markerActivityCache[tab] == nil {
+                group.addTask {
+                    do {
+                        let snapshot = try await MarkerActivityFeedLoader.loadTopTab(
+                            api: rlAppState.realApi,
+                            guildId: guildId,
+                            symbolId: symbolId,
+                            topTab: tab,
+                            scopes: Array(RLMarkerActivityScope.allCases),
+                            limit: 60
+                        )
+                        return (tab, snapshot)
+                    } catch {
+                        return (tab, nil)
+                    }
+                }
+            }
+
+            for await (tab, snapshot) in group {
+                guard let snapshot else { continue }
+                await MainActor.run {
+                    markerActivityCache[tab] = snapshot
+                }
+            }
         }
+    }
+
+    private func shouldRefresh(for notification: Notification) -> Bool {
+        guard let currentGuildId = rlAppState.currentGuild?.id else { return true }
+        guard let rawGuildId = notification.userInfo?["guildId"] else { return true }
+
+        if let guildId = rawGuildId as? UUID {
+            return guildId == currentGuildId
+        }
+
+        if let guildIdString = rawGuildId as? String,
+           let guildId = UUID(uuidString: guildIdString) {
+            return guildId == currentGuildId
+        }
+
+        return true
+    }
+
+    private func isCancellationError(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
     }
 }
 
@@ -817,10 +825,7 @@ private struct MarkerPlacementOptionRow: View {
                         .foregroundColor(.white)
                         .frame(width: 30, height: 30)
                 } else {
-                    UnifiedMarkerBadge(
-                        intent: intent,
-                        sizeToken: .medium
-                    )
+                    UnifiedMarkerBadge(intent: intent, sizeToken: .medium)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -906,7 +911,6 @@ private struct MarkerFilterSettingsSheet: View {
 
                 ScrollView {
                     VStack(spacing: 12) {
-                        // Visibility Section
                         AdminSectionCard {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Visibility Mode")
@@ -924,7 +928,6 @@ private struct MarkerFilterSettingsSheet: View {
                             }
                         }
 
-                        // Intent Filters Section
                         AdminSectionCard {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
@@ -956,10 +959,7 @@ private struct MarkerFilterSettingsSheet: View {
 
                                 ForEach(RLMarkerIntent.allCases, id: \.self) { intent in
                                     HStack(spacing: 10) {
-                                        UnifiedMarkerBadge(
-                                            intent: intent,
-                                            sizeToken: .tiny
-                                        )
+                                        UnifiedMarkerBadge(intent: intent, sizeToken: .tiny)
 
                                         Text(intent.displayName)
                                             .font(.subheadline)
@@ -980,7 +980,6 @@ private struct MarkerFilterSettingsSheet: View {
                     .padding(.top, 12)
                 }
 
-                // Done button
                 Button {
                     isPresented = false
                 } label: {
@@ -1024,194 +1023,6 @@ private struct MarkerFilterSettingsSheet: View {
         )
     }
 }
-
-private struct MarkerTimeSectionCard: View {
-    let group: MarkerTimeSectionGroup
-    let symbolPrice: Double?
-    let onOpen: (RLTopMarkerDTO) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: group.section.icon)
-                    .font(.caption)
-                    .foregroundColor(AppColors.statusInfo85)
-
-                Text(group.section.rawValue)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.gray)
-
-                Text("\(group.markers.count)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.gray)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(AppColors.surfaceWhite08))
-
-                Spacer()
-            }
-
-            VStack(spacing: 8) {
-                ForEach(group.markers) { marker in
-                    ActiveMarkerRow(
-                        marker: marker,
-                        symbolPrice: symbolPrice,
-                        onOpen: {
-                            onOpen(marker)
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-private struct ActiveMarkerRow: View {
-    let marker: RLTopMarkerDTO
-    let symbolPrice: Double?
-    let onOpen: () -> Void
-
-    private var trackingState: RLTrackingState? {
-        guard marker.intentEnum == .setup,
-              let raw = marker.setupSummary?.trackingState else { return nil }
-        return RLTrackingState(rawValue: raw)
-    }
-
-    private var approachingStatus: MarkerPredictionProgressStatus? {
-        guard marker.intentEnum == .setup else { return nil }
-        let status = MarkerPredictionProgress.status(
-            entryPrice: marker.setupSummary?.entryPrice ?? marker.price,
-            currentPrice: symbolPrice,
-            targetPrice: marker.setupSummary?.tpPrice,
-            stopLossPrice: marker.setupSummary?.slPrice
-        )
-        return (status == .approachingTP || status == .approachingSL) ? status : nil
-    }
-
-    private var shortTypeName: String {
-        switch marker.intentEnum {
-        case .setup: return "Setup"
-        case .analysis: return "Analysis"
-        case .alert: return "Alert"
-        case .question: return "Question"
-        case .poll: return "Poll"
-        case .news: return "News"
-        case .reaction: return "React"
-        case .personal: return "Private"
-        }
-    }
-
-    var body: some View {
-        UnifiedContentCard(onTap: onOpen) {
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 8) {
-                    // Icon with type label underneath
-                    VStack(spacing: 1) {
-                        UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .small)
-                        Text(shortTypeName)
-                            .font(.system(size: 7, weight: .medium))
-                            .foregroundColor(marker.intentEnum.color.opacity(0.9))
-                            .lineLimit(1)
-                    }
-                    .frame(width: 34)
-                    .padding(.top, 4)
-
-                    // Right side content
-                    VStack(alignment: .leading, spacing: 2) {
-                        // Symbol row at top
-                        HStack(spacing: 4) {
-                            if let brandColor = marker.symbolBrandColor {
-                                Circle()
-                                    .fill(Color(hex: brandColor) ?? .blue)
-                                    .frame(width: 6, height: 6)
-                            }
-                            Text(marker.symbolTicker)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(AppColors.whiteText)
-
-                            if marker.isCurrentUserMarker {
-                                Text("YOU")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(AppColors.statusInfo60))
-                            }
-
-                            Spacer()
-
-                            HStack(spacing: 2) {
-                                Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
-                                    .font(.system(size: 10))
-                                Text("\(marker.likeCount)")
-                                    .font(.system(size: 11, weight: .medium))
-                            }
-                            .foregroundColor(marker.isLikedByCurrentUser ? AppColors.markerHeartTint : AppColors.markerHeartMuted)
-                        }
-
-                        // Note preview
-                        if let note = marker.notePreview, !note.isEmpty {
-                            Text(note)
-                                .font(.system(size: 12))
-                                .foregroundColor(AppColors.whiteText.opacity(0.75))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .padding(.top, 4)
-                        }
-
-                        // Setup-specific: timeframe + tracking state
-                        if marker.intentEnum == .setup {
-                            HStack(spacing: 6) {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "clock")
-                                        .font(.system(size: 8, weight: .semibold))
-                                    Text(marker.timeframe.uppercased())
-                                        .font(.system(size: 9, weight: .bold))
-                                }
-                                .foregroundColor(AppColors.whiteText.opacity(0.85))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill(AppColors.whiteText.opacity(0.10))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                        )
-                                )
-
-                                if let trackingState {
-                                    TrackingStatePill(state: trackingState, size: .compact)
-                                }
-
-                                if let approachingStatus {
-                                    ApproachingLevelChip(status: approachingStatus)
-                                }
-
-                                Spacer()
-                            }
-                            .padding(.top, 2)
-                        }
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 10)
-                .padding(.bottom, 14)
-
-                UnifiedAuthorFooter(
-                    username: marker.authorUsername,
-                    isOnline: marker.authorIsOnline,
-                    role: RLMemberRole(from: marker.authorRole),
-                    reputation: marker.authorReputation,
-                    accuracy: marker.authorAccuracyFormatted,
-                    timeText: marker.createdAtFormatted,
-                    showOnlineStatus: false
-                )
-            }
-        }
-    }
-}
-
 
 private struct AnalysisMetricCard: View {
     let title: String
@@ -1280,7 +1091,7 @@ private struct BreakdownRow: View {
 }
 
 private struct QuickLinkRow: View {
-    let marker: RLTopMarkerDTO
+    let marker: RLMarkerActivityItemDTO
     let onOpen: () -> Void
 
     private var timeframeText: String {
@@ -1298,23 +1109,27 @@ private struct QuickLinkRow: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Text("\(timeframeText) • \(marker.createdAtFormatted)")
+
+                    Text("\(timeframeText) • \(marker.activityTimestampFormatted)")
                         .font(.caption2)
-                        .foregroundColor(.gray)
-                        .lineLimit(1)
+                        .foregroundColor(AppColors.surfaceWhite70)
                 }
 
-                Spacer(minLength: 0)
+                Spacer()
 
-                Image(systemName: "arrow.up.right")
-                    .font(.caption)
-                    .foregroundColor(AppColors.surfaceGray90)
+                Image(systemName: "arrow.up.forward")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(AppColors.statusInfo80)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(AppColors.surfaceWhite03)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(AppColors.surfaceWhite04)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                    )
             )
         }
         .buttonStyle(.plain)
