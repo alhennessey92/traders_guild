@@ -117,7 +117,7 @@ struct StochasticPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(AppColors.chartIndicatorHandleFill)
+                .fill(AppColors.panelHeaderBackground)
 
             // Capsule always centered
             Capsule()
@@ -460,7 +460,7 @@ struct StochasticPanelView: View {
             .padding(.top, 18)
             .padding(.bottom, 4)
             .padding(.trailing, 5)
-            .background(AppColors.surfaceBlack62)
+            .background(AppColors.chartPanelBackgroundDeep.opacity(0.92))
         }
     }
     
@@ -534,7 +534,7 @@ struct StochasticPanelView: View {
                 drawXAxisLabels(context: context, size: size)
             }
             .frame(height: 24)
-            .background(AppColors.systemBlack)
+            .background(AppColors.xAxisBackground)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)

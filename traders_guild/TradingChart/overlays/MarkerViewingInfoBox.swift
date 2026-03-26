@@ -7,12 +7,24 @@ struct MarkerViewingInfoBox: View {
     let yAxisWidth: CGFloat
     @Binding var isCollapsed: Bool
     let formatPrice: (Double) -> String
+    var currentPrice: Double? = nil
     let isSubmittingPollVote: Bool
     let submittingPollVoteOptionId: UUID?
     let onVote: (UUID, UUID) -> Void
 
     private var expandedWidth: CGFloat {
         min(max(220, chartWidth * 0.34), max(244, chartWidth - yAxisWidth - 12))
+    }
+
+    private var setupApproachingStatus: MarkerPredictionProgressStatus? {
+        guard marker.intent == .setup else { return nil }
+        let status = MarkerPredictionProgress.status(
+            entryPrice: marker.entryPrice ?? marker.price,
+            currentPrice: currentPrice,
+            targetPrice: marker.targetPrice,
+            stopLossPrice: marker.stopLossPrice
+        )
+        return (status == .approachingTP || status == .approachingSL) ? status : nil
     }
 
     var body: some View {
@@ -88,6 +100,14 @@ struct MarkerViewingInfoBox: View {
         switch marker.intent {
         case .setup:
             VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 6) {
+                    if let trackingState = marker.trackingState {
+                        TrackingStatePill(state: trackingState, size: .compact)
+                    }
+                    if let approachingStatus = setupApproachingStatus {
+                        ApproachingLevelChip(status: approachingStatus)
+                    }
+                }
                 valueRow(
                     title: "Entry",
                     value: formatPrice(marker.entryPrice ?? marker.price),

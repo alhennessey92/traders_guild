@@ -62,10 +62,37 @@ enum MarkerActivityScopeTab: String, CaseIterable, UnifiedTabItem {
     }
 }
 
-private struct MarkerTimelineGroup: Identifiable {
-    let id: String
-    let candleTimestamp: Date
+private enum MarkerTimeSection: String, CaseIterable, Identifiable {
+    case today = "Today"
+    case thisWeek = "This Week"
+    case thisMonth = "This Month"
+    case older = "Older"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .today: return "sun.max.fill"
+        case .thisWeek: return "calendar"
+        case .thisMonth: return "calendar.badge.clock"
+        case .older: return "clock.arrow.circlepath"
+        }
+    }
+
+    static func section(for date: Date) -> MarkerTimeSection {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return .today }
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) { return .thisWeek }
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .month) { return .thisMonth }
+        return .older
+    }
+}
+
+private struct MarkerTimeSectionGroup: Identifiable {
+    let section: MarkerTimeSection
     let markers: [RLTopMarkerDTO]
+
+    var id: String { section.rawValue }
 }
 
 /// Marker content view for ChartBottomSheet
@@ -122,20 +149,36 @@ struct chartSheetMarkersView: View {
         markers(for: selectedActivityScope)
     }
 
-    private var scopedTimelineGroups: [MarkerTimelineGroup] {
-        let grouped = Dictionary(grouping: scopedMarkers) { marker in
-            marker.candleTimestamp.timeIntervalSince1970
+    private var liveMarkers: [RLTopMarkerDTO] {
+        scopedMarkers.filter { marker in
+            guard marker.intentEnum == .setup,
+                  let raw = marker.setupSummary?.trackingState,
+                  let state = RLTrackingState(rawValue: raw) else { return true }
+            return state.isLive || state == .draft
+        }
+    }
+
+    private var resolvedMarkers: [RLTopMarkerDTO] {
+        scopedMarkers.filter { marker in
+            guard marker.intentEnum == .setup,
+                  let raw = marker.setupSummary?.trackingState,
+                  let state = RLTrackingState(rawValue: raw) else { return false }
+            return state.isResolved
+        }
+    }
+
+    private func timeSectionGroups(from markers: [RLTopMarkerDTO]) -> [MarkerTimeSectionGroup] {
+        let grouped = Dictionary(grouping: markers) { marker in
+            MarkerTimeSection.section(for: marker.createdAt)
         }
 
-        return grouped
-            .map { timestamp, markers in
-                MarkerTimelineGroup(
-                    id: "\(timestamp)",
-                    candleTimestamp: Date(timeIntervalSince1970: timestamp),
-                    markers: markers.sorted { $0.createdAt > $1.createdAt }
-                )
-            }
-            .sorted { $0.candleTimestamp > $1.candleTimestamp }
+        return MarkerTimeSection.allCases.compactMap { section in
+            guard let sectionMarkers = grouped[section], !sectionMarkers.isEmpty else { return nil }
+            return MarkerTimeSectionGroup(
+                section: section,
+                markers: sectionMarkers.sorted { $0.createdAt > $1.createdAt }
+            )
+        }
     }
 
     var body: some View {
@@ -370,17 +413,65 @@ struct chartSheetMarkersView: View {
             )
             .padding(.top, 20)
         } else {
-            VStack(spacing: 10) {
-                ForEach(Array(scopedTimelineGroups.enumerated()), id: \.element.id) { index, group in
-                    MarkerTimelineGroupCard(
-                        group: group,
-                        isLast: index == scopedTimelineGroups.count - 1,
-                        symbolPrice: activeSymbolPrice,
-                        onOpen: { marker in
-                            openMarker(marker)
-                        }
+            VStack(spacing: 16) {
+                let liveGroups = timeSectionGroups(from: liveMarkers)
+                let resolvedGroups = timeSectionGroups(from: resolvedMarkers)
+
+                if !liveMarkers.isEmpty {
+                    activeSection(
+                        title: "Live",
+                        icon: "bolt.fill",
+                        iconColor: .green,
+                        count: liveMarkers.count,
+                        groups: liveGroups
                     )
                 }
+
+                if !resolvedMarkers.isEmpty {
+                    activeSection(
+                        title: "Resolved",
+                        icon: "checkmark.diamond.fill",
+                        iconColor: AppColors.surfaceGray90,
+                        count: resolvedMarkers.count,
+                        groups: resolvedGroups
+                    )
+                }
+            }
+        }
+    }
+
+    private func activeSection(
+        title: String,
+        icon: String,
+        iconColor: Color,
+        count: Int,
+        groups: [MarkerTimeSectionGroup]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundColor(iconColor)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+
+                Text("\(count)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(AppColors.surfaceWhite12))
+
+                Spacer()
+            }
+
+            ForEach(groups) { group in
+                MarkerTimeSectionCard(
+                    group: group,
+                    symbolPrice: activeSymbolPrice,
+                    onOpen: { marker in openMarker(marker) }
+                )
             }
         }
     }
@@ -473,7 +564,8 @@ struct chartSheetMarkersView: View {
     private var metricGrid: some View {
         let total = scopedMarkers.count
         let uniqueTimeframes = Set(scopedMarkers.map { timeframeLabel($0.timeframe) }).count
-        let stackedCandles = scopedTimelineGroups.filter { $0.markers.count > 1 }.count
+        let candleGroups = Dictionary(grouping: scopedMarkers) { $0.candleTimestamp.timeIntervalSince1970 }
+        let stackedCandles = candleGroups.values.filter { $0.count > 1 }.count
         let predictionCount = scopedMarkers.filter { $0.intentEnum == .setup }.count
 
         return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
@@ -628,30 +720,75 @@ struct chartSheetMarkersView: View {
         }
 
         do {
-            async let userMarkersTask = rlAppState.realApi.getUserMarkers(guildId: guildId, userId: userId)
-            async let topMarkersTask = rlAppState.realApi.getTopMarkers(guildId: guildId, timeWindowHours: 336)
+            async let userMarkersTask: Result<RLTopMarkersListDTO, Error> = {
+                do {
+                    return .success(try await rlAppState.realApi.getUserMarkers(guildId: guildId, userId: userId))
+                } catch {
+                    return .failure(error)
+                }
+            }()
+            async let topMarkersTask: Result<RLTopMarkersListDTO, Error> = {
+                do {
+                    return .success(try await rlAppState.realApi.getTopMarkers(guildId: guildId, timeWindowHours: 336))
+                } catch {
+                    return .failure(error)
+                }
+            }()
 
-            let userMarkersResponse = try await userMarkersTask
-            let topMarkersResponse = try await topMarkersTask
+            let userMarkersResult = await userMarkersTask
+            let topMarkersResult = await topMarkersTask
             let freshSymbol = try? await rlAppState.realApi.getSymbol(symbolId: currentSymbol.id)
 
-            let mine = userMarkersResponse.mine.filter { $0.symbolId == currentSymbol.id }
-            let friends = topMarkersResponse.following.filter { $0.symbolId == currentSymbol.id }
+            let userMarkersResponse = try? userMarkersResult.get()
+            let topMarkersResponse = try? topMarkersResult.get()
 
-            let bySymbolMatches = topMarkersResponse.bySymbol.values
-                .flatMap { $0 }
+            let mine = dedupeMarkers(
+                (userMarkersResponse?.mine ?? [])
+                + (topMarkersResponse?.mine ?? [])
+            ).filter { $0.symbolId == currentSymbol.id }
+
+            let friends = dedupeMarkers(
+                topMarkersResponse?.following ?? []
+            ).filter { $0.symbolId == currentSymbol.id }
+
+            let bySymbolMatches = (topMarkersResponse?.bySymbol.values.flatMap { $0 } ?? [])
                 .filter { $0.symbolId == currentSymbol.id }
 
-            let trendingMatches = topMarkersResponse.trending.filter { $0.symbolId == currentSymbol.id }
+            let trendingMatches = (topMarkersResponse?.trending ?? [])
+                .filter { $0.symbolId == currentSymbol.id }
 
             let guild = dedupeMarkers(bySymbolMatches + trendingMatches + friends + mine)
 
+            let userMarkersError: Error?
+            switch userMarkersResult {
+            case .failure(let error):
+                userMarkersError = error
+            case .success:
+                userMarkersError = nil
+            }
+
+            let topMarkersError: Error?
+            switch topMarkersResult {
+            case .failure(let error):
+                topMarkersError = error
+            case .success:
+                topMarkersError = nil
+            }
+
+            let personalMarkers = dedupeMarkers(mine).sorted { $0.createdAt > $1.createdAt }
+            let friendMarkers = dedupeMarkers(friends).sorted { $0.createdAt > $1.createdAt }
+            let guildMarkers = guild.sorted { $0.createdAt > $1.createdAt }
+
             await MainActor.run {
-                markerCacheByScope[.personal] = dedupeMarkers(mine).sorted { $0.createdAt > $1.createdAt }
-                markerCacheByScope[.friends] = dedupeMarkers(friends).sorted { $0.createdAt > $1.createdAt }
-                markerCacheByScope[.guild] = guild.sorted { $0.createdAt > $1.createdAt }
+                markerCacheByScope[.personal] = personalMarkers
+                markerCacheByScope[.friends] = friendMarkers
+                markerCacheByScope[.guild] = guildMarkers
                 liveSymbol = freshSymbol ?? currentSymbol
-                activeLoadError = nil
+                if personalMarkers.isEmpty && friendMarkers.isEmpty && guildMarkers.isEmpty {
+                    activeLoadError = userMarkersError?.localizedDescription ?? topMarkersError?.localizedDescription
+                } else {
+                    activeLoadError = nil
+                }
             }
         } catch {
             await MainActor.run {
@@ -888,32 +1025,28 @@ private struct MarkerFilterSettingsSheet: View {
     }
 }
 
-private struct MarkerTimelineGroupCard: View {
-    let group: MarkerTimelineGroup
-    let isLast: Bool
+private struct MarkerTimeSectionCard: View {
+    let group: MarkerTimeSectionGroup
     let symbolPrice: Double?
     let onOpen: (RLTopMarkerDTO) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "clock")
+            HStack(spacing: 6) {
+                Image(systemName: group.section.icon)
                     .font(.caption)
                     .foregroundColor(AppColors.statusInfo85)
 
-                Text(group.candleTimestamp.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
+                Text(group.section.rawValue)
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(.gray)
 
-                if group.markers.count > 1 {
-                    Text("\(group.markers.count) stacked")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(AppColors.statusWarning90)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(AppColors.statusWarning18)
-                        .clipShape(Capsule())
-                }
+                Text("\(group.markers.count)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(AppColors.surfaceWhite08))
 
                 Spacer()
             }
@@ -929,21 +1062,7 @@ private struct MarkerTimelineGroupCard: View {
                     )
                 }
             }
-
-            if !isLast {
-                Divider()
-                    .background(AppColors.surfaceWhite08)
-            }
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(AppColors.surfaceWhite04)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
-                )
-        )
     }
 }
 
@@ -952,129 +1071,147 @@ private struct ActiveMarkerRow: View {
     let symbolPrice: Double?
     let onOpen: () -> Void
 
-    private var status: MarkerPredictionProgressStatus? {
+    private var trackingState: RLTrackingState? {
+        guard marker.intentEnum == .setup,
+              let raw = marker.setupSummary?.trackingState else { return nil }
+        return RLTrackingState(rawValue: raw)
+    }
+
+    private var approachingStatus: MarkerPredictionProgressStatus? {
         guard marker.intentEnum == .setup else { return nil }
-        return MarkerPredictionProgress.status(
+        let status = MarkerPredictionProgress.status(
             entryPrice: marker.setupSummary?.entryPrice ?? marker.price,
             currentPrice: symbolPrice,
             targetPrice: marker.setupSummary?.tpPrice,
             stopLossPrice: marker.setupSummary?.slPrice
         )
+        return (status == .approachingTP || status == .approachingSL) ? status : nil
     }
 
-    private var timeframeText: String {
-        RLChartTimeframe.fromBackendString(marker.timeframe)?.shortName ?? marker.timeframe.uppercased()
+    private var shortTypeName: String {
+        switch marker.intentEnum {
+        case .setup: return "Setup"
+        case .analysis: return "Analysis"
+        case .alert: return "Alert"
+        case .question: return "Question"
+        case .poll: return "Poll"
+        case .news: return "News"
+        case .reaction: return "React"
+        case .personal: return "Private"
+        }
     }
 
     var body: some View {
-        Button(action: onOpen) {
-            HStack(alignment: .top, spacing: 10) {
-                UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .small)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(marker.intentEnum.displayName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
-
-                        Text(timeframeText)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(marker.intentEnum.color)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(marker.intentEnum.color.opacity(0.2))
-                            .clipShape(Capsule())
-
-                        Spacer(minLength: 0)
-
-                        Image(systemName: "arrow.up.right")
-                            .font(.caption)
-                            .foregroundColor(AppColors.surfaceGray90)
+        UnifiedContentCard(onTap: onOpen) {
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 8) {
+                    // Icon with type label underneath
+                    VStack(spacing: 1) {
+                        UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .small)
+                        Text(shortTypeName)
+                            .font(.system(size: 7, weight: .medium))
+                            .foregroundColor(marker.intentEnum.color.opacity(0.9))
+                            .lineLimit(1)
                     }
+                    .frame(width: 34)
+                    .padding(.top, 4)
 
-                    HStack(spacing: 6) {
-                        if let symbolColor = marker.symbolBrandColor {
-                            Circle()
-                                .fill(Color(hex: symbolColor) ?? .blue)
-                                .frame(width: 6, height: 6)
+                    // Right side content
+                    VStack(alignment: .leading, spacing: 2) {
+                        // Symbol row at top
+                        HStack(spacing: 4) {
+                            if let brandColor = marker.symbolBrandColor {
+                                Circle()
+                                    .fill(Color(hex: brandColor) ?? .blue)
+                                    .frame(width: 6, height: 6)
+                            }
+                            Text(marker.symbolTicker)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(AppColors.whiteText)
+
+                            if marker.isCurrentUserMarker {
+                                Text("YOU")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(AppColors.statusInfo60))
+                            }
+
+                            Spacer()
+
+                            HStack(spacing: 2) {
+                                Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
+                                    .font(.system(size: 10))
+                                Text("\(marker.likeCount)")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(marker.isLikedByCurrentUser ? AppColors.markerHeartTint : AppColors.markerHeartMuted)
                         }
-                        Text(marker.symbolTicker)
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText)
 
-                        if !marker.isCurrentUserMarker {
-                            Text("@\(marker.authorUsername)")
-                                .font(.caption2)
-                                .foregroundColor(.gray)
-                                .lineLimit(1)
+                        // Note preview
+                        if let note = marker.notePreview, !note.isEmpty {
+                            Text(note)
+                                .font(.system(size: 12))
+                                .foregroundColor(AppColors.whiteText.opacity(0.75))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .padding(.top, 4)
                         }
 
-                        Spacer(minLength: 0)
+                        // Setup-specific: timeframe + tracking state
+                        if marker.intentEnum == .setup {
+                            HStack(spacing: 6) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "clock")
+                                        .font(.system(size: 8, weight: .semibold))
+                                    Text(marker.timeframe.uppercased())
+                                        .font(.system(size: 9, weight: .bold))
+                                }
+                                .foregroundColor(AppColors.whiteText.opacity(0.85))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(AppColors.whiteText.opacity(0.10))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
 
-                        Text(marker.createdAtFormatted)
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                    }
+                                if let trackingState {
+                                    TrackingStatePill(state: trackingState, size: .compact)
+                                }
 
-                    if let status {
-                        MarkerStatusChip(status: status)
-                    }
+                                if let approachingStatus {
+                                    ApproachingLevelChip(status: approachingStatus)
+                                }
 
-                    if let note = marker.notePreview, !note.isEmpty {
-                        Text(note)
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    HStack(spacing: 10) {
-                        Label("\(marker.likeCount)", systemImage: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
-                            .font(.caption2)
-                            .foregroundColor(marker.isLikedByCurrentUser ? AppColors.markerHeartTint : .gray)
-
-                        Label("\(marker.commentCount)", systemImage: "bubble.left")
-                            .font(.caption2)
-                            .foregroundColor(.gray)
+                                Spacer()
+                            }
+                            .padding(.top, 2)
+                        }
                     }
                 }
+                .padding(.horizontal, 8)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+
+                UnifiedAuthorFooter(
+                    username: marker.authorUsername,
+                    isOnline: marker.authorIsOnline,
+                    role: RLMemberRole(from: marker.authorRole),
+                    reputation: marker.authorReputation,
+                    accuracy: marker.authorAccuracyFormatted,
+                    timeText: marker.createdAtFormatted,
+                    showOnlineStatus: false
+                )
             }
-            .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(AppColors.surfaceWhite03)
-            )
         }
-        .buttonStyle(.plain)
     }
 }
 
-private struct MarkerStatusChip: View {
-    let status: MarkerPredictionProgressStatus
-
-    private var chipColor: Color {
-        switch status {
-        case .inProgress:
-            return .blue
-        case .approachingTP:
-            return .green
-        case .approachingSL:
-            return .orange
-        case .liveUnavailable:
-            return .gray
-        }
-    }
-
-    var body: some View {
-        Text(status.rawValue)
-            .font(.caption2.weight(.semibold))
-            .foregroundColor(chipColor)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(chipColor.opacity(0.2))
-            .clipShape(Capsule())
-    }
-}
 
 private struct AnalysisMetricCard: View {
     let title: String

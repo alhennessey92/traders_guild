@@ -1115,67 +1115,6 @@ struct MarkerDetailHeaderView: View {
     }
 }
 
-// MARK: - Tracking State Pill
-
-/// Capsule badge showing the tracking state with a pulsing dot for live states
-/// or a terminal icon for resolved states (TP Hit, SL Hit, Expired).
-struct TrackingStatePill: View {
-    let state: RLTrackingState
-
-    @State private var dotPulse: Bool = false
-
-    private var isLive: Bool {
-        state == .armed || state == .active
-    }
-
-    private var terminalIcon: String? {
-        switch state {
-        case .tpHit: return "checkmark.circle.fill"
-        case .slHit: return "xmark.circle.fill"
-        case .expired: return "clock.badge.exclamationmark"
-        default: return nil
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 5) {
-            if isLive {
-                // Pulsing dot for live states
-                Circle()
-                    .fill(state.color)
-                    .frame(width: 8, height: 8)
-                    .scaleEffect(dotPulse ? 1.3 : 0.8)
-                    .opacity(dotPulse ? 1.0 : 0.6)
-            } else if let icon = terminalIcon {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(state.color)
-            }
-
-            Text(state.displayName.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(state.color)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(state.color.opacity(0.15))
-                .overlay(
-                    Capsule()
-                        .stroke(state.color.opacity(0.3), lineWidth: 1)
-                )
-        )
-        .onAppear {
-            if isLive {
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    dotPulse = true
-                }
-            }
-        }
-    }
-}
-
 struct MarkerGeneralActionsRow: View {
     let isLiked: Bool
     let likeCount: Int
@@ -1498,6 +1437,9 @@ struct MarkerInfoContent: View {
         switch marker.intent {
         case .setup:
             VStack(spacing: 16) {
+                if let outcome = MarkerPredictionProgress.outcomeDescription(for: marker.marker) {
+                    setupOutcomeSection(outcome)
+                }
                 // Level Ladder Card (replaces old prediction section for cleaner UX)
                 LevelLadderCard(
                     entryPrice: marker.entryPrice ?? marker.horizontalLinePrice ?? marker.price,
@@ -1515,6 +1457,65 @@ struct MarkerInfoContent: View {
             pollSection
         default:
             EmptyView()
+        }
+    }
+
+    private func setupOutcomeSection(_ outcome: SetupOutcome) -> some View {
+        infoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: outcome.displayIcon)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(outcome.state.color)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Setup Outcome")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(AppColors.greyText)
+                        Text(outcome.displayLabel)
+                            .font(.headline.weight(.bold))
+                            .foregroundColor(.white)
+                    }
+
+                    Spacer()
+                }
+
+                if let pnl = outcome.pnl {
+                    Text(String(format: "%+.2f%%", pnl))
+                        .font(.system(size: 22, weight: .heavy, design: .monospaced))
+                        .foregroundColor(pnl >= 0 ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                }
+
+                if let triggerPrice = outcome.triggerPrice {
+                    componentRow(
+                        icon: "scope",
+                        title: "Trigger Price",
+                        value: formatPrice(triggerPrice)
+                    )
+                }
+
+                if let triggeredAtFormatted = outcome.triggeredAtFormatted {
+                    componentRow(
+                        icon: "clock",
+                        title: "Resolved",
+                        value: triggeredAtFormatted
+                    )
+                }
+
+                if let impactNote = outcome.impactNote {
+                    HStack(spacing: 6) {
+                        Image(systemName: outcome.affectsPerformance ? "chart.line.uptrend.xyaxis" : "clock.badge.xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(impactNote)
+                            .font(.caption2)
+                    }
+                    .foregroundColor(
+                        outcome.affectsPerformance
+                            ? (outcome.isWin ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                            : AppColors.greyText
+                    )
+                }
+            }
         }
     }
 

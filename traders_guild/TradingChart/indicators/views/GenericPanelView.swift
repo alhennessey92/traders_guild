@@ -156,7 +156,7 @@ struct GenericIndicatorPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(AppColors.chartIndicatorHandleFill)
+                .fill(AppColors.panelHeaderBackground)
 
             // Capsule always centered
             Capsule()
@@ -435,7 +435,7 @@ struct GenericIndicatorPanelView: View {
                 drawXAxisLabels(context: context, size: size)
             }
             .frame(height: 24)
-            .background(AppColors.systemBlack)
+            .background(AppColors.xAxisBackground)
             
             if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
                 crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)

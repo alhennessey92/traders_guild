@@ -26,7 +26,7 @@ struct StaticBackgroundView: View {
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = ThemeManager.shared.currentTheme == .midGrey ? 0.05 : 0.012
+                patternOpacity = 0.012
             }
         }
     }
@@ -76,7 +76,7 @@ struct StaticMessagingBackgroundView: View {
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = ThemeManager.shared.currentTheme == .midGrey ? 0.06 : 0.02
+                patternOpacity = 0.02
             }
         }
     }
@@ -95,7 +95,7 @@ struct StaticPatternView: View {
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
                 // Mid-grey backgrounds are lighter so need higher opacity for visible contrast
-                patternOpacity = ThemeManager.shared.currentTheme == .midGrey ? 0.06 : 0.02
+                patternOpacity = 0.02
             }
         }
     }

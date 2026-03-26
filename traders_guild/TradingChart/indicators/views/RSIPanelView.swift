@@ -402,7 +402,7 @@ struct RSIPanelView: View {
             .padding(.top, 18)
             .padding(.bottom, 4)
             .padding(.trailing, 5)
-            .background(AppColors.surfaceBlack62)
+            .background(AppColors.chartPanelBackgroundDeep.opacity(0.92))
         }
     }
     

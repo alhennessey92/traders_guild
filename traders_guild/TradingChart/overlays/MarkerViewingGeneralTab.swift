@@ -124,7 +124,8 @@ struct MarkerViewingGeneralTab: View {
     private var requirementsContent: some View {
         switch liveMarker.intent {
         case .setup:
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
+                setupStatusBanner
                 readOnlyValueRow(
                     title: "Entry",
                     value: formattedPrice(setupEntryPrice),
@@ -140,7 +141,6 @@ struct MarkerViewingGeneralTab: View {
                     value: formattedPrice(setupSlPrice),
                     color: RLComponentType.levelSl.color
                 )
-                trackingBadge
                 outcomeResultCard
             }
 
@@ -373,6 +373,71 @@ struct MarkerViewingGeneralTab: View {
         .buttonStyle(.plain)
     }
 
+    private var setupStatusBanner: some View {
+        let state = liveMarker.trackingState ?? .draft
+        let stateColor = state.color
+
+        return HStack(spacing: 10) {
+            Image(systemName: state.icon)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(stateColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(state.displayName.uppercased())
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundColor(.white)
+                Text(setupStatusSubtitle(for: state))
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText)
+            }
+
+            Spacer(minLength: 0)
+
+            Text(liveMarker.timeframe.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(AppColors.whiteText.opacity(0.12))
+                        .overlay(
+                            Capsule()
+                                .stroke(AppColors.whiteText.opacity(0.20), lineWidth: 1)
+                        )
+                )
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            stateColor.opacity(0.25),
+                            stateColor.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(stateColor.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+
+    private func setupStatusSubtitle(for state: RLTrackingState) -> String {
+        switch state {
+        case .draft: return "Setup is in draft"
+        case .armed: return "Monitoring for entry trigger"
+        case .active: return "Trade is live"
+        case .tpHit: return "Target price was hit"
+        case .slHit: return "Stop loss was hit"
+        case .expired: return "Setup expired without trigger"
+        }
+    }
+
     private var trackingBadge: some View {
         let stateLabel = liveMarker.trackingState?.displayName
             ?? (liveMarker.trackingEnabled ? "Tracking" : "Not Tracked")
@@ -402,35 +467,37 @@ struct MarkerViewingGeneralTab: View {
     @ViewBuilder
     private var outcomeResultCard: some View {
         if let outcome = MarkerPredictionProgress.outcomeDescription(for: liveMarker.marker) {
-            VStack(alignment: .leading, spacing: 8) {
-                // Outcome header
-                HStack(spacing: 8) {
+            VStack(spacing: 12) {
+                // Outcome header — large icon + heading
+                HStack(spacing: 10) {
                     Image(systemName: outcome.displayIcon)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundColor(outcome.state.color)
 
-                    Text("Outcome")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(AppColors.greyText)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(outcome.displayLabel.uppercased())
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(.white)
+                        if let triggeredAt = outcome.triggeredAtFormatted {
+                            Text(triggeredAt)
+                                .font(.caption2)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                    }
 
                     Spacer(minLength: 0)
-
-                    Text(outcome.displayLabel.uppercased())
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(outcome.state.color.opacity(0.42))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(outcome.state.color.opacity(0.62), lineWidth: 1)
-                                )
-                        )
                 }
 
-                // Trigger price
+                // P&L centerpiece
+                if let pnl = outcome.pnl {
+                    Text(pnl >= 0 ? "+\(formattedPrice(pnl))" : formattedPrice(pnl))
+                        .font(.system(size: 22, weight: .heavy, design: .monospaced))
+                        .foregroundColor(pnl >= 0 ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                }
+
+                // Trigger price detail
                 if let triggerPrice = outcome.triggerPrice {
                     HStack(spacing: 8) {
                         Text("Trigger Price")
@@ -443,61 +510,37 @@ struct MarkerViewingGeneralTab: View {
                     }
                 }
 
-                // P&L
-                if let pnl = outcome.pnl {
-                    HStack(spacing: 8) {
-                        Text("P&L")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                        Spacer(minLength: 0)
-                        Text(pnl >= 0 ? "+\(formattedPrice(pnl))" : formattedPrice(pnl))
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(pnl >= 0 ? AppColors.statusPositive90 : AppColors.statusNegative85)
-                    }
-                }
-
-                // Triggered time
-                if let triggeredAt = outcome.triggeredAtFormatted {
-                    HStack(spacing: 8) {
-                        Text("Resolved")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                        Spacer(minLength: 0)
-                        Text(triggeredAt)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-                    }
-                }
-
                 // Tracking impact note
-                if outcome.isTracked {
+                if let impactNote = outcome.impactNote {
                     HStack(spacing: 6) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
+                        Image(systemName: outcome.affectsPerformance ? "chart.line.uptrend.xyaxis" : "clock.badge.xmark")
                             .font(.system(size: 10, weight: .semibold))
-                        Text("This result affected your accuracy and reputation")
+                        Text(impactNote)
                             .font(.caption2)
                     }
-                    .foregroundColor(outcome.isWin ? AppColors.statusPositive90 : AppColors.statusNegative85)
-                    .padding(.top, 2)
+                    .foregroundColor(
+                        outcome.affectsPerformance
+                            ? (outcome.isWin ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                            : AppColors.greyText
+                    )
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(
                         LinearGradient(
                             colors: [
-                                outcome.state.color.opacity(0.15),
-                                outcome.state.color.opacity(0.06),
+                                outcome.state.color.opacity(0.22),
+                                outcome.state.color.opacity(0.08),
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(outcome.state.color.opacity(0.28), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(outcome.state.color.opacity(0.35), lineWidth: 1)
                     )
             )
         }

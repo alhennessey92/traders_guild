@@ -127,6 +127,15 @@ struct SetupOutcome {
     var isWin: Bool { state == .tpHit }
     var isLoss: Bool { state == .slHit }
     var isExpired: Bool { state == .expired }
+    var affectsPerformance: Bool { isTracked && !isExpired }
+
+    var impactNote: String? {
+        guard isTracked else { return nil }
+        if isExpired {
+            return "Expired setups do not affect accuracy or reputation"
+        }
+        return "This result affected your accuracy and reputation"
+    }
 
     var displayLabel: String { state.displayName }
 

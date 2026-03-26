@@ -1954,3 +1954,163 @@ enum PreviewCategoryTab: String, CaseIterable, UnifiedTabItem {
     }
 }
 #endif
+
+// MARK: - ================================================================================================
+// MARK: - TRACKING STATE PILL
+// MARK: - ================================================================================================
+
+/// Unified capsule badge showing the tracking state with a pulsing dot for live states
+/// or a terminal icon for resolved states (TP Hit, SL Hit, Expired).
+/// Use for: Setup marker state display across all list rows and detail views.
+struct TrackingStatePill: View {
+    let state: RLTrackingState
+    var size: PillSize = .standard
+
+    enum PillSize {
+        case compact  // list rows (bottom bar, left drawer)
+        case standard // detail views
+
+        var fontSize: CGFloat {
+            switch self {
+            case .compact: return 9
+            case .standard: return 10
+            }
+        }
+
+        var iconSize: CGFloat {
+            switch self {
+            case .compact: return 8
+            case .standard: return 10
+            }
+        }
+
+        var dotSize: CGFloat {
+            switch self {
+            case .compact: return 6
+            case .standard: return 8
+            }
+        }
+
+        var horizontalPadding: CGFloat {
+            switch self {
+            case .compact: return 7
+            case .standard: return 10
+            }
+        }
+
+        var verticalPadding: CGFloat {
+            switch self {
+            case .compact: return 3
+            case .standard: return 5
+            }
+        }
+
+        var spacing: CGFloat {
+            switch self {
+            case .compact: return 4
+            case .standard: return 5
+            }
+        }
+    }
+
+    @State private var dotPulse: Bool = false
+
+    private var isLive: Bool {
+        state == .armed || state == .active
+    }
+
+    private var terminalIcon: String? {
+        switch state {
+        case .tpHit: return "checkmark.circle.fill"
+        case .slHit: return "xmark.circle.fill"
+        case .expired: return "clock.badge.exclamationmark"
+        default: return nil
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: size.spacing) {
+            if isLive {
+                Circle()
+                    .fill(state.color)
+                    .frame(width: size.dotSize, height: size.dotSize)
+                    .scaleEffect(dotPulse ? 1.3 : 0.8)
+                    .opacity(dotPulse ? 1.0 : 0.6)
+            } else if let icon = terminalIcon {
+                Image(systemName: icon)
+                    .font(.system(size: size.iconSize, weight: .bold))
+                    .foregroundColor(state.color)
+            }
+
+            Text(state.displayName.uppercased())
+                .font(.system(size: size.fontSize, weight: .bold, design: .monospaced))
+                .foregroundColor(state.color)
+        }
+        .padding(.horizontal, size.horizontalPadding)
+        .padding(.vertical, size.verticalPadding)
+        .background(
+            Capsule()
+                .fill(state.color.opacity(0.15))
+                .overlay(
+                    Capsule()
+                        .stroke(state.color.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .onAppear {
+            if isLive {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    dotPulse = true
+                }
+            }
+        }
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - APPROACHING LEVEL CHIP
+// MARK: - ================================================================================================
+
+/// Secondary chip showing proximity to TP or SL price levels.
+/// Only renders for `.approachingTP` or `.approachingSL` states.
+/// Use for: Inline next to TrackingStatePill on active setup markers.
+struct ApproachingLevelChip: View {
+    let status: MarkerPredictionProgressStatus
+
+    private var shouldRender: Bool {
+        status == .approachingTP || status == .approachingSL
+    }
+
+    private var label: String {
+        switch status {
+        case .approachingTP: return "Near TP"
+        case .approachingSL: return "Near SL"
+        default: return ""
+        }
+    }
+
+    private var chipColor: Color {
+        switch status {
+        case .approachingTP: return .green
+        case .approachingSL: return .orange
+        default: return .clear
+        }
+    }
+
+    var body: some View {
+        if shouldRender {
+            Text(label.uppercased())
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(chipColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(chipColor.opacity(0.15))
+                        .overlay(
+                            Capsule()
+                                .stroke(chipColor.opacity(0.3), lineWidth: 1)
+                        )
+                )
+        }
+    }
+}

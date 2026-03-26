@@ -117,83 +117,93 @@ class MarkerNavigationHelper {
         let candleSpacing = self.candleSpacing
         
         DispatchQueue.main.asyncAfter(deadline: .now() + scrollDelay) {
-            let candles = capturedChartViewModel.dataManager.candles
-            print("🎯 After delay - finding candle for timestamp \(markerTimestamp)")
-            print("🎯 Current symbol after delay: \(capturedChartViewModel.currentSymbol?.ticker ?? "none")")
-            print("🎯 Current timeframe after delay: \(capturedChartViewModel.currentTimeframe.rawValue)")
-            print("🎯 Candle count: \(candles.count)")
-            
-            // Find the candle index that best matches the marker's timestamp
-            let targetCandleIndex: Int
-            if let foundIndex = Self.findCandleIndex(forTimestamp: markerTimestamp, in: candles) {
-                print("🎯 Found candle at index \(foundIndex) for timestamp")
-                targetCandleIndex = foundIndex
-            } else {
-                // Default to showing recent candles if timestamp isn't found
-                let safeIndex = max(0, candles.count - 50)
-                print("🎯 No candle match found, using safe index: \(safeIndex)")
-                targetCandleIndex = safeIndex
-            }
-            
-            print("🎯 Final target candle index: \(targetCandleIndex)")
-            if targetCandleIndex < candles.count {
-                let targetCandle = candles[targetCandleIndex]
-                print("🎯 Target candle timestamp: \(targetCandle.timestamp)")
-            }
-            
-            // Calculate the total candle width including spacing
-            let scaledCandleWidth = baseCandleWidth * capturedGestureState.candleWidthScale
-            let totalCandleWidth = scaledCandleWidth + candleSpacing
-            
-            print("🎯 Scroll params: candleWidthScale=\(capturedGestureState.candleWidthScale), totalCandleWidth=\(totalCandleWidth)")
-            print("🎯 Current panOffset before: \(capturedGestureState.panOffset.width)")
-            
-            // Center on candle with smooth animation
-            let candle = targetCandleIndex < candles.count ? candles[targetCandleIndex] : nil
-            let priceRange = capturedChartViewModel.dataManager.priceRange
-            let chartHeight = UIScreen.main.bounds.height * 0.6 // Approximate chart height
-
-            if let candle = candle, priceRange.max > priceRange.min {
-                let focusMarker = capturedChartViewModel.markerManager
-                    .flatMap { manager in
-                        Self.matchingMarkerForNavigation(targetMarker, markers: manager.markers)
-                    }
-                let focusPrice = focusMarker.flatMap { marker in
-                    MarkerFocusHelper.renderedGlyphFocusPrice(
-                        marker: marker,
-                        candles: candles,
-                        chartSize: CGSize(width: width, height: chartHeight),
-                        priceRange: priceRange,
-                        priceScale: capturedGestureState.priceScale,
-                        verticalOffset: capturedGestureState.verticalPanOffset,
-                        totalCandleWidth: totalCandleWidth,
-                        actualCandleWidth: scaledCandleWidth,
-                        totalOffset: capturedGestureState.panOffset.width
+            Task { @MainActor in
+                if Self.requiresHistoricalWindow(for: targetMarker, in: capturedChartViewModel.dataManager.candles) {
+                    print("🎯 Target lies outside current candle window - loading historical slice")
+                    await capturedChartViewModel.loadNavigationWindow(
+                        around: markerTimestamp,
+                        timeframe: markerTimeframe
                     )
-                } ?? candle.close
-                capturedGestureState.animateCenterOnMarker(
-                    at: targetCandleIndex,
-                    chartWidth: width,
-                    candleWidth: totalCandleWidth,
-                    price: focusPrice,
-                    chartHeight: chartHeight,
-                    priceRange: priceRange
-                )
-            } else {
-                capturedGestureState.centerOnCandle(
-                    at: targetCandleIndex,
-                    chartWidth: width,
-                    candleWidth: totalCandleWidth
-                )
+                }
+
+                let candles = capturedChartViewModel.dataManager.candles
+                print("🎯 After delay - finding candle for timestamp \(markerTimestamp)")
+                print("🎯 Current symbol after delay: \(capturedChartViewModel.currentSymbol?.ticker ?? "none")")
+                print("🎯 Current timeframe after delay: \(capturedChartViewModel.currentTimeframe.rawValue)")
+                print("🎯 Candle count: \(candles.count)")
+
+                // Find the candle index that best matches the marker's timestamp
+                let targetCandleIndex: Int
+                if let foundIndex = Self.findCandleIndex(forTimestamp: markerTimestamp, in: candles) {
+                    print("🎯 Found candle at index \(foundIndex) for timestamp")
+                    targetCandleIndex = foundIndex
+                } else {
+                    // Default to showing recent candles if timestamp isn't found
+                    let safeIndex = max(0, candles.count - 50)
+                    print("🎯 No candle match found, using safe index: \(safeIndex)")
+                    targetCandleIndex = safeIndex
+                }
+
+                print("🎯 Final target candle index: \(targetCandleIndex)")
+                if targetCandleIndex < candles.count {
+                    let targetCandle = candles[targetCandleIndex]
+                    print("🎯 Target candle timestamp: \(targetCandle.timestamp)")
+                }
+
+                // Calculate the total candle width including spacing
+                let scaledCandleWidth = baseCandleWidth * capturedGestureState.candleWidthScale
+                let totalCandleWidth = scaledCandleWidth + candleSpacing
+
+                print("🎯 Scroll params: candleWidthScale=\(capturedGestureState.candleWidthScale), totalCandleWidth=\(totalCandleWidth)")
+                print("🎯 Current panOffset before: \(capturedGestureState.panOffset.width)")
+
+                // Center on candle with smooth animation
+                let candle = targetCandleIndex < candles.count ? candles[targetCandleIndex] : nil
+                let priceRange = capturedChartViewModel.dataManager.priceRange
+                let chartHeight = UIScreen.main.bounds.height * 0.6 // Approximate chart height
+
+                if let candle = candle, priceRange.max > priceRange.min {
+                    let focusMarker = capturedChartViewModel.markerManager
+                        .flatMap { manager in
+                            Self.matchingMarkerForNavigation(targetMarker, markers: manager.markers)
+                        }
+                    let focusPrice = focusMarker.flatMap { marker in
+                        MarkerFocusHelper.renderedGlyphFocusPrice(
+                            marker: marker,
+                            candles: candles,
+                            chartSize: CGSize(width: width, height: chartHeight),
+                            priceRange: priceRange,
+                            priceScale: capturedGestureState.priceScale,
+                            verticalOffset: capturedGestureState.verticalPanOffset,
+                            totalCandleWidth: totalCandleWidth,
+                            actualCandleWidth: scaledCandleWidth,
+                            totalOffset: capturedGestureState.panOffset.width
+                        )
+                    } ?? candle.close
+                    capturedGestureState.animateCenterOnMarker(
+                        at: targetCandleIndex,
+                        chartWidth: width,
+                        candleWidth: totalCandleWidth,
+                        price: focusPrice,
+                        chartHeight: chartHeight,
+                        priceRange: priceRange
+                    )
+                } else {
+                    capturedGestureState.centerOnCandle(
+                        at: targetCandleIndex,
+                        chartWidth: width,
+                        candleWidth: totalCandleWidth
+                    )
+                }
+
+                // Select the marker after navigation so the bottom-sheet marker detail view opens.
+                Self.selectMarkerForDetail(targetMarker, in: capturedChartViewModel, attemptsRemaining: 6)
+
+                print("🎯 Current panOffset after: \(capturedGestureState.panOffset.width)")
+                print("🎯 === MARKER NAVIGATION COMPLETE ===")
+
+                completion?()
             }
-
-            // Select the marker after navigation so the bottom-sheet marker detail view opens.
-            Self.selectMarkerForDetail(targetMarker, in: capturedChartViewModel, attemptsRemaining: 6)
-
-            print("🎯 Current panOffset after: \(capturedGestureState.panOffset.width)")
-            print("🎯 === MARKER NAVIGATION COMPLETE ===")
-            
-            completion?()
         }
     }
     
@@ -274,6 +284,18 @@ class MarkerNavigationHelper {
         return closeTimeAndTypeMatches.min(by: { lhs, rhs in
             abs(lhs.price - target.price) < abs(rhs.price - target.price)
         })
+    }
+
+    private static func requiresHistoricalWindow(
+        for target: RLTopMarkerDTO,
+        in candles: [RLCandleDTO]
+    ) -> Bool {
+        guard let firstTimestamp = candles.first?.timestamp,
+              let lastTimestamp = candles.last?.timestamp else {
+            return true
+        }
+
+        return target.candleTimestamp < firstTimestamp || target.candleTimestamp > lastTimestamp
     }
     
     // MARK: - Private Methods

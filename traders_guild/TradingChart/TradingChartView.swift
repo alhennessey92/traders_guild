@@ -773,6 +773,9 @@ struct TradingChartView: View {
             if ThemeManager.shared.currentTheme == .midGrey {
                 AppColors.chartPanelBackgroundMuted
                     .ignoresSafeArea()
+                PatternOverlay(patternType: .honeycomb, hexSize: 16)
+                    .opacity(0.015)
+                    .ignoresSafeArea()
             }
 
             GeometryReader { geometry in
@@ -1069,25 +1072,6 @@ struct TradingChartView: View {
                 .zIndex(27)
             }
 
-            // Marker overlay: render selected marker's components as temporary overlays
-            if !markerOverlayComponents.isEmpty,
-               !isInteractiveDrawingSessionActive {
-                MarkerComponentOverlayLayer(
-                    components: markerOverlayComponents,
-                    yForPrice: { price in coordinateSystem.yPosition(forPrice: price) },
-                    width: max(0, geometry.size.width - yAxisWidth),
-                    xForTime: { time in
-                        guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
-                        return coordinateSystem.xCenterPosition(forCandleIndex: index)
-                    },
-                    formatPrice: { price in chartData.formatPrice(price) }
-                )
-                .mask(plotAreaMask(geometry: geometry))
-                .allowsHitTesting(false)
-                .zIndex(28)
-                .transition(.opacity)
-            }
-
             if shouldShowSelectedDrawingToolbar {
                 selectedDrawingToolbar(geometry: geometry)
                     .zIndex(60)
@@ -1127,12 +1111,33 @@ struct TradingChartView: View {
                     .zIndex(18)
             }
 
-            // Keep Y-axis above all overlays including placement lines so labels aren't obscured.
+            // Y-axis has no zIndex so document order controls layering:
+            // y-axis → drawings → price lines → indicator → info box → x-axis
+            // Each later item renders on top of earlier ones.
             yAxisOverlay(geometry: geometry)
-                .zIndex(45)
 
             markerDrawingOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
                 .mask(plotAreaMask(geometry: geometry))
+
+            // Marker component overlays (trendlines, zones, levels from selected marker)
+            // Positioned after drawings but before price lines, labels, and info boxes.
+            if !markerOverlayComponents.isEmpty,
+               !isInteractiveDrawingSessionActive {
+                MarkerComponentOverlayLayer(
+                    components: markerOverlayComponents,
+                    yForPrice: { price in coordinateSystem.yPosition(forPrice: price) },
+                    width: max(0, geometry.size.width - yAxisWidth),
+                    xForTime: { time in
+                        guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
+                        return coordinateSystem.xCenterPosition(forCandleIndex: index)
+                    },
+                    formatPrice: { price in chartData.formatPrice(price) }
+                )
+                .mask(plotAreaMask(geometry: geometry))
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+
             if !isInteractiveDrawingSessionActive {
                 markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
                     .mask(priceLinesFullWidthMask(geometry: geometry))
@@ -1144,13 +1149,13 @@ struct TradingChartView: View {
                     .mask(priceLinesFullWidthMask(geometry: geometry))
             }
 
+            markerTopPriorityOverlay()
+                .mask(topFadeMask(geometry: geometry))
+
             horizontalDrawingAxisLabelsOverlay(
                 geometry: geometry,
                 coordinateSystem: coordinateSystem
             )
-
-            markerTopPriorityOverlay()
-                .mask(topFadeMask(geometry: geometry))
 
             if !shouldHideCurrentPriceIndicator {
                 priceIndicatorView(geometry: geometry)
@@ -2197,6 +2202,18 @@ struct TradingChartView: View {
                 }
             }
             return
+        }
+
+        if placementState.intent == .setup,
+           let lastCandle = chartData.candles.last {
+            placementState.upsertComponent(
+                .anchor,
+                payload: .anchor(AnchorPayload(time: lastCandle.timestamp, price: lastCandle.close))
+            )
+            placementState.upsertComponent(
+                .levelEntry,
+                payload: .levelEntry(LevelPayload(price: lastCandle.close, label: "Entry"))
+            )
         }
 
         let request = placementState.buildCreateRequest(
@@ -5131,13 +5148,25 @@ struct TradingChartView: View {
         )
         let plotWidth = max(0, geometry.size.width - yAxisWidth)
         let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
+        let topInset = geometry.safeAreaInsets.top
+        let fadeStart = topInset > 0 ? topInset + 42 : 104
 
         return Color.clear
             .frame(width: geometry.size.width, height: geometry.size.height)
             .overlay(alignment: .topLeading) {
-                Rectangle()
-                    .fill(Color.white)
-                    .frame(width: plotWidth, height: plotHeight)
+                VStack(spacing: 0) {
+                    Color.clear
+                        .frame(height: fadeStart)
+                    LinearGradient(
+                        colors: [.clear, .white],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 60)
+                    Color.white
+                        .frame(height: max(0, plotHeight - fadeStart - 60))
+                }
+                .frame(width: plotWidth, height: plotHeight, alignment: .top)
             }
     }
 
@@ -5156,21 +5185,30 @@ struct TradingChartView: View {
             }
     }
 
-    /// Mask for price lines (TP/SL) — full width (spans y-axis) but clips vertically to plot area.
+    /// Mask for price lines (TP/SL) — full width (spans y-axis), fades out behind
+    /// the navigation bar at top (matching topFadeMask) and clips at the x-axis band at bottom.
     private func priceLinesFullWidthMask(geometry: GeometryProxy) -> some View {
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: geometry.size.height,
             includeLabelStrip: !panelOwnsBottomXAxisStrip
         )
         let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
+        let topInset = geometry.safeAreaInsets.top
+        let fadeStart = topInset > 0 ? topInset + 42 : 104
 
-        return Color.clear
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .overlay(alignment: .topLeading) {
-                Rectangle()
-                    .fill(Color.white)
-                    .frame(width: geometry.size.width, height: plotHeight)
-            }
+        return VStack(spacing: 0) {
+            Color.clear
+                .frame(height: fadeStart)
+            LinearGradient(
+                colors: [.clear, .white],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 60)
+            Color.white
+                .frame(height: max(0, plotHeight - fadeStart - 60))
+        }
+        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
     }
 
     // MARK: - Y-Axis Overlay
@@ -5262,6 +5300,7 @@ struct TradingChartView: View {
                             yAxisWidth: yAxisWidth,
                             isCollapsed: $isViewingInfoPanelCollapsed,
                             formatPrice: { price in chartData.formatPrice(price) },
+                            currentPrice: chartData.currentPrice,
                             isSubmittingPollVote: isSubmittingViewingPollVote,
                             submittingPollVoteOptionId: viewingPollVoteOptionId,
                             onVote: { markerId, optionId in
@@ -7392,7 +7431,7 @@ struct MarkerPriceLinesOverlay: View {
             width: labelWidth
         )
         let lineEndX = labelRect.maxX
-        
+
         let linePath = Path { path in
             path.move(to: CGPoint(x: 0, y: y))
             path.addLine(to: CGPoint(x: lineEndX, y: y))

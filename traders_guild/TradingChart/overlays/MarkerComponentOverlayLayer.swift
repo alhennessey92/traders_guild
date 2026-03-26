@@ -20,8 +20,20 @@ struct MarkerComponentOverlayLayer: View {
         }
     }
 
+    /// Level components to render, excluding Entry/TP/SL for setup markers
+    /// (those are rendered by MarkerPriceLinesOverlay with fill regions and custom styling).
     private var levelComponents: [RLMarkerComponentDTO] {
-        components.filter { $0.componentTypeEnum?.isLevel ?? false }
+        let isSetupMarker = components.contains { $0.componentTypeEnum == .levelEntry }
+        return components.filter { component in
+            guard component.componentTypeEnum?.isLevel ?? false else { return false }
+            if isSetupMarker {
+                let type = component.componentTypeEnum
+                if type == .levelEntry || type == .levelTp || type == .levelSl {
+                    return false
+                }
+            }
+            return true
+        }
     }
 
     private var horizontalLineComponents: [RLMarkerComponentDTO] {

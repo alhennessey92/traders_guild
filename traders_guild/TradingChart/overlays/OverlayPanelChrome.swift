@@ -11,8 +11,8 @@ enum OverlayPanelChrome {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(
                     ThemeManager.shared.currentTheme == .midGrey
-                        ? AppColors.panelHeaderBackground.opacity(0.92)
-                        : AppColors.surfaceBlack50
+                        ? AppColors.panelHeaderBackground
+                        : AppColors.surfaceBlack50.opacity(0.96)
                 )
         }
         .overlay {

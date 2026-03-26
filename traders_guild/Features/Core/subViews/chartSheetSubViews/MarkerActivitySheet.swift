@@ -172,17 +172,19 @@ struct MarkerActivitySheet: View {
 
                     if let trackingStateRaw = marker.setupSummary?.trackingState,
                        let trackingState = RLTrackingState(rawValue: trackingStateRaw) {
-                        Text(trackingState.displayName)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(trackingState.color)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(trackingState.color.opacity(0.18))
-                            .clipShape(Capsule())
-                    }
+                        HStack(spacing: 6) {
+                            TrackingStatePill(state: trackingState, size: .compact)
 
-                    if let status = predictionStatus(for: marker) {
-                        MarkerPredictionStatusChip(status: status)
+                            if marker.intentEnum == .setup {
+                                let approachStatus = MarkerPredictionProgress.status(
+                                    entryPrice: marker.setupSummary?.entryPrice ?? marker.price,
+                                    currentPrice: symbolCache[marker.symbolId]?.currentPrice,
+                                    targetPrice: marker.setupSummary?.tpPrice,
+                                    stopLossPrice: marker.setupSummary?.slPrice
+                                )
+                                ApproachingLevelChip(status: approachStatus)
+                            }
+                        }
                     }
 
                     if let note = marker.notePreview, !note.isEmpty {
@@ -208,16 +210,6 @@ struct MarkerActivitySheet: View {
         .buttonStyle(.plain)
     }
 
-    private func predictionStatus(for marker: RLTopMarkerDTO) -> MarkerPredictionProgressStatus? {
-        guard marker.intentEnum == .setup else { return nil }
-        let currentPrice = symbolCache[marker.symbolId]?.currentPrice
-        return MarkerPredictionProgress.status(
-            entryPrice: marker.setupSummary?.entryPrice ?? marker.price,
-            currentPrice: currentPrice,
-            targetPrice: marker.setupSummary?.tpPrice,
-            stopLossPrice: marker.setupSummary?.slPrice
-        )
-    }
 
     private func loadMarkers() async {
         guard let guildId = rlAppState.currentGuild?.id,
@@ -272,29 +264,3 @@ struct MarkerActivitySheet: View {
     }
 }
 
-private struct MarkerPredictionStatusChip: View {
-    let status: MarkerPredictionProgressStatus
-
-    private var chipColor: Color {
-        switch status {
-        case .inProgress:
-            return .blue
-        case .approachingTP:
-            return .green
-        case .approachingSL:
-            return .orange
-        case .liveUnavailable:
-            return .gray
-        }
-    }
-
-    var body: some View {
-        Text(status.rawValue)
-            .font(.caption2.weight(.semibold))
-            .foregroundColor(chipColor)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
-            .background(chipColor.opacity(0.2))
-            .clipShape(Capsule())
-    }
-}

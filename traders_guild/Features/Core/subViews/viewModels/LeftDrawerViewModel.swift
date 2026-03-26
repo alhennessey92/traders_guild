@@ -638,32 +638,47 @@ class LeftDrawerViewModel: ObservableObject {
     // ================================================================================================
     
     /// Load all top markers data from API
-    func loadTopMarkers(for guildId: UUID, rlAppState: RLAppState, timeWindowHours: Int = 48) async {
+    func loadTopMarkers(
+        for guildId: UUID,
+        rlAppState: RLAppState,
+        timeWindowHours: Int = 48,
+        updateCurrentState: Bool = true
+    ) async {
         let cacheKey = topMarkersCacheKey(guildId: guildId, timeWindowHours: timeWindowHours)
         if let entry = topMarkersCache[cacheKey],
            Date().timeIntervalSince(entry.refreshedAt) < Self.topMarkersCacheTTL {
-            applyTopMarkersResponse(
-                entry.response,
-                refreshedAt: entry.refreshedAt,
-                guildId: guildId,
-                timeWindowHours: timeWindowHours
-            )
+            if updateCurrentState {
+                applyTopMarkersResponse(
+                    entry.response,
+                    refreshedAt: entry.refreshedAt,
+                    guildId: guildId,
+                    timeWindowHours: timeWindowHours
+                )
+            }
             return
         }
 
-        isLoadingTopMarkers = true
-        defer { isLoadingTopMarkers = false }
+        if updateCurrentState {
+            isLoadingTopMarkers = true
+        }
+        defer {
+            if updateCurrentState {
+                isLoadingTopMarkers = false
+            }
+        }
 
         do {
             let response = try await rlAppState.realApi.getTopMarkers(guildId: guildId, timeWindowHours: timeWindowHours)
             let refreshedAt = Date()
             topMarkersCache[cacheKey] = TopMarkersCacheEntry(response: response, refreshedAt: refreshedAt)
-            applyTopMarkersResponse(
-                response,
-                refreshedAt: refreshedAt,
-                guildId: guildId,
-                timeWindowHours: timeWindowHours
-            )
+            if updateCurrentState {
+                applyTopMarkersResponse(
+                    response,
+                    refreshedAt: refreshedAt,
+                    guildId: guildId,
+                    timeWindowHours: timeWindowHours
+                )
+            }
 
             print("✅ Loaded top markers - Trending: \(response.trending.count), Symbols: \(response.bySymbol.count), Following: \(response.following.count), Mine: \(response.mine.count)")
 
@@ -682,6 +697,37 @@ class LeftDrawerViewModel: ObservableObject {
             topMarkersLastRefresh = nil
         }
         await loadTopMarkers(for: guildId, rlAppState: rlAppState, timeWindowHours: timeWindowHours)
+    }
+
+    func prefetchTopMarkers(
+        for guildId: UUID,
+        rlAppState: RLAppState,
+        timeWindowHoursList: [Int]
+    ) async {
+        var seen = Set<Int>()
+        for hours in timeWindowHoursList where seen.insert(hours).inserted {
+            await loadTopMarkers(
+                for: guildId,
+                rlAppState: rlAppState,
+                timeWindowHours: hours,
+                updateCurrentState: false
+            )
+        }
+    }
+
+    func topMarkersResponse(for guildId: UUID, timeWindowHours: Int) -> RLTopMarkersListDTO? {
+        if currentTopMarkersContext?.guildId == guildId,
+           currentTopMarkersContext?.timeWindowHours == timeWindowHours {
+            return RLTopMarkersListDTO(
+                trending: trendingMarkers,
+                bySymbol: symbolGroupedMarkers,
+                following: followingMarkers,
+                mine: myMarkers,
+                lastUpdated: topMarkersLastRefresh ?? Date()
+            )
+        }
+
+        return topMarkersCache[topMarkersCacheKey(guildId: guildId, timeWindowHours: timeWindowHours)]?.response
     }
     
     /// Toggle like on a marker and update local cache
@@ -853,6 +899,11 @@ class LeftDrawerViewModel: ObservableObject {
                     for: context.guildId,
                     rlAppState: rlAppStateRef,
                     timeWindowHours: context.timeWindowHours
+                )
+                await self.prefetchTopMarkers(
+                    for: context.guildId,
+                    rlAppState: rlAppStateRef,
+                    timeWindowHoursList: [24, 168, 720]
                 )
             }
         default:
@@ -1153,7 +1204,6 @@ extension RLGuildMemberDTO {
         )
     }
 }
-
 
 
 

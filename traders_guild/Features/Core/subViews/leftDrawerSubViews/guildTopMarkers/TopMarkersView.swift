@@ -85,23 +85,9 @@ struct TopMarkersView: View {
 
     // MARK: - Computed Data
 
-    private var followingAuthorIds: Set<UUID> {
-        Set(leftDrawerViewModel.followingMarkers.map(\.authorId))
-    }
-
-    /// Markers for the currently selected primary section
+    /// Markers for the currently selected time window and category.
     private var markersForSection: [RLTopMarkerDTO] {
-        switch selectedSection {
-        case .active:
-            return leftDrawerViewModel.trendingMarkers.filter(isLiveTrackedSetupMarker)
-        case .today:
-            return leftDrawerViewModel.trendingMarkers
-        case .thisWeek:
-            // symbolGroupedMarkers covers the weekly window
-            return leftDrawerViewModel.symbolGroupedMarkers.values.flatMap { $0 }
-        case .thisMonth:
-            return leftDrawerViewModel.myMarkers + leftDrawerViewModel.followingMarkers
-        }
+        markers(for: selectedSection, subTab: selectedSubTab)
     }
 
     private var showGreenBorder: Bool {
@@ -151,6 +137,7 @@ struct TopMarkersView: View {
         }
         .task {
             await loadMarkersIfNeeded()
+            await prefetchRemainingWindows(excluding: selectedSection)
         }
         .onReceive(NotificationCenter.default.publisher(for: .markerCreatedSuccessfully)) { _ in
             Task {
@@ -167,6 +154,7 @@ struct TopMarkersView: View {
                     timeWindowHours: newSection.timeWindowHours
                 )
                 isLoading = false
+                await prefetchRemainingWindows(excluding: newSection)
             }
         }
     }
@@ -174,16 +162,11 @@ struct TopMarkersView: View {
     // MARK: - Section Counts
 
     private func countForSection(_ tab: MarkerSectionTab) -> Int {
-        switch tab {
-        case .active:
-            return leftDrawerViewModel.trendingMarkers.filter(isLiveTrackedSetupMarker).count
-        case .today:
-            return leftDrawerViewModel.trendingMarkers.count
-        case .thisWeek:
-            return leftDrawerViewModel.symbolGroupedMarkers.values.reduce(0) { $0 + $1.count }
-        case .thisMonth:
-            return (leftDrawerViewModel.myMarkers + leftDrawerViewModel.followingMarkers).count
+        let markers = markers(for: tab, subTab: selectedSubTab)
+        if selectedSubTab == .bySymbol {
+            return Set(markers.map(\.symbolTicker)).count
         }
+        return markers.count
     }
 
     // MARK: - Filtered Marker List
@@ -197,10 +180,9 @@ struct TopMarkersView: View {
             UnifiedLoadingState(message: "Loading markers...")
                 .padding(.top, 40)
         } else {
-            let filtered = filterMarkers(markers, by: subTab)
             if subTab == .bySymbol {
                 // Grouped by symbol view
-                let grouped = Dictionary(grouping: filtered) { $0.symbolTicker }
+                let grouped = Dictionary(grouping: markers) { $0.symbolTicker }
                 if grouped.isEmpty {
                     emptyStateForSection
                 } else {
@@ -218,11 +200,11 @@ struct TopMarkersView: View {
                         }
                     }
                 }
-            } else if filtered.isEmpty {
+            } else if markers.isEmpty {
                 emptyStateForSection
             } else {
                 LazyVStack(spacing: 10) {
-                    ForEach(filtered) { marker in
+                    ForEach(markers) { marker in
                         TopMarkerCard(
                             marker: marker,
                             showMyBadge: marker.isCurrentUserMarker,
@@ -260,21 +242,6 @@ struct TopMarkersView: View {
             .padding(.top, 40)
     }
 
-    // MARK: - Filter Logic
-
-    private func filterMarkers(_ markers: [RLTopMarkerDTO], by subTab: MarkerSubTab) -> [RLTopMarkerDTO] {
-        switch subTab {
-        case .all:
-            return markers
-        case .bySymbol:
-            return markers // grouping handled in the view
-        case .friends:
-            return markers.filter { followingAuthorIds.contains($0.authorId) }
-        case .mine:
-            return markers.filter { $0.isCurrentUserMarker }
-        }
-    }
-
     // MARK: - Refresh
 
     private func refreshMarkers() async {
@@ -284,6 +251,7 @@ struct TopMarkersView: View {
             rlAppState: rlAppState,
             timeWindowHours: selectedSection.timeWindowHours
         )
+        await prefetchRemainingWindows(excluding: selectedSection)
     }
 
     // MARK: - Load Data
@@ -335,6 +303,55 @@ struct TopMarkersView: View {
 
     private func isLiveTrackedSetupMarker(_ marker: RLTopMarkerDTO) -> Bool {
         marker.intentEnum == .setup && marker.trackingStateEnum?.isLive == true
+    }
+
+    private func markers(
+        for section: MarkerSectionTab,
+        subTab: MarkerSubTab
+    ) -> [RLTopMarkerDTO] {
+        guard
+            let guildId = rlAppState.currentGuild?.id,
+            let response = leftDrawerViewModel.topMarkersResponse(
+                for: guildId,
+                timeWindowHours: section.timeWindowHours
+            )
+        else {
+            return []
+        }
+
+        let baseMarkers: [RLTopMarkerDTO]
+        switch subTab {
+        case .all:
+            baseMarkers = response.trending
+        case .bySymbol:
+            baseMarkers = response.bySymbol.values.flatMap { $0 }
+        case .friends:
+            baseMarkers = response.following
+        case .mine:
+            baseMarkers = response.mine
+        }
+
+        if section == .active {
+            return baseMarkers.filter(isLiveTrackedSetupMarker)
+        }
+
+        return baseMarkers
+    }
+
+    private func prefetchRemainingWindows(excluding section: MarkerSectionTab) async {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+
+        var seen = Set([section.timeWindowHours])
+        let remainingWindows = MarkerSectionTab.allCases.compactMap { tab -> Int? in
+            guard seen.insert(tab.timeWindowHours).inserted else { return nil }
+            return tab.timeWindowHours
+        }
+
+        await leftDrawerViewModel.prefetchTopMarkers(
+            for: guildId,
+            rlAppState: rlAppState,
+            timeWindowHoursList: remainingWindows
+        )
     }
 }
 
@@ -433,25 +450,36 @@ struct TopMarkerCard: View {
                                 .padding(.top, 4)
                         }
 
-                        if let setup = marker.setupSummary, marker.intentEnum == .setup {
+                        if marker.intentEnum == .setup {
                             HStack(spacing: 6) {
-                                if let entry = setup.entryPrice {
-                                    Text("E \(String(format: "%.2f", entry))")
+                                // Timeframe capsule
+                                HStack(spacing: 3) {
+                                    Image(systemName: "clock")
+                                        .font(.system(size: 8, weight: .semibold))
+                                    Text(marker.timeframe.uppercased())
+                                        .font(.system(size: 9, weight: .bold))
                                 }
-                                if let sl = setup.slPrice {
-                                    Text("SL \(String(format: "%.2f", sl))")
-                                }
-                                if let tp = setup.tpPrice {
-                                    Text("TP \(String(format: "%.2f", tp))")
-                                }
-                                if let state = setup.trackingState,
+                                .foregroundColor(AppColors.whiteText.opacity(0.85))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(AppColors.whiteText.opacity(0.10))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                        )
+                                )
+
+                                // Tracking state capsule
+                                if let setup = marker.setupSummary,
+                                   let state = setup.trackingState,
                                    let tracking = RLTrackingState(rawValue: state) {
-                                    Text(tracking.displayName.uppercased())
-                                        .foregroundColor(tracking.color)
+                                    TrackingStatePill(state: tracking, size: .compact)
                                 }
+
+                                Spacer()
                             }
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(AppColors.greyText)
                             .padding(.top, 2)
                         }
                     }

@@ -344,6 +344,51 @@ class ChartViewModel: ObservableObject {
         dataManager.currentTimeframe = timeframe
         handleTimeframeChange()
     }
+
+    /// Load a candle/marker window centered around a specific timestamp.
+    /// Used for marker navigation when the target lies outside the currently loaded chart slice.
+    func loadNavigationWindow(around timestamp: Date, timeframe: RLChartTimeframe? = nil) async {
+        guard let symbol = currentSymbol,
+              let guildId = appState.currentGuild?.id else {
+            return
+        }
+
+        let targetTimeframe = timeframe ?? currentTimeframe
+        let candleLimit = targetTimeframe.initialCandlesCount
+        let halfWindowCandles = max(1, candleLimit / 2)
+        let endTime = timestamp.addingTimeInterval(targetTimeframe.seconds * Double(halfWindowCandles))
+
+        do {
+            let candlesResponse = try await api.getCandles(
+                symbolId: symbol.id,
+                timeframe: targetTimeframe.toBackendString(),
+                limit: candleLimit,
+                endTime: endTime,
+                continuousTime: true
+            )
+
+            dataManager.currentSymbol = symbol
+            dataManager.currentTimeframe = targetTimeframe
+            dataManager.updateWithMarketData(candlesResponse.candles)
+            reconcileCurrentCandleWithSymbolSnapshot(symbol)
+            noteRealtimeMarketEvent()
+
+            if let markerManager {
+                await markerManager.loadMarkersFromAPI(
+                    api: api,
+                    symbolId: symbol.id,
+                    symbol: symbol.ticker,
+                    guildId: guildId,
+                    timeframe: targetTimeframe,
+                    candles: dataManager.candles
+                )
+            }
+
+            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+        } catch {
+            print("Failed to load navigation window: \(error)")
+        }
+    }
     
     /// Reload all data (watchlists and chart)
     func reloadData() async {
