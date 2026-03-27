@@ -72,16 +72,25 @@ class RealTimeService: ObservableObject {
     
     /// Connect to the WebSocket using the provided JWT token
     func connect(token: String) {
+        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let segments = trimmedToken.split(separator: ".", omittingEmptySubsequences: false)
+        guard segments.count == 3, segments.allSatisfy({ !$0.isEmpty }) else {
+            print("⚠️ [WS] Refusing to connect with malformed token")
+            activeToken = nil
+            connectionStatus = .disconnected
+            return
+        }
+
         // If we're already connected/connecting with a different token, restart.
         if connectionStatus == .connected || connectionStatus == .connecting {
-            if activeToken != token {
+            if activeToken != trimmedToken {
                 print("🔁 [WS] Token changed, reconnecting")
-                reconnectWithNewToken(token)
+                reconnectWithNewToken(trimmedToken)
             }
             return
         }
         
-        self.activeToken = token
+        self.activeToken = trimmedToken
         self.isIntentionalDisconnect = false
         self.reconnectAttempt = 0
         
@@ -364,4 +373,3 @@ class RealTimeService: ObservableObject {
         }
     }
 }
-

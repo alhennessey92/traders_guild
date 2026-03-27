@@ -1273,7 +1273,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 226. [FIXED] Claude - Implement a second theme, lighter, not white but almost a mid grey tone, allow users to switch from the settings
 
-227. Change resend token to be something better, more easier to relay back like a 5 string (7UY67)
+227. [Fixed] Change resend token to be something better, more easier to relay back like a 5 string (7UY67)
 
 228. Need to have a look at timeframe panel, would be nice if they could update in realtime on the chart, including new candles, active candle, moving price indicator (tick)relative to current default chart etc... Also the main chart timeframe panel, still has the vertical marker view/icon on latest candle, this isnt ncessary as we have the window view, its only necessary when used in marker view mode to show where the marker is located
 
@@ -1288,13 +1288,13 @@ Make sure you run through all drawing options and make improve them the way they
 
 231. Add tabs to announcements and events for relevant sections
 
-232. Support section still needs work need confirmation email etc and place for message to appear. Ui needs work minimum description etc
+232. [Fixed] Support section still needs work need confirmation email etc and place for message to appear. Ui needs work minimum description etc
 
 233. Timeframe panel price indicator not live and very dim
 
-234. Setup marker still not in active tab
+234. [Fixed] Setup marker still not in active tab
 
-235. Need to double check setup marker is correctly being watched for results as it’s not dealing out reputation and not reporting results in marker view mode. Also should fire a notification. In marker view mode should show some sort of result as to how the setup marker performed against the TP and SL
+235. [FIXED] Need to double check setup marker is correctly being watched for results as it’s not dealing out reputation and not reporting results in marker view mode. Also should fire a notification. In marker view mode should show some sort of result as to how the setup marker performed against the TP and SL
 
 236. [Testing] Notifications need a full audit listing current areas notifications are triggered and areas we need to implement
 
@@ -1306,7 +1306,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 240. Noticed sometimes when interacting with the app the music I am listening to gets paused, this should never happen music shouldn’t be interfered with by the app
 
-241. Find here is the outline for how i want the marker tabs and sections to work in the bottom bar and the left drawer.
+241. [FIXED] Find here is the outline for how i want the marker tabs and sections to work in the bottom bar and the left drawer.
 	Bottom Bar marker tabs
 		Add 
 			Prediction
@@ -1383,3 +1383,20 @@ Make sure you run through all drawing options and make improve them the way they
 				Guild
 				Friends
 				Personal
+
+
+242. Init message in each chat room creation
+
+243. No welcome notification on seeded account - Never got a welcome notification for joinging traders guild /joining initial guild
+
+244. No initial guild announcement for onboarding guild - need a generic announcement for welcoming guild creation. System generated fairly univeral among guilds
+
+245. Panel sometimes gets into a state of appearing above and below x axis and header is removed so can’t interact with it. some panels also overlaying each other when in this state. Only happens periodically when adding micture of timeframe and indicator panels so not sure
+
+246. No notification on setup loss and no negative reputation awarded/ global/personal/guild accuracy and reputation affected. Actually need to remove negative reputation on loss just affect accuracy
+
+247. Notification on sl hit needs to be red border for sl and getting missing marker context when tapping to go to marker
+
+248. Need network error toast when network drop
+
+249. Timeframe panel needs to appear in top chart info box and certain indicators like stochastics only show a single color and value in info box yet are represented by 2 values, need to make sure these are all accounted for

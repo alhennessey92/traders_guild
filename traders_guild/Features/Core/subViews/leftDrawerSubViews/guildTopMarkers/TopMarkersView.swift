@@ -579,78 +579,36 @@ struct MarkerActivityCard: View {
                         .padding(.top, 2)
 
                         if let outcome {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 6) {
-                                    if let pnl = outcome.pnl {
-                                        MarkerActivityMetaChip(
-                                            icon: outcome.isWin ? "arrow.up.right" : "arrow.down.right",
-                                            text: formatPnL(pnl),
-                                            tint: outcomeTint(outcome),
-                                            background: outcomeTint(outcome).opacity(0.15)
-                                        )
-                                    }
-
-                                    if let triggerPrice = outcome.triggerPrice {
-                                        MarkerActivityMetaChip(
-                                            icon: "target",
-                                            text: "Hit \(formatPrice(triggerPrice))",
-                                            tint: AppColors.statusInfo85,
-                                            background: AppColors.statusInfo85.opacity(0.14)
-                                        )
-                                    }
-
-                                    if let repText = outcome.repChangeText {
-                                        MarkerActivityMetaChip(
-                                            icon: "shield.lefthalf.filled",
-                                            text: "Rep \(repText)",
-                                            tint: (outcome.guildRepDelta ?? 0) >= 0
-                                                ? AppColors.statusPositive70
-                                                : AppColors.statusNegative70,
-                                            background: ((outcome.guildRepDelta ?? 0) >= 0
-                                                ? AppColors.statusPositive70
-                                                : AppColors.statusNegative70).opacity(0.15)
-                                        )
-                                    }
-
-                                    if outcome.isExpired {
-                                        MarkerActivityMetaChip(
-                                            icon: "clock.badge.xmark",
-                                            text: "No score impact",
-                                            tint: AppColors.surfaceGray90,
-                                            background: AppColors.surfaceWhite08
-                                        )
-                                    }
-                                }
-
-                                if let impactNote = outcome.impactNote {
-                                    Text(impactNote)
-                                        .font(.caption2)
-                                        .foregroundColor(AppColors.surfaceWhite70)
-                                        .lineLimit(2)
+                            HStack(spacing: 6) {
+                                if let pnl = outcome.pnl {
+                                    MarkerActivityMetaChip(
+                                        icon: outcome.isWin ? "arrow.up.right" : "arrow.down.right",
+                                        text: formatPnL(pnl),
+                                        tint: outcomeTint(outcome),
+                                        background: outcomeTint(outcome).opacity(0.15)
+                                    )
+                                } else if outcome.isExpired {
+                                    MarkerActivityMetaChip(
+                                        icon: "clock.badge.xmark",
+                                        text: "No score impact",
+                                        tint: AppColors.surfaceGray90,
+                                        background: AppColors.surfaceWhite08
+                                    )
                                 }
                             }
                             .padding(.top, 2)
                         } else if let liveSetupMetrics {
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack(spacing: 6) {
-                                    MarkerActivityMetaChip(
-                                        icon: liveSetupMetrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right",
-                                        text: "Live \(formatPnL(liveSetupMetrics.currentPnL))",
-                                        tint: liveSetupMetrics.isMovingTowardTarget
-                                            ? AppColors.statusInfo85
-                                            : AppColors.statusNegative70,
-                                        background: liveSetupMetrics.isMovingTowardTarget
-                                            ? AppColors.statusInfo15
-                                            : AppColors.statusNegative15
-                                    )
-
-                                    MarkerActivityMetaChip(
-                                        icon: "dollarsign.circle",
-                                        text: formatPrice(liveSetupMetrics.currentPrice),
-                                        tint: AppColors.surfaceWhite85,
-                                        background: AppColors.surfaceWhite08
-                                    )
-                                }
+                                MarkerActivityMetaChip(
+                                    icon: liveSetupMetrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right",
+                                    text: "Live \(formatPnL(liveSetupMetrics.currentPnL))",
+                                    tint: liveSetupMetrics.isMovingTowardTarget
+                                        ? AppColors.statusInfo85
+                                        : AppColors.statusNegative70,
+                                    background: liveSetupMetrics.isMovingTowardTarget
+                                        ? AppColors.statusInfo15
+                                        : AppColors.statusNegative15
+                                )
 
                                 LiveSetupProgressStrip(
                                     metrics: liveSetupMetrics,
@@ -670,7 +628,6 @@ struct MarkerActivityCard: View {
                     isOnline: marker.authorIsOnline,
                     role: RLMemberRole(from: marker.authorRole),
                     reputation: marker.authorReputation,
-                    accuracy: marker.authorAccuracyFormatted,
                     timeText: marker.activityTimestampFormatted,
                     showOnlineStatus: false
                 )

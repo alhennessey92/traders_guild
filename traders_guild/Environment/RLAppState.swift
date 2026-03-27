@@ -723,6 +723,7 @@ class RLAppState: ObservableObject {
         // Restore tokens
         let storedAccessToken = getTokenFromKeychain()
         let storedRefreshToken = getRefreshTokenFromKeychain()
+        let hasStoredSessionArtifacts = storedAccessToken != nil || storedRefreshToken != nil
 
         if storedAccessToken != nil {
             print("🔄 restoreSession: Found access token")
@@ -731,11 +732,25 @@ class RLAppState: ObservableObject {
             print("🔄 restoreSession: Found refresh token")
         }
 
-        var resolvedAccessToken = storedAccessToken
-        var resolvedRefreshToken = storedRefreshToken
+        var resolvedAccessToken = storedAccessToken.flatMap { Self.normalizedJWT($0) }
+        var resolvedRefreshToken = storedRefreshToken.flatMap { token in
+            let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        var shouldClearStoredSession = false
+
+        if storedAccessToken != nil && resolvedAccessToken == nil {
+            print("⚠️ restoreSession: Discarding malformed cached access token")
+            shouldClearStoredSession = true
+        }
+
+        if storedRefreshToken != nil && resolvedRefreshToken == nil {
+            print("⚠️ restoreSession: Discarding empty cached refresh token")
+            shouldClearStoredSession = true
+        }
 
         // Set tokens on realApi and try to refresh before publishing accessToken
-        if let access = storedAccessToken, let refresh = storedRefreshToken {
+        if let access = resolvedAccessToken, let refresh = resolvedRefreshToken {
             realApi.setTokens(access: access, refresh: refresh)
             print("🔄 restoreSession: Tokens set on API service")
             do {
@@ -745,10 +760,17 @@ class RLAppState: ObservableObject {
                 print("🔄 restoreSession: Tokens refreshed")
             } catch {
                 print("⚠️ restoreSession: Token refresh failed: \(error)")
+                resolvedAccessToken = nil
+                resolvedRefreshToken = nil
+                shouldClearStoredSession = true
+                realApi.clearTokens()
             }
-        } else if let access = storedAccessToken {
-            // Fallback - at least set access token
-            realApi.setAccessToken(access)
+        } else if resolvedAccessToken != nil || resolvedRefreshToken != nil {
+            print("⚠️ restoreSession: Incomplete cached token pair, clearing session restore state")
+            resolvedAccessToken = nil
+            resolvedRefreshToken = nil
+            shouldClearStoredSession = true
+            realApi.clearTokens()
         }
 
         // If auth/signup completed while we were restoring, keep live in-memory state.
@@ -756,6 +778,11 @@ class RLAppState: ObservableObject {
             print("🔄 restoreSession: Skipping apply - live auth state already established")
             isSessionRestored = true
             return
+        }
+
+        if shouldClearStoredSession && hasStoredSessionArtifacts {
+            print("🔄 restoreSession: Clearing invalid cached session artifacts")
+            clearLocalSessionState(clearAlertState: true)
         }
 
         // Publish tokens after refresh attempt so WS connects with valid token
@@ -2139,7 +2166,19 @@ class RLAppState: ObservableObject {
     private var keychainPrefix: String {
         "traders_guild_\(AppConfig.sessionStorageNamespace)_"
     }
-    
+
+    private static func normalizedJWT(_ token: String) -> String? {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let segments = trimmed.split(separator: ".", omittingEmptySubsequences: false)
+        guard segments.count == 3, segments.allSatisfy({ !$0.isEmpty }) else {
+            return nil
+        }
+
+        return trimmed
+    }
+
     // Token
     private func saveTokenToKeychain(_ token: String) {
         UserDefaults.standard.set(token, forKey: "\(keychainPrefix)token")

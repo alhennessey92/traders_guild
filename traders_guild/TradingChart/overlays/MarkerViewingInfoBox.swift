@@ -113,19 +113,17 @@ struct MarkerViewingInfoBox: View {
                     value: formatPrice(marker.entryPrice ?? marker.price),
                     color: RLComponentType.levelEntry.color
                 )
-                if let tp = marker.targetPrice {
-                    valueRow(
-                        title: "Take Profit",
-                        value: formatPrice(tp),
-                        color: RLComponentType.levelTp.color
-                    )
-                }
-                if let sl = marker.stopLossPrice {
-                    valueRow(
-                        title: "Stop Loss",
-                        value: formatPrice(sl),
-                        color: RLComponentType.levelSl.color
-                    )
+                HStack(spacing: 10) {
+                    if marker.targetPrice != nil {
+                        Text("TP")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(RLComponentType.levelTp.color)
+                    }
+                    if marker.stopLossPrice != nil {
+                        Text("SL")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(RLComponentType.levelSl.color)
+                    }
                 }
             }
 
