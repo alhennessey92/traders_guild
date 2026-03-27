@@ -7,17 +7,47 @@
 
 import SwiftUI
 
-enum ActiveIndicatorLegendKind {
+enum ActiveIndicatorLegendKind: Equatable {
     case overlay
     case panel
+    case timeframe
+}
+
+enum ActiveIndicatorLegendSwatchStyle: Equatable {
+    case line
+    case dot
+}
+
+struct ActiveIndicatorLegendSwatch: Identifiable {
+    let id: String
+    let color: Color
+    let style: ActiveIndicatorLegendSwatchStyle
+
+    init(id: String, color: Color, style: ActiveIndicatorLegendSwatchStyle = .line) {
+        self.id = id
+        self.color = color
+        self.style = style
+    }
 }
 
 struct ActiveIndicatorLegendEntry: Identifiable {
     let id: String
     let text: String
-    let primaryColor: Color
-    let secondaryColor: Color?
+    let swatches: [ActiveIndicatorLegendSwatch]
     let kind: ActiveIndicatorLegendKind
+}
+
+struct TimeframeLegendTextParts: Equatable {
+    let prefix: String
+    let token: String
+
+    static func split(_ text: String) -> TimeframeLegendTextParts {
+        guard text.hasPrefix("TF ") else {
+            return TimeframeLegendTextParts(prefix: "", token: text)
+        }
+        let token = String(text.dropFirst(3))
+        return TimeframeLegendTextParts(prefix: "TF ", token: token)
+    }
 }
 
 struct ChartDrawingLegendEntry: Identifiable {
@@ -35,8 +65,12 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "ma-\(ma.id.uuidString)",
                     text: ma.label,
-                    primaryColor: ma.color.color,
-                    secondaryColor: nil,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(
+                            id: "ma-line-\(ma.id.uuidString)",
+                            color: ma.color.color
+                        )
+                    ],
                     kind: .overlay
                 )
             )
@@ -47,8 +81,15 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "vwap-\(vwap.id.uuidString)",
                     text: vwap.showStandardDeviationBands ? "VWAP ±σ" : "VWAP",
-                    primaryColor: vwap.color.color,
-                    secondaryColor: nil,
+                    swatches: vwap.showStandardDeviationBands
+                        ? [
+                            ActiveIndicatorLegendSwatch(id: "vwap-upper-\(vwap.id.uuidString)", color: vwap.upperBandColor.color),
+                            ActiveIndicatorLegendSwatch(id: "vwap-line-\(vwap.id.uuidString)", color: vwap.color.color),
+                            ActiveIndicatorLegendSwatch(id: "vwap-lower-\(vwap.id.uuidString)", color: vwap.lowerBandColor.color),
+                        ]
+                        : [
+                            ActiveIndicatorLegendSwatch(id: "vwap-line-\(vwap.id.uuidString)", color: vwap.color.color),
+                        ],
                     kind: .overlay
                 )
             )
@@ -59,8 +100,10 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "sar-\(sar.id.uuidString)",
                     text: "SAR",
-                    primaryColor: sar.bullishColor.color,
-                    secondaryColor: sar.bearishColor.color,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(id: "sar-bull-\(sar.id.uuidString)", color: sar.bullishColor.color, style: .dot),
+                        ActiveIndicatorLegendSwatch(id: "sar-bear-\(sar.id.uuidString)", color: sar.bearishColor.color, style: .dot),
+                    ],
                     kind: .overlay
                 )
             )
@@ -71,8 +114,11 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "bb-\(bb.id.uuidString)",
                     text: "BB(\(bb.period), \(String(format: "%.1f", bb.standardDeviations))σ)",
-                    primaryColor: bb.color.color,
-                    secondaryColor: nil,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(id: "bb-upper-\(bb.id.uuidString)", color: bb.upperBandColor.color),
+                        ActiveIndicatorLegendSwatch(id: "bb-mid-\(bb.id.uuidString)", color: bb.color.color),
+                        ActiveIndicatorLegendSwatch(id: "bb-lower-\(bb.id.uuidString)", color: bb.lowerBandColor.color),
+                    ],
                     kind: .overlay
                 )
             )
@@ -83,8 +129,20 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "dc-\(dc.id.uuidString)",
                     text: "DC(\(dc.period))",
-                    primaryColor: dc.upperBandColor.color,
-                    secondaryColor: nil,
+                    swatches: {
+                        var swatches = [
+                            ActiveIndicatorLegendSwatch(id: "dc-upper-\(dc.id.uuidString)", color: dc.upperBandColor.color),
+                        ]
+                        if dc.showMiddleLine {
+                            swatches.append(
+                                ActiveIndicatorLegendSwatch(id: "dc-mid-\(dc.id.uuidString)", color: dc.color.color)
+                            )
+                        }
+                        swatches.append(
+                            ActiveIndicatorLegendSwatch(id: "dc-lower-\(dc.id.uuidString)", color: dc.lowerBandColor.color)
+                        )
+                        return swatches
+                    }(),
                     kind: .overlay
                 )
             )
@@ -95,8 +153,11 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "kc-\(kc.id.uuidString)",
                     text: "KC(\(kc.emaPeriod), \(kc.atrPeriod))",
-                    primaryColor: kc.color.color,
-                    secondaryColor: nil,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(id: "kc-upper-\(kc.id.uuidString)", color: kc.upperBandColor.color),
+                        ActiveIndicatorLegendSwatch(id: "kc-mid-\(kc.id.uuidString)", color: kc.color.color),
+                        ActiveIndicatorLegendSwatch(id: "kc-lower-\(kc.id.uuidString)", color: kc.lowerBandColor.color),
+                    ],
                     kind: .overlay
                 )
             )
@@ -107,8 +168,9 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "rsi-\(rsi.id.uuidString)",
                     text: "RSI(\(rsi.period))",
-                    primaryColor: rsi.color.color,
-                    secondaryColor: nil,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(id: "rsi-line-\(rsi.id.uuidString)", color: rsi.color.color)
+                    ],
                     kind: .panel
                 )
             )
@@ -119,8 +181,25 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "macd-\(macd.id.uuidString)",
                     text: "MACD(\(macd.fastPeriod),\(macd.slowPeriod),\(macd.signalPeriod))",
-                    primaryColor: macd.color.color,
-                    secondaryColor: nil,
+                    swatches: {
+                        var swatches = [
+                            ActiveIndicatorLegendSwatch(id: "macd-line-\(macd.id.uuidString)", color: macd.color.color)
+                        ]
+                        if macd.showSignalLine {
+                            swatches.append(
+                                ActiveIndicatorLegendSwatch(id: "macd-signal-\(macd.id.uuidString)", color: macd.signalColor.color)
+                            )
+                        }
+                        if macd.showHistogram {
+                            swatches.append(
+                                ActiveIndicatorLegendSwatch(id: "macd-hist-pos-\(macd.id.uuidString)", color: macd.histogramPositiveColor.color)
+                            )
+                            swatches.append(
+                                ActiveIndicatorLegendSwatch(id: "macd-hist-neg-\(macd.id.uuidString)", color: macd.histogramNegativeColor.color)
+                            )
+                        }
+                        return swatches
+                    }(),
                     kind: .panel
                 )
             )
@@ -131,8 +210,10 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "stoch-\(stochastic.id.uuidString)",
                     text: "Stoch(\(stochastic.kPeriod),\(stochastic.dPeriod))",
-                    primaryColor: stochastic.color.color,
-                    secondaryColor: nil,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(id: "stoch-k-\(stochastic.id.uuidString)", color: stochastic.color.color),
+                        ActiveIndicatorLegendSwatch(id: "stoch-d-\(stochastic.id.uuidString)", color: stochastic.dColor.color),
+                    ],
                     kind: .panel
                 )
             )
@@ -143,8 +224,9 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "cci-\(cci.id.uuidString)",
                     text: "CCI(\(cci.period))",
-                    primaryColor: cci.color.color,
-                    secondaryColor: nil,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(id: "cci-line-\(cci.id.uuidString)", color: cci.color.color)
+                    ],
                     kind: .panel
                 )
             )
@@ -155,8 +237,9 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "wpr-\(williamsR.id.uuidString)",
                     text: "W%R(\(williamsR.period))",
-                    primaryColor: williamsR.color.color,
-                    secondaryColor: nil,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(id: "wpr-line-\(williamsR.id.uuidString)", color: williamsR.color.color)
+                    ],
                     kind: .panel
                 )
             )
@@ -167,8 +250,9 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "atr-\(atr.id.uuidString)",
                     text: "ATR(\(atr.period))",
-                    primaryColor: atr.color.color,
-                    secondaryColor: nil,
+                    swatches: [
+                        ActiveIndicatorLegendSwatch(id: "atr-line-\(atr.id.uuidString)", color: atr.color.color)
+                    ],
                     kind: .panel
                 )
             )
@@ -179,8 +263,18 @@ enum ActiveIndicatorsLegendComposer {
                 ActiveIndicatorLegendEntry(
                     id: "vol-\(volume.id.uuidString)",
                     text: volume.showMA ? "VOL(MA\(volume.maPeriod))" : "VOL",
-                    primaryColor: volume.bullishColor.color,
-                    secondaryColor: nil,
+                    swatches: {
+                        var swatches = [
+                            ActiveIndicatorLegendSwatch(id: "vol-bull-\(volume.id.uuidString)", color: volume.bullishColor.color),
+                            ActiveIndicatorLegendSwatch(id: "vol-bear-\(volume.id.uuidString)", color: volume.bearishColor.color),
+                        ]
+                        if volume.showMA {
+                            swatches.append(
+                                ActiveIndicatorLegendSwatch(id: "vol-ma-\(volume.id.uuidString)", color: volume.maColor.color)
+                            )
+                        }
+                        return swatches
+                    }(),
                     kind: .panel
                 )
             )
@@ -192,7 +286,32 @@ enum ActiveIndicatorsLegendComposer {
     static func labels(from active: ActiveIndicators) -> [String] {
         entries(from: active).map(\.text)
     }
+}
 
+enum TimeframeLegendComposer {
+    static func entries(from panels: [TimeframePanelEntry]) -> [ActiveIndicatorLegendEntry] {
+        panels.map { panel in
+            ActiveIndicatorLegendEntry(
+                id: "tf-\(panel.source.rawValue)-\(panel.id.uuidString)",
+                text: timeframeLabel(for: panel.timeframe),
+                swatches: [],
+                kind: .timeframe
+            )
+        }
+    }
+
+    static func labels(from panels: [TimeframePanelEntry]) -> [String] {
+        entries(from: panels).map(\.text)
+    }
+
+    private static func timeframeLabel(for timeframe: RLChartTimeframe) -> String {
+        switch timeframe {
+        case .m1, .m5, .m15, .m30:
+            return "TF \(timeframe.rawValue)"
+        default:
+            return "TF \(timeframe.shortName.uppercased())"
+        }
+    }
 }
 
 enum ChartDrawingsLegendComposer {
@@ -258,11 +377,12 @@ enum ChartDrawingsLegendComposer {
 
 struct ActiveIndicatorsLegendView: View {
     @ObservedObject var indicatorManager: IndicatorManager
+    var timeframeEntries: [ActiveIndicatorLegendEntry] = []
     var drawings: [ChartDrawing] = []
     var formatPrice: (Double) -> String = { price in String(format: "%.4f", price) }
 
     private var legendEntries: [ActiveIndicatorLegendEntry] {
-        ActiveIndicatorsLegendComposer.entries(from: indicatorManager.activeIndicators)
+        timeframeEntries + ActiveIndicatorsLegendComposer.entries(from: indicatorManager.activeIndicators)
     }
 
     private var drawingEntries: [ChartDrawingLegendEntry] {
@@ -299,26 +419,48 @@ struct ActiveIndicatorsLegendView: View {
 
     private func legendItem(_ entry: ActiveIndicatorLegendEntry) -> some View {
         HStack(spacing: 4) {
-            if let secondaryColor = entry.secondaryColor {
-                Circle()
-                    .fill(entry.primaryColor)
-                    .frame(width: 6, height: 6)
-                Circle()
-                    .fill(secondaryColor)
-                    .frame(width: 6, height: 6)
-            } else {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(entry.primaryColor)
-                    .frame(width: 12, height: 2)
+            if !entry.swatches.isEmpty {
+                HStack(spacing: 3) {
+                    ForEach(entry.swatches) { swatch in
+                        switch swatch.style {
+                        case .line:
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(swatch.color)
+                                .frame(width: 10, height: 2)
+                        case .dot:
+                            Circle()
+                                .fill(swatch.color)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                }
             }
 
-            Text(entry.text)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(AppColors.surfaceWhite80)
+            legendText(for: entry)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func legendText(for entry: ActiveIndicatorLegendEntry) -> some View {
+        if entry.kind == .timeframe {
+            let parts = TimeframeLegendTextParts.split(entry.text)
+            (
+                Text(parts.prefix)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(AppColors.surfaceWhite70)
+                +
+                Text(parts.token)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white)
+            )
+        } else {
+            Text(entry.text)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(AppColors.surfaceWhite80)
+        }
     }
 
     private func drawingLegendItem(_ entry: ChartDrawingLegendEntry) -> some View {
@@ -341,9 +483,10 @@ struct ActiveIndicatorsLegendView: View {
 
 struct ActiveIndicatorsLegendCompactView: View {
     @ObservedObject var indicatorManager: IndicatorManager
+    var timeframeEntries: [ActiveIndicatorLegendEntry] = []
 
     private var legendEntries: [ActiveIndicatorLegendEntry] {
-        ActiveIndicatorsLegendComposer.entries(from: indicatorManager.activeIndicators)
+        timeframeEntries + ActiveIndicatorsLegendComposer.entries(from: indicatorManager.activeIndicators)
     }
 
     var body: some View {
@@ -351,19 +494,20 @@ struct ActiveIndicatorsLegendCompactView: View {
             HStack(spacing: 8) {
                 ForEach(legendEntries) { entry in
                     HStack(spacing: 3) {
-                        if entry.secondaryColor != nil {
-                            Circle()
-                                .fill(entry.primaryColor)
-                                .frame(width: 5, height: 5)
-                        } else {
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(entry.primaryColor)
-                                .frame(width: 10, height: 2)
+                        if let swatch = entry.swatches.first {
+                            switch swatch.style {
+                            case .line:
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(swatch.color)
+                                    .frame(width: 10, height: 2)
+                            case .dot:
+                                Circle()
+                                    .fill(swatch.color)
+                                    .frame(width: 5, height: 5)
+                            }
                         }
 
-                        Text(entry.text)
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(AppColors.surfaceWhite70)
+                        compactLegendText(for: entry)
                     }
                 }
             }
@@ -371,6 +515,26 @@ struct ActiveIndicatorsLegendCompactView: View {
             .padding(.vertical, 3)
             .background(AppColors.surfaceBlack30)
             .cornerRadius(4)
+        }
+    }
+
+    @ViewBuilder
+    private func compactLegendText(for entry: ActiveIndicatorLegendEntry) -> some View {
+        if entry.kind == .timeframe {
+            let parts = TimeframeLegendTextParts.split(entry.text)
+            (
+                Text(parts.prefix)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(AppColors.surfaceWhite66)
+                +
+                Text(parts.token)
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.white)
+            )
+        } else {
+            Text(entry.text)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundColor(AppColors.surfaceWhite70)
         }
     }
 }

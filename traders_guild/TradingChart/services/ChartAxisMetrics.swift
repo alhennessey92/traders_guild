@@ -12,6 +12,20 @@ enum ChartAxisMetrics {
     static let horizontalChipTrailingInset: CGFloat = 6
     static let horizontalLabeledChipWidth: CGFloat = 100
 
+    static let secondaryPriceChipWidth: CGFloat = 90
+    static let secondaryPriceChipHeight: CGFloat = 22
+    static let secondaryPriceChipHorizontalPadding: CGFloat = 4
+    static let secondaryPriceChipVerticalPadding: CGFloat = 2
+    static let secondaryLabelFontSize: CGFloat = 9
+    static let secondaryPriceFontSize: CGFloat = 10
+
+    static let setupCorePriceChipWidth: CGFloat = secondaryPriceChipWidth
+    static let setupCorePriceChipHeight: CGFloat = secondaryPriceChipHeight
+    static let setupCorePriceChipHorizontalPadding: CGFloat = secondaryPriceChipHorizontalPadding
+    static let setupCorePriceChipVerticalPadding: CGFloat = secondaryPriceChipVerticalPadding
+    static let setupCoreLabelFontSize: CGFloat = secondaryLabelFontSize
+    static let setupCorePriceFontSize: CGFloat = secondaryPriceFontSize
+
     static let currentPriceChipWidth: CGFloat = 66
     static let directionalPriceChipWidth: CGFloat = 94
     static let directionalArrowChipWidth: CGFloat = 36
@@ -57,5 +71,44 @@ enum ChartAxisMetrics {
             width: width,
             height: height
         )
+    }
+
+    static func setupCoreLabelRect(totalWidth: CGFloat, centerY: CGFloat) -> CGRect {
+        labelRect(
+            totalWidth: totalWidth,
+            centerY: centerY,
+            width: setupCorePriceChipWidth,
+            height: setupCorePriceChipHeight
+        )
+    }
+
+    static func secondaryLabelRect(totalWidth: CGFloat, centerY: CGFloat) -> CGRect {
+        labelRect(
+            totalWidth: totalWidth,
+            centerY: centerY,
+            width: secondaryPriceChipWidth,
+            height: secondaryPriceChipHeight
+        )
+    }
+}
+
+struct SetupCorePriceLineLayout {
+    let renderWidth: CGFloat
+    let plotWidth: CGFloat
+
+    init(renderWidth: CGFloat, plotWidth: CGFloat? = nil) {
+        let resolvedRenderWidth = max(0, renderWidth)
+        self.renderWidth = resolvedRenderWidth
+        self.plotWidth = max(0, plotWidth ?? ChartAxisMetrics.plotWidth(totalWidth: resolvedRenderWidth))
+    }
+
+    var labelWidth: CGFloat { ChartAxisMetrics.setupCorePriceChipWidth }
+    var lineEndX: CGFloat { ChartAxisMetrics.trailingLabelMaxX(totalWidth: renderWidth, width: labelWidth) }
+    var fillWidth: CGFloat { lineEndX }
+    var labelCenterX: CGFloat { ChartAxisMetrics.trailingLabelCenterX(totalWidth: renderWidth, width: labelWidth) }
+    var plotHandleCenterX: CGFloat { plotWidth * 0.5 }
+
+    func labelRect(centerY: CGFloat) -> CGRect {
+        ChartAxisMetrics.setupCoreLabelRect(totalWidth: renderWidth, centerY: centerY)
     }
 }

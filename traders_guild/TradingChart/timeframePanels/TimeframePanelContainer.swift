@@ -23,6 +23,7 @@ struct TimeframePanelContainer: View {
     var mainChartTimeframeSeconds: TimeInterval = 0
     var showMarkerLine: Bool = false
     var indicatorPanelCount: Int = 0
+    var bottomAxisPanelIndex: Int? = nil
 
     // MARK: - Computed
 
@@ -42,7 +43,6 @@ struct TimeframePanelContainer: View {
         if timeframePanelManager.hasActivePanels {
             VStack(spacing: 0) {
                 ForEach(Array(timeframePanelManager.panels.enumerated()), id: \.element.id) { index, entry in
-                    let isBottom = isBottomPanel(index: index)
                     TimeframePanelView(
                         entry: entry,
                         markerTimestamp: markerTimestamp,
@@ -55,32 +55,16 @@ struct TimeframePanelContainer: View {
                         showMarkerLine: showMarkerLine,
                         minPanelHeight: TimeframePanelManager.minPanelHeight,
                         maxPanelHeight: adjustedMaxHeight,
-                        isBottomPanel: isBottom
+                        isBottomPanel: bottomAxisPanelIndex == index
                     )
                 }
             }
         }
     }
 
-    // MARK: - Helpers
-
-    private func isBottomPanel(index: Int) -> Bool {
-        index == timeframePanelManager.panels.count - 1
-    }
-
     // MARK: - Total Height
 
     var totalPanelHeight: CGFloat {
-        let panelHeights = timeframePanelManager.panels.map(\.currentHeight)
-        var total = panelHeights.reduce(0) { partial, height in
-            partial + height + ChartPanelReserveCalculator.panelResizeHandleHeight
-        }
-
-        // X-axis labels on bottom panel
-        if let bottomHeight = panelHeights.last, bottomHeight > 0 {
-            total += ChartPanelReserveCalculator.panelXAxisLabelStripHeight
-        }
-
-        return total
+        ChartPanelReserveCalculator.stackReserve(panelHeights: timeframePanelManager.panels.map(\.currentHeight))
     }
 }

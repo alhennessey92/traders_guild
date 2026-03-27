@@ -36,6 +36,73 @@ enum MarkerVisibilityMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum MarkerPlacementFailure: Equatable {
+    case trackedSetupConflictSymbolTimeframe
+    case trackedSetupLimitReached
+    case genericCreateFailure
+    case genericUpdateFailure
+
+    var toastTitle: String {
+        switch self {
+        case .trackedSetupConflictSymbolTimeframe, .trackedSetupLimitReached:
+            return "Setup Not Allowed"
+        case .genericCreateFailure:
+            return "Placement Failed"
+        case .genericUpdateFailure:
+            return "Save Failed"
+        }
+    }
+
+    var toastSeverity: RLAlertSeverity {
+        switch self {
+        case .trackedSetupConflictSymbolTimeframe, .trackedSetupLimitReached:
+            return .warning
+        case .genericCreateFailure, .genericUpdateFailure:
+            return .error
+        }
+    }
+
+    var userMessage: String {
+        switch self {
+        case .trackedSetupConflictSymbolTimeframe:
+            return "You already have an open tracked setup on this symbol and timeframe."
+        case .trackedSetupLimitReached:
+            return "You already have 10 open tracked setups in this guild."
+        case .genericCreateFailure:
+            return "Could not place marker. Try again."
+        case .genericUpdateFailure:
+            return "Could not save changes. Try again."
+        }
+    }
+
+    static func from(error: Error, fallback: MarkerPlacementFailure) -> MarkerPlacementFailure {
+        switch error {
+        case APIError.badRequest(let detail), APIError.serverError(_, let detail):
+            switch detail {
+            case "tracked_setup_conflict_symbol_timeframe":
+                return .trackedSetupConflictSymbolTimeframe
+            case "tracked_setup_limit_reached":
+                return .trackedSetupLimitReached
+            default:
+                return fallback
+            }
+        default:
+            return fallback
+        }
+    }
+}
+
+enum MarkerPlacementSubmissionResult: Equatable {
+    case success
+    case failure(MarkerPlacementFailure)
+}
+
+private extension ChartMarkerUI {
+    var isOpenTrackedSetup: Bool {
+        intent == .setup && trackingEnabled && (trackingState == .armed || trackingState == .active)
+    }
+}
+
 // MARK: - Marker Appearance Model
 
 extension Color {
@@ -559,17 +626,44 @@ class MarkerManager: ObservableObject {
     
     // MARK: - Marker CRUD
     
+    private func preflightPlacementFailure(
+        for request: RLCreateMarkerRequest,
+        excludingMarkerId: UUID? = nil
+    ) -> MarkerPlacementFailure? {
+        guard request.intent == RLMarkerIntent.setup.rawValue, request.trackingEnabled else {
+            return nil
+        }
+
+        let conflictingMarker = markers.first { marker in
+            guard marker.id != excludingMarkerId else { return false }
+            return marker.author.userId == currentUserId
+                && marker.symbolId == request.symbolId
+                && marker.timeframe == request.timeframe
+                && marker.isOpenTrackedSetup
+        }
+
+        if conflictingMarker != nil {
+            return .trackedSetupConflictSymbolTimeframe
+        }
+
+        return nil
+    }
+
     @discardableResult
     func addMarkerV2(
         request: RLCreateMarkerRequest,
         candleIndex: Int,
         candles: [RLCandleDTO]
-    ) async -> Bool {
+    ) async -> MarkerPlacementSubmissionResult {
+        if let preflightFailure = preflightPlacementFailure(for: request) {
+            return .failure(preflightFailure)
+        }
+
         let tempId = UUID()
         let now = Date()
 
         guard let anchorRequest = request.components.first(where: { $0.componentType == RLComponentType.anchor.rawValue }) else {
-            return false
+            return .failure(.genericCreateFailure)
         }
         let anchorPayload = MarkerComponentPayload.decode(componentType: RLComponentType.anchor.rawValue, rawPayload: anchorRequest.payload)
         let anchorPrice = anchorPayload.levelPrice ?? 0
@@ -632,7 +726,7 @@ class MarkerManager: ObservableObject {
         markers.append(marker)
 
         guard let api else {
-            return true
+            return .success
         }
 
         do {
@@ -654,11 +748,11 @@ class MarkerManager: ObservableObject {
                 markers[idx] = updated
             }
             NotificationCenter.default.post(name: .markerCreatedSuccessfully, object: nil)
-            return true
+            return .success
         } catch {
             markers.removeAll { $0.id == tempId }
             print("Failed to create marker v2: \(error)")
-            return false
+            return .failure(MarkerPlacementFailure.from(error: error, fallback: .genericCreateFailure))
         }
     }
 
@@ -968,11 +1062,32 @@ class MarkerManager: ObservableObject {
     func updateMarkerFromPlacement(
         id: UUID,
         request: RLUpdateMarkerRequest
-    ) async -> Bool {
-        guard let index = markerIndex(for: id) else { return false }
-        guard let api = api else { return false }
+    ) async -> MarkerPlacementSubmissionResult {
+        guard let index = markerIndex(for: id) else {
+            return .failure(.genericUpdateFailure)
+        }
+        guard let api = api else {
+            return .failure(.genericUpdateFailure)
+        }
 
         let originalMarker = markers[index]
+        let effectiveCreateRequest = RLCreateMarkerRequest(
+            symbolId: originalMarker.symbolId,
+            timeframe: originalMarker.timeframe,
+            intent: request.intent ?? originalMarker.intent.rawValue,
+            title: request.title,
+            note: request.note,
+            visibility: request.visibility ?? originalMarker.visibility,
+            confidence: request.confidence,
+            trackingEnabled: request.trackingEnabled ?? originalMarker.trackingEnabled,
+            components: request.components ?? [],
+            pollQuestion: request.pollQuestion,
+            pollOptions: request.pollOptions
+        )
+        if let preflightFailure = preflightPlacementFailure(for: effectiveCreateRequest, excludingMarkerId: id) {
+            return .failure(preflightFailure)
+        }
+
         let originalSnapshot = snapshotLayout(for: originalMarker)
         let originalDTO = originalMarker.marker
 
@@ -1008,7 +1123,9 @@ class MarkerManager: ObservableObject {
                 markerId: id,
                 request: request
             )
-            guard let latestIndex = markerIndex(for: id) else { return false }
+            guard let latestIndex = markerIndex(for: id) else {
+                return .failure(.genericUpdateFailure)
+            }
 
             let latestSnapshot = snapshotLayout(for: markers[latestIndex])
             let reconciled = patchPollFields(
@@ -1022,9 +1139,11 @@ class MarkerManager: ObservableObject {
             )
             markers[latestIndex] = updated
             syncSelectedMarker(updated)
-            return true
+            return .success
         } catch {
-            guard let latestIndex = markerIndex(for: id) else { return false }
+            guard let latestIndex = markerIndex(for: id) else {
+                return .failure(.genericUpdateFailure)
+            }
             let rolledBack = applyingLayout(
                 originalSnapshot,
                 to: ChartMarkerUI(marker: originalMarker.marker, candleIndex: originalSnapshot.candleIndex)
@@ -1032,7 +1151,7 @@ class MarkerManager: ObservableObject {
             markers[latestIndex] = rolledBack
             syncSelectedMarker(rolledBack)
             print("Failed to update marker from placement: \(error)")
-            return false
+            return .failure(MarkerPlacementFailure.from(error: error, fallback: .genericUpdateFailure))
         }
     }
 

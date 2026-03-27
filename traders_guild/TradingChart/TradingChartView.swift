@@ -14,6 +14,72 @@ private func compactHorizontalPriceLabel(_ raw: String) -> String {
     }
 }
 
+private func secondaryPriceChipText(label: String, priceText: String) -> Text {
+    (
+        Text("\(compactHorizontalPriceLabel(label)) ")
+            .font(.system(size: ChartAxisMetrics.secondaryLabelFontSize, weight: .bold, design: .monospaced))
+            .foregroundColor(.white)
+        +
+        Text(priceText)
+            .font(.system(size: ChartAxisMetrics.secondaryPriceFontSize, weight: .semibold, design: .monospaced))
+            .foregroundColor(.white)
+    )
+}
+
+private func setupCorePriceLabelText(label: String, priceText: String) -> Text {
+    secondaryPriceChipText(label: label, priceText: priceText)
+}
+
+private struct SecondaryPriceChipPatternOverlay: View {
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                let spacing: CGFloat = 5
+                var startX = -geometry.size.height
+                while startX <= geometry.size.width + geometry.size.height {
+                    path.move(to: CGPoint(x: startX, y: geometry.size.height))
+                    path.addLine(to: CGPoint(x: startX + geometry.size.height, y: 0))
+                    startX += spacing
+                }
+            }
+            .stroke(.white.opacity(0.14), lineWidth: 0.7)
+        }
+    }
+}
+
+private struct SecondaryPriceChipView: View {
+    let label: String
+    let priceText: String
+    let color: Color
+    var showsPattern: Bool = false
+
+    var body: some View {
+        secondaryPriceChipText(label: label, priceText: priceText)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, ChartAxisMetrics.secondaryPriceChipHorizontalPadding)
+            .padding(.vertical, ChartAxisMetrics.secondaryPriceChipVerticalPadding)
+            .frame(
+                width: ChartAxisMetrics.secondaryPriceChipWidth,
+                height: ChartAxisMetrics.secondaryPriceChipHeight
+            )
+            .background(color.opacity(0.85))
+            .clipShape(
+                RoundedRectangle(cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
+            )
+            .overlay {
+                if showsPattern {
+                    SecondaryPriceChipPatternOverlay()
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
+                        )
+                }
+            }
+    }
+}
+
+private typealias SetupCorePriceChipView = SecondaryPriceChipView
+
 // MARK: - Prediction Placement State
 
 /// Tracks the state of the prediction marker placement flow (3-line system)
@@ -183,6 +249,7 @@ struct TradingChartView: View {
     
     /// RSI panel height binding for control box positioning
     @Binding var rsiPanelHeight: CGFloat
+    var activeTimeframeLegendEntries: [ActiveIndicatorLegendEntry] = []
     
     /// Total height of all active indicator panels (for bottom controls positioning)
     /// Passed from MainView to ensure controls float above panels
@@ -502,6 +569,7 @@ struct TradingChartView: View {
     ///   - controlViewModel: View model for chart controls
     ///   - chartViewModel: View model for chart data and state
     ///   - rsiPanelHeight: Binding to RSI panel height (for control box positioning)
+    ///   - activeTimeframeLegendEntries: Label-only timeframe summaries for the active panel source
     ///   - indicatorPanelBottomPadding: Total height of all active indicator panels
     ///   - panelBottomBoundaryLabelReserve: Bottom boundary x-axis-strip reserve, if visible
     init(
@@ -514,6 +582,7 @@ struct TradingChartView: View {
         gestureState: ChartGestureState,
         placementState: MarkerPlacementState,
         rsiPanelHeight: Binding<CGFloat> = .constant(120),
+        activeTimeframeLegendEntries: [ActiveIndicatorLegendEntry] = [],
         indicatorPanelBottomPadding: CGFloat = 0,
         panelBottomBoundaryLabelReserve: CGFloat = 0
     ) {
@@ -555,6 +624,7 @@ struct TradingChartView: View {
         self.gestureState = gestureState
         self.placementState = placementState
         self._rsiPanelHeight = rsiPanelHeight
+        self.activeTimeframeLegendEntries = activeTimeframeLegendEntries
         self.indicatorPanelBottomPadding = indicatorPanelBottomPadding
         self.panelBottomBoundaryLabelReserve = panelBottomBoundaryLabelReserve
     }
@@ -1182,11 +1252,13 @@ struct TradingChartView: View {
                     placement: $predictionPlacement,
                     draggingLine: $draggingPredictionLine,
                     coordinateSystem: coordinateSystem,
-                    chartWidth: max(0, geometry.size.width - yAxisWidth),
+                    renderWidth: geometry.size.width,
+                    plotWidth: max(0, geometry.size.width - yAxisWidth),
                     chartHeight: geometry.size.height,
                     chartData: chartData
                 )
-                .mask(plotAreaMask(geometry: geometry))
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+                .mask(priceLinesFullWidthMask(geometry: geometry))
                 .zIndex(40)
             }
 
@@ -2170,6 +2242,11 @@ struct TradingChartView: View {
             }
         }
     }
+
+    private func presentPlacementFailure(_ failure: MarkerPlacementFailure) {
+        placementSubmitErrorMessage = failure.userMessage
+        chartViewModel.showPlacementFailure(failure)
+    }
     
     /// Place a marker using the on-chart placement state.
     /// Builds an RLCreateMarkerRequest from placementState and calls the API.
@@ -2185,20 +2262,21 @@ struct TradingChartView: View {
         if let editingMarkerId = placementState.editingMarkerId {
             let updateRequest = placementState.buildUpdateRequest()
             Task { @MainActor in
-                let success = await markerManager.updateMarkerFromPlacement(
+                let result = await markerManager.updateMarkerFromPlacement(
                     id: editingMarkerId,
                     request: updateRequest
                 )
                 isSubmittingPlacement = false
 
-                if success {
+                switch result {
+                case .success:
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         placementState.clearMarkerEditSession()
                         controlViewModel.cancelMarkerPlacement()
                     }
                     impactFeedback.impactOccurred()
-                } else {
-                    placementSubmitErrorMessage = "Could not save changes. Try again."
+                case .failure(let failure):
+                    presentPlacementFailure(failure)
                 }
             }
             return
@@ -2224,20 +2302,21 @@ struct TradingChartView: View {
         let candleIdx = optimisticCandleIndex(from: request, fallback: fallbackCandleIndex)
 
         Task { @MainActor in
-            let success = await markerManager.addMarkerV2(
+            let result = await markerManager.addMarkerV2(
                 request: request,
                 candleIndex: candleIdx,
                 candles: chartData.candles
             )
             isSubmittingPlacement = false
 
-            if success {
+            switch result {
+            case .success:
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     controlViewModel.cancelMarkerPlacement()
                 }
                 impactFeedback.impactOccurred()
-            } else {
-                placementSubmitErrorMessage = "Could not place marker. Try again."
+            case .failure(let failure):
+                presentPlacementFailure(failure)
             }
         }
     }
@@ -4892,7 +4971,7 @@ struct TradingChartView: View {
                         .position(
                             x: ChartAxisMetrics.trailingLabelCenterX(
                                 totalWidth: geometry.size.width,
-                                width: ChartAxisMetrics.horizontalLabeledChipWidth
+                                width: ChartAxisMetrics.secondaryPriceChipWidth
                             ),
                             y: y
                         )
@@ -5070,27 +5149,10 @@ struct TradingChartView: View {
         price: Double,
         color: Color
     ) -> some View {
-        let displayLabel = compactHorizontalPriceLabel(label)
-        return HStack(spacing: 3) {
-            Text(displayLabel)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .font(.system(size: ChartAxisMetrics.horizontalLabelFontSize, weight: .bold, design: .monospaced))
-            Text(chartData.formatPrice(price))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, ChartAxisMetrics.horizontalPriceChipHorizontalPadding)
-        .padding(.vertical, ChartAxisMetrics.horizontalPriceChipVerticalPadding)
-        .frame(width: ChartAxisMetrics.horizontalLabeledChipWidth)
-        .background(
-            RoundedRectangle(cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
-                .fill(color.opacity(0.88))
-        )
-        .clipShape(
-            RoundedRectangle(cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
+        SecondaryPriceChipView(
+            label: label,
+            priceText: chartData.formatPrice(price),
+            color: color
         )
     }
     
@@ -5324,6 +5386,7 @@ struct TradingChartView: View {
             chartInfoPrimaryRows
             ActiveIndicatorsLegendView(
                 indicatorManager: indicatorManager,
+                timeframeEntries: activeTimeframeLegendEntries,
                 drawings: chartInfoLegendDrawings,
                 formatPrice: { price in chartData.formatPrice(price) }
             )
@@ -6506,7 +6569,7 @@ struct PlacementLineDragOverlay: View {
 
     var body: some View {
         if lineY.isFinite {
-            let labelWidth = ChartAxisMetrics.horizontalLabeledChipWidth
+            let labelWidth = ChartAxisMetrics.secondaryPriceChipWidth
             let labelCenterX = ChartAxisMetrics.trailingLabelCenterX(totalWidth: chartWidth, width: labelWidth)
             let lineEndX = ChartAxisMetrics.horizontalLineEndX(totalWidth: chartWidth, labelWidth: labelWidth)
             ZStack {
@@ -6535,24 +6598,10 @@ struct PlacementLineDragOverlay: View {
                     .allowsHitTesting(false)
 
                 // Price + type label near Y-axis
-                HStack(spacing: 3) {
-                    Text(markerIntent == .setup ? "Entry" : markerIntent.displayName)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .font(.system(size: ChartAxisMetrics.horizontalLabelFontSize, weight: .bold, design: .monospaced))
-                    Text(chartData.formatPrice(effectivePrice))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, ChartAxisMetrics.horizontalPriceChipHorizontalPadding)
-                .padding(.vertical, ChartAxisMetrics.horizontalPriceChipVerticalPadding)
-                .frame(width: labelWidth)
-                .background(markerIntent.color.opacity(0.85))
-                .cornerRadius(ChartAxisMetrics.horizontalPriceChipCornerRadius)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
+                SecondaryPriceChipView(
+                    label: markerIntent == .setup ? "Entry" : markerIntent.displayName,
+                    priceText: chartData.formatPrice(effectivePrice),
+                    color: markerIntent.color
                 )
                 .position(x: labelCenterX, y: lineY)
                 .allowsHitTesting(false)
@@ -6658,7 +6707,7 @@ struct PlacementSupportResistanceOverlay: View {
     ) -> some View {
         let y = coordinateSystem.yPosition(forPrice: price)
         let isActive = draggingLineType == componentType
-        let labelWidth = ChartAxisMetrics.horizontalLabeledChipWidth
+        let labelWidth = ChartAxisMetrics.secondaryPriceChipWidth
         let labelCenterX = ChartAxisMetrics.trailingLabelCenterX(totalWidth: chartWidth, width: labelWidth)
         let lineEndX = ChartAxisMetrics.horizontalLineEndX(totalWidth: chartWidth, labelWidth: labelWidth)
 
@@ -6676,24 +6725,10 @@ struct PlacementSupportResistanceOverlay: View {
             )
             .allowsHitTesting(false)
 
-            HStack(spacing: 3) {
-                Text(compactHorizontalPriceLabel(label))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .font(.system(size: ChartAxisMetrics.horizontalLabelFontSize, weight: .bold, design: .monospaced))
-                Text(chartData.formatPrice(price))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, ChartAxisMetrics.horizontalPriceChipHorizontalPadding)
-            .padding(.vertical, ChartAxisMetrics.horizontalPriceChipVerticalPadding)
-            .frame(width: labelWidth)
-            .background(color.opacity(0.88))
-            .cornerRadius(ChartAxisMetrics.horizontalPriceChipCornerRadius)
-            .clipShape(
-                RoundedRectangle(cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
+            SecondaryPriceChipView(
+                label: label,
+                priceText: chartData.formatPrice(price),
+                color: color
             )
             .position(x: labelCenterX, y: y)
             .allowsHitTesting(false)
@@ -6767,13 +6802,18 @@ struct PredictionPlacementOverlay: View {
     @Binding var placement: PredictionPlacementState?
     @Binding var draggingLine: PredictionLineType?
     let coordinateSystem: ChartCoordinateSystem
-    let chartWidth: CGFloat
+    let renderWidth: CGFloat
+    let plotWidth: CGFloat
     let chartHeight: CGFloat
     let chartData: ChartDataManager
 
     @State private var dragStartY: CGFloat = 0
     @State private var dragStartPrice: Double = 0
     private let haptic = UIImpactFeedbackGenerator(style: .medium)
+
+    private var layout: SetupCorePriceLineLayout {
+        SetupCorePriceLineLayout(renderWidth: renderWidth, plotWidth: plotWidth)
+    }
 
     var body: some View {
         if let state = placement {
@@ -6824,7 +6864,7 @@ struct PredictionPlacementOverlay: View {
                     state: state
                 )
             }
-            .frame(width: chartWidth, height: chartHeight)
+            .frame(width: renderWidth, height: chartHeight, alignment: .leading)
         }
     }
 
@@ -6835,18 +6875,14 @@ struct PredictionPlacementOverlay: View {
         let entryY = coordinateSystem.yPosition(forPrice: state.entryPrice)
         let tpY = coordinateSystem.yPosition(forPrice: state.takeProfitPrice)
         let slY = coordinateSystem.yPosition(forPrice: state.stopLossPrice)
-        let lineEndX = ChartAxisMetrics.horizontalLineEndX(
-            totalWidth: chartWidth,
-            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
-        )
 
         if entryY.isFinite, tpY.isFinite {
             let tpTop = min(entryY, tpY)
             let tpHeight = abs(entryY - tpY)
             Rectangle()
                 .fill(AppColors.statusPositive06)
-                .frame(width: lineEndX, height: max(0, tpHeight))
-                .position(x: lineEndX / 2, y: tpTop + tpHeight / 2)
+                .frame(width: layout.fillWidth, height: max(0, tpHeight))
+                .position(x: layout.fillWidth / 2, y: tpTop + tpHeight / 2)
                 .allowsHitTesting(false)
         }
 
@@ -6855,29 +6891,22 @@ struct PredictionPlacementOverlay: View {
             let slHeight = abs(entryY - slY)
             Rectangle()
                 .fill(AppColors.statusNegative.opacity(0.06))
-                .frame(width: lineEndX, height: max(0, slHeight))
-                .position(x: lineEndX / 2, y: slTop + slHeight / 2)
+                .frame(width: layout.fillWidth, height: max(0, slHeight))
+                .position(x: layout.fillWidth / 2, y: slTop + slHeight / 2)
                 .allowsHitTesting(false)
         }
     }
 
     // MARK: - Price Line
 
-    private var handleCenterX: CGFloat { chartWidth / 2 }
-
     @ViewBuilder
     private func priceLine(price: Double, color: Color, label: String, isDashed: Bool, lineWidth: CGFloat) -> some View {
         let y = coordinateSystem.yPosition(forPrice: price)
-        let labelWidth = ChartAxisMetrics.horizontalLabeledChipWidth
-        let labelCenterX = ChartAxisMetrics.trailingLabelCenterX(totalWidth: chartWidth, width: labelWidth)
-        let lineEndX = ChartAxisMetrics.horizontalLineEndX(totalWidth: chartWidth, labelWidth: labelWidth)
-        // Stop the entry (solid) line before the label chip so it doesn't overlap the text
-        let effectiveEndX = isDashed ? lineEndX : (lineEndX - labelWidth - 4)
 
         if y.isFinite {
             Path { path in
                 path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: effectiveEndX, y: y))
+                path.addLine(to: CGPoint(x: layout.lineEndX, y: y))
             }
             .stroke(color.opacity(0.8), style: StrokeStyle(
                 lineWidth: lineWidth,
@@ -6885,26 +6914,13 @@ struct PredictionPlacementOverlay: View {
             ))
             .allowsHitTesting(false)
 
-            HStack(spacing: 3) {
-                Text(compactHorizontalPriceLabel(label))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .font(.system(size: ChartAxisMetrics.horizontalLabelFontSize, weight: .bold, design: .monospaced))
-                Text(chartData.formatPrice(price))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, ChartAxisMetrics.horizontalPriceChipHorizontalPadding)
-            .padding(.vertical, ChartAxisMetrics.horizontalPriceChipVerticalPadding)
-            .frame(width: labelWidth)
-            .background(color.opacity(0.85))
-            .cornerRadius(ChartAxisMetrics.horizontalPriceChipCornerRadius)
-            .clipShape(
-                RoundedRectangle(cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
+            SetupCorePriceChipView(
+                label: label,
+                priceText: chartData.formatPrice(price),
+                color: color,
+                showsPattern: true
             )
-            .position(x: labelCenterX, y: y)
+            .position(x: layout.labelCenterX, y: y)
             .allowsHitTesting(false)
         }
     }
@@ -6929,13 +6945,13 @@ struct PredictionPlacementOverlay: View {
                         }
                     }
                 )
-                .position(x: handleCenterX, y: y)
+                .position(x: layout.plotHandleCenterX, y: y)
                 .allowsHitTesting(false)
 
             Color.clear
                 .contentShape(Rectangle())
-                .frame(width: chartWidth, height: 44)
-                .position(x: chartWidth / 2, y: y)
+                .frame(width: plotWidth, height: 44)
+                .position(x: layout.plotHandleCenterX, y: y)
                 .highPriorityGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
@@ -7199,10 +7215,8 @@ struct MarkerPriceLinesOverlay: View {
         let entryPrice = marker.entryPrice ?? marker.price
         let tpPrice = marker.targetPrice
         let slPrice = marker.stopLossPrice
-        let lineEndX = ChartAxisMetrics.horizontalLineEndX(
-            totalWidth: size.width,
-            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
-        )
+        let layout = setupLayout(renderWidth: size.width)
+        let lineEndX = layout.lineEndX
 
         // Entry line (green, solid)
         let entryY = coordinateSystem.yPosition(forPrice: entryPrice)
@@ -7212,7 +7226,7 @@ struct MarkerPriceLinesOverlay: View {
                 p.addLine(to: CGPoint(x: lineEndX, y: entryY))
             }
             context.stroke(entryPath, with: .color(AppColors.statusPositive60), style: StrokeStyle(lineWidth: 2))
-            drawPriceLabel(context: context, size: size, y: entryY, price: entryPrice, color: .green, label: "Entry")
+            drawPriceLabel(context: context, y: entryY, price: entryPrice, color: .green, label: "Entry", layout: layout)
         }
 
         // TP line (blue, dashed) + green fill region
@@ -7233,7 +7247,7 @@ struct MarkerPriceLinesOverlay: View {
                     p.addLine(to: CGPoint(x: lineEndX, y: tpY))
                 }
                 context.stroke(tpPath, with: .color(AppColors.statusInfo60), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
-                drawPriceLabel(context: context, size: size, y: tpY, price: tp, color: .blue, label: "TP")
+                drawPriceLabel(context: context, y: tpY, price: tp, color: .blue, label: "TP", layout: layout)
             }
         }
 
@@ -7255,7 +7269,7 @@ struct MarkerPriceLinesOverlay: View {
                     p.addLine(to: CGPoint(x: lineEndX, y: slY))
                 }
                 context.stroke(slPath, with: .color(AppColors.statusNegative60), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
-                drawPriceLabel(context: context, size: size, y: slY, price: sl, color: .red, label: "SL")
+                drawPriceLabel(context: context, y: slY, price: sl, color: .red, label: "SL", layout: layout)
             }
         }
     }
@@ -7301,14 +7315,16 @@ struct MarkerPriceLinesOverlay: View {
         }
     }
 
-    private func drawPriceLabel(context: GraphicsContext, size: CGSize, y: CGFloat, price: Double, color: Color, label: String) {
+    private func drawPriceLabel(
+        context: GraphicsContext,
+        y: CGFloat,
+        price: Double,
+        color: Color,
+        label: String,
+        layout: SetupCorePriceLineLayout
+    ) {
         let priceText = chartData.formatPrice(price)
-        let displayText = "\(compactHorizontalPriceLabel(label)) \(priceText)"
-        let labelRect = ChartAxisMetrics.labelRect(
-            totalWidth: size.width,
-            centerY: y,
-            width: ChartAxisMetrics.horizontalLabeledChipWidth
-        )
+        let labelRect = layout.labelRect(centerY: y)
         let roundedPath = Path(roundedRect: labelRect, cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
         context.fill(roundedPath, with: .color(color))
         if isSetupCorePriceLabel(label) {
@@ -7321,9 +7337,7 @@ struct MarkerPriceLinesOverlay: View {
         var labelContext = context
         labelContext.clip(to: roundedPath)
         labelContext.draw(
-            Text(displayText)
-                .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: priceLabelFontWeight(for: label), design: .monospaced))
-                .foregroundColor(.white),
+            setupCorePriceLabelText(label: label, priceText: priceText),
             at: CGPoint(x: labelRect.midX, y: y)
         )
     }
@@ -7336,10 +7350,8 @@ struct MarkerPriceLinesOverlay: View {
            let pending = pendingInfo,
            pending.markerIntent == .setup {
             let entryPrice = pending.horizontalLinePrice ?? pending.price
-            let lineEndX = ChartAxisMetrics.horizontalLineEndX(
-                totalWidth: size.width,
-                labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
-            )
+            let layout = setupLayout(renderWidth: size.width)
+            let lineEndX = layout.lineEndX
 
             // Entry line (green)
             let entryY = coordinateSystem.yPosition(forPrice: entryPrice)
@@ -7349,7 +7361,7 @@ struct MarkerPriceLinesOverlay: View {
                     p.addLine(to: CGPoint(x: lineEndX, y: entryY))
                 }
                 context.stroke(entryPath, with: .color(AppColors.statusPositive60), style: StrokeStyle(lineWidth: 2))
-                drawPriceLabel(context: context, size: size, y: entryY, price: entryPrice, color: .green, label: "Entry")
+                drawPriceLabel(context: context, y: entryY, price: entryPrice, color: .green, label: "Entry", layout: layout)
             }
 
             // TP line (blue)
@@ -7366,7 +7378,7 @@ struct MarkerPriceLinesOverlay: View {
                         p.addLine(to: CGPoint(x: lineEndX, y: tpY))
                     }
                     context.stroke(tpPath, with: .color(AppColors.statusInfo60), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
-                    drawPriceLabel(context: context, size: size, y: tpY, price: tp, color: .blue, label: "TP")
+                    drawPriceLabel(context: context, y: tpY, price: tp, color: .blue, label: "TP", layout: layout)
                 }
             }
 
@@ -7384,7 +7396,7 @@ struct MarkerPriceLinesOverlay: View {
                         p.addLine(to: CGPoint(x: lineEndX, y: slY))
                     }
                     context.stroke(slPath, with: .color(AppColors.statusNegative60), style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
-                    drawPriceLabel(context: context, size: size, y: slY, price: sl, color: .red, label: "SL")
+                    drawPriceLabel(context: context, y: slY, price: sl, color: .red, label: "SL", layout: layout)
                 }
             }
             return
@@ -7423,12 +7435,13 @@ struct MarkerPriceLinesOverlay: View {
         guard y >= 0 && y <= chartHeight else { return }
         
         let labelWidth = label != nil
-            ? ChartAxisMetrics.horizontalLabeledChipWidth
+            ? ChartAxisMetrics.secondaryPriceChipWidth
             : ChartAxisMetrics.currentPriceChipWidth
         let labelRect = ChartAxisMetrics.labelRect(
             totalWidth: size.width,
             centerY: y,
-            width: labelWidth
+            width: labelWidth,
+            height: label != nil ? ChartAxisMetrics.secondaryPriceChipHeight : ChartAxisMetrics.currentPriceChipHeight
         )
         let lineEndX = labelRect.maxX
 
@@ -7445,13 +7458,6 @@ struct MarkerPriceLinesOverlay: View {
         
         let priceText = chartData.formatPrice(price)
         
-        let displayText: String
-        if let label = label {
-            displayText = "\(compactHorizontalPriceLabel(label)) \(priceText)"
-        } else {
-            displayText = priceText
-        }
-        
         let roundedPath = Path(roundedRect: labelRect, cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
         context.fill(roundedPath, with: .color(color))
         if isSetupCorePriceLabel(label) {
@@ -7464,17 +7470,23 @@ struct MarkerPriceLinesOverlay: View {
 
         var labelContext = context
         labelContext.clip(to: roundedPath)
-        labelContext.draw(
-            Text(displayText)
-                .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: priceLabelFontWeight(for: label), design: .monospaced))
-                .foregroundColor(.white),
-            at: CGPoint(x: labelRect.midX, y: y)
-        )
+        if let label {
+            labelContext.draw(
+                secondaryPriceChipText(label: label, priceText: priceText),
+                at: CGPoint(x: labelRect.midX, y: y)
+            )
+        } else {
+            labelContext.draw(
+                Text(priceText)
+                    .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white),
+                at: CGPoint(x: labelRect.midX, y: y)
+            )
+        }
     }
 
-    private func priceLabelFontWeight(for label: String?) -> Font.Weight {
-        guard let label else { return .semibold }
-        return isSetupCorePriceLabel(label) ? .bold : .semibold
+    private func setupLayout(renderWidth: CGFloat) -> SetupCorePriceLineLayout {
+        SetupCorePriceLineLayout(renderWidth: renderWidth)
     }
 
     private func isSetupCorePriceLabel(_ label: String?) -> Bool {
@@ -7586,7 +7598,7 @@ struct MarkerDrawingOverlay: View {
         let startX: CGFloat = 0
         let endX = ChartAxisMetrics.horizontalLineEndX(
             totalWidth: chartWidth,
-            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+            labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
         )
 
         var path = Path()
@@ -7719,7 +7731,7 @@ struct PredictionTargetLineOverlay: View {
     }
     
     private func drawTargetLine(context: GraphicsContext, size: CGSize, y: CGFloat) {
-        let labelWidth: CGFloat = 110
+        let labelWidth = ChartAxisMetrics.secondaryPriceChipWidth
         let lineEndX = ChartAxisMetrics.horizontalLineEndX(totalWidth: size.width, labelWidth: labelWidth)
         let linePath = Path { path in
             path.move(to: CGPoint(x: 0, y: y))
@@ -7734,13 +7746,11 @@ struct PredictionTargetLineOverlay: View {
         guard let targetPrice = targetPrice else { return }
         
         let priceText = chartData.formatPrice(targetPrice)
-        let displayText = "Target \(priceText)"
-
-        let estimatedWidth: CGFloat = 110
         let labelRect = ChartAxisMetrics.labelRect(
             totalWidth: size.width,
             centerY: y,
-            width: estimatedWidth
+            width: ChartAxisMetrics.secondaryPriceChipWidth,
+            height: ChartAxisMetrics.secondaryPriceChipHeight
         )
 
         let roundedPath = Path(roundedRect: labelRect, cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
@@ -7749,9 +7759,7 @@ struct PredictionTargetLineOverlay: View {
         var labelContext = context
         labelContext.clip(to: roundedPath)
         labelContext.draw(
-            Text(displayText)
-                .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white),
+            secondaryPriceChipText(label: "Target", priceText: priceText),
             at: CGPoint(x: labelRect.midX, y: y)
         )
     }
@@ -7825,7 +7833,7 @@ struct StaticTargetLineOverlay: View {
             let y = coordinateSystem.yPosition(forPrice: targetPrice)
             guard y >= 0 && y <= chartHeight else { return }
             
-            let labelWidth: CGFloat = 110
+            let labelWidth = ChartAxisMetrics.secondaryPriceChipWidth
             let lineEndX = ChartAxisMetrics.horizontalLineEndX(totalWidth: size.width, labelWidth: labelWidth)
             
             let linePath = Path { path in
@@ -7835,13 +7843,11 @@ struct StaticTargetLineOverlay: View {
             
             context.stroke(linePath, with: .color(AppColors.statusWarning80), style: StrokeStyle(lineWidth: 2))
             
-            let priceText = chartData.formatPrice(targetPrice)
-            let displayText = "Target \(priceText)"
-
             let labelRect = ChartAxisMetrics.labelRect(
                 totalWidth: size.width,
                 centerY: y,
-                width: 110
+                width: labelWidth,
+                height: ChartAxisMetrics.secondaryPriceChipHeight
             )
 
             let roundedPath = Path(roundedRect: labelRect, cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
@@ -7850,9 +7856,7 @@ struct StaticTargetLineOverlay: View {
             var labelContext = context
             labelContext.clip(to: roundedPath)
             labelContext.draw(
-                Text(displayText)
-                    .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white),
+                secondaryPriceChipText(label: "Target", priceText: chartData.formatPrice(targetPrice)),
                 at: CGPoint(x: labelRect.midX, y: y)
             )
         }

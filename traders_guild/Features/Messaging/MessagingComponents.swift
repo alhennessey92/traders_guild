@@ -2097,85 +2097,101 @@ struct ChatSearchView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Search bar
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search messages...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .foregroundColor(.white)
-                        .autocorrectionDisabled()
-                    if !searchText.isEmpty {
-                        Button { searchText = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppColors.surfaceGray20)
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            ZStack {
+                AppColors.sheetBackground
+                    .ignoresSafeArea()
 
-                Divider().background(AppColors.surfaceGray30)
-
-                // Results
-                if isSearching && results.isEmpty {
-                    UnifiedLoadingState(message: "Searching...")
-                        .frame(maxHeight: .infinity)
-                } else if results.isEmpty && !searchText.isEmpty {
-                    UnifiedEmptyState(
-                        icon: "magnifyingglass",
-                        title: "No results",
-                        subtitle: "Try a different search term"
-                    )
-                    .frame(maxHeight: .infinity)
-                } else if results.isEmpty {
-                    UnifiedEmptyState(
-                        icon: "magnifyingglass",
-                        title: "Search messages",
-                        subtitle: "Find past messages across all chatrooms"
-                    )
-                    .frame(maxHeight: .infinity)
-                } else {
-                    List {
-                        ForEach(results) { result in
-                            searchResultRow(result)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                VStack(spacing: 0) {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(AppColors.surfaceWhite60)
+                            TextField("Search messages...", text: $searchText)
+                                .textFieldStyle(.plain)
+                                .foregroundColor(.white)
+                                .autocorrectionDisabled()
+                            if !searchText.isEmpty {
+                                Button { searchText = "" } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(AppColors.surfaceWhite60)
+                                }
+                            }
                         }
-
-                        if hasMore {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .onAppear { loadMore() }
-                                .listRowBackground(Color.clear)
-                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 11)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(AppColors.surfaceWhite08)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                                )
+                        )
 
                         if totalCount > 0 {
-                            Text("\(totalCount) results found")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .listRowBackground(Color.clear)
+                            HStack {
+                                Text("\(totalCount) result\(totalCount == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.surfaceWhite60)
+                                Spacer()
+                            }
                         }
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 14)
+                    .background(
+                        AppColors.sheetBackground
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(AppColors.surfaceWhite08)
+                                    .frame(height: 1)
+                            }
+                    )
+
+                    if isSearching && results.isEmpty {
+                        UnifiedLoadingState(message: "Searching...")
+                            .frame(maxHeight: .infinity)
+                    } else if results.isEmpty && !searchText.isEmpty {
+                        UnifiedEmptyState(
+                            icon: "magnifyingglass",
+                            title: "No results",
+                            subtitle: "Try a different search term"
+                        )
+                        .frame(maxHeight: .infinity)
+                    } else if results.isEmpty {
+                        UnifiedEmptyState(
+                            icon: "magnifyingglass",
+                            title: "Search messages",
+                            subtitle: "Find past messages across all chatrooms"
+                        )
+                        .frame(maxHeight: .infinity)
+                    } else {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(spacing: 10) {
+                                ForEach(results) { result in
+                                    searchResultRow(result)
+                                }
+
+                                if hasMore {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                        .onAppear { loadMore() }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 24)
+                        }
+                    }
                 }
             }
-            .background(
-                ZStack {
-                    Color.clear.background(.ultraThinMaterial)
-                    AppColors.sheetBackground
-                }
-            )
             .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
@@ -2186,6 +2202,7 @@ struct ChatSearchView: View {
                 performDebouncedSearch(newValue)
             }
         }
+        .tint(AppColors.accentColor)
     }
 
     private func searchResultRow(_ result: RLMessageSearchResultDTO) -> some View {
@@ -2202,7 +2219,7 @@ struct ChatSearchView: View {
                 Spacer()
                 Text(result.message.timestampFormatted)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.surfaceWhite50)
             }
 
             // Author
@@ -2220,7 +2237,11 @@ struct ChatSearchView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.surfaceGray20.opacity(0.5))
+                .fill(AppColors.surfaceWhite08)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                )
         )
     }
 
@@ -3838,4 +3859,3 @@ struct RLDMSettingsView: View {
         }
     }
 }
-

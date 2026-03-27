@@ -293,6 +293,21 @@ class LeftDrawerViewModel: ObservableObject {
         let ids = Set(payload.notificationIds)
         userNotifications.removeAll { ids.contains($0.id) }
     }
+
+    var hasUnreadAnnouncements: Bool {
+        announcements.contains { !$0.isRead }
+    }
+
+    var hasUnreadEvents: Bool {
+        upcomingEvents.contains { !$0.isRead }
+    }
+
+    var hasUnreadNotifications: Bool {
+        if let notificationStats {
+            return notificationStats.unreadCount > 0
+        }
+        return userNotifications.contains { !$0.isRead }
+    }
     
     // ================================================================================================
     // MARK: - Preload Data
@@ -1358,4 +1373,3 @@ extension RLGuildMemberDTO {
         )
     }
 }
-

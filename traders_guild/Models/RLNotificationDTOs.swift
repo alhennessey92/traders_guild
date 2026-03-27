@@ -185,7 +185,14 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
     
     /// Navigation destination from embedded data
     var navigationDestination: NotificationDestination? {
-        destination?.navigationDestination
+        guard let destination else { return nil }
+        switch destination.type {
+        case .symbolChart:
+            guard let symbolId = destination.symbolId else { return nil }
+            return .symbolChart(symbolId: symbolId, ticker: stringDataValue(for: "symbol_ticker") ?? "")
+        default:
+            return destination.navigationDestination
+        }
     }
     
     /// Whether this notification is tappable
@@ -251,13 +258,23 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         case .membershipRequestSubmitted:       return .indigo
         case .membershipRequestDecision:        return .blue
         case .memberJoined:                     return .green
-        case .markerResult:                     return .green
+        case .markerResult:
+            return markerResultType == "stop_loss" ? AppColors.statusNegative85 : AppColors.statusPositive90
         case .markerLike:                       return .pink
         case .markerComment:                    return .orange
         case .contentReaction:                  return .teal
         case .contentReport:                    return .red
         case .reputationTierChange:             return .yellow
         case .none:                             return .gray
+        }
+    }
+
+    var semanticBorderColor: Color? {
+        switch type {
+        case .markerResult:
+            return markerResultType == "stop_loss" ? AppColors.statusNegative40 : AppColors.statusPositive35
+        default:
+            return nil
         }
     }
 
@@ -326,6 +343,10 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         type?.isPersonal ?? true
     }
 
+    var markerResultType: String? {
+        stringDataValue(for: "result_type")
+    }
+
     var markerSharePayload: MarkerSharePayloadV1? {
         guard let markerId = uuidDataValue(for: "marker_id"),
               let symbolId = uuidDataValue(for: "symbol_id"),
@@ -340,6 +361,28 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
             symbolTicker: stringDataValue(for: "symbol_ticker"),
             timeframe: timeframe,
             candleTimestamp: candleTimestamp,
+            markerType: stringDataValue(for: "marker_type"),
+            intent: stringDataValue(for: "intent")
+        )
+    }
+
+    var markerNavigationPayload: MarkerSharePayloadV1? {
+        if let payload = markerSharePayload {
+            return payload
+        }
+
+        guard let markerId = uuidDataValue(for: "marker_id"),
+              let symbolId = uuidDataValue(for: "symbol_id"),
+              let timeframe = stringDataValue(for: "timeframe") else {
+            return nil
+        }
+
+        return MarkerSharePayloadV1(
+            markerId: markerId,
+            symbolId: symbolId,
+            symbolTicker: stringDataValue(for: "symbol_ticker"),
+            timeframe: timeframe,
+            candleTimestamp: dateDataValue(for: "candle_timestamp") ?? createdAt,
             markerType: stringDataValue(for: "marker_type"),
             intent: stringDataValue(for: "intent")
         )

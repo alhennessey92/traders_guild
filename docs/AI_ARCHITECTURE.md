@@ -1385,18 +1385,24 @@ Make sure you run through all drawing options and make improve them the way they
 				Personal
 
 
-242. Init message in each chat room creation
+242. [Fixed] Init message in each chat room creation
 
-243. No welcome notification on seeded account - Never got a welcome notification for joinging traders guild /joining initial guild
+243. [Fixed] No welcome notification on seeded account - Never got a welcome notification for joinging traders guild /joining initial guild
 
-244. No initial guild announcement for onboarding guild - need a generic announcement for welcoming guild creation. System generated fairly univeral among guilds
+244. [Fixed] No initial guild announcement for onboarding guild - need a generic announcement for welcoming guild creation. System generated fairly univeral among guilds
 
-245. Panel sometimes gets into a state of appearing above and below x axis and header is removed so can’t interact with it. some panels also overlaying each other when in this state. Only happens periodically when adding micture of timeframe and indicator panels so not sure
+245. [Fixed] Panel sometimes gets into a state of appearing above and below x axis and header is removed so can’t interact with it. some panels also overlaying each other when in this state. Only happens periodically when adding micture of timeframe and indicator panels so not sure
 
-246. No notification on setup loss and no negative reputation awarded/ global/personal/guild accuracy and reputation affected. Actually need to remove negative reputation on loss just affect accuracy
+246. [Fixed] No notification on setup loss and no negative reputation awarded/ global/personal/guild accuracy and reputation affected. Actually need to remove negative reputation on loss just affect accuracy
 
-247. Notification on sl hit needs to be red border for sl and getting missing marker context when tapping to go to marker
+247. [Fixed] Notification on sl hit needs to be red border for sl and getting missing marker context when tapping to go to marker
 
-248. Need network error toast when network drop
+248. [Fixed] Need network error toast when network drop
 
-249. Timeframe panel needs to appear in top chart info box and certain indicators like stochastics only show a single color and value in info box yet are represented by 2 values, need to make sure these are all accounted for
+249. [Fixed] Timeframe panel needs to appear in top chart info box and certain indicators like stochastics only show a single color and value in info box yet are represented by 2 values, need to make sure these are all accounted for
+
+250. Marker detail view can be adapted, need to remove title in marker placement mode, so only emphasis on description. In marker detail view - remove requirements header and leave top box as specifics to marker (question, poll, setup info etc...) Make the box a slightly different color so it stands out - make general, symbol and author info disclosure like symbol details in bottom bar symbol info. With slightly more simple ui design - not soo many boxes etc... but keep relevant info
+
+251. Review all setup tp - sl scale visual indicating swing of current price to sl and tp. Make sure all references and implementations of it in marker list views in left drawer, bottom bar marker section, marker detail view and marker info chart box all have same if not similar design and functionality. Need to double check they all work as should, noticed a couple where current swing was different to chart price levels
+
+252. In marker section in left drawer the timeframe pill needs to be moved next to the symbol name, before the YOU pill, so it always stays there. Also in same list views for markers need to make sure we dedicate a detail section for specifics to the marker - with slightly darker background, this could be question, alert status, setup amrker swing graphic, poll standings etc... make it look visually inline with how it looks in the marker info box on chart. In setup marker because the timeframe pill is moved, can move the live pill next to the active/tracking pill - make sure bottom bar marker section conforms to this new look for list view markers and also profile references showing markers and anywhere else that shows similar list view markers

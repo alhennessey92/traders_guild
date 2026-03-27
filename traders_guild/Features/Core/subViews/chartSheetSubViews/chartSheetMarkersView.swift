@@ -325,7 +325,7 @@ struct chartSheetMarkersView: View {
                     Image(systemName: "shield.checkered")
                         .foregroundColor(AppColors.statusWarning90)
                         .font(.caption)
-                    Text("Prediction markers affect your accuracy and reputation. Set entry, SL, and TP when prompted.")
+                    Text("Prediction markers affect your accuracy, and TP results also affect reputation. Set entry, SL, and TP when prompted.")
                         .font(.caption2)
                         .foregroundColor(.gray)
                     Spacer()

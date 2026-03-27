@@ -27,6 +27,20 @@ struct MarkerViewingInfoBox: View {
         return (status == .approachingTP || status == .approachingSL) ? status : nil
     }
 
+    private var setupSwingStripMetrics: SetupSwingStripMetrics? {
+        guard marker.intent == .setup,
+              let targetPrice = marker.targetPrice,
+              let stopLossPrice = marker.stopLossPrice else {
+            return nil
+        }
+        return SetupSwingStripMetrics.compute(
+            entryPrice: marker.entryPrice ?? marker.price,
+            stopLossPrice: stopLossPrice,
+            targetPrice: targetPrice,
+            currentPrice: currentPrice
+        )
+    }
+
     var body: some View {
         Group {
             if isCollapsed {
@@ -108,22 +122,10 @@ struct MarkerViewingInfoBox: View {
                         ApproachingLevelChip(status: approachingStatus)
                     }
                 }
-                valueRow(
-                    title: "Entry",
-                    value: formatPrice(marker.entryPrice ?? marker.price),
-                    color: RLComponentType.levelEntry.color
-                )
-                HStack(spacing: 10) {
-                    if marker.targetPrice != nil {
-                        Text("TP")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(RLComponentType.levelTp.color)
-                    }
-                    if marker.stopLossPrice != nil {
-                        Text("SL")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(RLComponentType.levelSl.color)
-                    }
+                if let setupSwingStripMetrics {
+                    CompactSetupSwingStripCard(metrics: setupSwingStripMetrics)
+                } else {
+                    bodyText(nil, placeholder: "Setup levels unavailable.")
                 }
             }
 
@@ -361,5 +363,134 @@ struct MarkerViewingInfoBox: View {
             }
         }
         return nil
+    }
+}
+
+private struct CompactSetupSwingStripCard: View {
+    let metrics: SetupSwingStripMetrics
+
+    private struct Caption: Identifiable {
+        let id: String
+        let text: String
+        let color: Color
+        let position: CGFloat
+    }
+
+    private var stopTint: Color { RLComponentType.levelSl.color }
+    private var targetTint: Color { RLComponentType.levelTp.color }
+    private var borderTint: Color {
+        switch metrics.tint {
+        case .target:
+            return targetTint
+        case .stop:
+            return stopTint
+        case .neutral:
+            return AppColors.surfaceWhite20
+        }
+    }
+
+    private var swingTint: Color {
+        switch metrics.tint {
+        case .target:
+            return targetTint
+        case .stop:
+            return stopTint
+        case .neutral:
+            return AppColors.surfaceWhite70
+        }
+    }
+
+    private var captions: [Caption] {
+        [
+            Caption(id: "sl", text: "SL", color: stopTint, position: CGFloat(metrics.stopLossPosition)),
+            Caption(id: "entry", text: "Entry", color: RLComponentType.levelEntry.color, position: CGFloat(metrics.entryPosition)),
+            Caption(id: "tp", text: "TP", color: targetTint, position: CGFloat(metrics.targetPosition)),
+        ]
+        .sorted { $0.position < $1.position }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            GeometryReader { geometry in
+                let safeWidth = max(geometry.size.width, 1)
+                let entryX = safeWidth * CGFloat(metrics.entryPosition)
+                let currentX = metrics.currentPosition.map { safeWidth * CGFloat($0) }
+                let swingStart = min(entryX, currentX ?? entryX)
+                let swingWidth = currentX.map { max(abs($0 - entryX), 2) } ?? 0
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(AppColors.surfaceWhite08)
+
+                    HStack(spacing: 0) {
+                        if metrics.isLong {
+                            Rectangle()
+                                .fill(stopTint.opacity(0.30))
+                                .frame(width: entryX)
+                            Rectangle()
+                                .fill(targetTint.opacity(0.30))
+                        } else {
+                            Rectangle()
+                                .fill(targetTint.opacity(0.30))
+                                .frame(width: entryX)
+                            Rectangle()
+                                .fill(stopTint.opacity(0.30))
+                        }
+                    }
+                    .clipShape(Capsule())
+
+                    if swingWidth > 0 {
+                        Capsule()
+                            .fill(swingTint)
+                            .frame(width: swingWidth)
+                            .offset(x: swingStart)
+                    }
+
+                    Capsule()
+                        .fill(AppColors.surfaceWhite88.opacity(0.72))
+                        .frame(width: 2)
+                        .offset(x: max(min(entryX - 1, safeWidth - 2), 0))
+
+                    if let currentX {
+                        Circle()
+                            .fill(swingTint)
+                            .frame(width: 10, height: 10)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppColors.systemBlack.opacity(0.45), lineWidth: 1.5)
+                            )
+                            .offset(x: max(min(currentX - 5, safeWidth - 10), 0), y: -1)
+                    }
+                }
+            }
+            .frame(height: 12)
+
+            GeometryReader { geometry in
+                let safeWidth = max(geometry.size.width, 1)
+
+                ZStack(alignment: .leading) {
+                    ForEach(captions) { caption in
+                        Text(caption.text)
+                            .font(.system(size: 8.5, weight: .bold))
+                            .foregroundColor(caption.color)
+                            .position(
+                                x: max(14, min(safeWidth - 14, safeWidth * caption.position)),
+                                y: 7
+                            )
+                    }
+                }
+            }
+            .frame(height: 14)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(AppColors.surfaceWhite08)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(borderTint.opacity(0.24), lineWidth: 1)
+                )
+        )
     }
 }

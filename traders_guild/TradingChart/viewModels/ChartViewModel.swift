@@ -138,6 +138,15 @@ class ChartViewModel: ObservableObject {
     }
     
     // MARK: - Public Methods
+
+    func showPlacementFailure(_ failure: MarkerPlacementFailure) {
+        appState.showError(
+            title: failure.toastTitle,
+            message: failure.userMessage,
+            severity: failure.toastSeverity,
+            style: .toast
+        )
+    }
     
     /// Initialize the view model with data
     func initialize() async {

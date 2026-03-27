@@ -20,6 +20,7 @@ struct IndicatorPanelContainer: View {
     let candleSpacing: CGFloat
     var timeframe: RLChartTimeframe = .h1
     var timeframePanelCount: Int = 0
+    var bottomAxisPanelIndex: Int? = nil
     
     @Binding var rsiPanelHeight: CGFloat
     @Binding var macdPanelHeight: CGFloat
@@ -59,7 +60,7 @@ struct IndicatorPanelContainer: View {
         if hasActivePanels {
             VStack(spacing: 0) {
                 ForEach(Array(activePanelTypes.enumerated()), id: \.element) { index, panelType in
-                    panelView(for: panelType, isBottomPanel: index == activePanelTypes.count - 1)
+                    panelView(for: panelType, isBottomPanel: bottomAxisPanelIndex == index)
                 }
             }
         }
@@ -175,33 +176,29 @@ struct IndicatorPanelContainer: View {
     }
     
     // MARK: - Height Calculations
+
+    private func panelHeight(for panelType: PanelIndicatorType) -> CGFloat {
+        switch panelType {
+        case .rsi:
+            return rsiPanelHeight
+        case .macd:
+            return macdPanelHeight
+        case .stochastic:
+            return stochasticPanelHeight
+        case .cci:
+            return cciPanelHeight
+        case .williamsR:
+            return williamsRPanelHeight
+        case .atr:
+            return atrPanelHeight
+        case .volume:
+            return volumePanelHeight
+        }
+    }
     
     var totalPanelHeight: CGFloat {
-        var total: CGFloat = 0
-        
-        for panelType in activePanelTypes {
-            switch panelType {
-            case .rsi:
-                total += rsiPanelHeight + 22
-            case .macd:
-                total += macdPanelHeight + 22
-            case .stochastic:
-                total += stochasticPanelHeight + 22
-            case .cci:
-                total += cciPanelHeight + 22
-            case .williamsR:
-                total += williamsRPanelHeight + 22
-            case .atr:
-                total += atrPanelHeight + 22
-            case .volume:
-                total += volumePanelHeight + 22
-            }
-        }
-
-        if hasActivePanels {
-            total += 24 // X-axis labels on bottom indicator panel
-        }
-        
-        return total
+        ChartPanelReserveCalculator.stackReserve(
+            panelHeights: activePanelTypes.map(panelHeight(for:))
+        )
     }
 }

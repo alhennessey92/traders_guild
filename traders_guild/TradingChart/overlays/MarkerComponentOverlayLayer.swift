@@ -62,7 +62,7 @@ struct MarkerComponentOverlayLayer: View {
     private func drawLevels(context: GraphicsContext) {
         let lineEndX = ChartAxisMetrics.horizontalLineEndX(
             totalWidth: width,
-            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+            labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
         )
         for component in levelComponents {
             guard let price = component.payload.levelPrice,
@@ -95,7 +95,7 @@ struct MarkerComponentOverlayLayer: View {
     private func drawHorizontalLines(context: GraphicsContext) {
         let endX = ChartAxisMetrics.horizontalLineEndX(
             totalWidth: width,
-            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+            labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
         )
         for component in horizontalLineComponents {
             guard case let .drawingHorizontalLine(payload) = component.payload,
@@ -239,22 +239,22 @@ struct MarkerComponentOverlayLayer: View {
             Text(label)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-                .font(.system(size: ChartAxisMetrics.horizontalLabelFontSize, weight: .bold, design: .monospaced))
+                .font(.system(size: ChartAxisMetrics.secondaryLabelFontSize, weight: .bold, design: .monospaced))
             Text(formattedPrice(price))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-                .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
+                .font(.system(size: ChartAxisMetrics.secondaryPriceFontSize, weight: .semibold, design: .monospaced))
         }
         .foregroundColor(.white)
-        .padding(.horizontal, ChartAxisMetrics.horizontalPriceChipHorizontalPadding)
-        .padding(.vertical, ChartAxisMetrics.horizontalPriceChipVerticalPadding)
-        .frame(width: ChartAxisMetrics.horizontalLabeledChipWidth)
+        .padding(.horizontal, ChartAxisMetrics.secondaryPriceChipHorizontalPadding)
+        .padding(.vertical, ChartAxisMetrics.secondaryPriceChipVerticalPadding)
+        .frame(width: ChartAxisMetrics.secondaryPriceChipWidth, height: ChartAxisMetrics.secondaryPriceChipHeight)
         .background(color.opacity(0.88))
         .cornerRadius(ChartAxisMetrics.horizontalPriceChipCornerRadius)
         .position(
             x: ChartAxisMetrics.trailingLabelCenterX(
                 totalWidth: width,
-                width: ChartAxisMetrics.horizontalLabeledChipWidth
+                width: ChartAxisMetrics.secondaryPriceChipWidth
             ),
             y: y
         )

@@ -486,7 +486,7 @@ final class MarkerPlacementState: ObservableObject {
             items.append(
                 checklistItem(
                     id: "setup_tracking_recommended",
-                    title: "Enable tracking for accuracy and reputation impact",
+                    title: "Enable tracking for accuracy and TP reputation impact",
                     isRequired: false,
                     isComplete: trackingEnabled
                 )

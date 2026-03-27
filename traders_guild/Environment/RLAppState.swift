@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 import Combine
 import UIKit
+import Network
 
 @MainActor
 class RLAppState: ObservableObject {
@@ -201,6 +202,10 @@ class RLAppState: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     @Published var presenceByUserId: [UUID: Bool] = [:]
     private var currentPresenceChannel: String?
+    private let reachabilityMonitor = NWPathMonitor()
+    private let reachabilityQueue = DispatchQueue(label: "traders_guild.reachability")
+    private var lastReachabilitySatisfied: Bool?
+    private var hasShownOfflineToastForCurrentEpisode = false
 
     @Published var notificationStats: RLNotificationStatsDTO? {
         didSet {
@@ -228,10 +233,15 @@ class RLAppState: ObservableObject {
         setupRealTimeObservers()
         setupPresenceListeners()
         setupGuildEventListeners()
+        startReachabilityMonitor()
         
         Task {
             await restoreSession()
         }
+    }
+
+    deinit {
+        reachabilityMonitor.cancel()
     }
     
     /// Handle authentication failure (refresh token expired)
@@ -261,6 +271,35 @@ class RLAppState: ObservableObject {
             message: "Please log in again",
             severity: .warning,
             style: .alert
+        )
+    }
+
+    private func startReachabilityMonitor() {
+        reachabilityMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                self?.handleReachabilityTransition(isSatisfied: path.status == .satisfied)
+            }
+        }
+        reachabilityMonitor.start(queue: reachabilityQueue)
+    }
+
+    private func handleReachabilityTransition(isSatisfied: Bool) {
+        let previous = lastReachabilitySatisfied
+        lastReachabilitySatisfied = isSatisfied
+
+        if isSatisfied {
+            hasShownOfflineToastForCurrentEpisode = false
+            return
+        }
+
+        guard previous == true else { return }
+        guard isAuthenticated, currentUser != nil else { return }
+        guard !hasShownOfflineToastForCurrentEpisode else { return }
+
+        hasShownOfflineToastForCurrentEpisode = true
+        showInfo(
+            "Connection lost. We’ll reconnect when you’re back online.",
+            title: "Offline"
         )
     }
     
@@ -2154,6 +2193,7 @@ class RLAppState: ObservableObject {
         pendingPasswordResetToken = nil
         presenceByUserId.removeAll()
         currentPresenceChannel = nil
+        hasShownOfflineToastForCurrentEpisode = false
 
         clearAllKeychain()
         resetChartReadyState()

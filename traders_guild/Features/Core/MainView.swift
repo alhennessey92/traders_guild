@@ -166,27 +166,29 @@ struct MainView: View {
         timeframePanelManager.panels.map(\.currentHeight)
     }
 
-    /// Calculate total height of active indicator panels for bottom padding.
-    private var indicatorPanelsTotalHeight: CGFloat {
-        ChartPanelReserveCalculator.stackReserve(panelHeights: indicatorPanelHeights)
-    }
-
-    /// Calculate total height of active timeframe panels for bottom padding.
-    private var timeframePanelsTotalHeight: CGFloat {
-        ChartPanelReserveCalculator.stackReserve(panelHeights: timeframePanelHeights)
-    }
-
-    /// Combined stack height for indicator + timeframe panel overlays.
-    private var chartPanelsTotalHeight: CGFloat {
-        indicatorPanelsTotalHeight + timeframePanelsTotalHeight
-    }
-
-    /// Label-strip reserve only when the bottom-most visible panel is expanded.
-    private var chartPanelsBottomLabelStripReserve: CGFloat {
-        ChartPanelReserveCalculator.bottomBoundaryLabelReserve(
-            indicatorPanelHeights: indicatorPanelHeights,
-            timeframePanelHeights: timeframePanelHeights
+    private var chartPanelLayout: CombinedChartPanelLayout {
+        ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: timeframePanelHeights,
+            indicatorPanelHeights: indicatorPanelHeights
         )
+    }
+
+    private var chartPanelsTotalHeight: CGFloat {
+        chartPanelLayout.totalReserve
+    }
+
+    private var chartPanelsBottomLabelStripReserve: CGFloat {
+        chartPanelLayout.bottomBoundaryLabelReserve
+    }
+
+    private var bottomTimeframeAxisPanelIndex: Int? {
+        guard case .timeframe(let index) = chartPanelLayout.bottomOwner else { return nil }
+        return index
+    }
+
+    private var bottomIndicatorAxisPanelIndex: Int? {
+        guard case .indicator(let index) = chartPanelLayout.bottomOwner else { return nil }
+        return index
     }
 
     /// When the bottom panel is collapsed, lift the panel stack so it doesn't cover
@@ -212,6 +214,16 @@ struct MainView: View {
             return .markerViewing
         }
         return .chartDefaults
+    }
+
+    private var activeTimeframeLegendEntries: [ActiveIndicatorLegendEntry] {
+        TimeframeLegendComposer.entries(from: timeframePanelManager.panels)
+    }
+
+    private var indicatorPanelFingerprint: String {
+        chartViewModel.indicatorManager.activeIndicators.activePanelTypes
+            .map(\.rawValue)
+            .joined(separator: "|")
     }
 
     private var placementTimeframeFingerprint: String {
@@ -257,6 +269,38 @@ struct MainView: View {
         }
     }
 
+    private func maxPanelHeight(for totalPanels: Int) -> CGFloat {
+        if totalPanels >= 3 {
+            return 140
+        }
+        return totalPanels >= 2 ? IndicatorManager.maxPanelHeightWith2Panels : IndicatorManager.maxPanelHeight
+    }
+
+    private func clampIndicatorPanelHeights(totalPanels: Int) {
+        let clampedMaxHeight = maxPanelHeight(for: totalPanels)
+
+        func clamped(_ height: CGFloat) -> CGFloat {
+            guard height > 0 else { return height }
+            return min(clampedMaxHeight, max(IndicatorManager.minPanelHeight, height))
+        }
+
+        rsiPanelHeight = clamped(rsiPanelHeight)
+        macdPanelHeight = clamped(macdPanelHeight)
+        stochasticPanelHeight = clamped(stochasticPanelHeight)
+        cciPanelHeight = clamped(cciPanelHeight)
+        williamsRPanelHeight = clamped(williamsRPanelHeight)
+        atrPanelHeight = clamped(atrPanelHeight)
+        volumePanelHeight = clamped(volumePanelHeight)
+    }
+
+    private func clampChartPanelHeightsForCurrentMode() {
+        let totalPanels =
+            timeframePanelManager.activePanelCount
+            + chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count
+        clampIndicatorPanelHeights(totalPanels: totalPanels)
+        timeframePanelManager.clampPanels(for: activeTimeframePanelSource, totalPanels: totalPanels)
+    }
+
     // MARK: - Initialization
     init() {
         let dataManager = ChartDataManager()
@@ -300,7 +344,8 @@ struct MainView: View {
                             mainChartVisibleEnd: mainChartVisibleEndDate,
                             mainChartTimeframeSeconds: chartViewModel.currentTimeframe.seconds,
                             showMarkerLine: chartViewModel.selectedMarkerForSheet != nil || placementState.anchorDraft != nil,
-                            indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count
+                            indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count,
+                            bottomAxisPanelIndex: bottomTimeframeAxisPanelIndex
                         )
 
                         // Indicator panels
@@ -312,6 +357,7 @@ struct MainView: View {
                             candleSpacing: 4,
                             timeframe: chartViewModel.currentTimeframe,
                             timeframePanelCount: timeframePanelManager.activePanelCount,
+                            bottomAxisPanelIndex: bottomIndicatorAxisPanelIndex,
                             rsiPanelHeight: $rsiPanelHeight,
                             macdPanelHeight: $macdPanelHeight,
                             stochasticPanelHeight: $stochasticPanelHeight,
@@ -540,6 +586,9 @@ struct MainView: View {
             }
             .onChange(of: chartViewModel.chartTimeframeLinkManager.linkedTimeframes) { _, _ in
                 syncChartDefaultTimeframePanels()
+            }
+            .onChange(of: indicatorPanelFingerprint) { _, _ in
+                clampChartPanelHeightsForCurrentMode()
             }
             .onChange(of: placementTimeframeFingerprint) { _, _ in
                 guard chartControlVM.isMarkerPlacementMode else { return }
@@ -853,6 +902,7 @@ struct MainView: View {
             gestureState: chartGestureState,
             placementState: placementState,
             rsiPanelHeight: $rsiPanelHeight,
+            activeTimeframeLegendEntries: activeTimeframeLegendEntries,
             indicatorPanelBottomPadding: chartPanelsTotalHeight,
             panelBottomBoundaryLabelReserve: chartPanelsBottomLabelStripReserve
         )
@@ -1130,6 +1180,7 @@ struct MainView: View {
         syncPlacementTimeframePanels(resetPresentationState: resetPlacementSource)
         syncViewingTimeframePanels(resetPresentationState: resetViewingSource)
         timeframePanelManager.setActiveSource(activeTimeframePanelSource)
+        clampChartPanelHeightsForCurrentMode()
     }
 
     private func syncChartDefaultTimeframePanels() {

@@ -3,6 +3,7 @@ import SwiftUI
 @available(*, deprecated, message: "Use the inline placement flow in TradingChartView/MainView.")
 struct MarkerComposerSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var rlAppState: RLAppState
 
     @ObservedObject var markerManager: MarkerManager
     let candleIndex: Int
@@ -314,14 +315,22 @@ struct MarkerComposerSheet: View {
         )
 
         Task {
-            let success = await markerManager.addMarkerV2(
+            let result = await markerManager.addMarkerV2(
                 request: request,
                 candleIndex: candleIndex,
                 candles: candles
             )
 
-            if success {
+            switch result {
+            case .success:
                 dismiss()
+            case .failure(let failure):
+                rlAppState.showError(
+                    title: failure.toastTitle,
+                    message: failure.userMessage,
+                    severity: failure.toastSeverity,
+                    style: .toast
+                )
             }
         }
     }

@@ -77,7 +77,7 @@ struct GhostPreviewLayer: View {
     private func drawLevels(context: GraphicsContext) {
         let lineEndX = ChartAxisMetrics.horizontalLineEndX(
             totalWidth: width,
-            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+            labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
         )
         for draft in placementState.components where draft.componentType.isLevel {
             guard shouldRenderSetupCoreLevelLine(for: draft.componentType) else { continue }
@@ -201,7 +201,7 @@ struct GhostPreviewLayer: View {
         let startX: CGFloat = 0
         let endX = ChartAxisMetrics.horizontalLineEndX(
             totalWidth: width,
-            labelWidth: ChartAxisMetrics.horizontalLabeledChipWidth
+            labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
         )
         var path = Path()
         path.move(to: CGPoint(x: startX, y: y))

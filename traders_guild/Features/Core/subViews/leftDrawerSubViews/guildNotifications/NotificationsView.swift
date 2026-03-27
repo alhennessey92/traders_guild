@@ -234,6 +234,37 @@ struct NotificationCard: View {
     private var notificationColor: Color {
         notification.accentColor    // Uses the computed property on RLNotificationDTO
     }
+
+    private var cardBaseFillOpacity: Double {
+        if showAsUnread {
+            return isPressed ? 0.10 : 0.08
+        }
+        return isPressed ? 0.07 : 0.04
+    }
+
+    private var iconBadgeFillOpacity: Double {
+        showAsUnread ? 0.20 : 0.14
+    }
+
+    private var titleColor: Color {
+        showAsUnread ? AppColors.whiteText : AppColors.whiteText.opacity(0.8)
+    }
+
+    private var bodyColor: Color {
+        showAsUnread ? AppColors.whiteText.opacity(0.72) : AppColors.whiteText.opacity(0.5)
+    }
+
+    private var timeColor: Color {
+        showAsUnread ? AppColors.whiteText.opacity(0.55) : AppColors.whiteText.opacity(0.32)
+    }
+
+    private var semanticBorderColor: Color {
+        showAsUnread ? (notification.semanticBorderColor ?? .clear) : .clear
+    }
+
+    private var showsSemanticBorder: Bool {
+        showAsUnread && notification.semanticBorderColor != nil
+    }
     
     var body: some View {
         Button(action: handleTap) {
@@ -241,12 +272,12 @@ struct NotificationCard: View {
                 // Icon badge
                 ZStack {
                     Circle()
-                        .fill(notificationColor.opacity(0.2))
+                        .fill(notificationColor.opacity(iconBadgeFillOpacity))
                         .frame(width: 36, height: 36)
                     
                     Image(systemName: notificationIcon)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(notificationColor)
+                        .foregroundColor(showAsUnread ? notificationColor : notificationColor.opacity(0.72))
                 }
                 
                 // Content
@@ -254,7 +285,7 @@ struct NotificationCard: View {
                     HStack(alignment: .top) {
                         Text(notification.displayTitle)          // <<< .title -> .displayTitle
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(AppColors.whiteText)
+                            .foregroundColor(titleColor)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
 
@@ -262,12 +293,19 @@ struct NotificationCard: View {
 
                         Text(notification.timeAgoFormatted)
                             .font(.system(size: 10))
-                            .foregroundColor(AppColors.whiteText.opacity(0.4))
+                            .foregroundColor(timeColor)
+
+                        if showAsUnread {
+                            Circle()
+                                .fill(AppColors.accentColor)
+                                .frame(width: 8, height: 8)
+                                .padding(.top, 4)
+                        }
                     }
 
                     Text(notification.displayBody)               // <<< .content -> .displayBody
                         .font(.system(size: 12))
-                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        .foregroundColor(bodyColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
@@ -326,12 +364,19 @@ struct NotificationCard: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.04))
+                    .fill(AppColors.systemWhite.opacity(cardBaseFillOpacity))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .strokeBorder(
-                                showAsUnread ? AppColors.accentColor.opacity(0.4) : Color.clear,
-                                lineWidth: 1
+                                semanticBorderColor,
+                                lineWidth: showsSemanticBorder ? 1 : 0
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(
+                                (showAsUnread && !showsSemanticBorder) ? AppColors.accentColor.opacity(0.4) : Color.clear,
+                                lineWidth: (showAsUnread && !showsSemanticBorder) ? 1 : 0
                             )
                     )
             )
@@ -375,10 +420,9 @@ struct NotificationCard: View {
             )
         }
         
-        // Navigate using the new destination
-        if let destination = notification.navigationDestination {
+        if notification.isActionable {
             Task {
-                await notificationNavigationManager.navigate(to: destination)
+                await notificationNavigationManager.navigate(to: notification)
             }
         }
     }
@@ -647,5 +691,3 @@ struct NavigationLoadingOverlay: View {
         }
     }
 }
-
-

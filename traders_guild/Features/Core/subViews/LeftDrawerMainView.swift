@@ -30,6 +30,11 @@ enum DrawerNavigationState: Equatable {
     case adminPanel
 }
 
+enum DrawerMenuBadge: Equatable {
+    case unreadDot
+    case count(Int)
+}
+
 /// Identifies which bottom sheet content to present from the left drawer.
 /// Conforms to `Identifiable` for `.sheet(item:)` and `Equatable` to support `.onChange`.
 /// Each case carries the minimal data needed to render its detail view.
@@ -392,14 +397,14 @@ struct MainDrawerView: View {
     
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
-    var menuItems: [(icon: String, title: String, state: DrawerNavigationState, badgeCount: Int?)] {
-        var items: [(icon: String, title: String, state: DrawerNavigationState, badgeCount: Int?)] = [
-            ("megaphone.fill", "Announcements", .announcements, nil),
-            ("bell.fill", "Notifications", .notifications, leftDrawerViewModel.notificationStats?.unreadCount),
+    var menuItems: [(icon: String, title: String, state: DrawerNavigationState, badge: DrawerMenuBadge?)] {
+        var items: [(icon: String, title: String, state: DrawerNavigationState, badge: DrawerMenuBadge?)] = [
+            ("megaphone.fill", "Announcements", .announcements, leftDrawerViewModel.hasUnreadAnnouncements ? .unreadDot : nil),
+            ("bell.fill", "Notifications", .notifications, leftDrawerViewModel.hasUnreadNotifications ? .unreadDot : nil),
             ("target", "Markers", .topMarkers, nil),
             ("trophy.fill", "Leaderboard", .leaderboard, nil),
             ("star.fill", "Watchlists", .guildWatchlist, nil),
-            ("calendar.badge.clock", "Events", .events, nil),
+            ("calendar.badge.clock", "Events", .events, leftDrawerViewModel.hasUnreadEvents ? .unreadDot : nil),
             ("person.2.fill", "User List", .userList, nil),
             ("chart.bar.fill", "Statistics", .statistics, nil)
         ]
@@ -550,7 +555,7 @@ struct MainDrawerView: View {
                         DrawerMenuButton(
                             icon: item.icon,
                             title: item.title,
-                            badgeCount: item.badgeCount,
+                            badge: item.badge,
                             action: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     navigationState = item.state
@@ -790,7 +795,7 @@ struct SectionDrawerView: View {
 struct DrawerMenuButton: View {
     let icon: String
     let title: String
-    let badgeCount: Int?
+    let badge: DrawerMenuBadge?
     let action: () -> Void
     
     var body: some View {
@@ -808,14 +813,23 @@ struct DrawerMenuButton: View {
                     .foregroundColor(AppColors.whiteText)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                if let badgeCount, badgeCount > 0 {
-                    Text("\(badgeCount)")
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(AppColors.accentColor)
-                        .clipShape(Capsule())
+                if let badge {
+                    switch badge {
+                    case .unreadDot:
+                        Circle()
+                            .fill(AppColors.accentColor)
+                            .frame(width: 10, height: 10)
+                    case .count(let count) where count > 0:
+                        Text("\(count)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(AppColors.accentColor)
+                            .clipShape(Capsule())
+                    default:
+                        EmptyView()
+                    }
                 }
                 
 //                Image(systemName: "chevron.right")

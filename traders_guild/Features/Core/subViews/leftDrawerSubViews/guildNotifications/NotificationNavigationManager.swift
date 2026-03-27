@@ -79,14 +79,19 @@ class NotificationNavigationManager: ObservableObject {
     
     /// Main entry point: Handle navigation for a notification
     func navigate(to notification: RLNotificationDTO) async {
-        if notification.destination?.type == .symbolChart,
-           let payload = notification.markerSharePayload {
-            dismissOverlays?()
-            NotificationCenter.default.post(
-                name: .openSharedMarker,
-                object: nil,
-                userInfo: payload.notificationUserInfo
-            )
+        if notification.destination?.type == .symbolChart {
+            if let payload = notification.markerNavigationPayload {
+                dismissOverlays?()
+                NotificationCenter.default.post(
+                    name: .openSharedMarker,
+                    object: nil,
+                    userInfo: payload.notificationUserInfo
+                )
+                return
+            }
+
+            print("⚠️ Marker notification '\(notification.displayTitle)' is missing chart context")
+            rlAppState?.showInfo("This chart notification is missing marker context")
             return
         }
 
@@ -180,5 +185,4 @@ class NotificationNavigationManager: ObservableObject {
     }
     
 }
-
 

@@ -169,6 +169,14 @@ final class TimeframePanelManager: ObservableObject {
         panelsBySource[source] = []
     }
 
+    func clampPanels(for source: TimeframePanelSource, totalPanels: Int) {
+        let maxHeight = maxHeight(forTotalStackCount: totalPanels)
+        let sourcePanels = panels(for: source)
+        sourcePanels.forEach {
+            $0.clampPresentation(maxHeight: maxHeight)
+        }
+    }
+
     func replacePanels(
         for source: TimeframePanelSource,
         backendValues: [String],
@@ -227,6 +235,13 @@ final class TimeframePanelManager: ObservableObject {
 
     private func maxHeight(forPanelCount panelCount: Int) -> CGFloat {
         panelCount > 1 ? Self.maxPanelHeightWith2 : Self.maxPanelHeight
+    }
+
+    private func maxHeight(forTotalStackCount totalPanels: Int) -> CGFloat {
+        if totalPanels >= 3 {
+            return 140
+        }
+        return totalPanels >= 2 ? Self.maxPanelHeightWith2 : Self.maxPanelHeight
     }
 
     private func normalizedRequestedTimeframes(from backendValues: [String]) -> [RLChartTimeframe] {
