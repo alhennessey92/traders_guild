@@ -293,7 +293,7 @@ struct RLRightDrawerMainView: View {
                         .fill(.ultraThinMaterial)
                         .ignoresSafeArea()
                     AppColors.drawerBackground
-                        .opacity(ThemeManager.shared.currentTheme == .midGrey ? 0.92 : 0.6)
+                        .opacity(ThemeManager.shared.currentTheme == .dark ? 0.6 : 0.92)
                 }
             )
             .overlay(

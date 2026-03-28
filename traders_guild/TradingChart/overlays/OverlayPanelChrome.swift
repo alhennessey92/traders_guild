@@ -10,15 +10,15 @@ enum OverlayPanelChrome {
                 .fill(.ultraThinMaterial)
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(
-                    ThemeManager.shared.currentTheme == .midGrey
-                        ? AppColors.panelHeaderBackground
-                        : AppColors.surfaceBlack50.opacity(0.96)
+                    ThemeManager.shared.currentTheme == .dark
+                        ? AppColors.surfaceBlack50.opacity(0.96)
+                        : AppColors.panelHeaderBackground
                 )
         }
         .overlay {
             if showsBorder {
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(AppColors.surfaceWhite18, lineWidth: 1)
+                    .stroke(AppColors.adaptiveOverlay18, lineWidth: 1)
             }
         }
     }
@@ -26,14 +26,14 @@ enum OverlayPanelChrome {
     static func sideHandle(icon: String) -> some View {
         Image(systemName: icon)
             .font(.system(size: 11, weight: .bold))
-            .foregroundColor(AppColors.surfaceWhite94)
+            .foregroundColor(AppColors.adaptiveOverlay94)
             .frame(width: 18, height: 64)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(AppColors.surfaceWhite12)
+                    .fill(AppColors.adaptiveOverlay10)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(AppColors.surfaceWhite20, lineWidth: 1)
+                            .stroke(AppColors.adaptiveOverlay20, lineWidth: 1)
                     )
             )
     }

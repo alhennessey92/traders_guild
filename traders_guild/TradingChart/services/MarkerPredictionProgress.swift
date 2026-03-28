@@ -177,6 +177,12 @@ struct LiveSetupMetrics {
     let isLong: Bool
     let isMovingTowardTarget: Bool
 
+    /// Normalized SL position within [0, 1] range.
+    var stopLossPosition: Double { isLong ? 0.0 : 1.0 }
+
+    /// Normalized TP position within [0, 1] range.
+    var targetPosition: Double { isLong ? 1.0 : 0.0 }
+
     /// Compute metrics from setup prices and current market price.
     /// Returns nil if prices are invalid or the setup direction can't be determined.
     static func compute(
@@ -216,66 +222,30 @@ struct LiveSetupMetrics {
             isMovingTowardTarget: isMovingTowardTarget
         )
     }
-}
 
-enum SetupSwingStripTint: Equatable {
-    case neutral
-    case target
-    case stop
-}
-
-struct SetupSwingStripMetrics: Equatable {
-    let entryPrice: Double
-    let stopLossPrice: Double
-    let targetPrice: Double
-    let stopLossPosition: Double
-    let entryPosition: Double
-    let targetPosition: Double
-    let currentPosition: Double?
-    let isLong: Bool
-    let tint: SetupSwingStripTint
-
+    /// Compute metrics from setup prices with an optional current price.
+    /// Returns nil if prices are invalid or the setup direction can't be determined.
+    /// When currentPrice is nil, returns metrics with current clamped to entry.
     static func compute(
         entryPrice: Double,
         stopLossPrice: Double,
         targetPrice: Double,
         currentPrice: Double?
-    ) -> SetupSwingStripMetrics? {
-        guard entryPrice > 0 else { return nil }
-
-        let isLong = targetPrice > entryPrice && stopLossPrice < entryPrice
-        let isShort = targetPrice < entryPrice && stopLossPrice > entryPrice
-        guard isLong || isShort else { return nil }
-
-        let rangeLow = min(stopLossPrice, targetPrice)
-        let rangeHigh = max(stopLossPrice, targetPrice)
-        guard rangeHigh > rangeLow else { return nil }
-
-        let normalize: (Double) -> Double = { value in
-            (value - rangeLow) / (rangeHigh - rangeLow)
+    ) -> LiveSetupMetrics? {
+        guard let currentPrice else {
+            return compute(
+                entryPrice: entryPrice,
+                stopLossPrice: stopLossPrice,
+                targetPrice: targetPrice,
+                currentPrice: entryPrice
+            )
         }
-
-        let normalizedCurrent = currentPrice.map { price in
-            let clamped = min(max(price, rangeLow), rangeHigh)
-            return normalize(clamped)
-        }
-
-        let tint: SetupSwingStripTint = {
-            guard let currentPrice else { return .neutral }
-            let isTowardTarget = isLong ? currentPrice >= entryPrice : currentPrice <= entryPrice
-            return isTowardTarget ? .target : .stop
-        }()
-
-        return SetupSwingStripMetrics(
+        return compute(
             entryPrice: entryPrice,
             stopLossPrice: stopLossPrice,
             targetPrice: targetPrice,
-            stopLossPosition: normalize(stopLossPrice),
-            entryPosition: normalize(entryPrice),
-            targetPosition: normalize(targetPrice),
-            currentPosition: normalizedCurrent,
-            isLong: isLong,
-            tint: tint
+            currentPrice: currentPrice
         )
     }
 }
+

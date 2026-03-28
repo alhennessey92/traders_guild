@@ -56,11 +56,18 @@ struct AnnouncementsListView: View {
 struct AnnouncementRowView: View {
     let announcement: RLGuildAnnouncementWithAuthorDTO
     let onTap: () -> Void
-    
+
+    private var styling: NotificationStyling {
+        NotificationStyling(isRead: announcement.isRead)
+    }
+
     var body: some View {
         UnifiedContentCard(
             onTap: onTap,
-            showUnreadBorder: !announcement.isRead,
+            showUnreadDot: !announcement.isRead,
+            isUnread: !announcement.isRead,
+            semanticBorderColor: announcement.isImportant && !announcement.isRead
+                ? Color.orange.opacity(0.4) : nil,
             cornerRadius: 14
         ) {
             VStack(spacing: 0) {
@@ -69,36 +76,37 @@ struct AnnouncementRowView: View {
                     // Icon
                     UnifiedIconBadge(
                         icon: announcement.isImportant ? "megaphone.fill" : "megaphone",
-                        color: announcement.isImportant ? AppColors.whiteText : AppColors.whiteText.opacity(0.8),
+                        color: (announcement.isImportant ? AppColors.whiteText : AppColors.whiteText.opacity(0.8))
+                            .opacity(styling.iconOpacity),
                         size: 36,
                         iconSize: 16,
-                        backgroundOpacity: 0.15
+                        backgroundOpacity: styling.iconBadgeOpacity
                     )
-                    
+
                     VStack(alignment: .leading, spacing: 6) {
                         // Title
                         Text(announcement.title)
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText)
+                            .foregroundColor(styling.titleColor)
                             .multilineTextAlignment(.leading)
                             .lineLimit(2)
-                        
+
                         // Importance badge
                         if announcement.isImportant {
                             UnifiedImportanceBadge(text: "IMPORTANT ANNOUNCEMENT")
                         }
-                        
+
                         // Preview text
                         Text(announcement.preview)
                             .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
+                            .foregroundColor(styling.bodyColor)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                     }
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundColor(AppColors.whiteText.opacity(0.3))
@@ -106,8 +114,8 @@ struct AnnouncementRowView: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
                 .padding(.bottom, 12)
-                
-                // MARK: - Author Footer Bar (uses view model's fallback properties)
+
+                // MARK: - Author Footer Bar
                 UnifiedAuthorFooter(
                     username: announcement.authorUsername,
                     role: announcement.authorRole,

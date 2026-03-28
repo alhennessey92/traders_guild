@@ -522,92 +522,214 @@ struct MarkersTabContent: View {
 struct ProfileMarkerCard: View {
     let marker: RLTopMarkerDTO
     let onTap: () -> Void
-    
-    @State private var isPressed = false
-    
+
+    private var shortTypeName: String {
+        switch marker.intentEnum {
+        case .analysis: return "Analysis"
+        case .setup: return "Setup"
+        case .alert: return "Alert"
+        case .question: return "Question"
+        case .poll: return "Poll"
+        case .news: return "News"
+        case .reaction: return "React"
+        case .personal: return "Private"
+        }
+    }
+
+    private var trackingState: RLTrackingState? {
+        guard let rawState = marker.setupSummary?.trackingState else { return nil }
+        return RLTrackingState(rawValue: rawState)
+    }
+
+    private var hasSpecificsContent: Bool {
+        switch marker.intentEnum {
+        case .question, .alert, .poll, .news:
+            return true
+        case .analysis:
+            return marker.notePreview != nil && !(marker.notePreview?.isEmpty ?? true)
+        default:
+            return false
+        }
+    }
+
     var body: some View {
-        Button(action: {
+        UnifiedContentCard(onTap: {
             HapticFeedback.light.trigger()
             onTap()
         }) {
-            HStack(alignment: .top, spacing: 10) {
-                // Marker type icon
-                VStack(spacing: 4) {
-                    UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .medium)
-                    
-                    Text(marker.intentEnum.displayName)
-                        .font(.system(size: 8, weight: .medium))
-                        .foregroundColor(marker.intentEnum.color)
-                        .lineLimit(1)
-                }
-                .frame(width: 44)
-                
-                // Content
-                VStack(alignment: .leading, spacing: 6) {
-                    // Symbol and time
-                    HStack {
-                        Text(marker.symbolTicker)
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.whiteText)
-                        
-                        Spacer()
-                        
-                        Text(marker.createdAtFormatted)
-                            .font(.caption2)
-                            .foregroundColor(AppColors.greyText)
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(spacing: 1) {
+                        UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .small)
+                        Text(shortTypeName)
+                            .font(.system(size: 7, weight: .medium))
+                            .foregroundColor(marker.intentEnum.color.opacity(0.9))
+                            .lineLimit(1)
                     }
-                    
-                    // Note preview
+                    .frame(width: 34)
+                    .padding(.top, 4)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Row 1: Symbol + Timeframe + Like
+                        HStack(spacing: 4) {
+                            if let brandColor = marker.symbolBrandColor {
+                                Circle()
+                                    .fill(Color(hex: brandColor) ?? .blue)
+                                    .frame(width: 6, height: 6)
+                            }
+                            Text(marker.symbolTicker)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(AppColors.whiteText)
+
+                            MarkerActivityMetaChip(
+                                icon: "clock",
+                                text: marker.timeframe.uppercased(),
+                                tint: AppColors.whiteText.opacity(0.85),
+                                background: AppColors.whiteText.opacity(0.10)
+                            )
+
+                            if marker.isCurrentUserMarker {
+                                Text("YOU")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(AppColors.statusInfo60))
+                            }
+
+                            Spacer()
+
+                            HStack(spacing: 2) {
+                                Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
+                                    .font(.system(size: 10))
+                                Text("\(marker.likeCount)")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(
+                                marker.isLikedByCurrentUser
+                                    ? AppColors.markerHeartTint
+                                    : AppColors.markerHeartMuted
+                            )
+                        }
+
+                        // Row 2: Tracking pills
+                        if let trackingState {
+                            HStack(spacing: 6) {
+                                if trackingState.isLive {
+                                    Text("LIVE")
+                                        .font(.system(size: 8, weight: .heavy))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Capsule().fill(AppColors.statusPositive70))
+                                }
+
+                                TrackingStatePill(state: trackingState, size: .compact)
+
+                                Spacer()
+                            }
+                            .padding(.top, 2)
+                        }
+
+                        // Row 3: Note preview (only for types without specifics)
+                        if !hasSpecificsContent,
+                           let note = marker.notePreview, !note.isEmpty {
+                            Text(note)
+                                .font(.system(size: 12))
+                                .foregroundColor(AppColors.whiteText.opacity(0.75))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .padding(.top, 2)
+                        }
+
+                        // Row 4: Marker specifics
+                        profileMarkerSpecifics
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+
+                UnifiedAuthorFooter(
+                    username: marker.authorUsername,
+                    isOnline: marker.authorIsOnline,
+                    role: RLMemberRole(from: marker.authorRole),
+                    reputation: marker.authorReputation,
+                    accuracy: marker.authorAccuracyFormatted,
+                    timeText: marker.createdAtFormatted,
+                    showOnlineStatus: false
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var profileMarkerSpecifics: some View {
+        if hasSpecificsContent {
+            MarkerListSpecificsSection {
+                switch marker.intentEnum {
+                case .question:
+                    MarkerListSpecificsLabel(label: "QUESTION", color: marker.intentEnum.color)
                     if let note = marker.notePreview, !note.isEmpty {
                         Text(note)
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite92)
                             .lineLimit(2)
                     }
-                    
-                    // Stats row
-                    HStack(spacing: 12) {
-                        HStack(spacing: 4) {
-                            Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
-                                .font(.caption2)
-                                .foregroundColor(marker.isLikedByCurrentUser ? AppColors.markerHeartTint : AppColors.markerHeartMuted)
-                            Text("\(marker.likeCount)")
-                                .font(.caption2)
-                                .foregroundColor(marker.isLikedByCurrentUser ? AppColors.markerHeartTint : AppColors.greyText)
-                        }
-                        
-                        HStack(spacing: 4) {
-                            Image(systemName: "bubble.right")
-                                .font(.caption2)
-                                .foregroundColor(AppColors.greyText)
-                            Text("\(marker.commentCount)")
-                                .font(.caption2)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        
-                        Spacer()
+
+                case .alert:
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Alert")
+                            .font(.system(size: 9.5, weight: .bold))
                     }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(marker.intentEnum.color.opacity(0.40))
+                            .overlay(Capsule().stroke(marker.intentEnum.color.opacity(0.60), lineWidth: 1))
+                    )
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite85)
+                            .lineLimit(2)
+                    }
+
+                case .poll:
+                    MarkerListSpecificsLabel(label: "POLL", color: marker.intentEnum.color)
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite85)
+                            .lineLimit(2)
+                    }
+
+                case .news:
+                    MarkerListSpecificsLabel(label: "NEWS", color: marker.intentEnum.color)
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite85)
+                            .lineLimit(1)
+                    }
+
+                case .analysis:
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite85)
+                            .lineLimit(2)
+                    }
+
+                default:
+                    EmptyView()
                 }
             }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.04))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppColors.surfaceWhite08, lineWidth: 1)
-                    )
-            )
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isPressed)
-        .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isPressed = pressing
-            }
-        }, perform: {})
     }
 }
 

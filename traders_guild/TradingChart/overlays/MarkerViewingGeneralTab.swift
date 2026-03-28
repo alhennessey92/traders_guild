@@ -43,10 +43,10 @@ struct MarkerViewingGeneralTab: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
                 heroPanel
-                requirementsSection
-                generalSection
-                symbolInfoSection
-                authorSection
+                markerSpecificsBox
+                generalDisclosure
+                symbolInfoDisclosure
+                authorDisclosure
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
@@ -105,19 +105,18 @@ struct MarkerViewingGeneralTab: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private var requirementsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(
-                title: "Requirements",
-                subtitle: "Intent-specific details",
-                icon: "list.bullet.clipboard",
-                tint: liveMarker.intent.color
+    private var markerSpecificsBox: some View {
+        requirementsContent
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppColors.whiteText.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppColors.whiteText.opacity(0.10), lineWidth: 1)
+                    )
             )
-            requirementsContent
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(sectionCardBackground())
     }
 
     @ViewBuilder
@@ -286,42 +285,42 @@ struct MarkerViewingGeneralTab: View {
         }
     }
 
-    private var generalSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(
+    private var generalDisclosure: some View {
+        UnifiedDisclosureGroupCustomHeader(isExpandedByDefault: false) { isExpanded in
+            disclosureHeader(
                 title: "General",
-                subtitle: "Description and metadata",
                 icon: "square.grid.2x2.fill",
-                tint: AppColors.whiteText.opacity(0.85)
+                isExpanded: isExpanded
             )
+        } content: {
+            VStack(alignment: .leading, spacing: 10) {
+                if let title = liveMarker.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                    readOnlyMetaRow(title: "Title", value: title)
+                }
 
-            if let title = liveMarker.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
-                readOnlyMetaRow(title: "Title", value: title)
+                readOnlyMetaRow(
+                    title: "Description",
+                    value: generalDescriptionText.isEmpty ? "No description" : generalDescriptionText
+                )
+
+                HStack(spacing: 8) {
+                    Text("Visibility")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+
+                    Text(visibilityLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(visibilityColor.opacity(0.38)))
+                }
+
+                statsRow
             }
-
-            readOnlyMetaRow(
-                title: "Description",
-                value: generalDescriptionText.isEmpty ? "No description" : generalDescriptionText
-            )
-
-            HStack(spacing: 8) {
-                Text("Visibility")
-                    .font(.caption)
-                    .foregroundColor(AppColors.greyText)
-
-                Text(visibilityLabel)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(visibilityColor.opacity(0.38)))
-            }
-
-            statsRow
+            .padding(12)
+            .background(disclosureContentBackground())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(sectionCardBackground())
     }
 
     private var statsRow: some View {
@@ -453,8 +452,9 @@ struct MarkerViewingGeneralTab: View {
                targetPrice: tpPrice,
                currentPrice: currentPrice
            ) {
-            DetailSetupProgressStrip(
+            UnifiedSetupProgressStrip(
                 metrics: metrics,
+                size: .detail,
                 formatPrice: { formattedPrice($0) }
             )
         }
@@ -752,57 +752,142 @@ struct MarkerViewingGeneralTab: View {
         )
     }
 
-    private var symbolInfoSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(
-                title: "Symbol Info",
-                subtitle: "Placement context",
-                icon: "chart.xyaxis.line",
-                tint: AppColors.whiteText.opacity(0.85)
+    private func disclosureHeader(
+        title: String,
+        icon: String,
+        isExpanded: Bool
+    ) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppColors.surfaceWhite74)
+                .frame(width: 18)
+
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(AppColors.surfaceWhite50)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(
+            LinearGradient(
+                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+                startPoint: .leading,
+                endPoint: .trailing
             )
+        )
+        .clipShape(Capsule())
+    }
 
-            // Symbol hero card with avatar
-            if let symbol = symbolDTO {
-                HStack(spacing: 12) {
-                    TradingSymbolIconView(symbol: symbol, size: 40, cornerRadiusRatio: 0.22)
+    private var symbolInfoDisclosure: some View {
+        UnifiedDisclosureGroupCustomHeader(isExpandedByDefault: false) { isExpanded in
+            disclosureHeader(
+                title: "Symbol Info",
+                icon: "chart.xyaxis.line",
+                isExpanded: isExpanded
+            )
+        } content: {
+            VStack(alignment: .leading, spacing: 10) {
+                // Symbol hero card with avatar
+                if let symbol = symbolDTO {
+                    HStack(spacing: 12) {
+                        TradingSymbolIconView(symbol: symbol, size: 40, cornerRadiusRatio: 0.22)
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(symbol.ticker)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.white)
-                        HStack(spacing: 6) {
-                            Text(symbol.displayName)
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                                .lineLimit(1)
-                            Text(symbol.assetClass.uppercased())
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(AppColors.whiteText.opacity(0.7))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-
-                    // Live price + 24h change
-                    if let priceStr = symbol.priceFormatted {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(priceStr)
-                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(symbol.ticker)
+                                .font(.subheadline.weight(.bold))
                                 .foregroundColor(.white)
-                            if let changeStr = symbol.changeFormatted {
-                                let isUp = symbol.isUp ?? false
-                                Text(changeStr)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(isUp ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                            HStack(spacing: 6) {
+                                Text(symbol.displayName)
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                                    .lineLimit(1)
+                                Text(symbol.assetClass.uppercased())
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+
+                        // Live price + 24h change
+                        if let priceStr = symbol.priceFormatted {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(priceStr)
+                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(.white)
+                                if let changeStr = symbol.changeFormatted {
+                                    let isUp = symbol.isUp ?? false
+                                    Text(changeStr)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(isUp ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(AppColors.whiteText.opacity(0.07))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                            )
+                    )
+                }
+
+                // Placement metadata chips
+                HStack(spacing: 8) {
+                    metaChip(label: liveMarker.timeframe.uppercased(), icon: "clock")
+                    metaChip(
+                        label: Self.priceFormatter.string(from: NSNumber(value: liveMarker.price)) ?? "\(liveMarker.price)",
+                        icon: "tag"
+                    )
+                    if let confidence = liveMarker.confidence {
+                        metaChip(label: "\(confidence)%", icon: "gauge.with.needle")
+                    }
+                }
+
+                // Placement time details
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text("Placed")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer(minLength: 0)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(Self.fullDateFormatter.string(from: liveMarker.createdAt))
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.white)
+                            Text(liveMarker.createdAtFormatted)
+                                .font(.caption2)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        Text("Candle Time")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer(minLength: 0)
+                        Text(Self.fullDateFormatter.string(from: liveMarker.candleTimestamp))
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white)
+                    }
                 }
                 .padding(.horizontal, 10)
-                .padding(.vertical, 10)
+                .padding(.vertical, 9)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
                         .fill(AppColors.whiteText.opacity(0.07))
@@ -812,60 +897,9 @@ struct MarkerViewingGeneralTab: View {
                         )
                 )
             }
-
-            // Placement metadata chips
-            HStack(spacing: 8) {
-                metaChip(label: liveMarker.timeframe.uppercased(), icon: "clock")
-                metaChip(
-                    label: Self.priceFormatter.string(from: NSNumber(value: liveMarker.price)) ?? "\(liveMarker.price)",
-                    icon: "tag"
-                )
-                if let confidence = liveMarker.confidence {
-                    metaChip(label: "\(confidence)%", icon: "gauge.with.needle")
-                }
-            }
-
-            // Placement time details
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text("Placed")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                    Spacer(minLength: 0)
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(Self.fullDateFormatter.string(from: liveMarker.createdAt))
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
-                        Text(liveMarker.createdAtFormatted)
-                            .font(.caption2)
-                            .foregroundColor(AppColors.greyText)
-                    }
-                }
-
-                HStack(spacing: 8) {
-                    Text("Candle Time")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                    Spacer(minLength: 0)
-                    Text(Self.fullDateFormatter.string(from: liveMarker.candleTimestamp))
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.whiteText.opacity(0.07))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                    )
-            )
+            .padding(12)
+            .background(disclosureContentBackground())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(sectionCardBackground())
     }
 
     private func metaChip(label: String, icon: String) -> some View {
@@ -889,15 +923,14 @@ struct MarkerViewingGeneralTab: View {
         )
     }
 
-    private var authorSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(
+    private var authorDisclosure: some View {
+        UnifiedDisclosureGroupCustomHeader(isExpandedByDefault: false) { isExpanded in
+            disclosureHeader(
                 title: "Author",
-                subtitle: "Marker creator",
                 icon: "person.circle.fill",
-                tint: AppColors.whiteText.opacity(0.85)
+                isExpanded: isExpanded
             )
-
+        } content: {
             Button {
                 onAuthorTap?()
             } label: {
@@ -944,10 +977,18 @@ struct MarkerViewingGeneralTab: View {
                 )
             }
             .buttonStyle(.plain)
+            .padding(12)
+            .background(disclosureContentBackground())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(sectionCardBackground())
+    }
+
+    private func disclosureContentBackground() -> some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(AppColors.whiteText.opacity(0.04))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(AppColors.whiteText.opacity(0.07), lineWidth: 1)
+            )
     }
 
     private func sectionCardBackground(cornerRadius: CGFloat = 12) -> some View {

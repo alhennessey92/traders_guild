@@ -497,6 +497,7 @@ struct MarkerActivityCard: View {
                     .padding(.top, 4)
 
                     VStack(alignment: .leading, spacing: 4) {
+                        // Row 1: Symbol + Timeframe + YOU + Like
                         HStack(spacing: 4) {
                             if let brandColor = marker.symbolBrandColor {
                                 Circle()
@@ -506,6 +507,13 @@ struct MarkerActivityCard: View {
                             Text(marker.symbolTicker)
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(AppColors.whiteText)
+
+                            MarkerActivityMetaChip(
+                                icon: "clock",
+                                text: marker.timeframe.uppercased(),
+                                tint: AppColors.whiteText.opacity(0.85),
+                                background: AppColors.whiteText.opacity(0.10)
+                            )
 
                             if showMyBadge {
                                 Text("YOU")
@@ -549,22 +557,16 @@ struct MarkerActivityCard: View {
                             }
                         }
 
-                        if let note = marker.notePreview, !note.isEmpty {
-                            Text(note)
-                                .font(.system(size: 12))
-                                .foregroundColor(AppColors.whiteText.opacity(0.75))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .padding(.top, 4)
-                        }
-
+                        // Row 2: LIVE + Tracking + Approaching pills
                         HStack(spacing: 6) {
-                            MarkerActivityMetaChip(
-                                icon: "clock",
-                                text: marker.timeframe.uppercased(),
-                                tint: AppColors.whiteText.opacity(0.85),
-                                background: AppColors.whiteText.opacity(0.10)
-                            )
+                            if let trackingState, trackingState.isLive {
+                                Text("LIVE")
+                                    .font(.system(size: 8, weight: .heavy))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(AppColors.statusPositive70))
+                            }
 
                             if let trackingState {
                                 TrackingStatePill(state: trackingState, size: .compact)
@@ -578,45 +580,19 @@ struct MarkerActivityCard: View {
                         }
                         .padding(.top, 2)
 
-                        if let outcome {
-                            HStack(spacing: 6) {
-                                if let pnl = outcome.pnl {
-                                    MarkerActivityMetaChip(
-                                        icon: outcome.isWin ? "arrow.up.right" : "arrow.down.right",
-                                        text: formatPnL(pnl),
-                                        tint: outcomeTint(outcome),
-                                        background: outcomeTint(outcome).opacity(0.15)
-                                    )
-                                } else if outcome.isExpired {
-                                    MarkerActivityMetaChip(
-                                        icon: "clock.badge.xmark",
-                                        text: "No score impact",
-                                        tint: AppColors.surfaceGray90,
-                                        background: AppColors.surfaceWhite08
-                                    )
-                                }
-                            }
-                            .padding(.top, 2)
-                        } else if let liveSetupMetrics {
-                            VStack(alignment: .leading, spacing: 8) {
-                                MarkerActivityMetaChip(
-                                    icon: liveSetupMetrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right",
-                                    text: "Live \(formatPnL(liveSetupMetrics.currentPnL))",
-                                    tint: liveSetupMetrics.isMovingTowardTarget
-                                        ? AppColors.statusInfo85
-                                        : AppColors.statusNegative70,
-                                    background: liveSetupMetrics.isMovingTowardTarget
-                                        ? AppColors.statusInfo15
-                                        : AppColors.statusNegative15
-                                )
-
-                                LiveSetupProgressStrip(
-                                    metrics: liveSetupMetrics,
-                                    formatPrice: formatPrice(_:)
-                                )
-                            }
-                            .padding(.top, 2)
+                        // Row 3: Note preview (only for types without a specifics section)
+                        if !markerHasSpecificsContent,
+                           let note = marker.notePreview, !note.isEmpty {
+                            Text(note)
+                                .font(.system(size: 12))
+                                .foregroundColor(AppColors.whiteText.opacity(0.75))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .padding(.top, 2)
                         }
+
+                        // Row 4: Marker specifics section
+                        markerSpecificsContent
                     }
                 }
                 .padding(.horizontal, 8)
@@ -628,10 +604,130 @@ struct MarkerActivityCard: View {
                     isOnline: marker.authorIsOnline,
                     role: RLMemberRole(from: marker.authorRole),
                     reputation: marker.authorReputation,
+                    accuracy: marker.authorAccuracyFormatted,
                     timeText: marker.activityTimestampFormatted,
                     showOnlineStatus: false
                 )
             }
+        }
+    }
+
+    @ViewBuilder
+    private var markerSpecificsContent: some View {
+        if markerHasSpecificsContent {
+            MarkerListSpecificsSection {
+                switch marker.intentEnum {
+                case .setup:
+                    if let outcome {
+                        HStack(spacing: 6) {
+                            if let pnl = outcome.pnl {
+                                MarkerActivityMetaChip(
+                                    icon: outcome.isWin ? "arrow.up.right" : "arrow.down.right",
+                                    text: formatPnL(pnl),
+                                    tint: outcomeTint(outcome),
+                                    background: outcomeTint(outcome).opacity(0.15)
+                                )
+                            } else if outcome.isExpired {
+                                MarkerActivityMetaChip(
+                                    icon: "clock.badge.xmark",
+                                    text: "No score impact",
+                                    tint: AppColors.surfaceGray90,
+                                    background: AppColors.surfaceWhite08
+                                )
+                            }
+                        }
+                    } else if let liveSetupMetrics {
+                        MarkerActivityMetaChip(
+                            icon: liveSetupMetrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right",
+                            text: "Live \(formatPnL(liveSetupMetrics.currentPnL))",
+                            tint: liveSetupMetrics.isMovingTowardTarget
+                                ? RLComponentType.levelTp.color
+                                : RLComponentType.levelSl.color,
+                            background: liveSetupMetrics.isMovingTowardTarget
+                                ? RLComponentType.levelTp.color.opacity(0.15)
+                                : RLComponentType.levelSl.color.opacity(0.15)
+                        )
+                        UnifiedSetupProgressStrip(
+                            metrics: liveSetupMetrics,
+                            size: .standard,
+                            formatPrice: formatPrice(_:)
+                        )
+                    }
+
+                case .question:
+                    MarkerListSpecificsLabel(label: "QUESTION", color: marker.intentEnum.color)
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite92)
+                            .lineLimit(2)
+                    }
+
+                case .alert:
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Alert")
+                            .font(.system(size: 9.5, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(marker.intentEnum.color.opacity(0.40))
+                            .overlay(Capsule().stroke(marker.intentEnum.color.opacity(0.60), lineWidth: 1))
+                    )
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite85)
+                            .lineLimit(2)
+                    }
+
+                case .poll:
+                    MarkerListSpecificsLabel(label: "POLL", color: marker.intentEnum.color)
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite85)
+                            .lineLimit(2)
+                    }
+
+                case .analysis:
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite85)
+                            .lineLimit(2)
+                    }
+
+                case .news:
+                    MarkerListSpecificsLabel(label: "NEWS", color: marker.intentEnum.color)
+                    if let note = marker.notePreview, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.surfaceWhite85)
+                            .lineLimit(1)
+                    }
+
+                default:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    private var markerHasSpecificsContent: Bool {
+        switch marker.intentEnum {
+        case .setup:
+            return outcome != nil || liveSetupMetrics != nil
+        case .question, .alert, .poll, .news:
+            return true
+        case .analysis:
+            return marker.notePreview != nil && !(marker.notePreview?.isEmpty ?? true)
+        default:
+            return false
         }
     }
 
@@ -657,95 +753,8 @@ struct MarkerActivityCard: View {
     }
 }
 
-// LiveSetupMetrics is defined in MarkerPredictionProgress.swift
-
-private struct LiveSetupProgressStrip: View {
-    let metrics: LiveSetupMetrics
-    let formatPrice: (Double) -> String
-
-    private var targetTint: Color { AppColors.statusInfo85 }
-    private var stopTint: Color { AppColors.statusNegative70 }
-    private var swingTint: Color { metrics.isMovingTowardTarget ? targetTint : stopTint }
-
-    private var entryPosition: CGFloat {
-        CGFloat(min(max(metrics.entryPosition, 0), 1))
-    }
-
-    private var currentPosition: CGFloat {
-        CGFloat(min(max(metrics.currentPosition, 0), 1))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            GeometryReader { geometry in
-                let width = geometry.size.width
-                let safeWidth = max(width, 1)
-                let entryX = safeWidth * entryPosition
-                let currentX = safeWidth * currentPosition
-                let swingStart = min(entryX, currentX)
-                let swingWidth = max(abs(currentX - entryX), 2)
-
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(AppColors.surfaceWhite08)
-
-                    HStack(spacing: 0) {
-                        if metrics.isLong {
-                            Rectangle()
-                                .fill(stopTint.opacity(0.35))
-                                .frame(width: entryX)
-                            Rectangle()
-                                .fill(targetTint.opacity(0.35))
-                        } else {
-                            Rectangle()
-                                .fill(targetTint.opacity(0.35))
-                                .frame(width: entryX)
-                            Rectangle()
-                                .fill(stopTint.opacity(0.35))
-                        }
-                    }
-                    .clipShape(Capsule())
-
-                    Capsule()
-                        .fill(swingTint)
-                        .frame(width: swingWidth)
-                        .offset(x: swingStart)
-
-                    Capsule()
-                        .fill(AppColors.surfaceWhite85.opacity(0.65))
-                        .frame(width: 2)
-                        .offset(x: max(min(entryX - 1, safeWidth - 2), 0))
-
-                    Circle()
-                        .fill(swingTint)
-                        .frame(width: 10, height: 10)
-                        .overlay(
-                            Circle()
-                                .stroke(AppColors.systemBlack.opacity(0.55), lineWidth: 2)
-                        )
-                        .offset(x: max(min(currentX - 5, safeWidth - 10), 0), y: -1)
-                }
-            }
-            .frame(height: 8)
-
-            HStack {
-                Text("SL \(formatPrice(metrics.stopLossPrice))")
-                    .foregroundColor(stopTint)
-
-                Spacer()
-
-                Text("ENTRY \(formatPrice(metrics.entryPrice))")
-                    .foregroundColor(AppColors.surfaceWhite70)
-
-                Spacer()
-
-                Text("TP \(formatPrice(metrics.targetPrice))")
-                    .foregroundColor(targetTint)
-            }
-            .font(.system(size: 8, weight: .bold, design: .monospaced))
-        }
-    }
-}
+// LiveSetupMetrics & UnifiedSetupProgressStrip are defined in
+// MarkerPredictionProgress.swift and UnifiedComponents.swift respectively.
 
 struct MarkerActivityMetaChip: View {
     let icon: String

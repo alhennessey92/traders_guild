@@ -846,6 +846,9 @@ struct TradingChartView: View {
                 PatternOverlay(patternType: .honeycomb, hexSize: 16)
                     .opacity(0.015)
                     .ignoresSafeArea()
+            } else if ThemeManager.shared.currentTheme == .lightGrey {
+                AppColors.chartPanelBackgroundMuted
+                    .ignoresSafeArea()
             }
 
             GeometryReader { geometry in
@@ -1166,6 +1169,15 @@ struct TradingChartView: View {
                     colors: [
                         AppColors.surfaceWhite04,
                         AppColors.surfaceWhite0015
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            } else if ThemeManager.shared.currentTheme == .lightGrey {
+                LinearGradient(
+                    colors: [
+                        AppColors.surfaceBlack10.opacity(0.04),
+                        AppColors.surfaceBlack10.opacity(0.015)
                     ],
                     startPoint: .top,
                     endPoint: .bottom

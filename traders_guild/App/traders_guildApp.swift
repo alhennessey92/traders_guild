@@ -119,7 +119,7 @@ struct traders_guildApp: App {
             // Fully authenticated with guild selected
             let _ = print("📱 → Showing MainView")
             MainView()
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(ThemeManager.shared.currentTheme.colorScheme)
                 .id(ThemeManager.shared.currentTheme)
                 
         } else {

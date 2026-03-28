@@ -475,57 +475,55 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
-    func setupSwingStripMetricsLongSetupUsesTargetTintAndExpectedOrdering() {
-        guard let metrics = SetupSwingStripMetrics.compute(
+    func liveSetupMetricsLongSetupUsesExpectedPositionOrdering() {
+        guard let metrics = LiveSetupMetrics.compute(
             entryPrice: 100,
             stopLossPrice: 95,
             targetPrice: 110,
             currentPrice: 104
         ) else {
-            Issue.record("Expected long setup swing-strip metrics")
+            Issue.record("Expected long setup live metrics")
             return
         }
 
         #expect(metrics.isLong)
         #expect(metrics.stopLossPosition < metrics.entryPosition)
         #expect(metrics.entryPosition < metrics.targetPosition)
-        #expect(metrics.currentPosition != nil)
-        #expect(metrics.tint == .target)
+        #expect(metrics.isMovingTowardTarget)
     }
 
     @Test
-    func setupSwingStripMetricsShortSetupUsesStopTintAndExpectedOrdering() {
-        guard let metrics = SetupSwingStripMetrics.compute(
+    func liveSetupMetricsShortSetupUsesExpectedPositionOrdering() {
+        guard let metrics = LiveSetupMetrics.compute(
             entryPrice: 100,
             stopLossPrice: 105,
             targetPrice: 90,
             currentPrice: 103
         ) else {
-            Issue.record("Expected short setup swing-strip metrics")
+            Issue.record("Expected short setup live metrics")
             return
         }
 
         #expect(!metrics.isLong)
         #expect(metrics.targetPosition < metrics.entryPosition)
         #expect(metrics.entryPosition < metrics.stopLossPosition)
-        #expect(metrics.currentPosition != nil)
-        #expect(metrics.tint == .stop)
+        #expect(!metrics.isMovingTowardTarget)
     }
 
     @Test
-    func setupSwingStripMetricsFallbackOmitsCurrentDotWhenLivePriceMissing() {
-        guard let metrics = SetupSwingStripMetrics.compute(
+    func liveSetupMetricsFallbackUsesEntryWhenLivePriceMissing() {
+        guard let metrics = LiveSetupMetrics.compute(
             entryPrice: 100,
             stopLossPrice: 95,
             targetPrice: 110,
-            currentPrice: nil
+            currentPrice: nil as Double?
         ) else {
-            Issue.record("Expected setup swing-strip fallback metrics")
+            Issue.record("Expected setup live metrics with nil current price")
             return
         }
 
-        #expect(metrics.currentPosition == nil)
-        #expect(metrics.tint == .neutral)
+        #expect(metrics.currentPosition == metrics.entryPosition)
+        #expect(!metrics.isMovingTowardTarget)
     }
 
     @Test

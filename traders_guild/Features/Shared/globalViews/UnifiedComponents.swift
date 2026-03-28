@@ -791,25 +791,50 @@ struct UnifiedStaticBackground: View {
 struct UnifiedContentCard<Content: View>: View {
     let onTap: () -> Void
     var showUnreadBorder: Bool = false
+    var showUnreadDot: Bool = false
+    var isUnread: Bool = false
+    var semanticBorderColor: Color? = nil
     var cornerRadius: CGFloat = 12
     @ViewBuilder let content: () -> Content
-    
+
     @State private var isPressed: Bool = false
-    
+
+    private var fillOpacity: Double {
+        if isUnread {
+            return isPressed ? 0.10 : 0.08
+        }
+        return isPressed ? 0.06 : 0.03
+    }
+
+    private var borderColor: Color {
+        if let semantic = semanticBorderColor {
+            return semantic
+        }
+        if showUnreadBorder || isUnread {
+            return AppColors.accentColor.opacity(0.4)
+        }
+        return AppColors.surfaceWhite08
+    }
+
     var body: some View {
         Button(action: onTap) {
             content()
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(AppColors.systemWhite.opacity(isPressed ? 0.06 : 0.03))
+                        .fill(AppColors.systemWhite.opacity(fillOpacity))
                         .overlay(
                             RoundedRectangle(cornerRadius: cornerRadius)
-                                .strokeBorder(
-                                    showUnreadBorder ? AppColors.accentColor.opacity(0.3) : AppColors.surfaceWhite08,
-                                    lineWidth: 1
-                                )
+                                .strokeBorder(borderColor, lineWidth: 1)
                         )
                 )
+                .overlay(alignment: .topTrailing) {
+                    if showUnreadDot {
+                        Circle()
+                            .fill(AppColors.accentColor)
+                            .frame(width: 8, height: 8)
+                            .padding(8)
+                    }
+                }
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.98 : 1.0)
@@ -819,6 +844,69 @@ struct UnifiedContentCard<Content: View>: View {
                 isPressed = pressing
             }
         }, perform: {})
+    }
+}
+
+// MARK: - Notification Styling Helper
+
+/// Shared styling values for read/unread notification states.
+/// Use across NotificationCard, AnnouncementRowView, EventRowView for consistency.
+struct NotificationStyling {
+    let isRead: Bool
+
+    var titleColor: Color {
+        isRead ? AppColors.whiteText.opacity(0.8) : AppColors.whiteText
+    }
+    var bodyColor: Color {
+        isRead ? AppColors.whiteText.opacity(0.5) : AppColors.whiteText.opacity(0.72)
+    }
+    var timeColor: Color {
+        isRead ? AppColors.whiteText.opacity(0.32) : AppColors.whiteText.opacity(0.55)
+    }
+    var iconOpacity: Double {
+        isRead ? 0.72 : 1.0
+    }
+    var iconBadgeOpacity: Double {
+        isRead ? 0.14 : 0.20
+    }
+}
+
+// MARK: - Marker List Specifics Section
+
+/// Dark container for marker-specific detail content in list view cards.
+/// Matches the visual style of the chart info box content area.
+struct MarkerListSpecificsSection<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            content()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.whiteText.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.whiteText.opacity(0.06), lineWidth: 1)
+                )
+        )
+        .padding(.top, 4)
+    }
+}
+
+/// Small uppercase label for marker type within the specifics section.
+struct MarkerListSpecificsLabel: View {
+    let label: String
+    let color: Color
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 8.5, weight: .heavy))
+            .foregroundColor(color)
+            .tracking(0.4)
     }
 }
 
@@ -2113,25 +2201,48 @@ struct ApproachingLevelChip: View {
     }
 }
 
-// MARK: - Detail Setup Progress Strip
+// MARK: - Unified Setup Progress Strip
 
-/// Expanded live setup progress visualization for marker detail views.
-/// Shows a taller progress bar with larger labels, current price indicator,
-/// live PNL, and approaching level status.
-struct DetailSetupProgressStrip: View {
+/// Size variant for the setup progress strip.
+enum SetupStripSize {
+    /// Chart info box: 12px bar, 10px dot, positional captions, card background with tinted border
+    case compact
+    /// List cards (drawer, bottom bar): 8px bar, 10px dot, inline HStack labels
+    case standard
+    /// Detail view: 12px bar, 14px dot, PNL header with R:R badge, VStack labels, card background
+    case detail
+}
+
+/// Unified live setup progress visualization used across all marker views.
+/// Replaces LiveSetupProgressStrip, CompactSetupSwingStripCard, and DetailSetupProgressStrip.
+struct UnifiedSetupProgressStrip: View {
     let metrics: LiveSetupMetrics
-    let formatPrice: (Double) -> String
+    let size: SetupStripSize
+    var formatPrice: ((Double) -> String)? = nil
 
-    private var targetTint: Color { AppColors.statusInfo85 }
-    private var stopTint: Color { AppColors.statusNegative70 }
+    private var targetTint: Color { RLComponentType.levelTp.color }
+    private var stopTint: Color { RLComponentType.levelSl.color }
+    private var entryTint: Color { RLComponentType.levelEntry.color }
     private var swingTint: Color { metrics.isMovingTowardTarget ? targetTint : stopTint }
 
-    private var entryPosition: CGFloat {
+    private var entryPos: CGFloat {
         CGFloat(min(max(metrics.entryPosition, 0), 1))
     }
 
-    private var currentPosition: CGFloat {
+    private var currentPos: CGFloat {
         CGFloat(min(max(metrics.currentPosition, 0), 1))
+    }
+
+    private var dotSize: CGFloat {
+        size == .detail ? 14 : 10
+    }
+
+    private var barHeight: CGFloat {
+        size == .standard ? 8 : 12
+    }
+
+    private var dotStrokeWidth: CGFloat {
+        size == .detail ? 2 : 1.5
     }
 
     private var riskRewardRatio: String? {
@@ -2141,148 +2252,255 @@ struct DetailSetupProgressStrip: View {
         return String(format: "%.1f", reward / risk)
     }
 
+    private func priceText(_ price: Double) -> String {
+        formatPrice?(price) ?? String(format: "%.5f", price)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Header: Live PNL + R:R badge
-            HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    Image(systemName: metrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right")
-                        .font(.system(size: 10, weight: .bold))
-                    Text(String(format: "%@%.2f%%", metrics.currentPnL >= 0 ? "+" : "", metrics.currentPnL))
-                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                }
-                .foregroundColor(swingTint)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(swingTint.opacity(0.15))
-                        .overlay(
-                            Capsule()
-                                .stroke(swingTint.opacity(0.3), lineWidth: 1)
-                        )
-                )
-
-                if let rr = riskRewardRatio {
-                    Text("R:R \(rr)")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(AppColors.surfaceWhite70)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(AppColors.surfaceWhite08)
-                                .overlay(
-                                    Capsule()
-                                        .stroke(AppColors.surfaceWhite15, lineWidth: 1)
-                                )
-                        )
-                }
-
-                Spacer()
-
-                Text(formatPrice(metrics.currentPrice))
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(swingTint)
+        VStack(alignment: .leading, spacing: size == .detail ? 10 : size == .compact ? 7 : 5) {
+            if size == .detail {
+                detailHeader
             }
 
-            // Progress bar
-            GeometryReader { geometry in
-                let width = geometry.size.width
-                let safeWidth = max(width, 1)
-                let entryX = safeWidth * entryPosition
-                let currentX = safeWidth * currentPosition
-                let swingStart = min(entryX, currentX)
-                let swingWidth = max(abs(currentX - entryX), 2)
+            progressBar
 
-                ZStack(alignment: .leading) {
-                    // Background track
-                    Capsule()
-                        .fill(AppColors.surfaceWhite08)
-
-                    // SL/TP colored zones
-                    HStack(spacing: 0) {
-                        if metrics.isLong {
-                            Rectangle()
-                                .fill(stopTint.opacity(0.30))
-                                .frame(width: entryX)
-                            Rectangle()
-                                .fill(targetTint.opacity(0.30))
-                        } else {
-                            Rectangle()
-                                .fill(targetTint.opacity(0.30))
-                                .frame(width: entryX)
-                            Rectangle()
-                                .fill(stopTint.opacity(0.30))
-                        }
-                    }
-                    .clipShape(Capsule())
-
-                    // Swing indicator
-                    Capsule()
-                        .fill(swingTint)
-                        .frame(width: swingWidth)
-                        .offset(x: swingStart)
-
-                    // Entry marker line
-                    Capsule()
-                        .fill(AppColors.surfaceWhite85.opacity(0.65))
-                        .frame(width: 2)
-                        .offset(x: max(min(entryX - 1, safeWidth - 2), 0))
-
-                    // Current price dot
-                    Circle()
-                        .fill(swingTint)
-                        .frame(width: 14, height: 14)
-                        .overlay(
-                            Circle()
-                                .stroke(AppColors.systemBlack.opacity(0.55), lineWidth: 2)
-                        )
-                        .offset(x: max(min(currentX - 7, safeWidth - 14), 0), y: -1)
-                }
+            switch size {
+            case .compact:
+                compactLabels
+            case .standard:
+                standardLabels
+            case .detail:
+                detailLabels
             }
-            .frame(height: 12)
-
-            // Price labels
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("SL")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(stopTint.opacity(0.7))
-                    Text(formatPrice(metrics.stopLossPrice))
-                        .foregroundColor(stopTint)
-                }
-
-                Spacer()
-
-                VStack(spacing: 1) {
-                    Text("ENTRY")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(AppColors.surfaceWhite50)
-                    Text(formatPrice(metrics.entryPrice))
-                        .foregroundColor(AppColors.surfaceWhite70)
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("TP")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(targetTint.opacity(0.7))
-                    Text(formatPrice(metrics.targetPrice))
-                        .foregroundColor(targetTint)
-                }
-            }
-            .font(.system(size: 11, weight: .bold, design: .monospaced))
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.surfaceWhite04)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(swingTint.opacity(0.25), lineWidth: 1)
-                )
-        )
+        .modifier(StripContainerModifier(size: size, borderTint: swingTint))
+    }
+
+    // MARK: - Detail Header (PNL + R:R)
+
+    private var detailHeader: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 4) {
+                Image(systemName: metrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right")
+                    .font(.system(size: 10, weight: .bold))
+                Text(String(format: "%@%.2f%%", metrics.currentPnL >= 0 ? "+" : "", metrics.currentPnL))
+                    .font(.system(size: 12, weight: .heavy, design: .monospaced))
+            }
+            .foregroundColor(swingTint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(swingTint.opacity(0.15))
+                    .overlay(
+                        Capsule()
+                            .stroke(swingTint.opacity(0.3), lineWidth: 1)
+                    )
+            )
+
+            if let rr = riskRewardRatio {
+                Text("R:R \(rr)")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(AppColors.surfaceWhite70)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(AppColors.surfaceWhite08)
+                            .overlay(
+                                Capsule()
+                                    .stroke(AppColors.surfaceWhite15, lineWidth: 1)
+                            )
+                    )
+            }
+
+            Spacer()
+
+            Text(priceText(metrics.currentPrice))
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(swingTint)
+        }
+    }
+
+    // MARK: - Progress Bar
+
+    private var progressBar: some View {
+        GeometryReader { geometry in
+            let safeWidth = max(geometry.size.width, 1)
+            let entryX = safeWidth * entryPos
+            let currentX = safeWidth * currentPos
+            let swingStart = min(entryX, currentX)
+            let swingWidth = max(abs(currentX - entryX), 2)
+            let halfDot = dotSize / 2
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(AppColors.surfaceWhite08)
+
+                HStack(spacing: 0) {
+                    if metrics.isLong {
+                        Rectangle()
+                            .fill(stopTint.opacity(0.30))
+                            .frame(width: entryX)
+                        Rectangle()
+                            .fill(targetTint.opacity(0.30))
+                    } else {
+                        Rectangle()
+                            .fill(targetTint.opacity(0.30))
+                            .frame(width: entryX)
+                        Rectangle()
+                            .fill(stopTint.opacity(0.30))
+                    }
+                }
+                .clipShape(Capsule())
+
+                Capsule()
+                    .fill(swingTint)
+                    .frame(width: swingWidth)
+                    .offset(x: swingStart)
+
+                Capsule()
+                    .fill(AppColors.surfaceWhite85.opacity(0.65))
+                    .frame(width: 2)
+                    .offset(x: max(min(entryX - 1, safeWidth - 2), 0))
+
+                Circle()
+                    .fill(swingTint)
+                    .frame(width: dotSize, height: dotSize)
+                    .overlay(
+                        Circle()
+                            .stroke(AppColors.systemBlack.opacity(0.55), lineWidth: dotStrokeWidth)
+                    )
+                    .offset(x: max(min(currentX - halfDot, safeWidth - dotSize), 0), y: -1)
+            }
+        }
+        .frame(height: barHeight)
+    }
+
+    // MARK: - Compact Labels (positional captions for info box)
+
+    private var compactLabels: some View {
+        GeometryReader { geometry in
+            let safeWidth = max(geometry.size.width, 1)
+            let slPos = CGFloat(metrics.stopLossPosition)
+            let tpPos = CGFloat(metrics.targetPosition)
+
+            ZStack(alignment: .leading) {
+                Text("SL")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundColor(stopTint)
+                    .position(
+                        x: max(14, min(safeWidth - 14, safeWidth * slPos)),
+                        y: 7
+                    )
+                Text("Entry")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundColor(entryTint)
+                    .position(
+                        x: max(14, min(safeWidth - 14, safeWidth * entryPos)),
+                        y: 7
+                    )
+                Text("TP")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundColor(targetTint)
+                    .position(
+                        x: max(14, min(safeWidth - 14, safeWidth * tpPos)),
+                        y: 7
+                    )
+            }
+        }
+        .frame(height: 14)
+    }
+
+    // MARK: - Standard Labels (inline HStack for list cards)
+
+    private var standardLabels: some View {
+        HStack {
+            Text("SL \(priceText(metrics.stopLossPrice))")
+                .foregroundColor(stopTint)
+
+            Spacer()
+
+            Text("ENTRY \(priceText(metrics.entryPrice))")
+                .foregroundColor(AppColors.surfaceWhite70)
+
+            Spacer()
+
+            Text("TP \(priceText(metrics.targetPrice))")
+                .foregroundColor(targetTint)
+        }
+        .font(.system(size: 8, weight: .bold, design: .monospaced))
+    }
+
+    // MARK: - Detail Labels (VStack labels with price below)
+
+    private var detailLabels: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("SL")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(stopTint.opacity(0.7))
+                Text(priceText(metrics.stopLossPrice))
+                    .foregroundColor(stopTint)
+            }
+
+            Spacer()
+
+            VStack(spacing: 1) {
+                Text("ENTRY")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(AppColors.surfaceWhite50)
+                Text(priceText(metrics.entryPrice))
+                    .foregroundColor(AppColors.surfaceWhite70)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("TP")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(targetTint.opacity(0.7))
+                Text(priceText(metrics.targetPrice))
+                    .foregroundColor(targetTint)
+            }
+        }
+        .font(.system(size: 11, weight: .bold, design: .monospaced))
     }
 }
+
+/// Applies the appropriate container styling based on strip size.
+private struct StripContainerModifier: ViewModifier {
+    let size: SetupStripSize
+    let borderTint: Color
+
+    func body(content: Content) -> some View {
+        switch size {
+        case .compact:
+            content
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 9)
+                        .fill(AppColors.surfaceWhite08)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9)
+                                .stroke(borderTint.opacity(0.24), lineWidth: 1)
+                        )
+                )
+        case .standard:
+            content
+        case .detail:
+            content
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppColors.surfaceWhite04)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(borderTint.opacity(0.25), lineWidth: 1)
+                        )
+                )
+        }
+    }
+}
+

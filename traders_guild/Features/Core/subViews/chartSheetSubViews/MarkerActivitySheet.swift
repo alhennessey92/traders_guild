@@ -161,6 +161,13 @@ struct MarkerActivitySheet: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(AppColors.whiteText)
 
+                        Text(marker.timeframe.uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(AppColors.whiteText.opacity(0.85))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(AppColors.whiteText.opacity(0.10)))
+
                         Text(marker.intentEnum.displayName)
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(marker.intentEnum.color)
@@ -173,6 +180,15 @@ struct MarkerActivitySheet: View {
                     if let trackingStateRaw = marker.setupSummary?.trackingState,
                        let trackingState = RLTrackingState(rawValue: trackingStateRaw) {
                         HStack(spacing: 6) {
+                            if trackingState.isLive {
+                                Text("LIVE")
+                                    .font(.system(size: 8, weight: .heavy))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(AppColors.statusPositive70))
+                            }
+
                             TrackingStatePill(state: trackingState, size: .compact)
 
                             if marker.intentEnum == .setup {
@@ -187,12 +203,7 @@ struct MarkerActivitySheet: View {
                         }
                     }
 
-                    if let note = marker.notePreview, !note.isEmpty {
-                        Text(note)
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                            .lineLimit(2)
-                    }
+                    markerRowSpecifics(marker)
 
                     Text(marker.createdAtFormatted)
                         .font(.caption2)
@@ -208,6 +219,104 @@ struct MarkerActivitySheet: View {
             .padding(.bottom, isLast ? 0 : 14)
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func markerRowSpecifics(_ marker: RLTopMarkerDTO) -> some View {
+        switch marker.intentEnum {
+        case .setup:
+            if let summary = marker.setupSummary,
+               let trackingStateRaw = summary.trackingState,
+               let trackingState = RLTrackingState(rawValue: trackingStateRaw),
+               trackingState.isLive,
+               let slPrice = summary.slPrice,
+               let tpPrice = summary.tpPrice,
+               let currentPrice = symbolCache[marker.symbolId]?.currentPrice,
+               let metrics = LiveSetupMetrics.compute(
+                   entryPrice: summary.entryPrice ?? marker.price,
+                   stopLossPrice: slPrice,
+                   targetPrice: tpPrice,
+                   currentPrice: currentPrice
+               ) {
+                MarkerListSpecificsSection {
+                    UnifiedSetupProgressStrip(
+                        metrics: metrics,
+                        size: .standard,
+                        formatPrice: { String(format: "%.5f", $0) }
+                    )
+                }
+            } else if let note = marker.notePreview, !note.isEmpty {
+                Text(note)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                    .lineLimit(2)
+            }
+
+        case .question:
+            MarkerListSpecificsSection {
+                MarkerListSpecificsLabel(label: "QUESTION", color: marker.intentEnum.color)
+                if let note = marker.notePreview, !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(AppColors.surfaceWhite92)
+                        .lineLimit(2)
+                }
+            }
+
+        case .alert:
+            MarkerListSpecificsSection {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("Alert")
+                        .font(.system(size: 9.5, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(marker.intentEnum.color.opacity(0.40))
+                        .overlay(Capsule().stroke(marker.intentEnum.color.opacity(0.60), lineWidth: 1))
+                )
+
+                if let note = marker.notePreview, !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(AppColors.surfaceWhite85)
+                        .lineLimit(2)
+                }
+            }
+
+        case .poll:
+            MarkerListSpecificsSection {
+                MarkerListSpecificsLabel(label: "POLL", color: marker.intentEnum.color)
+                if let note = marker.notePreview, !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(AppColors.surfaceWhite85)
+                        .lineLimit(2)
+                }
+            }
+
+        case .news:
+            MarkerListSpecificsSection {
+                MarkerListSpecificsLabel(label: "NEWS", color: marker.intentEnum.color)
+                if let note = marker.notePreview, !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(AppColors.surfaceWhite85)
+                        .lineLimit(1)
+                }
+            }
+
+        default:
+            if let note = marker.notePreview, !note.isEmpty {
+                Text(note)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                    .lineLimit(2)
+            }
+        }
     }
 
 

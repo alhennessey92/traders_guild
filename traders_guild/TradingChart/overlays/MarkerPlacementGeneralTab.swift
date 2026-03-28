@@ -380,8 +380,6 @@ struct MarkerPlacementGeneralTab: View {
                 tint: AppColors.whiteText.opacity(0.85)
             )
 
-            placementInputField("Title (optional)", text: $placementState.title, focus: .generalTitle)
-
             placementInputField(
                 "Description / Note",
                 text: $placementState.note,

@@ -458,14 +458,12 @@ struct UserSettingsSheetView: View {
                         } label: {
                             VStack(spacing: 8) {
                                 Circle()
-                                    .fill(theme == .dark
-                                        ? Color(red: 0x01 / 255.0, green: 0x01 / 255.0, blue: 0x05 / 255.0)
-                                        : Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0))
+                                    .fill(theme.swatchColor)
                                     .frame(width: 36, height: 36)
                                     .overlay(
                                         Circle()
                                             .stroke(ThemeManager.shared.currentTheme == theme
-                                                ? AppColors.accentColor : AppColors.surfaceWhite20,
+                                                ? AppColors.accentColor : AppColors.adaptiveOverlay20,
                                                 lineWidth: ThemeManager.shared.currentTheme == theme ? 2.5 : 1)
                                     )
 

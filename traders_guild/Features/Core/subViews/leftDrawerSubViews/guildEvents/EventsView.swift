@@ -64,11 +64,16 @@ struct EventsListView: View {
 struct EventRowView: View {
     let event: RLGuildEventWithAuthorDTO
     let onTap: () -> Void
-    
+
+    private var styling: NotificationStyling {
+        NotificationStyling(isRead: event.isRead)
+    }
+
     var body: some View {
         UnifiedContentCard(
             onTap: onTap,
-            showUnreadBorder: !event.isRead,
+            showUnreadDot: !event.isRead,
+            isUnread: !event.isRead,
             cornerRadius: 14
         ) {
             VStack(spacing: 0) {
@@ -76,20 +81,20 @@ struct EventRowView: View {
                 HStack(alignment: .top, spacing: 12) {
                     // Date pill
                     UnifiedDatePill(date: event.eventDate)
-                    
+
                     // Event content
                     VStack(alignment: .leading, spacing: 6) {
                         Text(event.title)
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText)
+                            .foregroundColor(styling.titleColor)
                             .lineLimit(2)
-                        
+
                         Text(event.content)
                             .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
+                            .foregroundColor(styling.bodyColor)
                             .lineLimit(2)
-                        
+
                         // Time and attendance
                         HStack(spacing: 6) {
                             Image(systemName: "clock")
@@ -99,17 +104,17 @@ struct EventRowView: View {
                         .foregroundColor(AppColors.accentColor)
                         .padding(.top, 2)
                     }
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundColor(AppColors.whiteText.opacity(0.3))
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
-                .padding(.bottom, 12) // More padding before footer
-                
+                .padding(.bottom, 12)
+
                 // MARK: - Author Footer Bar (Hosted by)
                 UnifiedAuthorFooter(
                     username: event.authorUsername,

@@ -9,59 +9,98 @@
 import SwiftUI
 
 enum AppColors {
-    // MARK: - Theme Helper
+    // MARK: - Theme Helpers
 
-    private static var isMidGrey: Bool {
-        ThemeManager.shared.currentTheme == .midGrey
+    private static var theme: AppTheme {
+        ThemeManager.shared.currentTheme
     }
+
+    private static var isMidGrey: Bool { theme == .midGrey }
+    private static var isLightGrey: Bool { theme == .lightGrey }
+
+    /// Base color used for adaptive overlays: white on dark themes, black on light.
+    private static var overlayBase: Color { isLightGrey ? .black : .white }
 
     // MARK: - Foundation Assets (theme-aware backgrounds)
 
-    /// TGGradientBackground. Dark: #010105, MidGrey: #181C28 (anchor — chat bg color).
+    /// TGGradientBackground. Dark: #010105, MidGrey: #181C28, LightGrey: #B3BACC.
     static var tgGradientBackground: Color {
-        isMidGrey ? Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0)
-                  : Color("TGGradientBackground")
+        switch theme {
+        case .lightGrey: return Color(red: 179.0 / 255, green: 186.0 / 255, blue: 204.0 / 255)
+        case .midGrey:   return Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0)
+        case .dark:      return Color("TGGradientBackground")
+        }
     }
-    /// TGGradientBackgroundMid. Dark: #111111, MidGrey: same ratio dimmed.
+    /// TGGradientBackgroundMid. Dark: #111111, MidGrey: dimmed, LightGrey: dimmed.
     static var tgGradientBackgroundMid: Color {
-        isMidGrey ? Color(red: 22.0 / 255, green: 26.0 / 255, blue: 36.0 / 255)
-                  : Color("TGGradientBackgroundMid")
+        switch theme {
+        case .lightGrey: return Color(red: 170.0 / 255, green: 177.0 / 255, blue: 192.0 / 255)
+        case .midGrey:   return Color(red: 22.0 / 255, green: 26.0 / 255, blue: 36.0 / 255)
+        case .dark:      return Color("TGGradientBackgroundMid")
+        }
     }
-    /// TGGradientBackgroundLight. Dark: #000127, MidGrey: same ratio lifted.
+    /// TGGradientBackgroundLight. Dark: #000127, MidGrey: lifted, LightGrey: lifted.
     static var tgGradientBackgroundLight: Color {
-        isMidGrey ? Color(red: 26.0 / 255, green: 30.0 / 255, blue: 42.0 / 255)
-                  : Color("TGGradientBackgroundLight")
+        switch theme {
+        case .lightGrey: return Color(red: 192.0 / 255, green: 198.0 / 255, blue: 212.0 / 255)
+        case .midGrey:   return Color(red: 26.0 / 255, green: 30.0 / 255, blue: 42.0 / 255)
+        case .dark:      return Color("TGGradientBackgroundLight")
+        }
     }
 
-    /// TGSheetBackground. Dark: #1B1A1F, MidGrey: #181C28 (matches chat bg).
+    /// TGSheetBackground. Dark: #1B1A1F, MidGrey: #181C28, LightGrey: #B9C0CE.
     static var tgSheetBackground: Color {
-        isMidGrey ? Color(red: 24.0 / 255, green: 28.0 / 255, blue: 40.0 / 255)
-                  : Color("TGSheetBackground")
+        switch theme {
+        case .lightGrey: return Color(red: 185.0 / 255, green: 192.0 / 255, blue: 206.0 / 255)
+        case .midGrey:   return Color(red: 24.0 / 255, green: 28.0 / 255, blue: 40.0 / 255)
+        case .dark:      return Color("TGSheetBackground")
+        }
     }
-    /// TGSheetDarkBackground. Dark: #1F1E1A, MidGrey: slightly darker.
+    /// TGSheetDarkBackground. Dark: #1F1E1A, MidGrey: slightly darker, LightGrey: darker.
     static var tgSheetDarkBackground: Color {
-        isMidGrey ? Color(red: 22.0 / 255, green: 26.0 / 255, blue: 38.0 / 255)
-                  : Color("TGSheetDarkBackground")
+        switch theme {
+        case .lightGrey: return Color(red: 170.0 / 255, green: 177.0 / 255, blue: 192.0 / 255)
+        case .midGrey:   return Color(red: 22.0 / 255, green: 26.0 / 255, blue: 38.0 / 255)
+        case .dark:      return Color("TGSheetDarkBackground")
+        }
     }
-    /// TGDrawerBackground. Dark: #00000A, MidGrey: #171B27 (near-identical to chat/sheets).
+    /// TGDrawerBackground. Dark: #00000A, MidGrey: #171B27, LightGrey: #A8AFBE.
     static var tgDrawerBackground: Color {
-        isMidGrey ? Color(red: 23.0 / 255, green: 27.0 / 255, blue: 39.0 / 255)
-                  : Color("TGDrawerBackground")
+        switch theme {
+        case .lightGrey: return Color(red: 168.0 / 255, green: 175.0 / 255, blue: 190.0 / 255)
+        case .midGrey:   return Color(red: 23.0 / 255, green: 27.0 / 255, blue: 39.0 / 255)
+        case .dark:      return Color("TGDrawerBackground")
+        }
     }
-    /// TGToolbarBackground. Dark: #00000E/0.35, MidGrey: #181C28/0.55.
+    /// TGToolbarBackground. Dark: #00000E/0.35, MidGrey: #181C28/0.55, LightGrey: #B3BACC/0.85.
     static var tgToolbarBackground: Color {
-        isMidGrey ? Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0).opacity(0.55)
-                  : Color("TGToolbarBackground")
+        switch theme {
+        case .lightGrey: return Color(red: 179.0 / 255, green: 186.0 / 255, blue: 204.0 / 255).opacity(0.85)
+        case .midGrey:   return Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0).opacity(0.55)
+        case .dark:      return Color("TGToolbarBackground")
+        }
     }
 
-    /// TGWhiteText asset. Hex #ECECEC alpha 1.0.
-    static let tgWhiteText = Color("TGWhiteText")
-    /// TGWhite asset. Hex #FFFFFF alpha 1.0.
-    static let tgWhite = Color("TGWhite")
-    /// TGMidGrey asset. Hex #7A7878 alpha 1.0.
-    static let tgMidGrey = Color("TGMidGrey")
-    /// TGGrey asset. Hex #A9A9A9 alpha 1.0.
-    static let tgGrey = Color("TGGrey")
+    /// TGWhiteText. Dark/MidGrey: #ECECEC, LightGrey: #1E2233 (dark blue-grey).
+    static var tgWhiteText: Color {
+        isLightGrey ? Color(red: 30.0 / 255, green: 34.0 / 255, blue: 51.0 / 255)
+                    : Color("TGWhiteText")
+    }
+    /// TGWhite. Dark/MidGrey: #FFFFFF, LightGrey: #1E2233.
+    static var tgWhite: Color {
+        isLightGrey ? Color(red: 30.0 / 255, green: 34.0 / 255, blue: 51.0 / 255)
+                    : Color("TGWhite")
+    }
+    /// TGMidGrey. Dark/MidGrey: #7A7878, LightGrey: #6A6E7C.
+    static var tgMidGrey: Color {
+        isLightGrey ? Color(red: 106.0 / 255, green: 110.0 / 255, blue: 124.0 / 255)
+                    : Color("TGMidGrey")
+    }
+    /// TGGrey. Dark/MidGrey: #A9A9A9, LightGrey: #4A4E5C.
+    static var tgGrey: Color {
+        isLightGrey ? Color(red: 74.0 / 255, green: 78.0 / 255, blue: 92.0 / 255)
+                    : Color("TGGrey")
+    }
 
     /// TGAccent asset. Hex #0F9EB4 alpha 1.0.
     static let tgAccent = Color("TGAccent")
@@ -75,17 +114,26 @@ enum AppColors {
     /// TGBear asset. Hex #A62C2B alpha 1.0.
     static let tgBear = Color("TGBear")
 
-    /// TGButtonSearchBackground. Dark: #191921, MidGrey: same ratio.
+    /// TGButtonSearchBackground. Dark: #191921, MidGrey: same ratio, LightGrey: #C4CAD7.
     static var tgButtonSearchBackground: Color {
-        isMidGrey ? Color(red: 20.0 / 255, green: 24.0 / 255, blue: 34.0 / 255)
-                  : Color("TGButtonSearchBackground")
+        switch theme {
+        case .lightGrey: return Color(red: 196.0 / 255, green: 202.0 / 255, blue: 215.0 / 255)
+        case .midGrey:   return Color(red: 20.0 / 255, green: 24.0 / 255, blue: 34.0 / 255)
+        case .dark:      return Color("TGButtonSearchBackground")
+        }
     }
-    /// TGUnhighlightedWhite asset. Hex #C3C3C3 alpha 1.0.
-    static let tgUnhighlightedWhite = Color("TGUnhighlightedWhite")
-    /// TGFadedBackground. Dark: #3F404D, MidGrey: same ratio lifted.
+    /// TGUnhighlightedWhite. Dark/MidGrey: #C3C3C3, LightGrey: #5A5E6C.
+    static var tgUnhighlightedWhite: Color {
+        isLightGrey ? Color(red: 90.0 / 255, green: 94.0 / 255, blue: 108.0 / 255)
+                    : Color("TGUnhighlightedWhite")
+    }
+    /// TGFadedBackground. Dark: #3F404D, MidGrey: lifted, LightGrey: #C8CEDA.
     static var tgFadedBackground: Color {
-        isMidGrey ? Color(red: 28.0 / 255, green: 32.0 / 255, blue: 46.0 / 255)
-                  : Color("TGFadedBackground")
+        switch theme {
+        case .lightGrey: return Color(red: 200.0 / 255, green: 206.0 / 255, blue: 218.0 / 255)
+        case .midGrey:   return Color(red: 28.0 / 255, green: 32.0 / 255, blue: 46.0 / 255)
+        case .dark:      return Color("TGFadedBackground")
+        }
     }
     /// TGChartLogo asset. Hex #7A7878 alpha 1.0.
     static let tgChartLogo = Color("TGChartLogo")
@@ -122,6 +170,26 @@ enum AppColors {
     static let systemMint = Color.mint
     /// System `Color.indigo` wrapper.
     static let systemIndigo = Color.indigo
+
+    // MARK: - Adaptive Surfaces (theme-aware overlays)
+
+    /// Adaptive overlay: white on dark themes, black on light. Use for borders, dividers, subtle fills.
+    static var adaptiveOverlay03: Color { overlayBase.opacity(0.03) }
+    static var adaptiveOverlay05: Color { overlayBase.opacity(0.05) }
+    static var adaptiveOverlay08: Color { overlayBase.opacity(0.08) }
+    static var adaptiveOverlay10: Color { overlayBase.opacity(0.1) }
+    static var adaptiveOverlay15: Color { overlayBase.opacity(0.15) }
+    static var adaptiveOverlay18: Color { overlayBase.opacity(0.18) }
+    static var adaptiveOverlay20: Color { overlayBase.opacity(0.2) }
+    static var adaptiveOverlay24: Color { overlayBase.opacity(0.24) }
+    static var adaptiveOverlay30: Color { overlayBase.opacity(0.3) }
+    static var adaptiveOverlay40: Color { overlayBase.opacity(0.4) }
+    static var adaptiveOverlay50: Color { overlayBase.opacity(0.5) }
+    static var adaptiveOverlay60: Color { overlayBase.opacity(0.6) }
+    static var adaptiveOverlay70: Color { overlayBase.opacity(0.7) }
+    static var adaptiveOverlay80: Color { overlayBase.opacity(0.8) }
+    static var adaptiveOverlay90: Color { overlayBase.opacity(0.9) }
+    static var adaptiveOverlay94: Color { overlayBase.opacity(0.94) }
 
     // MARK: - Surfaces (Neutral Overlays)
 
@@ -334,47 +402,75 @@ enum AppColors {
     static let chartDeepSubTabGradientEnd = Color(red: 0.05, green: 0.08, blue: 0.18)
 
     static var chartPanelBackground: Color {
-        isMidGrey ? Color(red: 24.0 / 255, green: 28.0 / 255, blue: 40.0 / 255)
-                  : Color(red: 20.0 / 255, green: 20.0 / 255, blue: 28.0 / 255)
+        switch theme {
+        case .lightGrey: return Color(red: 179.0 / 255, green: 186.0 / 255, blue: 204.0 / 255)
+        case .midGrey:   return Color(red: 24.0 / 255, green: 28.0 / 255, blue: 40.0 / 255)
+        case .dark:      return Color(red: 20.0 / 255, green: 20.0 / 255, blue: 28.0 / 255)
+        }
     }
     static var chartPanelBackgroundMuted: Color {
-        isMidGrey ? Color(red: 23.0 / 255, green: 27.0 / 255, blue: 38.0 / 255)
-                  : Color(red: 20.0 / 255, green: 20.0 / 255, blue: 26.0 / 255)
+        switch theme {
+        case .lightGrey: return Color(red: 175.0 / 255, green: 182.0 / 255, blue: 198.0 / 255)
+        case .midGrey:   return Color(red: 23.0 / 255, green: 27.0 / 255, blue: 38.0 / 255)
+        case .dark:      return Color(red: 20.0 / 255, green: 20.0 / 255, blue: 26.0 / 255)
+        }
     }
     static var chartPanelBackgroundInset: Color {
-        isMidGrey ? Color(red: 22.0 / 255, green: 26.0 / 255, blue: 36.0 / 255)
-                  : Color(red: 18.0 / 255, green: 18.0 / 255, blue: 28.0 / 255)
+        switch theme {
+        case .lightGrey: return Color(red: 170.0 / 255, green: 177.0 / 255, blue: 192.0 / 255)
+        case .midGrey:   return Color(red: 22.0 / 255, green: 26.0 / 255, blue: 36.0 / 255)
+        case .dark:      return Color(red: 18.0 / 255, green: 18.0 / 255, blue: 28.0 / 255)
+        }
     }
     static var chartPanelBackgroundAlt: Color {
-        isMidGrey ? Color(red: 26.0 / 255, green: 30.0 / 255, blue: 42.0 / 255)
-                  : Color(red: 25.0 / 255, green: 25.0 / 255, blue: 33.0 / 255)
+        switch theme {
+        case .lightGrey: return Color(red: 185.0 / 255, green: 192.0 / 255, blue: 206.0 / 255)
+        case .midGrey:   return Color(red: 26.0 / 255, green: 30.0 / 255, blue: 42.0 / 255)
+        case .dark:      return Color(red: 25.0 / 255, green: 25.0 / 255, blue: 33.0 / 255)
+        }
     }
     static var chartPanelBackgroundDeep: Color {
-        isMidGrey ? Color(red: 18.0 / 255, green: 22.0 / 255, blue: 32.0 / 255)
-                  : Color(red: 10.0 / 255, green: 10.0 / 255, blue: 12.0 / 255)
+        switch theme {
+        case .lightGrey: return Color(red: 155.0 / 255, green: 162.0 / 255, blue: 178.0 / 255)
+        case .midGrey:   return Color(red: 18.0 / 255, green: 22.0 / 255, blue: 32.0 / 255)
+        case .dark:      return Color(red: 10.0 / 255, green: 10.0 / 255, blue: 12.0 / 255)
+        }
     }
     static var chartIndicatorHandleFill: Color {
-        isMidGrey ? Color(white: 0.10) : Color(white: 0.08)
+        switch theme {
+        case .lightGrey: return Color(white: 0.90)
+        case .midGrey:   return Color(white: 0.10)
+        case .dark:      return Color(white: 0.08)
+        }
     }
 
     // MARK: - Component-Level Theme Tokens
 
     /// Info box background (crosshair OHLCV popup). Blends with chart background.
     static var infoBoxBackground: Color {
-        isMidGrey ? Color(red: 22.0 / 255, green: 26.0 / 255, blue: 38.0 / 255).opacity(0.94)
-                  : Color.black.opacity(0.85)
+        switch theme {
+        case .lightGrey: return Color(red: 170.0 / 255, green: 177.0 / 255, blue: 192.0 / 255).opacity(0.94)
+        case .midGrey:   return Color(red: 22.0 / 255, green: 26.0 / 255, blue: 38.0 / 255).opacity(0.94)
+        case .dark:      return Color.black.opacity(0.85)
+        }
     }
 
     /// Panel header background (indicator & timeframe panels). Subtle darker strip.
     static var panelHeaderBackground: Color {
-        isMidGrey ? Color(red: 18.0 / 255, green: 22.0 / 255, blue: 32.0 / 255)
-                  : Color(red: 16.0 / 255, green: 16.0 / 255, blue: 22.0 / 255)
+        switch theme {
+        case .lightGrey: return Color(red: 155.0 / 255, green: 162.0 / 255, blue: 178.0 / 255)
+        case .midGrey:   return Color(red: 18.0 / 255, green: 22.0 / 255, blue: 32.0 / 255)
+        case .dark:      return Color(red: 16.0 / 255, green: 16.0 / 255, blue: 22.0 / 255)
+        }
     }
 
-    /// X-axis bottom area background. Dark: pure black, MidGrey: very dark blue-grey.
+    /// X-axis bottom area background. Dark: pure black, MidGrey: very dark blue-grey, LightGrey: darker blue-grey.
     static var xAxisBackground: Color {
-        isMidGrey ? Color(red: 14.0 / 255, green: 18.0 / 255, blue: 26.0 / 255)
-                  : Color.black
+        switch theme {
+        case .lightGrey: return Color(red: 145.0 / 255, green: 152.0 / 255, blue: 168.0 / 255)
+        case .midGrey:   return Color(red: 14.0 / 255, green: 18.0 / 255, blue: 26.0 / 255)
+        case .dark:      return Color.black
+        }
     }
 
     static let signupInterestBlue = Color(red: 0.4, green: 0.7, blue: 0.9)
@@ -398,8 +494,14 @@ enum AppColors {
     static let markerSelectedBorder = Color(white: 0.5)
     static let markerSelectedBorderWidth: CGFloat = 0.8
     static let markerUnselectedBorderWidth: CGFloat = 0.8
-    static let markerNeutralFillTop = Color(red: 34.0 / 255.0, green: 34.0 / 255.0, blue: 37.0 / 255.0)
-    static let markerNeutralFillBottom = Color(red: 12.0 / 255.0, green: 12.0 / 255.0, blue: 14.0 / 255.0)
+    static var markerNeutralFillTop: Color {
+        isLightGrey ? Color(red: 185.0 / 255, green: 192.0 / 255, blue: 206.0 / 255)
+                    : Color(red: 34.0 / 255.0, green: 34.0 / 255.0, blue: 37.0 / 255.0)
+    }
+    static var markerNeutralFillBottom: Color {
+        isLightGrey ? Color(red: 155.0 / 255, green: 162.0 / 255, blue: 178.0 / 255)
+                    : Color(red: 12.0 / 255.0, green: 12.0 / 255.0, blue: 14.0 / 255.0)
+    }
     static let markerIconLight = Color(white: 0.72)
     static let markerBorderGrey = surfaceWhite24
 
@@ -414,8 +516,8 @@ enum AppColors {
     static var drawerBackground: Color { tgDrawerBackground }
     static var toolbarBackground: Color { tgToolbarBackground }
 
-    static let whiteText = tgWhiteText
-    static let greyText = tgMidGrey
+    static var whiteText: Color { tgWhiteText }
+    static var greyText: Color { tgMidGrey }
     static let accentColor = tgAccent
     static let accentDarkColor = tgAccentDark
     static let friendAccent = tgFriend
@@ -423,7 +525,7 @@ enum AppColors {
     static let bearCandleRed = tgBear
 
     static var unhighlightedTextBoxBackground: Color { tgButtonSearchBackground }
-    static let unhighlightedButtonBackground = tgUnhighlightedWhite
+    static var unhighlightedButtonBackground: Color { tgUnhighlightedWhite }
     static var fadedBackground: Color { tgFadedBackground }
     static let chartLogo = tgChartLogo
 }

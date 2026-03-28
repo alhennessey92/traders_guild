@@ -1237,8 +1237,9 @@ struct MarkerInfoContent: View {
                        targetPrice: tpPrice,
                        currentPrice: price
                    ) {
-                    DetailSetupProgressStrip(
+                    UnifiedSetupProgressStrip(
                         metrics: metrics,
+                        size: .detail,
                         formatPrice: { String(format: "%.5f", $0) }
                     )
                 }
