@@ -101,6 +101,13 @@ struct MarkerPlacementGeneralTab: View {
             if placementState.alertSeverity == nil {
                 placementState.alertSeverity = inferredAlertSeverity(from: placementState.note)
             }
+            placementState.isTextInputFocused = focusedInput != nil
+        }
+        .onChange(of: focusedInput) { _, newValue in
+            placementState.isTextInputFocused = newValue != nil
+        }
+        .onDisappear {
+            placementState.isTextInputFocused = false
         }
         .alert(item: $pendingIntentSwitch) { pending in
             Alert(
@@ -289,14 +296,30 @@ struct MarkerPlacementGeneralTab: View {
                 focus: .analysisNote
             )
                 .lineLimit(3...6)
+                .onChange(of: placementState.note) { _, newValue in
+                    syncNoteComponent(with: newValue)
+                }
 
         case .alert:
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(alertSeverityOptions) { option in
-                    alertSeverityButton(option)
+            VStack(spacing: 10) {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(alertSeverityOptions) { option in
+                        alertSeverityButton(option)
+                    }
                 }
-            }
+
+                placementInputField(
+                    "Describe the alert",
+                    text: $placementState.note,
+                    axis: .vertical,
+                    focus: .alertNote
+                )
+                    .lineLimit(3...5)
+                    .onChange(of: placementState.note) { _, newValue in
+                        syncNoteComponent(with: newValue)
+                    }
+                }
 
         case .question:
             placementInputField(
@@ -306,6 +329,9 @@ struct MarkerPlacementGeneralTab: View {
                 focus: .questionNote
             )
                 .lineLimit(3...5)
+                .onChange(of: placementState.note) { _, newValue in
+                    syncNoteComponent(with: newValue)
+                }
 
         case .poll:
             pollFields
@@ -380,18 +406,18 @@ struct MarkerPlacementGeneralTab: View {
                 tint: AppColors.whiteText.opacity(0.85)
             )
 
-            placementInputField(
-                "Description / Note",
-                text: $placementState.note,
-                axis: .vertical,
-                focus: .generalNote
-            )
-                .lineLimit(2...5)
-                .onChange(of: placementState.note) { _, newValue in
-                    if placementState.component(.textNote) != nil {
-                        placementState.upsertComponent(.textNote, payload: .note(NotePayload(text: newValue)))
+            if showsGeneralNoteField {
+                placementInputField(
+                    "Description / Note",
+                    text: $placementState.note,
+                    axis: .vertical,
+                    focus: .generalNote
+                )
+                    .lineLimit(2...5)
+                    .onChange(of: placementState.note) { _, newValue in
+                        syncNoteComponent(with: newValue)
                     }
-                }
+            }
 
             statsRow
         }
@@ -863,6 +889,30 @@ struct MarkerPlacementGeneralTab: View {
         )
     }
 
+    private var showsGeneralNoteField: Bool {
+        switch placementState.intent {
+        case .alert, .question:
+            return false
+        default:
+            return true
+        }
+    }
+
+    private func syncNoteComponent(with text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard allowedComponentTypes(for: placementState.intent).contains(.textNote) else { return }
+
+        guard !trimmed.isEmpty else {
+            placementState.removeComponent(.textNote)
+            return
+        }
+
+        placementState.upsertComponent(
+            .textNote,
+            payload: .note(NotePayload(text: text))
+        )
+    }
+
     private func stripExistingSeverityPrefix(from text: String) -> String {
         let knownPrefixes = [
             "[Critical] ",
@@ -983,6 +1033,7 @@ private struct AlertSeverityOption: Identifiable {
 private enum PlacementInputFocus: Hashable {
     case level(String)
     case analysisNote
+    case alertNote
     case questionNote
     case newsURL
     case pollQuestion

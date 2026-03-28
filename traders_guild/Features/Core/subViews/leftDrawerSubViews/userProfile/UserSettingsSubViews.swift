@@ -98,11 +98,18 @@ struct EditProfileView: View {
                         VStack(spacing: 24) {
                             // Avatar Section
                             VStack(spacing: 12) {
+                                let currentUser = rlAppState.currentUser
                                 ZStack(alignment: .bottomTrailing) {
                                     UnifiedMemberAvatar(
                                         username: displayName,
-                                        avatarURL: rlAppState.currentUser?.avatarUrl,
-                                        isOnline: rlAppState.currentUser?.isOnline ?? false,
+                                        avatarURL: currentUser?.avatarUrl,
+                                        isOnline: {
+                                            guard let currentUser else { return false }
+                                            return rlAppState.effectiveOnlineStatus(
+                                                userId: currentUser.id,
+                                                fallback: currentUser.isOnline
+                                            )
+                                        }(),
                                         size: 100,
                                         showOnlineIndicator: false
                                     )
@@ -1903,136 +1910,143 @@ struct ContactSupportView: View {
             AppColors.sheetBackground
                 .ignoresSafeArea()
             
-            ScrollView {
-                VStack(spacing: 0) {
-                    SettingsSubViewHeader(title: "Contact Support", onBack: onBack)
+            KeyboardAwareBottomInsetContainer {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        SettingsSubViewHeader(title: "Contact Support", onBack: onBack)
 
-                    VStack(spacing: 24) {
-                        // Info text
-                        VStack(spacing: 8) {
-                            Image(systemName: "envelope.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(AppColors.accentColor)
+                        VStack(spacing: 24) {
+                            // Info text
+                            VStack(spacing: 8) {
+                                Image(systemName: "envelope.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(AppColors.accentColor)
 
-                            Text("How can we help?")
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.whiteText)
-
-                            Text("We typically respond within 24 hours")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        .padding(.top, 20)
-
-                        // Category selection
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Category")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(AppColors.greyText)
-
-                            LazyVGrid(columns: [
-                                GridItem(.flexible(), spacing: 12),
-                                GridItem(.flexible(), spacing: 12)
-                            ], spacing: 12) {
-                                ForEach(categories, id: \.0) { cat in
-                                    CategoryChip(
-                                        id: cat.0,
-                                        name: cat.1,
-                                        icon: cat.2,
-                                        isSelected: category == cat.0,
-                                        onTap: { category = cat.0 }
-                                    )
-                                }
-                            }
-                        }
-
-                        // Subject
-                        SettingsTextField(
-                            title: "Subject",
-                            placeholder: "Brief description of your issue",
-                            text: $subject,
-                            icon: "text.alignleft"
-                        )
-                        .focused($focusedField, equals: .subject)
-
-                        // Message
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Message")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(AppColors.greyText)
-
-                            TextEditor(text: $message)
-                                .frame(minHeight: 150)
-                                .padding(12)
-                                .background(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                )
-                                .foregroundColor(AppColors.whiteText)
-                                .focused($focusedField, equals: .message)
-
-                            HStack {
-                                Spacer()
-                                Text("\(message.count)/5000")
-                                    .font(.caption)
-                                    .foregroundColor(message.count > 5000 ? .red : AppColors.greyText)
-                            }
-                        }
-
-                        // Error message
-                        if let errorMessage {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.caption)
-                                Text(errorMessage)
-                                    .font(.caption)
-                            }
-                            .foregroundColor(AppColors.statusNegative70)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(AppColors.statusNegative08)
-                            .cornerRadius(12)
-                        }
-
-                        // Device info toggle
-                        Toggle(isOn: $includeDeviceInfo) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Include device information")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
+                                Text("How can we help?")
+                                    .font(.title3)
+                                    .fontWeight(.semibold)
                                     .foregroundColor(AppColors.whiteText)
 
-                                Text("Helps us diagnose technical issues")
+                                Text("We typically respond within 24 hours")
                                     .font(.caption)
                                     .foregroundColor(AppColors.greyText)
                             }
+                            .padding(.top, 20)
+
+                            // Category selection
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Category")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppColors.greyText)
+
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12)
+                                ], spacing: 12) {
+                                    ForEach(categories, id: \.0) { cat in
+                                        CategoryChip(
+                                            id: cat.0,
+                                            name: cat.1,
+                                            icon: cat.2,
+                                            isSelected: category == cat.0,
+                                            onTap: { category = cat.0 }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Subject
+                            SettingsTextField(
+                                title: "Subject",
+                                placeholder: "Brief description of your issue",
+                                text: $subject,
+                                icon: "text.alignleft"
+                            )
+                            .focused($focusedField, equals: .subject)
+
+                            // Message
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Message")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppColors.greyText)
+
+                                TextEditor(text: $message)
+                                    .frame(minHeight: 150)
+                                    .padding(12)
+                                    .background(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                    )
+                                    .foregroundColor(AppColors.whiteText)
+                                    .focused($focusedField, equals: .message)
+
+                                HStack {
+                                    Spacer()
+                                    Text("\(message.count)/5000")
+                                        .font(.caption)
+                                        .foregroundColor(message.count > 5000 ? .red : AppColors.greyText)
+                                }
+                            }
+
+                            // Error message
+                            if let errorMessage {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.caption)
+                                    Text(errorMessage)
+                                        .font(.caption)
+                                }
+                                .foregroundColor(AppColors.statusNegative70)
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(AppColors.statusNegative08)
+                                .cornerRadius(12)
+                            }
+
+                            // Device info toggle
+                            Toggle(isOn: $includeDeviceInfo) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Include device information")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(AppColors.whiteText)
+
+                                    Text("Helps us diagnose technical issues")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.greyText)
+                                }
+                            }
+                            .tint(AppColors.accentColor)
+                            .padding()
+                            .background(AppColors.surfaceWhite03)
+                            .cornerRadius(12)
                         }
-                        .tint(AppColors.accentColor)
-                        .padding()
-                        .background(AppColors.surfaceWhite03)
-                        .cornerRadius(12)
-
-                        // Send button
-                        StandardActionButtonFullWidth(
-                            title: "Send Message",
-                            backgroundColor: isValid ? AppColors.accentColor : AppColors.greyText.opacity(0.5),
-                            foregroundColor: .white,
-                            isLoading: isSending,
-                            isDisabled: !isValid || isSending,
-                            action: sendTicket
-                        )
+                        .padding(.horizontal, 25)
+                        .padding(.bottom, 24)
                     }
+                }
+                .scrollDismissesKeyboard(.interactively)
+            } footer: {
+                VStack(spacing: 0) {
+                    Divider()
+                    StandardActionButtonFullWidth(
+                        title: "Send Message",
+                        backgroundColor: isValid ? AppColors.accentColor : AppColors.greyText.opacity(0.5),
+                        foregroundColor: .white,
+                        isLoading: isSending,
+                        isDisabled: !isValid || isSending,
+                        action: sendTicket
+                    )
                     .padding(.horizontal, 25)
-
-                    Spacer(minLength: 100)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
+                    .background(AppColors.sheetBackground)
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()

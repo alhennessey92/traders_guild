@@ -60,6 +60,7 @@ struct MarkerPredictionProgressTests {
             confidence: nil,
             trackingEnabled: true,
             trackingState: "ACTIVE",
+            alertSeverity: nil,
             createdAt: Date(),
             createdAtFormatted: "now",
             isVisible: true,
@@ -99,7 +100,8 @@ struct MarkerPredictionProgressTests {
             primaryComponentId: nil,
             pollQuestion: nil,
             pollOptions: nil,
-            userPollVote: nil
+            userPollVote: nil,
+            predictionResult: nil
         )
 
         let status = MarkerPredictionProgress.status(marker: marker, currentPrice: 118)

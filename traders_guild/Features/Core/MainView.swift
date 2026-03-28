@@ -1946,6 +1946,7 @@ struct ChartBottomSheet: View {
     private var shouldIgnoreKeyboardSafeArea: Bool {
         if isMarkerDetailActive && markerDetailTab == .chat { return false }
         if selectedView == .chat && isExpanded { return false }
+        if controlViewModel.isMarkerPlacementMode && placementState.isTextInputFocused { return false }
         return true
     }
 
@@ -1959,63 +1960,18 @@ struct ChartBottomSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Content Area
-            if isExpanded {
-                if controlViewModel.isMarkerPlacementMode {
-                    // PLACEMENT MODE: show MarkerPlacementPanel instead of normal tabs
-                    placementModeContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if isMarkerDetailActive, let marker = chartViewModel.selectedMarkerForSheet,
-                   let markerManager = chartViewModel.markerManager {
-                    // Marker detail mode - replaces all tab content
-                    markerDetailContent(marker: marker, markerManager: markerManager)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if selectedView == .chat {
-                    // Chat view - manages its own scroll and keyboard
-                    chatContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if selectedView == .components {
-                    // Components has internal scroll behavior; avoid nested scroll views.
-                    componentsContent
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // Other views use standard scrollable layout
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            switch selectedView {
-                            case .symbol:
-                                symbolAndSettingsContent
-                            case .markers:
-                                markersContent
-                            case .components, .chat:
-                                EmptyView()
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 20)
-                        .padding(.bottom, 20)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .scrollDismissesKeyboard(.interactively)
+        Group {
+            if selectedView == .chat && isExpanded && !controlViewModel.isMarkerPlacementMode && !isMarkerDetailActive {
+                KeyboardAwareBottomInsetContainer(showsDivider: true) {
+                    sheetPrimaryContent
+                } footer: {
+                    chatInputFooter
                 }
             } else {
-                Spacer()
-            }
-
-            // Conditional Footer: Marker Detail Tab Bar, Chat Input, or Standard Tab Bar
-            if controlViewModel.isMarkerPlacementMode {
-                placementTabBar
-            } else if isMarkerDetailActive {
-                markerDetailTabBar
-            } else if selectedView == .chat && isExpanded {
-                // Chat Input Footer (replaces tab bar)
-                chatInputFooter
-            } else {
-                // Standard Tab Bar
-                standardTabBar
+                VStack(spacing: 0) {
+                    sheetPrimaryContent
+                    sheetBottomBar
+                }
             }
         }
         .animation(.easeInOut(duration: 0.3), value: selectedView)
@@ -2054,6 +2010,60 @@ struct ChartBottomSheet: View {
         }
         .onChange(of: viewingIndicatorFingerprint) { _, _ in
             refreshViewingIndicatorsIfNeeded()
+        }
+    }
+
+    @ViewBuilder
+    private var sheetPrimaryContent: some View {
+        if isExpanded {
+            if controlViewModel.isMarkerPlacementMode {
+                placementModeContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isMarkerDetailActive,
+                      let marker = chartViewModel.selectedMarkerForSheet,
+                      let markerManager = chartViewModel.markerManager {
+                markerDetailContent(marker: marker, markerManager: markerManager)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if selectedView == .chat {
+                chatContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if selectedView == .components {
+                componentsContent
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        switch selectedView {
+                        case .symbol:
+                            symbolAndSettingsContent
+                        case .markers:
+                            markersContent
+                        case .components, .chat:
+                            EmptyView()
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 20)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scrollDismissesKeyboard(.interactively)
+            }
+        } else {
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var sheetBottomBar: some View {
+        if controlViewModel.isMarkerPlacementMode {
+            placementTabBar
+        } else if isMarkerDetailActive {
+            markerDetailTabBar
+        } else {
+            standardTabBar
         }
     }
     
@@ -2750,6 +2760,14 @@ struct ChartBottomSheet: View {
         .buttonStyle(.plain)
     }
 
+    private var placementPreviewReactionEmoji: String? {
+        guard case let .reactionEmoji(payload)? = placementState.component(.reactionEmoji)?.payload else {
+            return nil
+        }
+        let trimmed = payload.emoji.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     private func placementGeneralTabButton(
         isSelected: Bool,
         action: @escaping () -> Void
@@ -2759,7 +2777,8 @@ struct ChartBottomSheet: View {
                 UnifiedMarkerBadge(
                     intent: placementState.intent,
                     alertSeverity: placementState.intent == .alert ? placementState.alertSeverity : nil,
-                    size: 40
+                    size: 40,
+                    emoji: placementState.intent == .reaction ? placementPreviewReactionEmoji : nil
                 )
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -2798,7 +2817,8 @@ struct ChartBottomSheet: View {
                 UnifiedMarkerBadge(
                     intent: marker.intent,
                     alertSeverity: marker.alertSeverity,
-                    size: 40
+                    size: 40,
+                    emoji: marker.intent == .reaction ? marker.selectedEmoji : nil
                 )
 
                 VStack(alignment: .leading, spacing: 1) {

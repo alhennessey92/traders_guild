@@ -2,6 +2,8 @@ import Foundation
 import Testing
 @testable import traders_guild
 
+private struct JSONObjectEncodingError: Error {}
+
 struct MessagingReplyReactionTests {
     @Test
     func chatroomAndDMMessagesDecodeReplyPreviewAndReactions() throws {
@@ -195,8 +197,7 @@ private func encodeJSONObject<T: Encodable>(_ value: T) throws -> [String: Any] 
     let data = try encoder.encode(value)
     let object = try JSONSerialization.jsonObject(with: data)
     guard let dictionary = object as? [String: Any] else {
-        struct JSONObjectError: Error {}
-        throw JSONObjectError()
+        throw JSONObjectEncodingError()
     }
     return dictionary
 }

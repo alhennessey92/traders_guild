@@ -336,70 +336,70 @@ struct RLMessagingSheet: View {
     
     // MARK: - Messaging View
     private var messagingView: some View {
-        VStack(spacing: 0) {
-            // Header section
+        KeyboardAwareBottomInsetContainer(showsDivider: true) {
             VStack(spacing: 0) {
-                HStack {
-                    // Settings button
-                    ChatSettingsButton {
-                        withAnimation {
-                            showSettings = true
-                        }
-                        HapticFeedback.light.trigger()
-                    }
-                    
-                    Spacer()
-                    
-                    // Header content
-                    switch contentType {
-                    case .chatroom(let chatroom):
-                        chatroomHeader(resolvedChatroom(for: chatroom))
-                    case .dmThread(let thread):
-                        Button(action: {
+                // Header section
+                VStack(spacing: 0) {
+                    HStack {
+                        // Settings button
+                        ChatSettingsButton {
                             withAnimation {
-                                showUserProfile = true
+                                showSettings = true
                             }
                             HapticFeedback.light.trigger()
-                        }) {
-                            dmHeader(thread)
                         }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    
-                    Spacer()
-                    
-                    // Search button (chatrooms only)
-                    if case .chatroom = contentType {
-                        Button {
-                            showSearch = true
-                            HapticFeedback.light.trigger()
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(AppColors.whiteText.opacity(0.6))
-                                .frame(width: 32, height: 32)
+                        
+                        Spacer()
+                        
+                        // Header content
+                        switch contentType {
+                        case .chatroom(let chatroom):
+                            chatroomHeader(resolvedChatroom(for: chatroom))
+                        case .dmThread(let thread):
+                            Button(action: {
+                                withAnimation {
+                                    showUserProfile = true
+                                }
+                                HapticFeedback.light.trigger()
+                            }) {
+                                dmHeader(thread)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
-                    }
+                        
+                        Spacer()
+                        
+                        // Search button (chatrooms only)
+                        if case .chatroom = contentType {
+                            Button {
+                                showSearch = true
+                                HapticFeedback.light.trigger()
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(AppColors.whiteText.opacity(0.6))
+                                    .frame(width: 32, height: 32)
+                            }
+                        }
 
-                    // Close button
-                    ChatDismissButton {
-                        messagingManager.closeMessage()
-                        dismiss()
+                        // Close button
+                        ChatDismissButton {
+                            messagingManager.closeMessage()
+                            dismiss()
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
+                    .background(AppColors.sheetBackground)
+
+                    Divider()
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
-                .background(AppColors.sheetBackground)
 
-                Divider()
+                // Messages list
+                messagesListView
             }
-
-            // Messages list
-            messagesListView
-            Divider()
-            
-            // Input footer
+        } footer: {
             switch contentType {
             case .chatroom(let chatroom):
                 RLChatroomFooterView(
@@ -777,6 +777,7 @@ struct RLMessagingSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onTapGesture {
                 chatSurfaceOverlayCoordinator.dismissAll()
                 UIApplication.shared.sendAction(

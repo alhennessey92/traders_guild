@@ -138,11 +138,18 @@ struct UserGlobalSheetView: View {
             .padding(.top, 20)
 
             HStack(spacing: 16) {
+                let currentUser = rlAppState.currentUser
                 ZStack(alignment: .bottomTrailing) {
                     UnifiedMemberAvatar(
-                        username: rlAppState.currentUser?.username ?? "User",
-                        avatarURL: rlAppState.currentUser?.avatarUrl,
-                        isOnline: rlAppState.currentUser?.isOnline ?? false,
+                        username: currentUser?.username ?? "User",
+                        avatarURL: currentUser?.avatarUrl,
+                        isOnline: {
+                            guard let currentUser else { return false }
+                            return rlAppState.effectiveOnlineStatus(
+                                userId: currentUser.id,
+                                fallback: currentUser.isOnline
+                            )
+                        }(),
                         size: 70,
                         showOnlineIndicator: false
                     )

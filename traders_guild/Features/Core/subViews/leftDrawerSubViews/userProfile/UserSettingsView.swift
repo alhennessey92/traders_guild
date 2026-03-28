@@ -225,12 +225,16 @@ struct UserSettingsSheetView: View {
             SettingsSectionHeader(title: "Profile")
 
             if let user = rlAppState.currentUser {
+                let isEffectivelyOnline = rlAppState.effectiveOnlineStatus(
+                    userId: user.id,
+                    fallback: user.isOnline
+                )
                 // User info display
                 HStack(spacing: 12) {
                     UnifiedMemberAvatar(
                         username: user.displayName,
                         avatarURL: user.avatarUrl,
-                        isOnline: user.isOnline,
+                        isOnline: isEffectivelyOnline,
                         size: 50
                     )
 

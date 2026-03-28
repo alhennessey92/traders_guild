@@ -60,15 +60,15 @@ struct MarkerPlanFixesTests {
         let neutralMarker = makeMarkerUI(intent: .alert, title: "Neutral Alert", alertSeverity: nil)
         let criticalMarker = makeMarkerUI(intent: .alert, title: "Critical Alert", alertSeverity: "critical")
 
-        let markerNeutralDistance = colorDistance(rgba(neutralMarker.effectiveColor), rgba(neutralAlertColor))
+        let markerNeutralDistance = colorDistance(rgba(neutralMarker.displayColor), rgba(neutralAlertColor))
         #expect(markerNeutralDistance < 0.02)
 
-        let severityDistance = colorDistance(rgba(neutralMarker.effectiveColor), rgba(criticalMarker.effectiveColor))
+        let severityDistance = colorDistance(rgba(neutralMarker.displayColor), rgba(criticalMarker.displayColor))
         #expect(severityDistance > 0.12)
 
         let neutralPalette = RLMarkerIntent.alert.markerPalette(for: nil)
         let criticalPalette = RLMarkerIntent.alert.markerPalette(for: .critical)
-        #expect(colorDistance(rgba(neutralPalette[0]), rgba(criticalPalette[0])) > 0.12)
+        #expect(colorDistance(rgba(neutralPalette[1]), rgba(criticalPalette[1])) > 0.12)
     }
 
     @Test
@@ -644,6 +644,121 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func analysisNewsQuestionAndAlertValidationFollowPlanRules() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let analysisState = MarkerPlacementState()
+        analysisState.reset(to: .analysis, anchorTime: now, anchorPrice: 100)
+        #expect(!analysisState.isValid)
+        analysisState.note = "Detailed bias shift"
+        #expect(!analysisState.isValid)
+        analysisState.upsertComponent(
+            .timeframeLink,
+            payload: .timeframeLink(TimeframeLinkPayload(timeframe: "4h", note: "Higher timeframe"))
+        )
+        #expect(analysisState.isValid)
+
+        let newsState = MarkerPlacementState()
+        newsState.reset(to: .news, anchorTime: now, anchorPrice: 100)
+        newsState.newsURL = "https://example.com/news"
+        #expect(!newsState.isValid)
+        newsState.upsertComponent(
+            .linkURL,
+            payload: .link(LinkPayload(url: "https://example.com/news", title: nil, previewImage: nil))
+        )
+        #expect(newsState.isValid)
+
+        let questionState = MarkerPlacementState()
+        questionState.reset(to: .question, anchorTime: now, anchorPrice: 100)
+        questionState.note = "Too short"
+        #expect(!questionState.isValid)
+        questionState.note = "Will this breakout hold?"
+        #expect(questionState.isValid)
+
+        let alertState = MarkerPlacementState()
+        alertState.reset(to: .alert, anchorTime: now, anchorPrice: 100)
+        alertState.alertSeverity = .critical
+        alertState.note = "[Critical] short"
+        #expect(!alertState.isValid)
+        alertState.note = "[Critical] Market structure failed"
+        #expect(alertState.isValid)
+    }
+
+    @Test
+    func reactionUpdateReconcilesSelectedEmojiAcrossPersistedMarkerState() async {
+        let guildId = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let symbolId = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let member = makeMember(userId: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!, username: "tester")
+        let markerId = UUID(uuidString: "EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE")!
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let anchor = RLMarkerComponentDTO(
+            id: UUID(),
+            componentType: RLComponentType.anchor.rawValue,
+            payload: .anchor(AnchorPayload(time: now, price: 100)),
+            ordering: 0
+        )
+        let initialEmoji = RLMarkerComponentDTO(
+            id: UUID(),
+            componentType: RLComponentType.reactionEmoji.rawValue,
+            payload: .reactionEmoji(EmojiPayload(emoji: "🎯")),
+            ordering: 1
+        )
+        let updatedEmoji = RLMarkerComponentDTO(
+            id: initialEmoji.id,
+            componentType: RLComponentType.reactionEmoji.rawValue,
+            payload: .reactionEmoji(EmojiPayload(emoji: "🔥")),
+            ordering: 1
+        )
+
+        let manager = MarkerManager(userId: member.userId, guildId: guildId, currentUserMember: member)
+        manager.markers = [
+            makeMarkerUI(
+                id: markerId,
+                intent: .reaction,
+                title: "Reaction",
+                visibility: "guild",
+                components: [anchor, initialEmoji],
+                isCurrentUserMarker: true,
+                canEdit: true,
+                author: member
+            ),
+        ]
+
+        let api = MarkerPlacementUpdateFakeAPI()
+        api.updateResponse = makeMarkerDTO(
+            id: markerId,
+            author: member,
+            intent: .reaction,
+            title: "Reaction",
+            visibility: "guild",
+            trackingEnabled: false,
+            components: [anchor, updatedEmoji],
+            isCurrentUserMarker: true,
+            canEdit: true,
+            candleTimestamp: now
+        )
+        manager.configure(api: api, symbolId: symbolId, timeframe: .h1)
+
+        let request = RLUpdateMarkerRequest(
+            intent: nil,
+            title: "Reaction",
+            note: nil,
+            visibility: "guild",
+            confidence: nil,
+            trackingEnabled: false,
+            components: [
+                RLMarkerComponentRequest(componentType: anchor.componentType, payload: anchor.payload.rawPayload),
+                RLMarkerComponentRequest(componentType: updatedEmoji.componentType, payload: updatedEmoji.payload.rawPayload),
+            ]
+        )
+
+        let result = await manager.updateMarkerFromPlacement(id: markerId, request: request)
+        #expect(result == .success)
+        #expect(manager.markers.first?.selectedEmoji == "🔥")
+    }
+
+    @Test
     func editableMarkersUseOwnershipAndCanEditOnly() {
         let ownedEditableAnalysis = makeMarkerUI(
             intent: .analysis,
@@ -987,14 +1102,26 @@ struct MarkerPlanFixesTests {
     }
 }
 
-private final class MarkerPlacementUpdateFakeAPI: RealAPIService {
+private final class MarkerPlacementUpdateFakeAPI: MarkerAPIClient {
     var updateCalls = 0
     var createCalls = 0
     var shouldFailUpdate = false
     var createResponse: RLChartMarkerDTO?
     var updateResponse: RLChartMarkerDTO?
 
-    override func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO {
+    func getMarkers(
+        guildId: UUID,
+        symbolId: UUID,
+        timeframe: String,
+        limit: Int,
+        cursor: String?,
+        startTime: Date?,
+        endTime: Date?
+    ) async throws -> RLMarkersListDTO {
+        fatalError("getMarkers should not be called in MarkerPlacementUpdateFakeAPI")
+    }
+
+    func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO {
         createCalls += 1
         if let createResponse {
             return createResponse
@@ -1002,7 +1129,7 @@ private final class MarkerPlacementUpdateFakeAPI: RealAPIService {
         return updateResponse ?? makeMarkerDTO(author: makeMember(userId: UUID(), username: "fallback"), intent: .analysis)
     }
 
-    override func updateMarkerV2(guildId: UUID, markerId: UUID, request body: RLUpdateMarkerRequest) async throws -> RLChartMarkerDTO {
+    func updateMarkerV2(guildId: UUID, markerId: UUID, request body: RLUpdateMarkerRequest) async throws -> RLChartMarkerDTO {
         updateCalls += 1
         if shouldFailUpdate {
             throw MarkerPlacementUpdateError.simulatedFailure
@@ -1011,6 +1138,52 @@ private final class MarkerPlacementUpdateFakeAPI: RealAPIService {
             return updateResponse
         }
         return makeMarkerDTO(id: markerId, author: makeMember(userId: UUID(), username: "fallback"), intent: .analysis)
+    }
+
+    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
+        fatalError("deleteMarker should not be called in MarkerPlacementUpdateFakeAPI")
+    }
+
+    func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO {
+        fatalError("toggleMarkerLike should not be called in MarkerPlacementUpdateFakeAPI")
+    }
+
+    func voteOnPoll(guildId: UUID, markerId: UUID, optionId: UUID) async throws -> RLVotePollDTO {
+        fatalError("voteOnPoll should not be called in MarkerPlacementUpdateFakeAPI")
+    }
+
+    func addMarkerComment(
+        guildId: UUID,
+        markerId: UUID,
+        content: String,
+        attachmentUrl: String?,
+        attachmentType: String?,
+        attachmentName: String?,
+        replyToMessageId: UUID?
+    ) async throws -> RLMarkerCommentDTO {
+        fatalError("addMarkerComment should not be called in MarkerPlacementUpdateFakeAPI")
+    }
+
+    func toggleMarkerCommentReaction(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMarkerCommentDTO {
+        fatalError("toggleMarkerCommentReaction should not be called in MarkerPlacementUpdateFakeAPI")
+    }
+
+    func getMarkerCommentReactionReactors(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        fatalError("getMarkerCommentReactionReactors should not be called in MarkerPlacementUpdateFakeAPI")
+    }
+
+    func deleteMarkerComment(guildId: UUID, markerId: UUID, commentId: UUID) async throws -> RLDetailResponseDTO {
+        fatalError("deleteMarkerComment should not be called in MarkerPlacementUpdateFakeAPI")
     }
 }
 
@@ -1147,7 +1320,8 @@ private func makeMarkerDTO(
         primaryComponentId: resolvedComponents.first?.id,
         pollQuestion: pollQuestion,
         pollOptions: pollOptions,
-        userPollVote: nil
+        userPollVote: nil,
+        predictionResult: nil
     )
 }
 

@@ -97,6 +97,51 @@ enum MarkerPlacementSubmissionResult: Equatable {
     case failure(MarkerPlacementFailure)
 }
 
+protocol MarkerAPIClient: AnyObject {
+    func getMarkers(
+        guildId: UUID,
+        symbolId: UUID,
+        timeframe: String,
+        limit: Int,
+        cursor: String?,
+        startTime: Date?,
+        endTime: Date?
+    ) async throws -> RLMarkersListDTO
+    func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO
+    func updateMarkerV2(guildId: UUID, markerId: UUID, request body: RLUpdateMarkerRequest) async throws -> RLChartMarkerDTO
+    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO
+    func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO
+    func voteOnPoll(guildId: UUID, markerId: UUID, optionId: UUID) async throws -> RLVotePollDTO
+    func addMarkerComment(
+        guildId: UUID,
+        markerId: UUID,
+        content: String,
+        attachmentUrl: String?,
+        attachmentType: String?,
+        attachmentName: String?,
+        replyToMessageId: UUID?
+    ) async throws -> RLMarkerCommentDTO
+    func toggleMarkerCommentReaction(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMarkerCommentDTO
+    func getMarkerCommentReactionReactors(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO
+    func deleteMarkerComment(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID
+    ) async throws -> RLDetailResponseDTO
+}
+
+extension RealAPIService: MarkerAPIClient {}
+
 private extension ChartMarkerUI {
     var isOpenTrackedSetup: Bool {
         intent == .setup && trackingEnabled && (trackingState == .armed || trackingState == .active)
@@ -206,7 +251,7 @@ class MarkerManager: ObservableObject {
     private var currentUserMember: RLGuildMemberDTO
     
     /// API service for backend persistence
-    private weak var api: RealAPIService?
+    private weak var api: (any MarkerAPIClient)?
 
     /// Current symbol ID for API calls
     private var currentSymbolId: UUID?
@@ -223,7 +268,7 @@ class MarkerManager: ObservableObject {
     var userId: UUID { currentUserId }
     
     /// Configure MarkerManager with API service
-    func configure(api: RealAPIService, symbolId: UUID, timeframe: RLChartTimeframe) {
+    func configure(api: any MarkerAPIClient, symbolId: UUID, timeframe: RLChartTimeframe) {
         self.api = api
         self.currentSymbolId = symbolId
         self.currentTimeframe = timeframe
@@ -251,11 +296,18 @@ class MarkerManager: ObservableObject {
         self.currentGuildId = guildId
         self.currentUserMember = currentUserMember
     }
+
+    private func canRenderMarker(_ marker: RLChartMarkerDTO) -> Bool {
+        let visibility = marker.visibility.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return visibility != "private"
+            || marker.author.userId == currentUserId
+            || marker.isCurrentUserMarker
+    }
     
     // MARK: - API Loading
     
     func loadMarkersFromAPI(
-        api: RealAPIService,
+        api: any MarkerAPIClient,
         symbolId: UUID,
         symbol: String,
         guildId: UUID,
@@ -300,6 +352,7 @@ class MarkerManager: ObservableObject {
             // Convert RLChartMarkerUI to ChartMarkerUI (UI model)
             var convertedMarkers: [ChartMarkerUI] = []
             for rlMarker in fetchedMarkers {
+                guard canRenderMarker(rlMarker) else { continue }
                 if let candleIndex = findCandleIndex(timestamp: rlMarker.candleTimestamp, in: candles) {
                     convertedMarkers.append(ChartMarkerUI(marker: rlMarker, candleIndex: candleIndex))
                 }
@@ -389,9 +442,10 @@ class MarkerManager: ObservableObject {
         self.dataManager = dataManager
         cancellables.removeAll()
         RealTimeService.shared.messageSubject
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] message in
-                self?.handleRealTimeMessage(message)
+                Task { @MainActor [weak self] in
+                    self?.handleRealTimeMessage(message)
+                }
             }
             .store(in: &cancellables)
     }
@@ -410,6 +464,7 @@ class MarkerManager: ObservableObject {
         }
     }
 
+    @MainActor
     private func handleRealTimeMessage(_ message: WSIncomingMessage) {
         guard let channel = message.channel, channel == currentMarkerChannel else { return }
 
@@ -435,6 +490,7 @@ class MarkerManager: ObservableObject {
 
     private func handleMarkerCreated(_ message: WSIncomingMessage) {
         guard let markerDTO = message.payload(as: RLChartMarkerDTO.self) else { return }
+        guard canRenderMarker(markerDTO) else { return }
 
         // Filter to current symbol and timeframe
         guard markerDTO.symbolId == currentSymbolId,
@@ -463,6 +519,15 @@ class MarkerManager: ObservableObject {
 
     private func handleMarkerUpdated(_ message: WSIncomingMessage) {
         guard let markerDTO = message.payload(as: RLChartMarkerDTO.self) else { return }
+        guard canRenderMarker(markerDTO) else {
+            let markerId = markerDTO.id
+            markers.removeAll { $0.id == markerId }
+            if selectedMarker?.id == markerId {
+                selectedMarker = nil
+            }
+            recalculateAllPositions()
+            return
+        }
         guard let index = markers.firstIndex(where: { $0.id == markerDTO.id }) else { return }
 
         // Preserve positioning — only update the DTO
@@ -1480,6 +1545,7 @@ class MarkerManager: ObservableObject {
 
         return markers.filter { marker in
             guard marker.isVisible else { return false }
+            guard canRenderMarker(marker.marker) else { return false }
             guard effectiveIntents.contains(marker.intent) else { return false }
             switch visibilityMode {
             case .off:

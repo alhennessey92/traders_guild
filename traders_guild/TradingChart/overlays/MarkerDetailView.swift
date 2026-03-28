@@ -715,7 +715,8 @@ struct CommentsView: View {
             UnifiedMarkerBadge(
                 intent: liveMarker.intent,
                 alertSeverity: liveMarker.alertSeverity,
-                sizeToken: .medium
+                sizeToken: .medium,
+                emoji: liveMarker.intent == .reaction ? liveMarker.selectedEmoji : nil
             )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -997,6 +998,7 @@ struct MarkerDetailHeaderView: View {
                                 intent: marker.intent,
                                 alertSeverity: marker.alertSeverity,
                                 sizeToken: .large,
+                                emoji: marker.intent == .reaction ? marker.selectedEmoji : nil,
                                 isSelected: true
                             )
                         }

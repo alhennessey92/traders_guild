@@ -208,7 +208,7 @@ struct LiveSetupMetrics {
 
         let entryPosition = (entryPrice - rangeLow) / (rangeHigh - rangeLow)
         let currentPosition = (clampedCurrent - rangeLow) / (rangeHigh - rangeLow)
-        let isMovingTowardTarget = isLong ? currentPrice >= entryPrice : currentPrice <= entryPrice
+        let isMovingTowardTarget = isLong ? currentPrice > entryPrice : currentPrice < entryPrice
 
         return LiveSetupMetrics(
             entryPrice: entryPrice,
@@ -248,4 +248,3 @@ struct LiveSetupMetrics {
         )
     }
 }
-

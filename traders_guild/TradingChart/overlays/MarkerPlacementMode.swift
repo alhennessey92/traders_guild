@@ -177,6 +177,7 @@ final class MarkerPlacementState: ObservableObject {
     @Published var alertSeverity: MarkerAlertSeverity?
     @Published var newsURL: String = ""
     @Published var isChecklistCollapsed: Bool = false
+    @Published var isTextInputFocused: Bool = false
     /// Placement-local color overrides keep UI edits stable while payloads are replaced.
     @Published var drawingColorOverrides: [UUID: String] = [:]
     /// Placement-local emoji scale while editing (interaction-only, non-persisted).
@@ -496,16 +497,16 @@ final class MarkerPlacementState: ObservableObject {
             items.append(
                 checklistItem(
                     id: "analysis_note",
-                    title: "Add analysis context",
-                    isRequired: false,
+                    title: "Add analysis description",
+                    isRequired: true,
                     isComplete: !trimmedNote.isEmpty
                 )
             )
             items.append(
                 checklistItem(
                     id: "analysis_structure",
-                    title: "Add support/resistance or drawing",
-                    isRequired: false,
+                    title: "Add at least one chart component",
+                    isRequired: true,
                     isComplete: hasStructuredAnalysisComponents
                 )
             )
@@ -515,16 +516,16 @@ final class MarkerPlacementState: ObservableObject {
                 checklistItem(
                     id: "alert_severity",
                     title: "Select alert severity",
-                    isRequired: false,
-                    isComplete: alertSeverity != nil
+                    isRequired: true,
+                    isComplete: resolvedAlertSeverity != nil
                 )
             )
             items.append(
                 checklistItem(
                     id: "alert_context",
-                    title: "Add alert context",
-                    isRequired: false,
-                    isComplete: !trimmedNote.isEmpty
+                    title: "Write at least 10 characters of alert context",
+                    isRequired: true,
+                    isComplete: trimmedAlertDescription.count >= 10
                 )
             )
 
@@ -532,9 +533,9 @@ final class MarkerPlacementState: ObservableObject {
             items.append(
                 checklistItem(
                     id: "question_required",
-                    title: "Question text provided",
+                    title: "Write at least 10 characters",
                     isRequired: true,
-                    isComplete: !trimmedNote.isEmpty
+                    isComplete: trimmedQuestionNote.count >= 10
                 )
             )
             items.append(
@@ -577,7 +578,7 @@ final class MarkerPlacementState: ObservableObject {
                 checklistItem(
                     id: "news_url",
                     title: "Attach source URL",
-                    isRequired: false,
+                    isRequired: true,
                     isComplete: hasNewsSourceURL
                 )
             )
@@ -690,10 +691,6 @@ final class MarkerPlacementState: ObservableObject {
         let anchorCount = components.filter { $0.componentType == .anchor }.count
         guard anchorCount == 1 else { return false }
 
-        if intent == .question {
-            return !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-
         if intent == .poll {
             let validOptions = pollOptions
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -701,20 +698,26 @@ final class MarkerPlacementState: ObservableObject {
             return !pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && validOptions.count >= 2
         }
 
-        if intent == .reaction {
-            guard case let .reactionEmoji(payload)? = component(.reactionEmoji)?.payload else {
-                return false
-            }
-            return !payload.emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-
-        // Setup anchors are fixed by chart placement flow; do not block submit on
-        // additional directional/location requirements.
-        if intent == .setup {
+        switch intent {
+        case .analysis:
+            return !trimmedNote.isEmpty && hasStructuredAnalysisComponents
+        case .setup:
+            // Setup anchors are fixed by chart placement flow; do not block submit on
+            // additional directional/location requirements.
+            return true
+        case .alert:
+            return resolvedAlertSeverity != nil && trimmedAlertDescription.count >= 10
+        case .question:
+            return trimmedQuestionNote.count >= 10
+        case .poll:
+            return false
+        case .news:
+            return hasNewsSourceURL
+        case .reaction:
+            return hasSelectedReactionEmoji
+        case .personal:
             return true
         }
-
-        return true
     }
 
     func reset(to intent: RLMarkerIntent, anchorTime: Date, anchorPrice: Double) {
@@ -756,6 +759,7 @@ final class MarkerPlacementState: ObservableObject {
         self.alertSeverity = nil
         self.newsURL = ""
         self.isChecklistCollapsed = false
+        self.isTextInputFocused = false
         self.drawingColorOverrides = [:]
         resetDrawingInteraction()
     }
@@ -1310,6 +1314,7 @@ final class MarkerPlacementState: ObservableObject {
     func clearMarkerEditSession() {
         editingMarkerId = nil
         isAnchorLocked = false
+        isTextInputFocused = false
     }
 
     func beginEditingMarker(_ marker: ChartMarkerUI) {
@@ -1333,6 +1338,7 @@ final class MarkerPlacementState: ObservableObject {
 
         alertSeverity = marker.alertSeverity
         isChecklistCollapsed = false
+        isTextInputFocused = false
         emojiScaleOverrides = [:]
 
         let orderedComponents = marker.components.sorted {
@@ -1965,8 +1971,17 @@ final class MarkerPlacementState: ObservableObject {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var trimmedQuestionNote: String {
+        trimmedNote
+    }
+
     private var trimmedPollQuestion: String {
         pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedAlertDescription: String {
+        stripAlertSeverityPrefix(from: trimmedNote)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var validPollOptions: [String] {
@@ -1983,9 +1998,6 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     private var hasNewsSourceURL: Bool {
-        if !newsURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return true
-        }
         guard case let .link(payload)? = component(.linkURL)?.payload else {
             return false
         }
@@ -1993,10 +2005,42 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     private var hasStructuredAnalysisComponents: Bool {
-        component(.levelSupport) != nil
-            || component(.levelResistance) != nil
+        components.contains {
+            switch $0.componentType {
+            case .levelEntry, .levelSl, .levelTp, .levelSupport, .levelResistance:
+                return true
+            default:
+                return false
+            }
+        }
             || drawingOverlayCount > 0
-            || indicatorPanelCount > 0
+            || !indicatorDrafts.isEmpty
+            || timeframeLinkCount > 0
+    }
+
+    private var resolvedAlertSeverity: MarkerAlertSeverity? {
+        alertSeverity ?? inferredAlertSeverity(from: trimmedNote)
+    }
+
+    private func stripAlertSeverityPrefix(from text: String) -> String {
+        let knownPrefixes = [
+            "[Critical] ",
+            "[Severe] ",
+            "[Warning] ",
+            "[Informational] ",
+        ]
+        for prefix in knownPrefixes where text.hasPrefix(prefix) {
+            return String(text.dropFirst(prefix.count))
+        }
+        return text
+    }
+
+    private func inferredAlertSeverity(from note: String) -> MarkerAlertSeverity? {
+        if note.hasPrefix("[Critical] ") { return .critical }
+        if note.hasPrefix("[Severe] ") { return .severe }
+        if note.hasPrefix("[Warning] ") { return .moderate }
+        if note.hasPrefix("[Informational] ") { return .mild }
+        return nil
     }
 
     private var isSetupDirectionValid: Bool {

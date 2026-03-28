@@ -32,19 +32,25 @@ enum ChartPanelReserveCalculator {
         return nil
     }
 
+    private static func stackBaseReserve(for panelHeights: [CGFloat]) -> CGFloat {
+        guard !panelHeights.isEmpty else { return 0 }
+
+        let effectiveHeights = panelHeights.map(effectivePanelHeight)
+        if let lastExpandedIndex = bottomExpandedPanelIndex(in: panelHeights) {
+            return effectiveHeights[...lastExpandedIndex].reduce(0) { partial, height in
+                partial + height + panelResizeHandleHeight
+            }
+        }
+
+        return panelResizeHandleHeight
+    }
+
     static func combinedLayout(
         timeframePanelHeights: [CGFloat],
         indicatorPanelHeights: [CGFloat]
     ) -> CombinedChartPanelLayout {
-        let effectiveTimeframeHeights = timeframePanelHeights.map(effectivePanelHeight)
-        let effectiveIndicatorHeights = indicatorPanelHeights.map(effectivePanelHeight)
-
-        var totalReserve = effectiveTimeframeHeights.reduce(0) { partial, height in
-            partial + height + panelResizeHandleHeight
-        }
-        totalReserve += effectiveIndicatorHeights.reduce(0) { partial, height in
-            partial + height + panelResizeHandleHeight
-        }
+        var totalReserve = stackBaseReserve(for: timeframePanelHeights)
+        totalReserve += stackBaseReserve(for: indicatorPanelHeights)
 
         let bottomOwner: ChartPanelStackOwner?
         if let indicatorIndex = bottomExpandedPanelIndex(in: indicatorPanelHeights) {
@@ -80,10 +86,7 @@ enum ChartPanelReserveCalculator {
     static func stackReserve(panelHeights: [CGFloat]) -> CGFloat {
         guard !panelHeights.isEmpty else { return 0 }
 
-        let visibleHeights = panelHeights.map(effectivePanelHeight)
-        var total = visibleHeights.reduce(0) { partial, height in
-            partial + height + panelResizeHandleHeight
-        }
+        var total = stackBaseReserve(for: panelHeights)
 
         if bottomExpandedPanelIndex(in: panelHeights) != nil {
             total += panelXAxisLabelStripHeight

@@ -167,7 +167,8 @@ struct MarkerHorizontalLinePayloadTests {
             primaryComponentId: anchor.id,
             pollQuestion: nil,
             pollOptions: nil,
-            userPollVote: nil
+            userPollVote: nil,
+            predictionResult: nil
         )
     }
 }

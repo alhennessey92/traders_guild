@@ -45,11 +45,12 @@ struct ChatSurfaceOverlayCoordinatorTests {
     func presentingReactorsDismissesComposerPanel() {
         let coordinator = ChatSurfaceOverlayCoordinator()
         let messageID = UUID()
+        let reactions = [RLMessageReactionDTO(emoji: "🔥", count: 3, reactedByCurrentUser: true)]
 
         coordinator.setComposerActionPanelVisible(true)
-        coordinator.presentReactionReactors(for: messageID, emoji: "🔥")
+        coordinator.presentReactionReactors(for: messageID, reactions: reactions)
 
-        #expect(coordinator.presentation == .reactionReactors(messageID: messageID, emoji: "🔥"))
+        #expect(coordinator.presentation == .reactionReactors(messageID: messageID, reactions: reactions))
         #expect(coordinator.isComposerActionPanelVisible == false)
     }
 }

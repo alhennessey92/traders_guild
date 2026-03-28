@@ -109,6 +109,57 @@ struct MarkerManagerAuditTests {
     }
 
     @Test
+    func foreignPrivateMarkersAreFilteredEvenInAllMode() {
+        let me = makeMember(
+            userId: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            username: "me",
+            isFriend: false
+        )
+        let friend = makeMember(
+            userId: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+            username: "friend",
+            isFriend: true
+        )
+
+        let manager = MarkerManager(userId: me.userId, guildId: guildId, currentUserMember: me)
+        manager.markers = [
+            makeMarker(
+                id: UUID(),
+                author: me,
+                intent: .personal,
+                isCurrentUserMarker: true,
+                isLikedByCurrentUser: false,
+                likeCount: 0,
+                visibility: "private"
+            ),
+            makeMarker(
+                id: UUID(),
+                author: friend,
+                intent: .personal,
+                isCurrentUserMarker: false,
+                isLikedByCurrentUser: false,
+                likeCount: 0,
+                visibility: "private"
+            ),
+            makeMarker(
+                id: UUID(),
+                author: friend,
+                intent: .analysis,
+                isCurrentUserMarker: false,
+                isLikedByCurrentUser: false,
+                likeCount: 0,
+                visibility: "guild"
+            ),
+        ]
+
+        manager.visibilityMode = .all
+        #expect(manager.filteredMarkers.count == 2)
+        #expect(manager.filteredMarkers.allSatisfy {
+            $0.visibility != "private" || $0.author.userId == me.userId
+        })
+    }
+
+    @Test
     func toggleLikeSurvivesConcurrentMarkerRemoval() async throws {
         let me = makeMember(userId: UUID(), username: "me", isFriend: false)
         let manager = MarkerManager(userId: me.userId, guildId: guildId, currentUserMember: me)
@@ -225,6 +276,7 @@ struct MarkerManagerAuditTests {
             confidence: nil,
             trackingEnabled: true,
             trackingState: RLTrackingState.armed.rawValue,
+            alertSeverity: nil,
             createdAt: timestamp,
             createdAtFormatted: "now",
             isVisible: true,
@@ -246,7 +298,8 @@ struct MarkerManagerAuditTests {
             primaryComponentId: nil,
             pollQuestion: nil,
             pollOptions: nil,
-            userPollVote: nil
+            userPollVote: nil,
+            predictionResult: nil
         )
         api.markersResponse = RLMarkersListDTO(markers: [markerDTO], totalCount: 1, hasMore: false, nextCursor: nil)
 
@@ -293,6 +346,7 @@ struct MarkerManagerAuditTests {
             )
         )
 
+        try await Task.sleep(nanoseconds: 20_000_000)
         #expect(manager.markers.first?.trackingState == .active)
     }
 }
@@ -483,7 +537,7 @@ struct ChatAuthorTapRoutingTests {
     }
 }
 
-private final class MarkerAuditFakeAPI: RealAPIService {
+private final class MarkerAuditFakeAPI: MarkerAPIClient {
     var toggleLikeDelayNs: UInt64 = 0
     var addCommentDelayNs: UInt64 = 0
     var shouldFailDeleteComment = false
@@ -522,20 +576,49 @@ private final class MarkerAuditFakeAPI: RealAPIService {
         canDelete: true
     )
 
-    override func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO {
+    func getMarkers(
+        guildId: UUID,
+        symbolId: UUID,
+        timeframe: String,
+        limit: Int,
+        cursor: String?,
+        startTime: Date?,
+        endTime: Date?
+    ) async throws -> RLMarkersListDTO {
+        markersResponse
+    }
+
+    func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO {
+        fatalError("createMarkerV2 should not be called in MarkerAuditFakeAPI")
+    }
+
+    func updateMarkerV2(guildId: UUID, markerId: UUID, request body: RLUpdateMarkerRequest) async throws -> RLChartMarkerDTO {
+        fatalError("updateMarkerV2 should not be called in MarkerAuditFakeAPI")
+    }
+
+    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
+        fatalError("deleteMarker should not be called in MarkerAuditFakeAPI")
+    }
+
+    func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO {
         if toggleLikeDelayNs > 0 {
             try await Task.sleep(nanoseconds: toggleLikeDelayNs)
         }
         return toggleLikeResult
     }
 
-    override func addMarkerComment(
+    func voteOnPoll(guildId: UUID, markerId: UUID, optionId: UUID) async throws -> RLVotePollDTO {
+        fatalError("voteOnPoll should not be called in MarkerAuditFakeAPI")
+    }
+
+    func addMarkerComment(
         guildId: UUID,
         markerId: UUID,
         content: String,
         attachmentUrl: String?,
         attachmentType: String?,
-        attachmentName: String?
+        attachmentName: String?,
+        replyToMessageId: UUID?
     ) async throws -> RLMarkerCommentDTO {
         if addCommentDelayNs > 0 {
             try await Task.sleep(nanoseconds: addCommentDelayNs)
@@ -543,23 +626,29 @@ private final class MarkerAuditFakeAPI: RealAPIService {
         return addCommentResult
     }
 
-    override func deleteMarkerComment(guildId: UUID, markerId: UUID, commentId: UUID) async throws -> RLDetailResponseDTO {
+    func toggleMarkerCommentReaction(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMarkerCommentDTO {
+        fatalError("toggleMarkerCommentReaction should not be called in MarkerAuditFakeAPI")
+    }
+
+    func getMarkerCommentReactionReactors(
+        guildId: UUID,
+        markerId: UUID,
+        commentId: UUID,
+        emoji: String
+    ) async throws -> RLMessageReactionReactorsDTO {
+        fatalError("getMarkerCommentReactionReactors should not be called in MarkerAuditFakeAPI")
+    }
+
+    func deleteMarkerComment(guildId: UUID, markerId: UUID, commentId: UUID) async throws -> RLDetailResponseDTO {
         if shouldFailDeleteComment {
             throw MarkerAuditError.simulatedFailure
         }
         return RLDetailResponseDTO(detail: "ok")
-    }
-
-    override func getMarkers(
-        guildId: UUID,
-        symbolId: UUID,
-        timeframe: String = "1m",
-        limit: Int = 50,
-        cursor: String? = nil,
-        startTime: Date? = nil,
-        endTime: Date? = nil
-    ) async throws -> RLMarkersListDTO {
-        markersResponse
     }
 }
 
@@ -612,6 +701,7 @@ private func makeMarker(
     isCurrentUserMarker: Bool,
     isLikedByCurrentUser: Bool,
     likeCount: Int,
+    visibility: String = "guild",
     comments: [RLMarkerCommentDTO] = []
 ) -> ChartMarkerUI {
     let anchorComponent = RLMarkerComponentDTO(
@@ -642,10 +732,11 @@ private func makeMarker(
         intent: intent.rawValue,
         title: nil,
         note: "test",
-        visibility: "guild",
+        visibility: visibility,
         confidence: nil,
         trackingEnabled: intent == .setup,
         trackingState: intent == .setup ? RLTrackingState.armed.rawValue : nil,
+        alertSeverity: nil,
         createdAt: Date(),
         createdAtFormatted: "now",
         isVisible: true,
@@ -660,7 +751,8 @@ private func makeMarker(
         primaryComponentId: anchorComponent.id,
         pollQuestion: nil,
         pollOptions: nil,
-        userPollVote: nil
+        userPollVote: nil,
+        predictionResult: nil
     )
 
     return ChartMarkerUI(marker: dto, candleIndex: 0)

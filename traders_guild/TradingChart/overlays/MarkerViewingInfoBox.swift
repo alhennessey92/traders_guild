@@ -41,6 +41,11 @@ struct MarkerViewingInfoBox: View {
         )
     }
 
+    private var reactionEmoji: String? {
+        let trimmed = marker.selectedEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     var body: some View {
         Group {
             if isCollapsed {
@@ -74,7 +79,8 @@ struct MarkerViewingInfoBox: View {
             UnifiedMarkerBadge(
                 intent: marker.intent,
                 alertSeverity: marker.alertSeverity,
-                sizeToken: .tiny
+                sizeToken: .tiny,
+                emoji: marker.intent == .reaction ? reactionEmoji : nil
             )
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
@@ -93,7 +99,8 @@ struct MarkerViewingInfoBox: View {
             UnifiedMarkerBadge(
                 intent: marker.intent,
                 alertSeverity: marker.alertSeverity,
-                sizeToken: .small
+                sizeToken: .small,
+                emoji: marker.intent == .reaction ? reactionEmoji : nil
             )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -170,18 +177,17 @@ struct MarkerViewingInfoBox: View {
             bodyText(newsURL ?? marker.note, placeholder: "No link or note provided.")
 
         case .reaction:
-            let emoji = marker.selectedEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if emoji.isEmpty {
-                bodyText(nil, placeholder: "No reaction selected.")
-            } else {
+            if let reactionEmoji {
                 HStack(spacing: 8) {
-                    Text(emoji)
+                    Text(reactionEmoji)
                         .font(.system(size: 22))
                     Text("Reaction selected")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(AppColors.surfaceWhite80)
                     Spacer(minLength: 0)
                 }
+            } else {
+                bodyText(nil, placeholder: "No reaction selected.")
             }
 
         case .personal:
@@ -365,4 +371,3 @@ struct MarkerViewingInfoBox: View {
         return nil
     }
 }
-

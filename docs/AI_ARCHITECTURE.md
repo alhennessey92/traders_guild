@@ -1265,9 +1265,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 222. [FIXED] Claude - Contact support needs work, ui is rough and functionality not great, keyboard needs to be removable by tapping outside etc, send button not working etc…
 
-223. In settings user online status not always working as it should
 
-224. CODEX - When sending photos in chat they appear only as name, no image is appearing. Do we need to implement file storage on hetzner
 
 225. [FIXED] Dark space under bottom bar and x axis needs extending to bottom
 
@@ -1302,7 +1300,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 238. Need to review user permissions making sure things like user blocks, bans, suspended and muted are all applied to relevant areas and things like caps on chat message (50 per hour) for anti spam are in place and marker placement limits etc
 
-239. Crosshair info box needs proper reporting on indicators like stochs and macd etc
+239. [Fixed] Crosshair info box needs proper reporting on indicators like stochs and macd etc
 
 240. Noticed sometimes when interacting with the app the music I am listening to gets paused, this should never happen music shouldn’t be interfered with by the app
 
@@ -1408,3 +1406,27 @@ Make sure you run through all drawing options and make improve them the way they
 252. [Fixed] In marker section in left drawer the timeframe pill needs to be moved next to the symbol name, before the YOU pill, so it always stays there. Also in same list views for markers need to make sure we dedicate a detail section for specifics to the marker - with slightly darker background, this could be question, alert status, setup amrker swing graphic, poll standings etc... make it look visually inline with how it looks in the marker info box on chart. In setup marker because the timeframe pill is moved, can move the live pill next to the active/tracking pill - make sure bottom bar marker section conforms to this new look for list view markers and also profile references showing markers and anywhere else that shows similar list view markers
 
 253. [Fixed] Review all notification ui looks for viewed and unviewed state making sure all have good, clean ui views and all are in accordance with their relative notification and general notification look
+
+
+
+
+254. Need to make sure all instances of keyboard being shown that the text box moves up above keyboard to show text user is typing, go through all marker placement textboxes, chat textboxes in marker chat, symbol chat, chatroom and dm chat. Any settings input, basically any text box in the app needs to make sure it is visible when being selected and keynoard shown
+
+<!-- 255. Maybe remove sub tabs of personal guild and friends and use pills where necessary
+Maybe have active, all, resolved and personal -->
+
+256. News marker allows placement without uploaded news link plus need color aspect to marker
+
+257. Analysis marker should require at least description and 1 component
+
+258. Question marker should require minimum 10 character length question to create
+
+259. Reaction marker needs to update actual marker reference in toolbar and marker detail view with selected emoji
+
+260. Check personal  marker isn’t viewable by other users
+
+261. Alert marker shouldn’t allow placement unless select alert type and entered a description. Will need to move the description up into required box and require at least 10 characters
+
+223. In settings user online status not always working as it should, shows offline when online, need to chexk source
+
+224. When sending photos in chat they appear only as name, no image is appearing. Do we need to implement file storage on hetzner etc to make sure they always show and perhaps increase in size on click

@@ -67,7 +67,8 @@ struct MarkerViewingGeneralTab: View {
             UnifiedMarkerBadge(
                 intent: liveMarker.intent,
                 alertSeverity: liveMarker.alertSeverity,
-                sizeToken: .large
+                sizeToken: .large,
+                emoji: liveMarker.intent == .reaction ? reactionEmoji : nil
             )
 
             VStack(alignment: .leading, spacing: 2) {
