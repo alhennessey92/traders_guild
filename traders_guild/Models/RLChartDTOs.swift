@@ -248,6 +248,52 @@ enum RLTrackingState: String, Codable, CaseIterable {
     }
 }
 
+// =============================================================================
+// MARK: - Marker List Item Data Protocol
+// =============================================================================
+
+/// Shared surface for `RLTopMarkerDTO` and `RLMarkerActivityItemDTO` so that
+/// a single `MarkerListItem` view can render either type without existential boxing.
+protocol MarkerListItemData {
+    var id: UUID { get }
+    var symbolId: UUID { get }
+    var symbolTicker: String { get }
+    var symbolBrandColor: String? { get }
+    var symbolAssetClass: String { get }
+    var authorId: UUID { get }
+    var authorUsername: String { get }
+    var authorInitials: String { get }
+    var authorAvatarUrl: String? { get }
+    var authorIsOnline: Bool { get }
+    var authorReputation: Int { get }
+    var authorAccuracyRate: Double? { get }
+    var authorRole: String { get }
+    var intent: String { get }
+    var title: String? { get }
+    var notePreview: String? { get }
+    var selectedEmoji: String? { get }
+    var createdAt: Date { get }
+    var createdAtFormatted: String { get }
+    var timeframe: String { get }
+    var price: Double { get }
+    var setupSummary: RLSetupSummaryDTO? { get }
+    var likeCount: Int { get set }
+    var isLikedByCurrentUser: Bool { get set }
+    var commentCount: Int { get }
+    var isCurrentUserMarker: Bool { get }
+    var intentEnum: RLMarkerIntent { get }
+    var authorAccuracyFormatted: String? { get }
+
+    // Activity-only fields (optional for RLTopMarkerDTO)
+    var predictionResult: RLPredictionResultDTO? { get }
+    var displayTimestamp: String { get }
+    var trackingStateEnum: RLTrackingState? { get }
+}
+
+extension MarkerListItemData {
+    var selectedEmoji: String? { nil }
+}
+
 enum RLComponentType: String, Codable, CaseIterable {
     case anchor = "anchor"
     case levelEntry = "level.entry"
@@ -1367,6 +1413,7 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let intent: String
     let title: String?
     let notePreview: String?
+    let selectedEmoji: String?
     let createdAt: Date
     let createdAtFormatted: String
     
@@ -1406,6 +1453,15 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     }
 
     var intentEnum: RLMarkerIntent { RLMarkerIntent(rawValue: intent) ?? .analysis }
+}
+
+extension RLTopMarkerDTO: MarkerListItemData {
+    var predictionResult: RLPredictionResultDTO? { nil }
+    var displayTimestamp: String { createdAtFormatted }
+    var trackingStateEnum: RLTrackingState? {
+        guard let rawState = setupSummary?.trackingState else { return nil }
+        return RLTrackingState(rawValue: rawState)
+    }
 }
 
 struct RLSetupSummaryDTO: Codable, Hashable {
@@ -1547,6 +1603,80 @@ enum RLMarkerActivityTopTab: String, Codable, CaseIterable, UnifiedTabItem {
     }
 }
 
+// =============================================================================
+// MARK: - Bottom Bar Marker Sub-Tabs (Redesigned)
+// =============================================================================
+
+enum MarkerSheetSubTab: String, CaseIterable, UnifiedTabItem {
+    case liveFeed = "Live Feed"
+    case setups = "Setups"
+    case byTimeframe = "By Timeframe"
+    case all = "All"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .liveFeed: return "bolt.horizontal.fill"
+        case .setups: return "target"
+        case .byTimeframe: return "clock.fill"
+        case .all: return "square.grid.2x2.fill"
+        }
+    }
+}
+
+enum MarkerScopeToggle: String, CaseIterable {
+    case everyone = "All"
+    case friends = "Friends"
+
+    var apiScope: RLMarkerActivityScope {
+        switch self {
+        case .everyone: return .guild
+        case .friends: return .friends
+        }
+    }
+}
+
+// =============================================================================
+// MARK: - Left Drawer Marker Tabs (Redesigned)
+// =============================================================================
+
+enum DrawerMarkerTab: String, CaseIterable, UnifiedTabItem {
+    case liveFeed = "Live Feed"
+    case setups = "Setups"
+    case bySymbol = "By Symbol"
+    case all = "All"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .liveFeed: return "bolt.horizontal.fill"
+        case .setups: return "target"
+        case .bySymbol: return "list.bullet.rectangle.fill"
+        case .all: return "square.grid.2x2.fill"
+        }
+    }
+}
+
+enum DrawerScopeToggle: String, CaseIterable {
+    case everyone = "All"
+    case friends = "Friends"
+    case mine = "Mine"
+
+    var apiScope: RLMarkerActivityScope {
+        switch self {
+        case .everyone: return .guild
+        case .friends: return .friends
+        case .mine: return .personal
+        }
+    }
+}
+
+// =============================================================================
+// MARK: - Marker Activity Item DTO
+// =============================================================================
+
 struct RLMarkerActivityItemDTO: Codable, Identifiable, Equatable, Hashable {
     let id: UUID
     let symbolId: UUID
@@ -1567,6 +1697,7 @@ struct RLMarkerActivityItemDTO: Codable, Identifiable, Equatable, Hashable {
     let intent: String
     let title: String?
     let notePreview: String?
+    let selectedEmoji: String?
     let createdAt: Date
     let createdAtFormatted: String
     let activityTimestamp: Date
@@ -1597,6 +1728,10 @@ struct RLMarkerActivityItemDTO: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
+extension RLMarkerActivityItemDTO: MarkerListItemData {
+    var displayTimestamp: String { activityTimestampFormatted }
+}
+
 struct RLMarkerActivityListDTO: Codable {
     let markers: [RLMarkerActivityItemDTO]
     let totalCount: Int
@@ -1625,6 +1760,7 @@ extension RLMarkerActivityItemDTO {
             intent: intent,
             title: title,
             notePreview: notePreview,
+            selectedEmoji: selectedEmoji,
             createdAt: createdAt,
             createdAtFormatted: createdAtFormatted,
             candleTimestamp: candleTimestamp,

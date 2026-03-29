@@ -3,26 +3,39 @@
 //  traders_guild
 //
 //  Left drawer marker activity feed.
-//  Active | Today | This Week | This Month | Resolved
-//  Guild | Friends | Personal
+//  Live Feed | Setups | By Symbol | All
+//  Scope via inline pill toggle (Everyone / Friends / Mine)
 //
 
 import SwiftUI
+
+private struct TopMarkerSetupCacheEntry {
+    let live: [RLMarkerActivityItemDTO]
+    let resolved: [RLMarkerActivityItemDTO]
+}
 
 struct TopMarkersView: View {
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
     @EnvironmentObject var rlAppState: RLAppState
 
-    @State private var selectedTopTab: RLMarkerActivityTopTab = .active
-    @State private var selectedScope: RLMarkerActivityScope = .guild
+    @State private var selectedTab: DrawerMarkerTab = .liveFeed
+    @State private var selectedScope: DrawerScopeToggle = .everyone
 
-    @State private var activitySnapshots: [RLMarkerActivityTopTab: MarkerActivityFeedSnapshot] = [:]
+    @State private var recentMarkers: [RLMarkerActivityItemDTO] = []
+    @State private var archiveMarkers: [RLMarkerActivityItemDTO] = []
+    @State private var setupsLiveMarkers: [RLMarkerActivityItemDTO] = []
+    @State private var setupsResolvedMarkers: [RLMarkerActivityItemDTO] = []
+
+    @State private var recentCache: [String: [RLMarkerActivityItemDTO]] = [:]
+    @State private var archiveCache: [String: [RLMarkerActivityItemDTO]] = [:]
+    @State private var setupsCache: [String: TopMarkerSetupCacheEntry] = [:]
+
     @State private var symbolCache: [UUID: RLTradingSymbolDTO] = [:]
     @State private var cacheNamespace = ""
     @State private var isLoading = false
-    @State private var hasLoaded = false
     @State private var loadError: String?
     @State private var likedMarkerId: UUID?
+    @State private var activeLoadRequestId = 0
 
     var onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
 
@@ -33,43 +46,35 @@ struct TopMarkersView: View {
     }
 
     private var visibleLoadKey: String {
-        "\(reloadKey)|\(selectedTopTab.rawValue)"
-    }
-
-    private var selectedMarkers: [RLMarkerActivityItemDTO] {
-        activitySnapshots[selectedTopTab]?.markersByScope[selectedScope] ?? []
+        "\(reloadKey)|\(selectedTab.rawValue)|\(selectedScope.rawValue)"
     }
 
     private var currentTotalCount: Int {
-        activitySnapshots[selectedTopTab]?.totalCountByScope[selectedScope] ?? selectedMarkers.count
+        switch selectedTab {
+        case .liveFeed:
+            return recentMarkers.count
+        case .setups:
+            return setupsLiveMarkers.count + setupsResolvedMarkers.count
+        case .bySymbol, .all:
+            return archiveMarkers.count
+        }
+    }
+
+    private var symbolGroups: [MarkerSymbolGroup] {
+        MarkerActivityNavigation.symbolGroups(from: archiveMarkers)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             UnifiedTabBar(
-                selectedTab: $selectedTopTab,
+                selectedTab: $selectedTab,
                 size: .compact,
-                theme: .componentsTabs,
-                countForTab: { tab in
-                    activitySnapshots[tab]?.totalCountByScope[selectedScope] ?? 0
-                },
+                theme: .markerNavigation,
                 spacing: 6
             )
             .padding(.horizontal, 12)
             .padding(.top, 4)
             .padding(.bottom, 8)
-
-            UnifiedTabBar(
-                selectedTab: $selectedScope,
-                size: .compact,
-                theme: .subTab,
-                countForTab: { scope in
-                    activitySnapshots[selectedTopTab]?.totalCountByScope[scope] ?? 0
-                },
-                spacing: 6
-            )
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
 
             summaryBadge
                 .padding(.horizontal, 12)
@@ -82,7 +87,7 @@ struct TopMarkersView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 20)
             }
-        .refreshable {
+            .refreshable {
                 await loadActivity(forceRefresh: true)
             }
         }
@@ -110,93 +115,194 @@ struct TopMarkersView: View {
         }
     }
 
-    @ViewBuilder
-    private var content: some View {
-        if isLoading && !hasLoaded {
-            UnifiedLoadingState(message: "Loading marker activity...")
-                .padding(.top, 40)
-        } else if let loadError, selectedMarkers.isEmpty {
-            UnifiedEmptyState(
-                icon: "exclamationmark.triangle",
-                title: "Unable to load marker activity",
-                subtitle: loadError
-            )
-            .padding(.top, 36)
-        } else if selectedMarkers.isEmpty {
-            UnifiedEmptyState(
-                icon: emptyStateIcon,
-                title: emptyStateTitle,
-                subtitle: emptyStateSubtitle
-            )
-            .padding(.top, 36)
-        } else {
-            LazyVStack(spacing: 10) {
-                ForEach(selectedMarkers) { marker in
-                    MarkerActivityCard(
-                        marker: marker,
-                        showMyBadge: marker.isCurrentUserMarker,
-                        currentPrice: symbolCache[marker.symbolId]?.currentPrice,
-                        likeAnimationMarkerId: likedMarkerId,
-                        onLike: { handleLike(marker: marker) },
-                        onTap: { handleMarkerTap(marker: marker) }
-                    )
-                }
-            }
-        }
-    }
-
     private var summaryBadge: some View {
         HStack(spacing: 8) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.caption)
                 .foregroundColor(AppColors.statusInfo80)
 
-            Text("\(selectedTopTab.title) • \(selectedScope.title) • \(currentTotalCount) markers")
+            Text("\(selectedTab.title) \u{2022} \(selectedScope.rawValue) \u{2022} \(currentTotalCount) markers")
                 .font(.caption2)
                 .foregroundColor(.gray)
                 .lineLimit(1)
 
             Spacer()
+
+            drawerScopePill
         }
     }
 
-    private var emptyStateIcon: String {
-        switch selectedTopTab {
-        case .active: return "bolt"
-        case .today: return "sun.max"
-        case .thisWeek: return "calendar"
-        case .thisMonth: return "calendar.badge.clock"
-        case .resolved: return "checkmark.circle"
+    private var drawerScopePill: some View {
+        HStack(spacing: 0) {
+            ForEach(DrawerScopeToggle.allCases, id: \.self) { toggle in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedScope = toggle
+                    }
+                } label: {
+                    Text(toggle.rawValue)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(selectedScope == toggle ? .white : AppColors.surfaceWhite60)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(
+                            selectedScope == toggle
+                                ? Capsule().fill(AppColors.statusInfo60)
+                                : Capsule().fill(Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(
+            Capsule().fill(AppColors.surfaceWhite08)
+        )
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isLoading && recentMarkers.isEmpty && archiveMarkers.isEmpty && setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
+            UnifiedLoadingState(message: "Loading marker activity...")
+                .padding(.top, 40)
+        } else if let loadError, recentMarkers.isEmpty && archiveMarkers.isEmpty && setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
+            UnifiedEmptyState(
+                icon: "exclamationmark.triangle",
+                title: "Unable to load marker activity",
+                subtitle: loadError
+            )
+            .padding(.top, 36)
+        } else {
+            switch selectedTab {
+            case .liveFeed:
+                liveFeedContent
+            case .setups:
+                setupsContent
+            case .bySymbol:
+                bySymbolContent
+            case .all:
+                allMarkersContent
+            }
         }
     }
 
-    private var emptyStateTitle: String {
-        switch selectedTopTab {
-        case .active: return "No Active Setups"
-        case .today: return "No Markers Today"
-        case .thisWeek: return "No Markers This Week"
-        case .thisMonth: return "No Markers This Month"
-        case .resolved: return "No Resolved Setups"
+    @ViewBuilder
+    private var liveFeedContent: some View {
+        if recentMarkers.isEmpty {
+            UnifiedEmptyState(
+                icon: "bolt.horizontal",
+                title: "No Recent Activity",
+                subtitle: "Recent \(selectedScope.rawValue.lowercased()) marker activity will appear here."
+            )
+            .padding(.top, 36)
+        } else {
+            markerList(recentMarkers)
         }
     }
 
-    private var emptyStateSubtitle: String {
-        switch selectedTopTab {
-        case .active:
-            return "\(selectedScope.title) tracked setup markers will appear here while they are being watched."
-        case .resolved:
-            return "\(selectedScope.title) setups that hit TP, SL, or expired will appear here."
-        case .today, .thisWeek, .thisMonth:
-            return "\(selectedScope.title) marker activity in this time window will appear here."
+    @ViewBuilder
+    private var setupsContent: some View {
+        if setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
+            UnifiedEmptyState(
+                icon: "target",
+                title: "No Setups",
+                subtitle: "\(selectedScope.rawValue) tracked setup markers will appear here."
+            )
+            .padding(.top, 36)
+        } else {
+            VStack(spacing: 12) {
+                if !setupsLiveMarkers.isEmpty {
+                    UnifiedDisclosureGroup(
+                        title: "Live",
+                        count: setupsLiveMarkers.count,
+                        icon: "bolt.fill",
+                        iconColor: AppColors.statusPositive70,
+                        isExpandedByDefault: true
+                    ) {
+                        markerList(setupsLiveMarkers)
+                    }
+                }
+
+                if !setupsResolvedMarkers.isEmpty {
+                    UnifiedDisclosureGroup(
+                        title: "Resolved",
+                        count: setupsResolvedMarkers.count,
+                        icon: "checkmark.circle.fill",
+                        iconColor: AppColors.surfaceWhite60,
+                        isExpandedByDefault: false
+                    ) {
+                        markerList(setupsResolvedMarkers)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var bySymbolContent: some View {
+        if symbolGroups.isEmpty {
+            UnifiedEmptyState(
+                icon: "list.bullet.rectangle",
+                title: "No Markers by Symbol",
+                subtitle: "\(selectedScope.rawValue) marker activity grouped by symbol will appear here."
+            )
+            .padding(.top, 36)
+        } else {
+            VStack(spacing: 8) {
+                ForEach(symbolGroups) { symbolGroup in
+                    UnifiedDisclosureGroup(
+                        title: symbolGroup.ticker,
+                        count: symbolGroup.count,
+                        icon: "chart.xyaxis.line",
+                        iconColor: colorForSymbolGroup(symbolGroup),
+                        isExpandedByDefault: false
+                    ) {
+                        markerList(symbolGroup.markers)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var allMarkersContent: some View {
+        if archiveMarkers.isEmpty {
+            UnifiedEmptyState(
+                icon: "square.grid.2x2",
+                title: "No Markers",
+                subtitle: "\(selectedScope.rawValue) marker archive will appear here."
+            )
+            .padding(.top, 36)
+        } else {
+            markerList(archiveMarkers)
+        }
+    }
+
+    private func markerList(_ markers: [RLMarkerActivityItemDTO]) -> some View {
+        LazyVStack(spacing: 10) {
+            ForEach(markers) { marker in
+                MarkerListItem(
+                    marker: marker,
+                    style: .capsule,
+                    showMyBadge: marker.isCurrentUserMarker,
+                    currentPrice: symbolCache[marker.symbolId]?.currentPrice,
+                    likeAnimationMarkerId: likedMarkerId,
+                    onLike: { handleLike(marker: marker) },
+                    onTap: { handleMarkerTap(marker: marker) }
+                )
+            }
         }
     }
 
     private func loadActivity(forceRefresh: Bool) async {
+        let requestId = await MainActor.run {
+            activeLoadRequestId += 1
+            return activeLoadRequestId
+        }
+
         guard let guildId = rlAppState.currentGuild?.id else {
-            await MainActor.run {
-                activitySnapshots = [:]
+            applyIfCurrentRequest(requestId) {
+                resetAllState()
                 cacheNamespace = reloadKey
-                hasLoaded = true
                 loadError = "Select a guild to load marker activity."
                 isLoading = false
             }
@@ -204,91 +310,149 @@ struct TopMarkersView: View {
         }
 
         if cacheNamespace != reloadKey {
-            await MainActor.run {
+            applyIfCurrentRequest(requestId) {
                 cacheNamespace = reloadKey
-                activitySnapshots = [:]
+                resetAllState()
                 symbolCache = [:]
-                hasLoaded = false
                 loadError = nil
             }
         }
 
-        let requestTab = selectedTopTab
+        let requestTab = selectedTab
+        let scope = selectedScope.apiScope
+        let loadKey = selectedScope.rawValue
 
-        if !forceRefresh, activitySnapshots[requestTab] != nil, hasLoaded {
-            return
+        if !forceRefresh {
+            switch requestTab {
+            case .liveFeed:
+                if let cachedMarkers = recentCache[loadKey] {
+                    applyIfCurrentRequest(requestId) {
+                        recentMarkers = cachedMarkers
+                        loadError = nil
+                        isLoading = false
+                    }
+                    await loadLiveSymbols(for: cachedMarkers)
+                    return
+                }
+            case .setups:
+                if let cachedEntry = setupsCache[loadKey] {
+                    applyIfCurrentRequest(requestId) {
+                        setupsLiveMarkers = cachedEntry.live
+                        setupsResolvedMarkers = cachedEntry.resolved
+                        loadError = nil
+                        isLoading = false
+                    }
+                    await loadLiveSymbols(for: cachedEntry.live + cachedEntry.resolved)
+                    return
+                }
+            case .bySymbol, .all:
+                if let cachedMarkers = archiveCache[loadKey] {
+                    applyIfCurrentRequest(requestId) {
+                        archiveMarkers = cachedMarkers
+                        loadError = nil
+                        isLoading = false
+                    }
+                    await loadLiveSymbols(for: cachedMarkers)
+                    return
+                }
+            }
         }
 
-        await MainActor.run {
+        applyIfCurrentRequest(requestId) {
             isLoading = true
-            if forceRefresh {
-                loadError = nil
-            }
+            loadError = nil
         }
 
         do {
-            let snapshot = try await MarkerActivityFeedLoader.loadTopTab(
-                api: rlAppState.realApi,
-                guildId: guildId,
-                topTab: requestTab,
-                scopes: Array(RLMarkerActivityScope.allCases),
-                limit: 60
-            )
+            switch requestTab {
+            case .liveFeed:
+                let markers = try await loadMarkers(
+                    guildId: guildId,
+                    scope: scope,
+                    loadMode: .recentFeed
+                )
 
-            guard !Task.isCancelled else { return }
+                guard isCurrentRequest(requestId) else { return }
 
-            await MainActor.run {
-                activitySnapshots[requestTab] = snapshot
-                hasLoaded = true
-                loadError = nil
-                isLoading = false
-            }
+                applyIfCurrentRequest(requestId) {
+                    recentCache[loadKey] = markers
+                    recentMarkers = markers
+                    loadError = nil
+                    isLoading = false
+                }
 
-            await loadLiveSymbols(for: Array(snapshot.markersByScope.values.joined()))
+                await loadLiveSymbols(for: markers)
 
-            Task {
-                await prefetchRemainingTabs(excluding: requestTab, guildId: guildId)
+            case .setups:
+                async let liveMarkers = loadMarkers(
+                    guildId: guildId,
+                    scope: scope,
+                    loadMode: .setupsLive
+                )
+                async let resolvedMarkers = loadMarkers(
+                    guildId: guildId,
+                    scope: scope,
+                    loadMode: .setupsResolved
+                )
+
+                let (live, resolved) = try await (liveMarkers, resolvedMarkers)
+                guard !Task.isCancelled else { return }
+
+                guard isCurrentRequest(requestId) else { return }
+
+                applyIfCurrentRequest(requestId) {
+                    setupsCache[loadKey] = TopMarkerSetupCacheEntry(live: live, resolved: resolved)
+                    setupsLiveMarkers = live
+                    setupsResolvedMarkers = resolved
+                    loadError = nil
+                    isLoading = false
+                }
+
+                await loadLiveSymbols(for: live + resolved)
+
+            case .bySymbol, .all:
+                let markers = try await loadMarkers(
+                    guildId: guildId,
+                    scope: scope,
+                    loadMode: .archive
+                )
+
+                guard isCurrentRequest(requestId) else { return }
+
+                applyIfCurrentRequest(requestId) {
+                    archiveCache[loadKey] = markers
+                    archiveMarkers = markers
+                    loadError = nil
+                    isLoading = false
+                }
+
+                await loadLiveSymbols(for: markers)
             }
         } catch {
             guard !isCancellationError(error) else { return }
-            await MainActor.run {
-                hasLoaded = true
+            applyIfCurrentRequest(requestId) {
                 loadError = error.localizedDescription
                 isLoading = false
             }
         }
     }
 
-    private func prefetchRemainingTabs(
-        excluding activeTab: RLMarkerActivityTopTab,
-        guildId: UUID
-    ) async {
-        await withTaskGroup(of: (RLMarkerActivityTopTab, MarkerActivityFeedSnapshot?).self) { group in
-            for tab in RLMarkerActivityTopTab.allCases where tab != activeTab && activitySnapshots[tab] == nil {
-                group.addTask {
-                    do {
-                        let snapshot = try await MarkerActivityFeedLoader.loadTopTab(
-                            api: rlAppState.realApi,
-                            guildId: guildId,
-                            topTab: tab,
-                            scopes: Array(RLMarkerActivityScope.allCases),
-                            limit: 60
-                        )
-                        return (tab, snapshot)
-                    } catch {
-                        return (tab, nil)
-                    }
-                }
-            }
+    private func loadMarkers(
+        guildId: UUID,
+        scope: RLMarkerActivityScope,
+        loadMode: MarkerActivityListLoadMode
+    ) async throws -> [RLMarkerActivityItemDTO] {
+        let snapshot = try await MarkerActivityFeedLoader.loadForScope(
+            api: rlAppState.realApi,
+            guildId: guildId,
+            scope: scope,
+            state: loadMode.state,
+            limit: loadMode.limit,
+            fetchAllPages: loadMode.fetchAllPages
+        )
 
-            for await (tab, snapshot) in group {
-                guard let snapshot else { continue }
-                await MainActor.run {
-                    activitySnapshots[tab] = snapshot
-                }
-                await loadLiveSymbols(for: Array(snapshot.markersByScope.values.joined()))
-            }
-        }
+        guard !Task.isCancelled else { return [] }
+        return MarkerActivityNavigation.sortedByActivity(snapshot.markersByScope[scope] ?? [])
     }
 
     private func loadLiveSymbols(for markers: [RLMarkerActivityItemDTO], forceReload: Bool = false) async {
@@ -338,7 +502,7 @@ struct TopMarkersView: View {
                     updateMarkerLike(markerId: marker.id, isLiked: result.isLiked, likeCount: result.likeCount)
                 }
             } catch {
-                print("⚠️ Failed to toggle marker like: \(error)")
+                print("Failed to toggle marker like: \(error)")
             }
         }
     }
@@ -356,25 +520,61 @@ struct TopMarkersView: View {
     }
 
     private func updateMarkerLike(markerId: UUID, isLiked: Bool, likeCount: Int) {
-        for key in activitySnapshots.keys {
-            guard let snapshot = activitySnapshots[key] else { continue }
+        updateLike(in: &recentMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+        updateLike(in: &archiveMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+        updateLike(in: &setupsLiveMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+        updateLike(in: &setupsResolvedMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
 
-            var markersByScope = snapshot.markersByScope
-            for scope in markersByScope.keys {
-                guard var markers = markersByScope[scope] else { continue }
-                if let index = markers.firstIndex(where: { $0.id == markerId }) {
-                    markers[index].isLikedByCurrentUser = isLiked
-                    markers[index].likeCount = likeCount
-                    markersByScope[scope] = markers
-                }
-            }
-
-            activitySnapshots[key] = MarkerActivityFeedSnapshot(
-                markersByScope: markersByScope,
-                totalCountByScope: snapshot.totalCountByScope,
-                lastUpdated: Date()
-            )
+        for key in recentCache.keys {
+            guard var markers = recentCache[key] else { continue }
+            updateLike(in: &markers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            recentCache[key] = markers
         }
+
+        for key in archiveCache.keys {
+            guard var markers = archiveCache[key] else { continue }
+            updateLike(in: &markers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            archiveCache[key] = markers
+        }
+
+        for key in setupsCache.keys {
+            guard var entry = setupsCache[key] else { continue }
+            var live = entry.live
+            var resolved = entry.resolved
+            updateLike(in: &live, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            updateLike(in: &resolved, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            entry = TopMarkerSetupCacheEntry(live: live, resolved: resolved)
+            setupsCache[key] = entry
+        }
+    }
+
+    private func updateLike(
+        in markers: inout [RLMarkerActivityItemDTO],
+        markerId: UUID,
+        isLiked: Bool,
+        likeCount: Int
+    ) {
+        guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
+        markers[index].isLikedByCurrentUser = isLiked
+        markers[index].likeCount = likeCount
+    }
+
+    private func colorForSymbolGroup(_ group: MarkerSymbolGroup) -> Color {
+        if let brandColor = group.brandColor,
+           let color = Color(hex: brandColor) {
+            return color
+        }
+        return AppColors.statusInfo80
+    }
+
+    private func resetAllState() {
+        recentMarkers = []
+        archiveMarkers = []
+        setupsLiveMarkers = []
+        setupsResolvedMarkers = []
+        recentCache = [:]
+        archiveCache = [:]
+        setupsCache = [:]
     }
 
     private func shouldRefresh(for notification: Notification) -> Bool {
@@ -401,384 +601,15 @@ struct TopMarkersView: View {
         let nsError = error as NSError
         return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
     }
-}
 
-struct MarkerActivityCard: View {
-    let marker: RLMarkerActivityItemDTO
-    var showMyBadge: Bool = false
-    var currentPrice: Double? = nil
-    var likeAnimationMarkerId: UUID? = nil
-    var onLike: (() -> Void)? = nil
-    let onTap: () -> Void
-
-    private var isLikeAnimating: Bool {
-        likeAnimationMarkerId == marker.id
+    @MainActor
+    private func applyIfCurrentRequest(_ requestId: Int, updates: () -> Void) {
+        guard requestId == activeLoadRequestId else { return }
+        updates()
     }
 
-    private var trackingState: RLTrackingState? {
-        marker.trackingStateEnum
-    }
-
-    private var approachingStatus: MarkerPredictionProgressStatus? {
-        guard marker.intentEnum == .setup,
-              let setupSummary = marker.setupSummary,
-              let trackingState,
-              trackingState.isLive else { return nil }
-
-        let status = MarkerPredictionProgress.status(
-            entryPrice: setupSummary.entryPrice ?? marker.price,
-            currentPrice: currentPrice,
-            targetPrice: setupSummary.tpPrice,
-            stopLossPrice: setupSummary.slPrice
-        )
-        return (status == .approachingTP || status == .approachingSL) ? status : nil
-    }
-
-    private var liveSetupMetrics: LiveSetupMetrics? {
-        guard marker.intentEnum == .setup,
-              let setupSummary = marker.setupSummary,
-              let trackingState,
-              trackingState.isLive,
-              let stopLossPrice = setupSummary.slPrice,
-              let targetPrice = setupSummary.tpPrice,
-              let currentPrice else { return nil }
-
-        let entryPrice = setupSummary.entryPrice ?? marker.price
-        return LiveSetupMetrics.compute(
-            entryPrice: entryPrice,
-            stopLossPrice: stopLossPrice,
-            targetPrice: targetPrice,
-            currentPrice: currentPrice
-        )
-    }
-
-    private var outcome: SetupOutcome? {
-        guard marker.intentEnum == .setup,
-              let trackingState,
-              trackingState.isResolved else { return nil }
-
-        return SetupOutcome(
-            state: trackingState,
-            resultType: marker.predictionResult?.resultType,
-            triggerPrice: marker.predictionResult?.triggerPrice,
-            triggeredAtFormatted: marker.predictionResult?.triggeredAtFormatted,
-            pnl: marker.predictionResult?.pnl,
-            isTracked: true,
-            guildRepDelta: marker.predictionResult?.guildRepDelta,
-            globalRepDelta: marker.predictionResult?.globalRepDelta
-        )
-    }
-
-    private var shortTypeName: String {
-        switch marker.intentEnum {
-        case .analysis: return "Analysis"
-        case .setup: return "Setup"
-        case .alert: return "Alert"
-        case .question: return "Question"
-        case .poll: return "Poll"
-        case .news: return "News"
-        case .reaction: return "React"
-        case .personal: return "Private"
-        }
-    }
-
-    var body: some View {
-        UnifiedContentCard(onTap: onTap) {
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 8) {
-                    VStack(spacing: 1) {
-                        UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .small)
-                        Text(shortTypeName)
-                            .font(.system(size: 7, weight: .medium))
-                            .foregroundColor(marker.intentEnum.color.opacity(0.9))
-                            .lineLimit(1)
-                    }
-                    .frame(width: 34)
-                    .padding(.top, 4)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        // Row 1: Symbol + Timeframe + YOU + Like
-                        HStack(spacing: 4) {
-                            if let brandColor = marker.symbolBrandColor {
-                                Circle()
-                                    .fill(Color(hex: brandColor) ?? .blue)
-                                    .frame(width: 6, height: 6)
-                            }
-                            Text(marker.symbolTicker)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(AppColors.whiteText)
-
-                            MarkerActivityMetaChip(
-                                icon: "clock",
-                                text: marker.timeframe.uppercased(),
-                                tint: AppColors.whiteText.opacity(0.85),
-                                background: AppColors.whiteText.opacity(0.10)
-                            )
-
-                            if showMyBadge {
-                                Text("YOU")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(AppColors.statusInfo60))
-                            }
-
-                            Spacer()
-
-                            if let onLike {
-                                Button(action: onLike) {
-                                    HStack(spacing: 2) {
-                                        Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
-                                            .font(.system(size: 10))
-                                            .scaleEffect(isLikeAnimating ? 1.3 : 1.0)
-                                        Text("\(marker.likeCount)")
-                                            .font(.system(size: 11, weight: .medium))
-                                    }
-                                    .foregroundColor(
-                                        marker.isLikedByCurrentUser
-                                            ? AppColors.markerHeartTint
-                                            : AppColors.markerHeartMuted
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            } else {
-                                HStack(spacing: 2) {
-                                    Image(systemName: marker.isLikedByCurrentUser ? "heart.fill" : "heart")
-                                        .font(.system(size: 10))
-                                    Text("\(marker.likeCount)")
-                                        .font(.system(size: 11, weight: .medium))
-                                }
-                                .foregroundColor(
-                                    marker.isLikedByCurrentUser
-                                        ? AppColors.markerHeartTint
-                                        : AppColors.markerHeartMuted
-                                )
-                            }
-                        }
-
-                        // Row 2: LIVE + Tracking + Approaching pills
-                        HStack(spacing: 6) {
-                            if let trackingState, trackingState.isLive {
-                                Text("LIVE")
-                                    .font(.system(size: 8, weight: .heavy))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(AppColors.statusPositive70))
-                            }
-
-                            if let trackingState {
-                                TrackingStatePill(state: trackingState, size: .compact)
-                            }
-
-                            if let approachingStatus {
-                                ApproachingLevelChip(status: approachingStatus)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.top, 2)
-
-                        // Row 3: Note preview (only for types without a specifics section)
-                        if !markerHasSpecificsContent,
-                           let note = marker.notePreview, !note.isEmpty {
-                            Text(note)
-                                .font(.system(size: 12))
-                                .foregroundColor(AppColors.whiteText.opacity(0.75))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .padding(.top, 2)
-                        }
-
-                        // Row 4: Marker specifics section
-                        markerSpecificsContent
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 10)
-                .padding(.bottom, 14)
-
-                UnifiedAuthorFooter(
-                    username: marker.authorUsername,
-                    isOnline: marker.authorIsOnline,
-                    role: RLMemberRole(from: marker.authorRole),
-                    reputation: marker.authorReputation,
-                    accuracy: marker.authorAccuracyFormatted,
-                    timeText: marker.activityTimestampFormatted,
-                    showOnlineStatus: false
-                )
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var markerSpecificsContent: some View {
-        if markerHasSpecificsContent {
-            MarkerListSpecificsSection {
-                switch marker.intentEnum {
-                case .setup:
-                    if let outcome {
-                        HStack(spacing: 6) {
-                            if let pnl = outcome.pnl {
-                                MarkerActivityMetaChip(
-                                    icon: outcome.isWin ? "arrow.up.right" : "arrow.down.right",
-                                    text: formatPnL(pnl),
-                                    tint: outcomeTint(outcome),
-                                    background: outcomeTint(outcome).opacity(0.15)
-                                )
-                            } else if outcome.isExpired {
-                                MarkerActivityMetaChip(
-                                    icon: "clock.badge.xmark",
-                                    text: "No score impact",
-                                    tint: AppColors.surfaceGray90,
-                                    background: AppColors.surfaceWhite08
-                                )
-                            }
-                        }
-                    } else if let liveSetupMetrics {
-                        MarkerActivityMetaChip(
-                            icon: liveSetupMetrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right",
-                            text: "Live \(formatPnL(liveSetupMetrics.currentPnL))",
-                            tint: liveSetupMetrics.isMovingTowardTarget
-                                ? RLComponentType.levelTp.color
-                                : RLComponentType.levelSl.color,
-                            background: liveSetupMetrics.isMovingTowardTarget
-                                ? RLComponentType.levelTp.color.opacity(0.15)
-                                : RLComponentType.levelSl.color.opacity(0.15)
-                        )
-                        UnifiedSetupProgressStrip(
-                            metrics: liveSetupMetrics,
-                            size: .standard,
-                            formatPrice: formatPrice(_:)
-                        )
-                    }
-
-                case .question:
-                    MarkerListSpecificsLabel(label: "QUESTION", color: marker.intentEnum.color)
-                    if let note = marker.notePreview, !note.isEmpty {
-                        Text(note)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppColors.surfaceWhite92)
-                            .lineLimit(2)
-                    }
-
-                case .alert:
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("Alert")
-                            .font(.system(size: 9.5, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(marker.intentEnum.color.opacity(0.40))
-                            .overlay(Capsule().stroke(marker.intentEnum.color.opacity(0.60), lineWidth: 1))
-                    )
-                    if let note = marker.notePreview, !note.isEmpty {
-                        Text(note)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppColors.surfaceWhite85)
-                            .lineLimit(2)
-                    }
-
-                case .poll:
-                    MarkerListSpecificsLabel(label: "POLL", color: marker.intentEnum.color)
-                    if let note = marker.notePreview, !note.isEmpty {
-                        Text(note)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppColors.surfaceWhite85)
-                            .lineLimit(2)
-                    }
-
-                case .analysis:
-                    if let note = marker.notePreview, !note.isEmpty {
-                        Text(note)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppColors.surfaceWhite85)
-                            .lineLimit(2)
-                    }
-
-                case .news:
-                    MarkerListSpecificsLabel(label: "NEWS", color: marker.intentEnum.color)
-                    if let note = marker.notePreview, !note.isEmpty {
-                        Text(note)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppColors.surfaceWhite85)
-                            .lineLimit(1)
-                    }
-
-                default:
-                    EmptyView()
-                }
-            }
-        }
-    }
-
-    private var markerHasSpecificsContent: Bool {
-        switch marker.intentEnum {
-        case .setup:
-            return outcome != nil || liveSetupMetrics != nil
-        case .question, .alert, .poll, .news:
-            return true
-        case .analysis:
-            return marker.notePreview != nil && !(marker.notePreview?.isEmpty ?? true)
-        default:
-            return false
-        }
-    }
-
-    private func outcomeTint(_ outcome: SetupOutcome) -> Color {
-        if outcome.isWin { return AppColors.statusPositive70 }
-        if outcome.isLoss { return AppColors.statusNegative70 }
-        return AppColors.surfaceGray90
-    }
-
-    private func formatPnL(_ pnl: Double) -> String {
-        String(format: "%@%.2f%%", pnl >= 0 ? "+" : "", pnl)
-    }
-
-    private func formatPrice(_ price: Double) -> String {
-        let absolute = abs(price)
-        if absolute >= 1000 {
-            return String(format: "%.2f", price)
-        }
-        if absolute >= 1 {
-            return String(format: "%.4f", price)
-        }
-        return String(format: "%.6f", price)
-    }
-}
-
-// LiveSetupMetrics & UnifiedSetupProgressStrip are defined in
-// MarkerPredictionProgress.swift and UnifiedComponents.swift respectively.
-
-struct MarkerActivityMetaChip: View {
-    let icon: String
-    let text: String
-    let tint: Color
-    let background: Color
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 8, weight: .semibold))
-            Text(text)
-                .font(.system(size: 9, weight: .bold))
-        }
-        .foregroundColor(tint)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(
-            Capsule()
-                .fill(background)
-                .overlay(
-                    Capsule()
-                        .stroke(tint.opacity(0.18), lineWidth: 1)
-                )
-        )
+    @MainActor
+    private func isCurrentRequest(_ requestId: Int) -> Bool {
+        requestId == activeLoadRequestId
     }
 }

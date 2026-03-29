@@ -4,7 +4,8 @@
 //
 //  Chart bottom-sheet marker management:
 //  Add | Markers | Analysis
-//  Markers -> Active | Today | This Week | This Month | Resolved
+//  Markers -> Live Feed | Setups | By Timeframe | All
+//  Scope via inline pill toggle (Everyone / Friends)
 //
 
 import SwiftUI
@@ -25,24 +26,9 @@ enum MarkerSheetPrimaryTab: String, CaseIterable, UnifiedTabItem {
     }
 }
 
-enum MarkerAddCategoryTab: String, CaseIterable, UnifiedTabItem {
-    case prediction = "Prediction"
-    case trade = "Trade"
-    case analysis = "Analysis"
-    case signals = "Signals"
-    case social = "Social"
-
-    var title: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .prediction: return "target"
-        case .trade: return "arrow.left.and.right.circle.fill"
-        case .analysis: return "waveform.path.ecg"
-        case .signals: return "bell.badge.fill"
-        case .social: return "person.2.fill"
-        }
-    }
+private struct ChartMarkerSetupCacheEntry {
+    let live: [RLMarkerActivityItemDTO]
+    let resolved: [RLMarkerActivityItemDTO]
 }
 
 struct chartSheetMarkersView: View {
@@ -55,12 +41,20 @@ struct chartSheetMarkersView: View {
     var onMarkerSelection: (() -> Void)? = nil
 
     @State private var selectedPrimaryTab: MarkerSheetPrimaryTab = .add
-    @State private var selectedAddCategory: MarkerAddCategoryTab = .prediction
-    @State private var selectedMarkerTopTab: RLMarkerActivityTopTab = .active
-    @State private var selectedScope: RLMarkerActivityScope = .guild
+    @State private var selectedSubTab: MarkerSheetSubTab = .liveFeed
+    @State private var selectedScopeToggle: MarkerScopeToggle = .everyone
 
-    @State private var markerActivityCache: [RLMarkerActivityTopTab: MarkerActivityFeedSnapshot] = [:]
+    @State private var recentMarkers: [RLMarkerActivityItemDTO] = []
+    @State private var archiveMarkers: [RLMarkerActivityItemDTO] = []
+    @State private var setupsLiveMarkers: [RLMarkerActivityItemDTO] = []
+    @State private var setupsResolvedMarkers: [RLMarkerActivityItemDTO] = []
+
+    @State private var recentCache: [String: [RLMarkerActivityItemDTO]] = [:]
+    @State private var archiveCache: [String: [RLMarkerActivityItemDTO]] = [:]
+    @State private var setupsCache: [String: ChartMarkerSetupCacheEntry] = [:]
+
     @State private var analysisSnapshot: MarkerActivityFeedSnapshot?
+
     @State private var cacheNamespace = ""
     @State private var liveSymbol: RLTradingSymbolDTO?
 
@@ -68,6 +62,7 @@ struct chartSheetMarkersView: View {
     @State private var isRefreshingActivity = false
     @State private var activityLoadError: String?
     @State private var showMarkerSettingsSheet = false
+    @State private var likedMarkerId: UUID?
 
     private var reloadKey: String {
         let symbol = chartViewModel.currentSymbol?.id.uuidString ?? "none"
@@ -77,33 +72,49 @@ struct chartSheetMarkersView: View {
     }
 
     private var visibleLoadKey: String {
-        "\(reloadKey)|\(selectedPrimaryTab.rawValue)|\(selectedMarkerTopTab.rawValue)"
+        "\(reloadKey)|\(selectedPrimaryTab.rawValue)|\(selectedSubTab.rawValue)|\(selectedScopeToggle.rawValue)"
     }
 
     private var currentSymbolLabel: String {
         chartViewModel.currentSymbol?.ticker ?? "Symbol"
     }
 
-    private var markerCategoryMap: [MarkerAddCategoryTab: [RLMarkerIntent]] {
-        [
-            .prediction: [.setup],
-            .trade: [.setup, .alert],
-            .analysis: [.analysis, .news],
-            .signals: [.alert, .question],
-            .social: [.poll, .reaction, .personal]
-        ]
-    }
-
     private var activeSymbolPrice: Double? {
         liveSymbol?.currentPrice ?? chartViewModel.currentSymbol?.currentPrice
     }
 
-    private var selectedMarkers: [RLMarkerActivityItemDTO] {
-        markerActivityCache[selectedMarkerTopTab]?.markersByScope[selectedScope] ?? []
+    private var selectedFlatMarkers: [RLMarkerActivityItemDTO] {
+        switch selectedSubTab {
+        case .liveFeed:
+            return recentMarkers
+        case .all:
+            return archiveMarkers
+        case .setups, .byTimeframe:
+            return []
+        }
+    }
+
+    private var timeframeGroups: [MarkerTimeframeGroup] {
+        MarkerActivityNavigation.timeframeGroups(
+            from: archiveMarkers,
+            currentTimeframe: chartViewModel.currentTimeframe
+        )
     }
 
     private var analysisMarkers: [RLMarkerActivityItemDTO] {
         analysisSnapshot?.markersByScope[.guild] ?? []
+    }
+
+    private var addMarkerIntents: [RLMarkerIntent] {
+        let allIntents = RLMarkerIntent.allCases
+        guard let setupIndex = allIntents.firstIndex(of: .setup) else {
+            return allIntents
+        }
+
+        var orderedIntents = allIntents
+        let setupIntent = orderedIntents.remove(at: setupIndex)
+        orderedIntents.insert(setupIntent, at: 0)
+        return orderedIntents
     }
 
     var body: some View {
@@ -114,39 +125,21 @@ struct chartSheetMarkersView: View {
                 selectedTab: $selectedPrimaryTab,
                 size: .compact,
                 theme: .markerPrimary,
-                countForTab: { count(for: $0) },
                 spacing: 6
             )
 
             switch selectedPrimaryTab {
             case .add:
-                UnifiedTabBar(
-                    selectedTab: $selectedAddCategory,
-                    size: .compact,
-                    theme: .subTab,
-                    countForTab: { markerIntents(for: $0).count },
-                    spacing: 6
-                )
+                EmptyView()
             case .markers:
                 UnifiedTabBar(
-                    selectedTab: $selectedMarkerTopTab,
+                    selectedTab: $selectedSubTab,
                     size: .compact,
-                    theme: .componentsTabs,
-                    countForTab: { countForTopTab($0) },
+                    theme: .markerNavigation,
                     spacing: 6
                 )
 
-                UnifiedTabBar(
-                    selectedTab: $selectedScope,
-                    size: .compact,
-                    theme: .subTab,
-                    countForTab: { countForScope($0, topTab: selectedMarkerTopTab) },
-                    spacing: 6
-                )
-
-                activitySummaryBadge(
-                    descriptor: selectedMarkerTopTab.title
-                )
+                markersSummaryBadge
             case .analysis:
                 analysisSummaryBadge
             }
@@ -156,7 +149,7 @@ struct chartSheetMarkersView: View {
             if let activityLoadError,
                !activityLoadError.isEmpty,
                selectedPrimaryTab != .add,
-               selectedPrimaryTab == .analysis ? analysisMarkers.isEmpty : selectedMarkers.isEmpty {
+               selectedPrimaryTab == .analysis ? analysisMarkers.isEmpty : visibleMarkersAreEmpty {
                 errorBanner(activityLoadError)
             }
         }
@@ -220,6 +213,8 @@ struct chartSheetMarkersView: View {
             }
         }
     }
+
+    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 12) {
@@ -298,13 +293,15 @@ struct chartSheetMarkersView: View {
     private var subtitleForCurrentTab: String {
         switch selectedPrimaryTab {
         case .add:
-            return "Add markers quickly from grouped categories. Selecting one closes the sheet and starts placement."
+            return "Select a marker type to begin placement on the chart."
         case .markers:
-            return "Track live setups plus recent and resolved marker activity for \(currentSymbolLabel)."
+            return "Browse recent, grouped, and archived marker activity for \(currentSymbolLabel)."
         case .analysis:
             return "See one universal analysis view for all marker activity on \(currentSymbolLabel)."
         }
     }
+
+    // MARK: - Content Router
 
     @ViewBuilder
     private var content: some View {
@@ -318,23 +315,25 @@ struct chartSheetMarkersView: View {
         }
     }
 
+    // MARK: - Add Tab (flat list of all intents)
+
     private var addContent: some View {
         VStack(spacing: 8) {
-            if selectedAddCategory == .prediction {
-                HStack(spacing: 6) {
-                    Image(systemName: "shield.checkered")
-                        .foregroundColor(AppColors.statusWarning90)
-                        .font(.caption)
-                    Text("Prediction markers affect your accuracy, and TP results also affect reputation. Set entry, SL, and TP when prompted.")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                    Spacer()
+            ForEach(addMarkerIntents, id: \.self) { intent in
+                if intent == .setup {
+                    HStack(spacing: 6) {
+                        Image(systemName: "shield.checkered")
+                            .foregroundColor(AppColors.statusWarning90)
+                            .font(.caption)
+                        Text("Prediction markers affect your accuracy, and TP results also affect reputation. Set entry, SL, and TP when prompted.")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 2)
+                    .padding(.bottom, 4)
                 }
-                .padding(.horizontal, 2)
-                .padding(.bottom, 4)
-            }
 
-            ForEach(markerIntents(for: selectedAddCategory), id: \.self) { intent in
                 MarkerPlacementOptionRow(
                     intent: intent,
                     isActive: isMarkerPlacementActive(for: intent),
@@ -344,12 +343,18 @@ struct chartSheetMarkersView: View {
         }
     }
 
+    // MARK: - Markers Tab
+
     @ViewBuilder
     private var markersContent: some View {
-        if isLoadingActivity && selectedMarkers.isEmpty {
+        if selectedSubTab == .setups {
+            setupsContent
+        } else if selectedSubTab == .byTimeframe {
+            timeframeContent
+        } else if isLoadingActivity && selectedFlatMarkers.isEmpty {
             UnifiedLoadingState(message: "Loading marker activity...")
                 .padding(.top, 24)
-        } else if selectedMarkers.isEmpty {
+        } else if selectedFlatMarkers.isEmpty {
             UnifiedEmptyState(
                 icon: emptyStateIcon,
                 title: emptyStateTitle,
@@ -357,18 +362,83 @@ struct chartSheetMarkersView: View {
             )
             .padding(.top, 20)
         } else {
-            LazyVStack(spacing: 10) {
-                ForEach(selectedMarkers) { marker in
-                    MarkerActivityCard(
-                        marker: marker,
-                        showMyBadge: marker.isCurrentUserMarker,
-                        currentPrice: activeSymbolPrice,
-                        onTap: { openMarker(marker) }
-                    )
+            markerList(selectedFlatMarkers)
+        }
+    }
+
+    @ViewBuilder
+    private var setupsContent: some View {
+        if isLoadingActivity && setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
+            UnifiedLoadingState(message: "Loading setups...")
+                .padding(.top, 24)
+        } else if setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
+            UnifiedEmptyState(
+                icon: "target",
+                title: "No Setups",
+                subtitle: "No tracked setup markers for \(currentSymbolLabel) yet."
+            )
+            .padding(.top, 20)
+        } else {
+            VStack(spacing: 12) {
+                if !setupsLiveMarkers.isEmpty {
+                    UnifiedDisclosureGroup(
+                        title: "Live",
+                        count: setupsLiveMarkers.count,
+                        icon: "bolt.fill",
+                        iconColor: AppColors.statusPositive70,
+                        isExpandedByDefault: true
+                    ) {
+                        markerList(setupsLiveMarkers)
+                    }
+                }
+
+                if !setupsResolvedMarkers.isEmpty {
+                    UnifiedDisclosureGroup(
+                        title: "Resolved",
+                        count: setupsResolvedMarkers.count,
+                        icon: "checkmark.circle.fill",
+                        iconColor: AppColors.surfaceWhite60,
+                        isExpandedByDefault: false
+                    ) {
+                        markerList(setupsResolvedMarkers)
+                    }
                 }
             }
         }
     }
+
+    @ViewBuilder
+    private var timeframeContent: some View {
+        if isLoadingActivity && archiveMarkers.isEmpty {
+            UnifiedLoadingState(message: "Loading marker timeframes...")
+                .padding(.top, 24)
+        } else if timeframeGroups.isEmpty {
+            UnifiedEmptyState(
+                icon: "clock",
+                title: "No Markers by Timeframe",
+                subtitle: "Grouped marker activity for \(currentSymbolLabel) will appear here."
+            )
+            .padding(.top, 20)
+        } else {
+            VStack(spacing: 8) {
+                ForEach(timeframeGroups) { group in
+                    UnifiedDisclosureGroup(
+                        title: group.title,
+                        count: group.count,
+                        icon: "clock",
+                        iconColor: group.rawTimeframe == chartViewModel.currentTimeframe.toBackendString()
+                            ? AppColors.statusPositive70
+                            : AppColors.statusInfo80,
+                        isExpandedByDefault: group.isExpandedByDefault
+                    ) {
+                        markerList(group.markers)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Analysis Tab
 
     @ViewBuilder
     private var analysisContent: some View {
@@ -424,36 +494,103 @@ struct chartSheetMarkersView: View {
         }
     }
 
+    // MARK: - Summary Badges
+
+    private var markersSummaryBadge: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.caption)
+                .foregroundColor(AppColors.statusInfo80)
+
+            Text("\(currentSymbolLabel) \u{2022} \(selectedSubTab.title) \u{2022} \(summaryMarkerCount) markers")
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .lineLimit(1)
+
+            Spacer()
+
+            scopePillToggle
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var scopePillToggle: some View {
+        HStack(spacing: 0) {
+            ForEach(MarkerScopeToggle.allCases, id: \.self) { toggle in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedScopeToggle = toggle
+                    }
+                } label: {
+                    Text(toggle.rawValue)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(selectedScopeToggle == toggle ? .white : AppColors.surfaceWhite60)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            selectedScopeToggle == toggle
+                                ? Capsule().fill(AppColors.statusInfo60)
+                                : Capsule().fill(Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(
+            Capsule().fill(AppColors.surfaceWhite08)
+        )
+    }
+
+    private var analysisSummaryBadge: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.caption)
+                .foregroundColor(AppColors.statusInfo80)
+
+            Text("\(currentSymbolLabel) \u{2022} Guild \u{2022} \(analysisMarkers.count) markers \u{2022} \(Set(analysisMarkers.map { timeframeLabel($0.timeframe) }).count) timeframes")
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.horizontal, 2)
+    }
+
+    // MARK: - Empty States
+
     private var emptyStateIcon: String {
-        switch selectedMarkerTopTab {
-        case .active: return "bolt"
-        case .today: return "sun.max"
-        case .thisWeek: return "calendar"
-        case .thisMonth: return "calendar.badge.clock"
-        case .resolved: return "checkmark.circle"
+        switch selectedSubTab {
+        case .liveFeed: return "bolt.horizontal"
+        case .setups: return "target"
+        case .byTimeframe: return "clock"
+        case .all: return "square.grid.2x2"
         }
     }
 
     private var emptyStateTitle: String {
-        switch selectedMarkerTopTab {
-        case .active: return "No Active Markers"
-        case .today: return "No Markers Today"
-        case .thisWeek: return "No Markers This Week"
-        case .thisMonth: return "No Markers This Month"
-        case .resolved: return "No Resolved Markers"
+        switch selectedSubTab {
+        case .liveFeed: return "No Recent Activity"
+        case .setups: return "No Setups"
+        case .byTimeframe: return "No Markers by Timeframe"
+        case .all: return "No Markers"
         }
     }
 
     private var emptyStateSubtitle: String {
-        switch selectedMarkerTopTab {
-        case .active:
-            return "Tracked setup markers for \(currentSymbolLabel) will appear here while they are being watched."
-        case .resolved:
-            return "Setups for \(currentSymbolLabel) move here when they hit TP, SL, or expire."
-        case .today, .thisWeek, .thisMonth:
-            return "All marker activity for \(currentSymbolLabel) in the selected time window will appear here."
+        switch selectedSubTab {
+        case .liveFeed:
+            return "Recent marker activity for \(currentSymbolLabel) will appear here."
+        case .setups:
+            return "No tracked setup markers for \(currentSymbolLabel) yet."
+        case .byTimeframe:
+            return "Grouped timeframe activity for \(currentSymbolLabel) will appear here."
+        case .all:
+            return "No archived marker activity for \(currentSymbolLabel) yet."
         }
     }
+
+    // MARK: - Analysis Helpers
 
     private var markerTypeBreakdown: [(key: String, value: Int)] {
         let counts = Dictionary(grouping: analysisMarkers) { $0.intentEnum.displayName }
@@ -491,46 +628,45 @@ struct chartSheetMarkersView: View {
         }
     }
 
-    private func activitySummaryBadge(descriptor: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.caption)
-                .foregroundColor(AppColors.statusInfo80)
-
-            Text("\(currentSymbolLabel) • \(descriptor) • \(selectedScope.title) • \(summaryMarkerCount) markers")
-                .font(.caption2)
-                .foregroundColor(.gray)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.horizontal, 2)
-    }
-
-    private var analysisSummaryBadge: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "chart.bar.xaxis")
-                .font(.caption)
-                .foregroundColor(AppColors.statusInfo80)
-
-            Text("\(currentSymbolLabel) • Guild • \(analysisMarkers.count) markers • \(Set(analysisMarkers.map { timeframeLabel($0.timeframe) }).count) timeframes")
-                .font(.caption2)
-                .foregroundColor(.gray)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.horizontal, 2)
-    }
+    // MARK: - Count Helpers
 
     private var summaryMarkerCount: Int {
-        switch selectedPrimaryTab {
-        case .add:
-            return 0
-        case .markers:
-            return countForScope(selectedScope, topTab: selectedMarkerTopTab)
-        case .analysis:
-            return analysisMarkers.count
+        switch selectedSubTab {
+        case .liveFeed:
+            return recentMarkers.count
+        case .setups:
+            return setupsLiveMarkers.count + setupsResolvedMarkers.count
+        case .byTimeframe, .all:
+            return archiveMarkers.count
+        }
+    }
+
+    private var visibleMarkersAreEmpty: Bool {
+        switch selectedSubTab {
+        case .liveFeed:
+            return recentMarkers.isEmpty
+        case .setups:
+            return setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty
+        case .byTimeframe, .all:
+            return archiveMarkers.isEmpty
+        }
+    }
+
+    // MARK: - UI Helpers
+
+    private func markerList(_ markers: [RLMarkerActivityItemDTO]) -> some View {
+        LazyVStack(spacing: 10) {
+            ForEach(markers) { marker in
+                MarkerListItem(
+                    marker: marker,
+                    style: .capsule,
+                    showMyBadge: marker.isCurrentUserMarker,
+                    currentPrice: activeSymbolPrice,
+                    likeAnimationMarkerId: likedMarkerId,
+                    onLike: { handleLike(marker: marker) },
+                    onTap: { openMarker(marker) }
+                )
+            }
         }
     }
 
@@ -579,29 +715,7 @@ struct chartSheetMarkersView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func markerIntents(for category: MarkerAddCategoryTab) -> [RLMarkerIntent] {
-        markerCategoryMap[category] ?? []
-    }
-
-    private func count(for tab: MarkerSheetPrimaryTab) -> Int {
-        switch tab {
-        case .add:
-            return Set(markerCategoryMap.values.flatMap { $0 }).count
-        case .markers:
-            return summaryMarkerCount
-        case .analysis:
-            return analysisMarkers.count
-        }
-    }
-
-    private func countForTopTab(_ topTab: RLMarkerActivityTopTab) -> Int {
-        countForScope(selectedScope, topTab: topTab)
-    }
-
-    private func countForScope(_ scope: RLMarkerActivityScope, topTab: RLMarkerActivityTopTab) -> Int {
-        let snapshot = markerActivityCache[topTab]
-        return snapshot?.totalCountByScope[scope] ?? snapshot?.markersByScope[scope]?.count ?? 0
-    }
+    // MARK: - Actions
 
     private func isMarkerPlacementActive(for intent: RLMarkerIntent) -> Bool {
         controlViewModel.isMarkerPlacementMode && controlViewModel.currentMarkerIntent == intent
@@ -617,21 +731,108 @@ struct chartSheetMarkersView: View {
         onMarkerSelection?()
     }
 
+    private func handleLike(marker: RLMarkerActivityItemDTO) {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            likedMarkerId = marker.id
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            likedMarkerId = nil
+        }
+
+        Task {
+            guard let guildId = rlAppState.currentGuild?.id else { return }
+            do {
+                let result = try await rlAppState.realApi.toggleMarkerLike(guildId: guildId, markerId: marker.id)
+                await MainActor.run {
+                    updateMarkerLike(markerId: marker.id, isLiked: result.isLiked, likeCount: result.likeCount)
+                }
+            } catch {
+                print("Failed to toggle marker like: \(error)")
+            }
+        }
+    }
+
     private func openMarker(_ marker: RLMarkerActivityItemDTO) {
         onNavigateToMarker?(marker.asTopMarkerDTO())
         onMarkerSelection?()
     }
 
-    private func timeframeLabel(_ backendTimeframe: String) -> String {
-        RLChartTimeframe.fromBackendString(backendTimeframe)?.shortName ?? backendTimeframe.uppercased()
+    private func updateMarkerLike(markerId: UUID, isLiked: Bool, likeCount: Int) {
+        updateLike(in: &recentMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+        updateLike(in: &archiveMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+        updateLike(in: &setupsLiveMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+        updateLike(in: &setupsResolvedMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+
+        for key in recentCache.keys {
+            guard var markers = recentCache[key] else { continue }
+            updateLike(in: &markers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            recentCache[key] = markers
+        }
+
+        for key in archiveCache.keys {
+            guard var markers = archiveCache[key] else { continue }
+            updateLike(in: &markers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            archiveCache[key] = markers
+        }
+
+        for key in setupsCache.keys {
+            guard var entry = setupsCache[key] else { continue }
+            var live = entry.live
+            var resolved = entry.resolved
+            updateLike(in: &live, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            updateLike(in: &resolved, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            entry = ChartMarkerSetupCacheEntry(live: live, resolved: resolved)
+            setupsCache[key] = entry
+        }
+
+        if let snapshot = analysisSnapshot {
+            var markersByScope = snapshot.markersByScope
+            for scope in markersByScope.keys {
+                guard var markers = markersByScope[scope],
+                      let index = markers.firstIndex(where: { $0.id == markerId }) else { continue }
+
+                markers[index].isLikedByCurrentUser = isLiked
+                markers[index].likeCount = likeCount
+                markersByScope[scope] = markers
+            }
+
+            analysisSnapshot = MarkerActivityFeedSnapshot(
+                markersByScope: markersByScope,
+                totalCountByScope: snapshot.totalCountByScope,
+                lastUpdated: snapshot.lastUpdated
+            )
+        }
     }
+
+    private func updateLike(
+        in markers: inout [RLMarkerActivityItemDTO],
+        markerId: UUID,
+        isLiked: Bool,
+        likeCount: Int
+    ) {
+        guard let index = markers.firstIndex(where: { $0.id == markerId }) else { return }
+        markers[index].isLikedByCurrentUser = isLiked
+        markers[index].likeCount = likeCount
+    }
+
+    private func timeframeLabel(_ backendTimeframe: String) -> String {
+        MarkerActivityNavigation.timeframeTitle(for: backendTimeframe)
+    }
+
+    // MARK: - Data Loading
 
     private func loadMarkerActivity(forceRefresh: Bool) async {
         guard let guildId = rlAppState.currentGuild?.id,
               rlAppState.currentUser?.id != nil,
               let currentSymbol = chartViewModel.currentSymbol else {
             await MainActor.run {
-                markerActivityCache = [:]
+                resetMarkerActivityState()
+                setupsLiveMarkers = []
+                setupsResolvedMarkers = []
                 analysisSnapshot = nil
                 liveSymbol = chartViewModel.currentSymbol
                 activityLoadError = "Select a guild, user, and symbol to load marker activity."
@@ -642,13 +843,15 @@ struct chartSheetMarkersView: View {
         }
 
         let requestPrimaryTab = selectedPrimaryTab
-        let requestTopTab = selectedMarkerTopTab
+        let requestSubTab = selectedSubTab
+        let requestScope = selectedScopeToggle
         let requestSymbol = currentSymbol
+        let loadKey = requestScope.rawValue
 
         if cacheNamespace != reloadKey {
             await MainActor.run {
                 cacheNamespace = reloadKey
-                markerActivityCache = [:]
+                resetMarkerActivityState()
                 analysisSnapshot = nil
             }
         }
@@ -659,13 +862,6 @@ struct chartSheetMarkersView: View {
                 isLoadingActivity = false
                 isRefreshingActivity = false
             }
-            return
-        }
-
-        if requestPrimaryTab == .markers,
-           !forceRefresh,
-           markerActivityCache[requestTopTab] != nil,
-           liveSymbol != nil {
             return
         }
 
@@ -694,31 +890,109 @@ struct chartSheetMarkersView: View {
 
             switch requestPrimaryTab {
             case .markers:
-                let snapshot = try await MarkerActivityFeedLoader.loadTopTab(
-                    api: api,
-                    guildId: guildId,
-                    symbolId: requestSymbol.id,
-                    topTab: requestTopTab,
-                    scopes: Array(RLMarkerActivityScope.allCases),
-                    limit: 60
-                )
+                let scope = requestScope.apiScope
 
-                guard !Task.isCancelled else { return }
+                switch requestSubTab {
+                case .liveFeed:
+                    if !forceRefresh, let cachedMarkers = recentCache[loadKey] {
+                        await MainActor.run {
+                            recentMarkers = cachedMarkers
+                            liveSymbol = refreshedSymbol ?? requestSymbol
+                            activityLoadError = nil
+                            isLoadingActivity = false
+                            isRefreshingActivity = false
+                        }
+                        break
+                    }
 
-                await MainActor.run {
-                    markerActivityCache[requestTopTab] = snapshot
-                    liveSymbol = refreshedSymbol ?? requestSymbol
-                    activityLoadError = nil
-                    isLoadingActivity = false
-                    isRefreshingActivity = false
-                }
-
-                Task {
-                    await prefetchRemainingTopTabs(
-                        excluding: requestTopTab,
+                    let markers = try await loadMarkers(
+                        api: api,
                         guildId: guildId,
-                        symbolId: requestSymbol.id
+                        symbolId: requestSymbol.id,
+                        scope: scope,
+                        loadMode: .recentFeed
                     )
+                    guard !Task.isCancelled else { return }
+
+                    await MainActor.run {
+                        recentCache[loadKey] = markers
+                        recentMarkers = markers
+                        liveSymbol = refreshedSymbol ?? requestSymbol
+                        activityLoadError = nil
+                        isLoadingActivity = false
+                        isRefreshingActivity = false
+                    }
+
+                case .setups:
+                    if !forceRefresh, let cachedEntry = setupsCache[loadKey] {
+                        await MainActor.run {
+                            setupsLiveMarkers = cachedEntry.live
+                            setupsResolvedMarkers = cachedEntry.resolved
+                            liveSymbol = refreshedSymbol ?? requestSymbol
+                            activityLoadError = nil
+                            isLoadingActivity = false
+                            isRefreshingActivity = false
+                        }
+                        break
+                    }
+
+                    async let liveMarkers = loadMarkers(
+                        api: api,
+                        guildId: guildId,
+                        symbolId: requestSymbol.id,
+                        scope: scope,
+                        loadMode: .setupsLive
+                    )
+                    async let resolvedMarkers = loadMarkers(
+                        api: api,
+                        guildId: guildId,
+                        symbolId: requestSymbol.id,
+                        scope: scope,
+                        loadMode: .setupsResolved
+                    )
+
+                    let (live, resolved) = try await (liveMarkers, resolvedMarkers)
+                    guard !Task.isCancelled else { return }
+
+                    await MainActor.run {
+                        setupsCache[loadKey] = ChartMarkerSetupCacheEntry(live: live, resolved: resolved)
+                        setupsLiveMarkers = live
+                        setupsResolvedMarkers = resolved
+                        liveSymbol = refreshedSymbol ?? requestSymbol
+                        activityLoadError = nil
+                        isLoadingActivity = false
+                        isRefreshingActivity = false
+                    }
+
+                case .byTimeframe, .all:
+                    if !forceRefresh, let cachedMarkers = archiveCache[loadKey] {
+                        await MainActor.run {
+                            archiveMarkers = cachedMarkers
+                            liveSymbol = refreshedSymbol ?? requestSymbol
+                            activityLoadError = nil
+                            isLoadingActivity = false
+                            isRefreshingActivity = false
+                        }
+                        break
+                    }
+
+                    let markers = try await loadMarkers(
+                        api: api,
+                        guildId: guildId,
+                        symbolId: requestSymbol.id,
+                        scope: scope,
+                        loadMode: .archive
+                    )
+                    guard !Task.isCancelled else { return }
+
+                    await MainActor.run {
+                        archiveCache[loadKey] = markers
+                        archiveMarkers = markers
+                        liveSymbol = refreshedSymbol ?? requestSymbol
+                        activityLoadError = nil
+                        isLoadingActivity = false
+                        isRefreshingActivity = false
+                    }
                 }
 
             case .analysis:
@@ -756,37 +1030,35 @@ struct chartSheetMarkersView: View {
         }
     }
 
-    private func prefetchRemainingTopTabs(
-        excluding activeTab: RLMarkerActivityTopTab,
+    private func loadMarkers(
+        api: RealAPIService,
         guildId: UUID,
-        symbolId: UUID
-    ) async {
-        await withTaskGroup(of: (RLMarkerActivityTopTab, MarkerActivityFeedSnapshot?).self) { group in
-            for tab in RLMarkerActivityTopTab.allCases where tab != activeTab && markerActivityCache[tab] == nil {
-                group.addTask {
-                    do {
-                        let snapshot = try await MarkerActivityFeedLoader.loadTopTab(
-                            api: rlAppState.realApi,
-                            guildId: guildId,
-                            symbolId: symbolId,
-                            topTab: tab,
-                            scopes: Array(RLMarkerActivityScope.allCases),
-                            limit: 60
-                        )
-                        return (tab, snapshot)
-                    } catch {
-                        return (tab, nil)
-                    }
-                }
-            }
+        symbolId: UUID,
+        scope: RLMarkerActivityScope,
+        loadMode: MarkerActivityListLoadMode
+    ) async throws -> [RLMarkerActivityItemDTO] {
+        let snapshot = try await MarkerActivityFeedLoader.loadForScope(
+            api: api,
+            guildId: guildId,
+            symbolId: symbolId,
+            scope: scope,
+            state: loadMode.state,
+            limit: loadMode.limit,
+            fetchAllPages: loadMode.fetchAllPages
+        )
 
-            for await (tab, snapshot) in group {
-                guard let snapshot else { continue }
-                await MainActor.run {
-                    markerActivityCache[tab] = snapshot
-                }
-            }
-        }
+        guard !Task.isCancelled else { return [] }
+        return MarkerActivityNavigation.sortedByActivity(snapshot.markersByScope[scope] ?? [])
+    }
+
+    private func resetMarkerActivityState() {
+        recentMarkers = []
+        archiveMarkers = []
+        setupsLiveMarkers = []
+        setupsResolvedMarkers = []
+        recentCache = [:]
+        archiveCache = [:]
+        setupsCache = [:]
     }
 
     private func shouldRefresh(for notification: Notification) -> Bool {
@@ -815,6 +1087,8 @@ struct chartSheetMarkersView: View {
     }
 }
 
+// MARK: - Private Helper Views
+
 private struct MarkerPlacementOptionRow: View {
     let intent: RLMarkerIntent
     let isActive: Bool
@@ -822,44 +1096,47 @@ private struct MarkerPlacementOptionRow: View {
 
     var body: some View {
         Button(action: onToggle) {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 if isActive {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 30, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(width: 30, height: 30)
+                        .frame(width: 46, height: 46)
                 } else {
-                    UnifiedMarkerBadge(intent: intent, sizeToken: .medium)
+                    UnifiedMarkerBadge(intent: intent, sizeToken: .large)
+                        .frame(width: 46, height: 46)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isActive ? "Cancel Placement" : intent.displayName)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                     if !isActive {
                         Text(intent.subtitle)
                             .font(.caption2)
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.surfaceWhite74)
                             .lineLimit(1)
                     }
                 }
 
                 Spacer(minLength: 0)
 
-                Image(systemName: isActive ? "xmark" : "chevron.right")
+                Image(systemName: isActive ? "xmark" : "plus")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? AppColors.surfaceWhite80 : AppColors.surfaceGray90)
+                    .foregroundColor(AppColors.surfaceWhite84)
+                    .frame(width: 28, height: 28)
+                    .background(AppColors.surfaceWhite08)
+                    .clipShape(Circle())
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                Capsule()
                     .fill(isActive ? AppColors.statusNegative35 : intent.color.opacity(0.12))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                Capsule()
                     .stroke(AppColors.surfaceWhite08, lineWidth: 1)
             )
         }
@@ -1108,13 +1385,13 @@ private struct QuickLinkRow: View {
                 UnifiedMarkerBadge(intent: marker.intentEnum, sizeToken: .tiny)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("\(marker.intentEnum.displayName) • \(marker.symbolTicker)")
+                    Text("\(marker.intentEnum.displayName) \u{2022} \(marker.symbolTicker)")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
                         .lineLimit(1)
 
-                    Text("\(timeframeText) • \(marker.activityTimestampFormatted)")
+                    Text("\(timeframeText) \u{2022} \(marker.activityTimestampFormatted)")
                         .font(.caption2)
                         .foregroundColor(AppColors.surfaceWhite70)
                 }

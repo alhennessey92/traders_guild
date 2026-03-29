@@ -678,14 +678,17 @@ struct SectionDrawerView: View {
                 .padding(.top, 60)
                 .padding(.bottom, 16)
                 
-                Text(sectionTitle)
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.whiteText)
-    //                .frame(width: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .center, spacing: 12) {
+                    Text(sectionTitle)
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.whiteText)
+                    
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 Rectangle()
                     .fill(AppColors.surfaceGray40)
@@ -713,7 +716,7 @@ struct SectionDrawerView: View {
             EmptyView()
         }
     }
-    
+
     /// Whether the current section handles its own scrolling (has sticky tab bars)
     private var sectionHandlesOwnScrolling: Bool {
         switch currentSection {

@@ -19,6 +19,8 @@ enum MarkerActivityFeedLoader {
         guildId: UUID,
         symbolId: UUID? = nil,
         topTab: RLMarkerActivityTopTab,
+        startTime: Date? = nil,
+        endTime: Date? = nil,
         scopes: [RLMarkerActivityScope] = Array(RLMarkerActivityScope.allCases),
         limit: Int = 60,
         fetchAllPages: Bool = false
@@ -29,7 +31,35 @@ enum MarkerActivityFeedLoader {
             symbolId: symbolId,
             state: topTab.activityState,
             window: topTab.activityWindow,
+            startTime: startTime,
+            endTime: endTime,
             scopes: scopes,
+            limit: limit,
+            fetchAllPages: fetchAllPages
+        )
+    }
+
+    static func loadForScope(
+        api: RealAPIService,
+        guildId: UUID,
+        symbolId: UUID? = nil,
+        scope: RLMarkerActivityScope,
+        state: RLMarkerActivityState,
+        startTime: Date? = nil,
+        endTime: Date? = nil,
+        intent: String? = nil,
+        limit: Int = 60,
+        fetchAllPages: Bool = false
+    ) async throws -> MarkerActivityFeedSnapshot {
+        try await loadScopes(
+            api: api,
+            guildId: guildId,
+            symbolId: symbolId,
+            state: state,
+            startTime: startTime,
+            endTime: endTime,
+            intent: intent,
+            scopes: [scope],
             limit: limit,
             fetchAllPages: fetchAllPages
         )
@@ -41,6 +71,9 @@ enum MarkerActivityFeedLoader {
         symbolId: UUID? = nil,
         state: RLMarkerActivityState,
         window: RLMarkerActivityWindow? = nil,
+        startTime: Date? = nil,
+        endTime: Date? = nil,
+        intent: String? = nil,
         scopes: [RLMarkerActivityScope] = Array(RLMarkerActivityScope.allCases),
         limit: Int = 50,
         fetchAllPages: Bool = false
@@ -57,6 +90,9 @@ enum MarkerActivityFeedLoader {
                         scope: scope,
                         state: state,
                         window: window,
+                        startTime: startTime,
+                        endTime: endTime,
+                        intent: intent,
                         limit: limit,
                         fetchAllPages: fetchAllPages
                     )
@@ -89,6 +125,9 @@ enum MarkerActivityFeedLoader {
         scope: RLMarkerActivityScope,
         state: RLMarkerActivityState,
         window: RLMarkerActivityWindow?,
+        startTime: Date?,
+        endTime: Date?,
+        intent: String? = nil,
         limit: Int,
         fetchAllPages: Bool
     ) async throws -> RLMarkerActivityListDTO {
@@ -98,6 +137,9 @@ enum MarkerActivityFeedLoader {
             scope: scope,
             state: state,
             window: window,
+            startTime: startTime,
+            endTime: endTime,
+            intent: intent,
             limit: limit
         )
 
@@ -116,6 +158,9 @@ enum MarkerActivityFeedLoader {
                 scope: scope,
                 state: state,
                 window: window,
+                startTime: startTime,
+                endTime: endTime,
+                intent: intent,
                 limit: limit,
                 cursor: nextCursor
             )

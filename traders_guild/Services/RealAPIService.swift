@@ -3094,6 +3094,9 @@ extension RealAPIService {
         scope: RLMarkerActivityScope,
         state: RLMarkerActivityState,
         window: RLMarkerActivityWindow? = nil,
+        startTime: Date? = nil,
+        endTime: Date? = nil,
+        intent: String? = nil,
         limit: Int = 50,
         cursor: String? = nil
     ) async throws -> RLMarkerActivityListDTO {
@@ -3102,12 +3105,22 @@ extension RealAPIService {
             URLQueryItem(name: "state", value: state.rawValue),
             URLQueryItem(name: "limit", value: String(limit))
         ]
+        let formatter = ISO8601DateFormatter()
 
         if let symbolId {
             queryItems.append(URLQueryItem(name: "symbol_id", value: symbolId.uuidString))
         }
         if let window {
             queryItems.append(URLQueryItem(name: "window", value: window.rawValue))
+        }
+        if let startTime {
+            queryItems.append(URLQueryItem(name: "start_time", value: formatter.string(from: startTime)))
+        }
+        if let endTime {
+            queryItems.append(URLQueryItem(name: "end_time", value: formatter.string(from: endTime)))
+        }
+        if let intent, !intent.isEmpty {
+            queryItems.append(URLQueryItem(name: "intent", value: intent))
         }
         if let cursor, !cursor.isEmpty {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))

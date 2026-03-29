@@ -1410,23 +1410,38 @@ Make sure you run through all drawing options and make improve them the way they
 
 
 
-254. Need to make sure all instances of keyboard being shown that the text box moves up above keyboard to show text user is typing, go through all marker placement textboxes, chat textboxes in marker chat, symbol chat, chatroom and dm chat. Any settings input, basically any text box in the app needs to make sure it is visible when being selected and keynoard shown
+254. [Fixed] Need to make sure all instances of keyboard being shown that the text box moves up above keyboard to show text user is typing, go through all marker placement textboxes, chat textboxes in marker chat, symbol chat, chatroom and dm chat. Any settings input, basically any text box in the app needs to make sure it is visible when being selected and keynoard shown
 
 <!-- 255. Maybe remove sub tabs of personal guild and friends and use pills where necessary
 Maybe have active, all, resolved and personal -->
 
-256. News marker allows placement without uploaded news link plus need color aspect to marker
+256. [Fixed] News marker allows placement without uploaded news link plus need color aspect to marker
 
-257. Analysis marker should require at least description and 1 component
+257. [Fixed] Analysis marker should require at least description and 1 component
 
-258. Question marker should require minimum 10 character length question to create
+258. [Fixed] Question marker should require minimum 10 character length question to create
 
-259. Reaction marker needs to update actual marker reference in toolbar and marker detail view with selected emoji
+259. [Fixed] Reaction marker needs to update actual marker reference in toolbar and marker detail view with selected emoji
 
-260. Check personal  marker isn’t viewable by other users
+260. [Fixed] Check personal  marker isn’t viewable by other users
 
-261. Alert marker shouldn’t allow placement unless select alert type and entered a description. Will need to move the description up into required box and require at least 10 characters
+261. [Fixed] Alert marker shouldn’t allow placement unless select alert type and entered a description. Will need to move the description up into required box and require at least 10 characters
 
-223. In settings user online status not always working as it should, shows offline when online, need to chexk source
+223. [Fixed] In settings user online status not always working as it should, shows offline when online, need to chexk source
 
-224. When sending photos in chat they appear only as name, no image is appearing. Do we need to implement file storage on hetzner etc to make sure they always show and perhaps increase in size on click
+224. [Fixed] When sending photos in chat they appear only as name, no image is appearing. Do we need to implement file storage on hetzner etc to make sure they always show and perhaps increase in size on click
+
+262. Still feel the tab sections for the marker list views in left drawer marker section and bottom bar marker sections are not working - thinking of doing a large restructure of it - the structure needs to mostly mirror across both sections, so feel its best to follow the following structure
+	Left drawer marker list view
+		Live Feed
+		Setups
+		By Symbol (Eurusd, audusd etc...) Use disclosures
+		All
+
+	Bottom bar Marker section
+		Live Feed
+		Setups
+		By Timeframe (1min, 5min etc...) Use disclosures
+		All
+
+Due to this we can remove the timeframe filter functionality in the left drawer marker section

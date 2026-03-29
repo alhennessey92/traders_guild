@@ -301,6 +301,7 @@ enum UnifiedTabTheme {
     case colored        // Per-tab colors (personal=yellow, guild=blue, etc.)
     case accent         // Uses AppColors.accentColor
     case componentsTabs  // Orange only for "Active" tab (index 0), blue for rest
+    case markerNavigation // Live Feed orange, Setups green, grouped/archive blue
     case markerPrimary   // Green for "Add" (index 0), blue for rest
 
     // Consistent blue gradient used for active/selected tabs
@@ -331,7 +332,29 @@ enum UnifiedTabTheme {
         )
     }
 
-    func selectedBackground(for index: Int) -> LinearGradient {
+    enum MarkerAccent: Equatable {
+        case blue
+        case orange
+        case green
+    }
+
+    func markerAccent(forTitle title: String) -> MarkerAccent {
+        switch self {
+        case .markerNavigation:
+            switch title.lowercased() {
+            case "live feed":
+                return .orange
+            case "setups":
+                return .green
+            default:
+                return .blue
+            }
+        default:
+            return .blue
+        }
+    }
+
+    func selectedBackground<Tab: UnifiedTabItem>(for tab: Tab, index: Int) -> LinearGradient {
         switch self {
         case .blue:
             return UnifiedTabTheme.consistentBlueGradient
@@ -369,6 +392,15 @@ enum UnifiedTabTheme {
         case .componentsTabs:
             // Only "Active" tab (index 0) is orange, all others are blue
             return index == 0 ? UnifiedTabTheme.orangeGradient : UnifiedTabTheme.consistentBlueGradient
+        case .markerNavigation:
+            switch markerAccent(forTitle: tab.title) {
+            case .blue:
+                return UnifiedTabTheme.consistentBlueGradient
+            case .orange:
+                return UnifiedTabTheme.orangeGradient
+            case .green:
+                return UnifiedTabTheme.greenGradient
+            }
         case .markerPrimary:
             // "Add" (index 0) = green, all others = blue
             if index == 0 { return UnifiedTabTheme.greenGradient }
@@ -376,7 +408,7 @@ enum UnifiedTabTheme {
         }
     }
 
-    func borderColor(for index: Int) -> Color {
+    func borderColor<Tab: UnifiedTabItem>(for tab: Tab, index: Int) -> Color {
         switch self {
         case .blue:
             return AppColors.statusInfo40
@@ -391,6 +423,15 @@ enum UnifiedTabTheme {
             return AppColors.accentColor.opacity(0.4)
         case .componentsTabs:
             return index == 0 ? Color.orange.opacity(0.4) : AppColors.statusInfo40
+        case .markerNavigation:
+            switch markerAccent(forTitle: tab.title) {
+            case .blue:
+                return AppColors.statusInfo40
+            case .orange:
+                return Color.orange.opacity(0.4)
+            case .green:
+                return AppColors.statusPositive40
+            }
         case .markerPrimary:
             if index == 0 { return AppColors.statusPositive40 }
             return AppColors.statusInfo40
@@ -432,7 +473,7 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
             .padding(.vertical, size.verticalPadding)
             .background(
                 isSelected ?
-                theme.selectedBackground(for: index) :
+                theme.selectedBackground(for: tab, index: index) :
                 LinearGradient(
                     colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
                     startPoint: .top,
@@ -442,7 +483,7 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? theme.borderColor(for: index) : Color.clear, lineWidth: 1)
+                    .stroke(isSelected ? theme.borderColor(for: tab, index: index) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -496,7 +537,7 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
     let action: () -> Void
     
     private var selectedGradient: LinearGradient {
-        theme.selectedBackground(for: index)
+        theme.selectedBackground(for: tab, index: index)
     }
     
     private var unselectedGradient: LinearGradient {
@@ -907,6 +948,39 @@ struct MarkerListSpecificsLabel: View {
             .font(.system(size: 8.5, weight: .heavy))
             .foregroundColor(color)
             .tracking(0.4)
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - MARKER ACTIVITY META CHIP
+// MARK: - ================================================================================================
+
+/// Small pill showing icon + text (e.g., timeframe "M5", type label).
+/// Reused across all marker list item styles.
+struct MarkerActivityMetaChip: View {
+    let icon: String
+    let text: String
+    let tint: Color
+    let background: Color
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 7, weight: .semibold))
+            Text(text)
+                .font(.system(size: 8, weight: .bold))
+        }
+        .foregroundColor(tint)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2.5)
+        .background(
+            Capsule()
+                .fill(background)
+                .overlay(
+                    Capsule()
+                        .stroke(tint.opacity(0.15), lineWidth: 0.5)
+                )
+        )
     }
 }
 
@@ -2503,4 +2577,3 @@ private struct StripContainerModifier: ViewModifier {
         }
     }
 }
-

@@ -782,6 +782,7 @@ private func makeTopMarker(
         intent: intent,
         title: nil,
         notePreview: "preview",
+        selectedEmoji: nil,
         createdAt: createdAt,
         createdAtFormatted: "now",
         candleTimestamp: createdAt,
