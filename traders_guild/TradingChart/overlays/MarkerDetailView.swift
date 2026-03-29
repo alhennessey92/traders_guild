@@ -450,7 +450,9 @@ struct MarkerShareSheet: View {
             timeframe: marker.timeframe,
             candleTimestamp: marker.candleTimestamp,
             markerType: marker.intent.rawValue,
-            intent: marker.intent.rawValue
+            intent: marker.intent.rawValue,
+            selectedEmoji: marker.selectedEmoji,
+            alertSeverity: marker.alertSeverity?.toBackendString()
         )
         let content = MarkerShareCodec.buildMessage(note: note, payload: payload)
 

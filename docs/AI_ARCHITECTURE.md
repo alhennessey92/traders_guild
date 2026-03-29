@@ -1221,7 +1221,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 201. [FIXED] Need to adjust the emoji section in marker placement mode and emoji section in reactions for chat etc... to display all the default emojis available in a better more concise format, at the moment we only allow a few and they may not be significant. We need all possible emoji options that are available to th user.
 
-202. Need a major review of the authentication and register/login section of the app working out what has been implemented and what is remaining, this goes down to signing up and logging in using alternative options such as apple, google accounts etc... forgetting passwords etc... making sure all relevant authentication such as faceid etc... are all implemented, everything we need for this section fo the app
+202. [Fixed] Need a major review of the authentication and register/login section of the app working out what has been implemented and what is remaining, this goes down to signing up and logging in using alternative options such as apple, google accounts etc... forgetting passwords etc... making sure all relevant authentication such as faceid etc... are all implemented, everything we need for this section fo the app
 
 203. [FIXED] Need to adjust the timeframe panels to show current price when not set for a marker - i.e. set in default chart, so user can see current price marker etc... Could expand this to show vertical pinpoint lines aswell that can be relevant in the timeframe
 
@@ -1233,7 +1233,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 207. [FIXED] Y axis needs a review dont like the border, chart background should morph seemlesly into y axis, but obiously content that goes into y axis is hidden/blurred
 
-208. Emoji marker needs its icon changed relative to when its changed, especially real time when changing and same for when editing marker the icon on the chart needs to change realtime
+208. [Fixed] Emoji marker needs its icon changed relative to when its changed, especially real time when changing and same for when editing marker the icon on the chart needs to change realtime
 
 209. When editing a marker the selected marker reverts to a faded out marker like the other markers, it should stay stand out like when selected
 
@@ -1273,7 +1273,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 227. [Fixed] Change resend token to be something better, more easier to relay back like a 5 string (7UY67)
 
-228. Need to have a look at timeframe panel, would be nice if they could update in realtime on the chart, including new candles, active candle, moving price indicator (tick)relative to current default chart etc... Also the main chart timeframe panel, still has the vertical marker view/icon on latest candle, this isnt ncessary as we have the window view, its only necessary when used in marker view mode to show where the marker is located
+
 
 
 
@@ -1288,7 +1288,7 @@ Make sure you run through all drawing options and make improve them the way they
 
 232. [Fixed] Support section still needs work need confirmation email etc and place for message to appear. Ui needs work minimum description etc
 
-233. Timeframe panel price indicator not live and very dim
+233. [Fixed] Timeframe panel price indicator not live and very dim
 
 234. [Fixed] Setup marker still not in active tab
 
@@ -1296,13 +1296,10 @@ Make sure you run through all drawing options and make improve them the way they
 
 236. [Testing] Notifications need a full audit listing current areas notifications are triggered and areas we need to implement
 
-237. Reputation for personal, guild and global need a full audit. Again listing areas reputation is applied and areas we still need to apply to
-
-238. Need to review user permissions making sure things like user blocks, bans, suspended and muted are all applied to relevant areas and things like caps on chat message (50 per hour) for anti spam are in place and marker placement limits etc
 
 239. [Fixed] Crosshair info box needs proper reporting on indicators like stochs and macd etc
 
-240. Noticed sometimes when interacting with the app the music I am listening to gets paused, this should never happen music shouldn’t be interfered with by the app
+
 
 241. [FIXED] Find here is the outline for how i want the marker tabs and sections to work in the bottom bar and the left drawer.
 	Bottom Bar marker tabs
@@ -1431,7 +1428,7 @@ Maybe have active, all, resolved and personal -->
 
 224. [Fixed] When sending photos in chat they appear only as name, no image is appearing. Do we need to implement file storage on hetzner etc to make sure they always show and perhaps increase in size on click
 
-262. Still feel the tab sections for the marker list views in left drawer marker section and bottom bar marker sections are not working - thinking of doing a large restructure of it - the structure needs to mostly mirror across both sections, so feel its best to follow the following structure
+262. [Fixed] Still feel the tab sections for the marker list views in left drawer marker section and bottom bar marker sections are not working - thinking of doing a large restructure of it - the structure needs to mostly mirror across both sections, so feel its best to follow the following structure
 	Left drawer marker list view
 		Live Feed
 		Setups
@@ -1445,3 +1442,15 @@ Maybe have active, all, resolved and personal -->
 		All
 
 Due to this we can remove the timeframe filter functionality in the left drawer marker section
+
+228. Need to have a look at timeframe panel, would be nice if they could update in realtime on the chart, including new candles, active candle, moving price indicator (tick)relative to current default chart etc... Also the main chart timeframe panel, still has the vertical marker view/icon on latest candle, this isnt ncessary as we have the window view, its only necessary when used in marker view mode to show where the marker is located
+
+237. Reputation for personal, guild and global need a full audit. Again listing areas reputation is applied and areas we still need to apply to
+
+238. Need to review user permissions making sure things like user blocks, bans, suspended and muted are all applied to relevant areas and things like caps on chat message (50 per hour) for anti spam are in place and marker placement limits etc
+
+240. Noticed sometimes when interacting with the app the music I am listening to gets paused, this should never happen music shouldn’t be interfered with by the app
+
+263. Need to change instances of all implementations of button Done used to close sheet etc... to change to the used X button used in other sheets, from what i can see this appears in marker link sheet, All rep and acc breakdown sheets, Chart Settings, 
+
+264. Chart Settings sheet needs to conform more to UI like in marker settings view.

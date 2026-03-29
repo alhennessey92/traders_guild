@@ -1094,6 +1094,27 @@ private struct MarkerPlacementOptionRow: View {
     let isActive: Bool
     let onToggle: () -> Void
 
+    private var rowAccentColor: Color {
+        isActive ? AppColors.statusNegative95 : intent.color
+    }
+
+    private var rowBackgroundGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                rowAccentColor.opacity(0.22),
+                rowAccentColor.opacity(0.12),
+                AppColors.surfaceGray20,
+                AppColors.surfaceBlack62,
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var rowBorderColor: Color {
+        rowAccentColor.opacity(isActive ? 0.42 : 0.34)
+    }
+
     var body: some View {
         Button(action: onToggle) {
             HStack(spacing: 12) {
@@ -1132,12 +1153,12 @@ private struct MarkerPlacementOptionRow: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
-                Capsule()
-                    .fill(isActive ? AppColors.statusNegative35 : intent.color.opacity(0.12))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(rowBackgroundGradient)
             )
             .overlay(
-                Capsule()
-                    .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(rowBorderColor, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

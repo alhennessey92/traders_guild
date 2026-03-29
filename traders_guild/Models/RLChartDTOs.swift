@@ -272,6 +272,7 @@ protocol MarkerListItemData {
     var title: String? { get }
     var notePreview: String? { get }
     var selectedEmoji: String? { get }
+    var alertSeverity: String? { get }
     var createdAt: Date { get }
     var createdAtFormatted: String { get }
     var timeframe: String { get }
@@ -292,6 +293,16 @@ protocol MarkerListItemData {
 
 extension MarkerListItemData {
     var selectedEmoji: String? { nil }
+    var alertSeverity: String? { nil }
+
+    var alertSeverityEnum: MarkerAlertSeverity? {
+        guard intentEnum == .alert else { return nil }
+        return MarkerAlertSeverity.resolved(
+            rawValue: alertSeverity,
+            title: title,
+            notePreview: notePreview
+        )
+    }
 }
 
 enum RLComponentType: String, Codable, CaseIterable {
@@ -1414,6 +1425,7 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let title: String?
     let notePreview: String?
     let selectedEmoji: String?
+    let alertSeverity: String?
     let createdAt: Date
     let createdAtFormatted: String
     
@@ -1698,6 +1710,7 @@ struct RLMarkerActivityItemDTO: Codable, Identifiable, Equatable, Hashable {
     let title: String?
     let notePreview: String?
     let selectedEmoji: String?
+    let alertSeverity: String?
     let createdAt: Date
     let createdAtFormatted: String
     let activityTimestamp: Date
@@ -1761,6 +1774,7 @@ extension RLMarkerActivityItemDTO {
             title: title,
             notePreview: notePreview,
             selectedEmoji: selectedEmoji,
+            alertSeverity: alertSeverity,
             createdAt: createdAt,
             createdAtFormatted: createdAtFormatted,
             candleTimestamp: candleTimestamp,

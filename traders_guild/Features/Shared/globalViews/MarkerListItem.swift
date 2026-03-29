@@ -36,7 +36,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
     // MARK: - Computed Properties
 
     private var hasNotePreview: Bool {
-        guard let note = marker.notePreview else { return false }
+        guard let note = notePreviewText else { return false }
         return !note.isEmpty
     }
 
@@ -161,9 +161,35 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         marker.likeCount > 0
     }
 
+    private var alertSeverity: MarkerAlertSeverity? {
+        marker.alertSeverityEnum
+    }
+
+    private var accentColor: Color {
+        if marker.intentEnum == .alert {
+            return alertSeverity?.color ?? marker.intentEnum.color
+        }
+        return marker.intentEnum.color
+    }
+
     private var reactionEmoji: String? {
         let trimmed = marker.selectedEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var notePreviewText: String? {
+        guard let note = marker.notePreview else { return nil }
+        let normalized: String
+        if marker.intentEnum == .alert {
+            normalized = MarkerAlertSeverity.stripKnownPrefix(from: note)
+        } else {
+            normalized = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private var alertIconName: String {
+        alertSeverity?.markerIcon ?? "exclamationmark.triangle.fill"
     }
 
     // MARK: - Body
@@ -228,11 +254,12 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         }) {
             VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 8) {
-                    UnifiedMarkerBadge(
-                        intent: marker.intentEnum,
-                        sizeToken: .large,
-                        emoji: marker.intentEnum == .reaction ? reactionEmoji : nil
-                    )
+                UnifiedMarkerBadge(
+                    intent: marker.intentEnum,
+                    alertSeverity: alertSeverity,
+                    sizeToken: .large,
+                    emoji: marker.intentEnum == .reaction ? reactionEmoji : nil
+                )
                         .padding(.top, 2)
 
                     cardPrimaryContent
@@ -262,6 +289,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             HStack(spacing: 5) {
                 UnifiedMarkerBadge(
                     intent: marker.intentEnum,
+                    alertSeverity: alertSeverity,
                     sizeToken: .tiny,
                     emoji: marker.intentEnum == .reaction ? reactionEmoji : nil
                 )
@@ -285,10 +313,10 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
                 Text(marker.intentEnum.displayName)
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(marker.intentEnum.color)
+                    .foregroundColor(accentColor)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(marker.intentEnum.color.opacity(0.18))
+                    .background(accentColor.opacity(0.18))
                     .clipShape(Capsule())
             }
 
@@ -408,7 +436,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         VStack(alignment: .leading, spacing: 4) {
             MarkerListSpecificsLabel(
                 label: marker.intentEnum.displayName.uppercased(),
-                color: marker.intentEnum.color
+                color: accentColor
             )
 
             Text("Placed @ \(formatPrice(marker.price))")
@@ -422,6 +450,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         Button(action: onTap) {
             UnifiedMarkerBadge(
                 intent: marker.intentEnum,
+                alertSeverity: alertSeverity,
                 sizeToken: .large,
                 emoji: marker.intentEnum == .reaction ? reactionEmoji : nil
             )
@@ -491,7 +520,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 MarkerListSpecificsSection {
                     expandedContent
                 }
-            } else if hasNotePreview, let note = marker.notePreview {
+            } else if hasNotePreview, let note = notePreviewText {
                 Text(note)
                     .font(.system(size: 12))
                     .foregroundColor(AppColors.whiteText.opacity(0.75))
@@ -596,7 +625,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     )
                 }
 
-                if let note = marker.notePreview, !note.isEmpty {
+                if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11))
                         .foregroundColor(AppColors.surfaceWhite80)
@@ -605,7 +634,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             }
 
         case .question, .poll:
-            if let note = marker.notePreview, !note.isEmpty {
+            if let note = notePreviewText, !note.isEmpty {
                 Text(note)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppColors.surfaceWhite90)
@@ -613,11 +642,11 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             }
 
         case .alert:
-            if let note = marker.notePreview, !note.isEmpty {
+            if let note = notePreviewText, !note.isEmpty {
                 HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
+                    Image(systemName: alertIconName)
                         .font(.system(size: 10))
-                        .foregroundColor(marker.intentEnum.color)
+                        .foregroundColor(accentColor)
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppColors.surfaceWhite85)
@@ -626,7 +655,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             }
 
         case .news, .analysis:
-            if let note = marker.notePreview, !note.isEmpty {
+            if let note = notePreviewText, !note.isEmpty {
                 Text(note)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(AppColors.surfaceWhite85)
@@ -652,7 +681,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                         formatPrice: { String(format: "%.5f", $0) }
                     )
                 }
-            } else if let note = marker.notePreview, !note.isEmpty {
+            } else if let note = notePreviewText, !note.isEmpty {
                 Text(note)
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -661,8 +690,8 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
         case .question:
             MarkerListSpecificsSection {
-                MarkerListSpecificsLabel(label: "QUESTION", color: marker.intentEnum.color)
-                if let note = marker.notePreview, !note.isEmpty {
+                MarkerListSpecificsLabel(label: "QUESTION", color: accentColor)
+                if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppColors.surfaceWhite92)
@@ -673,7 +702,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         case .alert:
             MarkerListSpecificsSection {
                 HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
+                    Image(systemName: alertIconName)
                         .font(.system(size: 10, weight: .semibold))
                     Text("Alert")
                         .font(.system(size: 9.5, weight: .bold))
@@ -682,11 +711,11 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(
-                    Capsule().fill(marker.intentEnum.color.opacity(0.40))
-                        .overlay(Capsule().stroke(marker.intentEnum.color.opacity(0.60), lineWidth: 1))
+                    Capsule().fill(accentColor.opacity(0.40))
+                        .overlay(Capsule().stroke(accentColor.opacity(0.60), lineWidth: 1))
                 )
 
-                if let note = marker.notePreview, !note.isEmpty {
+                if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppColors.surfaceWhite85)
@@ -696,8 +725,8 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
         case .poll:
             MarkerListSpecificsSection {
-                MarkerListSpecificsLabel(label: "POLL", color: marker.intentEnum.color)
-                if let note = marker.notePreview, !note.isEmpty {
+                MarkerListSpecificsLabel(label: "POLL", color: accentColor)
+                if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppColors.surfaceWhite85)
@@ -707,8 +736,8 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
         case .news:
             MarkerListSpecificsSection {
-                MarkerListSpecificsLabel(label: "NEWS", color: marker.intentEnum.color)
-                if let note = marker.notePreview, !note.isEmpty {
+                MarkerListSpecificsLabel(label: "NEWS", color: accentColor)
+                if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppColors.surfaceWhite85)
@@ -717,7 +746,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             }
 
         default:
-            if let note = marker.notePreview, !note.isEmpty {
+            if let note = notePreviewText, !note.isEmpty {
                 Text(note)
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)

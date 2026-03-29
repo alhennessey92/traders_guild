@@ -362,7 +362,9 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
             timeframe: timeframe,
             candleTimestamp: candleTimestamp,
             markerType: stringDataValue(for: "marker_type"),
-            intent: stringDataValue(for: "intent")
+            intent: stringDataValue(for: "intent"),
+            selectedEmoji: stringDataValue(for: "selected_emoji") ?? stringDataValue(for: "selectedEmoji"),
+            alertSeverity: stringDataValue(for: "alert_severity") ?? stringDataValue(for: "alertSeverity")
         )
     }
 
@@ -384,7 +386,9 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
             timeframe: timeframe,
             candleTimestamp: dateDataValue(for: "candle_timestamp") ?? createdAt,
             markerType: stringDataValue(for: "marker_type"),
-            intent: stringDataValue(for: "intent")
+            intent: stringDataValue(for: "intent"),
+            selectedEmoji: stringDataValue(for: "selected_emoji") ?? stringDataValue(for: "selectedEmoji"),
+            alertSeverity: stringDataValue(for: "alert_severity") ?? stringDataValue(for: "alertSeverity")
         )
     }
     

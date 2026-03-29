@@ -86,6 +86,48 @@ enum MarkerAlertSeverity: String, Codable, CaseIterable {
             return [base, AppColors.statusInfo90, AppColors.statusAccent66]
         }
     }
+
+    static func resolved(
+        rawValue: String?,
+        title: String? = nil,
+        notePreview: String? = nil
+    ) -> MarkerAlertSeverity? {
+        if let rawValue,
+           let resolved = MarkerAlertSeverity.fromBackendString(rawValue) {
+            return resolved
+        }
+
+        return inferred(from: title) ?? inferred(from: notePreview)
+    }
+
+    static func stripKnownPrefix(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let knownPrefixes = [
+            "[Critical] ",
+            "[Severe] ",
+            "[Warning] ",
+            "[Informational] ",
+        ]
+
+        for prefix in knownPrefixes where trimmed.hasPrefix(prefix) {
+            return String(trimmed.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return trimmed
+    }
+
+    static func inferred(from text: String?) -> MarkerAlertSeverity? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return nil
+        }
+
+        if text.hasPrefix("[Critical] ") { return .critical }
+        if text.hasPrefix("[Severe] ") { return .severe }
+        if text.hasPrefix("[Warning] ") { return .moderate }
+        if text.hasPrefix("[Informational] ") { return .mild }
+        return nil
+    }
 }
 
 // MARK: - Trendline Direction

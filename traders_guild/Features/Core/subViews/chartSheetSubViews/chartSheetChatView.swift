@@ -117,7 +117,6 @@ struct ImprovedChartSheetChatView: View {
     // MARK: - Chat Header
     private func chartChatHeader(for chat: RLChartChatDTO) -> some View {
         HStack(spacing: 12) {
-            // Symbol avatar with chart icon
             Circle()
                 .fill(AppColors.accentColor.opacity(0.2))
                 .frame(width: 40, height: 40)
@@ -126,22 +125,20 @@ struct ImprovedChartSheetChatView: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(AppColors.accentColor)
                 )
-            
-            // Symbol info
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(chat.symbolTicker)
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
-                
+
                 Text(chat.guildName)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
-            Spacer()
 
-            // Unread badge
+            Spacer(minLength: 0)
+
             if chat.hasUnread {
                 Text("\(chat.unreadCount)")
                     .font(.caption2)
@@ -153,12 +150,13 @@ struct ImprovedChartSheetChatView: View {
                     .clipShape(Capsule())
             }
 
-            // Active users pill - using unified component
             ActiveUsersPill(count: chat.activeUserCount)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
         .padding(.top, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.sheetBackground)
     }
     
     // MARK: - Empty Messages View (Using Unified ChatEmptyStateView)
@@ -426,6 +424,3 @@ struct ChartMessageRow: View {
         )
     }
 }
-
-
-

@@ -171,22 +171,60 @@ struct ChatMarkerFilter: Equatable {
     }
 }
 
-struct ChatMarkerLinkDraft: Equatable, Identifiable {
-    let markerId: UUID
-    let symbolId: UUID
-    let symbolTicker: String
-    let timeframe: String
-    let candleTimestamp: Date
-    let intent: String
-    let createdAt: Date
-    let notePreview: String?
+struct ChatMarkerLinkDraft: Equatable, Identifiable, MarkerListItemData {
+    var marker: RLTopMarkerDTO
 
-    var id: UUID { markerId }
+    var id: UUID { marker.id }
+    var markerId: UUID { marker.id }
+    var symbolId: UUID { marker.symbolId }
+    var symbolTicker: String { marker.symbolTicker }
+    var symbolBrandColor: String? { marker.symbolBrandColor }
+    var symbolAssetClass: String { marker.symbolAssetClass }
+    var authorId: UUID { marker.authorId }
+    var authorUsername: String { marker.authorUsername }
+    var authorInitials: String { marker.authorInitials }
+    var authorAvatarUrl: String? { marker.authorAvatarUrl }
+    var authorIsOnline: Bool { marker.authorIsOnline }
+    var authorReputation: Int { marker.authorReputation }
+    var authorAccuracyRate: Double? { marker.authorAccuracyRate }
+    var authorRole: String { marker.authorRole }
+    var intent: String { marker.intent }
+    var title: String? { marker.title }
+    var notePreview: String? { marker.notePreview }
+    var selectedEmoji: String? { marker.selectedEmoji }
+    var alertSeverity: String? { marker.alertSeverity }
+    var createdAt: Date { marker.createdAt }
+    var createdAtFormatted: String { marker.createdAtFormatted }
+    var candleTimestamp: Date { marker.candleTimestamp }
+    var timeframe: String { marker.timeframe }
+    var price: Double { marker.price }
+    var setupSummary: RLSetupSummaryDTO? { marker.setupSummary }
+    var likeCount: Int {
+        get { marker.likeCount }
+        set { marker.likeCount = newValue }
+    }
+    var isLikedByCurrentUser: Bool {
+        get { marker.isLikedByCurrentUser }
+        set { marker.isLikedByCurrentUser = newValue }
+    }
+    var commentCount: Int { marker.commentCount }
+    var isCurrentUserMarker: Bool { marker.isCurrentUserMarker }
+    var intentEnum: RLMarkerIntent { marker.intentEnum }
+    var authorAccuracyFormatted: String? { marker.authorAccuracyFormatted }
+    var predictionResult: RLPredictionResultDTO? { nil }
+    var displayTimestamp: String { marker.displayTimestamp }
+    var trackingStateEnum: RLTrackingState? { marker.trackingStateEnum }
 
     var markerType: String { intent }
 
-    var intentEnum: RLMarkerIntent {
-        RLMarkerIntent(rawValue: intent) ?? .analysis
+    var cleanedNotePreview: String? {
+        guard let notePreview else { return nil }
+        if intentEnum == .alert {
+            let stripped = MarkerAlertSeverity.stripKnownPrefix(from: notePreview)
+            return stripped.isEmpty ? nil : stripped
+        }
+        let trimmed = notePreview.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     var payload: MarkerSharePayloadV1 {
@@ -197,19 +235,14 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable {
             timeframe: timeframe,
             candleTimestamp: candleTimestamp,
             markerType: intent,
-            intent: intent
+            intent: intent,
+            selectedEmoji: selectedEmoji,
+            alertSeverity: alertSeverity
         )
     }
 
     init(marker: RLTopMarkerDTO) {
-        self.markerId = marker.id
-        self.symbolId = marker.symbolId
-        self.symbolTicker = marker.symbolTicker
-        self.timeframe = marker.timeframe
-        self.candleTimestamp = marker.candleTimestamp
-        self.intent = marker.intent
-        self.createdAt = marker.createdAt
-        self.notePreview = marker.notePreview
+        self.marker = marker
     }
 }
 
@@ -295,6 +328,8 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
     let candleTimestamp: Date
     let markerType: String?
     let intent: String?
+    let selectedEmoji: String?
+    let alertSeverity: String?
 
     var intentEnum: RLMarkerIntent {
         if let intent, let intentEnum = RLMarkerIntent(rawValue: intent) {
@@ -336,7 +371,9 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         timeframe: String,
         candleTimestamp: Date,
         markerType: String? = nil,
-        intent: String? = nil
+        intent: String? = nil,
+        selectedEmoji: String? = nil,
+        alertSeverity: String? = nil
     ) {
         self.markerId = markerId
         self.symbolId = symbolId
@@ -345,6 +382,18 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         self.candleTimestamp = candleTimestamp
         self.markerType = markerType
         self.intent = intent
+        self.selectedEmoji = selectedEmoji
+        self.alertSeverity = alertSeverity
+    }
+
+    var selectedEmojiValue: String? {
+        let trimmed = selectedEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var alertSeverityEnum: MarkerAlertSeverity? {
+        guard intentEnum == .alert else { return nil }
+        return MarkerAlertSeverity.resolved(rawValue: alertSeverity)
     }
 
     var notificationUserInfo: [String: Any] {
@@ -362,6 +411,12 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         }
         if let intent {
             info["intent"] = intent
+        }
+        if let selectedEmojiValue {
+            info["selectedEmoji"] = selectedEmojiValue
+        }
+        if let alertSeverity {
+            info["alertSeverity"] = alertSeverity
         }
         return info
     }
@@ -401,6 +456,8 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         self.candleTimestamp = candleTimestamp
         self.markerType = userInfo["markerType"] as? String
         self.intent = userInfo["intent"] as? String
+        self.selectedEmoji = (userInfo["selectedEmoji"] ?? userInfo["selected_emoji"]) as? String
+        self.alertSeverity = (userInfo["alertSeverity"] ?? userInfo["alert_severity"]) as? String
     }
 }
 
@@ -1103,30 +1160,15 @@ struct ChatInputFooter: View {
 
     private func markerPreviewChip(for marker: ChatMarkerLinkDraft) -> some View {
         ZStack(alignment: .topTrailing) {
-            HStack(spacing: 8) {
-                UnifiedMarkerBadge(
-                    intent: marker.intentEnum,
-                    sizeToken: .small
-                )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Linked Marker")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(AppColors.greyText)
-                    Text("\(marker.symbolTicker) • \(marker.timeframe.uppercased())")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(AppColors.whiteText.opacity(0.95))
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(AppColors.whiteText.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(AppColors.surfaceWhite20, lineWidth: 1)
-                    )
+            ChatMarkerSummaryCard(
+                intent: marker.intentEnum,
+                alertSeverity: marker.alertSeverityEnum,
+                emoji: marker.selectedEmoji,
+                eyebrow: "Linked Marker",
+                title: "\(marker.symbolTicker) • \(marker.timeframe.uppercased())",
+                subtitle: marker.cleanedNotePreview != nil
+                    ? marker.cleanedNotePreview
+                    : marker.createdAt.formatted(date: .abbreviated, time: .shortened)
             )
 
             Button {
@@ -1233,85 +1275,220 @@ private struct ChatMarkerPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Loading markers...")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let errorMessage {
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.title2)
-                            .foregroundColor(AppColors.bearCandleRed)
-                        Text(errorMessage)
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.whiteText)
-                        Button("Retry", action: onRetry)
-                            .buttonStyle(.borderedProminent)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if markers.isEmpty {
-                    ChatEmptyStateView(
-                        icon: "target",
-                        title: "No markers found",
-                        subtitle: "Place a marker to share it in chat."
-                    )
-                } else {
-                    List(markers) { marker in
-                        Button {
-                            onSelect(marker)
-                            dismiss()
-                        } label: {
-                            HStack(spacing: 10) {
-                                UnifiedMarkerBadge(
-                                    intent: marker.intentEnum,
-                                    sizeToken: .medium
-                                )
+        ZStack {
+            ChatBackground().ignoresSafeArea()
 
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("\(marker.symbolTicker) • \(marker.timeframe.uppercased())")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundColor(AppColors.whiteText)
-                                    Text(marker.intentEnum.displayName)
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundColor(marker.intentEnum.color.opacity(0.9))
-                                    Text(marker.candleTimestamp.formatted(date: .abbreviated, time: .shortened))
-                                        .font(.caption2)
-                                        .foregroundColor(AppColors.greyText)
-                                    if let note = marker.notePreview, !note.isEmpty {
-                                        Text(note)
-                                            .font(.caption2)
-                                            .foregroundColor(AppColors.greyText.opacity(0.9))
-                                            .lineLimit(1)
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
-                        .listRowBackground(Color.clear)
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .background(ChatBackground())
-                }
+            VStack(spacing: 0) {
+                header
+                content
+                footer
             }
-            .navigationTitle("Link Marker")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") { dismiss() }
-                        .foregroundColor(AppColors.accentColor)
-                }
-            }
-            .background(ChatBackground())
         }
+    }
+
+    private var header: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(AppColors.statusInfo22.opacity(0.92))
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Image(systemName: "paperclip.circle.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(AppColors.statusInfo95)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Link Marker")
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(.white)
+                    Text("Share one of your markers in chat using the same marker row presentation.")
+                        .font(.caption)
+                        .foregroundColor(AppColors.surfaceWhite70)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(AppColors.surfaceWhite80)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            .background(AppColors.sheetBackground.opacity(0.96))
+
+            Divider()
+                .background(AppColors.surfaceGray30)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isLoading {
+            VStack(spacing: 12) {
+                Spacer(minLength: 0)
+                ProgressView()
+                Text("Loading markers...")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let errorMessage {
+            VStack(spacing: 12) {
+                Spacer(minLength: 0)
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.title2)
+                    .foregroundColor(AppColors.bearCandleRed)
+                Text(errorMessage)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.whiteText)
+                Button("Retry", action: onRetry)
+                    .buttonStyle(.borderedProminent)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if markers.isEmpty {
+            ChatEmptyStateView(
+                icon: "target",
+                title: "No markers found",
+                subtitle: "Place a marker to share it in chat."
+            )
+        } else {
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 12) {
+                    ForEach(markers) { marker in
+                        MarkerListItem(
+                            marker: marker,
+                            style: .capsule,
+                            onTap: {
+                                onSelect(marker)
+                                dismiss()
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+        }
+    }
+
+    private var footer: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .background(AppColors.surfaceGray30)
+
+            HStack(spacing: 12) {
+                Text(footerTitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.surfaceWhite80)
+
+                Spacer(minLength: 0)
+
+                Text(footerHint)
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(AppColors.sheetBackground.opacity(0.94))
+        }
+    }
+
+    private var footerTitle: String {
+        if isLoading {
+            return "Loading your markers"
+        }
+        if errorMessage != nil {
+            return "Unable to load markers"
+        }
+        return "\(markers.count) marker\(markers.count == 1 ? "" : "s") available"
+    }
+
+    private var footerHint: String {
+        if errorMessage != nil {
+            return "Use Retry above to try again"
+        }
+        return "Tap a row to link it"
+    }
+}
+
+private struct ChatMarkerSummaryCard: View {
+    let intent: RLMarkerIntent
+    let alertSeverity: MarkerAlertSeverity?
+    let emoji: String?
+    let eyebrow: String
+    let title: String
+    let subtitle: String?
+
+    private var accentColor: Color {
+        if intent == .alert {
+            return alertSeverity?.color ?? intent.color
+        }
+        return intent.color
+    }
+
+    private var backgroundGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                accentColor.opacity(0.18),
+                accentColor.opacity(0.08),
+                AppColors.surfaceGray20,
+                AppColors.surfaceBlack62,
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            UnifiedMarkerBadge(
+                intent: intent,
+                alertSeverity: alertSeverity,
+                sizeToken: .medium,
+                emoji: intent == .reaction ? emoji : nil
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(eyebrow)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(AppColors.surfaceWhite70)
+
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText.opacity(0.96))
+                    .lineLimit(1)
+
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(backgroundGradient)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(accentColor.opacity(0.34), lineWidth: 1)
+        )
     }
 }
 
@@ -2043,11 +2220,15 @@ struct ActiveUsersPill: View {
                 Text("\(count) active")
                     .font(.caption2)
                     .fontWeight(.medium)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.surfaceWhite70)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(AppColors.surfaceWhite06)
+            .background(AppColors.surfaceWhite08)
+            .overlay(
+                Capsule()
+                    .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+            )
             .clipShape(Capsule())
         }
     }
@@ -3259,38 +3440,64 @@ private struct MarkerShareCard: View {
         payload.candleTimestamp.formatted(date: .abbreviated, time: .shortened)
     }
 
+    private var accentColor: Color {
+        if payload.intentEnum == .alert {
+            return payload.alertSeverityEnum?.color ?? payload.intentEnum.color
+        }
+        return payload.intentEnum.color
+    }
+
+    private var backgroundGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                accentColor.opacity(isCurrentUserMessage ? 0.26 : 0.18),
+                accentColor.opacity(isCurrentUserMessage ? 0.10 : 0.08),
+                isCurrentUserMessage ? AppColors.surfaceWhite15 : AppColors.surfaceGray20,
+                isCurrentUserMessage ? AppColors.surfaceBlack45 : AppColors.surfaceBlack62,
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     var body: some View {
         Button(action: onTap) {
             HStack(alignment: .center, spacing: 10) {
                 UnifiedMarkerBadge(
                     intent: payload.intentEnum,
-                    sizeToken: .medium
+                    alertSeverity: payload.alertSeverityEnum,
+                    sizeToken: .medium,
+                    emoji: payload.intentEnum == .reaction ? payload.selectedEmojiValue : nil
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(payload.intentEnum.displayName)
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite80 : AppColors.greyText)
+                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite80 : accentColor.opacity(0.95))
                     Text("\(tickerLabel) • \(timeframeLabel)")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(isCurrentUserMessage ? .white : .primary)
+                        .foregroundColor(isCurrentUserMessage ? .white : AppColors.whiteText)
                     Text(timestampLabel)
                         .font(.caption2)
-                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite75 : .secondary)
+                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite75 : AppColors.surfaceWhite70)
                 }
 
                 Spacer(minLength: 6)
 
                 Image(systemName: "arrow.up.right")
                     .font(.caption)
-                    .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite80 : AppColors.accentColor)
+                    .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite80 : accentColor.opacity(0.95))
             }
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isCurrentUserMessage ? AppColors.surfaceWhite15 : AppColors.surfaceWhite10)
+                    .fill(backgroundGradient)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(accentColor.opacity(isCurrentUserMessage ? 0.28 : 0.34), lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
