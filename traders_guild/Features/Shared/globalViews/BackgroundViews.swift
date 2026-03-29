@@ -34,7 +34,7 @@ struct StaticBackgroundView: View {
 
 struct StaticAuthBackgroundView: View {
     @State private var patternOpacity: Double = 0
-    
+
     var body: some View {
         ZStack {
             // Base gradient
@@ -43,10 +43,18 @@ struct StaticAuthBackgroundView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            
-            // Pattern overlay - fades in smoothly
+
+            // Pattern overlay - fades in smoothly with edge vignette mask
             PatternOverlay(patternType: .honeycomb, hexSize: 16)
                 .opacity(patternOpacity)
+                .mask(
+                    RadialGradient(
+                        colors: [.white, .white.opacity(0.6), .clear],
+                        center: .center,
+                        startRadius: 60,
+                        endRadius: 420
+                    )
+                )
         }
         .ignoresSafeArea()
         .onAppear {

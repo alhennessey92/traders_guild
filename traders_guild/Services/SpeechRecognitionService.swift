@@ -92,8 +92,12 @@ final class SpeechRecognitionService: ObservableObject {
         // Configure audio session
         let audioSession = AVAudioSession.sharedInstance()
         do {
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            try audioSession.setCategory(
+                .playAndRecord,
+                mode: .measurement,
+                options: [.mixWithOthers, .allowBluetoothHFP]
+            )
+            try audioSession.setActive(true)
         } catch {
             errorMessage = "Failed to configure audio session."
             return
@@ -103,6 +107,7 @@ final class SpeechRecognitionService: ObservableObject {
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest = recognitionRequest else {
             errorMessage = "Unable to create recognition request."
+            deactivateAudioSession()
             return
         }
 
@@ -166,12 +171,7 @@ final class SpeechRecognitionService: ObservableObject {
         recognitionTask?.cancel()
         recognitionTask = nil
 
-        // Reset audio session
-        do {
-            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        } catch {
-            // Non-critical — audio session will clean up eventually
-        }
+        deactivateAudioSession()
 
         DispatchQueue.main.async {
             self.isRecording = false
@@ -195,5 +195,14 @@ final class SpeechRecognitionService: ObservableObject {
         recognitionTask?.cancel()
         recognitionTask = nil
         isRecording = false
+        deactivateAudioSession()
+    }
+
+    private func deactivateAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            // Non-critical — audio session will clean up eventually
+        }
     }
 }

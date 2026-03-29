@@ -95,8 +95,7 @@ struct UserGlobalSheetView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showGlobalReputationBreakdown = false }
-                                .foregroundColor(AppColors.accentColor)
+                            SheetCloseButton(action: { showGlobalReputationBreakdown = false })
                         }
                     }
             }
@@ -109,8 +108,7 @@ struct UserGlobalSheetView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showGlobalAccuracyBreakdown = false }
-                                .foregroundColor(AppColors.accentColor)
+                            SheetCloseButton(action: { showGlobalAccuracyBreakdown = false })
                         }
                     }
             }

@@ -117,14 +117,23 @@ struct ImprovedChartSheetChatView: View {
     // MARK: - Chat Header
     private func chartChatHeader(for chat: RLChartChatDTO) -> some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(AppColors.accentColor.opacity(0.2))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppColors.accentColor)
+            if let symbol = chartViewModel.currentSymbol, symbol.id == chat.symbolId {
+                TradingSymbolIconView(
+                    symbol: symbol,
+                    size: 40,
+                    cornerRadiusRatio: 0.22,
+                    strokeOpacity: 0.18,
+                    showShadow: true
                 )
+            } else {
+                TickerSymbolIconView(
+                    ticker: chat.symbolTicker,
+                    size: 40,
+                    cornerRadiusRatio: 0.22,
+                    strokeOpacity: 0.18,
+                    showShadow: true
+                )
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(chat.symbolTicker)

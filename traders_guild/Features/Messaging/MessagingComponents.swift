@@ -232,6 +232,8 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable, MarkerListItemData {
             markerId: markerId,
             symbolId: symbolId,
             symbolTicker: symbolTicker,
+            symbolAssetClass: symbolAssetClass,
+            symbolBrandColor: symbolBrandColor,
             timeframe: timeframe,
             candleTimestamp: candleTimestamp,
             markerType: intent,
@@ -324,6 +326,8 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
     let markerId: UUID
     let symbolId: UUID
     let symbolTicker: String?
+    let symbolAssetClass: String?
+    let symbolBrandColor: String?
     let timeframe: String
     let candleTimestamp: Date
     let markerType: String?
@@ -368,6 +372,8 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         markerId: UUID,
         symbolId: UUID,
         symbolTicker: String?,
+        symbolAssetClass: String? = nil,
+        symbolBrandColor: String? = nil,
         timeframe: String,
         candleTimestamp: Date,
         markerType: String? = nil,
@@ -378,6 +384,8 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         self.markerId = markerId
         self.symbolId = symbolId
         self.symbolTicker = symbolTicker
+        self.symbolAssetClass = symbolAssetClass
+        self.symbolBrandColor = symbolBrandColor
         self.timeframe = timeframe
         self.candleTimestamp = candleTimestamp
         self.markerType = markerType
@@ -405,6 +413,12 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         ]
         if let symbolTicker {
             info["symbolTicker"] = symbolTicker
+        }
+        if let symbolAssetClass {
+            info["symbolAssetClass"] = symbolAssetClass
+        }
+        if let symbolBrandColor {
+            info["symbolBrandColor"] = symbolBrandColor
         }
         if let markerType {
             info["markerType"] = markerType
@@ -452,6 +466,8 @@ struct MarkerSharePayloadV1: Codable, Equatable, Hashable {
         self.markerId = markerId
         self.symbolId = symbolId
         self.symbolTicker = userInfo["symbolTicker"] as? String
+        self.symbolAssetClass = (userInfo["symbolAssetClass"] ?? userInfo["symbol_asset_class"]) as? String
+        self.symbolBrandColor = (userInfo["symbolBrandColor"] ?? userInfo["symbol_brand_color"]) as? String
         self.timeframe = timeframe
         self.candleTimestamp = candleTimestamp
         self.markerType = userInfo["markerType"] as? String
@@ -1159,28 +1175,20 @@ struct ChatInputFooter: View {
     }
 
     private func markerPreviewChip(for marker: ChatMarkerLinkDraft) -> some View {
-        ZStack(alignment: .topTrailing) {
-            ChatMarkerSummaryCard(
-                intent: marker.intentEnum,
-                alertSeverity: marker.alertSeverityEnum,
-                emoji: marker.selectedEmoji,
-                eyebrow: "Linked Marker",
-                title: "\(marker.symbolTicker) • \(marker.timeframe.uppercased())",
-                subtitle: marker.cleanedNotePreview != nil
-                    ? marker.cleanedNotePreview
-                    : marker.createdAt.formatted(date: .abbreviated, time: .shortened)
-            )
-
-            Button {
+        LinkedMarkerRow(
+            intent: marker.intentEnum,
+            alertSeverity: marker.alertSeverityEnum,
+            emoji: marker.selectedEmoji,
+            ticker: marker.symbolTicker,
+            assetClass: marker.symbolAssetClass,
+            brandColorHex: marker.symbolBrandColor,
+            timeframe: marker.timeframe,
+            subtitle: marker.cleanedNotePreview ?? marker.createdAt.formatted(date: .abbreviated, time: .shortened),
+            style: .attachmentDraft,
+            trailingAction: {
                 withAnimation { selectedMarkerDraft = nil }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .background(AppColors.surfaceBlack45, in: Circle())
             }
-            .offset(x: 4, y: -4)
-        }
+        )
     }
 
     // MARK: - Helpers
@@ -1419,76 +1427,6 @@ private struct ChatMarkerPickerSheet: View {
             return "Use Retry above to try again"
         }
         return "Tap a row to link it"
-    }
-}
-
-private struct ChatMarkerSummaryCard: View {
-    let intent: RLMarkerIntent
-    let alertSeverity: MarkerAlertSeverity?
-    let emoji: String?
-    let eyebrow: String
-    let title: String
-    let subtitle: String?
-
-    private var accentColor: Color {
-        if intent == .alert {
-            return alertSeverity?.color ?? intent.color
-        }
-        return intent.color
-    }
-
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                accentColor.opacity(0.18),
-                accentColor.opacity(0.08),
-                AppColors.surfaceGray20,
-                AppColors.surfaceBlack62,
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            UnifiedMarkerBadge(
-                intent: intent,
-                alertSeverity: alertSeverity,
-                sizeToken: .medium,
-                emoji: intent == .reaction ? emoji : nil
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(eyebrow)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(AppColors.surfaceWhite70)
-
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(AppColors.whiteText.opacity(0.96))
-                    .lineLimit(1)
-
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundColor(AppColors.greyText)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(backgroundGradient)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(accentColor.opacity(0.34), lineWidth: 1)
-        )
     }
 }
 
@@ -2161,11 +2099,7 @@ struct ChatDismissButton: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.title2)
-                .foregroundColor(.secondary)
-        }
+        SheetCloseButton(action: action, tint: .secondary)
     }
 }
 
@@ -3440,67 +3374,197 @@ private struct MarkerShareCard: View {
         payload.candleTimestamp.formatted(date: .abbreviated, time: .shortened)
     }
 
-    private var accentColor: Color {
-        if payload.intentEnum == .alert {
-            return payload.alertSeverityEnum?.color ?? payload.intentEnum.color
-        }
-        return payload.intentEnum.color
-    }
-
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                accentColor.opacity(isCurrentUserMessage ? 0.26 : 0.18),
-                accentColor.opacity(isCurrentUserMessage ? 0.10 : 0.08),
-                isCurrentUserMessage ? AppColors.surfaceWhite15 : AppColors.surfaceGray20,
-                isCurrentUserMessage ? AppColors.surfaceBlack45 : AppColors.surfaceBlack62,
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .center, spacing: 10) {
-                UnifiedMarkerBadge(
-                    intent: payload.intentEnum,
-                    alertSeverity: payload.alertSeverityEnum,
-                    sizeToken: .medium,
-                    emoji: payload.intentEnum == .reaction ? payload.selectedEmojiValue : nil
-                )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(payload.intentEnum.displayName)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite80 : accentColor.opacity(0.95))
-                    Text("\(tickerLabel) • \(timeframeLabel)")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(isCurrentUserMessage ? .white : AppColors.whiteText)
-                    Text(timestampLabel)
-                        .font(.caption2)
-                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite75 : AppColors.surfaceWhite70)
-                }
-
-                Spacer(minLength: 6)
-
-                Image(systemName: "arrow.up.right")
-                    .font(.caption)
-                    .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite80 : accentColor.opacity(0.95))
-            }
-            .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(backgroundGradient)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(accentColor.opacity(isCurrentUserMessage ? 0.28 : 0.34), lineWidth: 1)
+            LinkedMarkerRow(
+                intent: payload.intentEnum,
+                alertSeverity: payload.alertSeverityEnum,
+                emoji: payload.selectedEmojiValue,
+                ticker: tickerLabel,
+                assetClass: payload.symbolAssetClass,
+                brandColorHex: payload.symbolBrandColor,
+                timeframe: timeframeLabel,
+                subtitle: timestampLabel,
+                style: .messageCard(isCurrentUserMessage: isCurrentUserMessage)
             )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+private enum LinkedMarkerRowStyle: Equatable {
+    case attachmentDraft
+    case messageCard(isCurrentUserMessage: Bool)
+}
+
+private struct LinkedMarkerRow: View {
+    let intent: RLMarkerIntent
+    let alertSeverity: MarkerAlertSeverity?
+    let emoji: String?
+    let ticker: String
+    let assetClass: String?
+    let brandColorHex: String?
+    let timeframe: String
+    let subtitle: String?
+    let style: LinkedMarkerRowStyle
+    var trailingAction: (() -> Void)? = nil
+
+    private var accentColor: Color {
+        if intent == .alert {
+            return alertSeverity?.color ?? intent.color
+        }
+        return intent.color
+    }
+
+    private var isCurrentUserMessage: Bool {
+        if case let .messageCard(isCurrentUserMessage) = style {
+            return isCurrentUserMessage
+        }
+        return false
+    }
+
+    private var backgroundGradient: LinearGradient {
+        switch style {
+        case .attachmentDraft:
+            return LinearGradient(
+                colors: [
+                    accentColor.opacity(0.18),
+                    accentColor.opacity(0.08),
+                    AppColors.surfaceGray20,
+                    AppColors.surfaceBlack62,
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .messageCard:
+            return LinearGradient(
+                colors: [
+                    accentColor.opacity(isCurrentUserMessage ? 0.26 : 0.18),
+                    accentColor.opacity(isCurrentUserMessage ? 0.11 : 0.08),
+                    isCurrentUserMessage ? AppColors.surfaceWhite15 : AppColors.surfaceGray20,
+                    isCurrentUserMessage ? AppColors.surfaceBlack45 : AppColors.surfaceBlack62,
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    private var rowStrokeColor: Color {
+        accentColor.opacity(isCurrentUserMessage ? 0.28 : 0.34)
+    }
+
+    private var subtitleText: String? {
+        let trimmed = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var timeframeText: String {
+        timeframe.uppercased()
+    }
+
+    private var badgeSize: UnifiedMarkerBadgeSizeToken {
+        switch style {
+        case .attachmentDraft:
+            return .small
+        case .messageCard:
+            return .tiny
+        }
+    }
+
+    private var iconSize: CGFloat {
+        switch style {
+        case .attachmentDraft:
+            return 18
+        case .messageCard:
+            return 17
+        }
+    }
+
+    private var verticalPadding: CGFloat {
+        switch style {
+        case .attachmentDraft:
+            return 8
+        case .messageCard:
+            return 7
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            UnifiedMarkerBadge(
+                intent: intent,
+                alertSeverity: alertSeverity,
+                sizeToken: badgeSize,
+                emoji: intent == .reaction ? emoji : nil
+            )
+
+            TickerSymbolIconView(
+                ticker: ticker,
+                assetClass: assetClass,
+                brandColorHex: brandColorHex,
+                size: iconSize,
+                cornerRadiusRatio: 0.24,
+                strokeOpacity: 0.14
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(ticker)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(isCurrentUserMessage ? .white : AppColors.whiteText.opacity(0.96))
+                        .lineLimit(1)
+
+                    Text(timeframeText)
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.88))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(AppColors.whiteText.opacity(0.10)))
+
+                    Text(intent.displayName)
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(accentColor)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(accentColor.opacity(0.16)))
+                        .lineLimit(1)
+                }
+
+                if let subtitleText {
+                    Text(subtitleText)
+                        .font(.caption2)
+                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite78 : AppColors.greyText)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            if let trailingAction {
+                Button(action: trailingAction) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .background(AppColors.surfaceBlack45, in: Circle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite82 : accentColor.opacity(0.95))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, verticalPadding)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(backgroundGradient)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(rowStrokeColor, lineWidth: 1)
+        )
     }
 }
 

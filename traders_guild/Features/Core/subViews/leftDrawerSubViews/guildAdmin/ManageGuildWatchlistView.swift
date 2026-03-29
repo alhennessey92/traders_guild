@@ -173,6 +173,13 @@ struct ManageGuildWatchlistView: View {
         let busy = processingRequestIds.contains(request.id)
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
+                TickerSymbolIconView(
+                    ticker: request.symbolTicker,
+                    size: 28,
+                    cornerRadiusRatio: 0.22,
+                    strokeOpacity: 0.14
+                )
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(request.symbolTicker)
                         .font(.headline)
@@ -318,6 +325,13 @@ struct ManageGuildWatchlistView: View {
         let busy = processingSymbolIds.contains(symbol.id)
 
         return HStack(spacing: 10) {
+            TradingSymbolIconView(
+                symbol: symbol,
+                size: 30,
+                cornerRadiusRatio: 0.22,
+                strokeOpacity: 0.16
+            )
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(symbol.ticker)
                     .font(.subheadline)
@@ -382,6 +396,13 @@ struct ManageGuildWatchlistView: View {
     private func guildSymbolRow(_ symbol: RLTradingSymbolDTO) -> some View {
         let busy = processingSymbolIds.contains(symbol.id)
         return HStack(spacing: 10) {
+            TradingSymbolIconView(
+                symbol: symbol,
+                size: 30,
+                cornerRadiusRatio: 0.22,
+                strokeOpacity: 0.16
+            )
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(symbol.ticker)
                     .font(.subheadline)

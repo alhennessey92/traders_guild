@@ -183,8 +183,15 @@ struct LeftDrawerMainView: View {
                     Rectangle()
                         .fill(.ultraThinMaterial)
                         .ignoresSafeArea()
-                    AppColors.drawerBackground
-                        .opacity(ThemeManager.shared.currentTheme == .dark ? 0.6 : 0.92)
+                    LinearGradient(
+                        colors: [
+                            AppColors.drawerBackground,
+                            AppColors.sheetBackground
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
                 }
             )
             .overlay(
@@ -213,11 +220,11 @@ struct LeftDrawerMainView: View {
                     .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
     //                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
                     .presentationBackground {
-                        ZStack {
-                            Color.clear
-                                .background(.ultraThinMaterial)
-                            AppColors.sheetBackground
-                        }
+                        LinearGradient(
+                            colors: [AppColors.sheetBackground, AppColors.drawerBackground],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     }
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .presentationCornerRadius(33)

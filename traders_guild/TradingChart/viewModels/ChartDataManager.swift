@@ -115,152 +115,19 @@ class ChartDataManager: ObservableObject {
     ///   - volume: Tick volume (required)
     ///   - timestamp: Optional tick timestamp (uses current time if nil)
     func processRealTick(price: Double, volume: Double, timestamp: Date? = nil) {
-        // Update current price display immediately
-        currentPrice = price
-        basePrice = price
-
-        guard !candles.isEmpty else { return }
-
-        let tickTime = timestamp ?? Date()
-        let bucketTimestamp = alignedCandleTimestamp(for: tickTime)
-
-        if let lastCandle = candles.last {
-            if bucketTimestamp > lastCandle.timestamp {
-                let fallbackCandles = fillRealtimeGap(from: lastCandle, to: bucketTimestamp)
-                if !fallbackCandles.isEmpty {
-                    candles.append(contentsOf: fallbackCandles)
-                }
-
-                // Start a new in-progress candle bucket.
-                let newCandle = RLCandleDTO(
-                    timestamp: bucketTimestamp,
-                    timestampFormatted: nil,
-                    open: price,
-                    high: price,
-                    low: price,
-                    close: price,
-                    volume: volume,
-                    volumeFormatted: formatVolume(volume),
-                    isGapFill: false
-                )
-                candles.append(newCandle)
-                if candles.count > maxCandles {
-                    candles.removeFirst(candles.count - maxCandles)
-                }
-                updatePriceRange()
-            } else if bucketTimestamp == lastCandle.timestamp {
-                updateCurrentCandle(at: candles.count - 1, withTick: price, tickVolume: volume)
-            } else {
-                if let existingIndex = indexOfCandle(with: bucketTimestamp),
-                   candles[existingIndex].isGapFill {
-                    candles[existingIndex] = RLCandleDTO(
-                        timestamp: bucketTimestamp,
-                        timestampFormatted: candles[existingIndex].timestampFormatted,
-                        open: price,
-                        high: price,
-                        low: price,
-                        close: price,
-                        volume: volume,
-                        volumeFormatted: formatVolume(volume),
-                        isGapFill: false
-                    )
-                    updatePriceRange()
-                    return
-                }
-                // Ignore stale tick for an older bucket unless replacing a placeholder.
-                return
-            }
-        }
-    }
-
-    private func fillRealtimeGap(from lastCandle: RLCandleDTO, to newTimestamp: Date) -> [RLCandleDTO] {
-        let step = max(1, currentTimeframe.seconds)
-        var nextTimestamp = lastCandle.timestamp.addingTimeInterval(step)
-        var generated: [RLCandleDTO] = []
-
-        while nextTimestamp < newTimestamp && generated.count < maxRealtimeFallbackInsert {
-            let close = generated.last?.close ?? lastCandle.close
-            generated.append(
-                RLCandleDTO(
-                    timestamp: nextTimestamp,
-                    timestampFormatted: nil,
-                    open: close,
-                    high: close,
-                    low: close,
-                    close: close,
-                    volume: 0,
-                    volumeFormatted: formatVolume(0),
-                    isGapFill: true
-                )
-            )
-            nextTimestamp = nextTimestamp.addingTimeInterval(step)
-        }
-
-        return generated
-    }
-
-    private func indexOfCandle(with timestamp: Date) -> Int? {
-        var left = 0
-        var right = candles.count - 1
-
-        while left <= right {
-            let middle = (left + right) / 2
-            let currentTimestamp = candles[middle].timestamp
-
-            if currentTimestamp == timestamp {
-                return middle
-            }
-
-            if currentTimestamp < timestamp {
-                left = middle + 1
-            } else {
-                right = middle - 1
-            }
-        }
-
-        return nil
-    }
-
-    /// Align tick timestamps to the current timeframe bucket boundary.
-    private func alignedCandleTimestamp(for timestamp: Date) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
-
-        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: timestamp)
-        components.second = 0
-
-        switch currentTimeframe {
-        case .m1:
-            break
-        case .m5:
-            if let minute = components.minute { components.minute = (minute / 5) * 5 }
-        case .m15:
-            if let minute = components.minute { components.minute = (minute / 15) * 15 }
-        case .m30:
-            if let minute = components.minute { components.minute = (minute / 30) * 30 }
-        case .h1:
-            components.minute = 0
-        case .h4:
-            if let hour = components.hour { components.hour = (hour / 4) * 4 }
-            components.minute = 0
-        case .d1:
-            components.hour = 0
-            components.minute = 0
-        case .w1:
-            components.hour = 0
-            components.minute = 0
-            if let dayStart = calendar.date(from: components) {
-                let weekday = calendar.component(.weekday, from: dayStart)
-                let daysFromMonday = (weekday + 5) % 7
-                return calendar.date(byAdding: .day, value: -daysFromMonday, to: dayStart) ?? dayStart
-            }
-        case .mn:
-            components.day = 1
-            components.hour = 0
-            components.minute = 0
-        }
-
-        return calendar.date(from: components) ?? timestamp
+        let result = RealtimeCandleStreamReducer.processTick(
+            candles: candles,
+            timeframe: currentTimeframe,
+            price: price,
+            volume: volume,
+            timestamp: timestamp,
+            maxCandles: maxCandles,
+            maxRealtimeFallbackInsert: maxRealtimeFallbackInsert
+        )
+        candles = result.candles
+        currentPrice = result.currentPrice
+        basePrice = result.currentPrice
+        updatePriceRange()
     }
     
     /// Process a complete candle from a data feed
@@ -268,31 +135,18 @@ class ChartDataManager: ObservableObject {
     /// - Parameter candle: The complete candle data
     @discardableResult
     func processRealCandle(_ candle: RLCandleDTO) -> Int {
-        var trimmedCount = 0
-        if let existingIndex = indexOfCandle(with: candle.timestamp) {
-            candles[existingIndex] = candle
-        } else if let lastCandle = candles.last {
-            if candle.timestamp > lastCandle.timestamp {
-                let fallbackCandles = fillRealtimeGap(from: lastCandle, to: candle.timestamp)
-                if !fallbackCandles.isEmpty {
-                    candles.append(contentsOf: fallbackCandles)
-                }
-                candles.append(candle)
-
-                if candles.count > maxCandles {
-                    trimmedCount = candles.count - maxCandles
-                    candles.removeFirst(trimmedCount)
-                }
-            }
-            // Older candles are ignored unless they match an existing placeholder timestamp.
-        } else {
-            candles.append(candle)
-        }
-        
-        currentPrice = candle.close
-        basePrice = candle.close
+        let result = RealtimeCandleStreamReducer.processCompletedCandle(
+            candles: candles,
+            timeframe: currentTimeframe,
+            candle: candle,
+            maxCandles: maxCandles,
+            maxRealtimeFallbackInsert: maxRealtimeFallbackInsert
+        )
+        candles = result.candles
+        currentPrice = result.currentPrice
+        basePrice = result.currentPrice
         updatePriceRange()
-        return trimmedCount
+        return result.trimmedCount
     }
     
     // MARK: - Timer Management (for cleanup only - no mock data generation)

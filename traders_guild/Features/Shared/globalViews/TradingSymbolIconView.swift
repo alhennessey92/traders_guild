@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Unified symbol icon renderer with source priority:
-/// iconUrl (remote) -> iconName (bundled asset) -> gradient + fallback initial.
+/// iconUrl (remote) -> iconName (bundled asset) -> mapped bundled asset -> gradient + fallback initial.
 struct TradingSymbolIconView: View {
     let symbol: RLTradingSymbolDTO
     var size: CGFloat = 44
@@ -37,6 +37,13 @@ struct TradingSymbolIconView: View {
         return URL(string: mediaBase + "/" + iconUrl)
     }
 
+    private var iconAssetName: String? {
+        if let bundledName = BundledTradingSymbolIconResolver.bundledAssetName(for: symbol.iconName) {
+            return bundledName
+        }
+        return BundledTradingSymbolIconResolver.assetName(for: symbol.ticker, assetClass: symbol.assetClass)
+    }
+
     var body: some View {
         iconContent
             .frame(width: size, height: size)
@@ -70,8 +77,8 @@ struct TradingSymbolIconView: View {
                     fallbackContent
                 }
             }
-        } else if let iconName = symbol.iconName, !iconName.isEmpty {
-            Image(iconName)
+        } else if let iconAssetName {
+            Image(iconAssetName)
                 .resizable()
                 .scaledToFill()
         } else {
@@ -95,4 +102,5 @@ struct TradingSymbolIconView: View {
                 .foregroundColor(.white)
         }
     }
+
 }

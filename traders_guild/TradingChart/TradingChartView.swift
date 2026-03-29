@@ -5857,6 +5857,15 @@ struct TradingChartView: View {
     private var symbolTimeframeRow: some View {
         HStack(spacing: 8) {
             if let symbol = currentSymbol {
+                TickerSymbolIconView(
+                    ticker: symbol.ticker,
+                    assetClass: symbol.assetClass,
+                    brandColorHex: symbol.primaryColor,
+                    size: 18,
+                    cornerRadiusRatio: 0.24,
+                    strokeOpacity: 0.14
+                )
+
                 Text(symbol.ticker)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
@@ -6118,9 +6127,9 @@ struct TradingChartView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    SheetCloseButton(action: {
                         showMarkerTypeFilterSheet = false
-                    }
+                    })
                 }
             }
         }

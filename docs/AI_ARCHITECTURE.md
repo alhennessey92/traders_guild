@@ -1443,14 +1443,21 @@ Maybe have active, all, resolved and personal -->
 
 Due to this we can remove the timeframe filter functionality in the left drawer marker section
 
-228. Need to have a look at timeframe panel, would be nice if they could update in realtime on the chart, including new candles, active candle, moving price indicator (tick)relative to current default chart etc... Also the main chart timeframe panel, still has the vertical marker view/icon on latest candle, this isnt ncessary as we have the window view, its only necessary when used in marker view mode to show where the marker is located
+
 
 237. Reputation for personal, guild and global need a full audit. Again listing areas reputation is applied and areas we still need to apply to
 
 238. Need to review user permissions making sure things like user blocks, bans, suspended and muted are all applied to relevant areas and things like caps on chat message (50 per hour) for anti spam are in place and marker placement limits etc
 
-240. Noticed sometimes when interacting with the app the music I am listening to gets paused, this should never happen music shouldn’t be interfered with by the app
+228. [Fixed] Need to have a look at timeframe panel, would be nice if they could update in realtime on the chart, including new candles, active candle, moving price indicator (tick)relative to current default chart etc... and the timeframe current price indicator is like its hidden behind its y axis so quite dim.
 
-263. Need to change instances of all implementations of button Done used to close sheet etc... to change to the used X button used in other sheets, from what i can see this appears in marker link sheet, All rep and acc breakdown sheets, Chart Settings, 
+240. [Fixed] Noticed sometimes when interacting with the app the music I am listening to gets paused, this should never happen music shouldn’t be interfered with by the app
 
-264. Chart Settings sheet needs to conform more to UI like in marker settings view.
+263. [Fixed] Need to change instances of all implementations of button Done used to close sheet etc... to change to the used X button used in other sheets, from what i can see this appears in marker link sheet, All rep and acc breakdown sheets, Chart Settings, 
+
+264. [Fixed] Chart Settings sheet needs to conform more to UI like in marker settings view.
+
+265. [Fixed] Need to begin using symbol icons throughout the app where necessary, have uploaded them in the assets folder
+
+266. Linking markers need a different look in the attachement state on chat to in chat look, doesnt conform currently to current marker row look, can have a more slimlined version of the row view but needs to be similar - still not great, background is not great and icons are too small
+

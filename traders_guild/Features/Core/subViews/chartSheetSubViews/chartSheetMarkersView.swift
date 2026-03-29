@@ -203,9 +203,9 @@ struct chartSheetMarkersView: View {
                     .background(AppColors.systemBlack.ignoresSafeArea())
                     .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Done") {
+                            SheetCloseButton(action: {
                                 showMarkerSettingsSheet = false
-                            }
+                            })
                         }
                     }
                 }
@@ -1100,61 +1100,70 @@ private struct MarkerPlacementOptionRow: View {
 
     private var rowBackgroundGradient: LinearGradient {
         LinearGradient(
-            colors: [
-                rowAccentColor.opacity(0.22),
-                rowAccentColor.opacity(0.12),
-                AppColors.surfaceGray20,
-                AppColors.surfaceBlack62,
-            ],
+            colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
     private var rowBorderColor: Color {
-        rowAccentColor.opacity(isActive ? 0.42 : 0.34)
+        AppColors.surfaceWhite10
     }
 
     var body: some View {
         Button(action: onToggle) {
-            HStack(spacing: 12) {
-                if isActive {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 46, height: 46)
-                } else {
-                    UnifiedMarkerBadge(intent: intent, sizeToken: .large)
-                        .frame(width: 46, height: 46)
-                }
+            HStack(spacing: 0) {
+                // Left accent bar
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(rowAccentColor)
+                    .frame(width: 3, height: 32)
+                    .padding(.leading, 6)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isActive ? "Cancel Placement" : intent.displayName)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    if !isActive {
-                        Text(intent.subtitle)
-                            .font(.caption2)
-                            .foregroundColor(AppColors.surfaceWhite74)
-                            .lineLimit(1)
+                HStack(spacing: 12) {
+                    if isActive {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 46, height: 46)
+                    } else {
+                        UnifiedMarkerBadge(intent: intent, sizeToken: .large)
+                            .frame(width: 46, height: 46)
                     }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(isActive ? "Cancel Placement" : intent.displayName)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        if !isActive {
+                            Text(intent.subtitle)
+                                .font(.caption2)
+                                .foregroundColor(AppColors.surfaceWhite74)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: isActive ? "xmark" : "plus")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.surfaceWhite84)
+                        .frame(width: 28, height: 28)
+                        .background(AppColors.surfaceWhite08)
+                        .clipShape(Circle())
                 }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: isActive ? "xmark" : "plus")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(AppColors.surfaceWhite84)
-                    .frame(width: 28, height: 28)
-                    .background(AppColors.surfaceWhite08)
-                    .clipShape(Circle())
+                .padding(.leading, 8)
+                .padding(.trailing, 14)
             }
-            .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(rowBackgroundGradient)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(rowBackgroundGradient)
+                    PatternOverlay(patternType: .honeycomb, hexSize: 16)
+                        .opacity(0.02)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)

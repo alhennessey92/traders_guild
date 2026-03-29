@@ -20,19 +20,23 @@ class TimeframePanelDataManager: ObservableObject {
     @Published var livePrice: Double?
 
     let timeframe: RLChartTimeframe
+    let ownerToken: String
 
     // MARK: - Private
 
     private let api: RealAPIService
     private var cancellable: AnyCancellable?
+    private var currentTickChannel: String?
     private var currentCandleChannel: String?
     private var currentSymbolId: UUID?
+    private var currentGuildId: UUID?
 
     // MARK: - Init
 
-    init(timeframe: RLChartTimeframe, api: RealAPIService) {
+    init(timeframe: RLChartTimeframe, api: RealAPIService, ownerToken: String) {
         self.timeframe = timeframe
         self.api = api
+        self.ownerToken = ownerToken
     }
 
     deinit {
@@ -46,6 +50,8 @@ class TimeframePanelDataManager: ObservableObject {
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
+        currentSymbolId = symbolId
+        currentGuildId = guildId
 
         do {
             let chartData = try await api.getChartData(
@@ -70,18 +76,26 @@ class TimeframePanelDataManager: ObservableObject {
         isLoading = false
     }
 
+    @MainActor
+    func refreshIfPossible() async {
+        guard let currentSymbolId, let currentGuildId else { return }
+        await loadCandles(symbolId: currentSymbolId, guildId: currentGuildId)
+    }
+
     // MARK: - Real-Time Subscription
 
     private func subscribeToRealTime(symbolId: UUID) {
         unsubscribeFromRealTime()
 
-        currentSymbolId = symbolId
         let symbolIdStr = symbolId.uuidString.lowercased()
         let timeframeStr = timeframe.toBackendString()
-        let channel = "market:candles:\(symbolIdStr):\(timeframeStr)"
-        currentCandleChannel = channel
+        currentTickChannel = "market:ticks:\(symbolIdStr)"
+        currentCandleChannel = "market:candles:\(symbolIdStr):\(timeframeStr)"
 
-        RealTimeService.shared.subscribe(to: [channel], owner: "timeframePanel_\(timeframeStr)")
+        RealTimeService.shared.subscribe(
+            to: [currentTickChannel, currentCandleChannel].compactMap { $0 },
+            owner: ownerToken
+        )
 
         cancellable = RealTimeService.shared.messageSubject
             .receive(on: DispatchQueue.main)
@@ -93,56 +107,71 @@ class TimeframePanelDataManager: ObservableObject {
     private func unsubscribeFromRealTime() {
         cancellable?.cancel()
         cancellable = nil
-        if let channel = currentCandleChannel {
-            let timeframeStr = timeframe.toBackendString()
-            RealTimeService.shared.unsubscribe(from: [channel], owner: "timeframePanel_\(timeframeStr)")
-            currentCandleChannel = nil
+        let channels = [currentTickChannel, currentCandleChannel].compactMap { $0 }
+        if !channels.isEmpty {
+            RealTimeService.shared.unsubscribe(from: channels, owner: ownerToken)
         }
-        currentSymbolId = nil
+        currentTickChannel = nil
+        currentCandleChannel = nil
     }
 
     private func handleRealTimeMessage(_ message: WSIncomingMessage) {
-        guard message.type == "candle_update",
-              let payload = message.payload(as: MarketCandlePayload.self),
-              payload.timeframe == timeframe.toBackendString() else { return }
+        guard let channel = message.channel,
+              channel == currentTickChannel || channel == currentCandleChannel else {
+            return
+        }
 
-        let candleData = payload.candle
-        livePrice = candleData.close
-
-        guard !candles.isEmpty else { return }
-
-        let lastCandle = candles[candles.count - 1]
-        let timeframeSeconds = timeframe.seconds
-
-        // Check if this update belongs to the current (last) candle or a new one
-        if candleData.timestamp == lastCandle.timestamp ||
-           (candleData.timestamp >= lastCandle.timestamp &&
-            candleData.timestamp < lastCandle.timestamp.addingTimeInterval(timeframeSeconds)) {
-            // Update existing last candle
-            let updated = RLCandleDTO(
-                timestamp: lastCandle.timestamp,
-                timestampFormatted: lastCandle.timestampFormatted,
-                open: lastCandle.open,
-                high: max(lastCandle.high, candleData.high),
-                low: min(lastCandle.low, candleData.low),
-                close: candleData.close,
-                volume: candleData.volume,
-                volumeFormatted: nil
+        if message.type == "tick" {
+            guard let payload = message.payload(as: MarketTickPayload.self) else { return }
+            let result = RealtimeCandleStreamReducer.processTick(
+                candles: candles,
+                timeframe: timeframe,
+                price: payload.price,
+                volume: payload.volume ?? 0,
+                timestamp: payload.timestamp
             )
-            candles[candles.count - 1] = updated
-        } else if candleData.timestamp >= lastCandle.timestamp.addingTimeInterval(timeframeSeconds) {
-            // New candle — append
-            let newCandle = RLCandleDTO(
-                timestamp: candleData.timestamp,
+            candles = result.candles
+            livePrice = result.currentPrice
+            return
+        }
+
+        guard let payload = message.payload(as: MarketCandlePayload.self),
+              payload.timeframe == timeframe.toBackendString() else {
+            return
+        }
+
+        if message.type == "candle_complete" {
+            let candle = RLCandleDTO(
+                timestamp: payload.candle.timestamp,
                 timestampFormatted: nil,
-                open: candleData.open,
-                high: candleData.high,
-                low: candleData.low,
-                close: candleData.close,
-                volume: candleData.volume,
-                volumeFormatted: nil
+                open: payload.candle.open,
+                high: payload.candle.high,
+                low: payload.candle.low,
+                close: payload.candle.close,
+                volume: payload.candle.volume,
+                volumeFormatted: nil,
+                isGapFill: false
             )
-            candles.append(newCandle)
+            let result = RealtimeCandleStreamReducer.processCompletedCandle(
+                candles: candles,
+                timeframe: timeframe,
+                candle: candle
+            )
+            candles = result.candles
+            livePrice = result.currentPrice
+            return
+        }
+
+        if message.type == "candle_update" {
+            let result = RealtimeCandleStreamReducer.processTick(
+                candles: candles,
+                timeframe: timeframe,
+                price: payload.candle.close,
+                volume: payload.candle.volume,
+                timestamp: payload.candle.timestamp
+            )
+            candles = result.candles
+            livePrice = result.currentPrice
         }
     }
 

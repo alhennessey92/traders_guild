@@ -294,11 +294,14 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     emoji: marker.intentEnum == .reaction ? reactionEmoji : nil
                 )
 
-                if let symbolColor = marker.symbolBrandColor {
-                    Circle()
-                        .fill(Color(hex: symbolColor) ?? .blue)
-                        .frame(width: 8, height: 8)
-                }
+                TickerSymbolIconView(
+                    ticker: marker.symbolTicker,
+                    assetClass: marker.symbolAssetClass,
+                    brandColorHex: marker.symbolBrandColor,
+                    size: 16,
+                    cornerRadiusRatio: 0.24,
+                    strokeOpacity: 0.12
+                )
 
                 Text(marker.symbolTicker)
                     .font(.subheadline.weight(.semibold))
@@ -360,6 +363,15 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
     private var capsuleTopRow: some View {
         HStack(spacing: 5) {
+            TickerSymbolIconView(
+                ticker: marker.symbolTicker,
+                assetClass: marker.symbolAssetClass,
+                brandColorHex: marker.symbolBrandColor,
+                size: 18,
+                cornerRadiusRatio: 0.24,
+                strokeOpacity: 0.12
+            )
+
             Text(marker.symbolTicker)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.white)
@@ -469,6 +481,15 @@ struct MarkerListItem<M: MarkerListItemData>: View {
     private var cardPrimaryContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
+                TickerSymbolIconView(
+                    ticker: marker.symbolTicker,
+                    assetClass: marker.symbolAssetClass,
+                    brandColorHex: marker.symbolBrandColor,
+                    size: 18,
+                    cornerRadiusRatio: 0.24,
+                    strokeOpacity: 0.12
+                )
+
                 Text(marker.symbolTicker)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(AppColors.whiteText)

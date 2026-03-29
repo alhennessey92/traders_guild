@@ -37,6 +37,12 @@ struct TimeframePanelView: View {
     @State private var lastDragTranslation: CGSize = .zero
     @State private var hasCenteredOnMarker = false
 
+    private let livePriceBadgeWidth: CGFloat = 46
+    private let livePriceBadgeHeight: CGFloat = 16
+    private let yAxisOverlayWidth: CGFloat = 33
+    private let livePriceTopClearance: CGFloat = 24
+    private let livePriceBottomClearance: CGFloat = 10
+
     // MARK: - Computed
 
     private var panelHeight: CGFloat {
@@ -61,6 +67,37 @@ struct TimeframePanelView: View {
 
     private var markerCandleIndex: Int? {
         dataManager.markerCandleIndex(for: markerTimestamp)
+    }
+
+    private var livePriceOverlayModel: (y: CGFloat, text: String)? {
+        let candles = dataManager.candles
+        guard let currentPrice = dataManager.livePrice ?? candles.last?.close,
+              !candles.isEmpty else {
+            return nil
+        }
+
+        let priceRange = candlePriceRange(candles: candles)
+        guard priceRange.max > priceRange.min else { return nil }
+
+        let topPadding: CGFloat = 18
+        let bottomPadding: CGFloat = 4
+        let drawableHeight = panelHeight - topPadding - bottomPadding
+        guard drawableHeight > 0 else { return nil }
+
+        let rawY = yPosition(
+            for: currentPrice,
+            priceRange: priceRange,
+            height: drawableHeight,
+            topPadding: topPadding
+        )
+        let minY = livePriceTopClearance + livePriceBadgeHeight / 2
+        let maxY = panelHeight - livePriceBottomClearance - livePriceBadgeHeight / 2
+        guard maxY > minY else { return nil }
+
+        return (
+            y: min(max(rawY, minY), maxY),
+            text: formatPrice(currentPrice)
+        )
     }
 
     init(
@@ -281,6 +318,7 @@ struct TimeframePanelView: View {
 
             yAxisLabelsOverlay
             panelHeaderOverlay
+            livePriceBadgeOverlay
         }
         .clipped()
     }
@@ -327,7 +365,7 @@ struct TimeframePanelView: View {
             let y = topPadding + drawableHeight * (1.0 - CGFloat(normalizedPrice))
             if y >= topPadding && y <= topPadding + drawableHeight {
                 // Dashed price line
-                let lineEndX = size.width - 30
+                let lineEndX = max(0, size.width - yAxisOverlayWidth - livePriceBadgeWidth - 6)
                 let linePath = Path { path in
                     path.move(to: CGPoint(x: 0, y: y))
                     path.addLine(to: CGPoint(x: lineEndX, y: y))
@@ -337,24 +375,6 @@ struct TimeframePanelView: View {
                     with: .color(AppColors.statusHighlight80.opacity(0.6)),
                     style: StrokeStyle(lineWidth: 0.8, dash: [4, 3])
                 )
-
-                // Yellow price badge on right edge
-                let badgeWidth: CGFloat = 30
-                let badgeHeight: CGFloat = 14
-                let badgeX = size.width - badgeWidth
-                let badgeRect = CGRect(
-                    x: badgeX,
-                    y: y - badgeHeight / 2,
-                    width: badgeWidth,
-                    height: badgeHeight
-                )
-                let roundedBadge = Path(roundedRect: badgeRect, cornerRadius: 3)
-                context.fill(roundedBadge, with: .color(.yellow))
-
-                let priceText = Text(formatPrice(currentPrice))
-                    .font(.system(size: 7, weight: .bold, design: .monospaced))
-                    .foregroundColor(.black)
-                context.draw(priceText, at: CGPoint(x: badgeRect.midX, y: y))
             }
         }
 
@@ -629,6 +649,30 @@ struct TimeframePanelView: View {
             )
             Spacer()
         }
+    }
+
+    private var livePriceBadgeOverlay: some View {
+        GeometryReader { geometry in
+            if let overlayModel = livePriceOverlayModel {
+                let x = geometry.size.width - livePriceBadgeWidth / 2 - 2
+
+                Text(overlayModel.text)
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.black)
+                    .frame(width: livePriceBadgeWidth, height: livePriceBadgeHeight)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(AppColors.statusHighlight90)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .stroke(AppColors.surfaceBlack62.opacity(0.35), lineWidth: 0.8)
+                    )
+                    .position(x: x, y: overlayModel.y)
+                    .shadow(color: AppColors.surfaceBlack62.opacity(0.16), radius: 2, x: 0, y: 1)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     private func formatPrice(_ value: Double) -> String {

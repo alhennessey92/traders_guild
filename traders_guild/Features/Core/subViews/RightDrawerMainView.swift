@@ -292,8 +292,15 @@ struct RLRightDrawerMainView: View {
                     Rectangle()
                         .fill(.ultraThinMaterial)
                         .ignoresSafeArea()
-                    AppColors.drawerBackground
-                        .opacity(ThemeManager.shared.currentTheme == .dark ? 0.6 : 0.92)
+                    LinearGradient(
+                        colors: [
+                            AppColors.drawerBackground,
+                            AppColors.sheetBackground
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
                 }
             )
             .overlay(

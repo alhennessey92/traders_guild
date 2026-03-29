@@ -112,8 +112,7 @@ struct UserProfileDetailView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showGuildReputationBreakdown = false }
-                                .foregroundColor(AppColors.accentColor)
+                            SheetCloseButton(action: { showGuildReputationBreakdown = false })
                         }
                     }
             }
@@ -126,8 +125,7 @@ struct UserProfileDetailView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showGuildAccuracyBreakdown = false }
-                                .foregroundColor(AppColors.accentColor)
+                            SheetCloseButton(action: { showGuildAccuracyBreakdown = false })
                         }
                     }
             }

@@ -197,10 +197,16 @@ final class TimeframePanelManager: ObservableObject {
                 }
                 nextPanels.append(existing)
             } else {
+                let panelID = UUID()
                 let entry = TimeframePanelEntry(
+                    id: panelID,
                     source: source,
                     timeframe: timeframe,
-                    dataManager: TimeframePanelDataManager(timeframe: timeframe, api: api),
+                    dataManager: TimeframePanelDataManager(
+                        timeframe: timeframe,
+                        api: api,
+                        ownerToken: "timeframePanel_\(panelID.uuidString.lowercased())"
+                    ),
                     gestureState: TimeframePanelGestureState()
                 )
                 nextPanels.append(entry)
@@ -228,6 +234,12 @@ final class TimeframePanelManager: ObservableObject {
             Task { @MainActor in
                 await panel.dataManager.loadCandles(symbolId: symbolId, guildId: guildId)
             }
+        }
+    }
+
+    func refreshPanels(for source: TimeframePanelSource) async {
+        for panel in panels(for: source) {
+            await panel.dataManager.refreshIfPossible()
         }
     }
 

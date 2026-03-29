@@ -466,7 +466,16 @@ struct MainView: View {
                     ZStack {
                         Color.clear
                             .background(.ultraThinMaterial)
-                        AppColors.drawerBackground.opacity(0.4)
+                        LinearGradient(
+                            colors: [
+                                AppColors.sheetBackground.opacity(0.7),
+                                AppColors.drawerBackground.opacity(0.5)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        PatternOverlay(patternType: .honeycomb, hexSize: 16)
+                            .opacity(0.012)
                     }
                 }
             }
@@ -607,6 +616,7 @@ struct MainView: View {
                     Task {
                         _ = try? await rlAppState.fetchNotificationStats()
                         await chartViewModel.handleAppDidBecomeActive()
+                        await timeframePanelManager.refreshPanels(for: activeTimeframePanelSource)
                         await rlAppState.refreshCurrentGuildReputation()
                     }
                 case .inactive:

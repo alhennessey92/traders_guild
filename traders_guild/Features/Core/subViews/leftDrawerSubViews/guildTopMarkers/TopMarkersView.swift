@@ -249,18 +249,53 @@ struct TopMarkersView: View {
         } else {
             VStack(spacing: 8) {
                 ForEach(symbolGroups) { symbolGroup in
-                    UnifiedDisclosureGroup(
-                        title: symbolGroup.ticker,
-                        count: symbolGroup.count,
-                        icon: "chart.xyaxis.line",
-                        iconColor: colorForSymbolGroup(symbolGroup),
+                    UnifiedDisclosureGroupCustomHeader(
                         isExpandedByDefault: false
                     ) {
+                        symbolGroupHeader(symbolGroup, isExpanded: $0)
+                    } content: {
                         markerList(symbolGroup.markers)
                     }
                 }
             }
         }
+    }
+
+    private func symbolGroupHeader(_ symbolGroup: MarkerSymbolGroup, isExpanded: Bool) -> some View {
+        HStack(spacing: 10) {
+            TickerSymbolIconView(
+                ticker: symbolGroup.ticker,
+                brandColorHex: symbolGroup.brandColor,
+                size: 18,
+                cornerRadiusRatio: 0.24,
+                strokeOpacity: 0.12
+            )
+
+            Text(symbolGroup.ticker)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+
+            Text("(\(symbolGroup.count))")
+                .font(.caption)
+                .foregroundColor(AppColors.surfaceWhite50)
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(AppColors.surfaceWhite50)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(
+            LinearGradient(
+                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
+        .clipShape(Capsule())
     }
 
     @ViewBuilder

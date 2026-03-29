@@ -13,119 +13,161 @@ struct ChartSettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationView {
-            Form {
-                // MARK: - Grid Lines
-                Section(header: Text("Grid Lines")) {
-                    Toggle("Show Grid Lines", isOn: $settings.showGridLines)
-                        .tint(.cyan)
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) {
+                AdminSheetHeader(
+                    icon: "slider.horizontal.3",
+                    iconColor: AppColors.accentColor,
+                    title: "Chart Settings",
+                    subtitle: "Grid, timeframe panel, and marker layout controls"
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 24)
 
-                    if settings.showGridLines {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Grid Opacity")
-                                Spacer()
-                                Text("\(Int(settings.gridOpacity * 100))%")
-                                    .foregroundColor(.secondary)
-                                    .font(.system(.body, design: .monospaced))
-                            }
+                Divider()
+                    .background(AppColors.surfaceWhite15)
+                    .padding(.top, 12)
 
-                            Slider(value: $settings.gridOpacity, in: 0.05...0.5, step: 0.01)
-                                .tint(.cyan)
-
-                            Text("Adjust how visible grid lines appear on the chart")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 4)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        gridLinesCard
+                        candleColorsCard
+                        timeframeViewportCard
+                        markerLayoutCard
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
                 }
+            }
 
-                // MARK: - Candle Colors
-                Section(header: Text("Candle Colors")) {
-                    ColorPicker("Bullish (Up)", selection: $settings.bullishCandleColor, supportsOpacity: false)
-                    ColorPicker("Bearish (Down)", selection: $settings.bearishCandleColor, supportsOpacity: false)
+            SheetCloseButton(action: { dismiss() })
+                .padding(.top, 16)
+                .padding(.trailing, 16)
+        }
+        .background(AdminSheetBackground())
+        .presentationDetents([.fraction(0.72), .large])
+        .presentationDragIndicator(.visible)
+    }
 
-                    Button("Reset to Default") {
-                        settings.bullishCandleColor = .green
-                        settings.bearishCandleColor = .red
-                    }
-                    .foregroundColor(.cyan)
-                    .font(.caption)
+    private var gridLinesCard: some View {
+        AdminSectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionTitle("Grid Lines", subtitle: "Control visibility and chart contrast.")
+
+                settingsToggleRow(
+                    title: "Show Grid Lines",
+                    subtitle: "Display horizontal and vertical guides on the chart.",
+                    isOn: $settings.showGridLines
+                )
+
+                if settings.showGridLines {
+                    sliderRow(
+                        title: "Grid Opacity",
+                        valueText: "\(Int(settings.gridOpacity * 100))%",
+                        value: $settings.gridOpacity,
+                        range: 0.05...0.5,
+                        step: 0.01
+                    )
                 }
+            }
+        }
+    }
 
-                // MARK: - Viewport Window
-                Section(header: Text("Timeframe Panel Viewport")) {
-                    Toggle("Show Viewport Window", isOn: $settings.showViewportWindow)
-                        .tint(.cyan)
+    private var candleColorsCard: some View {
+        AdminSectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionTitle("Candle Colors", subtitle: "Match bullish and bearish candles to your preferred contrast.")
 
-                    if settings.showViewportWindow {
+                settingsColorPicker(
+                    title: "Bullish (Up)",
+                    selection: $settings.bullishCandleColor
+                )
+
+                settingsColorPicker(
+                    title: "Bearish (Down)",
+                    selection: $settings.bearishCandleColor
+                )
+
+                secondaryActionButton(title: "Reset to Default") {
+                    settings.bullishCandleColor = .green
+                    settings.bearishCandleColor = .red
+                }
+            }
+        }
+    }
+
+    private var timeframeViewportCard: some View {
+        AdminSectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionTitle("Timeframe Panel Viewport", subtitle: "Show where the main chart window sits inside higher-timeframe panels.")
+
+                settingsToggleRow(
+                    title: "Show Viewport Window",
+                    subtitle: "Highlights the part of the main chart visible in linked timeframe panels.",
+                    isOn: $settings.showViewportWindow
+                )
+
+                if settings.showViewportWindow {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Style")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(AppColors.greyText)
+
                         Picker("Style", selection: $settings.viewportWindowStyle) {
                             ForEach(ViewportWindowStyle.allCases) { style in
                                 Text(style.rawValue).tag(style)
                             }
                         }
                         .pickerStyle(.segmented)
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Opacity")
-                                Spacer()
-                                Text("\(Int(settings.viewportWindowOpacity * 100))%")
-                                    .foregroundColor(.secondary)
-                                    .font(.system(.body, design: .monospaced))
-                            }
-
-                            Slider(value: $settings.viewportWindowOpacity, in: 0.1...0.7, step: 0.05)
-                                .tint(.cyan)
-                        }
-                        .padding(.vertical, 2)
-
-                        Text("Shows which part of the main chart is visible in higher-timeframe panels")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        .colorScheme(.dark)
                     }
-                }
 
-                Section(header: Text("Marker Layout")) {
-                    markerLayoutSliderRow(
-                        title: "Candle Distance",
-                        value: baseOffsetBinding,
-                        range: 40...140
+                    sliderRow(
+                        title: "Opacity",
+                        valueText: "\(Int(settings.viewportWindowOpacity * 100))%",
+                        value: $settings.viewportWindowOpacity,
+                        range: 0.1...0.7,
+                        step: 0.05
                     )
-                    markerLayoutSliderRow(
-                        title: "Stack Distance",
-                        value: stackOffsetBinding,
-                        range: 18...90
-                    )
-                    markerLayoutSliderRow(
-                        title: "Min Stack Spacing",
-                        value: minStackSpacingBinding,
-                        range: Double(MarkerPositionCalculator.hardMinimumStackSpacing)...80
-                    )
-                    markerLayoutSliderRow(
-                        title: "Proximity Spread",
-                        value: proximityTierOffsetBinding,
-                        range: 8...70
-                    )
-                    markerLayoutSliderRow(
-                        title: "Placement Extra Offset",
-                        value: placementExtraOffsetBinding,
-                        range: 10...100
-                    )
-
-                    Button("Reset Marker Layout") {
-                        markerLayoutSettings.resetToDefaults()
-                    }
-                    .foregroundColor(.cyan)
-                    .font(.caption)
                 }
             }
-            .navigationTitle("Chart Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+        }
+    }
+
+    private var markerLayoutCard: some View {
+        AdminSectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionTitle("Marker Layout", subtitle: "Tune spacing and stacking behavior for marker rendering.")
+
+                markerLayoutSliderRow(
+                    title: "Candle Distance",
+                    value: baseOffsetBinding,
+                    range: 40...140
+                )
+                markerLayoutSliderRow(
+                    title: "Stack Distance",
+                    value: stackOffsetBinding,
+                    range: 18...90
+                )
+                markerLayoutSliderRow(
+                    title: "Min Stack Spacing",
+                    value: minStackSpacingBinding,
+                    range: Double(MarkerPositionCalculator.hardMinimumStackSpacing)...80
+                )
+                markerLayoutSliderRow(
+                    title: "Proximity Spread",
+                    value: proximityTierOffsetBinding,
+                    range: 8...70
+                )
+                markerLayoutSliderRow(
+                    title: "Placement Extra Offset",
+                    value: placementExtraOffsetBinding,
+                    range: 10...100
+                )
+
+                secondaryActionButton(title: "Reset Marker Layout") {
+                    markerLayoutSettings.resetToDefaults()
                 }
             }
         }
@@ -172,18 +214,109 @@ struct ChartSettingsView: View {
         value: Binding<Double>,
         range: ClosedRange<Double>
     ) -> some View {
+        sliderRow(
+            title: title,
+            valueText: "\(Int(value.wrappedValue.rounded()))",
+            value: value,
+            range: range,
+            step: 1
+        )
+    }
+
+    private func sectionTitle(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(AppColors.whiteText)
+
+            Text(subtitle)
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+        }
+    }
+
+    private func settingsToggleRow(
+        title: String,
+        subtitle: String,
+        isOn: Binding<Bool>
+    ) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText)
+
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(AppColors.accentColor)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppColors.surfaceWhite03)
+        )
+    }
+
+    private func settingsColorPicker(
+        title: String,
+        selection: Binding<Color>
+    ) -> some View {
+        ColorPicker(title, selection: selection, supportsOpacity: false)
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(AppColors.whiteText)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(AppColors.surfaceWhite03)
+            )
+    }
+
+    private func secondaryActionButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(.caption.weight(.semibold))
+            .foregroundColor(AppColors.accentColor)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(AppColors.accentColor.opacity(0.14))
+            )
+            .buttonStyle(.plain)
+    }
+
+    private func sliderRow(
+        title: String,
+        valueText: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.greyText)
                 Spacer()
-                Text("\(Int(value.wrappedValue.rounded()))")
-                    .foregroundColor(.secondary)
-                    .font(.system(.body, design: .monospaced))
+                Text(valueText)
+                    .foregroundColor(AppColors.surfaceWhite80)
+                    .font(.system(.caption, design: .monospaced).weight(.bold))
             }
 
-            Slider(value: value, in: range, step: 1)
-                .tint(.cyan)
+            Slider(value: value, in: range, step: step)
+                .tint(AppColors.accentColor)
         }
-        .padding(.vertical, 2)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppColors.surfaceWhite03)
+        )
     }
 }
