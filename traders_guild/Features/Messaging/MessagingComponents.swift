@@ -3427,22 +3427,15 @@ private struct LinkedMarkerRow: View {
         switch style {
         case .attachmentDraft:
             return LinearGradient(
-                colors: [
-                    accentColor.opacity(0.18),
-                    accentColor.opacity(0.08),
-                    AppColors.surfaceGray20,
-                    AppColors.surfaceBlack62,
-                ],
+                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-        case .messageCard:
+        case .messageCard(let isCurrentUser):
             return LinearGradient(
                 colors: [
-                    accentColor.opacity(isCurrentUserMessage ? 0.26 : 0.18),
-                    accentColor.opacity(isCurrentUserMessage ? 0.11 : 0.08),
-                    isCurrentUserMessage ? AppColors.surfaceWhite15 : AppColors.surfaceGray20,
-                    isCurrentUserMessage ? AppColors.surfaceBlack45 : AppColors.surfaceBlack62,
+                    isCurrentUser ? AppColors.surfaceBlack30 : AppColors.surfaceBlack45,
+                    isCurrentUser ? AppColors.surfaceBlack45 : AppColors.surfaceBlack62
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -3451,65 +3444,36 @@ private struct LinkedMarkerRow: View {
     }
 
     private var rowStrokeColor: Color {
-        accentColor.opacity(isCurrentUserMessage ? 0.28 : 0.34)
-    }
-
-    private var subtitleText: String? {
-        let trimmed = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
+        switch style {
+        case .attachmentDraft:
+            return AppColors.surfaceWhite10
+        case .messageCard(let isCurrentUser):
+            return isCurrentUser ? AppColors.surfaceWhite12 : AppColors.surfaceWhite08
+        }
     }
 
     private var timeframeText: String {
         timeframe.uppercased()
     }
 
-    private var badgeSize: UnifiedMarkerBadgeSizeToken {
-        switch style {
-        case .attachmentDraft:
-            return .small
-        case .messageCard:
-            return .tiny
-        }
-    }
-
-    private var iconSize: CGFloat {
-        switch style {
-        case .attachmentDraft:
-            return 18
-        case .messageCard:
-            return 17
-        }
-    }
-
-    private var verticalPadding: CGFloat {
-        switch style {
-        case .attachmentDraft:
-            return 8
-        case .messageCard:
-            return 7
-        }
-    }
-
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 10) {
+            // Left accent bar
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(accentColor)
+                .frame(width: 3, height: 28)
+
+            // Prominent marker badge
             UnifiedMarkerBadge(
                 intent: intent,
                 alertSeverity: alertSeverity,
-                sizeToken: badgeSize,
+                sizeToken: .medium,
                 emoji: intent == .reaction ? emoji : nil
             )
 
-            TickerSymbolIconView(
-                ticker: ticker,
-                assetClass: assetClass,
-                brandColorHex: brandColorHex,
-                size: iconSize,
-                cornerRadiusRatio: 0.24,
-                strokeOpacity: 0.14
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            // Core info
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
                     Text(ticker)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(isCurrentUserMessage ? .white : AppColors.whiteText.opacity(0.96))
@@ -3521,22 +3485,12 @@ private struct LinkedMarkerRow: View {
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(AppColors.whiteText.opacity(0.10)))
-
-                    Text(intent.displayName)
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(accentColor)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(accentColor.opacity(0.16)))
-                        .lineLimit(1)
                 }
 
-                if let subtitleText {
-                    Text(subtitleText)
-                        .font(.caption2)
-                        .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite78 : AppColors.greyText)
-                        .lineLimit(1)
-                }
+                Text(intent.displayName)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(accentColor.opacity(0.9))
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 4)
@@ -3552,11 +3506,12 @@ private struct LinkedMarkerRow: View {
             } else {
                 Image(systemName: "arrow.up.right")
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(isCurrentUserMessage ? AppColors.surfaceWhite82 : accentColor.opacity(0.95))
+                    .foregroundColor(AppColors.surfaceWhite60)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, verticalPadding)
+        .padding(.leading, 6)
+        .padding(.trailing, 10)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(backgroundGradient)

@@ -15,11 +15,14 @@ private struct SignupPasswordRequirement: Identifiable {
 struct SignupEmailView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
+    @EnvironmentObject var rlAppState: RLAppState
 
     @State private var name: String = ""
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
+    @State private var emailAvailabilityError: String?
+    @State private var isCheckingAvailability: Bool = false
 
     private var normalizedName: String {
         RLAuthValidator.trimmed(name)
@@ -80,6 +83,10 @@ struct SignupEmailView: View {
         passwordsMatch ? AppColors.bullCandleGreen : AppColors.bearCandleRed
     }
 
+    private var emailValidationState: StandardTextFieldValidationState {
+        emailAvailabilityError == nil ? .neutral : .invalid
+    }
+
     var body: some View {
         ZStack {
             StaticAuthBackgroundView()
@@ -113,8 +120,21 @@ struct SignupEmailView: View {
                     StandardTextFieldView(title: "Display name", text: $name)
                         .padding(.bottom, 10)
 
-                    StandardTextFieldView(title: "Email", text: $email)
+                    StandardTextFieldView(
+                        title: "Email",
+                        text: $email,
+                        validationState: emailValidationState
+                    )
                         .padding(.bottom, 10)
+
+                    if let emailAvailabilityError {
+                        Text(emailAvailabilityError)
+                            .font(.caption)
+                            .foregroundColor(AppColors.bearCandleRed)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 4)
+                    }
 
                     Text("Password requirements")
                         .font(AppFonts.smallNotice())
@@ -183,22 +203,33 @@ struct SignupEmailView: View {
                     .padding(.top, 16)
 
                     StandardActionButtonFullWidth(
-                        title: "Continue",
+                        title: isCheckingAvailability ? "Checking..." : "Continue",
                         backgroundColor: AppColors.whiteText,
                         foregroundColor: AppColors.gradientBackgroundDark
                     ) {
-                        data.name = normalizedName
-                        data.email = normalizedEmail
-                        data.password = password
-                        path.append(.username)
+                        Task { await validateAvailabilityAndContinue() }
                     }
                     .frame(maxWidth: .infinity)
-                    .disabled(!isFormValid)
-                    .opacity(isFormValid ? 1.0 : 0.5)
+                    .disabled(!isFormValid || isCheckingAvailability)
+                    .opacity((isFormValid && !isCheckingAvailability) ? 1.0 : 0.5)
 
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .onChange(of: email) { _, _ in
+                emailAvailabilityError = nil
+            }
+            .onAppear {
+                if name.isEmpty {
+                    name = data.name
+                }
+                if email.isEmpty {
+                    email = data.email
+                }
+                if password.isEmpty {
+                    password = data.password
+                }
             }
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
@@ -219,6 +250,33 @@ struct SignupEmailView: View {
                         .fontWeight(.heavy)
                         .foregroundColor(AppColors.fadedBackground)
                 }
+            }
+        }
+    }
+
+    @MainActor
+    private func validateAvailabilityAndContinue() async {
+        guard !isCheckingAvailability else { return }
+        emailAvailabilityError = nil
+        isCheckingAvailability = true
+        defer { isCheckingAvailability = false }
+
+        do {
+            let response = try await rlAppState.realApi.checkEmailAvailability(email: normalizedEmail)
+            guard response.available else {
+                emailAvailabilityError = response.detail
+                return
+            }
+
+            data.name = normalizedName
+            data.email = normalizedEmail
+            data.password = password
+            path.append(.username)
+        } catch {
+            if case APIError.badRequest(let detail) = error {
+                emailAvailabilityError = detail
+            } else {
+                emailAvailabilityError = "We couldn't verify this email right now. Please try again."
             }
         }
     }

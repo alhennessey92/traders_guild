@@ -491,6 +491,28 @@ extension RealAPIService {
         
         return response
     }
+
+    func checkEmailAvailability(email: String) async throws -> RLFieldAvailabilityResponseDTO {
+        let requestBody = RLEmailAvailabilityRequestDTO(email: email)
+
+        return try await request(
+            "/auth/register/check-email",
+            service: .auth,
+            method: "POST",
+            body: requestBody
+        )
+    }
+
+    func checkUsernameAvailability(username: String) async throws -> RLFieldAvailabilityResponseDTO {
+        let requestBody = RLUsernameAvailabilityRequestDTO(username: username)
+
+        return try await request(
+            "/auth/register/check-username",
+            service: .auth,
+            method: "POST",
+            body: requestBody
+        )
+    }
     
     /// Login with identifier (email or username) and password
     func login(identifier: String, password: String) async throws -> RLLoginResponseDTO {

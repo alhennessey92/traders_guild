@@ -1459,5 +1459,5 @@ Due to this we can remove the timeframe filter functionality in the left drawer 
 
 265. [Fixed] Need to begin using symbol icons throughout the app where necessary, have uploaded them in the assets folder
 
-266. Linking markers need a different look in the attachement state on chat to in chat look, doesnt conform currently to current marker row look, can have a more slimlined version of the row view but needs to be similar - still not great, background is not great and icons are too small
+266. [Fixed] Linking markers need a different look in the attachement state on chat to in chat look, doesnt conform currently to current marker row look, can have a more slimlined version of the row view but needs to be similar - still not great, background is not great and icons are too small
 

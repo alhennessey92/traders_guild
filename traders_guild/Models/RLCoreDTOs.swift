@@ -28,6 +28,14 @@ struct RLRegisterRequestDTO: Codable {
     let location: String?
 }
 
+struct RLEmailAvailabilityRequestDTO: Codable {
+    let email: String
+}
+
+struct RLUsernameAvailabilityRequestDTO: Codable {
+    let username: String
+}
+
 /// Matches backend LoginRequest schema
 struct RLLoginRequestDTO: Codable {
     let identifier: String
@@ -78,6 +86,11 @@ struct RLRegistrationResponseDTO: Codable {
     let tokens: RLTokenDTO
     let defaultGuild: RLGuildDTO?                      // backend: default_guild
     let defaultGuildMembership: RLGuildMembershipDTO?  // backend: default_guild_membership
+}
+
+struct RLFieldAvailabilityResponseDTO: Codable {
+    let available: Bool
+    let detail: String
 }
 
 
