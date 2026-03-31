@@ -1445,7 +1445,7 @@ Due to this we can remove the timeframe filter functionality in the left drawer 
 
 
 
-237. Reputation for personal, guild and global need a full audit. Again listing areas reputation is applied and areas we still need to apply to
+237. [Fixed] Reputation for personal, guild and global need a full audit. Again listing areas reputation is applied and areas we still need to apply to
 
 238. Need to review user permissions making sure things like user blocks, bans, suspended and muted are all applied to relevant areas and things like caps on chat message (50 per hour) for anti spam are in place and marker placement limits etc
 

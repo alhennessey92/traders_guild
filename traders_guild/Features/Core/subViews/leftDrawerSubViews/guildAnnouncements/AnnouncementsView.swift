@@ -64,7 +64,6 @@ struct AnnouncementRowView: View {
     var body: some View {
         UnifiedContentCard(
             onTap: onTap,
-            showUnreadDot: !announcement.isRead,
             isUnread: !announcement.isRead,
             semanticBorderColor: announcement.isImportant && !announcement.isRead
                 ? Color.orange.opacity(0.4) : nil,

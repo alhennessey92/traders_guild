@@ -9,6 +9,26 @@
 
 import SwiftUI
 
+// MARK: - Global Keyboard Dismissal
+
+private struct DismissKeyboardOnTap: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        let tap = UITapGestureRecognizer(target: view, action: #selector(UIView.endEditing(_:)))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+        return view
+    }
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+extension View {
+    func dismissKeyboardOnTap() -> some View {
+        self.background(DismissKeyboardOnTap())
+    }
+}
+
 @main
 struct traders_guildApp: App {
     
@@ -48,8 +68,9 @@ struct traders_guildApp: App {
                         .zIndex(1) // Ensure it's on top
                 }
             }
+            .dismissKeyboardOnTap()
             .animation(.easeOut(duration: 0.5), value: rlAppState.showingTransition)
-            
+
             // Blocking alerts
             .alert(
                 rlAppState.currentAlert?.title ?? "Alert",

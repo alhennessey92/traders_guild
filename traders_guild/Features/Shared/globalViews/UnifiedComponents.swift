@@ -1686,23 +1686,7 @@ struct UnifiedMemberAvatar: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             if let avatarURL, !avatarURL.isEmpty, let url = URL(string: avatarURL) {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Circle()
-                            .fill(AppColors.accentColor.opacity(0.3))
-                            .overlay(
-                                Text(initials)
-                                    .font(.system(size: size * 0.35, weight: .bold))
-                                    .foregroundColor(AppColors.accentColor)
-                            )
-                    }
-                }
-                .frame(width: size, height: size)
-                .clipShape(Circle())
+                CachedAvatarImage(url: url, size: size, initials: initials)
             } else {
                 Circle()
                     .fill(AppColors.accentColor.opacity(0.3))
@@ -1713,7 +1697,7 @@ struct UnifiedMemberAvatar: View {
                             .foregroundColor(AppColors.accentColor)
                     )
             }
-            
+
             if showOnlineIndicator {
                 Circle()
                     .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)

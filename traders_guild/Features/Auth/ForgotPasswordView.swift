@@ -5,6 +5,12 @@
 
 import SwiftUI
 
+private struct ResetPasswordRequirement: Identifiable {
+    let title: String
+    let isMet: Bool
+    var id: String { title }
+}
+
 struct ForgotPasswordView: View {
     enum ResetFlowStep {
         case request
@@ -55,6 +61,48 @@ struct ForgotPasswordView: View {
         tokenIsValid != false
     }
 
+    // MARK: - Password Validation
+
+    private var isValidLength: Bool {
+        let bytes = newPassword.utf8.count
+        return bytes >= 8 && bytes <= 72
+    }
+
+    private var hasUppercase: Bool {
+        newPassword.rangeOfCharacter(from: .uppercaseLetters) != nil
+    }
+
+    private var hasLowercase: Bool {
+        newPassword.rangeOfCharacter(from: .lowercaseLetters) != nil
+    }
+
+    private var hasNumber: Bool {
+        newPassword.rangeOfCharacter(from: .decimalDigits) != nil
+    }
+
+    private var passwordsMatch: Bool {
+        RLAuthValidator.doPasswordsMatch(newPassword, confirmPassword)
+    }
+
+    private var passwordRequirements: [ResetPasswordRequirement] {
+        [
+            ResetPasswordRequirement(title: "8-72 characters", isMet: isValidLength),
+            ResetPasswordRequirement(title: "At least one uppercase letter", isMet: hasUppercase),
+            ResetPasswordRequirement(title: "At least one lowercase letter", isMet: hasLowercase),
+            ResetPasswordRequirement(title: "At least one number", isMet: hasNumber),
+        ]
+    }
+
+    private var passwordValidationState: StandardTextFieldValidationState {
+        if newPassword.isEmpty { return .neutral }
+        return RLAuthValidator.isValidPassword(newPassword) ? .valid : .invalid
+    }
+
+    private var confirmPasswordValidationState: StandardTextFieldValidationState {
+        if confirmPassword.isEmpty { return .neutral }
+        return passwordsMatch ? .valid : .invalid
+    }
+
     var body: some View {
         ZStack {
             StaticAuthBackgroundView()
@@ -66,7 +114,7 @@ struct ForgotPasswordView: View {
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .bottomLeading)
                         .padding(.bottom, 20)
-                        .padding(.leading, 20)
+                        .padding(.horizontal, 20)
 
                     if step == .request {
                         requestStepView
@@ -175,21 +223,65 @@ struct ForgotPasswordView: View {
                 tokenIsValid = nil
             }
 
-        StandardTextFieldView(title: "New Password", text: $newPassword, isSecure: true)
-            .padding(.bottom, 10)
-            .disabled(isSubmitting)
-
-        StandardTextFieldView(title: "Confirm Password", text: $confirmPassword, isSecure: true)
-            .padding(.bottom, 10)
-            .disabled(isSubmitting)
-
-        Text("Password must be 8-72 characters with uppercase, lowercase, and a number.")
+        Text("Password requirements")
             .font(AppFonts.smallNotice())
             .foregroundColor(AppColors.greyText)
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 10)
+            .padding(.bottom, 5)
             .padding(.horizontal, 24)
-            .padding(.bottom, 6)
+
+        StandardTextFieldView(
+            title: "New Password",
+            text: $newPassword,
+            isSecure: true,
+            validationState: passwordValidationState
+        )
+            .padding(.bottom, 10)
+            .disabled(isSubmitting)
+
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(passwordRequirements) { requirement in
+                HStack(spacing: 7) {
+                    Image(systemName: requirement.isMet ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(requirement.isMet ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+
+                    Text(requirement.title)
+                        .font(.caption)
+                        .foregroundColor(requirement.isMet ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 12)
+
+        StandardTextFieldView(
+            title: "Confirm Password",
+            text: $confirmPassword,
+            isSecure: true,
+            validationState: confirmPasswordValidationState
+        )
+            .padding(.bottom, 4)
+            .disabled(isSubmitting)
+
+        if !confirmPassword.isEmpty {
+            HStack(spacing: 7) {
+                Image(systemName: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(passwordsMatch ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+
+                Text(passwordsMatch ? "Passwords match" : "Passwords do not match")
+                    .font(.caption)
+                    .foregroundColor(passwordsMatch ? AppColors.bullCandleGreen : AppColors.bearCandleRed)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 10)
+        }
 
         if let tokenIsValid {
             Text(tokenIsValid ? "Reset code verified." : "Reset code is invalid or expired.")

@@ -26,7 +26,9 @@ struct LoginButton: View {
                 .scaleEffect(0.9)
         }
         .foregroundColor(foregroundColor)
-        .frame(maxWidth: .infinity, maxHeight: 50)
+        .padding(.vertical, 14)
+        .padding(.horizontal)
+        .frame(maxWidth: .infinity)
         .background(backgroundColor)
     //  .cornerRadius(12)
         .clipShape(Capsule())

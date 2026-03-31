@@ -469,7 +469,9 @@ class RLAppState: ObservableObject {
             self.currentMembership = response.defaultGuildMembership
             self.isSessionRestored = true
             
-            showSuccess("Welcome to Traders Guild, \(response.user.username)!")
+            if !beginOnboarding {
+                showSuccess("Welcome to Traders Guild, \(response.user.username)!")
+            }
             if beginOnboarding {
                 isOnboardingFlowActive = true
             } else {
@@ -527,7 +529,6 @@ class RLAppState: ObservableObject {
             print("🔐 Login: Final state - currentGuild: \(currentGuild?.name ?? "nil"), showSheet: \(showGuildSelectionSheet)")
             
             isOnboardingFlowActive = false
-            showSuccess("Welcome back, \(response.user.username)!")
 
         } catch {
             isHandlingAuthFlow = false  // ← Clear flag on error
@@ -567,7 +568,6 @@ class RLAppState: ObservableObject {
 
             subscribeToNotifications()
             isOnboardingFlowActive = false
-            showSuccess("Welcome, \(response.user.displayName)!")
 
         } catch {
             isHandlingAuthFlow = false

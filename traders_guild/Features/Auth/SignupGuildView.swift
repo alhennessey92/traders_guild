@@ -185,14 +185,16 @@ struct SignupGuildView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    if !path.isEmpty { path.removeLast() }
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .foregroundColor(AppColors.unhighlightedButtonBackground)
+                if !rlAppState.isAuthenticated {
+                    Button(action: {
+                        if !path.isEmpty { path.removeLast() }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.headline)
+                            .foregroundColor(AppColors.unhighlightedButtonBackground)
+                    }
+                    .disabled(isPreparingAccount || isLoadingGuilds || isContinuing)
                 }
-                .disabled(isPreparingAccount || isLoadingGuilds || isContinuing)
             }
 
             ToolbarItem(placement: .principal) {
@@ -383,6 +385,8 @@ struct SignupGuildView: View {
         isPreparingAccount = true
         defer { isPreparingAccount = false }
         try await rlAppState.signUp(data: data, beginOnboarding: true)
+        // Remove prior signup steps from navigation stack to prevent back-navigation
+        path = [.guild]
     }
 
     private func recoverAssignedGuildFromCurrentState() async -> Bool {
@@ -413,8 +417,8 @@ struct SignupProfileSetupView: View {
     @EnvironmentObject var rlAppState: RLAppState
 
     @State private var bio: String = ""
-    @State private var language: String = ""
-    @State private var location: String = ""
+    @State private var selectedLanguageCode: String = ""
+    @State private var selectedCountryCode: String = ""
     @State private var tradingStyle: String = ""
     @State private var twitterHandle: String = ""
     @State private var discordHandle: String = ""
@@ -427,6 +431,14 @@ struct SignupProfileSetupView: View {
     @State private var isSaving: Bool = false
 
     private let suggestedInterests: [RLTradingInterestItem] = RLTradingInterestsCatalog.allItems
+
+    private var selectedLanguageLabel: String {
+        LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label ?? "Select language"
+    }
+
+    private var selectedCountryLabel: String {
+        LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label ?? "Select country"
+    }
 
     var body: some View {
         ZStack {
@@ -515,8 +527,46 @@ struct SignupProfileSetupView: View {
                     // About You section
                     profileSetupSection(title: "About You") {
                         VStack(spacing: 12) {
-                            StandardTextFieldView(title: "Language (optional)", text: $language)
-                            StandardTextFieldView(title: "Location (optional)", text: $location)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Language (optional)")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+
+                                Menu {
+                                    Button("Not specified") {
+                                        selectedLanguageCode = ""
+                                    }
+                                    Divider()
+                                    ForEach(LocaleOptionCatalog.languages) { option in
+                                        Button(option.label) {
+                                            selectedLanguageCode = option.code
+                                        }
+                                    }
+                                } label: {
+                                    profileDropdownFieldLabel(selectedLanguageCode.isEmpty ? "Select language" : selectedLanguageLabel)
+                                }
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Location (optional)")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+
+                                Menu {
+                                    Button("Not specified") {
+                                        selectedCountryCode = ""
+                                    }
+                                    Divider()
+                                    ForEach(LocaleOptionCatalog.countries) { option in
+                                        Button(option.label) {
+                                            selectedCountryCode = option.code
+                                        }
+                                    }
+                                } label: {
+                                    profileDropdownFieldLabel(selectedCountryCode.isEmpty ? "Select country" : selectedCountryLabel)
+                                }
+                            }
+
                             StandardTextFieldView(title: "Trading Style (optional)", text: $tradingStyle)
 
                             VStack(alignment: .leading, spacing: 8) {
@@ -592,14 +642,16 @@ struct SignupProfileSetupView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    if !path.isEmpty { path.removeLast() }
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .foregroundColor(AppColors.unhighlightedButtonBackground)
+                if !rlAppState.isAuthenticated {
+                    Button(action: {
+                        if !path.isEmpty { path.removeLast() }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.headline)
+                            .foregroundColor(AppColors.unhighlightedButtonBackground)
+                    }
+                    .disabled(isSaving)
                 }
-                .disabled(isSaving)
             }
 
             ToolbarItem(placement: .principal) {
@@ -655,11 +707,13 @@ struct SignupProfileSetupView: View {
             if selectedInterests.isEmpty, !data.selectedInterests.isEmpty {
                 selectedInterests = Set(data.selectedInterests)
             }
-            if language.isEmpty {
-                language = data.language
+            if selectedLanguageCode.isEmpty {
+                // data.language stores a code from locale detection
+                selectedLanguageCode = data.language
             }
-            if location.isEmpty {
-                location = data.location
+            if selectedCountryCode.isEmpty {
+                // data.location stores a code from locale detection
+                selectedCountryCode = data.location
             }
         }
     }
@@ -682,6 +736,29 @@ struct SignupProfileSetupView: View {
                 )
         )
         .padding(.horizontal, 20)
+    }
+
+    private func profileDropdownFieldLabel(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            Text(text)
+                .font(.body)
+                .foregroundColor(AppColors.whiteText)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.down")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppColors.greyText)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                )
+        )
     }
 
     private func profileSocialField(icon: String, title: String, text: Binding<String>) -> some View {
@@ -740,17 +817,20 @@ struct SignupProfileSetupView: View {
                 RLSocialLinkItem(platform: "youtube", username: RLAuthValidator.trimmed(youtubeHandle), url: nil),
             ].filter { !$0.username.isEmpty }
 
+            let languageLabel = LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label
+            let countryLabel = LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label
+
             let request = RLUserProfileUpdateRequest(
                 bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : bio.trimmingCharacters(in: .whitespacesAndNewlines),
-                language: language.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : language.trimmingCharacters(in: .whitespacesAndNewlines),
-                location: location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines),
+                language: languageLabel,
+                location: countryLabel,
                 tradingStyle: tradingStyle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : tradingStyle.trimmingCharacters(in: .whitespacesAndNewlines),
                 socialLinks: links.isEmpty ? nil : links,
                 tradingInterests: selected.isEmpty ? nil : selected
             )
             _ = try await rlAppState.updateCurrentUserProfile(request)
-            data.language = language
-            data.location = location
+            data.language = languageLabel ?? ""
+            data.location = countryLabel ?? ""
         } catch {
             // Error surfaced by RLAppState
         }
