@@ -73,41 +73,12 @@ struct SigninEmailView: View {
                         .padding(.bottom, 10)
                         .disabled(isLoggingIn)
 
-                    VStack(spacing: 0) {
-                        Divider()
-                            .frame(height: 1)
-                            .background(AppColors.surfaceGray30)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-
-                    StandardActionButtonFullWidth(
-                        title: isLoggingIn ? "Signing In..." : "Sign In",
-                        backgroundColor: AppColors.whiteText,
-                        foregroundColor: AppColors.gradientBackgroundDark
-                    ) {
-                        Task {
-                            await handleLogin()
-                        }
-                    }
-                    .disabled(!isFormValid || isLoggingIn)
-                    .opacity(isFormValid && !isLoggingIn ? 1.0 : 0.5)
-                    .overlay {
-                        if isLoggingIn {
-                            HStack {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: AppColors.gradientBackgroundDark))
-                                    .scaleEffect(0.8)
-                                Spacer()
-                            }
-                            .padding(.leading, 46)
-                        }
-                    }
-                    
-                    Spacer()
+                    Spacer(minLength: 120)
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapBackground()
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .toolbar {
@@ -132,7 +103,30 @@ struct SigninEmailView: View {
                     Divider()
                         .frame(height: 1)
                         .background(AppColors.surfaceGray30)
-                    
+
+                    StandardActionButtonFullWidth(
+                        title: isLoggingIn ? "Signing In..." : "Sign In",
+                        backgroundColor: AppColors.whiteText,
+                        foregroundColor: AppColors.gradientBackgroundDark
+                    ) {
+                        Task {
+                            await handleLogin()
+                        }
+                    }
+                    .disabled(!isFormValid || isLoggingIn)
+                    .opacity(isFormValid && !isLoggingIn ? 1.0 : 0.5)
+                    .overlay {
+                        if isLoggingIn {
+                            HStack {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: AppColors.gradientBackgroundDark))
+                                    .scaleEffect(0.8)
+                                Spacer()
+                            }
+                            .padding(.leading, 46)
+                        }
+                    }
+
                     NavigationLink(destination: ForgotPasswordView()) {
                         Text("Forgot your password?")
                             .font(AppFonts.smallNotice())
@@ -144,6 +138,7 @@ struct SigninEmailView: View {
                     }
                     .disabled(isLoggingIn)
                 }
+                .background(AppColors.sheetBackground)
             }
         }
     }

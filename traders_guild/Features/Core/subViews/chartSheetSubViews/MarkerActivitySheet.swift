@@ -101,10 +101,10 @@ struct MarkerActivitySheet: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(AppColors.surfaceWhite04)
+                        .fill(AppColors.surfaceWhite08)
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                                .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                         )
                 )
                 .padding(.bottom, 22)
@@ -121,10 +121,10 @@ struct MarkerActivitySheet: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.surfaceWhite04)
+                .fill(AppColors.surfaceWhite08)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                 )
         )
         .padding(.top, 8)

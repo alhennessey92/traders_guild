@@ -194,29 +194,12 @@ struct SignupEmailView: View {
                         .padding(.bottom, 10)
                     }
 
-                    VStack(spacing: 0) {
-                        Divider()
-                            .frame(height: 1)
-                            .background(AppColors.surfaceGray30)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-
-                    StandardActionButtonFullWidth(
-                        title: isCheckingAvailability ? "Checking..." : "Continue",
-                        backgroundColor: AppColors.whiteText,
-                        foregroundColor: AppColors.gradientBackgroundDark
-                    ) {
-                        Task { await validateAvailabilityAndContinue() }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .disabled(!isFormValid || isCheckingAvailability)
-                    .opacity((isFormValid && !isCheckingAvailability) ? 1.0 : 0.5)
-
-                    Spacer()
+                    Spacer(minLength: 120)
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapBackground()
             .onChange(of: email) { _, _ in
                 emailAvailabilityError = nil
             }
@@ -251,6 +234,24 @@ struct SignupEmailView: View {
                         .foregroundColor(AppColors.fadedBackground)
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 0) {
+                Divider()
+                    .frame(height: 1)
+                    .background(AppColors.surfaceGray30)
+
+                StandardActionButtonFullWidth(
+                    title: isCheckingAvailability ? "Checking..." : "Continue",
+                    backgroundColor: AppColors.whiteText,
+                    foregroundColor: AppColors.gradientBackgroundDark
+                ) {
+                    Task { await validateAvailabilityAndContinue() }
+                }
+                .disabled(!isFormValid || isCheckingAvailability)
+                .opacity((isFormValid && !isCheckingAvailability) ? 1.0 : 0.5)
+            }
+            .background(AppColors.sheetBackground)
         }
     }
 

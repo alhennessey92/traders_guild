@@ -130,6 +130,15 @@ struct RLAppleSignInRequestDTO: Codable {
     let email: String?               // backend: email
 }
 
+/// Apple Sign In response DTO — returned from POST /auth/apple
+/// Extends login response with new-user indicator for onboarding routing.
+struct RLAppleSignInResponseDTO: Codable {
+    let user: RLUserDTO
+    let tokens: RLTokenDTO
+    let isNewUser: Bool?             // backend: is_new_user (nil until backend sends it)
+    let onboardingState: String?     // backend: onboarding_state (e.g. "account_created", "onboarding_complete")
+}
+
 /// Email verification request DTO — sent to POST /auth/email/verify
 struct RLEmailVerifyRequestDTO: Codable {
     let token: String
@@ -2353,6 +2362,10 @@ struct RLSignupData {
     var language: String = RLSignupData.defaultLanguage()
     var location: String = RLSignupData.defaultLocation()
 
+    /// True when this signup was initiated via Apple Sign In (skips password, pre-fills Apple data)
+    var isAppleSignUp: Bool = false
+    var dateOfBirth: Date? = nil
+
     static func defaultLanguage() -> String {
         let preferred = Locale.preferredLanguages.first ?? Locale.current.identifier
         let locale = Locale(identifier: preferred)
@@ -2435,10 +2448,24 @@ enum RLAuthValidator {
 
 enum RLSignupStep: Hashable {
     case accountInfo
+    case appleProfileCompletion
     case username
     case basics
     case interests
     case guild
     case profile
     case emailVerification
+}
+
+/// Tracks how far a user has progressed through onboarding.
+/// Persisted locally so returning users (including Apple users) can resume.
+enum RLOnboardingState: String, Codable {
+    case accountCreated = "account_created"
+    case profileCompleted = "profile_completed"
+    case usernameCompleted = "username_completed"
+    case basicsCompleted = "basics_completed"
+    case interestsCompleted = "interests_completed"
+    case guildSelected = "guild_selected"
+    case optionalDetailsCompleted = "optional_details_completed"
+    case complete = "onboarding_complete"
 }

@@ -122,10 +122,12 @@ struct ForgotPasswordView: View {
                         resetStepView
                     }
 
-                    Spacer(minLength: 80)
+                    Spacer(minLength: 160)
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapBackground()
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .toolbar {
@@ -145,6 +147,9 @@ struct ForgotPasswordView: View {
                         .foregroundColor(AppColors.fadedBackground)
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            forgotPasswordFooter
         }
         .onAppear {
             if step == .reset, !normalizedToken.isEmpty {
@@ -176,34 +181,7 @@ struct ForgotPasswordView: View {
                 .padding(.bottom, 8)
         }
 
-        VStack(spacing: 0) {
-            Divider()
-                .frame(height: 1)
-                .background(AppColors.surfaceGray30)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-
-        StandardActionButtonFullWidth(
-                        title: isSubmitting ? "Sending..." : (requestSubmitted ? "Reset Code Sent" : "Send Reset Code"),
-            backgroundColor: requestSubmitted ? AppColors.bullCandleGreen : AppColors.whiteText,
-            foregroundColor: requestSubmitted ? AppColors.whiteText : AppColors.gradientBackgroundDark
-        ) {
-            Task { await submitForgotRequest() }
-        }
-        .frame(maxWidth: .infinity)
-        .disabled(!canRequestReset)
-        .opacity(canRequestReset ? 1.0 : 0.5)
-
-        Button {
-            tokenIsValid = nil
-            step = .reset
-        } label: {
-            Text("Already have a reset code?")
-                .font(AppFonts.smallNotice())
-                .foregroundColor(AppColors.accentColor)
-                .padding(.top, 12)
-        }
+        EmptyView()
     }
 
     @ViewBuilder
@@ -292,47 +270,72 @@ struct ForgotPasswordView: View {
                 .padding(.bottom, 6)
         }
 
-        VStack(spacing: 0) {
+        EmptyView()
+    }
+
+    @ViewBuilder
+    private var forgotPasswordFooter: some View {
+        VStack(spacing: 10) {
             Divider()
                 .frame(height: 1)
                 .background(AppColors.surfaceGray30)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
 
-        StandardActionButtonFullWidth(
-            title: isSubmitting ? "Resetting..." : "Reset Password",
-            backgroundColor: AppColors.whiteText,
-            foregroundColor: AppColors.gradientBackgroundDark
-        ) {
-            Task { await submitResetPassword() }
-        }
-        .frame(maxWidth: .infinity)
-        .disabled(!canSubmitReset)
-        .opacity(canSubmitReset ? 1.0 : 0.5)
-
-        HStack(spacing: 12) {
-            Button {
-                Task { await verifyTokenIfNeeded() }
-            } label: {
-                    Text(isVerifyingToken ? "Verifying..." : "Verify Code")
-                    .font(AppFonts.smallNotice())
-                    .foregroundColor(AppColors.accentColor)
-            }
-            .disabled(normalizedToken.isEmpty || isSubmitting || isVerifyingToken)
-
-            if !launchedFromDeepLink {
-                Button {
-                    step = .request
-                } label: {
-                    Text("Back to Email Step")
-                        .font(AppFonts.smallNotice())
-                        .foregroundColor(AppColors.greyText)
+            if step == .request {
+                StandardActionButtonFullWidth(
+                    title: isSubmitting ? "Sending..." : (requestSubmitted ? "Reset Code Sent" : "Send Reset Code"),
+                    backgroundColor: requestSubmitted ? AppColors.bullCandleGreen : AppColors.whiteText,
+                    foregroundColor: requestSubmitted ? AppColors.whiteText : AppColors.gradientBackgroundDark
+                ) {
+                    Task { await submitForgotRequest() }
                 }
-                .disabled(isSubmitting || isVerifyingToken)
+                .disabled(!canRequestReset)
+                .opacity(canRequestReset ? 1.0 : 0.5)
+
+                Button {
+                    tokenIsValid = nil
+                    step = .reset
+                } label: {
+                    Text("Already have a reset code?")
+                        .font(AppFonts.smallNotice())
+                        .foregroundColor(AppColors.accentColor)
+                }
+            } else {
+                StandardActionButtonFullWidth(
+                    title: isSubmitting ? "Resetting..." : "Reset Password",
+                    backgroundColor: AppColors.whiteText,
+                    foregroundColor: AppColors.gradientBackgroundDark
+                ) {
+                    Task { await submitResetPassword() }
+                }
+                .disabled(!canSubmitReset)
+                .opacity(canSubmitReset ? 1.0 : 0.5)
+
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await verifyTokenIfNeeded() }
+                    } label: {
+                        Text(isVerifyingToken ? "Verifying..." : "Verify Code")
+                            .font(AppFonts.smallNotice())
+                            .foregroundColor(AppColors.accentColor)
+                    }
+                    .disabled(normalizedToken.isEmpty || isSubmitting || isVerifyingToken)
+
+                    if !launchedFromDeepLink {
+                        Button {
+                            step = .request
+                        } label: {
+                            Text("Back to Email Step")
+                                .font(AppFonts.smallNotice())
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        .disabled(isSubmitting || isVerifyingToken)
+                    }
+                }
             }
         }
         .padding(.top, 10)
+        .padding(.bottom, 10)
+        .background(AppColors.sheetBackground)
     }
 
     private func submitForgotRequest() async {

@@ -24,13 +24,14 @@ struct ContentView: View {
     //@EnvironmentObject var appState: AppState
     
     var body: some View {
-        // 👋 No user or no guild, show the signup flow
         NavigationStack(path: $path) {
             WelcomeView(path: $path, data: $data)
                 .navigationDestination(for: RLSignupStep.self) { step in
                     switch step {
                     case .accountInfo:
                         SignupEmailView(data: $data, path: $path)
+                    case .appleProfileCompletion:
+                        AppleProfileCompletionView(data: $data, path: $path)
                     case .username:
                         SignupUsernameView(data: $data, path: $path)
                     case .basics:
@@ -53,6 +54,12 @@ struct ContentView: View {
         }
         .onAppear {
             showResetFromDeepLink = RLAppState.pendingPasswordResetToken != nil
+        }
+        .onReceive(RLAppState.$appleSignUpPrefill) { prefill in
+            guard let prefill = prefill else { return }
+            data = prefill
+            RLAppState.appleSignUpPrefill = nil
+            path = [.appleProfileCompletion]
         }
         .onChange(of: RLAppState.pendingPasswordResetToken) { _, newValue in
             showResetFromDeepLink = newValue != nil

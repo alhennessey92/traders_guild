@@ -287,10 +287,10 @@ struct MarkerViewingInfoBox: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 9)
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.surfaceWhite12)
                 .overlay(
                     RoundedRectangle(cornerRadius: 9)
-                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                 )
         )
     }
@@ -307,10 +307,10 @@ struct MarkerViewingInfoBox: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 9)
-                    .fill(AppColors.surfaceWhite08)
+                    .fill(AppColors.surfaceWhite12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 9)
-                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                     )
             )
     }

@@ -194,22 +194,24 @@ struct EditProfileView: View {
                                 }
                                 
                                 // Language
-                                SettingsTextField(
+                                SettingsDropdownField(
                                     title: "Language",
                                     placeholder: "Preferred language",
                                     text: $language,
-                                    icon: "globe"
+                                    icon: "globe",
+                                    options: LocaleOptionCatalog.languages
                                 )
                                 .onChange(of: language) { _, _ in
                                     hasChanges = true
                                 }
 
                                 // Location
-                                SettingsTextField(
+                                SettingsDropdownField(
                                     title: "Location",
-                                    placeholder: "City, Country",
+                                    placeholder: "Select country",
                                     text: $location,
-                                    icon: "location.fill"
+                                    icon: "location.fill",
+                                    options: LocaleOptionCatalog.countries
                                 )
                                 .onChange(of: location) { _, _ in
                                     hasChanges = true
@@ -2621,6 +2623,61 @@ struct SettingsTextField: View {
                 Text(error)
                     .font(.caption)
                     .foregroundColor(.red)
+            }
+        }
+    }
+}
+
+struct SettingsDropdownField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    var icon: String? = nil
+    let options: [LocaleOption]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.greyText)
+
+            Menu {
+                Button("Not specified") {
+                    text = ""
+                }
+
+                Divider()
+
+                ForEach(options) { option in
+                    Button(option.label) {
+                        text = option.label
+                    }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    if let icon = icon {
+                        Image(systemName: icon)
+                            .foregroundColor(AppColors.greyText)
+                    }
+
+                    Text(text.isEmpty ? placeholder : text)
+                        .foregroundColor(text.isEmpty ? AppColors.greyText : AppColors.whiteText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.greyText)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                )
             }
         }
     }

@@ -8,28 +8,39 @@ struct LocaleOption: Identifiable, Hashable {
 }
 
 enum LocaleOptionCatalog {
+    private static let commonLanguageCodes: [String] = [
+        "en", "es", "fr", "de", "it", "pt", "zh", "ja", "ko", "ar", "hi", "ru"
+    ]
+
+    private static let commonCountryCodes: [String] = [
+        "US", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "NL", "SE",
+        "NO", "DK", "IE", "NZ", "SG", "AE", "IN", "JP", "KR", "BR", "MX"
+    ]
+
     static let languages: [LocaleOption] = {
         let locale = Locale.current
-        return Locale.isoLanguageCodes
-            .compactMap { code in
-                guard let label = locale.localizedString(forLanguageCode: code) else { return nil }
+        let options = Locale.isoLanguageCodes
+            .compactMap { code -> LocaleOption? in
+                let codeValue = String(describing: code)
+                guard let label = locale.localizedString(forLanguageCode: codeValue) else { return nil }
                 let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return nil }
-                return LocaleOption(code: code, label: trimmed.capitalized)
+                return LocaleOption(code: codeValue, label: trimmed.capitalized)
             }
-            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+        return orderedOptions(options, commonCodes: commonLanguageCodes)
     }()
 
     static let countries: [LocaleOption] = {
         let locale = Locale.current
-        return Locale.isoRegionCodes
-            .compactMap { code in
-                guard let label = locale.localizedString(forRegionCode: code) else { return nil }
+        let options = Locale.isoRegionCodes
+            .compactMap { code -> LocaleOption? in
+                let codeValue = String(describing: code)
+                guard let label = locale.localizedString(forRegionCode: codeValue) else { return nil }
                 let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return nil }
-                return LocaleOption(code: code, label: trimmed)
+                return LocaleOption(code: codeValue, label: trimmed)
             }
-            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+        return orderedOptions(options, commonCodes: commonCountryCodes)
     }()
 
     static func defaultLanguageCode() -> String {
@@ -42,5 +53,26 @@ enum LocaleOptionCatalog {
     static func defaultCountryCode() -> String {
         let code = Locale.current.regionCode ?? ""
         return countries.contains(where: { $0.code == code }) ? code : ""
+    }
+
+    private static func orderedOptions(_ options: [LocaleOption], commonCodes: [String]) -> [LocaleOption] {
+        let sortedOptions = options.sorted {
+            $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+        }
+
+        let optionsByCode = Dictionary(uniqueKeysWithValues: sortedOptions.map { ($0.code, $0) })
+        var ordered: [LocaleOption] = []
+        var seenCodes = Set<String>()
+
+        for code in commonCodes {
+            guard let option = optionsByCode[code], seenCodes.insert(code).inserted else { continue }
+            ordered.append(option)
+        }
+
+        for option in sortedOptions where seenCodes.insert(option.code).inserted {
+            ordered.append(option)
+        }
+
+        return ordered
     }
 }

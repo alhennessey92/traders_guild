@@ -91,6 +91,21 @@ class RLAppState: ObservableObject {
     /// Whether to show biometric enrollment sheet after login
     @Published var showBiometricEnrollment: Bool = false
 
+    /// Pre-filled signup data from Apple Sign In for new Apple users entering onboarding.
+    /// Set by loginWithApple() when the backend reports a new user; consumed by ContentView
+    /// to route into the Apple onboarding path.
+    @Published var appleSignUpPrefill: RLSignupData?
+
+    /// Tracks onboarding progress so users can resume from the correct step.
+    /// Persisted to UserDefaults and cleared on logout or onboarding completion.
+    @Published var onboardingState: RLOnboardingState? {
+        didSet { saveOnboardingState(onboardingState) }
+    }
+
+    /// True once the user's account record has been created (email signup or Apple).
+    /// Used to disable backward navigation in the onboarding flow.
+    @Published var accountCreatedDuringOnboarding: Bool = false
+
     /// User settings (privacy/data preferences)
     @Published var userSettings: RLUserSettingsDTO?
 
@@ -179,6 +194,7 @@ class RLAppState: ObservableObject {
     private var isFinalizingOnboarding: Bool = false
     
     @Published var showGuildSelectionSheet: Bool = false
+    @Published var showSignupWelcomeCarousel: Bool = false
 
     /// Keeps auth/signup onboarding in ContentView even after auth tokens are issued.
     @Published var isOnboardingFlowActive: Bool = false
@@ -206,6 +222,7 @@ class RLAppState: ObservableObject {
     private let reachabilityQueue = DispatchQueue(label: "traders_guild.reachability")
     private var lastReachabilitySatisfied: Bool?
     private var hasShownOfflineToastForCurrentEpisode = false
+    private var pendingSignupWelcomeUserId: UUID?
 
     @Published var notificationStats: RLNotificationStatsDTO? {
         didSet {
@@ -322,6 +339,7 @@ class RLAppState: ObservableObject {
         showingTransition = false
         hasCompletedInitialLoad = true
         transitionMinimumDismissAt = nil
+        presentPendingSignupWelcomeIfNeeded()
     }
     
     func chartDidBecomeReady() {
@@ -469,6 +487,9 @@ class RLAppState: ObservableObject {
             self.currentMembership = response.defaultGuildMembership
             self.isSessionRestored = true
             
+            accountCreatedDuringOnboarding = beginOnboarding
+            onboardingState = beginOnboarding ? .accountCreated : nil
+
             if !beginOnboarding {
                 showSuccess("Welcome to Traders Guild, \(response.user.username)!")
             }
@@ -521,14 +542,26 @@ class RLAppState: ObservableObject {
                 print("   [\(i)] \(g.guild.name)")
             }
             
-            try await completePostAuthGuildSetup(context: "Login")
+            // Check if returning user has incomplete onboarding
+            let storedState = getOnboardingStateFromKeychain()
+            let hasIncompleteOnboarding = storedState != nil && storedState != .complete
+            let usernameMissing = response.user.username.isEmpty
+                || response.user.username.hasPrefix("apple_user_")
+                || response.user.username.hasPrefix("user_")
 
-            // Fetch notifications
-            subscribeToNotifications()
-            
-            print("🔐 Login: Final state - currentGuild: \(currentGuild?.name ?? "nil"), showSheet: \(showGuildSelectionSheet)")
-            
-            isOnboardingFlowActive = false
+            if hasIncompleteOnboarding || usernameMissing {
+                onboardingState = storedState ?? .accountCreated
+                accountCreatedDuringOnboarding = true
+                isOnboardingFlowActive = true
+                isHandlingAuthFlow = false
+            } else {
+                try await completePostAuthGuildSetup(context: "Login")
+                subscribeToNotifications()
+                
+                print("🔐 Login: Final state - currentGuild: \(currentGuild?.name ?? "nil"), showSheet: \(showGuildSelectionSheet)")
+                
+                isOnboardingFlowActive = false
+            }
 
         } catch {
             isHandlingAuthFlow = false  // ← Clear flag on error
@@ -542,11 +575,16 @@ class RLAppState: ObservableObject {
         try await login(identifier: email, password: password)
     }
 
-    /// Login or register via Apple Sign In
+    /// Login or register via Apple Sign In.
+    /// Routes new Apple users into onboarding; returning users straight to guild setup.
     func loginWithApple(identityToken: String, authorizationCode: String, fullName: String?, email: String?) async throws {
         isLoading = true
         isHandlingAuthFlow = true
-        defer { isLoading = false }
+        isCompletingSignup = true
+        defer {
+            isLoading = false
+            isCompletingSignup = false
+        }
 
         do {
             let response = try await realApi.loginWithApple(
@@ -563,16 +601,57 @@ class RLAppState: ObservableObject {
             self.currentMembership = nil
             self.isSessionRestored = true
 
-            try await fetchUserGuilds()
-            try await completePostAuthGuildSetup(context: "Apple Sign In")
+            // Determine if this is a new user who needs onboarding.
+            // Use backend flag when available; fall back to heuristic (empty/placeholder username).
+            let userNeedsOnboarding: Bool = {
+                if let explicit = response.isNewUser { return explicit }
+                if let state = response.onboardingState, state == "onboarding_complete" { return false }
+                let username = response.user.username
+                return username.isEmpty
+                    || username.hasPrefix("apple_user_")
+                    || username.hasPrefix("user_")
+            }()
 
-            subscribeToNotifications()
-            isOnboardingFlowActive = false
+            if userNeedsOnboarding {
+                var prefill = RLSignupData()
+                prefill.isAppleSignUp = true
+                prefill.name = fullName ?? response.user.displayName
+                prefill.email = email ?? response.user.email
+                self.appleSignUpPrefill = prefill
+
+                accountCreatedDuringOnboarding = true
+                onboardingState = .accountCreated
+                isOnboardingFlowActive = true
+                isHandlingAuthFlow = false
+            } else {
+                // Returning Apple user -- normal post-auth flow
+                try await fetchUserGuilds()
+                try await completePostAuthGuildSetup(context: "Apple Sign In")
+                subscribeToNotifications()
+                isOnboardingFlowActive = false
+            }
 
         } catch {
             isHandlingAuthFlow = false
             showError(error, title: "Apple Sign In Failed", style: .alert)
             throw error
+        }
+    }
+
+    /// Sync onboarding data to backend for Apple Sign In users.
+    /// Called before guild selection since the Apple account was created with placeholder data.
+    /// Only sends fields not covered by SignupProfileSetupView (which sends interests, language, etc.).
+    func syncAppleOnboardingData(_ data: RLSignupData) async throws {
+        let updatedUser = try await realApi.updateBasicUserInfo(
+            RLBasicUserUpdateRequest(
+                displayName: data.name.isEmpty ? nil : data.name,
+                username: data.username.isEmpty ? nil : data.username
+            )
+        )
+        self.currentUser = updatedUser
+
+        if let dob = data.dateOfBirth {
+            _ = try await realApi.updateDateOfBirth(RLDOBUpdateRequest(dateOfBirth: dob))
         }
     }
 
@@ -735,8 +814,16 @@ class RLAppState: ObservableObject {
                 return
             }
 
+            onboardingState = .complete
+            accountCreatedDuringOnboarding = false
             isOnboardingFlowActive = false
+            queueSignupWelcomeCarouselIfNeeded()
             showTransitionForChartLoad(minimumDuration: 2.5)
+
+            // Offer biometric enrollment after the chart transition finishes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+                self?.offerBiometricEnrollmentIfNeeded()
+            }
         }
     }
 
@@ -746,6 +833,10 @@ class RLAppState: ObservableObject {
 
     func setPendingEmailVerificationToken(_ token: String?) {
         pendingEmailVerificationToken = token
+    }
+
+    func dismissSignupWelcomeCarousel() {
+        showSignupWelcomeCarousel = false
     }
     
     /// Restore session from keychain
@@ -848,15 +939,23 @@ class RLAppState: ObservableObject {
         }
 
         if currentUser != nil {
-            do {
-                userSettings = try await realApi.getUserSettings()
-            } catch {
-                print("⚠️ restoreSession: Failed to fetch user settings: \(error)")
+            // Check for incomplete onboarding before entering normal app flow
+            let storedOnboarding = getOnboardingStateFromKeychain()
+            if let state = storedOnboarding, state != .complete {
+                print("🔄 restoreSession: Incomplete onboarding detected (\(state.rawValue)), resuming")
+                onboardingState = state
+                accountCreatedDuringOnboarding = true
+                isOnboardingFlowActive = true
+            } else {
+                do {
+                    userSettings = try await realApi.getUserSettings()
+                } catch {
+                    print("⚠️ restoreSession: Failed to fetch user settings: \(error)")
+                }
+                subscribeToNotifications()
             }
-            subscribeToNotifications()
         }
 
-        
         print("🔄 restoreSession: Done - isAuthenticated: \(isAuthenticated), hasGuild: \(currentGuild != nil)")
         isSessionRestored = true
     }
@@ -907,8 +1006,11 @@ class RLAppState: ObservableObject {
         // Refresh current user's guild reputation from reputation-service so UI never shows stale 0
         Task { await refreshCurrentGuildReputation() }
 
-        // Offer biometric enrollment after guild selection (not during login, to avoid sheet conflicts)
-        offerBiometricEnrollmentIfNeeded()
+        // Offer biometric enrollment only when entering the app for the first time in this session
+        // (not during guild switching or onboarding -- those paths handle it separately)
+        if !isOnboardingFlowActive && !isFinalizingOnboarding {
+            offerBiometricEnrollmentIfNeeded()
+        }
     }
     
     /// Refreshes current user's guild reputation and accuracy from reputation-service and updates currentMembership.
@@ -2190,7 +2292,12 @@ class RLAppState: ObservableObject {
         showGuildSelectionSheet = false
         isHandlingAuthFlow = false
         isOnboardingFlowActive = false
+        showSignupWelcomeCarousel = false
+        pendingSignupWelcomeUserId = nil
         pendingPasswordResetToken = nil
+        onboardingState = nil
+        accountCreatedDuringOnboarding = false
+        appleSignUpPrefill = nil
         presenceByUserId.removeAll()
         currentPresenceChannel = nil
         hasShownOfflineToastForCurrentEpisode = false
@@ -2292,7 +2399,56 @@ class RLAppState: ObservableObject {
     private func clearRefreshTokenFromKeychain() {
         UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)refresh_token")
     }
-    
+
+    // Onboarding State
+    private func saveOnboardingState(_ state: RLOnboardingState?) {
+        if let state = state {
+            UserDefaults.standard.set(state.rawValue, forKey: "\(keychainPrefix)onboarding_state")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)onboarding_state")
+        }
+    }
+
+    private func getOnboardingStateFromKeychain() -> RLOnboardingState? {
+        guard let raw = UserDefaults.standard.string(forKey: "\(keychainPrefix)onboarding_state") else { return nil }
+        return RLOnboardingState(rawValue: raw)
+    }
+
+    private func clearOnboardingState() {
+        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)onboarding_state")
+    }
+
+    private func queueSignupWelcomeCarouselIfNeeded() {
+        guard let userId = currentUser?.id else { return }
+        guard !hasSeenSignupWelcomeCarousel(for: userId) else { return }
+        pendingSignupWelcomeUserId = userId
+    }
+
+    private func presentPendingSignupWelcomeIfNeeded() {
+        guard !showingTransition else { return }
+        guard let userId = pendingSignupWelcomeUserId else { return }
+        guard currentUser?.id == userId else {
+            pendingSignupWelcomeUserId = nil
+            return
+        }
+
+        markSignupWelcomeCarouselSeen(for: userId)
+        pendingSignupWelcomeUserId = nil
+        showSignupWelcomeCarousel = true
+    }
+
+    private func hasSeenSignupWelcomeCarousel(for userId: UUID) -> Bool {
+        UserDefaults.standard.bool(forKey: signupWelcomeCarouselKey(for: userId))
+    }
+
+    private func markSignupWelcomeCarouselSeen(for userId: UUID) {
+        UserDefaults.standard.set(true, forKey: signupWelcomeCarouselKey(for: userId))
+    }
+
+    private func signupWelcomeCarouselKey(for userId: UUID) -> String {
+        "\(keychainPrefix)signup_welcome_seen_\(userId.uuidString)"
+    }
+
     // Clear all
     private func clearAllKeychain() {
         clearTokenFromKeychain()
@@ -2300,6 +2456,7 @@ class RLAppState: ObservableObject {
         clearUserFromKeychain()
         clearGuildFromKeychain()
         clearMembershipFromKeychain()
+        clearOnboardingState()
         BiometricAuthManager.shared.disableBiometric()
     }
     

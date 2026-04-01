@@ -179,6 +179,8 @@ struct SignupGuildView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 20)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .dismissKeyboardOnTapBackground()
             }
         }
         .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
@@ -381,11 +383,17 @@ struct SignupGuildView: View {
     }
 
     private func ensureRegisteredIfNeeded() async throws {
-        guard !rlAppState.isAuthenticated else { return }
+        if rlAppState.isAuthenticated {
+            if data.isAppleSignUp {
+                isPreparingAccount = true
+                defer { isPreparingAccount = false }
+                try await rlAppState.syncAppleOnboardingData(data)
+            }
+            return
+        }
         isPreparingAccount = true
         defer { isPreparingAccount = false }
         try await rlAppState.signUp(data: data, beginOnboarding: true)
-        // Remove prior signup steps from navigation stack to prevent back-navigation
         path = [.guild]
     }
 
@@ -637,6 +645,8 @@ struct SignupProfileSetupView: View {
                     Spacer(minLength: 120)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapBackground()
         }
         .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
         .navigationBarBackButtonHidden(true)

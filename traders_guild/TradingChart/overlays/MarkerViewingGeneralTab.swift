@@ -112,10 +112,10 @@ struct MarkerViewingGeneralTab: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.whiteText.opacity(0.06))
+                    .fill(AppColors.whiteText.opacity(0.10))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppColors.whiteText.opacity(0.10), lineWidth: 1)
+                            .stroke(AppColors.whiteText.opacity(0.14), lineWidth: 1)
                     )
             )
     }
@@ -234,24 +234,9 @@ struct MarkerViewingGeneralTab: View {
 
         case .news:
             if let newsURL {
-                HStack(spacing: 8) {
-                    Image(systemName: "link")
-                        .font(.caption)
-                        .foregroundColor(liveMarker.intent.color)
-                    Text(newsURL)
-                        .font(.caption)
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppColors.whiteText.opacity(0.07))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                        )
+                NewsLinkPreviewCard(
+                    urlString: newsURL,
+                    accentColor: liveMarker.intent.color
                 )
             } else {
                 placeholderText("No link attached")
@@ -985,10 +970,10 @@ struct MarkerViewingGeneralTab: View {
 
     private func disclosureContentBackground() -> some View {
         RoundedRectangle(cornerRadius: 12)
-            .fill(AppColors.whiteText.opacity(0.04))
+            .fill(AppColors.whiteText.opacity(0.08))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppColors.whiteText.opacity(0.07), lineWidth: 1)
+                    .stroke(AppColors.whiteText.opacity(0.11), lineWidth: 1)
             )
     }
 
@@ -996,14 +981,14 @@ struct MarkerViewingGeneralTab: View {
         RoundedRectangle(cornerRadius: cornerRadius)
             .fill(
                 LinearGradient(
-                    colors: [AppColors.whiteText.opacity(0.07), AppColors.whiteText.opacity(0.045)],
+                    colors: [AppColors.whiteText.opacity(0.10), AppColors.whiteText.opacity(0.075)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(AppColors.whiteText.opacity(0.09), lineWidth: 1)
+                    .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
             )
     }
 

@@ -303,10 +303,10 @@ struct ChartSheetSymbolView: View {
                         .padding(14)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.surfaceWhite04)
+                                .fill(AppColors.surfaceWhite08)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                                 )
                         )
                         .transition(.opacity)
@@ -1516,10 +1516,10 @@ struct MarketSessionTimeline: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.surfaceWhite04)
+                .fill(AppColors.surfaceWhite08)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                 )
         )
         .onReceive(timer) { _ in now = Date() }
@@ -1534,7 +1534,7 @@ struct MarketSessionTimeline: View {
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(AppColors.surfaceWhite08)
+                    .fill(AppColors.surfaceWhite12)
                     .frame(height: 6)
 
                 RoundedRectangle(cornerRadius: 3)
@@ -1579,7 +1579,7 @@ struct MarketSessionTimeline: View {
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(AppColors.surfaceWhite08)
+                    .fill(AppColors.surfaceWhite12)
                     .frame(height: 6)
 
                 RoundedRectangle(cornerRadius: 3)

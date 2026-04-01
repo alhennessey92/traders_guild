@@ -366,7 +366,7 @@ struct TopMarkersView: View {
                         loadError = nil
                         isLoading = false
                     }
-                    await loadLiveSymbols(for: cachedMarkers)
+                    enqueueSymbolLoad(for: cachedMarkers)
                     return
                 }
             case .setups:
@@ -377,7 +377,7 @@ struct TopMarkersView: View {
                         loadError = nil
                         isLoading = false
                     }
-                    await loadLiveSymbols(for: cachedEntry.live + cachedEntry.resolved)
+                    enqueueSymbolLoad(for: cachedEntry.live + cachedEntry.resolved)
                     return
                 }
             case .bySymbol, .all:
@@ -387,7 +387,7 @@ struct TopMarkersView: View {
                         loadError = nil
                         isLoading = false
                     }
-                    await loadLiveSymbols(for: cachedMarkers)
+                    enqueueSymbolLoad(for: cachedMarkers)
                     return
                 }
             }
@@ -416,7 +416,7 @@ struct TopMarkersView: View {
                     isLoading = false
                 }
 
-                await loadLiveSymbols(for: markers)
+                enqueueSymbolLoad(for: markers)
 
             case .setups:
                 async let liveMarkers = loadMarkers(
@@ -443,7 +443,7 @@ struct TopMarkersView: View {
                     isLoading = false
                 }
 
-                await loadLiveSymbols(for: live + resolved)
+                enqueueSymbolLoad(for: live + resolved)
 
             case .bySymbol, .all:
                 let markers = try await loadMarkers(
@@ -461,7 +461,7 @@ struct TopMarkersView: View {
                     isLoading = false
                 }
 
-                await loadLiveSymbols(for: markers)
+                enqueueSymbolLoad(for: markers)
             }
         } catch {
             guard !isCancellationError(error) else { return }
@@ -514,6 +514,12 @@ struct TopMarkersView: View {
         guard !updates.isEmpty else { return }
         await MainActor.run {
             symbolCache.merge(updates) { _, newValue in newValue }
+        }
+    }
+
+    private func enqueueSymbolLoad(for markers: [RLMarkerActivityItemDTO]) {
+        Task {
+            await loadLiveSymbols(for: markers)
         }
     }
 

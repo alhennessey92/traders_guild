@@ -9,26 +9,6 @@
 
 import SwiftUI
 
-// MARK: - Global Keyboard Dismissal
-
-private struct DismissKeyboardOnTap: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.backgroundColor = .clear
-        let tap = UITapGestureRecognizer(target: view, action: #selector(UIView.endEditing(_:)))
-        tap.cancelsTouchesInView = false
-        view.addGestureRecognizer(tap)
-        return view
-    }
-    func updateUIView(_ uiView: UIView, context: Context) {}
-}
-
-extension View {
-    func dismissKeyboardOnTap() -> some View {
-        self.background(DismissKeyboardOnTap())
-    }
-}
-
 @main
 struct traders_guildApp: App {
     
@@ -68,7 +48,7 @@ struct traders_guildApp: App {
                         .zIndex(1) // Ensure it's on top
                 }
             }
-            .dismissKeyboardOnTap()
+            .dismissKeyboardOnTapBackground()
             .animation(.easeOut(duration: 0.5), value: rlAppState.showingTransition)
 
             // Blocking alerts
@@ -98,6 +78,14 @@ struct traders_guildApp: App {
             .sheet(isPresented: $rlAppState.showBiometricEnrollment) {
                 BiometricEnrollmentView()
                     .environmentObject(rlAppState)
+            }
+            .sheet(isPresented: $rlAppState.showSignupWelcomeCarousel, onDismiss: {
+                rlAppState.dismissSignupWelcomeCarousel()
+            }) {
+                SignupWelcomeCarouselView()
+                    .environmentObject(rlAppState)
+                    .presentationDetents([.fraction(0.58)])
+                    .presentationDragIndicator(.visible)
             }
             .onOpenURL { url in
                 guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }

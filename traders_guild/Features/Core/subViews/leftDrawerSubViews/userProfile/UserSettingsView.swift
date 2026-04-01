@@ -29,6 +29,10 @@ struct UserSettingsSheetView: View {
     @State private var allowFriendRequests = true
     @State private var dmPermissionMode: RLDMPermissionMode = .all
     @State private var isSyncingSettings = false
+
+    // Biometric
+    private let biometricManager = BiometricAuthManager.shared
+    @State private var isBiometricEnabled = BiometricAuthManager.shared.isBiometricEnabled
     
     var body: some View {
         ZStack {
@@ -428,6 +432,30 @@ struct UserSettingsSheetView: View {
                 }
             }
 
+            // Security (biometric toggle -- only shown when device supports it)
+            if biometricManager.isBiometricAvailable {
+                Divider()
+                    .background(AppColors.whiteText.opacity(0.2))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                SettingsSectionHeader(title: "Security")
+
+                VStack(alignment: .leading, spacing: 8) {
+                    SettingsToggleRow(
+                        icon: biometricManager.biometricIconName,
+                        title: biometricManager.biometricName,
+                        subtitle: "Use \(biometricManager.biometricName) for faster access when opening the app",
+                        isOn: $isBiometricEnabled,
+                        iconColor: AppColors.accentColor
+                    )
+                    .padding(.horizontal, 16)
+                    .onChange(of: isBiometricEnabled) { _, newValue in
+                        handleBiometricToggle(enabled: newValue)
+                    }
+                }
+            }
+
             Divider()
                 .background(AppColors.whiteText.opacity(0.2))
                 .padding(.horizontal, 16)
@@ -657,6 +685,42 @@ struct UserSettingsSheetView: View {
         if let scene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
             SKStoreReviewController.requestReview(in: scene)
+        }
+    }
+
+    private func handleBiometricToggle(enabled: Bool) {
+        if enabled {
+            Task {
+                do {
+                    let authenticated = try await biometricManager.authenticate(
+                        reason: "Confirm your identity to enable \(biometricManager.biometricName)"
+                    )
+                    guard authenticated else {
+                        await MainActor.run { isBiometricEnabled = false }
+                        return
+                    }
+
+                    if let refreshToken = rlAppState.currentRefreshToken {
+                        try biometricManager.storeBiometricRefreshToken(refreshToken)
+                        biometricManager.isBiometricEnabled = true
+                        rlAppState.showSuccess("\(biometricManager.biometricName) enabled!")
+                    } else {
+                        await MainActor.run { isBiometricEnabled = false }
+                        rlAppState.showError(NSError(
+                            domain: "", code: 0,
+                            userInfo: [NSLocalizedDescriptionKey: "No active session found. Please sign in again."]
+                        ))
+                    }
+                } catch {
+                    await MainActor.run { isBiometricEnabled = false }
+                    if (error as NSError).code != -2 {
+                        rlAppState.showError(error)
+                    }
+                }
+            }
+        } else {
+            biometricManager.disableBiometric()
+            rlAppState.showSuccess("\(biometricManager.biometricName) disabled")
         }
     }
 }

@@ -692,10 +692,10 @@ struct chartSheetMarkersView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(AppColors.surfaceWhite04)
+                .fill(AppColors.surfaceWhite08)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                 )
         )
     }
@@ -1356,10 +1356,10 @@ private struct AnalysisMetricCard: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(AppColors.surfaceWhite04)
+                .fill(AppColors.surfaceWhite08)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                 )
         )
     }
@@ -1390,7 +1390,7 @@ private struct BreakdownRow: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(AppColors.surfaceWhite08)
+                        .fill(AppColors.surfaceWhite12)
                     Capsule()
                         .fill(AppColors.statusInfo60)
                         .frame(width: geometry.size.width * ratio)
@@ -1436,10 +1436,10 @@ private struct QuickLinkRow: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(AppColors.surfaceWhite04)
+                    .fill(AppColors.surfaceWhite08)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
                     )
             )
         }

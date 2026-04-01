@@ -18,6 +18,7 @@ private struct SignupBasicFeature: Identifiable {
 struct SignupBasicsView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
+    @EnvironmentObject var rlAppState: RLAppState
 
     @State private var visibleCards: Set<UUID> = []
 
@@ -156,12 +157,14 @@ struct SignupBasicsView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    if !path.isEmpty { path.removeLast() }
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .foregroundColor(AppColors.unhighlightedButtonBackground)
+                if !rlAppState.accountCreatedDuringOnboarding {
+                    Button(action: {
+                        if !path.isEmpty { path.removeLast() }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.headline)
+                            .foregroundColor(AppColors.unhighlightedButtonBackground)
+                    }
                 }
             }
 
@@ -172,6 +175,7 @@ struct SignupBasicsView: View {
                     .foregroundColor(AppColors.fadedBackground)
             }
         }
+        .interactiveDismissDisabled(rlAppState.accountCreatedDuringOnboarding)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 Divider()
@@ -199,6 +203,7 @@ struct SignupBasicsView: View {
 struct SignupInterestsView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
+    @EnvironmentObject var rlAppState: RLAppState
 
     @State private var selectedInterests: Set<String> = []
 
@@ -287,12 +292,14 @@ struct SignupInterestsView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    if !path.isEmpty { path.removeLast() }
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .foregroundColor(AppColors.unhighlightedButtonBackground)
+                if !rlAppState.accountCreatedDuringOnboarding {
+                    Button(action: {
+                        if !path.isEmpty { path.removeLast() }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.headline)
+                            .foregroundColor(AppColors.unhighlightedButtonBackground)
+                    }
                 }
             }
 
@@ -303,6 +310,7 @@ struct SignupInterestsView: View {
                     .foregroundColor(AppColors.fadedBackground)
             }
         }
+        .interactiveDismissDisabled(rlAppState.accountCreatedDuringOnboarding)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 Divider()

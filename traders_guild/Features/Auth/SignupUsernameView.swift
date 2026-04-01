@@ -92,16 +92,20 @@ struct SignupUsernameView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapBackground()
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        if !path.isEmpty { path.removeLast() }
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.headline)
-                            .foregroundColor(AppColors.unhighlightedButtonBackground)
+                    if !rlAppState.accountCreatedDuringOnboarding {
+                        Button(action: {
+                            if !path.isEmpty { path.removeLast() }
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .font(.headline)
+                                .foregroundColor(AppColors.unhighlightedButtonBackground)
+                        }
                     }
                 }
 
@@ -112,6 +116,7 @@ struct SignupUsernameView: View {
                         .foregroundColor(AppColors.fadedBackground)
                 }
             }
+            .interactiveDismissDisabled(rlAppState.accountCreatedDuringOnboarding)
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
                     Divider()

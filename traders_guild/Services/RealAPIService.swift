@@ -564,7 +564,7 @@ extension RealAPIService {
     }
     
     /// Login with Apple Sign In identity token
-    func loginWithApple(identityToken: String, authorizationCode: String, fullName: String?, email: String?) async throws -> RLLoginResponseDTO {
+    func loginWithApple(identityToken: String, authorizationCode: String, fullName: String?, email: String?) async throws -> RLAppleSignInResponseDTO {
         let requestBody = RLAppleSignInRequestDTO(
             identityToken: identityToken,
             authorizationCode: authorizationCode,
@@ -572,7 +572,7 @@ extension RealAPIService {
             email: email
         )
 
-        let response: RLLoginResponseDTO = try await request(
+        let response: RLAppleSignInResponseDTO = try await request(
             "/auth/apple",
             service: .auth,
             method: "POST",

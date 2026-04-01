@@ -128,47 +128,6 @@ struct EmailVerificationView: View {
                             .padding(.bottom, 8)
                     }
 
-                    if verificationCode.count == 5 {
-                        Button {
-                            verifyWithCode()
-                        } label: {
-                            LoginButton(
-                                title: isVerifying ? "Verifying..." : "Verify Email",
-                                iconName: "checkmark.seal.fill",
-                                backgroundColor: AppColors.bullCandleGreen,
-                                foregroundColor: AppColors.whiteText
-                            )
-                        }
-                        .disabled(isVerifying)
-                        .padding(.bottom, 12)
-                    }
-
-                    // Resend button
-                    Button {
-                        resendEmail()
-                    } label: {
-                        LoginButton(
-                            title: resendCooldown > 0 ? "Resend in \(resendCooldown)s" : (isResending ? "Sending..." : "Resend Verification Email"),
-                            iconName: "arrow.clockwise",
-                            backgroundColor: canResend ? AppColors.accentColor : AppColors.surfaceGray30,
-                            foregroundColor: AppColors.whiteText
-                        )
-                    }
-                    .disabled(!canResend)
-                    .padding(.bottom, 12)
-
-                    // Continue button
-                    Button {
-                        onContinue()
-                    } label: {
-                        LoginButton(
-                            title: "Continue without verifying",
-                            iconName: "arrow.right",
-                            backgroundColor: AppColors.unhighlightedButtonBackground,
-                            foregroundColor: AppColors.whiteText
-                        )
-                    }
-
                     Text("You can verify later, but some features will be restricted until you do.")
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
@@ -176,10 +135,12 @@ struct EmailVerificationView: View {
                         .padding(.horizontal, 24)
                         .padding(.top, 8)
 
-                    Spacer(minLength: 80)
+                    Spacer(minLength: 140)
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapBackground()
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .toolbar {
@@ -190,6 +151,53 @@ struct EmailVerificationView: View {
                         .foregroundColor(AppColors.fadedBackground)
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 10) {
+                Divider()
+                    .frame(height: 1)
+                    .background(AppColors.surfaceGray30)
+
+                if verificationCode.count == 5 {
+                    Button {
+                        verifyWithCode()
+                    } label: {
+                        LoginButton(
+                            title: isVerifying ? "Verifying..." : "Verify Email",
+                            iconName: "checkmark.seal.fill",
+                            backgroundColor: AppColors.bullCandleGreen,
+                            foregroundColor: AppColors.whiteText
+                        )
+                    }
+                    .disabled(isVerifying)
+                }
+
+                Button {
+                    resendEmail()
+                } label: {
+                    LoginButton(
+                        title: resendCooldown > 0 ? "Resend in \(resendCooldown)s" : (isResending ? "Sending..." : "Resend Verification Email"),
+                        iconName: "arrow.clockwise",
+                        backgroundColor: canResend ? AppColors.accentColor : AppColors.surfaceGray30,
+                        foregroundColor: AppColors.whiteText
+                    )
+                }
+                .disabled(!canResend)
+
+                Button {
+                    onContinue()
+                } label: {
+                    LoginButton(
+                        title: "Continue without verifying",
+                        iconName: "arrow.right",
+                        backgroundColor: AppColors.unhighlightedButtonBackground,
+                        foregroundColor: AppColors.whiteText
+                    )
+                }
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 10)
+            .background(AppColors.sheetBackground)
         }
         .onDisappear {
             resendTimer?.invalidate()

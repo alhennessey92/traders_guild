@@ -691,7 +691,7 @@ private struct BreakdownDateBarChart: View {
             GeometryReader { geometry in
                 if points.isEmpty {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.surfaceWhite04)
+                        .fill(AppColors.surfaceWhite08)
                         .overlay(
                             Text("No 30-day trend data")
                                 .font(.caption2)
@@ -909,7 +909,7 @@ private struct BreakdownFreshnessBadge: View {
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(AppColors.surfaceWhite04)
+                .fill(AppColors.surfaceWhite08)
         )
     }
 

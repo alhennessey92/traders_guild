@@ -354,10 +354,10 @@ struct GuildSwitchRow: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isCurrentGuild ? AppColors.accentColor.opacity(0.1) : AppColors.gradientBackgroundDark.opacity(0.3))
+                    .fill(isCurrentGuild ? AppColors.accentColor.opacity(0.16) : AppColors.gradientBackgroundDark.opacity(0.42))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isCurrentGuild ? AppColors.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                            .stroke(isCurrentGuild ? AppColors.accentColor.opacity(0.38) : AppColors.whiteText.opacity(0.16), lineWidth: 1)
                     )
             )
         }
@@ -995,10 +995,10 @@ struct JoinGuildRow: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.gradientBackgroundDark.opacity(0.3))
+                    .fill(AppColors.gradientBackgroundDark.opacity(0.42))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                     )
             )
         }
@@ -1065,10 +1065,10 @@ struct GuildDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
+                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                 )
         )
     }
@@ -1188,10 +1188,10 @@ struct GuildDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(AppColors.gradientBackgroundDark.opacity(0.3))
+                            .fill(AppColors.gradientBackgroundDark.opacity(0.42))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .stroke(AppColors.accentColor.opacity(0.25), lineWidth: 1)
+                                    .stroke(AppColors.accentColor.opacity(0.32), lineWidth: 1)
                             )
                     )
                     .opacity(visibleSections.contains(4) ? 1 : 0)
@@ -1318,10 +1318,10 @@ private struct GuildMetaChip: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.25))
+                .fill(AppColors.gradientBackgroundDark.opacity(0.34))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                 )
         )
     }
@@ -1347,10 +1347,10 @@ struct StatBox: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.25))
+                .fill(AppColors.gradientBackgroundDark.opacity(0.34))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                 )
         )
     }
@@ -1464,10 +1464,10 @@ struct JoinGuildFormView: View {
                             .padding(16)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .fill(AppColors.gradientBackgroundDark.opacity(0.3))
+                                    .fill(AppColors.gradientBackgroundDark.opacity(0.42))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 14)
-                                            .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                                     )
                             )
                         }
@@ -1500,10 +1500,10 @@ struct JoinGuildFormView: View {
                         .padding(16)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
-                                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
+                                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14)
-                                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                                 )
                         )
                         }
@@ -1635,10 +1635,10 @@ struct CreateGuildView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.3))
+                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                 )
         )
     }

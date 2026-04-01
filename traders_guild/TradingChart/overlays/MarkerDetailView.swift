@@ -1220,6 +1220,17 @@ struct MarkerInfoContent: View {
         return String(format: "%.5f", price)
     }
 
+    private var newsURL: String? {
+        for component in marker.components where component.componentTypeEnum == .linkURL {
+            guard case let .link(payload) = component.payload else { continue }
+            let trimmed = payload.url.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return nil
+    }
+
     @ViewBuilder
     private var typeSpecificSection: some View {
         switch marker.intent {
@@ -1259,6 +1270,13 @@ struct MarkerInfoContent: View {
             }
         case .alert:
             alertSection
+        case .news:
+            if let newsURL {
+                NewsLinkPreviewCard(
+                    urlString: newsURL,
+                    accentColor: marker.intent.color
+                )
+            }
         case .reaction:
             emojiSection
         case .poll:
