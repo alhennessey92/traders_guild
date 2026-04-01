@@ -188,6 +188,19 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         return normalized.isEmpty ? nil : normalized
     }
 
+    /// For news markers, `notePreview` often holds the article URL.
+    private var newsLinkURLString: String? {
+        guard marker.intentEnum == .news, let raw = notePreviewText else { return nil }
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.lowercased().hasPrefix("http://") || t.lowercased().hasPrefix("https://") {
+            return t
+        }
+        if t.contains(".") && !t.contains(" ") {
+            return "https://\(t)"
+        }
+        return nil
+    }
+
     private var alertIconName: String {
         alertSeverity?.markerIcon ?? "exclamationmark.triangle.fill"
     }
@@ -758,7 +771,10 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         case .news:
             MarkerListSpecificsSection {
                 MarkerListSpecificsLabel(label: "NEWS", color: accentColor)
-                if let note = notePreviewText, !note.isEmpty {
+                if let url = newsLinkURLString {
+                    NewsLinkPreviewCard(urlString: url, accentColor: accentColor)
+                        .frame(maxHeight: 160)
+                } else if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppColors.surfaceWhite85)

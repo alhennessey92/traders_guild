@@ -91,6 +91,18 @@ struct UserSettingsSheetView: View {
         case .changeEmail:
             ChangeEmailView(onBack: { currentDestination = nil })
                 .environmentObject(rlAppState)
+
+        case .verifyEmail:
+            NavigationStack {
+                EmailVerificationView(
+                    userEmail: rlAppState.currentUser?.email ?? "",
+                    onContinue: {
+                        currentDestination = nil
+                    },
+                    showSkipUnverifiedOption: false
+                )
+                .environmentObject(rlAppState)
+            }
             
         case .changePassword:
             ChangePasswordView(onBack: { currentDestination = nil })
@@ -294,6 +306,48 @@ struct UserSettingsSheetView: View {
                 ) {
                     withAnimation {
                         currentDestination = .avatarSelection
+                    }
+                }
+
+                if let user = rlAppState.currentUser {
+                    if user.isVerified {
+                        HStack(spacing: 14) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.title3)
+                                .foregroundColor(AppColors.bullCandleGreen)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Email verified")
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.whiteText)
+                                Text(user.email)
+                                    .font(.caption2)
+                                    .foregroundColor(AppColors.greyText)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(AppColors.whiteText.opacity(0.05))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(AppColors.whiteText.opacity(0.1), lineWidth: 0.5)
+                        )
+                        .padding(.horizontal, 16)
+                    } else {
+                        SettingsButtonRow(
+                            icon: "envelope.badge.fill",
+                            title: "Verify email",
+                            subtitle: "Enter your code or resend the email",
+                            iconColor: AppColors.statusWarning80
+                        ) {
+                            withAnimation {
+                                currentDestination = .verifyEmail
+                            }
+                        }
                     }
                 }
 

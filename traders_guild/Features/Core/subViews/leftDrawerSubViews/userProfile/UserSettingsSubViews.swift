@@ -33,6 +33,7 @@ enum SettingsDestination: Hashable {
     case about
     case leaveGuild
     case deleteAccount
+    case verifyEmail
 }
 
 
@@ -2332,11 +2333,16 @@ struct DeleteAccountConfirmationView: View {
     @State private var confirmationText: String = ""
     @State private var showPassword = false
     @State private var isDeleting = false
+
+    /// Apple (and other non-password) accounts skip the password step.
+    private var requiresPassword: Bool {
+        rlAppState.currentUser?.usesEmailPasswordAuth ?? true
+    }
     
     private var canProceed: Bool {
         switch currentStep {
         case 1:
-            return !password.isEmpty
+            return requiresPassword ? !password.isEmpty : true
         case 2:
             return confirmationText.lowercased() == "delete my account"
         default:
@@ -2372,6 +2378,14 @@ struct DeleteAccountConfirmationView: View {
                                 .padding(.horizontal, 40)
                         }
                         .padding(.top, 20)
+
+                        if !requiresPassword, currentStep == 2 {
+                            Text("Your account uses Sign in with Apple. Confirm below to permanently delete your account — no password is required.")
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.greyText)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 8)
+                        }
                         
                         if currentStep == 1 {
                             // Step 1: Confirm with password
@@ -2458,8 +2472,14 @@ struct DeleteAccountConfirmationView: View {
                                     action: deleteAccount
                                 )
                                 
-                                Button(action: { currentStep = 1 }) {
-                                    Text("Go Back")
+                                Button(action: {
+                                    if requiresPassword {
+                                        currentStep = 1
+                                    } else {
+                                        onBack()
+                                    }
+                                }) {
+                                    Text(requiresPassword ? "Go Back" : "Cancel")
                                         .fontWeight(.medium)
                                         .foregroundColor(AppColors.greyText)
                                 }
@@ -2480,6 +2500,11 @@ struct DeleteAccountConfirmationView: View {
                 }
             }
         }
+        .onAppear {
+            if !requiresPassword {
+                currentStep = 2
+            }
+        }
     }
     
     private func deleteAccount() {
@@ -2488,7 +2513,10 @@ struct DeleteAccountConfirmationView: View {
         
         Task {
             do {
-                try await rlAppState.deleteAccount(password: password, confirmation: confirmationText)
+                try await rlAppState.deleteAccount(
+                    password: requiresPassword ? password : nil,
+                    confirmation: confirmationText
+                )
                 
                 await MainActor.run {
                     isDeleting = false

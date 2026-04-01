@@ -337,13 +337,22 @@ struct MarkerPlacementGeneralTab: View {
             pollFields
 
         case .news:
-            placementInputField(
-                "https://example.com/news-link",
-                text: newsURLBinding,
-                focus: .newsURL
-            )
+            VStack(alignment: .leading, spacing: 12) {
+                placementInputField(
+                    "https://example.com/news-link",
+                    text: newsURLBinding,
+                    focus: .newsURL
+                )
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
+
+                if !placementState.newsURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    NewsLinkPreviewCard(
+                        urlString: placementState.newsURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                        accentColor: placementState.intent.color
+                    )
+                }
+            }
 
         case .reaction:
             let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)

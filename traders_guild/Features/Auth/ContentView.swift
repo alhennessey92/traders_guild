@@ -19,10 +19,8 @@ struct ContentView: View {
     @EnvironmentObject var RLAppState: RLAppState
     @State private var showResetFromDeepLink: Bool = false
     @State private var showVerifyFromDeepLink: Bool = false
-    
-    
-    //@EnvironmentObject var appState: AppState
-    
+    @State private var showAbandonSignupConfirm: Bool = false
+
     var body: some View {
         NavigationStack(path: $path) {
             WelcomeView(path: $path, data: $data)
@@ -51,6 +49,27 @@ struct ContentView: View {
                         )
                     }
                 }
+        }
+        .toolbar {
+            if !path.isEmpty {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Exit") {
+                        showAbandonSignupConfirm = true
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.greyText)
+                }
+            }
+        }
+        .alert("Exit signup?", isPresented: $showAbandonSignupConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Exit", role: .destructive) {
+                path = []
+                data = RLSignupData()
+                RLAppState.abandonSignupAndReturnToWelcome()
+            }
+        } message: {
+            Text("You will be signed out. You can sign in with an existing account or start signup again.")
         }
         .onAppear {
             showResetFromDeepLink = RLAppState.pendingPasswordResetToken != nil

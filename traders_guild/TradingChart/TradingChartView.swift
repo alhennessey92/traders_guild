@@ -1190,12 +1190,20 @@ struct TradingChartView: View {
             if shouldShowMarkerPlacementOverlay,
                !isInteractiveDrawingSessionActive {
                 markerPlacementOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                    .mask(alignment: .top) {
+                        VStack(spacing: 0) {
+                            Color.clear
+                                .frame(height: priceIndicatorTopExclusionHeight(geometry: geometry))
+                            Rectangle()
+                                .fill(Color.white)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
                     .zIndex(18)
             }
 
-            // Y-axis has no zIndex so document order controls layering:
-            // y-axis → drawings → price lines → indicator → info box → x-axis
-            // Each later item renders on top of earlier ones.
+            // Y-axis has no zIndex so document order controls layering (later = on top).
+            // Price lines for markers are drawn after the live price chip so Entry/TP/SL stay readable.
             yAxisOverlay(geometry: geometry)
 
             markerDrawingOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
@@ -1220,6 +1228,17 @@ struct TradingChartView: View {
                 .transition(.opacity)
             }
 
+            horizontalDrawingAxisLabelsOverlay(
+                geometry: geometry,
+                coordinateSystem: coordinateSystem
+            )
+
+            if !shouldHideCurrentPriceIndicator {
+                priceIndicatorView(geometry: geometry)
+                    .mask(priceIndicatorMask(geometry: geometry))
+            }
+
+            // Drawn after the live price chip so Entry / TP / SL labels stay visible when prices align.
             if !isInteractiveDrawingSessionActive {
                 markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
                     .mask(priceLinesFullWidthMask(geometry: geometry))
@@ -1232,19 +1251,13 @@ struct TradingChartView: View {
             }
 
             markerTopPriorityOverlay()
-                .mask(topFadeMask(geometry: geometry))
-
-            horizontalDrawingAxisLabelsOverlay(
-                geometry: geometry,
-                coordinateSystem: coordinateSystem
-            )
-
-            if !shouldHideCurrentPriceIndicator {
-                priceIndicatorView(geometry: geometry)
-                    .mask(priceIndicatorMask(geometry: geometry))
-            }
+                .mask(alignment: .top) {
+                    markerTopPriorityToolbarMask(geometry: geometry)
+                }
 
             chartInfoBox(geometry: geometry)
+                .zIndex(50)
+
             xAxisOverlay(geometry: geometry)
 
             if let markerIntent = linePlacementOverlayIntent,
@@ -5205,6 +5218,21 @@ struct TradingChartView: View {
         return VStack(spacing: 0) {
             Color.clear
                 .frame(height: fadeHeight)
+            LinearGradient(
+                colors: [.clear, .white],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 60)
+            AppColors.systemWhite
+        }
+    }
+
+    /// Hides marker symbols under the nav toolbar; same fade pattern as `topFadeMask` below the cleared band.
+    private func markerTopPriorityToolbarMask(geometry: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(height: priceIndicatorTopExclusionHeight(geometry: geometry))
             LinearGradient(
                 colors: [.clear, .white],
                 startPoint: .top,

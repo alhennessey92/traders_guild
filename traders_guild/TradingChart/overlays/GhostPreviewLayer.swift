@@ -721,7 +721,11 @@ struct MarkerPlacementChecklistPanel: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(width: panelWidth, alignment: .leading)
-        .background(OverlayPanelChrome.background(cornerRadius: 12))
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.chartPanelBackground.opacity(0.94))
+        )
+        .overlay(OverlayPanelChrome.background(cornerRadius: 12))
     }
 
     private var collapsedChecklistStrip: some View {
@@ -739,7 +743,11 @@ struct MarkerPlacementChecklistPanel: View {
         .padding(.horizontal, 5)
         .padding(.vertical, 10)
         .frame(width: 30, alignment: .center)
-        .background(OverlayPanelChrome.background(cornerRadius: 10))
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.chartPanelBackground.opacity(0.94))
+        )
+        .overlay(OverlayPanelChrome.background(cornerRadius: 10))
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture(perform: toggleChecklistPanel)
     }

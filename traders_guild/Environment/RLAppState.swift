@@ -764,6 +764,16 @@ class RLAppState: ObservableObject {
         showInfo("You've been logged out")
     }
 
+    /// Leave signup/onboarding mid-flow: revoke tokens, clear local session, return user to welcome/sign-in.
+    func abandonSignupAndReturnToWelcome() {
+        unsubscribeFromNotifications()
+        Task {
+            await realApi.logout()
+        }
+        clearLocalSessionState(clearAlertState: true)
+        showInfo("You can sign in again or start signup over.")
+    }
+
     func completeOnboardingAndEnterApp() {
         guard !isFinalizingOnboarding else { return }
         isFinalizingOnboarding = true
@@ -2111,8 +2121,8 @@ class RLAppState: ObservableObject {
         }
     }
 
-    /// Delete account permanently
-    func deleteAccount(password: String, confirmation: String) async throws {
+    /// Delete account permanently. `password` is required only for email/password accounts.
+    func deleteAccount(password: String?, confirmation: String) async throws {
         do {
             let request = RLDeleteAccountRequest(password: password, confirmation: confirmation)
             _ = try await realApi.deleteAccount(request)

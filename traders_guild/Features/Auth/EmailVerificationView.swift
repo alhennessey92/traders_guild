@@ -18,6 +18,8 @@ struct EmailVerificationView: View {
 
     let userEmail: String
     let onContinue: () -> Void
+    /// When `false` (e.g. opened from settings), hide “Continue without verifying” and show a Done toolbar action.
+    var showSkipUnverifiedOption: Bool = true
 
     private var canResend: Bool {
         !isResending && resendCooldown == 0
@@ -150,6 +152,15 @@ struct EmailVerificationView: View {
                         .fontWeight(.heavy)
                         .foregroundColor(AppColors.fadedBackground)
                 }
+                if !showSkipUnverifiedOption {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") {
+                            dismiss()
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(AppColors.accentColor)
+                    }
+                }
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -184,15 +195,17 @@ struct EmailVerificationView: View {
                 }
                 .disabled(!canResend)
 
-                Button {
-                    onContinue()
-                } label: {
-                    LoginButton(
-                        title: "Continue without verifying",
-                        iconName: "arrow.right",
-                        backgroundColor: AppColors.unhighlightedButtonBackground,
-                        foregroundColor: AppColors.whiteText
-                    )
+                if showSkipUnverifiedOption {
+                    Button {
+                        onContinue()
+                    } label: {
+                        LoginButton(
+                            title: "Continue without verifying",
+                            iconName: "arrow.right",
+                            backgroundColor: AppColors.unhighlightedButtonBackground,
+                            foregroundColor: AppColors.whiteText
+                        )
+                    }
                 }
             }
             .padding(.top, 10)

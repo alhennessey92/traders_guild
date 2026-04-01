@@ -211,8 +211,15 @@ struct RLUserDTO: Codable, Identifiable, Equatable {
     let updatedAt: Date              // backend: updated_at
     let dateOfBirth: Date?           // backend: date_of_birth
     let status: String
-    
+    /// Backend `auth_provider`: e.g. `email`, `apple`. Absent in older payloads → treated as email.
+    let authProvider: String?
+
     // MARK: - Computed Properties
+
+    /// Account uses email/password (vs Sign in with Apple, etc.).
+    var usesEmailPasswordAuth: Bool {
+        (authProvider ?? "email").lowercased() == "email"
+    }
     
     var displayUsername: String {
         "@\(username)"
@@ -245,7 +252,8 @@ struct RLUserDTO: Codable, Identifiable, Equatable {
             createdAt: createdAt,
             updatedAt: Date(),
             dateOfBirth: dateOfBirth,
-            status: status
+            status: status,
+            authProvider: authProvider
         )
     }
 }
@@ -2106,7 +2114,7 @@ struct RLDOBUpdateRequest: Codable {
 }
 
 struct RLDeleteAccountRequest: Codable {
-    let password: String
+    let password: String?
     let confirmation: String
 }
 

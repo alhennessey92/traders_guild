@@ -88,7 +88,8 @@ struct MainView: View {
     @StateObject private var timeframePanelManager = TimeframePanelManager()
     @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
-    
+    @State private var showEmailVerificationSheet: Bool = false
+
     // MARK: - Computed Properties
     private var screenSize: CGSize {
         UIScreen.main.bounds.size
@@ -655,6 +656,30 @@ struct MainView: View {
                 StaticBackgroundView()
                 mainChartContentLayer
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let u = rlAppState.currentUser, !u.isVerified {
+                    Button {
+                        showEmailVerificationSheet = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "envelope.badge.fill")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Verify your email for full access to guilds and features.")
+                                .font(.subheadline.weight(.medium))
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: 8)
+                            Text("Verify")
+                                .font(.subheadline.weight(.bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.statusWarning80.opacity(0.42))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
             .toolbar {
                 mainToolbarContent
             }
@@ -664,6 +689,18 @@ struct MainView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 configureNavigationBarAppearance()
+            }
+            .sheet(isPresented: $showEmailVerificationSheet) {
+                NavigationStack {
+                    EmailVerificationView(
+                        userEmail: rlAppState.currentUser?.email ?? "",
+                        onContinue: {
+                            showEmailVerificationSheet = false
+                        },
+                        showSkipUnverifiedOption: false
+                    )
+                    .environmentObject(rlAppState)
+                }
             }
             .sheet(item: $selectedViewingMarkerAuthorRoute) { route in
                 switch route {
