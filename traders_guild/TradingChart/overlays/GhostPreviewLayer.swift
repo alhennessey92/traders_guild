@@ -725,7 +725,7 @@ struct MarkerPlacementChecklistPanel: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(AppColors.chartPanelBackground.opacity(0.94))
         )
-        .overlay(OverlayPanelChrome.background(cornerRadius: 12))
+        .background(OverlayPanelChrome.background(cornerRadius: 12))
     }
 
     private var collapsedChecklistStrip: some View {
@@ -747,7 +747,7 @@ struct MarkerPlacementChecklistPanel: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(AppColors.chartPanelBackground.opacity(0.94))
         )
-        .overlay(OverlayPanelChrome.background(cornerRadius: 10))
+        .background(OverlayPanelChrome.background(cornerRadius: 10))
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture(perform: toggleChecklistPanel)
     }

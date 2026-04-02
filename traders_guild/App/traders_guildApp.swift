@@ -87,6 +87,13 @@ struct traders_guildApp: App {
                     .presentationDetents([.fraction(0.58)])
                     .presentationDragIndicator(.visible)
             }
+            .task(id: rlAppState.pendingEmailVerificationToken) {
+                guard let token = rlAppState.pendingEmailVerificationToken,
+                      !token.isEmpty else {
+                    return
+                }
+                await rlAppState.consumePendingEmailVerificationToken()
+            }
             .onOpenURL { url in
                 guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
                 let path = components.path.lowercased()

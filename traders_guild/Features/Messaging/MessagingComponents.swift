@@ -1434,14 +1434,45 @@ private struct ChatMarkerPickerSheet: View {
 // MARK: - CHAT BACKGROUND
 // MARK: - ================================================================================================
 
+enum ChatBackgroundStyle {
+    case standard
+    case elevated
+}
+
 /// Unified chat background with material and pattern
 struct ChatBackground: View {
+    var style: ChatBackgroundStyle = .standard
+
+    private var overlayColors: [Color] {
+        switch style {
+        case .standard:
+            return [AppColors.surfaceWhite03, AppColors.surfaceWhite00]
+        case .elevated:
+            return [AppColors.surfaceWhite10, AppColors.surfaceWhite04]
+        }
+    }
+
+    private var patternOpacity: Double {
+        switch style {
+        case .standard:
+            return 0.06
+        case .elevated:
+            return 0.1
+        }
+    }
+
     var body: some View {
         ZStack {
             Color.clear
                 .background(.ultraThinMaterial)
             AppColors.sheetBackground
+            LinearGradient(
+                colors: overlayColors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             StaticPatternView()
+                .opacity(patternOpacity)
         }
     }
 }
@@ -2308,9 +2339,8 @@ struct ChatSearchView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                        .foregroundColor(AppColors.accentColor)
+                ToolbarItem(placement: .topBarTrailing) {
+                    SheetCloseButton(action: { dismiss() }, tint: AppColors.accentColor)
                 }
             }
             .onChange(of: searchText) { _, newValue in

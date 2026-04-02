@@ -644,7 +644,6 @@ struct CommentsView: View {
                         proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
                     }
                 }
-                .background(ChatBackground())
             }
         }
         .overlay {
@@ -686,7 +685,6 @@ struct CommentsView: View {
                 isActionPanelVisible: actionPanelVisibility
             )
         }
-        .background(AppColors.sheetBackground)
         .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .sheet(isPresented: $showReportCommentReasonSheet) {

@@ -258,6 +258,10 @@ struct MarkerPlacementGeneralTab: View {
         switch placementState.intent {
         case .setup:
             VStack(spacing: 10) {
+                Text("Set take profit and stop loss for this setup. Enable tracking if you want entry, SL, and TP transitions monitored automatically.")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 levelInputRow(
                     title: "Take Profit",
                     componentType: .levelTp,

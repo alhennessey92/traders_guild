@@ -41,11 +41,11 @@
 
 
 
-30. Cant dismiss keyboard on dob and display name page
+30. Apple signup - Cant dismiss keyboard on dob and display name page
 
-31. Would be nice if display name did display provided name from apple, or just leave blank - dont insert the random string.
+31. Apple signup - Would be nice if display name did display provided name from apple, or just leave blank - dont insert the random string.
 
-32. Need to provide a screen for enabling/disabling face id and then ensure faceid is provided on loading app if enabled
+32.  Apple Signup - Need to provide a screen for enabling/disabling face id and then ensure faceid is provided on loading app if enabled
 
 33. Close on chat search needs to be x not close
 

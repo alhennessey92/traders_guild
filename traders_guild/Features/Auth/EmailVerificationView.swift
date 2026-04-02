@@ -221,11 +221,12 @@ struct EmailVerificationView: View {
         isResending = true
         Task {
             do {
-                try await RLAppState.resendVerificationEmail()
+                let response = try await RLAppState.resendVerificationEmail()
                 await MainActor.run {
                     isResending = false
                     startResendCooldown()
-                    RLAppState.showSuccess("Verification email sent!")
+                    let message = response.detail.isEmpty ? "Verification email sent!" : response.detail
+                    RLAppState.showSuccess(message)
                 }
             } catch {
                 await MainActor.run {
@@ -244,15 +245,24 @@ struct EmailVerificationView: View {
         isVerifying = true
         Task {
             do {
-                let verified = try await RLAppState.verifyEmail(token: trimmed)
+                let response = try await RLAppState.verifyEmail(token: trimmed)
                 await MainActor.run {
                     isVerifying = false
-                    if verified {
-                        RLAppState.showSuccess("Email verified successfully!")
+                    if response.verified {
+                        let message = response.detail.isEmpty ? "Email verified successfully!" : response.detail
+                        RLAppState.showSuccess(message)
                         onContinue()
                     } else {
                         verificationCode = ""
-                        RLAppState.showError(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid or expired code. Please request a new one."]))
+                        let message = response.detail.isEmpty
+                            ? "Invalid or expired code. Please request a new one."
+                            : response.detail
+                        RLAppState.showError(
+                            title: "Verification Failed",
+                            message: message,
+                            severity: .warning,
+                            style: .alert
+                        )
                     }
                 }
             } catch {

@@ -89,7 +89,13 @@ struct AppleProfileCompletionView: View {
                         .padding(.horizontal, 20)
                         .onChange(of: dateOfBirth) { _, _ in
                             hasSetDOB = true
+                            dismissKeyboard()
                         }
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                dismissKeyboard()
+                            }
+                        )
                     }
                     .padding(.bottom, 16)
 
@@ -116,6 +122,13 @@ struct AppleProfileCompletionView: View {
                         .font(.largeTitle)
                         .fontWeight(.heavy)
                         .foregroundColor(AppColors.fadedBackground)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        dismissKeyboard()
+                    }
+                    .font(.subheadline.weight(.semibold))
                 }
             }
         }

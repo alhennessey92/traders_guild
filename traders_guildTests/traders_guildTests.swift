@@ -36,6 +36,15 @@ struct traders_guildTests {
         #expect(!RLAuthValidator.doPasswordsMatch("StrongPass1", "StrongPass2"))
     }
 
+    @Test func appleDisplayNameNormalizationTrimsWhitespace() async throws {
+        #expect(RLAuthValidator.normalizedAppleDisplayName("  Jane Appleseed  ") == "Jane Appleseed")
+    }
+
+    @Test func appleDisplayNameNormalizationLeavesMissingNamesBlank() async throws {
+        #expect(RLAuthValidator.normalizedAppleDisplayName(nil).isEmpty)
+        #expect(RLAuthValidator.normalizedAppleDisplayName("   ").isEmpty)
+    }
+
     @Test func sheetDarkAliasResolvesToDarkAssetToken() async throws {
         #expect(colorDistance(AppColors.sheetBackgroundDark, AppColors.tgSheetDarkBackground) < 0.0001)
     }

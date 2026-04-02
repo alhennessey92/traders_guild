@@ -165,7 +165,12 @@ struct ImprovedChartSheetChatView: View {
         .padding(.bottom, 12)
         .padding(.top, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.sheetBackground)
+        .background(
+            ZStack {
+                AppColors.sheetBackground
+                AppColors.surfaceWhite05
+            }
+        )
     }
     
     // MARK: - Empty Messages View (Using Unified ChatEmptyStateView)
@@ -175,7 +180,6 @@ struct ImprovedChartSheetChatView: View {
             title: "Start the conversation",
             subtitle: "Be the first to share your analysis on \(chartChatManager.activeChartChat?.symbolTicker ?? "this symbol")"
         )
-        .background(ChatBackground())
     }
     
     // MARK: - Messages Scroll View
@@ -242,7 +246,6 @@ struct ImprovedChartSheetChatView: View {
                     proxy.scrollTo(lastMessage.id, anchor: .bottom)
                 }
             }
-            .background(ChatBackground())
         }
         .overlay {
             ChatSurfaceOverlayHost(

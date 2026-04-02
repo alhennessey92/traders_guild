@@ -5381,6 +5381,8 @@ struct TradingChartView: View {
             ? chartInfoBaseContentWidth + 20
             : 132
         let chartInfoPanelWidth = min(intrinsicPanelWidth, availablePanelWidth)
+        let placementChecklistPanel = chartInfoPlacementChecklistPanel(geometry: geometry)
+        let viewingInfoPanel = chartInfoViewingPanel(geometry: geometry)
 
         VStack {
             HStack {
@@ -5388,27 +5390,12 @@ struct TradingChartView: View {
                     chartInfoContent(panelWidth: chartInfoPanelWidth)
                         .allowsHitTesting(false)
 
-                    if isMarkerPlacementMode, !placementState.placementChecklistItems.isEmpty {
-                        MarkerPlacementChecklistPanel(
-                            placementState: placementState,
-                            panelWidth: min(196, max(156, (geometry.size.width - yAxisWidth) * 0.30))
-                        )
+                    if let placementChecklistPanel {
+                        placementChecklistPanel
                     }
 
-                    if let marker = viewingInfoMarker {
-                        MarkerViewingInfoBox(
-                            marker: marker,
-                            chartWidth: geometry.size.width,
-                            yAxisWidth: yAxisWidth,
-                            isCollapsed: $isViewingInfoPanelCollapsed,
-                            formatPrice: { price in chartData.formatPrice(price) },
-                            currentPrice: chartData.currentPrice,
-                            isSubmittingPollVote: isSubmittingViewingPollVote,
-                            submittingPollVoteOptionId: viewingPollVoteOptionId,
-                            onVote: { markerId, optionId in
-                                handleViewingPollVote(markerId: markerId, optionId: optionId)
-                            }
-                        )
+                    if let viewingInfoPanel {
+                        viewingInfoPanel
                     }
                 }
                 Spacer()
@@ -5418,6 +5405,41 @@ struct TradingChartView: View {
             
             Spacer()
         }
+    }
+
+    private func chartInfoPlacementChecklistPanel(geometry: GeometryProxy) -> AnyView? {
+        guard isMarkerPlacementMode,
+              !placementState.placementChecklistItems.isEmpty else {
+            return nil
+        }
+
+        let panelWidth = min(196, max(156, (geometry.size.width - yAxisWidth) * 0.30))
+        return AnyView(
+            MarkerPlacementChecklistPanel(
+                placementState: placementState,
+                panelWidth: panelWidth
+            )
+        )
+    }
+
+    private func chartInfoViewingPanel(geometry: GeometryProxy) -> AnyView? {
+        guard let marker = viewingInfoMarker else { return nil }
+
+        return AnyView(
+            MarkerViewingInfoBox(
+                marker: marker,
+                chartWidth: geometry.size.width,
+                yAxisWidth: yAxisWidth,
+                isCollapsed: $isViewingInfoPanelCollapsed,
+                formatPrice: { price in chartData.formatPrice(price) },
+                currentPrice: chartData.currentPrice,
+                isSubmittingPollVote: isSubmittingViewingPollVote,
+                submittingPollVoteOptionId: viewingPollVoteOptionId,
+                onVote: { markerId, optionId in
+                    handleViewingPollVote(markerId: markerId, optionId: optionId)
+                }
+            )
+        )
     }
     
     @ViewBuilder

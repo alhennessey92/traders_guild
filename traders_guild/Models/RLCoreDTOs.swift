@@ -2412,6 +2412,10 @@ enum RLAuthValidator {
         value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    static func normalizedAppleDisplayName(_ value: String?) -> String {
+        trimmed(value ?? "")
+    }
+
     static func isValidDisplayName(_ value: String) -> Bool {
         let trimmedValue = trimmed(value)
         return !trimmedValue.isEmpty && trimmedValue.count <= 100

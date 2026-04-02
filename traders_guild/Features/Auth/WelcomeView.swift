@@ -14,6 +14,7 @@ struct WelcomeView: View {
     @State private var opacity: Double = 0
     @State private var isAppleSignInLoading = false
     @State private var isBiometricLoading = false
+    @State private var hasAttemptedAutoBiometricLogin = false
     private let appleSignInCoordinator = AppleSignInCoordinator()
     private let biometricManager = BiometricAuthManager.shared
 
@@ -153,9 +154,21 @@ struct WelcomeView: View {
                 opacity = 1
             }
         }
+        .task(id: RLAppState.isSessionRestored) {
+            guard RLAppState.isSessionRestored,
+                  !RLAppState.isAuthenticated,
+                  !hasAttemptedAutoBiometricLogin,
+                  biometricManager.canUseBiometricLogin else {
+                return
+            }
+
+            hasAttemptedAutoBiometricLogin = true
+            handleBiometricLogin(autoTriggered: true)
+        }
     }
 
-    private func handleBiometricLogin() {
+    private func handleBiometricLogin(autoTriggered: Bool = false) {
+        guard !isBiometricLoading else { return }
         isBiometricLoading = true
         Task {
             do {
@@ -167,6 +180,8 @@ struct WelcomeView: View {
                     // Don't show error for user cancellation
                     if case BiometricAuthManager.BiometricError.authenticationFailed = error {
                         // User cancelled — silent
+                    } else if autoTriggered {
+                        // Automatic launch prompts should quietly fall back to manual auth.
                     } else {
                         RLAppState.showError(error)
                     }

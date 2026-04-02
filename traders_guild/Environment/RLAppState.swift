@@ -192,6 +192,7 @@ class RLAppState: ObservableObject {
     @Published var isSessionRestored: Bool = false
     private var transitionMinimumDismissAt: Date?
     private var isFinalizingOnboarding: Bool = false
+    private var isConsumingPendingEmailVerificationToken: Bool = false
     
     @Published var showGuildSelectionSheet: Bool = false
     @Published var showSignupWelcomeCarousel: Bool = false
@@ -615,7 +616,7 @@ class RLAppState: ObservableObject {
             if userNeedsOnboarding {
                 var prefill = RLSignupData()
                 prefill.isAppleSignUp = true
-                prefill.name = fullName ?? response.user.displayName
+                prefill.name = RLAuthValidator.normalizedAppleDisplayName(fullName)
                 prefill.email = email ?? response.user.email
                 self.appleSignUpPrefill = prefill
 
@@ -656,28 +657,79 @@ class RLAppState: ObservableObject {
     }
 
     /// Verify email address with token
-    func verifyEmail(token: String) async throws -> Bool {
+    @discardableResult
+    func verifyEmail(token: String) async throws -> RLEmailVerifyResponseDTO {
         let response = try await realApi.verifyEmail(token: token)
-        if response.verified, let user = currentUser {
-            // Re-encode with isVerified flipped to true, then decode back
-            var data = try JSONEncoder().encode(user)
-            if var dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                dict["isVerified"] = true
-                data = try JSONSerialization.data(withJSONObject: dict)
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                if let updated = try? decoder.decode(RLUserDTO.self, from: data) {
-                    self.currentUser = updated
-                }
+        if response.verified {
+            if accessToken != nil, let refreshedUser = try? await realApi.getCurrentUser() {
+                currentUser = refreshedUser
+            } else {
+                markCurrentUserVerifiedLocally()
             }
         }
-        return response.verified
+        return response
     }
 
     /// Resend email verification link
-    func resendVerificationEmail() async throws {
-        _ = try await realApi.resendVerificationEmail()
+    func resendVerificationEmail() async throws -> RLPasswordForgotResponseDTO {
+        try await realApi.resendVerificationEmail()
+    }
+
+    @discardableResult
+    func consumePendingEmailVerificationToken() async -> Bool {
+        guard !isConsumingPendingEmailVerificationToken,
+              let token = pendingEmailVerificationToken,
+              !token.isEmpty else {
+            return false
+        }
+
+        isConsumingPendingEmailVerificationToken = true
+        defer {
+            isConsumingPendingEmailVerificationToken = false
+            pendingEmailVerificationToken = nil
+        }
+
+        do {
+            let response = try await verifyEmail(token: token)
+            if response.verified {
+                let message = response.detail.isEmpty ? "Email verified successfully!" : response.detail
+                showSuccess(message)
+                return true
+            }
+
+            let message = response.detail.isEmpty ? "Invalid or expired verification token." : response.detail
+            showError(
+                title: "Verification Failed",
+                message: message,
+                severity: .warning,
+                style: .alert
+            )
+            return false
+        } catch {
+            showError(error)
+            return false
+        }
+    }
+
+    private func markCurrentUserVerifiedLocally() {
+        guard let user = currentUser else { return }
+        currentUser = RLUserDTO(
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+            globalReputation: user.globalReputation,
+            isOnline: user.isOnline,
+            isVerified: true,
+            isSuperuser: user.isSuperuser,
+            lastSeenAt: user.lastSeenAt,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+            dateOfBirth: user.dateOfBirth,
+            status: user.status,
+            authProvider: user.authProvider
+        )
     }
 
     // MARK: - Biometric Authentication
