@@ -2459,6 +2459,36 @@ class RLAppState: ObservableObject {
         "\(keychainPrefix)signup_welcome_seen_\(userId.uuidString)"
     }
 
+    // MARK: - In-App Tutorial Persistence
+
+    func hasTutorialCompleted(for userId: UUID) -> Bool {
+        UserDefaults.standard.bool(forKey: "\(keychainPrefix)tutorial_completed_\(userId.uuidString)")
+    }
+
+    func markTutorialCompleted(for userId: UUID) {
+        UserDefaults.standard.set(true, forKey: "\(keychainPrefix)tutorial_completed_\(userId.uuidString)")
+        clearTutorialProgress(for: userId)
+    }
+
+    func saveTutorialProgress(step: Int, for userId: UUID) {
+        UserDefaults.standard.set(step, forKey: "\(keychainPrefix)tutorial_step_\(userId.uuidString)")
+    }
+
+    func getTutorialProgress(for userId: UUID) -> Int? {
+        let key = "\(keychainPrefix)tutorial_step_\(userId.uuidString)"
+        guard UserDefaults.standard.object(forKey: key) != nil else { return nil }
+        return UserDefaults.standard.integer(forKey: key)
+    }
+
+    func clearTutorialProgress(for userId: UUID) {
+        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)tutorial_step_\(userId.uuidString)")
+    }
+
+    func resetTutorial(for userId: UUID) {
+        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)tutorial_completed_\(userId.uuidString)")
+        clearTutorialProgress(for: userId)
+    }
+
     // Clear all
     private func clearAllKeychain() {
         clearTokenFromKeychain()

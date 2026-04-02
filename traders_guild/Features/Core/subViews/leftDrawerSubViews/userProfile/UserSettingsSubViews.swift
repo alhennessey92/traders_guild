@@ -1470,12 +1470,12 @@ struct DataPrivacyView: View {
     @State private var personalizedAds = true
     @State private var showClearDataAlert = false
     @State private var isSyncingSettings = false
-    
+
     var body: some View {
         ZStack {
             AppColors.sheetBackground
                 .ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
                 SettingsSubViewHeader(title: "Data & Privacy", onBack: onBack)
                 

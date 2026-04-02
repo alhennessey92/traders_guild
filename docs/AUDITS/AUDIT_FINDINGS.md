@@ -25,25 +25,34 @@
 
 
 
-23. Server error on account delete
+23. [Fixed] Server error on account delete
 
-24. Can’t exit sign up half way through
+24. [Fixed] Can’t exit sign up half way through
 
-25. if verification not complete need a permanent banner to get user to verify, with a link to another sheet to enter token etc... needs to remain permanent. Need to also add section in settings to verify email, when verified this section just says email is verified
+25. [Fixed] f verification not complete need a permanent banner to get user to verify, with a link to another sheet to enter token etc... needs to remain permanent. Need to also add section in settings to verify email, when verified this section just says email is verified
 
-26. Entry price label still below current yellow price label
+26. [Fixed] Entry price label still below current yellow price label
 
-27. News marker needs to show preview of news article, at the moment still just shows link, needs to be an almost embedded view of the article
+27. [Fixed] News marker needs to show preview of news article, at the moment still just shows link, needs to be an almost embedded view of the article
 
-28. Setup horizontal lines still over marker placement req box - this is in marker placement mode
+28. [Fixed] Setup horizontal lines still over marker placement req box - this is in marker placement mode
 
-29. Marker placing mode,  marker still above toolbar when panning around
+29. [Fixed] Marker placing mode,  marker still above toolbar when panning around
 
 
-Apple Signin Audit
 
 30. Cant dismiss keyboard on dob and display name page
 
 31. Would be nice if display name did display provided name from apple, or just leave blank - dont insert the random string.
 
 32. Need to provide a screen for enabling/disabling face id and then ensure faceid is provided on loading app if enabled
+
+33. Close on chat search needs to be x not close
+
+34. Chart chat and marker chat needs lighter background as too similar to chart background
+
+35. Marker placement mode requirements box is showing blank
+
+36. Verification email system needs work. Verified in onboarding process but still got banner in main view. Tried to reverify there got no email. Verification banner not overlaying toolbar, would be better in left drawer as a section that is active only when verification is required and disappears when verification is done
+
+37. Marker chat shows bottom bar options when sending message need to remove this, just show text box area like in chart chat

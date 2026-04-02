@@ -208,7 +208,10 @@ struct UserSettingsSheetView: View {
                 
                 // GLOBAL ACCOUNT SETTINGS SECTION
                 globalSettingsSection
-                
+
+                // HELP & SUPPORT SECTION
+                tutorialSection
+
                 // LOGOUT SECTION
                 logoutSection
                 
@@ -656,8 +659,51 @@ struct UserSettingsSheetView: View {
         }
     }
     
+    // MARK: - Tutorial Section
+
+    private var tutorialCompleted: Bool {
+        guard let userId = rlAppState.currentUser?.id else { return false }
+        return rlAppState.hasTutorialCompleted(for: userId)
+    }
+
+    private var tutorialSubtitle: String {
+        if tutorialCompleted {
+            return "Review the guided tour"
+        }
+        guard let userId = rlAppState.currentUser?.id,
+              rlAppState.getTutorialProgress(for: userId) != nil else {
+            return "Take a guided tour of the app"
+        }
+        return "Continue the guided tour"
+    }
+
+    private var tutorialSection: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+
+            SettingsSectionHeader(title: "Help & Support")
+
+            VStack(alignment: .leading, spacing: 8) {
+                SettingsButtonRow(
+                    icon: "graduationcap.fill",
+                    title: "App Tutorial",
+                    subtitle: tutorialSubtitle,
+                    iconColor: AppColors.accentColor
+                ) {
+                    NotificationCenter.default.post(
+                        name: .startTutorial,
+                        object: nil,
+                        userInfo: ["fromBeginning": tutorialCompleted]
+                    )
+                }
+            }
+        }
+    }
+
     // MARK: - Logout Section
-    
+
     private var logoutSection: some View {
         VStack(spacing: 0) {
             Divider()

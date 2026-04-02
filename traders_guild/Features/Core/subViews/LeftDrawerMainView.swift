@@ -554,7 +554,8 @@ struct MainDrawerView: View {
             .padding(.trailing, 25)
             .padding(.bottom, 4)
             .padding(.top, 60)
-            
+            .spotlightTarget("guild-header")
+
             // Menu Items
             ScrollView {
                 VStack(spacing: 8) {
@@ -569,11 +570,13 @@ struct MainDrawerView: View {
                                 }
                             }
                         )
+                        .spotlightTarget("menu-\(item.title)")
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 20)
+                .spotlightTarget("guild-menu-area")
             }
             .scrollDismissesKeyboard(.interactively)
             .refreshable {

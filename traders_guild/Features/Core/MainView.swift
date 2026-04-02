@@ -57,7 +57,10 @@ struct MainView: View {
     @StateObject private var markerOverlayState = MarkerOverlayState()
     
     @State private var fadeIn: Bool = false
-    
+
+    // MARK: - Tutorial State
+    @StateObject private var tutorialManager = TutorialManager()
+
     // MARK: - Drawer State Management
     @State private var showLeftDrawer: Bool = false
     @State private var showRightDrawer: Bool = false
@@ -386,6 +389,7 @@ struct MainView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
+                                    guard !tutorialManager.isActive else { return }
                                     dismissRightSheetsSignal = true
                                     if showLeftDrawer && value.translation.width < 0 {
                                         leftDragTranslation = value.translation.width
@@ -394,6 +398,7 @@ struct MainView: View {
                                     }
                                 }
                                 .onEnded { value in
+                                    guard !tutorialManager.isActive else { return }
                                     handleDrawerDragEnd(currentPosition: showLeftDrawer ? leftDragTranslation : rightDragTranslation)
                                 }
                         )
@@ -414,6 +419,10 @@ struct MainView: View {
                         .opacity(showSheetOverlay ? 1 : 0)
                         .animation(.linear(duration: 0.05), value: showSheetOverlay)
                 }
+
+            }
+            .onPreferenceChange(SpotlightFrameKey.self) { frames in
+                tutorialManager.spotlightFrames = frames
             }
             .ignoresSafeArea()
             .rlGlobalMessaging()          // RL: chatrooms/DMs sheets
@@ -457,6 +466,7 @@ struct MainView: View {
                     }
                 )
                 .environmentObject(rlAppState)
+                .environmentObject(tutorialManager)
                 .presentationDetents([.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)],
                                       selection: $selectedDetent)
                 .presentationDragIndicator(.visible)
@@ -503,10 +513,37 @@ struct MainView: View {
             }
             .sensoryFeedback(.impact(weight: .light), trigger: showLeftDrawer)
             .sensoryFeedback(.impact(weight: .light), trigger: showRightDrawer)
+            .onChange(of: tutorialManager.isActive) { _, isActive in
+                if isActive {
+                    TutorialWindowManager.shared.show(tutorialManager: tutorialManager)
+                } else {
+                    TutorialWindowManager.shared.dismiss()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .startTutorial)) { notification in
+                let fromBeginning = notification.userInfo?["fromBeginning"] as? Bool ?? true
+                // Dismiss any presented sheets first (profile, settings, etc.)
+                dismissLeftSheetsSignal = true
+                dismissRightSheetsSignal = true
+                // Close all drawers
+                withAnimation(AnimationConstants.standard) {
+                    showLeftDrawer = false
+                    showRightDrawer = false
+                    showOverlay = false
+                    showSheetOverlay = false
+                    leftDragTranslation = 0
+                    rightDragTranslation = 0
+                }
+                // Wait for sheets and drawers to fully dismiss before starting tutorial
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    tutorialManager.startTutorial(fromBeginning: fromBeginning)
+                }
+            }
             
             .environmentObject(leftDrawerViewModel)
             .environmentObject(rightDrawerViewModel)
             .environmentObject(notificationNavigationManager)
+            .environmentObject(tutorialManager)
             .task {
                 // Use rlAppState guild ID for all data loading
                 guard let rlGuildId = rlAppState.currentGuild?.id else { return }
@@ -553,6 +590,17 @@ struct MainView: View {
                 )
                 
                 rlAppState.chartDidBecomeReady()
+
+                // Configure tutorial manager with drawer control closures
+                configureTutorialManager()
+
+                // Auto-launch tutorial for new users
+                if !rlAppState.hasTutorialCompleted(for: user.id) &&
+                   rlAppState.getTutorialProgress(for: user.id) == nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        tutorialManager.startTutorial(fromBeginning: true)
+                    }
+                }
             }
             .onChange(of: rlAppState.currentGuild?.id) { oldValue, newValue in
                 if let guildId = newValue, oldValue != newValue {
@@ -891,7 +939,69 @@ struct MainView: View {
         }
     }
 
+    private func configureTutorialManager() {
+        tutorialManager.configure(
+            openLeftDrawer: {
+                withAnimation(AnimationConstants.standard) {
+                    dismissKeyboard()
+                    selectedDetent = .fraction(0.11)
+                    showLeftDrawer = true
+                    showRightDrawer = false
+                    showOverlay = true
+                }
+            },
+            closeLeftDrawer: {
+                withAnimation(AnimationConstants.standard) {
+                    showLeftDrawer = false
+                    showOverlay = false
+                }
+            },
+            openRightDrawer: {
+                withAnimation(AnimationConstants.standard) {
+                    dismissKeyboard()
+                    selectedDetent = .fraction(0.11)
+                    showRightDrawer = true
+                    showLeftDrawer = false
+                    showOverlay = true
+                }
+            },
+            closeRightDrawer: {
+                withAnimation(AnimationConstants.standard) {
+                    showRightDrawer = false
+                    showOverlay = false
+                }
+            },
+            closeAllDrawers: {
+                withAnimation(AnimationConstants.standard) {
+                    showLeftDrawer = false
+                    showRightDrawer = false
+                    showOverlay = false
+                    leftDragTranslation = 0
+                    rightDragTranslation = 0
+                }
+            },
+            expandSheetToTab: { tabName in
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    selectedDetent = .fraction(0.5)
+                }
+                // Post notification to switch tab in ChartBottomSheet
+                NotificationCenter.default.post(
+                    name: .tutorialSwitchSheetTab,
+                    object: nil,
+                    userInfo: ["tab": tabName]
+                )
+            },
+            collapseSheet: {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    selectedDetent = .fraction(0.11)
+                }
+            },
+            appState: rlAppState
+        )
+    }
+
     private func toggleLeftDrawerFromToolbar() {
+        guard !tutorialManager.isActive else { return }
         withAnimation(AnimationConstants.standard) {
             dismissKeyboard()
             selectedDetent = .fraction(0.11)
@@ -902,6 +1012,7 @@ struct MainView: View {
     }
 
     private func toggleRightDrawerFromToolbar() {
+        guard !tutorialManager.isActive else { return }
         withAnimation(AnimationConstants.standard) {
             dismissKeyboard()
             selectedDetent = .fraction(0.11)
@@ -1024,11 +1135,13 @@ struct MainView: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
+                        guard !tutorialManager.isActive else { return }
                         if value.translation.width < 0 {
                             leftDragTranslation = value.translation.width
                         }
                     }
                     .onEnded { value in
+                        guard !tutorialManager.isActive else { return }
                         handleDrawerDragEnd(currentPosition: leftDragTranslation)
                     }
             )
@@ -1061,11 +1174,13 @@ struct MainView: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
+                        guard !tutorialManager.isActive else { return }
                         if value.translation.width > 0 {
                             rightDragTranslation = value.translation.width
                         }
                     }
                     .onEnded { value in
+                        guard !tutorialManager.isActive else { return }
                         handleDrawerDragEnd(currentPosition: rightDragTranslation)
                     }
             )
@@ -1925,6 +2040,7 @@ struct ChartBottomSheet: View {
     @ObservedObject var timeframePanelManager: TimeframePanelManager
     @Binding var selectedDetent: PresentationDetent
     @EnvironmentObject var rlAppState: RLAppState
+    @EnvironmentObject var tutorialManager: TutorialManager
     let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
     let onPlaceMarker: (() -> Void)?
     var onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil
@@ -2021,6 +2137,17 @@ struct ChartBottomSheet: View {
                 }
             }
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear {
+                        tutorialManager.spotlightFrames["bottom-sheet"] = geo.frame(in: .global)
+                    }
+                    .onChange(of: geo.size) { _, _ in
+                        tutorialManager.spotlightFrames["bottom-sheet"] = geo.frame(in: .global)
+                    }
+            }
+        )
         .animation(.easeInOut(duration: 0.3), value: selectedView)
         .animation(.easeInOut(duration: 0.3), value: isMarkerDetailActive)
         .animation(nil, value: shouldIgnoreKeyboardSafeArea)
@@ -2057,6 +2184,14 @@ struct ChartBottomSheet: View {
         }
         .onChange(of: viewingIndicatorFingerprint) { _, _ in
             refreshViewingIndicatorsIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .tutorialSwitchSheetTab)) { notification in
+            if let tabName = notification.userInfo?["tab"] as? String,
+               let tab = ChartView.allCases.first(where: { $0.rawValue == tabName }) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    selectedView = tab
+                }
+            }
         }
     }
 
@@ -2329,6 +2464,17 @@ struct ChartBottomSheet: View {
         }
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear {
+                        tutorialManager.spotlightFrames["bottom-bar"] = geo.frame(in: .global)
+                    }
+                    .onChange(of: geo.size) { _, _ in
+                        tutorialManager.spotlightFrames["bottom-bar"] = geo.frame(in: .global)
+                    }
+            }
+        )
     }
 
     // MARK: - Placement Tab Bar

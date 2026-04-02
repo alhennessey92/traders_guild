@@ -185,7 +185,8 @@ struct RLRightDrawerMainView: View {
                 .padding(.trailing, 25)
                 .padding(.bottom, 4)
                 .padding(.top, 60)
-                
+                .spotlightTarget("chat-header")
+
                 // User lists and chatrooms with disclosure groups
                 ScrollView {
                     VStack(spacing: 12) {
