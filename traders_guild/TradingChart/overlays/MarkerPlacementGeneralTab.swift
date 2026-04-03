@@ -353,7 +353,8 @@ struct MarkerPlacementGeneralTab: View {
                 if !placementState.newsURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     NewsLinkPreviewCard(
                         urlString: placementState.newsURL.trimmingCharacters(in: .whitespacesAndNewlines),
-                        accentColor: placementState.intent.color
+                        accentColor: placementState.intent.color,
+                        onPreviewLoaded: syncNewsPreviewMetadata
                     )
                 }
             }
@@ -372,7 +373,9 @@ struct MarkerPlacementGeneralTab: View {
                                 Button {
                                     placementState.upsertComponent(
                                         .reactionEmoji,
-                                        payload: .reactionEmoji(EmojiPayload(emoji: emoji))
+                                        payload: .reactionEmoji(
+                                            placementState.anchoredEmojiPayload(emoji: emoji)
+                                        )
                                     )
                                     HapticFeedback.light.trigger()
                                 } label: {
@@ -863,6 +866,13 @@ struct MarkerPlacementGeneralTab: View {
         return payload.emoji
     }
 
+    private var existingNotePayload: NotePayload? {
+        guard case let .note(payload)? = placementState.component(.textNote)?.payload else {
+            return nil
+        }
+        return payload
+    }
+
     private func syncNewsURLFromComponent() {
         guard placementState.newsURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard case let .link(payload)? = placementState.component(.linkURL)?.payload else { return }
@@ -877,15 +887,33 @@ struct MarkerPlacementGeneralTab: View {
         }
 
         let existingTitle: String?
+        let existingImage: String?
         if case let .link(payload)? = placementState.component(.linkURL)?.payload {
             existingTitle = payload.title
+            existingImage = payload.previewImage
         } else {
             existingTitle = nil
+            existingImage = nil
         }
 
         placementState.upsertComponent(
             .linkURL,
-            payload: .link(LinkPayload(url: trimmed, title: existingTitle, previewImage: nil))
+            payload: .link(LinkPayload(url: trimmed, title: existingTitle, previewImage: existingImage))
+        )
+    }
+
+    private func syncNewsPreviewMetadata(_ preview: NewsLinkPreview) {
+        let resolvedURL = preview.resolvedURL.absoluteString
+        placementState.newsURL = resolvedURL
+        placementState.upsertComponent(
+            .linkURL,
+            payload: .link(
+                LinkPayload(
+                    url: resolvedURL,
+                    title: preview.title,
+                    previewImage: preview.imageURL?.absoluteString
+                )
+            )
         )
     }
 
@@ -898,7 +926,12 @@ struct MarkerPlacementGeneralTab: View {
         placementState.note = "[\(option.label)] \(base)"
         placementState.upsertComponent(
             .textNote,
-            payload: .note(NotePayload(text: placementState.note))
+            payload: .note(
+                placementState.anchoredNotePayload(
+                    text: placementState.note,
+                    preserving: existingNotePayload
+                )
+            )
         )
     }
 
@@ -922,7 +955,12 @@ struct MarkerPlacementGeneralTab: View {
 
         placementState.upsertComponent(
             .textNote,
-            payload: .note(NotePayload(text: text))
+            payload: .note(
+                placementState.anchoredNotePayload(
+                    text: text,
+                    preserving: existingNotePayload
+                )
+            )
         )
     }
 

@@ -41,18 +41,42 @@
 
 
 
-30. Apple signup - Cant dismiss keyboard on dob and display name page
+30. [Fixed] Apple signup - Cant dismiss keyboard on dob and display name page
 
-31. Apple signup - Would be nice if display name did display provided name from apple, or just leave blank - dont insert the random string.
+31. [Fixed] Apple signup - Would be nice if display name did display provided name from apple, or just leave blank - dont insert the random string.
 
-32.  Apple Signup - Need to provide a screen for enabling/disabling face id and then ensure faceid is provided on loading app if enabled
+32.  [Fixed] Apple Signup - Need to provide a screen for enabling/disabling face id and then ensure faceid is provided on loading app if enabled
 
-33. Close on chat search needs to be x not close
+33. [Fixed] Close on chat search needs to be x not close
 
-34. Chart chat and marker chat needs lighter background as too similar to chart background
+34. [Fixed] Chart chat and marker chat needs lighter background as too similar to chart background
 
-35. Marker placement mode requirements box is showing blank
+35. [Fixed] Marker placement mode requirements box is showing blank
 
-36. Verification email system needs work. Verified in onboarding process but still got banner in main view. Tried to reverify there got no email. Verification banner not overlaying toolbar, would be better in left drawer as a section that is active only when verification is required and disappears when verification is done
+36. [Fixed] Verification email system needs work. Verified in onboarding process but still got banner in main view. Tried to reverify there got no email. Verification banner not overlaying toolbar, would be better in left drawer as a section that is active only when verification is required and disappears when verification is done
 
-37. Marker chat shows bottom bar options when sending message need to remove this, just show text box area like in chart chat
+37. [Fixed] Marker chat shows bottom bar options when sending message need to remove this, just show text box area like in chart chat
+
+
+
+38. On initial onboarding tutorial there is a random link not box showing for first few steps saying something about placing a marker at the bottom, this hides the spotlighted area
+
+39. With Face ID enabled no check is done when loading app
+
+40. Should give warning of not able to place multiple setup markers before getting into marker placement mode
+
+41. Still getting instances of music interruption throughout the app
+
+42. Chat search shouldn’t have blue x needs to be grey like rest of the app
+
+43. When entering right drawer search and keyboard opens, items like price indicator and chart tools in the chart behind the drawer move up with keyboard, they need to remain in their place
+
+44. News marker - add button to extend article embeded
+
+45. News marker - add image and short title in chart info box - rather than showing the link
+
+46. Emoji drawing seem to follow latest price
+
+47. Emoji selection for drawing needs to show a larger box on chart giving all the options of most emojis to select. Dont give the emojis a rectangular background just leave them as they are, could make it virtically scrollable to show more
+
+48. Doesn’t look like setup marker APN getting sent on completion, may also be APN service not working at all

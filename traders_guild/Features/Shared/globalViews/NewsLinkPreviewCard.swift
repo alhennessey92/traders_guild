@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import SafariServices
 
 struct NewsLinkPreview: Equatable {
     let resolvedURL: URL
@@ -7,6 +8,38 @@ struct NewsLinkPreview: Equatable {
     let title: String
     let snippet: String?
     let imageURL: URL?
+}
+
+enum NewsLinkPreviewDisplayMode {
+    case standard
+    case compact
+
+    var imageHeight: CGFloat {
+        switch self {
+        case .standard:
+            return 140
+        case .compact:
+            return 84
+        }
+    }
+
+    var titleLineLimit: Int {
+        switch self {
+        case .standard:
+            return 3
+        case .compact:
+            return 2
+        }
+    }
+
+    var snippetLineLimit: Int {
+        switch self {
+        case .standard:
+            return 4
+        case .compact:
+            return 2
+        }
+    }
 }
 
 actor NewsLinkPreviewService {
@@ -182,12 +215,13 @@ actor NewsLinkPreviewService {
 struct NewsLinkPreviewCard: View {
     let urlString: String
     var accentColor: Color = RLMarkerIntent.news.color
-
-    @Environment(\.openURL) private var openURL
+    var displayMode: NewsLinkPreviewDisplayMode = .standard
+    var onPreviewLoaded: ((NewsLinkPreview) -> Void)? = nil
 
     @State private var preview: NewsLinkPreview?
     @State private var isLoading = false
     @State private var didAttemptLoad = false
+    @State private var isExpandedArticlePresented = false
 
     var body: some View {
         let url = normalizedURL
@@ -206,8 +240,8 @@ struct NewsLinkPreviewCard: View {
                 Spacer(minLength: 0)
 
                 if let openTarget = preview?.resolvedURL ?? url {
-                    Button("Open") {
-                        openURL(openTarget)
+                    Button(displayMode == .compact ? "Read" : "Expand") {
+                        isExpandedArticlePresented = true
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundColor(accentColor)
@@ -229,12 +263,12 @@ struct NewsLinkPreviewCard: View {
                                 .tint(accentColor)
                         }
                     case .failure:
-                        EmptyView()
+                        imagePlaceholder
                     @unknown default:
-                        EmptyView()
+                        imagePlaceholder
                     }
                 }
-                .frame(height: 140)
+                .frame(height: displayMode.imageHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
@@ -242,11 +276,13 @@ struct NewsLinkPreviewCard: View {
                 Text(title)
                     .font(.subheadline.weight(.bold))
                     .foregroundColor(.white)
+                    .lineLimit(displayMode.titleLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(urlString)
                     .font(.caption)
                     .foregroundColor(.white)
+                    .lineLimit(displayMode.titleLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -254,7 +290,7 @@ struct NewsLinkPreviewCard: View {
                 Text(snippet)
                     .font(.caption)
                     .foregroundColor(AppColors.surfaceWhite74)
-                    .lineLimit(4)
+                    .lineLimit(displayMode.snippetLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
             } else if isLoading {
                 Text("Loading article preview...")
@@ -274,6 +310,11 @@ struct NewsLinkPreviewCard: View {
         )
         .task(id: normalizedURL?.absoluteString ?? urlString) {
             await loadPreviewIfNeeded()
+        }
+        .sheet(isPresented: $isExpandedArticlePresented) {
+            if let openTarget = preview?.resolvedURL ?? normalizedURL {
+                NewsArticleSheet(url: openTarget, accentColor: accentColor)
+            }
         }
     }
 
@@ -298,6 +339,33 @@ struct NewsLinkPreviewCard: View {
         isLoading = true
         didAttemptLoad = true
         preview = await NewsLinkPreviewService.shared.preview(for: url)
+        if let preview {
+            onPreviewLoaded?(preview)
+        }
         isLoading = false
     }
+
+    private var imagePlaceholder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(AppColors.surfaceWhite06)
+            .overlay(
+                Image(systemName: "newspaper")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(accentColor.opacity(0.8))
+            )
+    }
+}
+
+private struct NewsArticleSheet: UIViewControllerRepresentable {
+    let url: URL
+    let accentColor: Color
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.preferredControlTintColor = UIColor(accentColor)
+        controller.dismissButtonStyle = .close
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }

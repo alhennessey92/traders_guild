@@ -608,7 +608,9 @@ struct GhostPreviewLayer: View {
                     NotePayload(
                         text: note.text,
                         offsetX: Double(offset.x),
-                        offsetY: Double(offset.y)
+                        offsetY: Double(offset.y),
+                        anchorTime: note.anchorTime,
+                        anchorPrice: note.anchorPrice
                     )
                 )
             )
@@ -619,7 +621,9 @@ struct GhostPreviewLayer: View {
                     EmojiPayload(
                         emoji: emoji.emoji,
                         offsetX: Double(offset.x),
-                        offsetY: Double(offset.y)
+                        offsetY: Double(offset.y),
+                        anchorTime: emoji.anchorTime,
+                        anchorPrice: emoji.anchorPrice
                     )
                 )
             )

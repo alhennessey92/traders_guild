@@ -19,7 +19,7 @@ struct TutorialOverlayView: View {
     // MARK: - Constants
 
     private let spotlightPadding: CGFloat = 16
-    private let cardSpotlightGap: CGFloat = 20
+    private let cardSpotlightGap: CGFloat = 28
     private let screenEdgePadding: CGFloat = 16
 
     // MARK: - Body
@@ -62,13 +62,15 @@ struct TutorialOverlayView: View {
         let showIcon = spotlightRect == nil || isSheetInfoStep(step) || step == .chart
 
         if spotlightRect == nil {
-            // Centered info card — no spotlight, use Spacer-based centering
-            VStack(spacing: 0) {
-                Spacer()
-                cardBody(step: step, showIcon: showIcon, cardWidth: cardWidth)
-                Spacer()
+            if step.spotlightKey == nil {
+                // Centered info card — no spotlight, use Spacer-based centering
+                VStack(spacing: 0) {
+                    Spacer()
+                    cardBody(step: step, showIcon: showIcon, cardWidth: cardWidth)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             // Spotlight card — position absolutely relative to the spotlight rect
             cardBody(step: step, showIcon: showIcon, cardWidth: cardWidth)

@@ -1093,6 +1093,44 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func setupSelectionPreflightRejectsDuplicateOpenTrackedSetupBeforePlacement() {
+        let guildId = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
+        let symbolId = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
+        let member = makeMember(userId: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!, username: "creator")
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let manager = MarkerManager(userId: member.userId, guildId: guildId, currentUserMember: member)
+
+        manager.markers = [
+            makeMarkerUI(
+                intent: .setup,
+                title: "Existing tracked setup",
+                components: [
+                    RLMarkerComponentDTO(
+                        id: UUID(),
+                        componentType: RLComponentType.anchor.rawValue,
+                        payload: .anchor(AnchorPayload(time: timestamp, price: 100)),
+                        ordering: 0
+                    ),
+                ],
+                trackingEnabled: true,
+                trackingState: .armed,
+                author: member,
+                symbolId: symbolId,
+                timeframe: RLChartTimeframe.h1.toBackendString()
+            )
+        ]
+
+        let preflightFailure = manager.preflightPlacementFailure(
+            for: .setup,
+            symbolId: symbolId,
+            timeframe: RLChartTimeframe.h1.toBackendString(),
+            trackingEnabled: true
+        )
+
+        #expect(preflightFailure == .trackedSetupConflictSymbolTimeframe)
+    }
+
+    @Test
     func secondaryPriceChipMetricsStaySmallerThanCurrentPriceChip() {
         #expect(ChartAxisMetrics.secondaryPriceChipHeight < ChartAxisMetrics.currentPriceChipHeight)
         #expect(ChartAxisMetrics.secondaryPriceChipWidth < ChartAxisMetrics.horizontalLabeledChipWidth)

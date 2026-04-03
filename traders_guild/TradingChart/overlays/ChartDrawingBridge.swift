@@ -99,17 +99,31 @@ enum ChartDrawingBridge {
             )
 
         case .textNote:
+            let noteAnchor = drawing.points.first ?? ChartDrawingPoint(time: anchorTime, price: anchorPrice)
             return MarkerComponentDraft(
                 id: drawing.id,
                 componentType: .textNote,
-                payload: .note(NotePayload(text: drawing.note ?? "Add your context"))
+                payload: .note(
+                    NotePayload(
+                        text: drawing.note ?? "Add your context",
+                        anchorTime: noteAnchor.time,
+                        anchorPrice: noteAnchor.price
+                    )
+                )
             )
 
         case .emoji:
+            let emojiAnchor = drawing.points.first ?? ChartDrawingPoint(time: anchorTime, price: anchorPrice)
             return MarkerComponentDraft(
                 id: drawing.id,
                 componentType: .reactionEmoji,
-                payload: .reactionEmoji(EmojiPayload(emoji: drawing.emoji ?? "🎯"))
+                payload: .reactionEmoji(
+                    EmojiPayload(
+                        emoji: drawing.emoji ?? "🎯",
+                        anchorTime: emojiAnchor.time,
+                        anchorPrice: emojiAnchor.price
+                    )
+                )
             )
         }
     }
@@ -185,6 +199,12 @@ enum ChartDrawingBridge {
             return ChartDrawing(
                 id: draft.id,
                 type: .textNote,
+                points: [
+                    ChartDrawingPoint(
+                        time: payload.anchorTime ?? anchorTime,
+                        price: payload.anchorPrice ?? anchorPrice
+                    ),
+                ],
                 colorHex: ChartDrawingType.textNote.defaultColorHex,
                 note: payload.text
             )
@@ -193,6 +213,12 @@ enum ChartDrawingBridge {
             return ChartDrawing(
                 id: draft.id,
                 type: .emoji,
+                points: [
+                    ChartDrawingPoint(
+                        time: payload.anchorTime ?? anchorTime,
+                        price: payload.anchorPrice ?? anchorPrice
+                    ),
+                ],
                 colorHex: ChartDrawingType.emoji.defaultColorHex,
                 emoji: payload.emoji
             )

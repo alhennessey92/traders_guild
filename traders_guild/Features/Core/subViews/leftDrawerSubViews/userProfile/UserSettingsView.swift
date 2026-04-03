@@ -123,7 +123,11 @@ struct UserSettingsSheetView: View {
         case .dataPrivacy:
             DataPrivacyView(onBack: { currentDestination = nil })
                 .environmentObject(rlAppState)
-            
+
+        case .pushNotifications:
+            PushNotificationSettingsView(onBack: { currentDestination = nil })
+                .environmentObject(rlAppState)
+
         case .helpCenter:
             HelpCenterView(
                 onBack: { currentDestination = nil },
@@ -491,6 +495,17 @@ struct UserSettingsSheetView: View {
                 ) {
                     withAnimation {
                         currentDestination = .dataPrivacy
+                    }
+                }
+
+                SettingsButtonRow(
+                    icon: "bell.badge.fill",
+                    title: "Push Notifications",
+                    subtitle: "Manage which notifications you receive",
+                    iconColor: .red
+                ) {
+                    withAnimation {
+                        currentDestination = .pushNotifications
                     }
                 }
             }

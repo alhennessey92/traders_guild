@@ -2127,6 +2127,7 @@ struct RLUserSettingsDTO: Codable {
     let analyticsEnabled: Bool
     let personalizedContentEnabled: Bool
     let dmPermissionMode: String
+    let pushNotificationPreferences: RLPushNotificationPreferences
 
     var dmPermission: RLDMPermissionMode {
         RLDMPermissionMode(rawValue: dmPermissionMode) ?? .all
@@ -2140,7 +2141,85 @@ struct RLUserSettingsDTO: Codable {
         analyticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .analyticsEnabled) ?? true
         personalizedContentEnabled = try container.decodeIfPresent(Bool.self, forKey: .personalizedContentEnabled) ?? true
         dmPermissionMode = try container.decodeIfPresent(String.self, forKey: .dmPermissionMode) ?? "all"
+        pushNotificationPreferences = try container.decodeIfPresent(RLPushNotificationPreferences.self, forKey: .pushNotificationPreferences) ?? RLPushNotificationPreferences()
     }
+}
+
+// MARK: - Push Notification Preferences
+
+struct RLPushNotificationPreferences: Codable, Equatable {
+    var dm: Bool
+    var mention: Bool
+    var markerResult: Bool
+    var markerEngagement: Bool
+    var announcement: Bool
+    var event: Bool
+    var friendRequest: Bool
+
+    init(
+        dm: Bool = true,
+        mention: Bool = true,
+        markerResult: Bool = true,
+        markerEngagement: Bool = true,
+        announcement: Bool = true,
+        event: Bool = true,
+        friendRequest: Bool = true
+    ) {
+        self.dm = dm
+        self.mention = mention
+        self.markerResult = markerResult
+        self.markerEngagement = markerEngagement
+        self.announcement = announcement
+        self.event = event
+        self.friendRequest = friendRequest
+    }
+}
+
+struct RLPushPreferencesUpdateRequest: Codable {
+    let dm: Bool?
+    let mention: Bool?
+    let markerResult: Bool?
+    let markerEngagement: Bool?
+    let announcement: Bool?
+    let event: Bool?
+    let friendRequest: Bool?
+
+    init(
+        dm: Bool? = nil,
+        mention: Bool? = nil,
+        markerResult: Bool? = nil,
+        markerEngagement: Bool? = nil,
+        announcement: Bool? = nil,
+        event: Bool? = nil,
+        friendRequest: Bool? = nil
+    ) {
+        self.dm = dm
+        self.mention = mention
+        self.markerResult = markerResult
+        self.markerEngagement = markerEngagement
+        self.announcement = announcement
+        self.event = event
+        self.friendRequest = friendRequest
+    }
+}
+
+// MARK: - Device Token DTOs
+
+struct RLDeviceTokenRegisterRequest: Codable {
+    let deviceToken: String
+    let platform: String
+}
+
+struct RLDeviceTokenResponse: Codable {
+    let id: UUID
+    let deviceToken: String
+    let platform: String
+    let isActive: Bool
+    let createdAt: Date
+}
+
+struct RLDeviceTokenDeleteRequest: Codable {
+    let deviceToken: String
 }
 
 struct RLUserSettingsUpdateRequest: Codable {

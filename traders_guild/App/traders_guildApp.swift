@@ -12,6 +12,9 @@ import SwiftUI
 @main
 struct traders_guildApp: App {
     
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
+    
     @StateObject private var rlAppState = RLAppState()
     @StateObject private var themeManager = ThemeManager.shared
 
@@ -25,6 +28,7 @@ struct traders_guildApp: App {
         
         // Configure the connections
         rlMessagingManager.configure(with: rlAppState)       // RL system - chatrooms/DMs
+        PushNotificationManager.shared.configure(apiService: rlAppState.realApi)
         
         _rlAppState = StateObject(wrappedValue: rlAppState)
         _rlMessagingManager = StateObject(wrappedValue: rlMessagingManager)
@@ -32,24 +36,67 @@ struct traders_guildApp: App {
     
     var body: some Scene {
         WindowGroup {
+            let isBiometricLocked = rlAppState.shouldPresentBiometricAppLock
             ZStack {
-                // MainContent loads in background (not in if/else)
-                // This allows chart to initialize while transition shows
-                mainContent
-                    .environmentObject(rlAppState)
-                    .environmentObject(rlMessagingManager)    // chatrooms/DMs
-                
-                // TransitionView overlays on top until chart is ready
-                if rlAppState.showingTransition {
-                    TransitionView()
+                ZStack {
+                    // MainContent loads in background (not in if/else)
+                    // This allows chart to initialize while transition shows
+                    mainContent
                         .environmentObject(rlAppState)
-                        .environmentObject(rlMessagingManager)
+                        .environmentObject(rlMessagingManager)    // chatrooms/DMs
+
+                    // TransitionView overlays on top until chart is ready
+                    if rlAppState.showingTransition {
+                        TransitionView()
+                            .environmentObject(rlAppState)
+                            .environmentObject(rlMessagingManager)
+                            .transition(.opacity)
+                            .zIndex(1) // Ensure it's on top
+                    }
+                }
+                .compositingGroup()
+                .blur(radius: isBiometricLocked ? 28 : 0)
+                .scaleEffect(isBiometricLocked ? 1.02 : 1)
+                .overlay {
+                    if isBiometricLocked {
+                        ZStack {
+                            Rectangle()
+                                .fill(.ultraThinMaterial)
+                            Color.black.opacity(0.46)
+                        }
+                        .ignoresSafeArea()
                         .transition(.opacity)
-                        .zIndex(1) // Ensure it's on top
+                    }
+                }
+                .allowsHitTesting(!isBiometricLocked)
+
+                if isBiometricLocked {
+                    BiometricAppLockView()
+                        .environmentObject(rlAppState)
+                        .transition(.opacity)
+                        .zIndex(2)
                 }
             }
             .dismissKeyboardOnTapBackground()
             .animation(.easeOut(duration: 0.5), value: rlAppState.showingTransition)
+            .animation(.easeInOut(duration: 0.2), value: rlAppState.shouldPresentBiometricAppLock)
+            .onChange(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .active:
+                    rlAppState.handleSceneDidBecomeActive()
+                    if rlAppState.currentUser != nil {
+                        Task {
+                            await PushNotificationManager.shared.registerForRemoteNotifications(reason: .appActive)
+                        }
+                    }
+                case .inactive:
+                    break
+                case .background:
+                    rlAppState.handleSceneDidEnterBackground()
+                @unknown default:
+                    break
+                }
+            }
 
             // Blocking alerts
             .alert(

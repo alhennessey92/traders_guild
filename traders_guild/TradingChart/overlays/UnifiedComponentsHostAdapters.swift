@@ -108,6 +108,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
     private var applyToHostScheduled = false
     private var indicatorIDsByName: [String: UUID] = [:]
     private var timeframeIDsByBackend: [String: UUID] = [:]
+    private var mirroredHostDrawingIDs = Set<UUID>()
 
     init(
         placementState: MarkerPlacementState,
@@ -243,11 +244,24 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         defer { isSyncingFromHost = false }
         refreshSnapshot()
 
+        let previousMirroredHostDrawingIDs = mirroredHostDrawingIDs
+        let hostDrawingDrafts = drawingManager.activeDrawings.map { drawing in
+            ChartDrawingBridge.markerDraft(
+                from: drawing,
+                anchorTime: anchorTime,
+                anchorPrice: anchorPrice
+            )
+        }
+        let hostDrawingIDs = Set(hostDrawingDrafts.map(\.id))
+        mirroredHostDrawingIDs = hostDrawingIDs
         let preservedDrawingComponents = placementState.components.filter {
-            isChartDrawingPlacementComponent($0.componentType)
+            guard isChartDrawingPlacementComponent($0.componentType) else { return false }
+            guard !hostDrawingIDs.contains($0.id) else { return false }
+            return !previousMirroredHostDrawingIDs.contains($0.id)
         }
         var nextComponents: [MarkerComponentDraft] = [anchorDraft()]
         nextComponents.append(contentsOf: indicatorDraftsFromHost())
+        nextComponents.append(contentsOf: hostDrawingDrafts)
         nextComponents.append(contentsOf: preservedDrawingComponents)
         nextComponents.append(contentsOf: timeframeDraftsFromHost())
         placementState.components = nextComponents

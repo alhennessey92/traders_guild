@@ -48,6 +48,10 @@
 	<string>Traders Guild needs photo library access so you can attach images in chats.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Traders Guild uses speech recognition to transcribe your voice into chat messages.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

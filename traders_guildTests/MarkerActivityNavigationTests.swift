@@ -107,6 +107,7 @@ private func makeActivityMarker(
         title: "Marker",
         notePreview: "Preview",
         selectedEmoji: nil,
+        alertSeverity: nil,
         createdAt: createdDate,
         createdAtFormatted: "now",
         activityTimestamp: activityDate,

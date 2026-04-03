@@ -174,7 +174,15 @@ struct MarkerViewingInfoBox: View {
             pollContent
 
         case .news:
-            bodyText(newsURL ?? marker.note, placeholder: "No link or note provided.")
+            if let newsURL {
+                NewsLinkPreviewCard(
+                    urlString: newsURL,
+                    accentColor: marker.intent.color,
+                    displayMode: .compact
+                )
+            } else {
+                bodyText(marker.note, placeholder: "No link or note provided.")
+            }
 
         case .reaction:
             if let reactionEmoji {

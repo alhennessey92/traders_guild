@@ -2525,6 +2525,63 @@ extension RealAPIService {
     }
     
     // =============================================================================================
+    // MARK: - Device Tokens (Push Notifications)
+    // =============================================================================================
+
+    /// Register a device token for APNs push notifications
+    /// POST /users/me/device-tokens
+    func registerDeviceToken(deviceToken: String, platform: String = "ios") async throws {
+        let body = RLDeviceTokenRegisterRequest(deviceToken: deviceToken, platform: platform)
+        let _: RLDeviceTokenResponse = try await request(
+            "/users/me/device-tokens",
+            service: .core,
+            method: "POST",
+            body: body,
+            auth: true
+        )
+    }
+
+    /// Deregister a device token (on logout)
+    /// DELETE /users/me/device-tokens
+    func deregisterDeviceToken(deviceToken: String) async throws {
+        let body = RLDeviceTokenDeleteRequest(deviceToken: deviceToken)
+        let _: EmptyResponse = try await request(
+            "/users/me/device-tokens",
+            service: .core,
+            method: "DELETE",
+            body: body,
+            auth: true
+        )
+    }
+
+    // =============================================================================================
+    // MARK: - Push Notification Preferences
+    // =============================================================================================
+
+    /// Fetch push notification preferences
+    /// GET /users/me/push-preferences
+    func getPushPreferences() async throws -> RLPushNotificationPreferences {
+        return try await request(
+            "/users/me/push-preferences",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Update push notification preferences (partial update)
+    /// PATCH /users/me/push-preferences
+    func updatePushPreferences(_ update: RLPushPreferencesUpdateRequest) async throws -> RLPushNotificationPreferences {
+        return try await request(
+            "/users/me/push-preferences",
+            service: .core,
+            method: "PATCH",
+            body: update,
+            auth: true
+        )
+    }
+
+    // =============================================================================================
     // MARK: - Data Export
     // =============================================================================================
     

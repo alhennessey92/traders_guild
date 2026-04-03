@@ -323,6 +323,7 @@ struct RLRightDrawerMainView: View {
             )
             .shadow(radius: LayoutConstants.shadowRadius)
             .ignoresSafeArea()
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .task {
                 // Preload data when drawer appears
                 await rightDrawerViewModel.preloadData(for: guild.id, appState: appState)

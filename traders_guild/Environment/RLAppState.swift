@@ -196,6 +196,10 @@ class RLAppState: ObservableObject {
     
     @Published var showGuildSelectionSheet: Bool = false
     @Published var showSignupWelcomeCarousel: Bool = false
+    @Published var isBiometricAppLockActive: Bool = false
+    @Published var isBiometricUnlockInProgress: Bool = false
+    @Published var biometricUnlockErrorMessage: String?
+    @Published private(set) var biometricUnlockRequestID: UUID?
 
     /// Keeps auth/signup onboarding in ContentView even after auth tokens are issued.
     @Published var isOnboardingFlowActive: Bool = false
@@ -210,6 +214,15 @@ class RLAppState: ObservableObject {
     
     /// Available guilds for selection (combined view model)
     @Published var userGuilds: [RLGuildWithMembership] = []
+
+    var shouldPresentBiometricAppLock: Bool {
+        shouldUseBiometricAppLock && isBiometricAppLockActive
+    }
+
+    private var shouldUseBiometricAppLock: Bool {
+        isAuthenticated && !isOnboardingFlowActive && BiometricAuthManager.shared.canUseBiometricLogin
+    }
+    private var shouldTriggerBiometricUnlockOnNextActive = false
     
     // ================================================================================================
     // MARK: - Services
@@ -557,7 +570,8 @@ class RLAppState: ObservableObject {
                 isHandlingAuthFlow = false
             } else {
                 try await completePostAuthGuildSetup(context: "Login")
-                subscribeToNotifications()
+                clearBiometricAppLock()
+                subscribeToNotifications(reason: .login)
                 
                 print("🔐 Login: Final state - currentGuild: \(currentGuild?.name ?? "nil"), showSheet: \(showGuildSelectionSheet)")
                 
@@ -628,7 +642,8 @@ class RLAppState: ObservableObject {
                 // Returning Apple user -- normal post-auth flow
                 try await fetchUserGuilds()
                 try await completePostAuthGuildSetup(context: "Apple Sign In")
-                subscribeToNotifications()
+                clearBiometricAppLock()
+                subscribeToNotifications(reason: .login)
                 isOnboardingFlowActive = false
             }
 
@@ -789,7 +804,8 @@ class RLAppState: ObservableObject {
                 try? manager.storeBiometricRefreshToken(newRefresh)
             }
 
-            subscribeToNotifications()
+            clearBiometricAppLock()
+            subscribeToNotifications(reason: .biometricLogin)
 
         } catch {
             isHandlingAuthFlow = false
@@ -899,6 +915,77 @@ class RLAppState: ObservableObject {
 
     func dismissSignupWelcomeCarousel() {
         showSignupWelcomeCarousel = false
+    }
+
+    func armBiometricAppLockIfNeeded(reason: String, autoPromptWhenActive: Bool = true) {
+        guard shouldUseBiometricAppLock else {
+            clearBiometricAppLock()
+            return
+        }
+
+        biometricUnlockErrorMessage = nil
+        isBiometricAppLockActive = true
+        if autoPromptWhenActive {
+            shouldTriggerBiometricUnlockOnNextActive = false
+            biometricUnlockRequestID = UUID()
+        } else {
+            shouldTriggerBiometricUnlockOnNextActive = true
+            biometricUnlockRequestID = nil
+        }
+        print("🔐 App lock armed (\(reason))")
+    }
+
+    func clearBiometricAppLock() {
+        isBiometricAppLockActive = false
+        isBiometricUnlockInProgress = false
+        biometricUnlockErrorMessage = nil
+        biometricUnlockRequestID = nil
+        shouldTriggerBiometricUnlockOnNextActive = false
+    }
+
+    func handleSceneDidBecomeActive() {
+        guard shouldUseBiometricAppLock else {
+            clearBiometricAppLock()
+            return
+        }
+        guard shouldTriggerBiometricUnlockOnNextActive else { return }
+        shouldTriggerBiometricUnlockOnNextActive = false
+        biometricUnlockRequestID = UUID()
+        print("🔐 App lock requested on foreground return")
+    }
+
+    func handleSceneDidEnterBackground() {
+        guard shouldUseBiometricAppLock else { return }
+        armBiometricAppLockIfNeeded(reason: "scene_background", autoPromptWhenActive: false)
+    }
+
+    func unlockBiometricAppLock() async {
+        guard shouldPresentBiometricAppLock else { return }
+        guard !isBiometricUnlockInProgress else { return }
+
+        isBiometricUnlockInProgress = true
+        biometricUnlockErrorMessage = nil
+
+        defer {
+            isBiometricUnlockInProgress = false
+        }
+
+        do {
+            let authenticated = try await BiometricAuthManager.shared.authenticate(
+                reason: "Unlock Traders Guild"
+            )
+            guard authenticated else {
+                biometricUnlockErrorMessage = "Unable to unlock with biometrics."
+                return
+            }
+            clearBiometricAppLock()
+        } catch {
+            if case BiometricAuthManager.BiometricError.authenticationFailed = error {
+                biometricUnlockErrorMessage = "Unlock cancelled or failed."
+            } else {
+                biometricUnlockErrorMessage = error.localizedDescription
+            }
+        }
     }
     
     /// Restore session from keychain
@@ -1014,7 +1101,8 @@ class RLAppState: ObservableObject {
                 } catch {
                     print("⚠️ restoreSession: Failed to fetch user settings: \(error)")
                 }
-                subscribeToNotifications()
+                armBiometricAppLockIfNeeded(reason: "session_restore")
+                subscribeToNotifications(reason: .sessionRestore)
             }
         }
 
@@ -2355,6 +2443,7 @@ class RLAppState: ObservableObject {
         isHandlingAuthFlow = false
         isOnboardingFlowActive = false
         showSignupWelcomeCarousel = false
+        clearBiometricAppLock()
         pendingSignupWelcomeUserId = nil
         pendingPasswordResetToken = nil
         onboardingState = nil
@@ -3399,10 +3488,14 @@ class RLAppState: ObservableObject {
     /// Call this when user logs in / connects WebSocket.
     /// The realtime-service auto-subscribes the user to their notification channel,
     /// so this is just for subscribing on the iOS side to the existing WS connection.
-    func subscribeToNotifications() {
+    func subscribeToNotifications(reason: PushRegistrationReason = .login) {
         guard let userId = currentUser?.id else { return }
         let channel = "user:\(userId):notifications"
         RealTimeService.shared.subscribe(to: [channel], owner: "notifications")
+
+        Task {
+            await PushNotificationManager.shared.requestPermissionAndRegister(reason: reason)
+        }
     }
 
     /// Unsubscribe when logging out
@@ -3410,6 +3503,10 @@ class RLAppState: ObservableObject {
         guard let userId = currentUser?.id else { return }
         let channel = "user:\(userId):notifications"
         RealTimeService.shared.unsubscribe(from: [channel], owner: "notifications")
+
+        Task {
+            await PushNotificationManager.shared.deregisterToken()
+        }
     }
     
     // =============================================================================================

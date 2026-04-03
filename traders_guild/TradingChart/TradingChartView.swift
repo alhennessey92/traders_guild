@@ -4622,7 +4622,10 @@ struct TradingChartView: View {
         for payload: MarkerComponentPayload,
         coordinateSystem: ChartCoordinateSystem
     ) -> CGPoint? {
-        guard let anchorPoint = annotationAnchorPoint(coordinateSystem: coordinateSystem) else {
+        guard let anchorPoint = annotationAnchorPoint(
+            for: payload,
+            coordinateSystem: coordinateSystem
+        ) else {
             return nil
         }
         let offset = annotationOffset(for: payload)
@@ -4630,18 +4633,31 @@ struct TradingChartView: View {
     }
 
     private func annotationAnchorPoint(
+        for payload: MarkerComponentPayload,
         coordinateSystem: ChartCoordinateSystem
     ) -> CGPoint? {
-        guard
-            let anchor = activeInteractiveDrawingState?.anchorDraft,
-            let anchorPrice = anchor.payload.levelPrice
-        else {
-            return nil
+        let fallbackAnchorTime = activeInteractiveDrawingState?.anchorDraft?.payload.anchorTime
+        let fallbackAnchorPrice = activeInteractiveDrawingState?.anchorDraft?.payload.levelPrice
+
+        let anchorTime: Date?
+        let anchorPrice: Double?
+        switch payload {
+        case let .note(note):
+            anchorTime = note.anchorTime ?? fallbackAnchorTime
+            anchorPrice = note.anchorPrice ?? fallbackAnchorPrice
+        case let .reactionEmoji(emoji):
+            anchorTime = emoji.anchorTime ?? fallbackAnchorTime
+            anchorPrice = emoji.anchorPrice ?? fallbackAnchorPrice
+        default:
+            anchorTime = fallbackAnchorTime
+            anchorPrice = fallbackAnchorPrice
         }
+
+        guard let anchorPrice else { return nil }
 
         let anchorY = coordinateSystem.yPosition(forPrice: anchorPrice)
         let anchorX: CGFloat
-        if let anchorTime = anchor.payload.anchorTime,
+        if let anchorTime,
            let anchorIndex = coordinateSystem.candleIndex(forTimestamp: anchorTime) {
             anchorX = coordinateSystem.xCenterPosition(forCandleIndex: anchorIndex)
         } else if effectiveCandleIndex >= 0 && effectiveCandleIndex < chartData.candles.count {
@@ -5533,8 +5549,13 @@ struct TradingChartView: View {
         ["#10B981", "#38BDF8", "#F59E0B", "#F43F5E", "#8B5CF6", "#94A3B8"]
     }
 
-    private var drawingToolbarEmojis: [String] {
-        ["🎯", "🔥", "🐻", "🐂", "✅", "❌", "⚠️", "💡", "📌", "🚀", "👀", "🧠"]
+    private var drawingEmojiPickerCategories: [(title: String, emojis: [String])] {
+        [
+            ("Trading", ["🎯", "🔥", "🐻", "🐂", "✅", "❌", "⚠️", "💡", "📌", "🚀", "👀", "🧠"]),
+            ("Momentum", ["📈", "📉", "⚡", "💥", "🔍", "⏳", "🛑", "💰", "💎", "🔔", "📣", "🎉"]),
+            ("Reactions", ["😀", "😎", "🤔", "😬", "😮", "😤", "😭", "🥶", "🥵", "🤯", "😴", "🤝"]),
+            ("Signals", ["📝", "📊", "📍", "🔒", "🔓", "⏰", "🗓️", "🔁", "🏁", "🧭", "🏆", "🎲"]),
+        ]
     }
 
     @ViewBuilder
@@ -5552,32 +5573,29 @@ struct TradingChartView: View {
                 Spacer()
 
                 HStack {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
-                            Image(systemName: draft.componentType.icon)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(AppColors.surfaceWhite90)
-
-                            Text(draft.componentType.displayName)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(AppColors.surfaceWhite94)
-
-                            Spacer(minLength: 0)
-                        }
-
-                        ScrollView(.horizontal, showsIndicators: false) {
+                    if supportsSelectedDrawingEmojiEditing(draft) {
+                        selectedDrawingEmojiPicker(
+                            draft: draft,
+                            drawingState: drawingState,
+                            toolbarWidth: toolbarWidth
+                        )
+                        .padding(.leading, 8)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
-                                if supportsSelectedDrawingEmojiEditing(draft) {
-                                    let selectedEmoji = drawingToolbarSelectedEmoji(for: draft)
-                                    ForEach(drawingToolbarEmojis, id: \.self) { emoji in
-                                        drawingEmojiToolbarButton(
-                                            emoji: emoji,
-                                            isSelected: selectedEmoji == emoji,
-                                            draft: draft,
-                                            drawingState: drawingState
-                                        )
-                                    }
-                                } else {
+                                Image(systemName: draft.componentType.icon)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(AppColors.surfaceWhite90)
+
+                                Text(draft.componentType.displayName)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(AppColors.surfaceWhite94)
+
+                                Spacer(minLength: 0)
+                            }
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
                                     ForEach(drawingToolbarColorHexes, id: \.self) { hex in
                                         drawingColorSwatchButton(
                                             hex: hex,
@@ -5612,24 +5630,24 @@ struct TradingChartView: View {
                                             openDrawingTextEditor(for: draft)
                                         }
                                     }
-                                }
 
-                                drawingToolbarActionButton(
-                                    icon: "trash",
-                                    title: "Delete",
-                                    foreground: AppColors.statusNegative85
-                                ) {
-                                    drawingState.removeComponent(id: draft.id)
-                                    drawingState.commitDrawingAndExit()
+                                    drawingToolbarActionButton(
+                                        icon: "trash",
+                                        title: "Delete",
+                                        foreground: AppColors.statusNegative85
+                                    ) {
+                                        drawingState.removeComponent(id: draft.id)
+                                        drawingState.commitDrawingAndExit()
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(width: toolbarWidth, alignment: .leading)
+                        .background(OverlayPanelChrome.background(cornerRadius: 12))
+                        .padding(.leading, 8)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .frame(width: toolbarWidth, alignment: .leading)
-                    .background(OverlayPanelChrome.background(cornerRadius: 12))
-                    .padding(.leading, 8)
 
                     Spacer(minLength: 0)
                 }
@@ -5722,6 +5740,73 @@ struct TradingChartView: View {
         .buttonStyle(.plain)
     }
 
+    private func selectedDrawingEmojiPicker(
+        draft: MarkerComponentDraft,
+        drawingState: MarkerPlacementState,
+        toolbarWidth: CGFloat
+    ) -> some View {
+        let selectedEmoji = drawingToolbarSelectedEmoji(for: draft)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 6)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppColors.surfaceWhite90)
+
+                Text("Emoji Picker")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppColors.surfaceWhite94)
+
+                Spacer(minLength: 0)
+
+                drawingToolbarActionButton(
+                    icon: "trash",
+                    title: "Delete",
+                    foreground: AppColors.statusNegative85
+                ) {
+                    drawingState.removeComponent(id: draft.id)
+                    drawingState.commitDrawingAndExit()
+                }
+            }
+
+            Text("Pick an anchor emoji for this chart note.")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(AppColors.surfaceWhite70)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(Array(drawingEmojiPickerCategories.enumerated()), id: \.offset) { entry in
+                        let category = entry.element
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(category.title)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(AppColors.greyText)
+                                .textCase(.uppercase)
+
+                            LazyVGrid(columns: columns, spacing: 10) {
+                                ForEach(category.emojis, id: \.self) { emoji in
+                                    drawingEmojiToolbarButton(
+                                        emoji: emoji,
+                                        isSelected: selectedEmoji == emoji,
+                                        draft: draft,
+                                        drawingState: drawingState
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.trailing, 4)
+            }
+            .frame(maxHeight: 210)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(width: toolbarWidth, alignment: .leading)
+        .background(OverlayPanelChrome.background(cornerRadius: 14))
+    }
+
     private func drawingEmojiToolbarButton(
         emoji: String,
         isSelected: Bool,
@@ -5736,25 +5821,30 @@ struct TradingChartView: View {
                     EmojiPayload(
                         emoji: emoji,
                         offsetX: payload.offsetX,
-                        offsetY: payload.offsetY
+                        offsetY: payload.offsetY,
+                        anchorTime: payload.anchorTime,
+                        anchorPrice: payload.anchorPrice
                     )
                 )
             )
         } label: {
-            Text(emoji)
-                .font(.system(size: 18))
-                .frame(width: 30, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.whiteText.opacity(isSelected ? 0.14 : 0.08))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(
-                            AppColors.surfaceWhite70.opacity(isSelected ? 0.85 : 0.18),
-                            lineWidth: isSelected ? 1.5 : 1
-                        )
-                )
+            ZStack {
+                Circle()
+                    .fill(isSelected ? AppColors.whiteText.opacity(0.18) : Color.clear)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                isSelected
+                                    ? AppColors.surfaceWhite84.opacity(0.55)
+                                    : AppColors.surfaceWhite12.opacity(0.35),
+                                lineWidth: isSelected ? 1.5 : 0.5
+                            )
+                    )
+                Text(emoji)
+                    .font(.system(size: 24))
+            }
+            .frame(width: 40, height: 40)
+            .scaleEffect(isSelected ? 1.05 : 1.0)
         }
         .buttonStyle(.plain)
     }
@@ -5881,7 +5971,9 @@ struct TradingChartView: View {
                     NotePayload(
                         text: value,
                         offsetX: payload.offsetX,
-                        offsetY: payload.offsetY
+                        offsetY: payload.offsetY,
+                        anchorTime: payload.anchorTime,
+                        anchorPrice: payload.anchorPrice
                     )
                 )
             )
@@ -5893,7 +5985,9 @@ struct TradingChartView: View {
                     EmojiPayload(
                         emoji: value.trimmingCharacters(in: .whitespacesAndNewlines),
                         offsetX: payload.offsetX,
-                        offsetY: payload.offsetY
+                        offsetY: payload.offsetY,
+                        anchorTime: payload.anchorTime,
+                        anchorPrice: payload.anchorPrice
                     )
                 )
             )

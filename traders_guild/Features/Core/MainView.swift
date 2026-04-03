@@ -749,6 +749,11 @@ struct MainView: View {
                 await handleOpenSharedMarker(notification.userInfo)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pushNotificationTapped)) { notification in
+            Task {
+                await handlePushNotificationTap(notification.userInfo)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .guildWatchlistUpdated)) { _ in
             guard let guildId = rlAppState.currentGuild?.id else { return }
             Task {
@@ -1148,6 +1153,7 @@ struct MainView: View {
             )
         }
         .frame(maxHeight: .infinity)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .offset(x: showRightDrawer ? 0 : drawerWidth)
         .animation(AnimationConstants.standard, value: showRightDrawer)
     }
@@ -1397,6 +1403,46 @@ struct MainView: View {
             object: nil,
             userInfo: payload.notificationUserInfo
         )
+    }
+
+    private func handlePushNotificationTap(_ userInfo: [AnyHashable: Any]?) async {
+        guard let userInfo else { return }
+        let destination = userInfo["destination"] as? [String: Any]
+        guard let typeStr = destination?["type"] as? String else { return }
+
+        let parsed: NotificationDestination? = {
+            switch typeStr {
+            case "user_dm":
+                guard let idStr = destination?["userId"] as? String,
+                      let userId = UUID(uuidString: idStr) else { return nil }
+                return .userDM(userId: userId)
+            case "chatroom":
+                guard let idStr = destination?["chatroomId"] as? String,
+                      let chatroomId = UUID(uuidString: idStr) else { return nil }
+                return .chatroom(chatroomId: chatroomId)
+            case "user_profile":
+                guard let idStr = destination?["userId"] as? String,
+                      let userId = UUID(uuidString: idStr) else { return nil }
+                return .userProfile(userId: userId)
+            case "announcement":
+                guard let idStr = destination?["announcementId"] as? String,
+                      let announcementId = UUID(uuidString: idStr) else { return nil }
+                return .announcement(announcementId: announcementId)
+            case "event":
+                guard let idStr = destination?["eventId"] as? String,
+                      let eventId = UUID(uuidString: idStr) else { return nil }
+                return .event(eventId: eventId)
+            case "admin_reports":
+                let guildId = (destination?["guildId"] as? String).flatMap(UUID.init)
+                let reportId = (destination?["reportId"] as? String).flatMap(UUID.init)
+                return .adminReports(guildId: guildId, reportId: reportId)
+            default:
+                return nil
+            }
+        }()
+
+        guard let dest = parsed else { return }
+        await notificationNavigationManager.navigate(to: dest)
     }
 }
 
@@ -2101,12 +2147,13 @@ struct ChartBottomSheet: View {
         }
         .background(
             GeometryReader { geo in
+                let frame = geo.frame(in: .global)
                 Color.clear
                     .onAppear {
-                        tutorialManager.spotlightFrames["bottom-sheet"] = geo.frame(in: .global)
+                        tutorialManager.spotlightFrames["bottom-sheet"] = frame
                     }
-                    .onChange(of: geo.size) { _, _ in
-                        tutorialManager.spotlightFrames["bottom-sheet"] = geo.frame(in: .global)
+                    .onChange(of: frame) { _, newFrame in
+                        tutorialManager.spotlightFrames["bottom-sheet"] = newFrame
                     }
             }
         )
@@ -2432,12 +2479,13 @@ struct ChartBottomSheet: View {
         .ignoresSafeArea(.keyboard)
         .background(
             GeometryReader { geo in
+                let frame = geo.frame(in: .global)
                 Color.clear
                     .onAppear {
-                        tutorialManager.spotlightFrames["bottom-bar"] = geo.frame(in: .global)
+                        tutorialManager.spotlightFrames["bottom-bar"] = frame
                     }
-                    .onChange(of: geo.size) { _, _ in
-                        tutorialManager.spotlightFrames["bottom-bar"] = geo.frame(in: .global)
+                    .onChange(of: frame) { _, newFrame in
+                        tutorialManager.spotlightFrames["bottom-bar"] = newFrame
                     }
             }
         )

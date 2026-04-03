@@ -691,19 +691,22 @@ class MarkerManager: ObservableObject {
     
     // MARK: - Marker CRUD
     
-    private func preflightPlacementFailure(
-        for request: RLCreateMarkerRequest,
+    func preflightPlacementFailure(
+        for intent: RLMarkerIntent,
+        symbolId: UUID,
+        timeframe: String,
+        trackingEnabled: Bool,
         excludingMarkerId: UUID? = nil
     ) -> MarkerPlacementFailure? {
-        guard request.intent == RLMarkerIntent.setup.rawValue, request.trackingEnabled else {
+        guard intent == .setup, trackingEnabled else {
             return nil
         }
 
         let conflictingMarker = markers.first { marker in
             guard marker.id != excludingMarkerId else { return false }
             return marker.author.userId == currentUserId
-                && marker.symbolId == request.symbolId
-                && marker.timeframe == request.timeframe
+                && marker.symbolId == symbolId
+                && marker.timeframe == timeframe
                 && marker.isOpenTrackedSetup
         }
 
@@ -712,6 +715,19 @@ class MarkerManager: ObservableObject {
         }
 
         return nil
+    }
+
+    private func preflightPlacementFailure(
+        for request: RLCreateMarkerRequest,
+        excludingMarkerId: UUID? = nil
+    ) -> MarkerPlacementFailure? {
+        preflightPlacementFailure(
+            for: RLMarkerIntent(rawValue: request.intent) ?? .analysis,
+            symbolId: request.symbolId,
+            timeframe: request.timeframe,
+            trackingEnabled: request.trackingEnabled,
+            excludingMarkerId: excludingMarkerId
+        )
     }
 
     @discardableResult
@@ -1061,9 +1077,28 @@ class MarkerManager: ObservableObject {
         }
 
         if let selectedEmoji {
+            let existingEmojiPayload: EmojiPayload? = {
+                guard let existing = updatedComponents.first(where: {
+                    $0.componentType == RLComponentType.reactionEmoji.rawValue
+                }) else {
+                    return nil
+                }
+                guard case let .reactionEmoji(payload) = existing.payload else {
+                    return nil
+                }
+                return payload
+            }()
             upsertComponent(
                 RLComponentType.reactionEmoji.rawValue,
-                payload: .reactionEmoji(EmojiPayload(emoji: selectedEmoji))
+                payload: .reactionEmoji(
+                    EmojiPayload(
+                        emoji: selectedEmoji,
+                        offsetX: existingEmojiPayload?.offsetX,
+                        offsetY: existingEmojiPayload?.offsetY,
+                        anchorTime: existingEmojiPayload?.anchorTime,
+                        anchorPrice: existingEmojiPayload?.anchorPrice
+                    )
+                )
             )
         }
 

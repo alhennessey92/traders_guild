@@ -408,10 +408,11 @@ struct MarkerPlacementDrawingsTab: View {
                             placementState.updateComponent(
                                 id: draft.id,
                                 payload: .reactionEmoji(
-                                    EmojiPayload(
+                                    placementState.anchoredEmojiPayload(
                                         emoji: emoji,
                                         offsetX: payload.offsetX,
-                                        offsetY: payload.offsetY
+                                        offsetY: payload.offsetY,
+                                        preserving: payload
                                     )
                                 )
                             )
@@ -1240,20 +1241,21 @@ struct MarkerPlacementDrawingsTab: View {
                 return payload.text
             },
             set: { newValue in
-                let existingOffsets: (Double?, Double?) = {
+                let existingPayload: NotePayload? = {
                     guard let draft = placementState.components.first(where: { $0.id == draftID }),
                           case let .note(payload) = draft.payload else {
-                        return (nil, nil)
+                        return nil
                     }
-                    return (payload.offsetX, payload.offsetY)
+                    return payload
                 }()
                 placementState.updateComponent(
                     id: draftID,
                     payload: .note(
-                        NotePayload(
+                        placementState.anchoredNotePayload(
                             text: newValue,
-                            offsetX: existingOffsets.0,
-                            offsetY: existingOffsets.1
+                            offsetX: existingPayload?.offsetX,
+                            offsetY: existingPayload?.offsetY,
+                            preserving: existingPayload
                         )
                     )
                 )
@@ -1422,7 +1424,9 @@ struct MarkerPlacementDrawingsTab: View {
         let text = placementState.note.trimmingCharacters(in: .whitespacesAndNewlines)
         placementState.upsertComponent(
             .textNote,
-            payload: .note(NotePayload(text: text.isEmpty ? "Add your context" : text))
+            payload: .note(
+                placementState.anchoredNotePayload(text: text.isEmpty ? "Add your context" : text)
+            )
         )
         if let draft = placementState.component(.textNote) {
             beginInteractiveDrawingSession()
@@ -1439,9 +1443,23 @@ struct MarkerPlacementDrawingsTab: View {
             return
         }
 
+        let existingPayload: EmojiPayload?
+        if case let .reactionEmoji(payload)? = placementState.component(.reactionEmoji)?.payload {
+            existingPayload = payload
+        } else {
+            existingPayload = nil
+        }
+
         placementState.upsertComponent(
             .reactionEmoji,
-            payload: .reactionEmoji(EmojiPayload(emoji: emoji))
+            payload: .reactionEmoji(
+                placementState.anchoredEmojiPayload(
+                    emoji: emoji,
+                    offsetX: existingPayload?.offsetX,
+                    offsetY: existingPayload?.offsetY,
+                    preserving: existingPayload
+                )
+            )
         )
         if placementState.intent != .reaction,
            let draft = placementState.component(.reactionEmoji) {

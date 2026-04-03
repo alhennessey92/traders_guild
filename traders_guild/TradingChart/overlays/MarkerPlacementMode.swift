@@ -742,7 +742,7 @@ final class MarkerPlacementState: ObservableObject {
             resetComponents.append(
                 MarkerComponentDraft(
                     componentType: .reactionEmoji,
-                    payload: .reactionEmoji(EmojiPayload(emoji: "🎯"))
+                    payload: .reactionEmoji(anchoredEmojiPayload(emoji: "🎯"))
                 )
             )
         }
@@ -782,7 +782,7 @@ final class MarkerPlacementState: ObservableObject {
         }
 
         if newIntent == .reaction, component(.reactionEmoji) == nil {
-            upsertComponent(.reactionEmoji, payload: .reactionEmoji(EmojiPayload(emoji: "🎯")))
+            upsertComponent(.reactionEmoji, payload: .reactionEmoji(anchoredEmojiPayload(emoji: "🎯")))
         }
 
         if newIntent == .poll {
@@ -1311,6 +1311,36 @@ final class MarkerPlacementState: ObservableObject {
         component(componentType)?.payload.levelPrice
     }
 
+    func anchoredNotePayload(
+        text: String,
+        offsetX: Double? = nil,
+        offsetY: Double? = nil,
+        preserving existing: NotePayload? = nil
+    ) -> NotePayload {
+        NotePayload(
+            text: text,
+            offsetX: offsetX,
+            offsetY: offsetY,
+            anchorTime: existing?.anchorTime ?? anchorDraft?.payload.anchorTime,
+            anchorPrice: existing?.anchorPrice ?? anchorDraft?.payload.levelPrice
+        )
+    }
+
+    func anchoredEmojiPayload(
+        emoji: String,
+        offsetX: Double? = nil,
+        offsetY: Double? = nil,
+        preserving existing: EmojiPayload? = nil
+    ) -> EmojiPayload {
+        EmojiPayload(
+            emoji: emoji,
+            offsetX: offsetX,
+            offsetY: offsetY,
+            anchorTime: existing?.anchorTime ?? anchorDraft?.payload.anchorTime,
+            anchorPrice: existing?.anchorPrice ?? anchorDraft?.payload.levelPrice
+        )
+    }
+
     func clearMarkerEditSession() {
         editingMarkerId = nil
         isAnchorLocked = false
@@ -1679,7 +1709,7 @@ final class MarkerPlacementState: ObservableObject {
             let text = note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? "Add your context"
                 : note.trimmingCharacters(in: .whitespacesAndNewlines)
-            upsertComponent(.textNote, payload: .note(NotePayload(text: text)))
+            upsertComponent(.textNote, payload: .note(anchoredNotePayload(text: text)))
             if let draftId = component(.textNote)?.id {
                 beginEditingDrawing(draftId, tool: .note)
             }
@@ -1700,7 +1730,7 @@ final class MarkerPlacementState: ObservableObject {
             let text = note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? "High-priority alert"
                 : note.trimmingCharacters(in: .whitespacesAndNewlines)
-            upsertComponent(.textNote, payload: .note(NotePayload(text: text)))
+            upsertComponent(.textNote, payload: .note(anchoredNotePayload(text: text)))
             if let draftId = component(.textNote)?.id {
                 beginEditingDrawing(draftId, tool: .note)
             }
@@ -1708,7 +1738,7 @@ final class MarkerPlacementState: ObservableObject {
             if component(.reactionEmoji) == nil && !canAddDrawing {
                 return
             }
-            upsertComponent(.reactionEmoji, payload: .reactionEmoji(EmojiPayload(emoji: "🎯")))
+            upsertComponent(.reactionEmoji, payload: .reactionEmoji(anchoredEmojiPayload(emoji: "🎯")))
             if let draftId = component(.reactionEmoji)?.id {
                 beginEditingDrawing(draftId, tool: .emoji)
             }
@@ -1716,7 +1746,7 @@ final class MarkerPlacementState: ObservableObject {
             if component(.reactionEmoji) == nil && !canAddDrawing {
                 return
             }
-            upsertComponent(.reactionEmoji, payload: .reactionEmoji(EmojiPayload(emoji: "🔥")))
+            upsertComponent(.reactionEmoji, payload: .reactionEmoji(anchoredEmojiPayload(emoji: "🔥")))
             if let draftId = component(.reactionEmoji)?.id {
                 beginEditingDrawing(draftId, tool: .emoji)
             }
@@ -1724,7 +1754,7 @@ final class MarkerPlacementState: ObservableObject {
             if component(.reactionEmoji) == nil && !canAddDrawing {
                 return
             }
-            upsertComponent(.reactionEmoji, payload: .reactionEmoji(EmojiPayload(emoji: "🐻")))
+            upsertComponent(.reactionEmoji, payload: .reactionEmoji(anchoredEmojiPayload(emoji: "🐻")))
             if let draftId = component(.reactionEmoji)?.id {
                 beginEditingDrawing(draftId, tool: .emoji)
             }
@@ -2132,18 +2162,20 @@ final class MarkerPlacementState: ObservableObject {
             )
         case let (.note(existingPayload), .note(incomingPayload)):
             return .note(
-                NotePayload(
+                anchoredNotePayload(
                     text: incomingPayload.text,
                     offsetX: incomingPayload.offsetX ?? existingPayload.offsetX,
-                    offsetY: incomingPayload.offsetY ?? existingPayload.offsetY
+                    offsetY: incomingPayload.offsetY ?? existingPayload.offsetY,
+                    preserving: existingPayload
                 )
             )
         case let (.reactionEmoji(existingPayload), .reactionEmoji(incomingPayload)):
             return .reactionEmoji(
-                EmojiPayload(
+                anchoredEmojiPayload(
                     emoji: incomingPayload.emoji,
                     offsetX: incomingPayload.offsetX ?? existingPayload.offsetX,
-                    offsetY: incomingPayload.offsetY ?? existingPayload.offsetY
+                    offsetY: incomingPayload.offsetY ?? existingPayload.offsetY,
+                    preserving: existingPayload
                 )
             )
         default:

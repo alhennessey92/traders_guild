@@ -241,11 +241,27 @@ final class TutorialManager: ObservableObject {
                 }
             }
 
+            if targetStep.spotlightKey != nil {
+                await waitForSpotlightFrame(for: targetStep)
+            }
+
             // Phase 4: Fade in new content
             withAnimation(.easeIn(duration: 0.35)) {
                 showSpotlight = true
             }
             isTransitioning = false
+        }
+    }
+
+    private func waitForSpotlightFrame(for step: TutorialStep) async {
+        guard step.spotlightKey != nil else { return }
+
+        let maxAttempts = 18
+        for _ in 0..<maxAttempts {
+            if currentStep == step, currentSpotlightRect != nil {
+                return
+            }
+            try? await Task.sleep(nanoseconds: 90_000_000)
         }
     }
 

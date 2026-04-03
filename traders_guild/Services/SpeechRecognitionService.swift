@@ -24,6 +24,8 @@ final class SpeechRecognitionService: ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
+    private var hasInstalledInputTap = false
+    private var notificationObservers: [NSObjectProtocol] = []
 
     // MARK: - Init
 
@@ -31,6 +33,11 @@ final class SpeechRecognitionService: ObservableObject {
         self.speechRecognizer = SFSpeechRecognizer(locale: locale)
         // Don't request auth on init — deferred to first toggleRecording() call
         // to avoid triggering audio session setup when view loads
+        configureAudioSessionObservers()
+    }
+
+    deinit {
+        notificationObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
     // MARK: - Authorization
@@ -95,7 +102,7 @@ final class SpeechRecognitionService: ObservableObject {
             try audioSession.setCategory(
                 .playAndRecord,
                 mode: .measurement,
-                options: [.mixWithOthers, .allowBluetoothHFP]
+                options: [.mixWithOthers, .allowBluetooth]
             )
             try audioSession.setActive(true)
         } catch {
@@ -121,6 +128,7 @@ final class SpeechRecognitionService: ObservableObject {
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
         }
+        hasInstalledInputTap = true
 
         // Start recognition task
         recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
@@ -138,7 +146,7 @@ final class SpeechRecognitionService: ObservableObject {
 
             if error != nil || isFinal {
                 DispatchQueue.main.async {
-                    self.stopRecording()
+                    self.finishRecordingSession()
                 }
             }
         }
@@ -155,7 +163,7 @@ final class SpeechRecognitionService: ObservableObject {
         } catch {
             DispatchQueue.main.async {
                 self.errorMessage = "Audio engine failed to start."
-                self.cleanup()
+                self.cleanupInternal()
             }
         }
     }
@@ -164,32 +172,26 @@ final class SpeechRecognitionService: ObservableObject {
 
     /// Stops audio capture and finalizes transcription
     func stopRecording() {
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-        recognitionTask?.cancel()
-        recognitionTask = nil
-
-        deactivateAudioSession()
-
-        DispatchQueue.main.async {
-            self.isRecording = false
-        }
+        finishRecordingSession()
     }
 
     // MARK: - Cleanup
 
     /// Full cleanup — call when the view disappears
     func cleanup() {
-        stopRecording()
+        cleanupInternal()
         transcribedText = ""
         errorMessage = nil
     }
 
     private func cleanupInternal() {
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if hasInstalledInputTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledInputTap = false
+        }
         recognitionRequest?.endAudio()
         recognitionRequest = nil
         recognitionTask?.cancel()
@@ -198,11 +200,87 @@ final class SpeechRecognitionService: ObservableObject {
         deactivateAudioSession()
     }
 
+    private func finishRecordingSession() {
+        cleanupInternal()
+        DispatchQueue.main.async {
+            self.isRecording = false
+        }
+    }
+
     private func deactivateAudioSession() {
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
             // Non-critical — audio session will clean up eventually
         }
+    }
+
+    private func configureAudioSessionObservers() {
+        let center = NotificationCenter.default
+
+        notificationObservers.append(
+            center.addObserver(
+                forName: AVAudioSession.interruptionNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.handleAudioSessionInterruption(notification)
+            }
+        )
+
+        notificationObservers.append(
+            center.addObserver(
+                forName: AVAudioSession.routeChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.handleAudioSessionRouteChange(notification)
+            }
+        )
+
+        notificationObservers.append(
+            center.addObserver(
+                forName: AVAudioSession.mediaServicesWereResetNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.handleMediaServicesReset()
+            }
+        )
+    }
+
+    private func handleAudioSessionInterruption(_ notification: Notification) {
+        guard isRecording else { return }
+        guard let userInfo = notification.userInfo,
+              let rawType = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: rawType) else {
+            return
+        }
+
+        if type == .began {
+            errorMessage = nil
+            finishRecordingSession()
+        }
+    }
+
+    private func handleAudioSessionRouteChange(_ notification: Notification) {
+        guard isRecording else { return }
+        guard let userInfo = notification.userInfo,
+              let rawReason = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: rawReason) else {
+            return
+        }
+
+        switch reason {
+        case .oldDeviceUnavailable, .noSuitableRouteForCategory, .routeConfigurationChange:
+            finishRecordingSession()
+        default:
+            break
+        }
+    }
+
+    private func handleMediaServicesReset() {
+        guard isRecording else { return }
+        finishRecordingSession()
     }
 }

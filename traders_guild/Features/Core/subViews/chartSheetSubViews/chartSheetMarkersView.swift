@@ -727,8 +727,33 @@ struct chartSheetMarkersView: View {
             return
         }
 
+        if let failure = placementPreflightFailure(for: intent) {
+            rlAppState.showError(
+                title: failure.toastTitle,
+                message: failure.userMessage,
+                severity: failure.toastSeverity,
+                style: .toast
+            )
+            return
+        }
+
         controlViewModel.startMarkerPlacement(intent: intent)
         onMarkerSelection?()
+    }
+
+    private func placementPreflightFailure(for intent: RLMarkerIntent) -> MarkerPlacementFailure? {
+        guard intent == .setup,
+              let markerManager = chartViewModel.markerManager,
+              let symbolId = chartViewModel.currentSymbol?.id else {
+            return nil
+        }
+
+        return markerManager.preflightPlacementFailure(
+            for: intent,
+            symbolId: symbolId,
+            timeframe: chartViewModel.currentTimeframe.toBackendString(),
+            trackingEnabled: true
+        )
     }
 
     private func handleLike(marker: RLMarkerActivityItemDTO) {

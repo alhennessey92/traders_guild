@@ -2249,29 +2249,9 @@ struct ChatSearchView: View {
 
                 VStack(spacing: 0) {
                     VStack(spacing: 12) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(AppColors.surfaceWhite60)
-                            TextField("Search messages...", text: $searchText)
-                                .textFieldStyle(.plain)
-                                .foregroundColor(.white)
-                                .autocorrectionDisabled()
-                            if !searchText.isEmpty {
-                                Button { searchText = "" } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(AppColors.surfaceWhite60)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 11)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.surfaceWhite08)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
-                                )
+                        UnifiedSearchBar(
+                            text: $searchText,
+                            placeholder: "Search messages..."
                         )
 
                         if totalCount > 0 {

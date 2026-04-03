@@ -26,6 +26,7 @@ enum SettingsDestination: Hashable {
     case tradingInterests
     case blockedUsers
     case dataPrivacy
+    case pushNotifications
     case helpCenter
     case contactSupport
     case rateApp
@@ -2778,3 +2779,438 @@ struct SettingsSecureField: View {
 
 // NOTE: SettingsSectionHeader, SettingsToggleRow, and SettingsButtonRow
 // are defined in MessagingSettings.swift and shared across the app.
+
+
+// ================================================================================================
+// MARK: - Push Notification Settings View
+// ================================================================================================
+
+struct PushNotificationSettingsView: View {
+    @EnvironmentObject var rlAppState: RLAppState
+    let onBack: () -> Void
+
+    @StateObject private var pushManager = PushNotificationManager.shared
+
+    @State private var prefs = RLPushNotificationPreferences()
+    @State private var isLoading = true
+    @State private var isSaving = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button(action: onBack) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                                .font(.headline)
+                            Text("Back")
+                                .font(.headline)
+                        }
+                        .foregroundColor(AppColors.whiteText)
+                    }
+
+                    Spacer()
+
+                    Text("Push Notifications")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.whiteText)
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left").font(.headline)
+                        Text("Back").font(.headline)
+                    }
+                    .opacity(0)
+                }
+                .padding(.horizontal, 25)
+                .padding(.top, 20)
+                .padding(.bottom, 10)
+
+                if pushManager.permissionStatus == .denied {
+                    systemSettingsBanner
+                }
+
+                pushDiagnosticsCard
+
+                if isLoading {
+                    ProgressView()
+                        .tint(.white)
+                        .padding(.top, 40)
+                } else {
+                    preferencesToggles
+                }
+
+                Spacer(minLength: 100)
+            }
+        }
+        .background(AppColors.sheetBackground.ignoresSafeArea())
+        .task {
+            await loadPreferences()
+        }
+    }
+
+    // MARK: - System Settings Banner
+
+    private var systemSettingsBanner: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                Text("Notifications are disabled at the system level.")
+                    .font(.caption)
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+            }
+
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Text("Open Settings")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.accentColor)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.surfaceWhite03)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    private var pushDiagnosticsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .foregroundColor(AppColors.accentColor)
+                Text("Device Registration")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                registrationStateBadge
+            }
+
+            diagnosticsRow(
+                title: "Authorization",
+                value: pushManager.permissionStatus.debugLabel
+            )
+            diagnosticsRow(
+                title: "APNs token",
+                value: pushManager.diagnostics.lastAPNsToken.map(shortToken) ?? "Missing"
+            )
+            diagnosticsRow(
+                title: "Last APNs attempt",
+                value: formattedAttempt(
+                    at: pushManager.diagnostics.lastAPNsRegistrationAttemptAt,
+                    reason: pushManager.diagnostics.lastAPNsRegistrationReason
+                )
+            )
+            diagnosticsRow(
+                title: "Backend registration",
+                value: pushManager.diagnostics.lastBackendRegistrationState.label
+            )
+            diagnosticsRow(
+                title: "Last backend attempt",
+                value: formattedAttempt(
+                    at: pushManager.diagnostics.lastBackendRegistrationAttemptAt,
+                    reason: pushManager.diagnostics.lastBackendRegistrationReason
+                )
+            )
+            diagnosticsRow(
+                title: "Marker results enabled",
+                value: prefs.markerResult ? "Yes" : "No"
+            )
+
+            if let error = pushManager.diagnostics.lastErrorMessage,
+               !error.isEmpty {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(AppColors.statusWarning95)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button {
+                Task {
+                    await pushManager.registerForRemoteNotifications(
+                        reason: .manual,
+                        allowPermissionPrompt: true
+                    )
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                    Text(pushManager.permissionStatus == .notDetermined
+                        ? "Enable and Register"
+                        : "Re-register Device")
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppColors.whiteText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.accentColor.opacity(0.24))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(AppColors.accentColor.opacity(0.45), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.surfaceWhite03)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    private var registrationStateBadge: some View {
+        let success = pushManager.diagnostics.isBackendRegisteredThisSession
+        return Text(success ? "Registered" : "Pending")
+            .font(.caption.weight(.semibold))
+            .foregroundColor(success ? AppColors.statusPositive90 : AppColors.statusWarning95)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill((success ? AppColors.statusPositive35 : AppColors.statusWarning95).opacity(0.18))
+            )
+    }
+
+    private func diagnosticsRow(title: String, value: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppColors.greyText)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.caption)
+                .foregroundColor(AppColors.whiteText)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func shortToken(_ token: String) -> String {
+        guard token.count > 12 else { return token }
+        return "\(token.prefix(8))...\(token.suffix(4))"
+    }
+
+    private func formattedAttempt(at date: Date?, reason: String?) -> String {
+        guard let date else { return "Never" }
+        if let reason, !reason.isEmpty {
+            return "\(date.formatted(date: .abbreviated, time: .shortened)) • \(reason)"
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    // MARK: - Preference Toggles
+
+    private var preferencesToggles: some View {
+        VStack(spacing: 0) {
+            // Messages
+            SettingsSectionHeader(title: "Messages")
+
+            VStack(spacing: 8) {
+                SettingsToggleRow(
+                    icon: "envelope.fill",
+                    title: "Direct Messages",
+                    subtitle: "New DM received (rate-limited)",
+                    isOn: $prefs.dm,
+                    iconColor: .blue
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.dm) { _, newValue in
+                    savePreference(\.dm, value: newValue)
+                }
+
+                SettingsToggleRow(
+                    icon: "at",
+                    title: "Mentions",
+                    subtitle: "Someone @mentions you in chat",
+                    isOn: $prefs.mention,
+                    iconColor: .cyan
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.mention) { _, newValue in
+                    savePreference(\.mention, value: newValue)
+                }
+            }
+
+            Divider()
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            // Trading
+            SettingsSectionHeader(title: "Trading")
+
+            VStack(spacing: 8) {
+                SettingsToggleRow(
+                    icon: "chart.line.uptrend.xyaxis",
+                    title: "Marker Results",
+                    subtitle: "Your setup marker hits SL or TP",
+                    isOn: $prefs.markerResult,
+                    iconColor: .green
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.markerResult) { _, newValue in
+                    savePreference(\.markerResult, value: newValue)
+                }
+
+                SettingsToggleRow(
+                    icon: "heart.fill",
+                    title: "Marker Engagement",
+                    subtitle: "Milestone likes on your markers (5, 10, 25...)",
+                    isOn: $prefs.markerEngagement,
+                    iconColor: .pink
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.markerEngagement) { _, newValue in
+                    savePreference(\.markerEngagement, value: newValue)
+                }
+            }
+
+            Divider()
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            // Guild
+            SettingsSectionHeader(title: "Guild")
+
+            VStack(spacing: 8) {
+                SettingsToggleRow(
+                    icon: "megaphone.fill",
+                    title: "Announcements",
+                    subtitle: "New announcement posted in your guild",
+                    isOn: $prefs.announcement,
+                    iconColor: .orange
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.announcement) { _, newValue in
+                    savePreference(\.announcement, value: newValue)
+                }
+
+                SettingsToggleRow(
+                    icon: "calendar",
+                    title: "Events",
+                    subtitle: "New event created in your guild",
+                    isOn: $prefs.event,
+                    iconColor: .purple
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.event) { _, newValue in
+                    savePreference(\.event, value: newValue)
+                }
+            }
+
+            Divider()
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            // Social
+            SettingsSectionHeader(title: "Social")
+
+            VStack(spacing: 8) {
+                SettingsToggleRow(
+                    icon: "person.badge.plus",
+                    title: "Friend Requests",
+                    subtitle: "Someone sends you a friend request",
+                    isOn: $prefs.friendRequest,
+                    iconColor: .green
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.friendRequest) { _, newValue in
+                    savePreference(\.friendRequest, value: newValue)
+                }
+            }
+
+            Divider()
+                .background(AppColors.whiteText.opacity(0.2))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            // Moderation (always on)
+            SettingsSectionHeader(title: "Moderation")
+
+            VStack(spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: "shield.fill")
+                        .foregroundColor(.red)
+                        .frame(width: 20)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Account Actions")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.whiteText)
+                        Text("Bans, mutes, kicks and role changes are always delivered")
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
+                    }
+
+                    Spacer()
+
+                    Text("Always On")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.surfaceWhite03)
+                )
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    // MARK: - Data Loading
+
+    private func loadPreferences() async {
+        await pushManager.refreshPermissionStatus()
+        do {
+            prefs = try await rlAppState.realApi.getPushPreferences()
+        } catch {
+            print("⚠️ Failed to load push preferences: \(error.localizedDescription)")
+        }
+        isLoading = false
+    }
+
+    private func savePreference(_ keyPath: WritableKeyPath<RLPushNotificationPreferences, Bool>, value: Bool) {
+        guard !isSaving else { return }
+        isSaving = true
+
+        var update = RLPushPreferencesUpdateRequest()
+        switch keyPath {
+        case \.dm:                update = RLPushPreferencesUpdateRequest(dm: value)
+        case \.mention:           update = RLPushPreferencesUpdateRequest(mention: value)
+        case \.markerResult:      update = RLPushPreferencesUpdateRequest(markerResult: value)
+        case \.markerEngagement:  update = RLPushPreferencesUpdateRequest(markerEngagement: value)
+        case \.announcement:      update = RLPushPreferencesUpdateRequest(announcement: value)
+        case \.event:             update = RLPushPreferencesUpdateRequest(event: value)
+        case \.friendRequest:     update = RLPushPreferencesUpdateRequest(friendRequest: value)
+        default: break
+        }
+
+        Task {
+            defer { isSaving = false }
+            do {
+                prefs = try await rlAppState.realApi.updatePushPreferences(update)
+            } catch {
+                print("⚠️ Failed to save push preference: \(error.localizedDescription)")
+            }
+        }
+    }
+}

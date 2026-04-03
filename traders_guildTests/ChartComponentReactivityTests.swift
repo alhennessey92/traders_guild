@@ -45,7 +45,7 @@ struct ChartComponentReactivityTests {
         let timeframeLinkManager = ChartTimeframeLinkManager()
         timeframeLinkManager.setLinkedTimeframes(["1h", "4h"])
 
-        _ = ChartComponentsAdapter(
+        let adapter = ChartComponentsAdapter(
             placementState: placementState,
             indicatorManager: indicatorManager,
             drawingManager: drawingManager,
@@ -58,6 +58,7 @@ struct ChartComponentReactivityTests {
             anchorTime: Date(timeIntervalSince1970: 1_700_000_000),
             anchorPrice: 1.205
         )
+        #expect(adapter.currentChartTimeframe == .h1)
 
         #expect(
             placementState.timeframeLinkDrafts.compactMap(\.payload.timeframeValue).sorted() == ["1h", "4h"]
@@ -77,7 +78,7 @@ struct ChartComponentReactivityTests {
         let drawingManager = ChartDrawingManager()
         let timeframeLinkManager = ChartTimeframeLinkManager()
 
-        _ = ChartComponentsAdapter(
+        let adapter = ChartComponentsAdapter(
             placementState: placementState,
             indicatorManager: indicatorManager,
             drawingManager: drawingManager,
@@ -90,6 +91,7 @@ struct ChartComponentReactivityTests {
             anchorTime: Date(timeIntervalSince1970: 1_700_000_000),
             anchorPrice: 1.205
         )
+        #expect(adapter.currentChartTimeframe == .m5)
 
         #expect(timeframeLinkManager.linkedTimeframes.isEmpty)
 
@@ -107,7 +109,7 @@ struct ChartComponentReactivityTests {
         let drawingManager = ChartDrawingManager()
         let timeframeLinkManager = ChartTimeframeLinkManager()
 
-        _ = ChartComponentsAdapter(
+        let adapter = ChartComponentsAdapter(
             placementState: placementState,
             indicatorManager: indicatorManager,
             drawingManager: drawingManager,
@@ -120,6 +122,7 @@ struct ChartComponentReactivityTests {
             anchorTime: Date(timeIntervalSince1970: 1_700_000_000),
             anchorPrice: 1.205
         )
+        #expect(adapter.currentChartTimeframe == .m5)
 
         #expect(placementState.upsertTimeframeLink("1h"))
         try await Task.sleep(nanoseconds: 50_000_000)
@@ -144,7 +147,7 @@ struct ChartComponentReactivityTests {
         let drawingManager = ChartDrawingManager()
         let timeframeLinkManager = ChartTimeframeLinkManager()
 
-        _ = ChartComponentsAdapter(
+        let adapter = ChartComponentsAdapter(
             placementState: placementState,
             indicatorManager: indicatorManager,
             drawingManager: drawingManager,
@@ -157,6 +160,7 @@ struct ChartComponentReactivityTests {
             anchorTime: Date(timeIntervalSince1970: 1_700_000_000),
             anchorPrice: 1.205
         )
+        #expect(adapter.currentChartTimeframe == .m5)
 
         #expect(placementState.upsertTimeframeLink("1h"))
         try await Task.sleep(nanoseconds: 50_000_000)
@@ -249,6 +253,90 @@ struct ChartComponentReactivityTests {
 
         #expect((topClamped?.displayY ?? 0) >= 72 + (ChartAxisMetrics.directionalArrowChipHeight * 0.5) + 4)
         #expect((bottomClamped?.displayY ?? .infinity) <= 220 - 84 - (ChartAxisMetrics.directionalArrowChipHeight * 0.5) - 4)
+    }
+
+    @Test
+    func chartDrawingBridgePreservesNoteAnchorCoordinatesAcrossRoundTrip() {
+        let noteAnchorTime = Date(timeIntervalSince1970: 1_700_000_000)
+        let fallbackAnchorTime = noteAnchorTime.addingTimeInterval(14_400)
+        let draft = MarkerComponentDraft(
+            componentType: .textNote,
+            payload: .note(
+                NotePayload(
+                    text: "Anchor stays put",
+                    anchorTime: noteAnchorTime,
+                    anchorPrice: 1.245
+                )
+            )
+        )
+
+        let drawing = ChartDrawingBridge.chartDrawing(
+            from: draft,
+            anchorTime: fallbackAnchorTime,
+            anchorPrice: 9.999
+        )
+
+        #expect(drawing?.points.first?.time == noteAnchorTime)
+        #expect(drawing?.points.first?.price == 1.245)
+
+        if let drawing {
+            let roundTripDraft = ChartDrawingBridge.markerDraft(
+                from: drawing,
+                anchorTime: fallbackAnchorTime,
+                anchorPrice: 9.999
+            )
+
+            if case let .note(payload) = roundTripDraft.payload {
+                #expect(payload.anchorTime == noteAnchorTime)
+                #expect(payload.anchorPrice == 1.245)
+            } else {
+                Issue.record("Expected note payload after chart drawing round-trip")
+            }
+        } else {
+            Issue.record("Expected chart drawing for note payload")
+        }
+    }
+
+    @Test
+    func chartDrawingBridgePreservesEmojiAnchorCoordinatesAcrossRoundTrip() {
+        let emojiAnchorTime = Date(timeIntervalSince1970: 1_700_000_120)
+        let fallbackAnchorTime = emojiAnchorTime.addingTimeInterval(28_800)
+        let draft = MarkerComponentDraft(
+            componentType: .reactionEmoji,
+            payload: .reactionEmoji(
+                EmojiPayload(
+                    emoji: "🚀",
+                    anchorTime: emojiAnchorTime,
+                    anchorPrice: 1.3125
+                )
+            )
+        )
+
+        let drawing = ChartDrawingBridge.chartDrawing(
+            from: draft,
+            anchorTime: fallbackAnchorTime,
+            anchorPrice: 7.777
+        )
+
+        #expect(drawing?.points.first?.time == emojiAnchorTime)
+        #expect(drawing?.points.first?.price == 1.3125)
+
+        if let drawing {
+            let roundTripDraft = ChartDrawingBridge.markerDraft(
+                from: drawing,
+                anchorTime: fallbackAnchorTime,
+                anchorPrice: 7.777
+            )
+
+            if case let .reactionEmoji(payload) = roundTripDraft.payload {
+                #expect(payload.anchorTime == emojiAnchorTime)
+                #expect(payload.anchorPrice == 1.3125)
+            } else {
+                Issue.record("Expected emoji payload after chart drawing round-trip")
+            }
+        } else {
+            Issue.record("Expected chart drawing for emoji payload")
+        }
     }
 
     private func makeCandle(open: Double, close: Double) -> RLCandleDTO {

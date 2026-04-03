@@ -783,6 +783,7 @@ private func makeTopMarker(
         title: nil,
         notePreview: "preview",
         selectedEmoji: nil,
+        alertSeverity: nil,
         createdAt: createdAt,
         createdAtFormatted: "now",
         candleTimestamp: createdAt,
