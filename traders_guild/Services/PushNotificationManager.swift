@@ -124,6 +124,7 @@ final class PushNotificationManager: ObservableObject {
     @Published private(set) var diagnostics = PushRegistrationDiagnostics()
 
     private var currentDeviceToken: String?
+    private var pendingTapPayload: RLPushNotificationTapPayload?
     private let authorizationProvider: any PushNotificationAuthorizationProviding
     private let remoteRegistrar: any RemoteNotificationRegistering
     private weak var apiService: (any DeviceTokenAPIClient)?
@@ -276,56 +277,23 @@ final class PushNotificationManager: ObservableObject {
     /// Decode the push payload and post a system notification so
     /// NotificationNavigationManager can route the user.
     func handleNotificationTap(userInfo: [AnyHashable: Any]) async {
-        guard let notificationType = userInfo["notification_type"] as? String else { return }
-
-        let destination = userInfo["destination"] as? [String: Any]
-        let notifData = userInfo["notification_data"] as? [String: Any]
-
-        let payload: [String: Any] = [
-            "notification_type": notificationType,
-            "destination": destination as Any,
-            "data": notifData as Any,
-        ]
-
-        // For marker/chart notifications, route via the shared-marker path.
-        if let dest = destination,
-           let typeStr = dest["type"] as? String,
-           typeStr == "symbol_chart",
-           let symbolIdStr = dest["symbolId"] as? String ?? (notifData?["symbol_id"] as? String),
-           let symbolId = UUID(uuidString: symbolIdStr),
-           let markerIdStr = notifData?["marker_id"] as? String,
-           let markerId = UUID(uuidString: markerIdStr),
-           let timeframe = notifData?["timeframe"] as? String {
-
-            let sharePayload = MarkerSharePayloadV1(
-                markerId: markerId,
-                symbolId: symbolId,
-                symbolTicker: notifData?["symbol_ticker"] as? String,
-                timeframe: timeframe,
-                candleTimestamp: Date(),
-                markerType: notifData?["marker_type"] as? String,
-                intent: notifData?["intent"] as? String,
-                selectedEmoji: notifData?["selected_emoji"] as? String,
-                alertSeverity: notifData?["alert_severity"] as? String
-            )
-
-            NotificationCenter.default.post(
-                name: .openSharedMarker,
-                object: nil,
-                userInfo: sharePayload.notificationUserInfo
-            )
-            print("📬 Push tap routed through shared-marker path (\(notificationType))")
+        guard let payload = RLPushNotificationTapPayload(userInfo: userInfo) else {
+            print("⚠️ Ignoring push tap because the payload could not be parsed")
             return
         }
 
-        // For all other types, post a generic push-tap notification that
-        // the main UI can observe and route through NotificationNavigationManager.
+        pendingTapPayload = payload
         NotificationCenter.default.post(
             name: .pushNotificationTapped,
-            object: nil,
-            userInfo: payload
+            object: nil
         )
-        print("📬 Push tap routed through generic path (\(notificationType))")
+        print("📬 Push tap queued for navigation (\(payload.notificationType))")
+    }
+
+    func consumePendingTapPayload() -> RLPushNotificationTapPayload? {
+        let payload = pendingTapPayload
+        pendingTapPayload = nil
+        return payload
     }
 
     private func recordError(_ message: String) {

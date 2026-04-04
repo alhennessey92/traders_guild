@@ -12,6 +12,7 @@
 //  Created by Al Hennessey on 16/09/2025.
 //
 import SwiftUI
+import UIKit
 
 enum StandardTextFieldValidationState {
     case neutral
@@ -25,6 +26,7 @@ struct StandardTextFieldView: View {
     @Binding var text: String         // Two-way binding
     var isSecure: Bool = false        // Password field?
     var validationState: StandardTextFieldValidationState = .neutral
+    @State private var isSecureTextVisible = false
     // Track focus
     @FocusState private var isFocused: Bool
     
@@ -48,6 +50,16 @@ struct StandardTextFieldView: View {
         normalizedTitle.contains("token")
     }
 
+    private var secureContentType: UITextContentType? {
+        if normalizedTitle.contains("new password") || normalizedTitle.contains("confirm password") {
+            return .newPassword
+        }
+        if normalizedTitle.contains("password") {
+            return .password
+        }
+        return nil
+    }
+
     private var strokeColor: Color {
         switch validationState {
         case .neutral:
@@ -60,24 +72,46 @@ struct StandardTextFieldView: View {
     }
     
     var body: some View {
-        Group {
+        HStack(spacing: 10) {
+            Group {
+                if isSecure {
+                    if isSecureTextVisible {
+                        TextField(title, text: $text)
+                            .textContentType(secureContentType)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        SecureField(title, text: $text)
+                            .textContentType(secureContentType)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                } else {
+                    TextField(title, text: $text)
+                        .textInputAutocapitalization(isDisplayNameField ? .words : .never)
+                        .textContentType(isEmailField ? .emailAddress : (isUsernameField ? .username : (isTokenField ? .oneTimeCode : nil)))
+                        .keyboardType(isEmailField ? .emailAddress : .default)
+                        .autocorrectionDisabled()
+                }
+            }
+            .focused($isFocused)
+
             if isSecure {
-                SecureField(title, text: $text)
-                    .textContentType(.password)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-            } else {
-                TextField(title, text: $text)
-                    .textInputAutocapitalization(isDisplayNameField ? .words : .never)
-                    .textContentType(isEmailField ? .emailAddress : (isUsernameField ? .username : (isTokenField ? .oneTimeCode : nil)))
-                    .keyboardType(isEmailField ? .emailAddress : .default)
-                    .autocorrectionDisabled()
+                Button {
+                    isSecureTextVisible.toggle()
+                    isFocused = true
+                } label: {
+                    Image(systemName: isSecureTextVisible ? "eye.slash.fill" : "eye.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.55))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
             }
         }
         .font(.body)
         .foregroundColor(AppColors.whiteText)
         .accentColor(AppColors.whiteText)
-        .focused($isFocused)
         .padding(.horizontal, 12)
         .padding(.vertical, 14)
         .background(

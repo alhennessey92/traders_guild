@@ -142,6 +142,7 @@ struct UnifiedSearchBar: View {
     var placeholder: String = "Search..."
     var onTextChange: ((String) -> Void)? = nil
     var onClear: (() -> Void)? = nil
+    var onFocusChange: ((Bool) -> Void)? = nil
     
     @FocusState private var isFocused: Bool
     
@@ -154,6 +155,7 @@ struct UnifiedSearchBar: View {
             TextField(placeholder, text: $text)
                 .foregroundColor(.white)
                 .font(.system(size: 15))
+                .tint(AppColors.surfaceWhite50)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .submitLabel(.done)
@@ -161,19 +163,25 @@ struct UnifiedSearchBar: View {
                 .onChange(of: text) { oldValue, newValue in
                     onTextChange?(newValue)
                 }
+                .onChange(of: isFocused) { _, focused in
+                    onFocusChange?(focused)
+                }
             
             if !text.isEmpty {
                 Button(action: {
                     text = ""
                     onClear?()
                     isFocused = false
+                    onFocusChange?(false)
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(AppColors.surfaceWhite50)
                         .font(.system(size: 16))
                 }
+                .buttonStyle(.plain)
             }
         }
+        .tint(AppColors.surfaceWhite50)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(
@@ -186,6 +194,9 @@ struct UnifiedSearchBar: View {
         .clipShape(Capsule())
         .onTapGesture {
             isFocused = true
+        }
+        .onAppear {
+            onFocusChange?(isFocused)
         }
     }
 }

@@ -24,6 +24,7 @@ class LeftDrawerViewModel: ObservableObject {
     }
 
     private static let topMarkersCacheTTL: TimeInterval = 300
+    private static let notificationRealtimeInsertWindow: TimeInterval = 1.5
     
     
     private weak var rlAppState: RLAppState?
@@ -92,6 +93,15 @@ class LeftDrawerViewModel: ObservableObject {
     
     private var topMarkersCache: [String: TopMarkersCacheEntry] = [:]
     private var currentTopMarkersContext: TopMarkersCacheContext?
+    private var notificationResyncTask: Task<Void, Never>?
+
+    var notificationRefreshActionOverride: (() async -> Void)?
+    var notificationResyncDebounceNanoseconds: UInt64 = 350_000_000
+    private(set) var lastNotificationSyncAt: Date?
+    private(set) var lastNotificationStatsUpdateAt: Date?
+    private(set) var lastNotificationForegroundSyncAt: Date?
+    private(set) var lastRealtimeNotificationInsertAt: Date?
+    private(set) var pendingNotificationCatchUpRefresh = false
 
 
     // ================================================================================================
@@ -241,9 +251,10 @@ class LeftDrawerViewModel: ObservableObject {
         }
     }
 
-    private func applyNotificationStats(_ stats: RLNotificationStatsDTO) {
+    func applyNotificationStats(_ stats: RLNotificationStatsDTO, updatedAt: Date = Date()) {
         notificationStats = stats
         rlAppStateRef?.notificationStats = stats
+        lastNotificationStatsUpdateAt = updatedAt
     }
 
     private func applyLocalNotificationRead(notification: RLNotificationDTO) {
@@ -263,6 +274,7 @@ class LeftDrawerViewModel: ObservableObject {
                 guildCount: guildCount
             )
         )
+        markNotificationListSynced()
     }
 
     private func applyNotificationReadEvent(_ payload: RLNotificationReadEventDTO) {
@@ -287,11 +299,13 @@ class LeftDrawerViewModel: ObservableObject {
                 guildCount: max(currentStats.guildCount - guildReads, 0)
             )
         )
+        markNotificationListSynced()
     }
 
     private func applyNotificationDeletedEvent(_ payload: RLNotificationDeletedEventDTO) {
         let ids = Set(payload.notificationIds)
         userNotifications.removeAll { ids.contains($0.id) }
+        markNotificationListSynced()
     }
 
     var hasUnreadAnnouncements: Bool {
@@ -650,6 +664,7 @@ class LeftDrawerViewModel: ObservableObject {
            await MainActor.run {
                self.userNotifications = result.notifications
                self.applyNotificationStats(stats)
+               self.markNotificationListSynced()
            }
        } catch is CancellationError {
            print("📋 refreshNotifications: Cancelled")
@@ -682,6 +697,13 @@ class LeftDrawerViewModel: ObservableObject {
         userNotifications = []
         notificationStats = nil
         rlAppStateRef?.notificationStats = nil
+        notificationResyncTask?.cancel()
+        notificationResyncTask = nil
+        lastNotificationSyncAt = nil
+        lastNotificationStatsUpdateAt = nil
+        lastNotificationForegroundSyncAt = nil
+        lastRealtimeNotificationInsertAt = nil
+        pendingNotificationCatchUpRefresh = false
         statistics = nil
         guildMembers = []
         guildMembersTotalCount = 0
@@ -865,6 +887,7 @@ class LeftDrawerViewModel: ObservableObject {
             let result = try await rlAppState.fetchNotifications(page: 1, pageSize: 50)
             await MainActor.run {
                 self.userNotifications = result.notifications
+                self.markNotificationListSynced()
             }
             // Also fetch stats for badges
             let stats = try await rlAppState.fetchNotificationStats()
@@ -909,11 +932,7 @@ class LeftDrawerViewModel: ObservableObject {
                 return
             }
 
-            // Insert at the top of the list
-            if !userNotifications.contains(where: { $0.id == notification.id }) {
-                userNotifications.insert(notification, at: 0)
-                print("🔔 New real-time notification: \(notification.displayTitle)")
-            }
+            handleRealtimeNotificationInsert(notification)
             if notification.type == .markerResult {
                 NotificationCenter.default.post(
                     name: .markerActivityDidChange,
@@ -925,9 +944,7 @@ class LeftDrawerViewModel: ObservableObject {
         case .notificationStatsUpdate:
             // Badge counts updated
             guard let stats = message.payload(as: RLNotificationStatsDTO.self) else { return }
-
-            applyNotificationStats(stats)
-            print("📊 Notification stats updated: \(stats.unreadCount) unread")
+            handleNotificationStatsUpdate(stats)
 
         case .notificationRead:
             guard let payload = message.payload(as: RLNotificationReadEventDTO.self) else {
@@ -968,6 +985,117 @@ class LeftDrawerViewModel: ObservableObject {
 
         default:
             break
+        }
+    }
+
+    func handleRealtimeNotificationInsert(_ notification: RLNotificationDTO) {
+        if !userNotifications.contains(where: { $0.id == notification.id }) {
+            userNotifications.insert(notification, at: 0)
+            lastRealtimeNotificationInsertAt = Date()
+            markNotificationListSynced(at: lastRealtimeNotificationInsertAt ?? Date())
+            print("🔔 New real-time notification: \(notification.displayTitle)")
+        }
+    }
+
+    func handleNotificationStatsUpdate(_ stats: RLNotificationStatsDTO) {
+        let previousUnreadCount = notificationStats?.unreadCount ?? 0
+        let receivedAt = Date()
+        applyNotificationStats(stats, updatedAt: receivedAt)
+        print("📊 Notification stats updated: \(stats.unreadCount) unread")
+
+        guard stats.unreadCount > previousUnreadCount else { return }
+        guard !didReceiveRealtimeNotificationRecently(reference: receivedAt) else { return }
+        scheduleNotificationCatchUpRefresh(reason: "stats_increase_without_realtime_notification")
+    }
+
+    func handleAppDidBecomeActive(rlAppState: RLAppState) async {
+        let previousUnreadCount = notificationStats?.unreadCount ?? rlAppState.notificationStats?.unreadCount ?? 0
+
+        do {
+            let stats = try await rlAppState.fetchNotificationStats()
+            let syncAt = Date()
+            await MainActor.run {
+                self.applyNotificationStats(stats, updatedAt: syncAt)
+                self.lastNotificationForegroundSyncAt = syncAt
+            }
+
+            if stats.unreadCount > previousUnreadCount
+                || pendingNotificationCatchUpRefresh
+                || isNotificationListOlder(than: syncAt) {
+                await refreshNotifications(rlAppState: rlAppState)
+            }
+        } catch is CancellationError {
+            print("📋 handleAppDidBecomeActive: Cancelled")
+        } catch {
+            print("⚠️ Failed to sync notification stats on foreground: \(error)")
+        }
+    }
+
+    func refreshNotificationsIfNeeded(rlAppState: RLAppState, force: Bool = false) async {
+        guard force || shouldRefreshNotificationsOnOpen else { return }
+        if let notificationRefreshActionOverride {
+            await notificationRefreshActionOverride()
+            markNotificationListSynced()
+            return
+        }
+        await refreshNotifications(rlAppState: rlAppState)
+    }
+
+    private var shouldRefreshNotificationsOnOpen: Bool {
+        if pendingNotificationCatchUpRefresh || lastNotificationSyncAt == nil {
+            return true
+        }
+
+        let newestMetadataUpdate = [lastNotificationStatsUpdateAt, lastNotificationForegroundSyncAt]
+            .compactMap { $0 }
+            .max()
+
+        guard let newestMetadataUpdate else { return false }
+        return isNotificationListOlder(than: newestMetadataUpdate)
+    }
+
+    private func markNotificationListSynced(at date: Date = Date()) {
+        lastNotificationSyncAt = date
+        pendingNotificationCatchUpRefresh = false
+    }
+
+    private func isNotificationListOlder(than date: Date) -> Bool {
+        guard let lastNotificationSyncAt else { return true }
+        return lastNotificationSyncAt < date
+    }
+
+    private func didReceiveRealtimeNotificationRecently(reference: Date) -> Bool {
+        guard let lastRealtimeNotificationInsertAt else { return false }
+        return reference.timeIntervalSince(lastRealtimeNotificationInsertAt) <= Self.notificationRealtimeInsertWindow
+    }
+
+    private func scheduleNotificationCatchUpRefresh(reason: String) {
+        pendingNotificationCatchUpRefresh = true
+        notificationResyncTask?.cancel()
+
+        let refreshOverride = notificationRefreshActionOverride
+        let appState = rlAppStateRef
+        let debounceNanoseconds = notificationResyncDebounceNanoseconds
+
+        print("📋 Scheduling notification catch-up refresh (\(reason))")
+
+        notificationResyncTask = Task { [weak self] in
+            if debounceNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: debounceNanoseconds)
+            }
+
+            guard let self, !Task.isCancelled else { return }
+
+            if let refreshOverride {
+                await refreshOverride()
+                await MainActor.run {
+                    self.markNotificationListSynced()
+                }
+                return
+            }
+
+            guard let appState else { return }
+            await self.refreshNotifications(rlAppState: appState)
         }
     }
 

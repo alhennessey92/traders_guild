@@ -7,12 +7,14 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// The main container for the right-side drawer.
 /// Hosts search/filter UI, lists for chatrooms and users, and opens chats via RLMessagingManager.
 struct RLRightDrawerMainView: View {
     // MARK: - Bindings & State
     let onClose: () -> Void
+    var onSearchFocusChanged: ((Bool) -> Void)? = nil
     
     @EnvironmentObject var messagingManager: RLMessagingManager
     @EnvironmentObject var appState: RLAppState
@@ -20,6 +22,7 @@ struct RLRightDrawerMainView: View {
     
     @State private var dragTranslation: CGFloat = 0
     @State private var searchText: String = ""
+    @State private var keyboardInset: CGFloat = 0
     @FocusState private var isSearchFocused: Bool
     
     // MARK: - Computed Filtered Lists
@@ -172,6 +175,13 @@ struct RLRightDrawerMainView: View {
                         placeholder: "Search chatrooms & users...",
                         onClear: {
                             isSearchFocused = false
+                        },
+                        onFocusChange: { focused in
+                            isSearchFocused = focused
+                            onSearchFocusChanged?(focused)
+                            if !focused {
+                                keyboardInset = 0
+                            }
                         }
                     )
                     .padding(.top, 12)
@@ -266,9 +276,14 @@ struct RLRightDrawerMainView: View {
                 .refreshable {
                     await rightDrawerViewModel.refresh(for: guild.id, appState: appState)
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear
+                        .frame(height: keyboardInset > 0 ? keyboardInset + 12 : 0)
+                }
                 .scrollDismissesKeyboard(.interactively)
                 .onTapGesture {
                     isSearchFocused = false
+                    onSearchFocusChanged?(false)
                     hideKeyboard()
                 }
                 .simultaneousGesture(
@@ -324,6 +339,18 @@ struct RLRightDrawerMainView: View {
             .shadow(radius: LayoutConstants.shadowRadius)
             .ignoresSafeArea()
             .ignoresSafeArea(.keyboard, edges: .bottom)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                updateKeyboardInset(from: notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                withAnimation(.easeOut(duration: 0.25)) {
+                    keyboardInset = 0
+                }
+            }
+            .onDisappear {
+                onSearchFocusChanged?(false)
+                keyboardInset = 0
+            }
             .task {
                 // Preload data when drawer appears
                 await rightDrawerViewModel.preloadData(for: guild.id, appState: appState)
@@ -335,6 +362,27 @@ struct RLRightDrawerMainView: View {
     
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    private func updateKeyboardInset(from notification: Notification) {
+        guard isSearchFocused,
+              let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+
+        let screenHeight = UIScreen.main.bounds.height
+        let overlap = max(0, screenHeight - endFrame.minY - bottomSafeAreaInset)
+        withAnimation(.easeOut(duration: 0.25)) {
+            keyboardInset = overlap
+        }
+    }
+
+    private var bottomSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { scene in
+                (scene as? UIWindowScene)?.windows.first(where: \.isKeyWindow)?.safeAreaInsets.bottom
+            }
+            .first ?? 0
     }
 
     private func openOrCreateDM(with member: RLGuildMemberDTO, guildId: UUID) {

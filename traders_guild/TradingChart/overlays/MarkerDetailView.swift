@@ -480,13 +480,20 @@ struct EmbeddedMarkerChatTabView: View {
     let marker: ChartMarkerUI
     @ObservedObject var markerManager: MarkerManager
     @Binding var selectedDetent: PresentationDetent
+    let onExitChat: () -> Void
 
     @State private var comments: [RLMarkerCommentDTO] = []
 
-    init(marker: ChartMarkerUI, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
+    init(
+        marker: ChartMarkerUI,
+        markerManager: MarkerManager,
+        selectedDetent: Binding<PresentationDetent>,
+        onExitChat: @escaping () -> Void
+    ) {
         self.marker = marker
         self.markerManager = markerManager
         self._selectedDetent = selectedDetent
+        self.onExitChat = onExitChat
         _comments = State(initialValue: marker.comments)
     }
 
@@ -495,7 +502,8 @@ struct EmbeddedMarkerChatTabView: View {
             marker: marker,
             comments: $comments,
             markerManager: markerManager,
-            selectedDetent: $selectedDetent
+            selectedDetent: $selectedDetent,
+            onExitChat: onExitChat
         )
         .onReceive(markerManager.$markers) { updatedMarkers in
             guard let updated = updatedMarkers.first(where: { $0.id == marker.id }) else { return }
@@ -520,6 +528,7 @@ struct CommentsView: View {
     let marker: ChartMarkerUI
     @Binding var comments: [RLMarkerCommentDTO]
     @ObservedObject var markerManager: MarkerManager
+    let onExitChat: () -> Void
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var chatSurfaceOverlayCoordinator: ChatSurfaceOverlayCoordinator
     
@@ -534,11 +543,18 @@ struct CommentsView: View {
     
     @Binding var selectedDetent: PresentationDetent
     
-    init(marker: ChartMarkerUI, comments: Binding<[RLMarkerCommentDTO]>, markerManager: MarkerManager, selectedDetent: Binding<PresentationDetent>) {
+    init(
+        marker: ChartMarkerUI,
+        comments: Binding<[RLMarkerCommentDTO]>,
+        markerManager: MarkerManager,
+        selectedDetent: Binding<PresentationDetent>,
+        onExitChat: @escaping () -> Void
+    ) {
         self.marker = marker
         self._comments = comments
         self.markerManager = markerManager
         self._selectedDetent = selectedDetent
+        self.onExitChat = onExitChat
     }
 
     private var liveMarker: ChartMarkerUI {
@@ -682,7 +698,8 @@ struct CommentsView: View {
                     handleAddComment(payload)
                 },
                 selectedDetent: $selectedDetent,
-                isActionPanelVisible: actionPanelVisibility
+                isActionPanelVisible: actionPanelVisibility,
+                onBack: onExitChat
             )
         }
         .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
@@ -905,6 +922,7 @@ struct MarkerCommentInputFooter: View {
     let onSend: (ChatComposerPayload) -> Void
     @Binding var selectedDetent: PresentationDetent
     var isActionPanelVisible: Binding<Bool>? = nil
+    var onBack: (() -> Void)? = nil
     
     var body: some View {
         ChatInputFooter(
@@ -915,6 +933,19 @@ struct MarkerCommentInputFooter: View {
             onSend: onSend,
             selectedDetent: $selectedDetent,
             expandedDetent: .fraction(0.9),
+            leadingAccessory: onBack.map { onBack in
+                AnyView(
+                    Button(action: onBack) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppColors.whiteText.opacity(0.9))
+                            .frame(width: 40, height: 40)
+                            .background(AppColors.gradientBackgroundDark)
+                            .clipShape(Circle())
+                            .shadow(color: AppColors.surfaceWhite30, radius: 1, x: 0, y: 0)
+                    }
+                )
+            },
             isActionPanelVisible: isActionPanelVisible
         )
     }

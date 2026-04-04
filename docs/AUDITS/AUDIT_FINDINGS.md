@@ -59,24 +59,34 @@
 
 
 
-38. On initial onboarding tutorial there is a random link not box showing for first few steps saying something about placing a marker at the bottom, this hides the spotlighted area
+38. [Fixed] On initial onboarding tutorial there is a random link not box showing for first few steps saying something about placing a marker at the bottom, this hides the spotlighted area
 
-39. With Face ID enabled no check is done when loading app
+39. [Fixed] With Face ID enabled no check is done when loading app
 
-40. Should give warning of not able to place multiple setup markers before getting into marker placement mode
+40. [Fixed] Should give warning of not able to place multiple setup markers before getting into marker placement mode
 
-41. Still getting instances of music interruption throughout the app
+41. [Fixed] Still getting instances of music interruption throughout the app
 
-42. Chat search shouldn’t have blue x needs to be grey like rest of the app
+42. [Fixed] Chat search shouldn’t have blue x needs to be grey like rest of the app
 
-43. When entering right drawer search and keyboard opens, items like price indicator and chart tools in the chart behind the drawer move up with keyboard, they need to remain in their place
+43. [Fixed] When entering right drawer search and keyboard opens, items like price indicator and chart tools in the chart behind the drawer move up with keyboard, they need to remain in their place
 
-44. News marker - add button to extend article embeded
+44. [Fixed] News marker - add button to extend article embeded
 
-45. News marker - add image and short title in chart info box - rather than showing the link
+45. [Fixed] News marker - add image and short title in chart info box - rather than showing the link
 
-46. Emoji drawing seem to follow latest price
+46. [Fixed] Emoji drawing seem to follow latest price
 
-47. Emoji selection for drawing needs to show a larger box on chart giving all the options of most emojis to select. Dont give the emojis a rectangular background just leave them as they are, could make it virtically scrollable to show more
+47. [Fixed] Emoji selection for drawing needs to show a larger box on chart giving all the options of most emojis to select. Dont give the emojis a rectangular background just leave them as they are, could make it virtically scrollable to show more
 
-48. Doesn’t look like setup marker APN getting sent on completion, may also be APN service not working at all
+48. [Fixed] Doesn’t look like setup marker APN getting sent on completion, may also be APN service not working at all
+
+
+
+49. [Fixed] APNs delivery and notification deep linking were broken by two issues: Hetzner `realtime-service` was missing APNs runtime config, and marker-like/comment notifications were being emitted without full chart context. APNs is now configured on the server, backend push handling only deactivates tokens for explicit invalid-token failures, marker notifications now include symbol/timeframe/candle context, and iOS will recover missing marker context by fetching the marker when older notifications only contain `marker_id`.
+
+50. [Fixed] Need to add a password viewing button for all password areas to view passwords
+
+51. [Fixed] Potential vug in marker placement mode, drag bottom bar up - open marker chat and proceed to close bottom bar with chat open - the small bottom bar tab section is blank, doesnt go back to standard tab buttons for markers - Also no way to get out of marker chat, need a back button like with chart chat on bottom left.
+
+52. [Fixed] Notifications arent auto updating, have to pull down on them to update, even though main app icon on homescreen showed 3 new notifications

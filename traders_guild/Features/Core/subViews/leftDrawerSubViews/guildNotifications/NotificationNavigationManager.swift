@@ -79,24 +79,51 @@ class NotificationNavigationManager: ObservableObject {
     
     /// Main entry point: Handle navigation for a notification
     func navigate(to notification: RLNotificationDTO) async {
-        if notification.destination?.type == .symbolChart {
-            if let payload = notification.markerNavigationPayload {
-                dismissOverlays?()
-                NotificationCenter.default.post(
-                    name: .openSharedMarker,
-                    object: nil,
-                    userInfo: payload.notificationUserInfo
-                )
-                return
-            }
+        if let payload = notification.markerNavigationPayload {
+            openMarker(payload)
+            return
+        }
 
+        if let markerId = notification.markerId,
+           let payload = await recoverMarkerNavigationPayload(markerId: markerId) {
+            openMarker(payload)
+            return
+        }
+
+        if notification.destination?.type == .symbolChart || notification.markerId != nil {
             print("⚠️ Marker notification '\(notification.displayTitle)' is missing chart context")
-            rlAppState?.showInfo("This chart notification is missing marker context")
+            rlAppState?.showInfo("This marker notification could not be opened")
             return
         }
 
         guard let destination = notification.navigationDestination else {
             print("⚠️ Notification '\(notification.displayTitle)' has no valid destination")
+            rlAppState?.showInfo("This notification cannot be opened")
+            return
+        }
+        await navigate(to: destination)
+    }
+
+    func navigate(to pushPayload: RLPushNotificationTapPayload) async {
+        if let payload = pushPayload.markerNavigationPayload {
+            openMarker(payload)
+            return
+        }
+
+        if let markerId = pushPayload.markerId,
+           let payload = await recoverMarkerNavigationPayload(markerId: markerId) {
+            openMarker(payload)
+            return
+        }
+
+        if pushPayload.destination?.type == .symbolChart || pushPayload.markerId != nil {
+            print("⚠️ Push notification '\(pushPayload.notificationType)' is missing chart context")
+            rlAppState?.showInfo("This marker notification could not be opened")
+            return
+        }
+
+        guard let destination = pushPayload.navigationDestination else {
+            print("⚠️ Push notification '\(pushPayload.notificationType)' has no valid destination")
             rlAppState?.showInfo("This notification cannot be opened")
             return
         }
@@ -183,6 +210,37 @@ class NotificationNavigationManager: ObservableObject {
             rlAppState.showError(error, title: "Navigation Failed", style: .toast)
         }
     }
+
+    private func openMarker(_ payload: MarkerSharePayloadV1) {
+        dismissOverlays?()
+        NotificationCenter.default.post(
+            name: .openSharedMarker,
+            object: nil,
+            userInfo: payload.notificationUserInfo
+        )
+    }
+
+    private func recoverMarkerNavigationPayload(markerId: UUID) async -> MarkerSharePayloadV1? {
+        guard let rlAppState else { return nil }
+
+        do {
+            let marker = try await rlAppState.realApi.getMarker(markerId: markerId)
+            return MarkerSharePayloadV1(
+                markerId: marker.id,
+                symbolId: marker.symbolId,
+                symbolTicker: nil,
+                timeframe: marker.timeframe,
+                candleTimestamp: marker.candleTimestamp,
+                intent: marker.intent,
+                alertSeverity: marker.alertSeverity
+            )
+        } catch APIError.serverError(let statusCode, _) where statusCode == 404 {
+            print("⚠️ Marker \(markerId) no longer exists for notification routing")
+            return nil
+        } catch {
+            print("⚠️ Failed to recover marker \(markerId) for notification routing: \(error)")
+            return nil
+        }
+    }
     
 }
-

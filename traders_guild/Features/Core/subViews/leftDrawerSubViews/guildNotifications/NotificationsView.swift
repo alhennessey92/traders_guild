@@ -81,6 +81,9 @@ struct NotificationsListView: View {
                 NavigationLoadingOverlay()
             }
         }
+        .task {
+            await leftDrawerViewModel.refreshNotificationsIfNeeded(rlAppState: rlAppState)
+        }
     }
     
     // MARK: - Refresh

@@ -3095,6 +3095,17 @@ extension RealAPIService {
             auth: true
         )
     }
+
+    /// Get a single marker by ID for notification recovery/deep linking.
+    /// GET /chart/markers/{marker_id}
+    func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO {
+        try await request(
+            "/chart/markers/\(markerId.uuidString)",
+            service: .chart,
+            method: "GET",
+            auth: true
+        )
+    }
     
     /// Create a new chart marker
     /// POST /chart/guilds/{guild_id}/markers

@@ -139,6 +139,122 @@ struct RLNotificationDestination: Codable, Equatable {
     }
 }
 
+extension RLNotificationDestination {
+    init?(pushDictionary: [String: Any]) {
+        guard let typeRaw = NotificationPayloadParser.string(from: pushDictionary["type"]),
+              let type = RLNotificationDestinationType(rawValue: typeRaw) else {
+            return nil
+        }
+
+        self.init(
+            type: type,
+            userId: NotificationPayloadParser.uuid(
+                from: pushDictionary["userId"] ?? pushDictionary["user_id"]
+            ),
+            guildId: NotificationPayloadParser.uuid(
+                from: pushDictionary["guildId"] ?? pushDictionary["guild_id"]
+            ),
+            symbolId: NotificationPayloadParser.uuid(
+                from: pushDictionary["symbolId"] ?? pushDictionary["symbol_id"]
+            ),
+            chatroomId: NotificationPayloadParser.uuid(
+                from: pushDictionary["chatroomId"] ?? pushDictionary["chatroom_id"]
+            ),
+            announcementId: NotificationPayloadParser.uuid(
+                from: pushDictionary["announcementId"] ?? pushDictionary["announcement_id"]
+            ),
+            eventId: NotificationPayloadParser.uuid(
+                from: pushDictionary["eventId"] ?? pushDictionary["event_id"]
+            ),
+            reportId: NotificationPayloadParser.uuid(
+                from: pushDictionary["reportId"] ?? pushDictionary["report_id"]
+            )
+        )
+    }
+}
+
+struct RLPushNotificationTapPayload: Equatable {
+    let notificationId: UUID?
+    let notificationType: String
+    let destination: RLNotificationDestination?
+    let data: [String: AnyCodableValue]
+
+    init?(userInfo: [AnyHashable: Any]) {
+        guard let notificationType = NotificationPayloadParser.string(from: userInfo["notification_type"]) else {
+            return nil
+        }
+
+        self.notificationId = NotificationPayloadParser.uuid(from: userInfo["notification_id"])
+        self.notificationType = notificationType
+        self.destination = NotificationPayloadParser.dictionary(from: userInfo["destination"])
+            .flatMap(RLNotificationDestination.init(pushDictionary:))
+        self.data = NotificationPayloadParser.anyCodableDictionary(from: userInfo["notification_data"])
+    }
+
+    var navigationDestination: NotificationDestination? {
+        guard let destination else { return nil }
+        switch destination.type {
+        case .symbolChart:
+            guard let symbolId = destination.symbolId else { return nil }
+            return .symbolChart(
+                symbolId: symbolId,
+                ticker: stringDataValue(forAnyOf: ["symbol_ticker", "symbolTicker"]) ?? ""
+            )
+        default:
+            return destination.navigationDestination
+        }
+    }
+
+    var markerNavigationPayload: MarkerSharePayloadV1? {
+        guard let markerId = uuidDataValue(forAnyOf: ["marker_id", "markerId"]),
+              let symbolId = uuidDataValue(forAnyOf: ["symbol_id", "symbolId"]),
+              let timeframe = stringDataValue(forAnyOf: ["timeframe"]) else {
+            return nil
+        }
+
+        return MarkerSharePayloadV1(
+            markerId: markerId,
+            symbolId: symbolId,
+            symbolTicker: stringDataValue(forAnyOf: ["symbol_ticker", "symbolTicker"]),
+            timeframe: timeframe,
+            candleTimestamp: dateDataValue(forAnyOf: ["candle_timestamp", "candleTimestamp"]) ?? Date(),
+            markerType: stringDataValue(forAnyOf: ["marker_type", "markerType"]),
+            intent: stringDataValue(forAnyOf: ["intent"]),
+            selectedEmoji: stringDataValue(forAnyOf: ["selected_emoji", "selectedEmoji"]),
+            alertSeverity: stringDataValue(forAnyOf: ["alert_severity", "alertSeverity"])
+        )
+    }
+
+    var markerId: UUID? {
+        uuidDataValue(forAnyOf: ["marker_id", "markerId"])
+    }
+
+    private func stringDataValue(forAnyOf keys: [String]) -> String? {
+        for key in keys {
+            if let value = data[key]?.stringValue {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func uuidDataValue(forAnyOf keys: [String]) -> UUID? {
+        guard let raw = stringDataValue(forAnyOf: keys) else { return nil }
+        return UUID(uuidString: raw)
+    }
+
+    private func dateDataValue(forAnyOf keys: [String]) -> Date? {
+        guard let raw = stringDataValue(forAnyOf: keys) else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: raw) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: raw)
+    }
+}
+
 
 // MARK: - Notification DTO
 
@@ -391,6 +507,10 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
             alertSeverity: stringDataValue(for: "alert_severity") ?? stringDataValue(for: "alertSeverity")
         )
     }
+
+    var markerId: UUID? {
+        uuidDataValue(for: "marker_id")
+    }
     
     // MARK: - Equatable
     
@@ -500,5 +620,69 @@ enum AnyCodableValue: Codable, Equatable {
         case .bool(let v):   try container.encode(v)
         case .null:          try container.encodeNil()
         }
+    }
+}
+
+extension AnyCodableValue {
+    init?(pushValue: Any) {
+        switch pushValue {
+        case let value as String:
+            self = .string(value)
+        case let value as Bool:
+            self = .bool(value)
+        case let value as Int:
+            self = .int(value)
+        case let value as Double:
+            self = .double(value)
+        case let value as NSNumber:
+            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                self = .bool(value.boolValue)
+            } else {
+                let doubleValue = value.doubleValue
+                if floor(doubleValue) == doubleValue {
+                    self = .int(value.intValue)
+                } else {
+                    self = .double(doubleValue)
+                }
+            }
+        case _ as NSNull:
+            self = .null
+        default:
+            return nil
+        }
+    }
+}
+
+private enum NotificationPayloadParser {
+    static func string(from raw: Any?) -> String? {
+        switch raw {
+        case let value as String:
+            return value
+        case let value as NSString:
+            return value as String
+        default:
+            return nil
+        }
+    }
+
+    static func uuid(from raw: Any?) -> UUID? {
+        guard let value = string(from: raw) else { return nil }
+        return UUID(uuidString: value)
+    }
+
+    static func dictionary(from raw: Any?) -> [String: Any]? {
+        raw as? [String: Any]
+    }
+
+    static func anyCodableDictionary(from raw: Any?) -> [String: AnyCodableValue] {
+        guard let dictionary = raw as? [String: Any] else { return [:] }
+        var values: [String: AnyCodableValue] = [:]
+        values.reserveCapacity(dictionary.count)
+        for (key, value) in dictionary {
+            if let converted = AnyCodableValue(pushValue: value) {
+                values[key] = converted
+            }
+        }
+        return values
     }
 }

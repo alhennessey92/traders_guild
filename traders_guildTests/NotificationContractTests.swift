@@ -161,10 +161,64 @@ struct NotificationContractTests {
 
         let dto = try decoder.decode(RLNotificationDTO.self, from: Data(json.utf8))
 
-        #expect(dto.navigationDestination == .symbolChart(symbolId: symbolId, ticker: ""))
+        #expect(dto.navigationDestination == .symbolChart(symbolId: symbolId, ticker: "BTCUSD"))
         #expect(dto.markerSharePayload?.markerId == markerId)
         #expect(dto.markerSharePayload?.symbolId == symbolId)
         #expect(dto.markerSharePayload?.timeframe == "1h")
+    }
+
+    @Test func pushTapPayloadParsesSnakeCaseDMDestination() async throws {
+        let notificationId = UUID()
+        let userId = UUID()
+
+        let payload = try #require(
+            RLPushNotificationTapPayload(
+                userInfo: [
+                    "notification_type": "dm",
+                    "notification_id": notificationId.uuidString,
+                    "destination": [
+                        "type": "user_dm",
+                        "user_id": userId.uuidString,
+                    ],
+                    "notification_data": [
+                        "thread_id": UUID().uuidString,
+                        "sender_username": "alice",
+                    ],
+                ]
+            )
+        )
+
+        #expect(payload.notificationId == notificationId)
+        #expect(payload.navigationDestination == .userDM(userId: userId))
+    }
+
+    @Test func pushTapPayloadBuildsMarkerNavigationPayloadFromAPNsData() async throws {
+        let symbolId = UUID()
+        let markerId = UUID()
+
+        let payload = try #require(
+            RLPushNotificationTapPayload(
+                userInfo: [
+                    "notification_type": "marker_comment",
+                    "destination": [
+                        "type": "symbol_chart",
+                        "symbol_id": symbolId.uuidString,
+                    ],
+                    "notification_data": [
+                        "marker_id": markerId.uuidString,
+                        "symbol_id": symbolId.uuidString,
+                        "symbol_ticker": "BTCUSD",
+                        "timeframe": "4h",
+                        "intent": "setup",
+                    ],
+                ]
+            )
+        )
+
+        #expect(payload.navigationDestination == .symbolChart(symbolId: symbolId, ticker: "BTCUSD"))
+        #expect(payload.markerNavigationPayload?.markerId == markerId)
+        #expect(payload.markerNavigationPayload?.symbolId == symbolId)
+        #expect(payload.markerNavigationPayload?.timeframe == "4h")
     }
 
     @Test func markerActivityDTODecodesResolvedPredictionResult() async throws {

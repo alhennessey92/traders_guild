@@ -64,6 +64,7 @@ struct MainView: View {
     // MARK: - Drawer State Management
     @State private var showLeftDrawer: Bool = false
     @State private var showRightDrawer: Bool = false
+    @State private var isRightDrawerSearchFocused: Bool = false
     @State private var showOverlay: Bool = false
     @State private var leftDragTranslation: CGFloat = 0
     @State private var rightDragTranslation: CGFloat = 0
@@ -419,6 +420,7 @@ struct MainView: View {
                 }
 
             }
+            .ignoresSafeArea(.keyboard, edges: showRightDrawer ? .bottom : [])
             .onPreferenceChange(SpotlightFrameKey.self) { frames in
                 tutorialManager.spotlightFrames = frames
             }
@@ -543,16 +545,6 @@ struct MainView: View {
             .environmentObject(notificationNavigationManager)
             .environmentObject(tutorialManager)
             .task {
-                // Use rlAppState guild ID for all data loading
-                guard let rlGuildId = rlAppState.currentGuild?.id else { return }
-                
-                // leftDrawerViewModel uses rlGuildId for all data via rlAppState
-                await leftDrawerViewModel.preloadData(for: rlGuildId, rlAppState: rlAppState)
-                
-                // NEW: rightDrawerViewModel now uses RLAppState for live messaging data
-                await rightDrawerViewModel.preloadData(for: rlGuildId, appState: rlAppState)
-                
-                // Configure notification navigation (still uses old system for now)
                 notificationNavigationManager.configure(
                     rlAppState: rlAppState,
                     messagingManager: rlMessagingManager,
@@ -579,6 +571,17 @@ struct MainView: View {
                         }
                     }
                 )
+
+                await handlePendingPushNotificationTapIfNeeded()
+
+                // Use rlAppState guild ID for all data loading
+                guard let rlGuildId = rlAppState.currentGuild?.id else { return }
+                
+                // leftDrawerViewModel uses rlGuildId for all data via rlAppState
+                await leftDrawerViewModel.preloadData(for: rlGuildId, rlAppState: rlAppState)
+                
+                // NEW: rightDrawerViewModel now uses RLAppState for live messaging data
+                await rightDrawerViewModel.preloadData(for: rlGuildId, appState: rlAppState)
                 
                 // Initialize chart with data
                 await chartViewModel.initialize()
@@ -661,7 +664,7 @@ struct MainView: View {
                         rlAppState.connectRealTimeService()
                     }
                     Task {
-                        _ = try? await rlAppState.fetchNotificationStats()
+                        await leftDrawerViewModel.handleAppDidBecomeActive(rlAppState: rlAppState)
                         await chartViewModel.handleAppDidBecomeActive()
                         await timeframePanelManager.refreshPanels(for: activeTimeframePanelSource)
                         await rlAppState.refreshCurrentGuildReputation()
@@ -672,6 +675,11 @@ struct MainView: View {
                     rlAppState.disconnectRealTimeService()
                 @unknown default:
                     break
+                }
+            }
+            .onChange(of: showRightDrawer) { _, isPresented in
+                if !isPresented {
+                    isRightDrawerSearchFocused = false
                 }
             }
         } else {
@@ -751,7 +759,7 @@ struct MainView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .pushNotificationTapped)) { notification in
             Task {
-                await handlePushNotificationTap(notification.userInfo)
+                await handlePendingPushNotificationTapIfNeeded()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .guildWatchlistUpdated)) { _ in
@@ -1128,11 +1136,15 @@ struct MainView: View {
                     dismissKeyboard()
                     withAnimation(AnimationConstants.standard) {
                         showRightDrawer = false
+                        isRightDrawerSearchFocused = false
                         rightDragTranslation = 0
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         showOverlay = false
                     }
+                },
+                onSearchFocusChanged: { isFocused in
+                    isRightDrawerSearchFocused = isFocused
                 }
             )
             .frame(width: drawerWidth)
@@ -1393,10 +1405,15 @@ struct MainView: View {
             }
         }
 
-        if let timeframe = RLChartTimeframe.fromBackendString(payload.timeframe),
-           chartViewModel.currentTimeframe != timeframe {
-            chartViewModel.setTimeframe(timeframe)
+        let targetTimeframe = RLChartTimeframe.fromBackendString(payload.timeframe) ?? chartViewModel.currentTimeframe
+        if chartViewModel.currentTimeframe != targetTimeframe {
+            chartViewModel.setTimeframe(targetTimeframe)
         }
+
+        await chartViewModel.loadNavigationWindow(
+            around: payload.candleTimestamp,
+            timeframe: targetTimeframe
+        )
 
         NotificationCenter.default.post(
             name: .focusSharedMarker,
@@ -1405,44 +1422,22 @@ struct MainView: View {
         )
     }
 
-    private func handlePushNotificationTap(_ userInfo: [AnyHashable: Any]?) async {
-        guard let userInfo else { return }
-        let destination = userInfo["destination"] as? [String: Any]
-        guard let typeStr = destination?["type"] as? String else { return }
+    private func handlePendingPushNotificationTapIfNeeded() async {
+        guard let payload = PushNotificationManager.shared.consumePendingTapPayload() else { return }
 
-        let parsed: NotificationDestination? = {
-            switch typeStr {
-            case "user_dm":
-                guard let idStr = destination?["userId"] as? String,
-                      let userId = UUID(uuidString: idStr) else { return nil }
-                return .userDM(userId: userId)
-            case "chatroom":
-                guard let idStr = destination?["chatroomId"] as? String,
-                      let chatroomId = UUID(uuidString: idStr) else { return nil }
-                return .chatroom(chatroomId: chatroomId)
-            case "user_profile":
-                guard let idStr = destination?["userId"] as? String,
-                      let userId = UUID(uuidString: idStr) else { return nil }
-                return .userProfile(userId: userId)
-            case "announcement":
-                guard let idStr = destination?["announcementId"] as? String,
-                      let announcementId = UUID(uuidString: idStr) else { return nil }
-                return .announcement(announcementId: announcementId)
-            case "event":
-                guard let idStr = destination?["eventId"] as? String,
-                      let eventId = UUID(uuidString: idStr) else { return nil }
-                return .event(eventId: eventId)
-            case "admin_reports":
-                let guildId = (destination?["guildId"] as? String).flatMap(UUID.init)
-                let reportId = (destination?["reportId"] as? String).flatMap(UUID.init)
-                return .adminReports(guildId: guildId, reportId: reportId)
-            default:
-                return nil
+        if let notificationId = payload.notificationId {
+            await rlAppState.markNotificationsAsRead(ids: [notificationId])
+            if leftDrawerViewModel.userNotifications.contains(where: { $0.id == notificationId }) {
+                leftDrawerViewModel.markNotificationAsRead(notificationId: notificationId)
             }
-        }()
+            do {
+                try await rlAppState.recordNotificationView(notificationId: notificationId)
+            } catch {
+                print("⚠️ Failed to record push notification view: \(error)")
+            }
+        }
 
-        guard let dest = parsed else { return }
-        await notificationNavigationManager.navigate(to: dest)
+        await notificationNavigationManager.navigate(to: payload)
     }
 }
 
@@ -2037,6 +2032,24 @@ enum DrawerSide { case left, right }
 // // MARK: - Drawer Side
 // enum DrawerSide { case left, right }
 
+enum ChartBottomSheetStateReducer {
+    static func markerDetailTabAfterDetentChange(
+        oldDetent: PresentationDetent,
+        newDetent: PresentationDetent,
+        isMarkerDetailActive: Bool,
+        currentTab: MarkerViewingTab
+    ) -> MarkerViewingTab {
+        guard isMarkerDetailActive,
+              currentTab == .chat,
+              oldDetent != .fraction(0.11),
+              newDetent == .fraction(0.11) else {
+            return currentTab
+        }
+
+        return .general
+    }
+}
+
 // MARK: - Chart Bottom Sheet (IMPROVED CHAT VERSION)
 // When in chat mode, the tab bar is replaced with chat input + back button
 struct ChartBottomSheet: View {
@@ -2184,6 +2197,9 @@ struct ChartBottomSheet: View {
                 // Keep sheet at closed state (0.11) — user drags up to expand
             }
         }
+        .onChange(of: selectedDetent) { oldValue, newValue in
+            handleSelectedDetentChange(oldValue: oldValue, newValue: newValue)
+        }
         .onChange(of: controlViewModel.isMarkerPlacementMode) { _, isPlacing in
             handlePlacementIndicatorLifecycle(isPlacing: isPlacing)
         }
@@ -2201,6 +2217,21 @@ struct ChartBottomSheet: View {
                     selectedView = tab
                 }
             }
+        }
+    }
+
+    private func handleSelectedDetentChange(oldValue: PresentationDetent, newValue: PresentationDetent) {
+        let updatedTab = ChartBottomSheetStateReducer.markerDetailTabAfterDetentChange(
+            oldDetent: oldValue,
+            newDetent: newValue,
+            isMarkerDetailActive: isMarkerDetailActive,
+            currentTab: markerDetailTab
+        )
+
+        guard updatedTab != markerDetailTab else { return }
+        chatSurfaceOverlayCoordinator.dismissAll()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            markerDetailTab = updatedTab
         }
     }
 
@@ -2723,7 +2754,13 @@ struct ChartBottomSheet: View {
             EmbeddedMarkerChatTabView(
                 marker: marker,
                 markerManager: markerManager,
-                selectedDetent: $selectedDetent
+                selectedDetent: $selectedDetent,
+                onExitChat: {
+                    chatSurfaceOverlayCoordinator.dismissAll()
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        markerDetailTab = .general
+                    }
+                }
             )
             .environmentObject(rlAppState)
         case .components:
