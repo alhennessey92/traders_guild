@@ -42,12 +42,14 @@ struct MainView: View {
     // MARK: - Properties
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var rlMessagingManager: RLMessagingManager       // NEW: chatrooms/DMs
-    
+
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
     @StateObject private var rightDrawerViewModel = RLRightDrawerViewModel()  // NEW: Uses RLAppState
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     @Environment(\.scenePhase) private var scenePhase
-    
+    /// Matches `ThemeManager` / `ChartBottomSheet` — forces the chart sheet subtree to rebuild on theme change (`.sheet` often skips `ObservableObject` updates).
+    @AppStorage("appTheme") private var appThemeStorage: AppTheme = .dark
+
     // MARK: - Chart State
     @StateObject private var chartControlVM = ChartControlViewModel()
     @StateObject private var chartDataManager = ChartDataManager()
@@ -467,6 +469,7 @@ struct MainView: View {
                 )
                 .environmentObject(rlAppState)
                 .environmentObject(tutorialManager)
+                .id(appThemeStorage)
                 .presentationDetents([.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)],
                                       selection: $selectedDetent)
                 .presentationDragIndicator(.visible)
@@ -2439,11 +2442,11 @@ struct ChartBottomSheet: View {
                     symbol: chartViewModel.currentSymbol?.ticker ?? "EURUSD",
                     symbolDTO: currentSymbolDTO,  // <-- ADD THIS LINE
                     backgroundColor: selectedView == .symbol ?
-                        AppColors.gradientBackgroundDark :
-                        AppColors.gradientBackgroundMid.opacity(0.9),
+                        AppColors.chartSheetMainTabSelectedBackground :
+                        AppColors.chartSheetMainTabUnselectedBackground,
                     foregroundColor: selectedView == .symbol ?
-                        .white :
-                        AppColors.whiteText.opacity(0.8)
+                        AppColors.chartSheetMainTabSelectedForeground :
+                        AppColors.chartSheetMainTabUnselectedForeground
                 ) {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         selectedView = .symbol
@@ -2457,11 +2460,11 @@ struct ChartBottomSheet: View {
                     RootBottomBarIconButton(
                         systemName: "message.fill",
                         backgroundColor: selectedView == .chat ?
-                            AppColors.gradientBackgroundDark :
-                            AppColors.gradientBackgroundMid.opacity(0.9),
+                            AppColors.chartSheetMainTabSelectedBackground :
+                            AppColors.chartSheetMainTabUnselectedBackground,
                         foregroundColor: selectedView == .chat ?
-                            .white :
-                            AppColors.whiteText.opacity(0.8)
+                            AppColors.chartSheetMainTabSelectedForeground :
+                            AppColors.chartSheetMainTabUnselectedForeground
                     ) {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             selectedView = .chat
@@ -2474,11 +2477,11 @@ struct ChartBottomSheet: View {
                         systemName: "plus.viewfinder",
                         fontSize: 25,
                         backgroundColor: selectedView == .components ?
-                            AppColors.gradientBackgroundDark :
-                            AppColors.gradientBackgroundMid.opacity(0.9),
+                            AppColors.chartSheetMainTabSelectedBackground :
+                            AppColors.chartSheetMainTabUnselectedBackground,
                         foregroundColor: selectedView == .components ?
-                            .white :
-                            AppColors.whiteText.opacity(0.8)
+                            AppColors.chartSheetMainTabSelectedForeground :
+                            AppColors.chartSheetMainTabUnselectedForeground
                     ) {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             selectedView = .components
@@ -2490,11 +2493,11 @@ struct ChartBottomSheet: View {
                         systemName: "target",
                         fontSize: 25,
                         backgroundColor: selectedView == .markers ?
-                            AppColors.whiteText :
-                            AppColors.whiteText.opacity(0.5),
+                            AppColors.chartSheetMarkersTabSelectedBackground :
+                            AppColors.chartSheetMarkersTabUnselectedBackground,
                         foregroundColor: selectedView == .markers ?
-                            AppColors.gradientBackgroundDark :
-                            AppColors.gradientBackgroundDark.opacity(0.8)
+                            AppColors.chartSheetMarkersTabSelectedForeground :
+                            AppColors.chartSheetMarkersTabUnselectedForeground
                     ) {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             selectedView = .markers

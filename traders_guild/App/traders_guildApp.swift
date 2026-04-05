@@ -36,6 +36,7 @@ struct traders_guildApp: App {
     
     var body: some Scene {
         WindowGroup {
+            let _ = themeManager.currentTheme
             let isBiometricLocked = rlAppState.shouldPresentBiometricAppLock
             ZStack {
                 ZStack {
@@ -182,8 +183,8 @@ struct traders_guildApp: App {
             // Fully authenticated with guild selected
             let _ = print("📱 → Showing MainView")
             MainView()
-                .preferredColorScheme(ThemeManager.shared.currentTheme.colorScheme)
-                .id(ThemeManager.shared.currentTheme)
+                .preferredColorScheme(themeManager.currentTheme.colorScheme)
+                .id(themeManager.currentTheme)
                 
         } else {
             // Authenticated but no guild selected - show loading/waiting view

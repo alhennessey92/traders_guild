@@ -772,7 +772,10 @@ struct ChatInputFooter: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(ChatChromeBarBackground())
+        .background(
+            ChatChromeBarBackground()
+                .ignoresSafeArea(edges: .bottom)
+        )
         .compositingGroup()
         .onChange(of: showActionPanel) { _, newValue in
             isActionPanelVisible?.wrappedValue = newValue

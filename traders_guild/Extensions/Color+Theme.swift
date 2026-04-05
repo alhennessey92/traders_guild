@@ -586,10 +586,46 @@ enum AppColors {
         isLightGrey ? tgMidGrey : tgWhiteText.opacity(0.8)
     }
 
+    /// Chart sheet standard tab row (symbol / chat / components). LightGrey: same soft chrome as placement bar; dark/mid: legacy gradients.
+    static var chartSheetMainTabSelectedBackground: Color {
+        switch theme {
+        case .lightGrey: return placementBarSelectedFill
+        case .midGrey, .dark: return gradientBackgroundDark
+        }
+    }
+
+    static var chartSheetMainTabUnselectedBackground: Color {
+        switch theme {
+        case .lightGrey: return placementBarUnselectedFill
+        case .midGrey, .dark: return gradientBackgroundMid.opacity(0.9)
+        }
+    }
+
+    static var chartSheetMainTabSelectedForeground: Color { placementBarSelectedForeground }
+
+    static var chartSheetMainTabUnselectedForeground: Color { placementBarUnselectedForeground }
+
+    /// Markers tab (inverted on dark/mid). LightGrey: matches other tabs’ soft chrome.
+    static var chartSheetMarkersTabSelectedBackground: Color {
+        isLightGrey ? placementBarSelectedFill : whiteText
+    }
+
+    static var chartSheetMarkersTabUnselectedBackground: Color {
+        isLightGrey ? placementBarUnselectedFill : whiteText.opacity(0.5)
+    }
+
+    static var chartSheetMarkersTabSelectedForeground: Color {
+        isLightGrey ? primaryForeground : gradientBackgroundDark
+    }
+
+    static var chartSheetMarkersTabUnselectedForeground: Color {
+        isLightGrey ? placementBarUnselectedForeground : gradientBackgroundDark.opacity(0.8)
+    }
+
     /// Canvas marker blob fill. Dark/MidGrey: near-black; LightGrey: mid grey so white glyphs read.
     static var canvasMarkerFill: Color {
         isLightGrey
-            ? Color(red: 88.0 / 255, green: 92.0 / 255, blue: 102.0 / 255).opacity(0.94)
+            ? Color(red: 102.0 / 255, green: 106.0 / 255, blue: 116.0 / 255).opacity(0.92)
             : Color(white: 0.11).opacity(0.94)
     }
 
@@ -672,7 +708,7 @@ enum AppColors {
     /// Symbol sheet timeframe section container. Dark/Mid: surfaceWhite05.
     static var symbolSheetGroupedPanelFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.06)
+        case .lightGrey: return tgWhiteText.opacity(0.12)
         case .midGrey, .dark: return surfaceWhite05
         }
     }

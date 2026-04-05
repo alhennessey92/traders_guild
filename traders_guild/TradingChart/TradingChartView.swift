@@ -6647,11 +6647,12 @@ struct ChartBottomControlButton: View {
     let action: () -> Void
 
     static let cornerRadius: CGFloat = 8
-    static let inactiveBackground: Color = AppColors.chartPanelBackgroundMuted.opacity(0.96)
-    static let inactiveBorder: Color = AppColors.surfaceWhite14
-    static let activeBackground: Color = AppColors.surfaceWhite68
-    static let activeBorder: Color = AppColors.surfaceWhite24
-    
+    /// Must be computed: `static let` captures `AppColors` once and never updates when the user changes theme.
+    static var inactiveBackground: Color { AppColors.chartPanelBackgroundMuted.opacity(0.96) }
+    static var inactiveBorder: Color { AppColors.surfaceWhite14 }
+    static var activeBackground: Color { AppColors.surfaceWhite68 }
+    static var activeBorder: Color { AppColors.surfaceWhite24 }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
