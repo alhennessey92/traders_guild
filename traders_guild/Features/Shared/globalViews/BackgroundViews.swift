@@ -20,7 +20,7 @@ struct StaticBackgroundView: View {
             )
 
             // Pattern overlay - fades in smoothly
-            PatternOverlay(patternType: .honeycomb, hexSize: 16)
+            PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
                 .opacity(patternOpacity)
         }
         .ignoresSafeArea()
@@ -45,7 +45,7 @@ struct StaticAuthBackgroundView: View {
             )
 
             // Pattern overlay - fades in smoothly with edge vignette mask
-            PatternOverlay(patternType: .honeycomb, hexSize: 16)
+            PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
                 .opacity(patternOpacity)
                 .mask(
                     RadialGradient(
@@ -78,13 +78,13 @@ struct StaticMessagingBackgroundView: View {
             )
 
             // Pattern overlay - fades in smoothly
-            PatternOverlay(patternType: .honeycomb, hexSize: 16)
+            PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
                 .opacity(patternOpacity)
         }
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = 0.02
+                patternOpacity = AppColors.messagingSheetHoneycombPatternOpacity
             }
         }
     }
@@ -96,14 +96,13 @@ struct StaticPatternView: View {
     var body: some View {
         ZStack {
             // Pattern overlay - fades in smoothly
-            PatternOverlay(patternType: .honeycomb, hexSize: 16)
+            PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
                 .opacity(patternOpacity)
         }
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                // Mid-grey backgrounds are lighter so need higher opacity for visible contrast
-                patternOpacity = 0.02
+                patternOpacity = AppColors.inlineHoneycombPatternOpacity
             }
         }
     }

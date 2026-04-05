@@ -238,13 +238,6 @@ struct NotificationCard: View {
         notification.accentColor    // Uses the computed property on RLNotificationDTO
     }
 
-    private var cardBaseFillOpacity: Double {
-        if showAsUnread {
-            return isPressed ? 0.10 : 0.08
-        }
-        return isPressed ? 0.07 : 0.04
-    }
-
     private var iconBadgeFillOpacity: Double {
         showAsUnread ? 0.20 : 0.14
     }
@@ -320,7 +313,7 @@ struct NotificationCard: View {
                                     if isProcessingInvite {
                                         ProgressView()
                                             .scaleEffect(0.6)
-                                            .tint(.white)
+                                            .tint(AppColors.onAccentForeground)
                                     }
                                     Text("Accept")
                                         .font(.system(size: 11, weight: .semibold))
@@ -328,7 +321,7 @@ struct NotificationCard: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
                                 .background(AppColors.statusPositive80)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.onAccentForeground)
                                 .cornerRadius(6)
                             }
                             .disabled(isProcessingInvite)
@@ -338,7 +331,7 @@ struct NotificationCard: View {
                                     .font(.system(size: 11, weight: .semibold))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(AppColors.surfaceWhite10)
+                                    .background(AppColors.panelFillEmphasis)
                                     .foregroundColor(AppColors.whiteText.opacity(0.7))
                                     .cornerRadius(6)
                             }
@@ -367,7 +360,7 @@ struct NotificationCard: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.systemWhite.opacity(cardBaseFillOpacity))
+                    .fill(AppColors.contentCardFill(isUnread: showAsUnread, isPressed: isPressed))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .strokeBorder(
@@ -681,10 +674,10 @@ struct NavigationLoadingOverlay: View {
             VStack(spacing: 12) {
                 ProgressView()
                     .scaleEffect(1.2)
-                    .tint(.white)
+                    .tint(AppColors.primaryForeground)
                 Text("Opening...")
                     .font(.subheadline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
             }
             .padding(24)
             .background(

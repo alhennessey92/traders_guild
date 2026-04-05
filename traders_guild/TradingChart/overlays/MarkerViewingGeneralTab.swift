@@ -74,7 +74,7 @@ struct MarkerViewingGeneralTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(liveMarker.intent.displayName)
                     .font(.subheadline.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text(liveMarker.intent.subtitle)
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -157,7 +157,7 @@ struct MarkerViewingGeneralTab: View {
                         Text(alertPresentation.title)
                             .font(.caption.weight(.semibold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .background(
@@ -206,7 +206,7 @@ struct MarkerViewingGeneralTab: View {
 
                             Text(option.text)
                                 .font(.caption.weight(isSelected ? .semibold : .regular))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
                                 .lineLimit(2)
 
                             Spacer(minLength: 0)
@@ -296,7 +296,7 @@ struct MarkerViewingGeneralTab: View {
 
                     Text(visibilityLabel)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.onAccentForeground)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(Capsule().fill(visibilityColor.opacity(0.38)))
@@ -344,7 +344,7 @@ struct MarkerViewingGeneralTab: View {
                 Text("Edit")
                     .font(.caption.weight(.semibold))
             }
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.primaryForeground)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
@@ -371,7 +371,7 @@ struct MarkerViewingGeneralTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(state.displayName.uppercased())
                     .font(.system(size: 13, weight: .heavy))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text(setupStatusSubtitle(for: state))
                     .font(.caption2)
                     .foregroundColor(AppColors.greyText)
@@ -381,7 +381,7 @@ struct MarkerViewingGeneralTab: View {
 
             Text(liveMarker.timeframe.uppercased())
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(
@@ -458,7 +458,7 @@ struct MarkerViewingGeneralTab: View {
                 .foregroundColor(AppColors.greyText)
             Text(stateLabel.uppercased())
                 .font(.caption2.weight(.bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(
@@ -485,7 +485,7 @@ struct MarkerViewingGeneralTab: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(outcome.displayLabel.uppercased())
                             .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                         if let triggeredAt = outcome.triggeredAtFormatted {
                             Text(triggeredAt)
                                 .font(.caption2)
@@ -535,7 +535,7 @@ struct MarkerViewingGeneralTab: View {
                         Spacer(minLength: 0)
                         Text(formattedPrice(triggerPrice))
                             .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                     }
                 }
 
@@ -585,7 +585,7 @@ struct MarkerViewingGeneralTab: View {
 
             Text(value)
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(
@@ -602,7 +602,7 @@ struct MarkerViewingGeneralTab: View {
     private func readOnlyTextBlock(_ text: String, placeholder: String) -> some View {
         Text(text.isEmpty ? placeholder : text)
             .font(.caption)
-            .foregroundColor(text.isEmpty ? AppColors.greyText : .white)
+            .foregroundColor(text.isEmpty ? AppColors.greyText : AppColors.primaryForeground)
             .lineLimit(nil)
             .padding(.horizontal, 10)
             .padding(.vertical, 9)
@@ -672,7 +672,7 @@ struct MarkerViewingGeneralTab: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
             Text(title)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(AppColors.greyText)
@@ -708,7 +708,7 @@ struct MarkerViewingGeneralTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.headline.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text(subtitle)
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -751,7 +751,7 @@ struct MarkerViewingGeneralTab: View {
 
             Text(title)
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
 
             Spacer()
 
@@ -764,7 +764,7 @@ struct MarkerViewingGeneralTab: View {
         .padding(.vertical, 11)
         .background(
             LinearGradient(
-                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+                colors: [AppColors.searchBarGradientLeading, AppColors.searchBarGradientTrailing],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -789,7 +789,7 @@ struct MarkerViewingGeneralTab: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(symbol.ticker)
                                 .font(.subheadline.weight(.bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
                             HStack(spacing: 6) {
                                 Text(symbol.displayName)
                                     .font(.caption)
@@ -811,7 +811,7 @@ struct MarkerViewingGeneralTab: View {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(priceStr)
                                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppColors.primaryForeground)
                                 if let changeStr = symbol.changeFormatted {
                                     let isUp = symbol.isUp ?? false
                                     Text(changeStr)
@@ -855,7 +855,7 @@ struct MarkerViewingGeneralTab: View {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(Self.fullDateFormatter.string(from: liveMarker.createdAt))
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
                             Text(liveMarker.createdAtFormatted)
                                 .font(.caption2)
                                 .foregroundColor(AppColors.greyText)
@@ -869,7 +869,7 @@ struct MarkerViewingGeneralTab: View {
                         Spacer(minLength: 0)
                         Text(Self.fullDateFormatter.string(from: liveMarker.candleTimestamp))
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                     }
                 }
                 .padding(.horizontal, 10)
@@ -895,7 +895,7 @@ struct MarkerViewingGeneralTab: View {
                 .foregroundColor(AppColors.greyText)
             Text(label)
                 .font(.caption.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -932,7 +932,7 @@ struct MarkerViewingGeneralTab: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(authorHandle)
                             .font(.subheadline.weight(.bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
 
                         HStack(spacing: 6) {
                             Text(liveMarker.author.memberRole.displayName)

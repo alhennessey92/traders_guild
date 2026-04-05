@@ -171,7 +171,7 @@ struct ManageReportsView: View {
                 Text("\(pendingCount)")
                     .font(.caption2)
                     .fontWeight(.bold)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(.orange))
@@ -292,7 +292,7 @@ struct ManageReportsView: View {
                         // Reason badge
                         Text(report.reasonDisplay)
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.onAccentForeground)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(
@@ -367,7 +367,7 @@ struct ManageReportsView: View {
         .buttonStyle(PlainButtonStyle())
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
@@ -396,7 +396,7 @@ struct ManageReportsView: View {
                         Text(report.reasonDisplay)
                             .font(.caption)
                             .fontWeight(.semibold)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.onAccentForeground)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
                             .background(Capsule().fill(reasonColor(for: report.reason)))
@@ -437,7 +437,7 @@ struct ManageReportsView: View {
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(AppColors.surfaceWhite05)
+                            .fill(AppColors.symbolSheetGroupedPanelFill)
                     )
 
                     // ── Reported User (offending user) ──
@@ -471,7 +471,7 @@ struct ManageReportsView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.surfaceWhite05)
+                                .fill(AppColors.symbolSheetGroupedPanelFill)
                         )
                     }
 
@@ -517,7 +517,7 @@ struct ManageReportsView: View {
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(AppColors.surfaceWhite05)
+                            .fill(AppColors.symbolSheetGroupedPanelFill)
                     )
 
                     // ── Resolution Info (for already resolved/dismissed reports) ──
@@ -584,7 +584,7 @@ struct ManageReportsView: View {
                             HStack(spacing: 8) {
                                 Button(action: { suspendReportedUser(report: report, userId: reportedUserId) }) {
                                     HStack(spacing: 4) {
-                                        if busy { ProgressView().scaleEffect(0.7).tint(.white) }
+                                        if busy { ProgressView().scaleEffect(0.7).tint(AppColors.onAccentForeground) }
                                         Image(systemName: "pause.circle.fill")
                                         Text("Suspend")
                                     }
@@ -596,7 +596,7 @@ struct ManageReportsView: View {
                                 .disabled(isProcessing || busy)
                                 Button(action: { kickReportedUser(report: report, userId: reportedUserId) }) {
                                     HStack(spacing: 4) {
-                                        if busy { ProgressView().scaleEffect(0.7).tint(.white) }
+                                        if busy { ProgressView().scaleEffect(0.7).tint(AppColors.onAccentForeground) }
                                         Image(systemName: "person.fill.xmark")
                                         Text("Kick")
                                     }
@@ -608,7 +608,7 @@ struct ManageReportsView: View {
                                 .disabled(isProcessing || busy)
                                 Button(action: { banReportedUser(report: report, userId: reportedUserId) }) {
                                     HStack(spacing: 4) {
-                                        if busy { ProgressView().scaleEffect(0.7).tint(.white) }
+                                        if busy { ProgressView().scaleEffect(0.7).tint(AppColors.onAccentForeground) }
                                         Image(systemName: "nosign")
                                         Text("Ban")
                                     }
@@ -623,7 +623,7 @@ struct ManageReportsView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.surfaceWhite05)
+                                .fill(AppColors.symbolSheetGroupedPanelFill)
                         )
                     }
 
@@ -664,7 +664,7 @@ struct ManageReportsView: View {
                                         if isProcessing {
                                             ProgressView()
                                                 .scaleEffect(0.7)
-                                                .tint(.white)
+                                                .tint(AppColors.onAccentForeground)
                                         }
                                         Image(systemName: "checkmark.circle.fill")
                                         Text("Resolve")
@@ -697,7 +697,7 @@ struct ManageReportsView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.surfaceWhite05)
+                                .fill(AppColors.symbolSheetGroupedPanelFill)
                         )
                     } else if report.isPending && !canAdmin {
                         // Moderator viewing pending report — info only

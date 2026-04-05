@@ -128,7 +128,7 @@ struct StochasticPanelView: View {
             HStack(spacing: 4) {
                 (Text(stochHeaderLabel)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                  + Text("  Indicator")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(AppColors.surfaceWhite50))
@@ -393,7 +393,7 @@ struct StochasticPanelView: View {
                         
                         let text = Text(String(format: "%.1f", kValue))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.onAccentForeground)
                         
                         context.draw(text, at: CGPoint(x: labelX, y: y))
                     }
@@ -472,14 +472,14 @@ struct StochasticPanelView: View {
                 HStack(spacing: 6) {
                     Text("%K:")
                         .font(.system(size: 9))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                     Text(String(format: "%.1f", latest.kValue))
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(stochConfig?.color.color ?? .yellow)
 
                     Text("%D:")
                         .font(.system(size: 9))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                     Text(String(format: "%.1f", latest.dValue))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(stochConfig?.dColor.color ?? .red)
@@ -504,7 +504,7 @@ struct StochasticPanelView: View {
         if value >= overbought {
             Text("OVERBOUGHT")
                 .font(.system(size: 8, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
                 .background(AppColors.statusNegative80)
@@ -512,7 +512,7 @@ struct StochasticPanelView: View {
         } else if value <= oversold {
             Text("OVERSOLD")
                 .font(.system(size: 8, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
                 .background(AppColors.statusPositive80)

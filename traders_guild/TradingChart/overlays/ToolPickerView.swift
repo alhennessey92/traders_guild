@@ -94,7 +94,7 @@ private struct ToolOptionStrip: View {
                                         .lineLimit(1)
                                     Spacer(minLength: 0)
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 7)
                                 .background(

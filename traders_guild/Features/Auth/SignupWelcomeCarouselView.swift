@@ -95,7 +95,7 @@ struct SignupWelcomeCarouselView: View {
                             .padding(.vertical, 14)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .fill(AppColors.surfaceWhite08)
+                                    .fill(AppColors.symbolDetailCardFill)
                             )
                     }
                 }

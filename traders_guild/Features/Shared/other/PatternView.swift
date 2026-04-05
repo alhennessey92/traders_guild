@@ -16,6 +16,7 @@ struct PatternOverlay: View {
     
     let patternType: PatternType
     var hexSize: CGFloat = 10
+    var strokeColor: Color = .white
     
     var body: some View {
         GeometryReader { geometry in
@@ -62,7 +63,7 @@ struct PatternOverlay: View {
                 }
                 path.closeSubpath()
                 
-                context.stroke(path, with: .color(.white), lineWidth: 1)
+                context.stroke(path, with: .color(strokeColor), lineWidth: 1)
             }
         }
     }
@@ -83,7 +84,7 @@ struct PatternOverlay: View {
                         width: squareSize,
                         height: squareSize
                     )
-                    context.fill(Path(rect), with: .color(.white))
+                    context.fill(Path(rect), with: .color(strokeColor))
                 }
             }
         }
@@ -108,7 +109,7 @@ struct PatternOverlay: View {
                     width: dotSize,
                     height: dotSize
                 )
-                context.fill(Path(ellipseIn: rect), with: .color(.white))
+                context.fill(Path(ellipseIn: rect), with: .color(strokeColor))
             }
         }
     }

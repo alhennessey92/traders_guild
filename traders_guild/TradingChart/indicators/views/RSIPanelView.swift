@@ -30,7 +30,7 @@ struct IndicatorPanelHeaderRow: View {
             if let badgeText, let badgeColor, !badgeText.isEmpty {
                 Text(badgeText)
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
                     .background(badgeColor.opacity(0.8))
@@ -178,7 +178,7 @@ struct RSIPanelView: View {
             HStack(spacing: 4) {
                 (Text(rsiConfig?.label ?? "RSI 14")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                  + Text("  Indicator")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(AppColors.surfaceWhite50))
@@ -333,7 +333,7 @@ struct RSIPanelView: View {
                         
                         let text = Text(String(format: "%.1f", rsiValue))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.onAccentForeground)
                         
                         context.draw(text, at: CGPoint(x: labelX, y: y))
                     }
@@ -365,7 +365,7 @@ struct RSIPanelView: View {
                 IndicatorPanelHeaderRow(
                     title: "",
                     valueText: String(format: "%.1f", latest.value),
-                    valueColor: condition.label.isEmpty ? AppColors.surfaceWhite90 : condition.color,
+                    valueColor: condition.label.isEmpty ? AppColors.listCardBodyEmphasisText : condition.color,
                     badgeText: condition.label.isEmpty ? nil : condition.label,
                     badgeColor: condition.label.isEmpty ? nil : condition.color
                 )
@@ -390,7 +390,7 @@ struct RSIPanelView: View {
                 
                 Text("50")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite66)
+                    .foregroundColor(AppColors.chartAxisLabelSecondary)
                 
                 Spacer()
                 

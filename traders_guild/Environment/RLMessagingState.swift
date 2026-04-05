@@ -391,7 +391,7 @@ struct RLMessagingSheet: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
                     .padding(.bottom, 16)
-                    .background(AppColors.sheetBackground)
+                    .background(ChatChromeBarBackground())
 
                     Divider()
                 }
@@ -698,7 +698,7 @@ struct RLMessagingSheet: View {
                         Group {
                             if isLoadingMore {
                                 ProgressView()
-                                    .tint(.white)
+                                    .tint(AppColors.primaryForeground)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 8)
                             } else {

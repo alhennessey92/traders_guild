@@ -715,7 +715,7 @@ private struct GlobalGuildLeaderboardRow: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.03))
+                .fill(isPressed ? AppColors.messagingListRowFillPressed : AppColors.messagingListRowFill)
         )
         .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
@@ -797,7 +797,7 @@ private struct GlobalUserAccuracyRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : 0.03))
+                    .fill(isPressed ? AppColors.messagingListRowFillPressed : AppColors.messagingListRowFill)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -894,7 +894,7 @@ private struct AccuracyLeaderboardRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
+                    .fill(AppColors.leaderboardRowFill(isTopRank: isTopRank, isPressed: isPressed))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .strokeBorder(
@@ -1004,7 +1004,7 @@ private struct LeaderboardMemberRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
+                    .fill(AppColors.leaderboardRowFill(isTopRank: isTopRank, isPressed: isPressed))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .strokeBorder(

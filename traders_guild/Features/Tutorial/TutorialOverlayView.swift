@@ -262,7 +262,7 @@ struct TutorialOverlayView: View {
             GeometryReader { barGeometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(AppColors.surfaceWhite08)
+                        .fill(AppColors.symbolDetailCardFill)
                         .frame(height: 3)
 
                     RoundedRectangle(cornerRadius: 2)
@@ -305,7 +305,7 @@ struct TutorialOverlayView: View {
                         .padding(.vertical, 13)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
-                                .fill(AppColors.surfaceWhite08)
+                                .fill(AppColors.symbolDetailCardFill)
                         )
                 }
             }
@@ -335,7 +335,7 @@ struct TutorialOverlayView: View {
                         .padding(.vertical, 13)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
-                                .fill(AppColors.surfaceWhite08)
+                                .fill(AppColors.symbolDetailCardFill)
                         )
                 }
             }

@@ -62,7 +62,7 @@ struct SettingsToggleRow: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.surfaceWhite03)
+                .fill(AppColors.insetPanelBackground)
         )
     }
 }

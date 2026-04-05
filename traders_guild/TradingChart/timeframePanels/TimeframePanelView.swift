@@ -226,7 +226,7 @@ struct TimeframePanelView: View {
             HStack(spacing: 4) {
                 (Text(dataManager.timeframe.shortName)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                  + Text("  Timeframe")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(AppColors.surfaceWhite50))
@@ -421,11 +421,11 @@ struct TimeframePanelView: View {
             // Dim regions outside the viewport
             if clampedLeft > 0 {
                 let leftDim = CGRect(x: 0, y: 0, width: clampedLeft, height: size.height)
-                context.fill(Path(leftDim), with: .color(Color.black.opacity(opacity)))
+                context.fill(Path(leftDim), with: .color(AppColors.viewportDim.opacity(opacity)))
             }
             if clampedRight < size.width {
                 let rightDim = CGRect(x: clampedRight, y: 0, width: size.width - clampedRight, height: size.height)
-                context.fill(Path(rightDim), with: .color(Color.black.opacity(opacity)))
+                context.fill(Path(rightDim), with: .color(AppColors.viewportDim.opacity(opacity)))
             }
             // Subtle border
             context.stroke(
@@ -602,7 +602,7 @@ struct TimeframePanelView: View {
 
         let label = Text("MARKER")
             .font(.system(size: 7, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
         context.draw(label, at: CGPoint(x: x, y: 11))
     }
 

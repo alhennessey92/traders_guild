@@ -18,11 +18,11 @@ private func secondaryPriceChipText(label: String, priceText: String) -> Text {
     (
         Text("\(compactHorizontalPriceLabel(label)) ")
             .font(.system(size: ChartAxisMetrics.secondaryLabelFontSize, weight: .bold, design: .monospaced))
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
         +
         Text(priceText)
             .font(.system(size: ChartAxisMetrics.secondaryPriceFontSize, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
     )
 }
 
@@ -843,11 +843,14 @@ struct TradingChartView: View {
             if ThemeManager.shared.currentTheme == .midGrey {
                 AppColors.chartPanelBackgroundMuted
                     .ignoresSafeArea()
-                PatternOverlay(patternType: .honeycomb, hexSize: 16)
+                PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
                     .opacity(0.015)
                     .ignoresSafeArea()
             } else if ThemeManager.shared.currentTheme == .lightGrey {
                 AppColors.chartPanelBackgroundMuted
+                    .ignoresSafeArea()
+                PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
+                    .opacity(AppColors.chartLightGreyHoneycombOpacity)
                     .ignoresSafeArea()
             }
 
@@ -1633,12 +1636,12 @@ struct TradingChartView: View {
             
             VStack(spacing: 20) {
                 ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryForeground))
                     .scaleEffect(1.5)
                 
                 Text("Loading Chart...")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 
                 loadingSubtitle
             }
@@ -1651,11 +1654,11 @@ struct TradingChartView: View {
         if chartViewModel.currentSymbol == nil {
             Text("Fetching symbol data")
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
         } else if chartData.candles.isEmpty {
             Text("Loading candles")
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
         }
     }
     
@@ -1698,13 +1701,13 @@ struct TradingChartView: View {
                 Text("A \(markerManager.duplicateMarkerToLike?.intent.displayName.lowercased() ?? "marker") already exists on this candle. Would you like to like it instead?")
                     .font(.body)
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.secondaryForeground)
                     .padding(.horizontal)
                 
                 duplicateMarkerButtons
             }
             .padding(30)
-            .background(Color(.systemBackground))
+            .background(AppColors.duplicateDialogCardBackground)
             .cornerRadius(20)
             .shadow(radius: 20)
             .padding(.horizontal, 40)
@@ -1725,7 +1728,7 @@ struct TradingChartView: View {
                     Text("Like Existing")
                 }
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(AppColors.statusInfo)
@@ -1738,7 +1741,7 @@ struct TradingChartView: View {
                     .foregroundColor(.blue)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(AppColors.duplicateDialogSecondaryButtonFill)
                     .cornerRadius(12)
             }
         }
@@ -1753,7 +1756,7 @@ struct TradingChartView: View {
             // Header label
             Text("Marker Actions")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
                 .textCase(.uppercase)
                 .tracking(0.5)
 
@@ -1814,17 +1817,17 @@ struct TradingChartView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("R:R")
                     .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
                 Text(String(format: "%.2f", state.riskRewardRatio))
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
             }
 
             // Profit %
             VStack(alignment: .leading, spacing: 1) {
                 Text("Profit")
                     .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
                 Text(String(format: "+%.2f%%", state.potentialProfitPercent))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(.green)
@@ -1834,7 +1837,7 @@ struct TradingChartView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Risk")
                     .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
                 Text(String(format: "-%.2f%%", state.potentialLossPercent))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(.red)
@@ -1853,7 +1856,7 @@ struct TradingChartView: View {
         Button(action: handleCancelPlacement) {
             Image(systemName: "xmark")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
                 .frame(width: 36, height: 36)
                 .background(AppColors.statusNegative70)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -1869,7 +1872,7 @@ struct TradingChartView: View {
                 Text("Confirm")
                     .font(.system(size: 12, weight: .semibold))
             }
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(AppColors.statusWarning70)
@@ -1885,7 +1888,7 @@ struct TradingChartView: View {
                 if isSubmittingPlacement {
                     ProgressView()
                         .progressViewStyle(.circular)
-                        .tint(.white)
+                        .tint(AppColors.onAccentForeground)
                         .scaleEffect(0.75)
                 } else {
                     Image(systemName: placementState.isEditingExistingMarker ? "checkmark.circle.fill" : "target")
@@ -1895,7 +1898,7 @@ struct TradingChartView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
             }
-            .foregroundColor(placementState.isValid ? .white : AppColors.whiteText.opacity(0.55))
+            .foregroundColor(placementState.isValid ? AppColors.onAccentForeground : AppColors.whiteText.opacity(0.55))
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .frame(minWidth: 122)
@@ -5235,12 +5238,12 @@ struct TradingChartView: View {
             Color.clear
                 .frame(height: fadeHeight)
             LinearGradient(
-                colors: [.clear, .white],
+                colors: [.clear, AppColors.chartMaskFade],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .frame(height: 60)
-            AppColors.systemWhite
+            AppColors.chartMaskFade
         }
     }
 
@@ -5250,12 +5253,12 @@ struct TradingChartView: View {
             Color.clear
                 .frame(height: priceIndicatorTopExclusionHeight(geometry: geometry))
             LinearGradient(
-                colors: [.clear, .white],
+                colors: [.clear, AppColors.chartMaskFade],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .frame(height: 60)
-            AppColors.systemWhite
+            AppColors.chartMaskFade
         }
     }
 
@@ -5276,12 +5279,12 @@ struct TradingChartView: View {
                     Color.clear
                         .frame(height: fadeStart)
                     LinearGradient(
-                        colors: [.clear, .white],
+                        colors: [.clear, AppColors.chartMaskFade],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                     .frame(height: 60)
-                    Color.white
+                    AppColors.chartMaskFade
                         .frame(height: max(0, plotHeight - fadeStart - 60))
                 }
                 .frame(width: plotWidth, height: plotHeight, alignment: .top)
@@ -5297,7 +5300,7 @@ struct TradingChartView: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
             .overlay(alignment: .topLeading) {
                 Rectangle()
-                    .fill(Color.white)
+                    .fill(AppColors.chartMaskFade)
                     .frame(width: geometry.size.width, height: visibleHeight)
                     .offset(y: topExclusion)
             }
@@ -5318,12 +5321,12 @@ struct TradingChartView: View {
             Color.clear
                 .frame(height: fadeStart)
             LinearGradient(
-                colors: [.clear, .white],
+                colors: [.clear, AppColors.chartMaskFade],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .frame(height: 60)
-            Color.white
+            AppColors.chartMaskFade
                 .frame(height: max(0, plotHeight - fadeStart - 60))
         }
         .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
@@ -5376,7 +5379,7 @@ struct TradingChartView: View {
                 context.draw(
                     Text(priceText)
                         .font(.system(size: 11))
-                        .foregroundColor(AppColors.surfaceWhite84),
+                        .foregroundColor(AppColors.chartAxisLabelPrimary),
                     at: CGPoint(x: 30, y: y)
                 )
                 labelCount += 1
@@ -5585,11 +5588,11 @@ struct TradingChartView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: draft.componentType.icon)
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(AppColors.surfaceWhite90)
+                                    .foregroundColor(AppColors.chartOverlayToolbarSecondary)
 
                                 Text(draft.componentType.displayName)
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(AppColors.surfaceWhite94)
+                                    .foregroundColor(AppColors.chartOverlayToolbarPrimary)
 
                                 Spacer(minLength: 0)
                             }
@@ -5706,7 +5709,10 @@ struct TradingChartView: View {
                 .frame(width: 18, height: 18)
                 .overlay(
                     Circle()
-                        .stroke(isSelected ? AppColors.surfaceWhite95 : AppColors.surfaceWhite12, lineWidth: isSelected ? 2 : 1)
+                        .stroke(
+                            isSelected ? AppColors.adaptiveOverlay94 : AppColors.adaptiveOverlay18,
+                            lineWidth: isSelected ? 2 : 1
+                        )
                 )
         }
         .buttonStyle(.plain)
@@ -5723,17 +5729,17 @@ struct TradingChartView: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(isSelected ? AppColors.surfaceWhite12 : AppColors.surfaceWhite04)
+                    .fill(isSelected ? AppColors.drawingStyleSwatchFillSelected : AppColors.drawingStyleSwatchFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 7)
-                            .stroke(isSelected ? AppColors.surfaceWhite50 : AppColors.surfaceWhite12, lineWidth: 1)
+                            .stroke(isSelected ? AppColors.adaptiveAccessoryForeground : AppColors.drawingStyleSwatchStroke, lineWidth: 1)
                     )
 
                 Path { path in
                     path.move(to: CGPoint(x: 6, y: 14))
                     path.addLine(to: CGPoint(x: 26, y: 14))
                 }
-                .stroke(AppColors.surfaceWhite84, style: StrokeStyle(lineWidth: 2, dash: style.dashPattern))
+                .stroke(AppColors.drawingStylePreviewLine, style: StrokeStyle(lineWidth: 2, dash: style.dashPattern))
             }
             .frame(width: 32, height: 28)
         }
@@ -5752,11 +5758,11 @@ struct TradingChartView: View {
             HStack(spacing: 8) {
                 Image(systemName: "face.smiling")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite90)
+                    .foregroundColor(AppColors.chartOverlayToolbarSecondary)
 
                 Text("Emoji Picker")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite94)
+                    .foregroundColor(AppColors.chartOverlayToolbarPrimary)
 
                 Spacer(minLength: 0)
 
@@ -5772,7 +5778,7 @@ struct TradingChartView: View {
 
             Text("Pick an anchor emoji for this chart note.")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(AppColors.surfaceWhite70)
+                .foregroundColor(AppColors.chartOverlayToolbarTertiary)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -5835,8 +5841,8 @@ struct TradingChartView: View {
                         Circle()
                             .stroke(
                                 isSelected
-                                    ? AppColors.surfaceWhite84.opacity(0.55)
-                                    : AppColors.surfaceWhite12.opacity(0.35),
+                                    ? AppColors.chartAxisLabelPrimary.opacity(0.55)
+                                    : AppColors.adaptiveOverlay18.opacity(0.35),
                                 lineWidth: isSelected ? 1.5 : 0.5
                             )
                     )
@@ -5852,7 +5858,7 @@ struct TradingChartView: View {
     private func drawingToolbarActionButton(
         icon: String,
         title: String,
-        foreground: Color = AppColors.surfaceWhite84,
+        foreground: Color = AppColors.chartOverlayToolbarPrimary,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -5865,7 +5871,7 @@ struct TradingChartView: View {
             .foregroundColor(foreground)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(AppColors.surfaceWhite08)
+            .background(AppColors.symbolDetailCardFill)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
@@ -6012,12 +6018,12 @@ struct TradingChartView: View {
 
                 Text(symbol.ticker)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .lineLimit(1)
             } else {
                 Text("—")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
             }
 
             if let symbol = currentSymbol {
@@ -7644,7 +7650,7 @@ struct MarkerPriceLinesOverlay: View {
             labelContext.draw(
                 Text(priceText)
                     .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white),
+                    .foregroundColor(AppColors.onAccentForeground),
                 at: CGPoint(x: labelRect.midX, y: y)
             )
         }

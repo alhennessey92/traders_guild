@@ -245,7 +245,7 @@ struct MarkerComponentOverlayLayer: View {
                 .minimumScaleFactor(0.75)
                 .font(.system(size: ChartAxisMetrics.secondaryPriceFontSize, weight: .semibold, design: .monospaced))
         }
-        .foregroundColor(.white)
+        .foregroundColor(AppColors.onAccentForeground)
         .padding(.horizontal, ChartAxisMetrics.secondaryPriceChipHorizontalPadding)
         .padding(.vertical, ChartAxisMetrics.secondaryPriceChipVerticalPadding)
         .frame(width: ChartAxisMetrics.secondaryPriceChipWidth, height: ChartAxisMetrics.secondaryPriceChipHeight)

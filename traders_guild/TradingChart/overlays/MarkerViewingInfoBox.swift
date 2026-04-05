@@ -106,7 +106,7 @@ struct MarkerViewingInfoBox: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(marker.intent.displayName) Marker")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text("Details")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(AppColors.surfaceWhite74)
@@ -148,7 +148,7 @@ struct MarkerViewingInfoBox: View {
                         Text(severity.rawValue)
                             .font(.system(size: 10.5, weight: .bold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
                     .background(
@@ -239,7 +239,7 @@ struct MarkerViewingInfoBox: View {
                 HStack(spacing: 6) {
                     Text(option.text)
                         .font(.system(size: 10.5, weight: isSelected ? .semibold : .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                         .lineLimit(2)
 
                     Spacer(minLength: 0)
@@ -289,7 +289,7 @@ struct MarkerViewingInfoBox: View {
             Spacer(minLength: 0)
             Text(value)
                 .font(.system(size: 10.5, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -346,7 +346,7 @@ struct MarkerViewingInfoBox: View {
                     LinearGradient(
                         colors: [
                             AppColors.statusInfo20,
-                            AppColors.surfaceWhite08
+                            AppColors.symbolDetailCardFill
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

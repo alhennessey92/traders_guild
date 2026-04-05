@@ -318,7 +318,7 @@ struct PendingRequestRow: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.surfaceWhite03)
+                .fill(AppColors.insetPanelBackground)
         )
     }
 }
@@ -359,7 +359,7 @@ struct PendingOutgoingRow: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.surfaceWhite03)
+                .fill(AppColors.insetPanelBackground)
         )
     }
 }
@@ -410,7 +410,7 @@ struct FriendRow: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.surfaceWhite03)
+                    .fill(AppColors.insetPanelBackground)
             )
         }
         .buttonStyle(PlainButtonStyle())

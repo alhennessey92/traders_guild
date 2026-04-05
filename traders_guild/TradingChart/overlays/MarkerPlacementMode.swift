@@ -2263,11 +2263,11 @@ struct MarkerPlacementMode: View {
         VStack(spacing: 12) {
             HStack {
                 Button("Cancel", action: onCancel)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Spacer()
                 Text("Placing Marker")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Spacer()
                 UnifiedMarkerBadge(
                     intent: placementState.intent,

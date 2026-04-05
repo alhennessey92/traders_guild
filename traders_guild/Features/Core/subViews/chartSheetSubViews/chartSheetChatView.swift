@@ -53,11 +53,11 @@ struct ImprovedChartSheetChatView: View {
             
             Text("No Symbol Selected")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
             
             Text("Select a symbol to start chatting with your guild")
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
         }
@@ -139,11 +139,11 @@ struct ImprovedChartSheetChatView: View {
                 Text(chat.symbolTicker)
                     .font(.headline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
 
                 Text(chat.guildName)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.secondaryForeground)
             }
 
             Spacer(minLength: 0)
@@ -152,7 +152,7 @@ struct ImprovedChartSheetChatView: View {
                 Text("\(chat.unreadCount)")
                     .font(.caption2)
                     .fontWeight(.bold)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(AppColors.accentColor)
@@ -168,7 +168,7 @@ struct ImprovedChartSheetChatView: View {
         .background(
             ZStack {
                 AppColors.sheetBackground
-                AppColors.surfaceWhite05
+                AppColors.symbolSheetGroupedPanelFill
             }
         )
     }

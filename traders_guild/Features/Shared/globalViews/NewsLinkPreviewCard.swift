@@ -258,7 +258,7 @@ struct NewsLinkPreviewCard: View {
                     case .empty:
                         ZStack {
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.surfaceWhite08)
+                                .fill(AppColors.symbolDetailCardFill)
                             ProgressView()
                                 .tint(accentColor)
                         }
@@ -275,13 +275,13 @@ struct NewsLinkPreviewCard: View {
             if let title = preview?.title {
                 Text(title)
                     .font(.subheadline.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .lineLimit(displayMode.titleLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(urlString)
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .lineLimit(displayMode.titleLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
             }

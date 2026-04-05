@@ -120,7 +120,7 @@ struct ChartSettingsView: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .colorScheme(.dark)
+                        .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
                     }
 
                     sliderRow(
@@ -260,7 +260,7 @@ struct ChartSettingsView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(AppColors.surfaceWhite03)
+                .fill(AppColors.insetPanelBackground)
         )
     }
 
@@ -275,7 +275,7 @@ struct ChartSettingsView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(AppColors.surfaceWhite03)
+                    .fill(AppColors.insetPanelBackground)
             )
     }
 
@@ -316,7 +316,7 @@ struct ChartSettingsView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(AppColors.surfaceWhite03)
+                .fill(AppColors.insetPanelBackground)
         )
     }
 }

@@ -2276,10 +2276,10 @@ struct ChartMarkerSystem {
 
         // 1. Shadow
         let shadowRect = circleRect.offsetBy(dx: 1, dy: 1)
-        drawContext.fill(Path(ellipseIn: shadowRect), with: .color(Color.black.opacity(0.25)))
+        drawContext.fill(Path(ellipseIn: shadowRect), with: .color(AppColors.canvasMarkerShadow))
 
         // 2. Opaque dark base (canvas can't use .ultraThinMaterial — must block chart content)
-        drawContext.fill(circlePath, with: .color(Color(white: 0.11).opacity(0.94)))
+        drawContext.fill(circlePath, with: .color(AppColors.canvasMarkerFill))
 
         // 3. Tint overlay — subtle for standard, stronger for alerts
         if isAlert, let severity = markerSeverity {
@@ -2351,7 +2351,7 @@ struct ChartMarkerSystem {
             drawContext.draw(
                 Text("\(marker.likeCount)")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white),
+                    .foregroundColor(AppColors.onAccentForeground),
                 at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 7)
             )
         }

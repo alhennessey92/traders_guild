@@ -185,9 +185,15 @@ struct UserProfileDetailView: View {
                 DrawerActionButton(
                     title: "Switch Guild",
                     imageName: "arrow.trianglehead.2.counterclockwise",
-                    backgroundColor: AppColors.whiteText.opacity(0.8),
-                    foregroundColor: AppColors.systemBlack,
-                    strokeColor: AppColors.systemBlack,
+                    backgroundColor: ThemeManager.shared.currentTheme == .lightGrey
+                        ? AppColors.standardSearchFieldFill
+                        : AppColors.whiteText.opacity(0.8),
+                    foregroundColor: ThemeManager.shared.currentTheme == .lightGrey
+                        ? AppColors.primaryForeground
+                        : AppColors.systemBlack,
+                    strokeColor: ThemeManager.shared.currentTheme == .lightGrey
+                        ? AppColors.standardSearchFieldStroke
+                        : AppColors.systemBlack,
                     strokeWidth: 0.5,
                     action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
@@ -237,6 +243,7 @@ struct UserProfileDetailView: View {
                     .background(.ultraThinMaterial)
                 AppColors.sheetBackground
                 StaticPatternView()
+                    .opacity(AppColors.guildFlowPatternOpacityScale)
             }
         )
     }
@@ -438,9 +445,15 @@ struct UserProfileFooterView: View {
             DrawerActionButton(
                 title: "Switch Guild",
                 imageName: "arrow.trianglehead.2.counterclockwise",
-                backgroundColor: AppColors.whiteText.opacity(0.8),
-                foregroundColor: AppColors.systemBlack,
-                strokeColor: AppColors.systemBlack,
+                backgroundColor: ThemeManager.shared.currentTheme == .lightGrey
+                    ? AppColors.standardSearchFieldFill
+                    : AppColors.whiteText.opacity(0.8),
+                foregroundColor: ThemeManager.shared.currentTheme == .lightGrey
+                    ? AppColors.primaryForeground
+                    : AppColors.systemBlack,
+                strokeColor: ThemeManager.shared.currentTheme == .lightGrey
+                    ? AppColors.standardSearchFieldStroke
+                    : AppColors.systemBlack,
                 strokeWidth: 0.5,
                 action: {
                     withAnimation(.easeInOut(duration: 0.3)) {

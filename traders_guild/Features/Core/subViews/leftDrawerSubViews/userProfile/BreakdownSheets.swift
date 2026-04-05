@@ -335,7 +335,7 @@ struct GuildReputationBreakdownSheetView: View {
                                 BreakdownMetricRow(label: "To Tier \(nextTier.tierLevel)", value: "\(profile.reputation) / \(nextTier.minReputation)", valueColor: AppColors.whiteText)
                                 GeometryReader { geometry in
                                     ZStack(alignment: .leading) {
-                                        Capsule().fill(AppColors.surfaceWhite08)
+                                        Capsule().fill(AppColors.symbolDetailCardFill)
                                         Capsule().fill(profile.tier.color)
                                             .frame(width: geometry.size.width * max(0, min(1, progress)))
                                     }
@@ -568,7 +568,7 @@ private struct BreakdownCard<Content: View>: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
@@ -655,7 +655,7 @@ private struct BreakdownBarRow: View {
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(AppColors.surfaceWhite08)
+                    Capsule().fill(AppColors.symbolDetailCardFill)
                     Capsule()
                         .fill(tint)
                         .frame(width: geometry.size.width * max(0, min(1, progress)))
@@ -691,7 +691,7 @@ private struct BreakdownDateBarChart: View {
             GeometryReader { geometry in
                 if points.isEmpty {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.surfaceWhite08)
+                        .fill(AppColors.symbolDetailCardFill)
                         .overlay(
                             Text("No 30-day trend data")
                                 .font(.caption2)
@@ -909,7 +909,7 @@ private struct BreakdownFreshnessBadge: View {
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.symbolDetailCardFill)
         )
     }
 

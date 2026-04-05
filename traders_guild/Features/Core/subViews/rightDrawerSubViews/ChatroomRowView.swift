@@ -98,7 +98,7 @@ struct RLChatroomRowView: View {
                             Text("\(chatroom.unreadCount)")
                                 .font(.caption2)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.onAccentForeground)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(AppColors.accentColor)
@@ -122,7 +122,7 @@ struct RLChatroomRowView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.1 : 0.03))
+                    .fill(isPressed ? AppColors.messagingListRowFillPressed : AppColors.messagingListRowFill)
             )
         }
         .buttonStyle(PlainButtonStyle())

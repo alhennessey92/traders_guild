@@ -34,7 +34,7 @@ struct MarkerActivitySheet: View {
                             if isRefreshingLiveData {
                                 ProgressView()
                                     .scaleEffect(0.8)
-                                    .tint(.white)
+                                    .tint(AppColors.primaryForeground)
                             } else {
                                 Image(systemName: "arrow.clockwise.circle")
                                     .font(.title3)
@@ -61,7 +61,7 @@ struct MarkerActivitySheet: View {
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.secondaryForeground)
             }
             .padding(.top, 12)
             .padding(.trailing, 16)
@@ -101,7 +101,7 @@ struct MarkerActivitySheet: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(AppColors.surfaceWhite08)
+                        .fill(AppColors.symbolDetailCardFill)
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
                                 .stroke(AppColors.surfaceWhite12, lineWidth: 1)
@@ -121,7 +121,7 @@ struct MarkerActivitySheet: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.symbolDetailCardFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 1)
@@ -143,7 +143,7 @@ struct MarkerActivitySheet: View {
 
                     if !isLast {
                         Rectangle()
-                            .fill(AppColors.surfaceWhite10)
+                            .fill(AppColors.panelFillEmphasis)
                             .frame(width: 2)
                             .frame(maxHeight: .infinity)
                     }

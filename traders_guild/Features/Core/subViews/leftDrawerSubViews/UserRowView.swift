@@ -55,7 +55,7 @@ struct UserRowView: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.06 : 0.03))
+                    .fill(isPressed ? AppColors.userListRowFillPressed : AppColors.userListRowFill)
             )
         }
         .buttonStyle(PlainButtonStyle())

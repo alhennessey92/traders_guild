@@ -123,7 +123,7 @@ struct EditProfileView: View {
                                             .overlay(
                                                 Image(systemName: "camera.fill")
                                                     .font(.system(size: 14))
-                                                    .foregroundColor(.white)
+                                                    .foregroundColor(AppColors.onAccentForeground)
                                             )
                                     }
                                 }
@@ -446,7 +446,7 @@ struct AvatarSelectionView: View {
                         }
                         .foregroundColor(AppColors.whiteText)
                         .padding()
-                        .background(AppColors.surfaceWhite05)
+                        .background(AppColors.symbolSheetGroupedPanelFill)
                         .cornerRadius(12)
                     }
                     
@@ -630,7 +630,7 @@ struct ChangeEmailView: View {
                                 Spacer()
                             }
                             .padding()
-                            .background(AppColors.surfaceWhite03)
+                            .background(AppColors.insetPanelBackground)
                             .cornerRadius(12)
                         }
 
@@ -807,7 +807,7 @@ struct ChangePasswordView: View {
                                 HStack(spacing: 4) {
                                     ForEach(0..<4) { index in
                                         Rectangle()
-                                            .fill(index < passwordStrength.level ? passwordStrength.color : AppColors.surfaceWhite10)
+                                            .fill(index < passwordStrength.level ? passwordStrength.color : AppColors.panelFillEmphasis)
                                             .frame(height: 4)
                                             .cornerRadius(2)
                                     }
@@ -842,7 +842,7 @@ struct ChangePasswordView: View {
                             PasswordRequirementRow(text: "Contains special character", isMet: newPassword.rangeOfCharacter(from: CharacterSet.punctuationCharacters.union(.symbols)) != nil)
                         }
                         .padding()
-                        .background(AppColors.surfaceWhite03)
+                        .background(AppColors.insetPanelBackground)
                         .cornerRadius(12)
 
                         // Save button
@@ -1018,7 +1018,7 @@ struct DateOfBirthView: View {
                         .datePickerStyle(.wheel)
                         .labelsHidden()
                         .frame(maxWidth: .infinity)
-                        .background(AppColors.surfaceWhite05)
+                        .background(AppColors.symbolSheetGroupedPanelFill)
                         .cornerRadius(12)
                         
                         // Age warning
@@ -1260,7 +1260,7 @@ struct InterestChip: View {
             .foregroundColor(isSelected ? AppColors.accentColor : AppColors.whiteText.opacity(0.8))
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.surfaceWhite05)
+            .background(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.symbolSheetGroupedPanelFill)
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -1443,7 +1443,7 @@ struct BlockedUserRow: View {
                 Text("Unblock")
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(AppColors.statusNegative80)
@@ -1451,7 +1451,7 @@ struct BlockedUserRow: View {
             }
         }
         .padding()
-        .background(AppColors.surfaceWhite03)
+        .background(AppColors.insetPanelBackground)
         .cornerRadius(12)
     }
 }
@@ -1525,7 +1525,7 @@ struct DataPrivacyView: View {
                             .padding(10)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(AppColors.surfaceWhite03)
+                                    .fill(AppColors.insetPanelBackground)
                             )
                             .padding(.horizontal, 16)
                             .onChange(of: dmPermissionMode) { _, newValue in
@@ -1773,7 +1773,7 @@ struct HelpCenterView: View {
                                     Text("Contact Support")
                                 }
                                 .fontWeight(.semibold)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.onAccentForeground)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 12)
                                 .background(AppColors.accentColor)
@@ -1783,7 +1783,7 @@ struct HelpCenterView: View {
                         }
                         .padding(24)
                         .frame(maxWidth: .infinity)
-                        .background(AppColors.surfaceWhite03)
+                        .background(AppColors.insetPanelBackground)
                         .cornerRadius(12)
                         .padding(.horizontal, 25)
                         
@@ -1866,7 +1866,7 @@ struct FAQItem: View {
                     .padding(.bottom)
             }
         }
-        .background(AppColors.surfaceWhite03)
+        .background(AppColors.insetPanelBackground)
         .cornerRadius(12)
     }
 }
@@ -2026,7 +2026,7 @@ struct ContactSupportView: View {
                             }
                             .tint(AppColors.accentColor)
                             .padding()
-                            .background(AppColors.surfaceWhite03)
+                            .background(AppColors.insetPanelBackground)
                             .cornerRadius(12)
                         }
                         .padding(.horizontal, 25)
@@ -2122,7 +2122,7 @@ struct CategoryChip: View {
             .foregroundColor(isSelected ? AppColors.accentColor : AppColors.whiteText.opacity(0.7))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.surfaceWhite05)
+            .background(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.symbolSheetGroupedPanelFill)
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -2313,7 +2313,7 @@ struct AboutLinkRow: View {
                     .foregroundColor(AppColors.greyText)
             }
             .padding()
-            .background(AppColors.surfaceWhite03)
+            .background(AppColors.insetPanelBackground)
             .cornerRadius(12)
         }
     }
@@ -2490,7 +2490,7 @@ struct DeleteAccountConfirmationView: View {
                         // Cancel button
                         StandardActionButtonFullWidth(
                             title: "Cancel",
-                            backgroundColor: AppColors.surfaceWhite05,
+                            backgroundColor: AppColors.symbolSheetGroupedPanelFill,
                             foregroundColor: AppColors.whiteText,
                             action: onBack
                         )
@@ -2837,7 +2837,7 @@ struct PushNotificationSettingsView: View {
 
                 if isLoading {
                     ProgressView()
-                        .tint(.white)
+                        .tint(AppColors.primaryForeground)
                         .padding(.top, 40)
                 } else {
                     preferencesToggles
@@ -2879,7 +2879,7 @@ struct PushNotificationSettingsView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.surfaceWhite03)
+                .fill(AppColors.insetPanelBackground)
         )
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -2892,7 +2892,7 @@ struct PushNotificationSettingsView: View {
                     .foregroundColor(AppColors.accentColor)
                 Text("Device Registration")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Spacer()
                 registrationStateBadge
             }
@@ -2969,7 +2969,7 @@ struct PushNotificationSettingsView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.surfaceWhite03)
+                .fill(AppColors.insetPanelBackground)
         )
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -3169,7 +3169,7 @@ struct PushNotificationSettingsView: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(AppColors.surfaceWhite03)
+                        .fill(AppColors.insetPanelBackground)
                 )
                 .padding(.horizontal, 16)
             }

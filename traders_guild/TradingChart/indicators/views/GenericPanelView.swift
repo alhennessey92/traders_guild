@@ -167,7 +167,7 @@ struct GenericIndicatorPanelView: View {
             HStack(spacing: 4) {
                 (Text(panelTitleBase)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                  + Text("  Indicator")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(AppColors.surfaceWhite50))
@@ -310,7 +310,7 @@ struct GenericIndicatorPanelView: View {
                 if y >= 0 && y <= geometry.size.height {
                     Text(formatValue(value))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(AppColors.surfaceWhite76)
+                        .foregroundColor(AppColors.chartAxisLabelSecondary)
                         .position(x: geometry.size.width - 20, y: y)
                 }
             }
@@ -336,7 +336,7 @@ struct GenericIndicatorPanelView: View {
                     // Current value label
                     Text(formatValue(currentValue))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.onAccentForeground)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(lineColor.opacity(0.8))

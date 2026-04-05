@@ -89,7 +89,7 @@ struct EmailVerificationView: View {
                                 .font(.system(size: 24, weight: .bold, design: .monospaced))
                                 .foregroundColor(AppColors.whiteText)
                                 .frame(width: 48, height: 56)
-                                .background(AppColors.surfaceWhite05)
+                                .background(AppColors.symbolSheetGroupedPanelFill)
                                 .cornerRadius(10)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)

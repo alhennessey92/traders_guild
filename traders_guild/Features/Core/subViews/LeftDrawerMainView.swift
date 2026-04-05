@@ -196,7 +196,7 @@ struct LeftDrawerMainView: View {
             )
             .overlay(
                 Rectangle()
-                    .fill(AppColors.surfaceWhite10)
+                    .fill(AppColors.panelFillEmphasis)
                     .frame(width: 1)
                     .frame(maxHeight: .infinity),
                 alignment: .trailing
@@ -835,7 +835,7 @@ struct DrawerMenuButton: View {
                     case .count(let count) where count > 0:
                         Text("\(count)")
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.onAccentForeground)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(AppColors.accentColor)

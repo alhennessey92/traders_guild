@@ -454,7 +454,7 @@ struct ActiveIndicatorsLegendView: View {
                 +
                 Text(parts.token)
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
             )
         } else {
             Text(entry.text)
@@ -529,7 +529,7 @@ struct ActiveIndicatorsLegendCompactView: View {
                 +
                 Text(parts.token)
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
             )
         } else {
             Text(entry.text)

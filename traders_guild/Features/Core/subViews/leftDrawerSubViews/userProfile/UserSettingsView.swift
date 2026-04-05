@@ -330,7 +330,7 @@ struct UserSettingsSheetView: View {
                         .foregroundColor(AppColors.greyText)
                 }
                 .padding()
-                .background(AppColors.surfaceWhite03)
+                .background(AppColors.insetPanelBackground)
                 .cornerRadius(12)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
@@ -469,7 +469,7 @@ struct UserSettingsSheetView: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(AppColors.surfaceWhite03)
+                        .fill(AppColors.insetPanelBackground)
                 )
                 .padding(.horizontal, 16)
                 .onChange(of: dmPermissionMode) { _, newValue in
@@ -590,7 +590,7 @@ struct UserSettingsSheetView: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.surfaceWhite03)
+                    .fill(AppColors.insetPanelBackground)
             )
             .padding(.horizontal, 16)
 
@@ -852,5 +852,5 @@ struct UserSettingsSheetView: View {
 #Preview {
     UserSettingsSheetView(onBack: {})
         .environmentObject(RLAppState())
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(ThemeManager.shared.currentTheme.colorScheme)
 }

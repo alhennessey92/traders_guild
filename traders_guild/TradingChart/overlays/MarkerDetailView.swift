@@ -382,10 +382,10 @@ struct MarkerShareSheet: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.systemWhite.opacity(isSelected ? 0.11 : 0.05))
+                    .fill(isSelected ? AppColors.intentPickerPillFillSelected : AppColors.intentPickerPillFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(isSelected ? AppColors.accentColor.opacity(0.65) : AppColors.surfaceWhite08, lineWidth: 1)
+                            .stroke(isSelected ? AppColors.accentColor.opacity(0.65) : AppColors.markerListCapsuleStroke, lineWidth: 1)
                     )
             )
         }
@@ -740,11 +740,11 @@ struct CommentsView: View {
                 Text("\(liveMarker.intent.displayName) Chat")
                     .font(.headline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
 
                 Text("@\(liveMarker.author.username) • \(liveMarker.timeframe.uppercased()) • \(comments.count) comments")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.secondaryForeground)
             }
 
             Spacer()
@@ -1044,7 +1044,7 @@ struct MarkerDetailHeaderView: View {
                             // Title
                             Text(marker.title ?? marker.intent.displayName)
                                 .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
                                 .lineLimit(2)
                         }
 
@@ -1229,16 +1229,16 @@ struct MarkerInfoContent: View {
                     .foregroundColor(marker.intent.color.opacity(0.9))
                 Text(parts.joined(separator: " · "))
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(AppColors.surfaceWhite74)
+                    .foregroundColor(AppColors.listCardSecondaryText)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.surfaceWhite04)
+                    .fill(AppColors.markerListCapsuleFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                            .stroke(AppColors.markerListCapsuleStroke, lineWidth: 1)
                     )
             )
         }
@@ -1329,7 +1329,7 @@ struct MarkerInfoContent: View {
                             .foregroundColor(AppColors.greyText)
                         Text(outcome.displayLabel)
                             .font(.headline.weight(.bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                     }
 
                     Spacer()
@@ -1373,7 +1373,7 @@ struct MarkerInfoContent: View {
                             .foregroundColor(AppColors.greyText)
                         Text(mergedParts.joined(separator: " · "))
                             .font(.caption)
-                            .foregroundColor(AppColors.surfaceWhite74)
+                            .foregroundColor(AppColors.listCardSecondaryText)
                     }
                 }
             }
@@ -1425,7 +1425,7 @@ struct MarkerInfoContent: View {
                                 .frame(width: 22, height: 22)
                             Image(systemName: node.icon)
                                 .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(isCurrent ? .white : isPast ? AppColors.surfaceWhite70 : AppColors.greyText.opacity(0.5))
+                                .foregroundColor(isCurrent ? AppColors.onAccentForeground : isPast ? AppColors.surfaceWhite70 : AppColors.greyText.opacity(0.5))
                         }
                         Text(nodeLabel)
                             .font(.system(size: 8, weight: .semibold))
@@ -1548,17 +1548,17 @@ struct FloatingEngagementBar: View {
                 HStack(spacing: 6) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.surfaceWhite85)
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.listCardBodyText)
                         .scaleEffect(likeScale)
                     Text("\(likeCount)")
                         .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.surfaceWhite85)
+                        .foregroundColor(isLiked ? AppColors.markerHeartTint : AppColors.listCardBodyText)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(isLiked ? AppColors.markerHeartBackground : AppColors.surfaceWhite08)
+                        .fill(isLiked ? AppColors.markerHeartBackground : AppColors.symbolDetailCardFill)
                 )
             }
             .buttonStyle(.plain)
@@ -1569,10 +1569,10 @@ struct FloatingEngagementBar: View {
             HStack(spacing: 5) {
                 Image(systemName: "bubble.left.fill")
                     .font(.system(size: 12))
-                    .foregroundColor(AppColors.surfaceWhite60)
+                    .foregroundColor(AppColors.listCardTertiaryText)
                 Text("\(commentCount)")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite70)
+                    .foregroundColor(AppColors.listCardContextSummaryFallback)
             }
 
             Spacer()
@@ -1581,9 +1581,9 @@ struct FloatingEngagementBar: View {
             Button(action: onShare) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite85)
+                    .foregroundColor(AppColors.listCardBodyText)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(AppColors.surfaceWhite08))
+                    .background(Circle().fill(AppColors.symbolDetailCardFill))
             }
             .buttonStyle(.plain)
             .padding(.trailing, 8)
@@ -1602,9 +1602,9 @@ struct FloatingEngagementBar: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite85)
+                    .foregroundColor(AppColors.listCardBodyText)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(AppColors.surfaceWhite08))
+                    .background(Circle().fill(AppColors.symbolDetailCardFill))
             }
         }
         .padding(.horizontal, 16)
@@ -1614,7 +1614,7 @@ struct FloatingEngagementBar: View {
                 .fill(AppColors.chartPanelBackgroundInset.opacity(0.95))
                 .overlay(
                     Capsule()
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(AppColors.markerListCapsuleStroke, lineWidth: 1)
                 )
                 .shadow(color: AppColors.surfaceBlack40, radius: 12, y: -4)
         )
@@ -1646,17 +1646,17 @@ struct LevelLadderCard: View {
             HStack {
                 Text("Price Levels")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Spacer()
                 if let rr = rrRatio {
                     Text(String(format: "R:R %.2f", rr))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(
                             Capsule()
-                                .fill(AppColors.surfaceWhite10)
+                                .fill(AppColors.panelFillEmphasis)
                                 .overlay(Capsule().stroke(AppColors.surfaceWhite15, lineWidth: 1))
                         )
                 }
@@ -1699,10 +1699,10 @@ struct LevelLadderCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(AppColors.markerListCapsuleStroke, lineWidth: 1)
                 )
         )
     }

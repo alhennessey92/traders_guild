@@ -58,7 +58,7 @@ struct MarkerViewingComponentsTab: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Component Overview")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
 
             HStack(spacing: 8) {
                 overviewBadge(title: "Total", value: "\(displayedComponentCount)")
@@ -175,7 +175,7 @@ struct MarkerViewingComponentsTab: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.headline.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text(subtitle)
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
@@ -185,7 +185,7 @@ struct MarkerViewingComponentsTab: View {
 
                 Text(countText)
                     .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(
@@ -229,7 +229,7 @@ struct MarkerViewingComponentsTab: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
             Text(title)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(AppColors.greyText)
@@ -271,7 +271,7 @@ struct MarkerViewingComponentsTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(indicatorName)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text(isPrimary ? "Primary indicator" : "Attached indicator")
                     .font(.caption2)
                     .foregroundColor(AppColors.greyText)
@@ -282,7 +282,7 @@ struct MarkerViewingComponentsTab: View {
             HStack(spacing: 6) {
                 Text(panel ? "Panel" : "Overlay")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(
@@ -323,7 +323,7 @@ struct MarkerViewingComponentsTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(component.componentTypeEnum?.displayName ?? component.componentType)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text(drawingCoordinateSummary(component))
                     .font(.caption2)
                     .foregroundColor(AppColors.greyText)
@@ -369,14 +369,14 @@ struct MarkerViewingComponentsTab: View {
                 HStack(spacing: 6) {
                     Text(shortName)
                         .font(.caption2.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.onAccentForeground)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Capsule().fill((Color(hex: "#38BDF8") ?? .cyan).opacity(0.42)))
 
                     Text(displayName)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                         .lineLimit(1)
                 }
 
@@ -405,7 +405,7 @@ struct MarkerViewingComponentsTab: View {
     private func smallInfoBadge(text: String, tint: Color) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Capsule().fill(tint.opacity(0.4)))

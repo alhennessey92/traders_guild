@@ -123,7 +123,7 @@ struct TopMarkersView: View {
 
             Text("\(selectedTab.title) \u{2022} \(selectedScope.rawValue) \u{2022} \(currentTotalCount) markers")
                 .font(.caption2)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
                 .lineLimit(1)
 
             Spacer()
@@ -155,7 +155,7 @@ struct TopMarkersView: View {
             }
         }
         .background(
-            Capsule().fill(AppColors.surfaceWhite08)
+            Capsule().fill(AppColors.symbolDetailCardFill)
         )
     }
 
@@ -273,7 +273,7 @@ struct TopMarkersView: View {
 
             Text(symbolGroup.ticker)
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
 
             Text("(\(symbolGroup.count))")
                 .font(.caption)
@@ -290,7 +290,7 @@ struct TopMarkersView: View {
         .padding(.vertical, 11)
         .background(
             LinearGradient(
-                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+                colors: [AppColors.searchBarGradientLeading, AppColors.searchBarGradientTrailing],
                 startPoint: .leading,
                 endPoint: .trailing
             )

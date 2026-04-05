@@ -56,7 +56,7 @@ struct StandardDatePickerView: View {
                     .datePickerStyle(.wheel)
                     .labelsHidden()
                     .foregroundColor(AppColors.whiteText)
-                    .colorScheme(.dark)
+                    .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
                     
                     
                     

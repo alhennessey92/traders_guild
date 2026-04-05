@@ -157,7 +157,7 @@ struct ChartSheetSymbolView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(symbol.displayName)
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
                                 .lineLimit(2)
                                 .minimumScaleFactor(0.85)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -195,7 +195,7 @@ struct ChartSheetSymbolView: View {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(symbol.formatPrice(chartViewModel.dataManager.currentPrice))
                                 .font(.system(size: 18, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
                                 .lineLimit(1)
                             
                             HStack(spacing: 2) {
@@ -244,24 +244,27 @@ struct ChartSheetSymbolView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "doc.text.magnifyingglass")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppColors.surfaceWhite80)
+                                .foregroundColor(AppColors.adaptiveAccessoryForeground)
 
                             Text("Symbol Details")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
 
                             Spacer()
 
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(AppColors.surfaceWhite50)
+                                .foregroundColor(AppColors.adaptiveAccessoryForeground)
                                 .rotationEffect(.degrees(isSymbolDetailsExpanded ? 90 : 0))
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 11)
                         .background(
                             LinearGradient(
-                                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+                                colors: [
+                                    AppColors.symbolDetailsHeaderGradientLeading,
+                                    AppColors.symbolDetailsHeaderGradientTrailing,
+                                ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -303,10 +306,10 @@ struct ChartSheetSymbolView: View {
                         .padding(14)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.surfaceWhite08)
+                                .fill(AppColors.symbolDetailCardFill)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                                        .stroke(AppColors.symbolDetailCardStroke, lineWidth: 1)
                                 )
                         )
                         .transition(.opacity)
@@ -573,10 +576,10 @@ struct ChartSheetSymbolView: View {
     private var loadingIndicator: some View {
         HStack(spacing: 8) {
             ProgressView()
-                .tint(.white)
+                .tint(AppColors.primaryForeground)
             Text("Loading chart data...")
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
         }
         .padding(.vertical, 8)
     }
@@ -607,7 +610,7 @@ struct ChartSheetSymbolView: View {
                 )
             }
             .padding(16)
-            .background(AppColors.surfaceWhite05)
+            .background(AppColors.symbolSheetGroupedPanelFill)
             .cornerRadius(12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -617,7 +620,7 @@ struct ChartSheetSymbolView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             HStack(alignment: .center, spacing: 8) {
@@ -643,7 +646,7 @@ struct ChartSheetSymbolView: View {
             HStack {
                 Text("Watchlists")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 
                 Spacer()
                 
@@ -722,7 +725,7 @@ struct ChartSheetSymbolView: View {
                         Text("Managed by guild admins")
                             .font(.system(size: 11))
                     }
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
                     symbolListView(symbols: chartViewModel.guildWatchlist)
@@ -763,7 +766,7 @@ struct ChartSheetSymbolView: View {
             
             Text("Search for Symbols")
                 .font(.headline)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
             
             Text("Find symbols to view on chart or add to your personal watchlist")
                 .font(.caption)
@@ -979,7 +982,7 @@ struct TimeframeChip: View {
         Button(action: action) {
             Text(timeframe.shortName)
                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? .white : .gray)
+                .foregroundColor(isSelected ? AppColors.onAccentForeground : AppColors.secondaryForeground)
                 .frame(minWidth: 44)
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)
@@ -991,7 +994,10 @@ struct TimeframeChip: View {
                         endPoint: .bottomTrailing
                     ) :
                     LinearGradient(
-                        colors: [AppColors.surfaceWhite10, AppColors.surfaceWhite05],
+                        colors: [
+                            AppColors.timeframeChipUnselectedLeading,
+                            AppColors.timeframeChipUnselectedTrailing,
+                        ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -1060,7 +1066,7 @@ struct SymbolListRow: View {
                     HStack(spacing: 6) {
                         Text(symbol.ticker)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                         
                         // Market status indicator
                         SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
@@ -1068,7 +1074,7 @@ struct SymbolListRow: View {
                     
                     Text(symbol.displayName)
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                         .lineLimit(1)
 
                     FlowLayout(spacing: 6) {
@@ -1090,7 +1096,7 @@ struct SymbolListRow: View {
                     Text(symbol.priceFormatted ?? "--")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     
                     HStack(spacing: 2) {
                         Image(systemName: (symbol.isUp ?? true) ? "arrow.up" : "arrow.down")
@@ -1123,7 +1129,10 @@ struct SymbolListRow: View {
                     endPoint: .trailing
                 ) :
                 LinearGradient(
-                    colors: [AppColors.surfaceWhite05, AppColors.surfaceWhite03],
+                    colors: [
+                        AppColors.symbolListRowUnselectedLeading,
+                        AppColors.symbolListRowUnselectedTrailing,
+                    ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
@@ -1174,14 +1183,14 @@ struct GlobalSymbolListRow: View {
                         HStack(spacing: 6) {
                             Text(symbol.ticker)
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.primaryForeground)
 
                             SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
                         }
 
                         Text(symbol.displayName)
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.secondaryForeground)
                             .lineLimit(1)
 
                         FlowLayout(spacing: 6) {
@@ -1201,7 +1210,7 @@ struct GlobalSymbolListRow: View {
                         Text(symbol.priceFormatted ?? "--")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
 
                         HStack(spacing: 2) {
                             Image(systemName: (symbol.isUp ?? true) ? "arrow.up" : "arrow.down")
@@ -1231,7 +1240,10 @@ struct GlobalSymbolListRow: View {
                         endPoint: .trailing
                     ) :
                     LinearGradient(
-                        colors: [AppColors.surfaceWhite05, AppColors.surfaceWhite03],
+                        colors: [
+                            AppColors.symbolListRowUnselectedLeading,
+                            AppColors.symbolListRowUnselectedTrailing,
+                        ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -1250,10 +1262,10 @@ struct GlobalSymbolListRow: View {
                         ForEach(statusBadges, id: \.self) { badge in
                             Text(badge)
                                 .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(AppColors.surfaceWhite90)
+                                .foregroundColor(AppColors.symbolRowBadgeForeground)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(AppColors.surfaceWhite14)
+                                .background(AppColors.symbolRowBadgeBackground)
                                 .clipShape(Capsule())
                         }
                     }
@@ -1516,7 +1528,7 @@ struct MarketSessionTimeline: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.symbolDetailCardFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 1)
@@ -1662,7 +1674,7 @@ extension Notification.Name {
         
         ScrollView {
             Text("Symbol Sheet Preview")
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
         }
         .padding()
     }

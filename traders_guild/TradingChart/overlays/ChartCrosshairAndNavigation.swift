@@ -455,7 +455,7 @@ struct CrosshairInfoPopupCompact: View {
                         // OHLC in ultra-compact format
                         HStack(spacing: 6) {
                             VStack(alignment: .leading, spacing: 0) {
-                                PriceRow(label: "O", value: chartData.formatPrice(candle.open), color: .white)
+                                PriceRow(label: "O", value: chartData.formatPrice(candle.open), color: AppColors.crosshairText)
                                 PriceRow(label: "L", value: chartData.formatPrice(candle.low), color: .red)
                             }
                             VStack(alignment: .leading, spacing: 0) {
@@ -817,7 +817,7 @@ struct ChartNavigationControls: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(AppColors.statusInfo)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
                 .cornerRadius(20)
             }
             .padding(.top, 100)
@@ -847,7 +847,7 @@ struct ZoomControls: View {
                     .font(.system(size: 16))
                     .frame(width: 40, height: 40)
                     .background(AppColors.surfaceBlack70)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .cornerRadius(8)
             }
             
@@ -858,7 +858,7 @@ struct ZoomControls: View {
                     .font(.system(size: 16))
                     .frame(width: 40, height: 40)
                     .background(AppColors.surfaceBlack70)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .cornerRadius(8)
             }
             
@@ -874,7 +874,7 @@ struct ZoomControls: View {
                     .font(.system(size: 16))
                     .frame(width: 40, height: 40)
                     .background(AppColors.surfaceBlack70)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .cornerRadius(8)
             }
         }

@@ -485,7 +485,7 @@ struct MainView: View {
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
-                        PatternOverlay(patternType: .honeycomb, hexSize: 16)
+                        PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
                             .opacity(0.012)
                     }
                 }
@@ -687,7 +687,7 @@ struct MainView: View {
                 ProgressView()
                     .scaleEffect(1.5)
                 Text("Reconnecting...")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.secondaryForeground)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onAppear {
@@ -714,8 +714,8 @@ struct MainView: View {
                 mainToolbarContent
             }
             .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .tint(.white)
+            .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
+            .tint(AppColors.primaryForeground)
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 configureNavigationBarAppearance()
@@ -829,7 +829,7 @@ struct MainView: View {
         if chartControlVM.isMarkerPlacementMode {
             Text(placementState.toolbarInstructionText ?? "Place a Marker")
                 .font(.caption.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .allowsTightening(true)
@@ -1243,14 +1243,14 @@ struct MainView: View {
                 )
                 Text("\(marker.intent.displayName) Marker")
                     .font(.headline.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .lineLimit(1)
             }
         } else {
             Text("Viewing Marker")
                 .font(.headline)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
         }
     }
 
@@ -2525,19 +2525,19 @@ struct ChartBottomSheet: View {
     // MARK: - Placement Tab Bar
 
     private var bottomBarSelectedBackground: Color {
-        AppColors.gradientBackgroundDark
+        AppColors.placementBarSelectedFill
     }
 
     private var bottomBarUnselectedBackground: Color {
-        AppColors.gradientBackgroundMid.opacity(0.9)
+        AppColors.placementBarUnselectedFill
     }
 
     private var bottomBarSelectedForeground: Color {
-        .white
+        AppColors.placementBarSelectedForeground
     }
 
     private var bottomBarUnselectedForeground: Color {
-        AppColors.whiteText.opacity(0.8)
+        AppColors.placementBarUnselectedForeground
     }
 
     private var placementTabBar: some View {
@@ -2988,7 +2988,7 @@ struct ChartBottomSheet: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(2)
             }
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
             .padding(.vertical, 12)
             .padding(.horizontal, 20)
             .background(
@@ -3028,7 +3028,7 @@ struct ChartBottomSheet: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(placementState.intent.displayName)
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                         .lineLimit(1)
                     Text("Marker")
                         .font(.system(size: 9, weight: .semibold))
@@ -3068,7 +3068,7 @@ struct ChartBottomSheet: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(marker.intent.displayName)
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                         .lineLimit(1)
                     Text(markerAuthorHandle(marker))
                         .font(.system(size: 9, weight: .semibold))
@@ -3120,14 +3120,14 @@ struct IndicatorItem: View {
                     .font(.title3)
                     .frame(width: 32)
                 Text(title)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .fontWeight(.medium)
                 Spacer()
                 Image(systemName: "plus.circle")
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
             }
             .padding()
-            .background(AppColors.surfaceWhite05)
+            .background(AppColors.symbolSheetGroupedPanelFill)
             .cornerRadius(8)
         }
         .buttonStyle(.plain)
@@ -3146,12 +3146,12 @@ struct MarkerTypeItem: View {
                 .font(.title3)
                 .frame(width: 32)
             Text(title)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .fontWeight(.medium)
             Spacer()
         }
         .padding()
-        .background(AppColors.surfaceWhite05)
+        .background(AppColors.symbolSheetGroupedPanelFill)
         .cornerRadius(8)
     }
 }
@@ -3180,7 +3180,7 @@ struct ChartControlButton: View {
             .background(
                 isActive ?
                 color :
-                AppColors.surfaceWhite10
+                AppColors.panelFillEmphasis
             )
             .cornerRadius(12)
         }

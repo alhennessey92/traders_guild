@@ -168,7 +168,7 @@ struct MarkerPlacementGeneralTab: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(placementState.intent.displayName)
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text(placementState.intent.subtitle)
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
@@ -277,7 +277,7 @@ struct MarkerPlacementGeneralTab: View {
                 Toggle(isOn: $placementState.trackingEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Tracked Setup")
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                             .font(.subheadline)
                         Text("Monitor entry, SL, and TP transitions")
                             .foregroundColor(AppColors.greyText)
@@ -457,7 +457,7 @@ struct MarkerPlacementGeneralTab: View {
 
                 Text(intent.displayName)
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
@@ -503,7 +503,7 @@ struct MarkerPlacementGeneralTab: View {
             TextField("0.0", value: levelValueBinding(for: componentType), formatter: Self.priceFormatter)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .multilineTextAlignment(.trailing)
                 .keyboardType(.decimalPad)
                 .focused($focusedInput, equals: .level(componentType.rawValue))
@@ -549,7 +549,7 @@ struct MarkerPlacementGeneralTab: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Tracking Mode Active")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text("Estimated reputation impact now shown")
                     .font(.caption2)
                     .foregroundColor(AppColors.statusPositive85)
@@ -648,7 +648,7 @@ struct MarkerPlacementGeneralTab: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
-            .foregroundColor(isSelected ? .white : AppColors.whiteText.opacity(0.82))
+            .foregroundColor(isSelected ? AppColors.onAccentForeground : AppColors.whiteText.opacity(0.82))
             .frame(maxWidth: .infinity)
             .frame(height: 58)
             .background(
@@ -712,7 +712,7 @@ struct MarkerPlacementGeneralTab: View {
         TextField(title, text: text, axis: axis)
             .textFieldStyle(.plain)
             .font(.subheadline)
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.primaryForeground)
             .focused($focusedInput, equals: focus)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -757,7 +757,7 @@ struct MarkerPlacementGeneralTab: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
             Text(title)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(AppColors.greyText)
@@ -793,7 +793,7 @@ struct MarkerPlacementGeneralTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.headline.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text(subtitle)
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)

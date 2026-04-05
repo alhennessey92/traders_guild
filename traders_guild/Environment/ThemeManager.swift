@@ -32,7 +32,7 @@ enum AppTheme: String, CaseIterable, Codable {
         switch self {
         case .dark:      return Color(red: 0x01 / 255.0, green: 0x01 / 255.0, blue: 0x05 / 255.0)
         case .midGrey:   return Color(red: 0x18 / 255.0, green: 0x1C / 255.0, blue: 0x28 / 255.0)
-        case .lightGrey: return Color(red: 0xB3 / 255.0, green: 0xBA / 255.0, blue: 0xCC / 255.0)
+        case .lightGrey: return Color(red: 0x6D / 255.0, green: 0x71 / 255.0, blue: 0x7E / 255.0)
         }
     }
 }

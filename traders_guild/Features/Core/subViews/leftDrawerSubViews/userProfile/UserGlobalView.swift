@@ -337,7 +337,7 @@ struct UserGlobalSheetView: View {
                     }
                 }
                 .padding()
-                .background(AppColors.surfaceWhite03)
+                .background(AppColors.insetPanelBackground)
                 .cornerRadius(12)
                 .padding(.horizontal, 25)
             }
@@ -392,7 +392,7 @@ struct UserGlobalSheetView: View {
                         value: lastActiveDisplay
                     )
                 }
-                .background(AppColors.surfaceWhite03)
+                .background(AppColors.insetPanelBackground)
                 .cornerRadius(12)
             }
             .padding(.horizontal, 25)
@@ -659,7 +659,7 @@ struct GlobalStatCard: View {
                 .foregroundColor(AppColors.greyText)
         }
         .padding()
-        .background(AppColors.surfaceWhite03)
+        .background(AppColors.insetPanelBackground)
         .cornerRadius(12)
     }
 }
@@ -693,7 +693,7 @@ struct ReputationBreakdownRow: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(AppColors.surfaceWhite10)
+                        .fill(AppColors.panelFillEmphasis)
                         .frame(height: 6)
 
                     RoundedRectangle(cornerRadius: 4)
@@ -820,7 +820,7 @@ struct GlobalGuildCard: View {
             Spacer()
         }
         .padding(14)
-        .background(AppColors.surfaceWhite03)
+        .background(AppColors.insetPanelBackground)
         .cornerRadius(12)
     }
 }
@@ -828,5 +828,5 @@ struct GlobalGuildCard: View {
 #Preview {
     UserGlobalSheetView(onBack: {})
         .environmentObject(RLAppState())
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(ThemeManager.shared.currentTheme.colorScheme)
 }

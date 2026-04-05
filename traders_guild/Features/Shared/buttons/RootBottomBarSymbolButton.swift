@@ -103,7 +103,7 @@ struct RootBottomBarSymbolButton: View {
                 
                 Text(String(symbol.prefix(1)))
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
             }
             .overlay(
                 Circle()

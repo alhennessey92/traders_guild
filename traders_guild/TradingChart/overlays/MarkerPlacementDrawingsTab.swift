@@ -104,12 +104,12 @@ struct MarkerPlacementDrawingsTab: View {
             HStack(spacing: 10) {
                 Image(systemName: "rectangle.2.swap")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mirror Chart Setup")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text("Copy current chart drawings and indicators to this marker")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
@@ -147,7 +147,7 @@ struct MarkerPlacementDrawingsTab: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Drawings")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text("Add lines, zones, and annotations")
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -218,7 +218,7 @@ struct MarkerPlacementDrawingsTab: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Trendline")
                         .font(.caption)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text("Tap row to edit on chart")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
@@ -262,7 +262,7 @@ struct MarkerPlacementDrawingsTab: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Horizontal Line")
                             .font(.caption)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                         Text("Tap row to edit on chart")
                             .font(.caption2)
                             .foregroundColor(AppColors.greyText)
@@ -287,7 +287,7 @@ struct MarkerPlacementDrawingsTab: View {
                 TextField("Line label", text: horizontalLineLabelBinding(for: draft.id))
                     .textFieldStyle(.plain)
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .background(
@@ -321,7 +321,7 @@ struct MarkerPlacementDrawingsTab: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Zone")
                         .font(.caption)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text("Tap row to edit on chart")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
@@ -358,7 +358,7 @@ struct MarkerPlacementDrawingsTab: View {
                         .foregroundColor(RLComponentType.textNote.color)
                     Text("Text Note")
                         .font(.caption)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Spacer(minLength: 0)
                     removeDraftButton(draft.id)
                 }
@@ -370,7 +370,7 @@ struct MarkerPlacementDrawingsTab: View {
                 )
                 .textFieldStyle(.plain)
                 .font(.caption)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(
@@ -394,7 +394,7 @@ struct MarkerPlacementDrawingsTab: View {
                         .foregroundColor(RLComponentType.reactionEmoji.color)
                     Text("Emoji")
                         .font(.caption)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Spacer(minLength: 0)
                     Text(payload.emoji)
                         .font(.system(size: 18))
@@ -490,7 +490,7 @@ struct MarkerPlacementDrawingsTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? subtitle : title)
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text("Tap row to edit on chart")
                     .font(.caption2)
                     .foregroundColor(AppColors.greyText)
@@ -647,7 +647,7 @@ struct MarkerPlacementDrawingsTab: View {
                     )
                     .textFieldStyle(.plain)
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .background(
@@ -733,7 +733,7 @@ struct MarkerPlacementDrawingsTab: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Planned tools")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text("Phase 2 builds on this workflow with additional line tools and pattern templates.")
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -752,7 +752,7 @@ struct MarkerPlacementDrawingsTab: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(tool.title)
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                         Text("Reserved for the phase 2 drawing engine rollout.")
                             .font(.caption2)
                             .foregroundColor(AppColors.greyText)
@@ -838,7 +838,7 @@ struct MarkerPlacementDrawingsTab: View {
                                         .frame(width: 14, height: 14)
                                     Text(option.name)
                                         .font(.caption2.weight(.semibold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(AppColors.primaryForeground)
                                     Spacer(minLength: 0)
                                 }
                                 .padding(.horizontal, 10)
@@ -888,7 +888,7 @@ struct MarkerPlacementDrawingsTab: View {
                                 .fill(defaultDrawingColor(for: draft.componentType))
                                 .frame(width: 14, height: 14)
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 9)
                         .background(
@@ -925,7 +925,7 @@ struct MarkerPlacementDrawingsTab: View {
                         applyDrawingColorSelection()
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(
@@ -994,7 +994,7 @@ struct MarkerPlacementDrawingsTab: View {
             TextField(placeholder, text: binding)
                 .textFieldStyle(.plain)
                 .font(.caption)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(
@@ -1148,7 +1148,7 @@ struct MarkerPlacementDrawingsTab: View {
             HStack(spacing: 10) {
                 Text(lineStyle.title)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .frame(width: 72, alignment: .leading)
 
                 GeometryReader { geometry in
@@ -1205,7 +1205,7 @@ struct MarkerPlacementDrawingsTab: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text(subtitle)
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
@@ -1216,7 +1216,7 @@ struct MarkerPlacementDrawingsTab: View {
 
                 Text(actionTitle)
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(isActive ? .white : placementState.intent.color)
+                    .foregroundColor(isActive ? AppColors.onAccentForeground : placementState.intent.color)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(

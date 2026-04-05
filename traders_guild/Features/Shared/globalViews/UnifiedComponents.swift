@@ -60,7 +60,7 @@ struct UnifiedDisclosureGroup<Content: View>: View {
                     Text(title)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     
                     Text("(\(count))")
                         .font(.caption)
@@ -77,7 +77,7 @@ struct UnifiedDisclosureGroup<Content: View>: View {
                 .padding(.vertical, 11)
                 .background(
                     LinearGradient(
-                        colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+                        colors: [AppColors.subtleSurfaceOverlay08, AppColors.subtleSurfaceOverlay04],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -135,6 +135,30 @@ struct UnifiedDisclosureGroupCustomHeader<Header: View, Content: View>: View {
 // MARK: - UNIFIED SEARCH BAR
 // MARK: - ================================================================================================
 
+@ViewBuilder
+private func unifiedSearchCapsuleBackground() -> some View {
+    if ThemeManager.shared.currentTheme == .lightGrey {
+        ZStack {
+            Capsule()
+                .fill(AppColors.standardSearchFieldFill)
+            Capsule()
+                .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
+        }
+    } else {
+        LinearGradient(
+            colors: [AppColors.searchBarGradientLeading, AppColors.searchBarGradientTrailing],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+}
+
+private var unifiedSearchAccessoryForeground: Color {
+    ThemeManager.shared.currentTheme == .lightGrey
+        ? AppColors.standardSearchFieldAccessory
+        : AppColors.surfaceWhite50
+}
+
 /// Unified search bar with consistent capsule styling
 /// Use for: Symbol search, user search, chatroom search, any text search input
 struct UnifiedSearchBar: View {
@@ -149,13 +173,13 @@ struct UnifiedSearchBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(AppColors.surfaceWhite50)
+                .foregroundColor(unifiedSearchAccessoryForeground)
                 .font(.system(size: 15))
             
             TextField(placeholder, text: $text)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .font(.system(size: 15))
-                .tint(AppColors.surfaceWhite50)
+                .tint(unifiedSearchAccessoryForeground)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .submitLabel(.done)
@@ -175,22 +199,16 @@ struct UnifiedSearchBar: View {
                     onFocusChange?(false)
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(AppColors.surfaceWhite50)
+                        .foregroundColor(unifiedSearchAccessoryForeground)
                         .font(.system(size: 16))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .tint(AppColors.surfaceWhite50)
+        .tint(unifiedSearchAccessoryForeground)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(
-            LinearGradient(
-                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
+        .background(unifiedSearchCapsuleBackground())
         .clipShape(Capsule())
         .onTapGesture {
             isFocused = true
@@ -213,16 +231,17 @@ struct UnifiedSymbolSearchBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(AppColors.surfaceWhite50)
+                .foregroundColor(unifiedSearchAccessoryForeground)
                 .font(.system(size: 15))
             
             TextField(placeholder, text: $text)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .font(.system(size: 15))
                 .autocapitalization(.allCharacters)
                 .disableAutocorrection(true)
                 .submitLabel(.done)
                 .focused($isFocused)
+                .tint(unifiedSearchAccessoryForeground)
                 .onChange(of: text) { oldValue, newValue in
                     onTextChange?(newValue)
                 }
@@ -234,20 +253,14 @@ struct UnifiedSymbolSearchBar: View {
                     isFocused = false
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(AppColors.surfaceWhite50)
+                        .foregroundColor(unifiedSearchAccessoryForeground)
                         .font(.system(size: 16))
                 }
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(
-            LinearGradient(
-                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
+        .background(unifiedSearchCapsuleBackground())
         .clipShape(Capsule())
         .onTapGesture {
             isFocused = true
@@ -476,17 +489,17 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
                 if let count = count, count > 0 {
                     Text("(\(count))")
                         .font(.system(size: size.labelSize - 2))
-                        .foregroundColor(isSelected ? AppColors.surfaceWhite70 : .gray)
+                        .foregroundColor(isSelected ? AppColors.surfaceWhite70 : AppColors.tabPillUnselectedLabel)
                 }
             }
-            .foregroundColor(isSelected ? .white : .gray)
+            .foregroundColor(isSelected ? .white : AppColors.tabPillUnselectedLabel)
             .padding(.horizontal, isSelected ? size.horizontalPadding : size.horizontalPadding - 2)
             .padding(.vertical, size.verticalPadding)
             .background(
                 isSelected ?
                 theme.selectedBackground(for: tab, index: index) :
                 LinearGradient(
-                    colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+                    colors: [AppColors.tabPillUnselectedGradientLeading, AppColors.tabPillUnselectedGradientTrailing],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -553,7 +566,7 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
     
     private var unselectedGradient: LinearGradient {
         LinearGradient(
-            colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+            colors: [AppColors.tabPillUnselectedGradientLeading, AppColors.tabPillUnselectedGradientTrailing],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -580,7 +593,7 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            .foregroundColor(isSelected ? .white : .gray)
+            .foregroundColor(isSelected ? .white : AppColors.tabPillUnselectedLabel)
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
             .background(isSelected ? selectedGradient : unselectedGradient)
@@ -697,12 +710,12 @@ struct UnifiedSectionHeader: View {
                 Text(title)
                     .font(.headline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 
                 if let subtitle = subtitle {
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                 }
             }
             
@@ -745,7 +758,7 @@ struct UnifiedEmptyState: View {
             if let subtitle = subtitle {
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
                     .multilineTextAlignment(.center)
             }
         }
@@ -792,11 +805,11 @@ struct UnifiedLoadingState: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.2)
-                .tint(.white)
+                .tint(AppColors.primaryForeground)
             
             Text(message)
                 .font(.subheadline)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 40)
@@ -851,13 +864,6 @@ struct UnifiedContentCard<Content: View>: View {
 
     @State private var isPressed: Bool = false
 
-    private var fillOpacity: Double {
-        if isUnread {
-            return isPressed ? 0.10 : 0.08
-        }
-        return isPressed ? 0.06 : 0.03
-    }
-
     private var borderColor: Color {
         if let semantic = semanticBorderColor {
             return semantic
@@ -865,7 +871,7 @@ struct UnifiedContentCard<Content: View>: View {
         if showUnreadBorder || isUnread {
             return AppColors.accentColor.opacity(0.4)
         }
-        return AppColors.surfaceWhite08
+        return AppColors.markerListCapsuleStroke
     }
 
     var body: some View {
@@ -873,7 +879,7 @@ struct UnifiedContentCard<Content: View>: View {
             content()
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(AppColors.systemWhite.opacity(fillOpacity))
+                        .fill(AppColors.contentCardFill(isUnread: isUnread, isPressed: isPressed))
                         .overlay(
                             RoundedRectangle(cornerRadius: cornerRadius)
                                 .strokeBorder(borderColor, lineWidth: 1)
@@ -1672,7 +1678,7 @@ struct UnifiedDatePill: View {
         }
         .frame(width: width)
         .padding(.vertical, 8)
-        .background(AppColors.surfaceWhite10)
+        .background(AppColors.panelFillEmphasis)
         .cornerRadius(8)
     }
 }
@@ -1780,7 +1786,7 @@ struct UnifiedMemberRow: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.06 : 0.03))
+                    .fill(isPressed ? AppColors.userListRowFillPressed : AppColors.userListRowFill)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1856,7 +1862,7 @@ struct UnifiedGuildMemberRow: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.06 : 0.03))
+                    .fill(isPressed ? AppColors.userListRowFillPressed : AppColors.userListRowFill)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1962,7 +1968,7 @@ struct UnifiedLeaderboardRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.systemWhite.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03)))
+                    .fill(AppColors.leaderboardRowFill(isTopRank: isTopRank, isPressed: isPressed))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .strokeBorder(
@@ -2036,7 +2042,7 @@ enum PreviewCategoryTab: String, CaseIterable, UnifiedTabItem {
                 )
                 
                 // Tab Bar - Standard
-                Text("Standard Tabs").foregroundColor(.gray).font(.caption)
+                Text("Standard Tabs").foregroundColor(AppColors.secondaryForeground).font(.caption)
                 UnifiedTabBar(
                     selectedTab: .constant(PreviewTab.personal),
                     size: .standard,
@@ -2050,7 +2056,7 @@ enum PreviewCategoryTab: String, CaseIterable, UnifiedTabItem {
                 }
                 
                 // Tab Bar - Compact
-                Text("Compact Tabs").foregroundColor(.gray).font(.caption)
+                Text("Compact Tabs").foregroundColor(AppColors.secondaryForeground).font(.caption)
                 UnifiedTabBar(
                     selectedTab: .constant(PreviewTab.guild),
                     size: .compact,
@@ -2058,14 +2064,14 @@ enum PreviewCategoryTab: String, CaseIterable, UnifiedTabItem {
                 )
                 
                 // Category Tabs
-                Text("Category Tabs").foregroundColor(.gray).font(.caption)
+                Text("Category Tabs").foregroundColor(AppColors.secondaryForeground).font(.caption)
                 UnifiedCategoryTabBar(
                     selectedTab: .constant(PreviewCategoryTab.trend),
                     theme: .blue
                 )
                 
                 // Disclosure Group
-                Text("Disclosure Group").foregroundColor(.gray).font(.caption)
+                Text("Disclosure Group").foregroundColor(AppColors.secondaryForeground).font(.caption)
                 UnifiedDisclosureGroup(
                     title: "Forex",
                     count: 8,
@@ -2076,13 +2082,13 @@ enum PreviewCategoryTab: String, CaseIterable, UnifiedTabItem {
                         ForEach(0..<3) { i in
                             HStack {
                                 Text("EUR/USD")
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppColors.primaryForeground)
                                 Spacer()
                                 Text("1.0850")
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(AppColors.secondaryForeground)
                             }
                             .padding(12)
-                            .background(AppColors.surfaceWhite05)
+                            .background(AppColors.symbolSheetGroupedPanelFill)
                             .cornerRadius(10)
                         }
                     }
@@ -2370,12 +2376,12 @@ struct UnifiedSetupProgressStrip: View {
             if let rr = riskRewardRatio {
                 Text("R:R \(rr)")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite70)
+                    .foregroundColor(AppColors.listCardContextSummaryFallback)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(
                         Capsule()
-                            .fill(AppColors.surfaceWhite08)
+                            .fill(AppColors.symbolDetailCardFill)
                             .overlay(
                                 Capsule()
                                     .stroke(AppColors.surfaceWhite15, lineWidth: 1)
@@ -2404,7 +2410,7 @@ struct UnifiedSetupProgressStrip: View {
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(AppColors.surfaceWhite08)
+                    .fill(AppColors.symbolDetailCardFill)
 
                 HStack(spacing: 0) {
                     if metrics.isLong {
@@ -2550,7 +2556,7 @@ private struct StripContainerModifier: ViewModifier {
                 .padding(.vertical, 9)
                 .background(
                     RoundedRectangle(cornerRadius: 9)
-                        .fill(AppColors.surfaceWhite08)
+                        .fill(AppColors.subtleSurfaceOverlay08)
                         .overlay(
                             RoundedRectangle(cornerRadius: 9)
                                 .stroke(borderTint.opacity(0.24), lineWidth: 1)
@@ -2563,7 +2569,7 @@ private struct StripContainerModifier: ViewModifier {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(AppColors.surfaceWhite04)
+                        .fill(AppColors.subtleSurfaceOverlay04)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(borderTint.opacity(0.25), lineWidth: 1)

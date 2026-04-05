@@ -589,6 +589,12 @@ struct ChatInputFooter: View {
     @State private var isLoadingMarkerDrafts = false
     @State private var markerPickerError: String? = nil
 
+    private var isLightGreyChrome: Bool { ThemeManager.shared.currentTheme == .lightGrey }
+
+    private var composerAccessoryIdleColor: Color {
+        isLightGreyChrome ? AppColors.standardSearchFieldAccessory : Color.secondary
+    }
+
     /// The partial @mention query extracted from the current cursor position
     private var mentionQuery: String? {
         guard !mentionCandidates.isEmpty else { return nil }
@@ -694,7 +700,7 @@ struct ChatInputFooter: View {
                     } label: {
                         Image(systemName: showActionPanel ? "xmark" : "plus")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(showActionPanel ? .white : .secondary)
+                            .foregroundColor(showActionPanel ? .white : composerAccessoryIdleColor)
                             .frame(width: 32, height: 32)
                             .background(showActionPanel ? AppColors.accentColor.opacity(0.8) : Color.clear)
                             .clipShape(Circle())
@@ -730,7 +736,7 @@ struct ChatInputFooter: View {
                         }) {
                             Image(systemName: speechService.isRecording ? "mic.circle.fill" : "mic.fill")
                                 .font(.title3)
-                                .foregroundColor(speechService.isRecording ? .red : .secondary)
+                                .foregroundColor(speechService.isRecording ? .red : composerAccessoryIdleColor)
                                 .frame(width: 32, height: 32)
                                 .symbolEffect(.pulse, isActive: speechService.isRecording)
                         }
@@ -747,13 +753,26 @@ struct ChatInputFooter: View {
                 }
                 .padding(.leading, 10)
                 .frame(height: 44)
-                .background(AppColors.whiteText.opacity(0.08))
-                .cornerRadius(25)
+                .background(
+                    Group {
+                        if isLightGreyChrome {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 25)
+                                    .fill(AppColors.standardSearchFieldFill)
+                                RoundedRectangle(cornerRadius: 25)
+                                    .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
+                            }
+                        } else {
+                            RoundedRectangle(cornerRadius: 25)
+                                .fill(AppColors.whiteText.opacity(0.08))
+                        }
+                    }
+                )
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(AppColors.sheetBackground)
+        .background(ChatChromeBarBackground())
         .compositingGroup()
         .onChange(of: showActionPanel) { _, newValue in
             isActionPanelVisible?.wrappedValue = newValue
@@ -890,7 +909,10 @@ struct ChatInputFooter: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [AppColors.surfaceWhite12, AppColors.surfaceWhite08],
+                        colors: [
+                            AppColors.composerActionPanelGradientLeading,
+                            AppColors.composerActionPanelGradientTrailing,
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -1127,7 +1149,7 @@ struct ChatInputFooter: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .background(AppColors.surfaceBlack45, in: Circle())
             }
             .offset(x: 4, y: -4)
@@ -1159,14 +1181,14 @@ struct ChatInputFooter: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .background(AppColors.surfaceBlack45, in: Circle())
             }
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.symbolDetailCardFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(AppColors.surfaceWhite20, lineWidth: 1)
@@ -1309,7 +1331,7 @@ private struct ChatMarkerPickerSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Link Marker")
                         .font(.headline.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text("Share one of your markers in chat using the same marker row presentation.")
                         .font(.caption)
                         .foregroundColor(AppColors.surfaceWhite70)
@@ -1446,18 +1468,18 @@ struct ChatBackground: View {
     private var overlayColors: [Color] {
         switch style {
         case .standard:
-            return [AppColors.surfaceWhite03, AppColors.surfaceWhite00]
+            return [AppColors.chatBackgroundOverlayStandardStart, AppColors.chatBackgroundOverlayStandardEnd]
         case .elevated:
-            return [AppColors.surfaceWhite10, AppColors.surfaceWhite04]
+            return [AppColors.chatBackgroundOverlayElevatedStart, AppColors.chatBackgroundOverlayElevatedEnd]
         }
     }
 
     private var patternOpacity: Double {
         switch style {
         case .standard:
-            return 0.06
+            return AppColors.chatBackgroundPatternMultiplyStandard
         case .elevated:
-            return 0.1
+            return AppColors.chatBackgroundPatternMultiplyElevated
         }
     }
 
@@ -1473,6 +1495,22 @@ struct ChatBackground: View {
             )
             StaticPatternView()
                 .opacity(patternOpacity)
+        }
+    }
+}
+
+/// Messaging header/footer chrome: on lightGrey matches symbol chat header (sheet + grouped tint). Dark/mid: flat sheet only (unchanged).
+struct ChatChromeBarBackground: View {
+    var body: some View {
+        Group {
+            if ThemeManager.shared.currentTheme == .lightGrey {
+                ZStack {
+                    AppColors.sheetBackground
+                    AppColors.symbolSheetGroupedPanelFill
+                }
+            } else {
+                AppColors.sheetBackground
+            }
         }
     }
 }
@@ -1607,7 +1645,7 @@ struct ChatFullScreenImageViewer: View {
                     case .empty:
                         ProgressView()
                             .scaleEffect(1.2)
-                            .tint(.white)
+                            .tint(AppColors.primaryForeground)
                     @unknown default:
                         EmptyView()
                     }
@@ -1894,7 +1932,7 @@ struct ChatScrollToBottomButton: View {
                 if unreadCount > 0 {
                     Text("\(unreadCount)")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.onAccentForeground)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(AppColors.accentColor)
@@ -1923,7 +1961,7 @@ struct TypingIndicatorBubble: View {
                 if let username {
                     Text(username)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColors.secondaryForeground)
                 }
 
                 HStack(spacing: 4) {
@@ -2162,7 +2200,7 @@ struct ChatSettingsButton: View {
         Button(action: action) {
             Image(systemName: "gear")
                 .font(.title2)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.secondaryForeground)
         }
     }
 }
@@ -2189,7 +2227,7 @@ struct ActiveUsersPill: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(AppColors.surfaceWhite08)
+            .background(AppColors.symbolDetailCardFill)
             .overlay(
                 Capsule()
                     .stroke(AppColors.surfaceWhite12, lineWidth: 1)
@@ -2270,7 +2308,7 @@ struct ChatSearchView: View {
                         AppColors.sheetBackground
                             .overlay(alignment: .bottom) {
                                 Rectangle()
-                                    .fill(AppColors.surfaceWhite08)
+                                    .fill(AppColors.symbolDetailCardFill)
                                     .frame(height: 1)
                             }
                     )
@@ -2317,7 +2355,7 @@ struct ChatSearchView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     SheetCloseButton(action: { dismiss() }, tint: AppColors.accentColor)
@@ -2356,16 +2394,16 @@ struct ChatSearchView: View {
             // Message content with highlighted search term
             Text(result.message.content)
                 .font(.subheadline)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .lineLimit(3)
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.symbolDetailCardFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(AppColors.symbolDetailCardFill, lineWidth: 1)
                 )
         )
     }
@@ -2750,7 +2788,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                 .fill(message.isCurrentUserMessage ? AppColors.surfaceBlack45 : AppColors.surfaceBlack30)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(message.isCurrentUserMessage ? AppColors.surfaceWhite12 : AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(message.isCurrentUserMessage ? AppColors.surfaceWhite12 : AppColors.symbolDetailCardFill, lineWidth: 1)
                 )
         )
     }
@@ -2841,7 +2879,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         HStack(spacing: 4) {
             Text(message.timestampFormatted)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.secondaryForeground)
 
             // Delivery status for current user's messages
             if message.isCurrentUserMessage {
@@ -2853,12 +2891,12 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                     // DMs: sent → read (single → double checkmark)
                     Image(systemName: isRead ? "checkmark.circle.fill" : "checkmark.circle")
                         .font(.caption2)
-                        .foregroundColor(isRead ? AppColors.accentColor : .secondary)
+                        .foregroundColor(isRead ? AppColors.accentColor : AppColors.secondaryForeground)
                 } else {
                     // Chatrooms: just show sent checkmark
                     Image(systemName: "checkmark")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColors.secondaryForeground)
                 }
             }
         }
@@ -3150,7 +3188,7 @@ private struct ChatCenteredMessageActionCard: View {
 
             // Divider
             Rectangle()
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.symbolDetailCardFill)
                 .frame(height: 1)
                 .padding(.horizontal, 4)
 
@@ -3437,7 +3475,7 @@ private struct LinkedMarkerRow: View {
         switch style {
         case .attachmentDraft:
             return LinearGradient(
-                colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+                colors: [AppColors.searchBarGradientLeading, AppColors.searchBarGradientTrailing],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -3456,9 +3494,9 @@ private struct LinkedMarkerRow: View {
     private var rowStrokeColor: Color {
         switch style {
         case .attachmentDraft:
-            return AppColors.surfaceWhite10
+            return AppColors.linkedMarkerAttachmentStroke
         case .messageCard(let isCurrentUser):
-            return isCurrentUser ? AppColors.surfaceWhite12 : AppColors.surfaceWhite08
+            return isCurrentUser ? AppColors.surfaceWhite12 : AppColors.symbolDetailCardFill
         }
     }
 
@@ -3509,7 +3547,7 @@ private struct LinkedMarkerRow: View {
                 Button(action: trailingAction) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                         .background(AppColors.surfaceBlack45, in: Circle())
                 }
                 .buttonStyle(.plain)

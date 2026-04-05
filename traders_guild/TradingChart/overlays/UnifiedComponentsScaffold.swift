@@ -42,7 +42,7 @@ struct UnifiedComponentsScaffold<Tab: UnifiedTabItem, Content: View>: View where
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.headline.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text(subtitle)
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)

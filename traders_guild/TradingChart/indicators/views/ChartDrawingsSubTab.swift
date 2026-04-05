@@ -186,7 +186,7 @@ struct ChartDrawingsSubTab: View {
                     )
                     .textFieldStyle(.plain)
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .background(
@@ -329,7 +329,7 @@ struct ChartDrawingsSubTab: View {
                         .foregroundColor(tint)
                     Text(title)
                         .font(.subheadline)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                 }
 
                 Text(subtitle)

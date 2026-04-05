@@ -189,7 +189,7 @@ struct ManageChatroomsView: View {
                         if processingChatroomId == chatroom.id {
                             ProgressView()
                                 .scaleEffect(0.8)
-                                .tint(.white)
+                                .tint(AppColors.primaryForeground)
                         } else {
                             Image(systemName: "ellipsis.circle")
                                 .font(.title3)

@@ -441,7 +441,7 @@ struct IndicatorSettingsEditorSheet: View {
             )) {
                 Text(field.label)
                     .font(.subheadline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
             }
             .tint(.blue)
             .padding(.horizontal, 10)
@@ -474,7 +474,7 @@ struct IndicatorSettingsEditorSheet: View {
             TextField(label, text: text)
                 .textFieldStyle(.plain)
                 .font(.subheadline)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .keyboardType(keyboard)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 9)

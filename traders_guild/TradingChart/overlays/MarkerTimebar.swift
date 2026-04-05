@@ -690,7 +690,7 @@ struct MarkerPlacementTimeBar: View {
                 Text(timestamp.chartTimeLabel)
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
             }
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(
@@ -723,7 +723,7 @@ struct MarkerPlacementTimeIndicator: View {
             
             Text(timestamp.chartTimeLabel)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(

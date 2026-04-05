@@ -191,11 +191,11 @@ struct chartSheetMarkersView: View {
 
                         Text("Marker settings are unavailable right now.")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
 
                         Text("Try again after the chart marker manager is ready.")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.secondaryForeground)
                             .multilineTextAlignment(.center)
                     }
                     .padding(20)
@@ -230,7 +230,7 @@ struct chartSheetMarkersView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Markers")
                     .font(.headline.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text(subtitleForCurrentTab)
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -247,14 +247,14 @@ struct chartSheetMarkersView: View {
                         if isRefreshingActivity {
                             ProgressView()
                                 .scaleEffect(0.8)
-                                .tint(.white)
+                                .tint(AppColors.primaryForeground)
                                 .frame(width: 34, height: 34)
                         } else {
                             Image(systemName: "arrow.clockwise.circle")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(AppColors.surfaceWhite85)
                                 .frame(width: 34, height: 34)
-                                .background(AppColors.surfaceWhite08)
+                                .background(AppColors.symbolDetailCardFill)
                                 .clipShape(Circle())
                         }
                     }
@@ -327,7 +327,7 @@ struct chartSheetMarkersView: View {
                             .font(.caption)
                         Text("Prediction markers affect your accuracy, and TP results also affect reputation. Set entry, SL, and TP when prompted.")
                             .font(.caption2)
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.secondaryForeground)
                         Spacer()
                     }
                     .padding(.horizontal, 2)
@@ -504,7 +504,7 @@ struct chartSheetMarkersView: View {
 
             Text("\(currentSymbolLabel) \u{2022} \(selectedSubTab.title) \u{2022} \(summaryMarkerCount) markers")
                 .font(.caption2)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
                 .lineLimit(1)
 
             Spacer()
@@ -524,7 +524,7 @@ struct chartSheetMarkersView: View {
                 } label: {
                     Text(toggle.rawValue)
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(selectedScopeToggle == toggle ? .white : AppColors.surfaceWhite60)
+                        .foregroundColor(selectedScopeToggle == toggle ? AppColors.onAccentForeground : AppColors.surfaceWhite60)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(
@@ -537,7 +537,7 @@ struct chartSheetMarkersView: View {
             }
         }
         .background(
-            Capsule().fill(AppColors.surfaceWhite08)
+            Capsule().fill(AppColors.symbolDetailCardFill)
         )
     }
 
@@ -549,7 +549,7 @@ struct chartSheetMarkersView: View {
 
             Text("\(currentSymbolLabel) \u{2022} Guild \u{2022} \(analysisMarkers.count) markers \u{2022} \(Set(analysisMarkers.map { timeframeLabel($0.timeframe) }).count) timeframes")
                 .font(.caption2)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
                 .lineLimit(1)
 
             Spacer()
@@ -683,7 +683,7 @@ struct chartSheetMarkersView: View {
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Spacer()
             }
 
@@ -692,7 +692,7 @@ struct chartSheetMarkersView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.symbolDetailCardFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 1)
@@ -1125,14 +1125,14 @@ private struct MarkerPlacementOptionRow: View {
 
     private var rowBackgroundGradient: LinearGradient {
         LinearGradient(
-            colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+            colors: [AppColors.searchBarGradientLeading, AppColors.searchBarGradientTrailing],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
     private var rowBorderColor: Color {
-        AppColors.surfaceWhite10
+        AppColors.panelFillEmphasis
     }
 
     var body: some View {
@@ -1148,7 +1148,7 @@ private struct MarkerPlacementOptionRow: View {
                     if isActive {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 30, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                             .frame(width: 46, height: 46)
                     } else {
                         UnifiedMarkerBadge(intent: intent, sizeToken: .large)
@@ -1158,7 +1158,7 @@ private struct MarkerPlacementOptionRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(isActive ? "Cancel Placement" : intent.displayName)
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                             .lineLimit(1)
                         if !isActive {
                             Text(intent.subtitle)
@@ -1174,7 +1174,7 @@ private struct MarkerPlacementOptionRow: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(AppColors.surfaceWhite84)
                         .frame(width: 28, height: 28)
-                        .background(AppColors.surfaceWhite08)
+                        .background(AppColors.symbolDetailCardFill)
                         .clipShape(Circle())
                 }
                 .padding(.leading, 8)
@@ -1185,7 +1185,7 @@ private struct MarkerPlacementOptionRow: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(rowBackgroundGradient)
-                    PatternOverlay(patternType: .honeycomb, hexSize: 16)
+                    PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
                         .opacity(0.02)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
@@ -1210,7 +1210,7 @@ private struct MarkerSettingsButton: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(AppColors.surfaceWhite85)
                 .frame(width: 34, height: 34)
-                .background(AppColors.surfaceWhite08)
+                .background(AppColors.symbolDetailCardFill)
                 .clipShape(Circle())
         }
         .accessibilityLabel("Marker settings")
@@ -1260,7 +1260,7 @@ private struct MarkerFilterSettingsSheet: View {
                                     }
                                 }
                                 .pickerStyle(.segmented)
-                                .colorScheme(.dark)
+                                .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
                             }
                         }
 
@@ -1299,7 +1299,7 @@ private struct MarkerFilterSettingsSheet: View {
 
                                         Text(intent.displayName)
                                             .font(.subheadline)
-                                            .foregroundColor(.white)
+                                            .foregroundColor(AppColors.primaryForeground)
 
                                         Spacer()
 
@@ -1321,7 +1321,7 @@ private struct MarkerFilterSettingsSheet: View {
                 } label: {
                     Text("Done")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.onAccentForeground)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(
@@ -1369,10 +1369,10 @@ private struct AnalysisMetricCard: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
             Text(value)
                 .font(.title3.weight(.bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
             Text(subtitle)
                 .font(.caption2)
                 .foregroundColor(AppColors.surfaceGray90)
@@ -1381,7 +1381,7 @@ private struct AnalysisMetricCard: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(AppColors.surfaceWhite08)
+                .fill(AppColors.symbolDetailCardFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 1)
@@ -1409,7 +1409,7 @@ private struct BreakdownRow: View {
                 Spacer()
                 Text("\(count)")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
             }
 
             GeometryReader { geometry in
@@ -1443,7 +1443,7 @@ private struct QuickLinkRow: View {
                     Text("\(marker.intentEnum.displayName) \u{2022} \(marker.symbolTicker)")
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                         .lineLimit(1)
 
                     Text("\(timeframeText) \u{2022} \(marker.activityTimestampFormatted)")
@@ -1461,7 +1461,7 @@ private struct QuickLinkRow: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(AppColors.surfaceWhite08)
+                    .fill(AppColors.symbolDetailCardFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(AppColors.surfaceWhite12, lineWidth: 1)

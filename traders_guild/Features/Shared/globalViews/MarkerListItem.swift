@@ -147,9 +147,9 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     ? RLComponentType.levelTp.color
                     : RLComponentType.levelSl.color
             }
-            return AppColors.surfaceWhite70
+            return AppColors.listCardContextSummaryFallback
         default:
-            return AppColors.surfaceWhite70
+            return AppColors.listCardContextSummaryFallback
         }
     }
 
@@ -236,10 +236,10 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         }
         .background(
             RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous)
-                .fill(AppColors.surfaceWhite04)
+                .fill(AppColors.markerListCapsuleFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 1)
+                        .stroke(AppColors.markerListCapsuleStroke, lineWidth: 1)
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
@@ -342,7 +342,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     if trackingState.isLive {
                         Text("LIVE")
                             .font(.system(size: 8, weight: .heavy))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.onAccentForeground)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(AppColors.statusPositive70))
@@ -387,7 +387,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
             Text(marker.symbolTicker)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
                 .lineLimit(1)
 
             MarkerActivityMetaChip(
@@ -400,7 +400,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             if let trackingState, trackingState.isLive {
                 Text("LIVE")
                     .font(.system(size: 7, weight: .heavy))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(AppColors.statusPositive70))
@@ -415,7 +415,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             if showMyBadge {
                 Text("YOU")
                     .font(.system(size: 7, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(AppColors.statusInfo60))
@@ -466,7 +466,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
             Text("Placed @ \(formatPrice(marker.price))")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(AppColors.surfaceWhite78)
+                .foregroundColor(AppColors.listCardSecondaryText)
                 .lineLimit(1)
         }
     }
@@ -517,7 +517,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 if showMyBadge {
                     Text("YOU")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.onAccentForeground)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(AppColors.statusInfo60))
@@ -533,7 +533,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     if trackingState.isLive {
                         Text("LIVE")
                             .font(.system(size: 8, weight: .heavy))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.onAccentForeground)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(AppColors.statusPositive70))
@@ -597,7 +597,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
     private var iconLikeBadgeContent: some View {
         Text("\(min(marker.likeCount, 99))")
             .font(.system(size: 7, weight: .bold))
-        .foregroundColor(.white)
+        .foregroundColor(AppColors.onAccentForeground)
         .frame(minWidth: 14, minHeight: 14)
         .padding(.horizontal, marker.likeCount > 9 ? 2 : 0)
         .background(
@@ -631,14 +631,14 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                                 icon: "clock.badge.xmark",
                                 text: "No score impact",
                                 tint: AppColors.surfaceGray90,
-                                background: AppColors.surfaceWhite08
+                                background: AppColors.metaChipNeutralBackground
                             )
                         }
 
                         if let triggeredAt = outcome.triggeredAtFormatted {
                             Text(triggeredAt)
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(AppColors.surfaceWhite60)
+                                .foregroundColor(AppColors.listCardTertiaryText)
                         }
                     }
                 } else if let liveSetupMetrics {
@@ -662,7 +662,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11))
-                        .foregroundColor(AppColors.surfaceWhite80)
+                        .foregroundColor(AppColors.listCardSecondaryText)
                         .lineLimit(4)
                 }
             }
@@ -671,7 +671,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             if let note = notePreviewText, !note.isEmpty {
                 Text(note)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(AppColors.surfaceWhite90)
+                    .foregroundColor(AppColors.listCardBodyEmphasisText)
                     .lineLimit(6)
             }
 
@@ -683,7 +683,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                         .foregroundColor(accentColor)
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.surfaceWhite85)
+                        .foregroundColor(AppColors.listCardBodyText)
                         .lineLimit(4)
                 }
             }
@@ -692,7 +692,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             if let note = notePreviewText, !note.isEmpty {
                 Text(note)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(AppColors.surfaceWhite85)
+                    .foregroundColor(AppColors.listCardBodyText)
                     .lineLimit(4)
             }
 
@@ -728,7 +728,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.surfaceWhite92)
+                        .foregroundColor(AppColors.listCardHighlightText)
                         .lineLimit(2)
                 }
             }
@@ -741,7 +741,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     Text("Alert")
                         .font(.system(size: 9.5, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(
@@ -752,7 +752,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.surfaceWhite85)
+                        .foregroundColor(AppColors.listCardBodyText)
                         .lineLimit(2)
                 }
             }
@@ -763,7 +763,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.surfaceWhite85)
+                        .foregroundColor(AppColors.listCardBodyText)
                         .lineLimit(2)
                 }
             }
@@ -777,7 +777,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 } else if let note = notePreviewText, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.surfaceWhite85)
+                        .foregroundColor(AppColors.listCardBodyText)
                         .lineLimit(1)
                 }
             }

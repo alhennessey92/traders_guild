@@ -143,7 +143,7 @@ struct RLRightDrawerMainView: View {
                             Text("\(rightDrawerViewModel.totalUnreadCount)")
                                 .font(.caption)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.onAccentForeground)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(AppColors.accentColor)
@@ -321,7 +321,7 @@ struct RLRightDrawerMainView: View {
             )
             .overlay(
                 Rectangle()
-                    .fill(AppColors.surfaceWhite10)
+                    .fill(AppColors.panelFillEmphasis)
                     .frame(width: 1)
                     .frame(maxHeight: .infinity),
                 alignment: .leading

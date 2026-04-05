@@ -147,7 +147,7 @@ struct TickerSymbolIconView: View {
 
             Text(fallbackInitial)
                 .font(.system(size: size * 0.38, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.onAccentForeground)
         }
     }
 }

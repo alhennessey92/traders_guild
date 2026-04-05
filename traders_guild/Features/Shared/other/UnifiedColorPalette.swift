@@ -37,7 +37,7 @@ struct UnifiedColors {
     /// Unselected tab background gradient
     static var tabUnselectedGradient: LinearGradient {
         LinearGradient(
-            colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+            colors: [AppColors.subtleSurfaceOverlay08, AppColors.subtleSurfaceOverlay04],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -113,7 +113,7 @@ struct UnifiedColors {
     // MARK: - Background Colors & Opacities
     
     /// Card/row background
-    static let cardBackground = AppColors.surfaceWhite05
+    static var cardBackground: Color { AppColors.symbolSheetGroupedPanelFill }
     
     /// Selected/highlighted card background
     static let cardBackgroundSelected = AppColors.statusInfo20
@@ -146,14 +146,14 @@ struct UnifiedColors {
     /// Disclosure header background (collapsed)
     static var disclosureHeaderBackground: LinearGradient {
         LinearGradient(
-            colors: [AppColors.surfaceWhite08, AppColors.surfaceWhite04],
+            colors: [AppColors.subtleSurfaceOverlay08, AppColors.subtleSurfaceOverlay04],
             startPoint: .top,
             endPoint: .bottom
         )
     }
     
     /// Disclosure content background
-    static let disclosureContentBackground = AppColors.surfaceWhite03
+    static var disclosureContentBackground: Color { AppColors.insetPanelBackground }
     
     /// Disclosure count badge background
     static let disclosureCountBadge = AppColors.surfaceWhite15
@@ -161,10 +161,10 @@ struct UnifiedColors {
     // MARK: - Search Bar Colors
     
     /// Search bar background
-    static let searchBarBackground = AppColors.surfaceWhite08
+    static var searchBarBackground: Color { AppColors.symbolDetailCardFill }
     
     /// Search bar border
-    static let searchBarBorder = AppColors.surfaceWhite10
+    static var searchBarBorder: Color { AppColors.panelFillEmphasis }
     
     /// Search bar focused border
     static let searchBarFocusedBorder = AppColors.statusInfo50

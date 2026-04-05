@@ -150,12 +150,12 @@ struct MarkerPlacementComponentsTab: View {
             HStack(spacing: 10) {
                 Image(systemName: "rectangle.2.swap")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mirror Chart Setup")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text("Copy current chart indicators and drawings to this marker")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
@@ -206,7 +206,7 @@ struct MarkerPlacementComponentsTab: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(indicatorTitle(for: payload))
                                     .font(.caption)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppColors.primaryForeground)
                                 Text(indicatorSubtitle(for: payload))
                                     .font(.caption2)
                                     .foregroundColor(AppColors.greyText)
@@ -242,7 +242,7 @@ struct MarkerPlacementComponentsTab: View {
                             .frame(width: 16)
                         Text(drawingTitle(for: draft))
                             .font(.caption)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         removeDraftButton(draft.id)
@@ -268,7 +268,7 @@ struct MarkerPlacementComponentsTab: View {
                             .frame(width: 16)
                         Text(timeframeLabel(for: draft))
                             .font(.caption)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                         Spacer(minLength: 0)
                         removeTimeframeDraftButton(draft)
                     }
@@ -284,7 +284,7 @@ struct MarkerPlacementComponentsTab: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
             Text(title)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(AppColors.greyText)

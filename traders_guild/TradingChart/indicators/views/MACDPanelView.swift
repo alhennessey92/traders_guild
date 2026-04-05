@@ -128,7 +128,7 @@ struct MACDPanelView: View {
             HStack(spacing: 4) {
                 (Text(macdHeaderLabel)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                  + Text("  Indicator")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(AppColors.surfaceWhite50))
@@ -430,7 +430,7 @@ struct MACDPanelView: View {
                         
                         let text = Text(formatMACDValue(latestMACD.macdLine))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.onAccentForeground)
                         
                         context.draw(text, at: CGPoint(x: labelX, y: y))
                     }
@@ -472,19 +472,19 @@ struct MACDPanelView: View {
             VStack {
                 Text(formatMACDValue(dataRange.max * 0.7))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite78)
+                    .foregroundColor(AppColors.chartAxisLabelSecondary)
                 
                 Spacer()
                 
                 Text("0")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite66)
+                    .foregroundColor(AppColors.chartAxisLabelSecondary.opacity(0.85))
                 
                 Spacer()
                 
                 Text(formatMACDValue(dataRange.min * 0.7))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite78)
+                    .foregroundColor(AppColors.chartAxisLabelSecondary)
             }
             .frame(width: 42)
             .padding(.top, 18)
@@ -516,7 +516,7 @@ struct MACDPanelView: View {
 
                     Text("H:")
                         .font(.system(size: 9))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                     Text(formatMACDValue(latest.histogram))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(latest.isHistogramPositive ? .green : .red)
@@ -539,7 +539,7 @@ struct MACDPanelView: View {
     private func macdConditionBadge(crossover: MACDCrossover) -> some View {
         Text(crossover.label)
             .font(.system(size: 8, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
             .background(crossover.color.opacity(0.8))

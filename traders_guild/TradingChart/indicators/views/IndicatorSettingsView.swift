@@ -42,14 +42,14 @@ struct ChartIndicatorBrowser: View {
                         Text("Indicators")
                             .font(.title2)
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                         Spacer()
                     }
                     .padding(.bottom, 6)
 
                     Text("Add indicators to analyse chart data.")
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 4)
@@ -156,7 +156,7 @@ struct ChartIndicatorBrowser: View {
         HStack {
             Text("Panel Indicators")
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
             Spacer()
             Text("\(indicatorManager.activePanelCount)/2")
                 .font(.caption)
@@ -164,7 +164,7 @@ struct ChartIndicatorBrowser: View {
                 .foregroundColor(indicatorManager.activePanelCount >= 2 ? .orange : .green)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
-                .background(AppColors.surfaceWhite10)
+                .background(AppColors.panelFillEmphasis)
                 .clipShape(Capsule())
         }
         .padding(.horizontal, 4)
@@ -181,12 +181,12 @@ struct ChartIndicatorBrowser: View {
                         .foregroundColor(AppColors.surfaceGray80)
                     Text("No active indicators")
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                     Button("Browse indicator categories") {
                         selectedTab = .trend
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
@@ -196,7 +196,7 @@ struct ChartIndicatorBrowser: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
-                .background(AppColors.surfaceWhite04)
+                .background(AppColors.markerListCapsuleFill)
                 .cornerRadius(12)
             } else {
                 if !indicatorManager.activeIndicators.enabledMovingAverages.isEmpty {
@@ -654,7 +654,7 @@ struct ChartIndicatorBrowser: View {
             Spacer()
             Button { indicatorManager.clearError() } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
             }
         }
         .padding(10)
@@ -672,12 +672,12 @@ struct IndicatorSectionHeader: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
                 .font(.caption)
             Text(title)
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColors.secondaryForeground)
             Spacer()
         }
         .padding(.top, 8)
@@ -732,13 +732,13 @@ struct ActiveIndicatorRow: View {
             
             Text(title)
                 .font(.subheadline)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
             
             Spacer()
             
             Button(action: onEdit) {
                 Image(systemName: "slider.horizontal.3")
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
                     .font(.caption)
             }
             
@@ -753,7 +753,7 @@ struct ActiveIndicatorRow: View {
             }
         }
         .padding(10)
-        .background(AppColors.surfaceWhite05)
+        .background(AppColors.symbolSheetGroupedPanelFill)
         .cornerRadius(10)
     }
 }
@@ -777,11 +777,11 @@ struct IndicatorRowWithEdit: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.subheadline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 if let subtitle = subtitle {
                     Text(subtitle)
                         .font(.caption2)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                 }
             }
             
@@ -790,7 +790,7 @@ struct IndicatorRowWithEdit: View {
             if let onEdit = onEdit, isActive {
                 Button(action: onEdit) {
                     Image(systemName: "slider.horizontal.3")
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                 }
                 .padding(.trailing, 8)
             }
@@ -801,7 +801,7 @@ struct IndicatorRowWithEdit: View {
             }
         }
         .padding(12)
-        .background(isActive ? color.opacity(0.15) : AppColors.surfaceWhite05)
+        .background(isActive ? color.opacity(0.15) : AppColors.symbolSheetGroupedPanelFill)
         .cornerRadius(10)
     }
 }
@@ -832,11 +832,11 @@ struct PanelIndicatorRowWithEdit: View {
                 HStack {
                     Text(title)
                         .font(.subheadline)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     
                     Text("PANEL")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
                         .background(AppColors.surfaceGray30)
@@ -845,7 +845,7 @@ struct PanelIndicatorRowWithEdit: View {
                 if let subtitle = subtitle {
                     Text(subtitle)
                         .font(.caption2)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                 }
             }
             
@@ -854,7 +854,7 @@ struct PanelIndicatorRowWithEdit: View {
             if let onEdit = onEdit, isActive {
                 Button(action: onEdit) {
                     Image(systemName: "slider.horizontal.3")
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                 }
                 .padding(.trailing, 8)
             }
@@ -876,7 +876,7 @@ struct PanelIndicatorRowWithEdit: View {
             .disabled(!isActive && !canAdd)
         }
         .padding(12)
-        .background(isActive ? color.opacity(0.15) : AppColors.surfaceWhite05)
+        .background(isActive ? color.opacity(0.15) : AppColors.symbolSheetGroupedPanelFill)
         .cornerRadius(10)
     }
 }

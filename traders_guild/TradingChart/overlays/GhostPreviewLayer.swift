@@ -489,7 +489,7 @@ struct GhostPreviewLayer: View {
     private func annotationNoteView(text: String, isSelected: Bool) -> some View {
         Text(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Note" : text)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.primaryForeground)
             .lineLimit(2)
             .padding(.horizontal, 9)
             .padding(.vertical, 7)

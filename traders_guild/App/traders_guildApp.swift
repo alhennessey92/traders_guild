@@ -191,11 +191,11 @@ struct traders_guildApp: App {
             VStack(spacing: 20) {
                 ProgressView()
                     .scaleEffect(1.5)
-                    .tint(.white)
+                    .tint(AppColors.primaryForeground)
                 
                 Text("Loading your guilds...")
                     .font(.subheadline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppColors.gradientBackgroundDark.opacity(0.9))

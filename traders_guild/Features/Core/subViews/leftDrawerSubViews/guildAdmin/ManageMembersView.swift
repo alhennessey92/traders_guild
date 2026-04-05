@@ -393,7 +393,7 @@ struct ManageMembersView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
@@ -444,7 +444,7 @@ struct ManageMembersView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
@@ -495,7 +495,7 @@ struct ManageMembersView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
@@ -550,7 +550,7 @@ struct ManageMembersView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)

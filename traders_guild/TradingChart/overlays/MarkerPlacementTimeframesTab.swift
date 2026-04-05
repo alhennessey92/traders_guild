@@ -55,7 +55,7 @@ struct MarkerPlacementTimeframesTab: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Timeframes")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text("Link supporting timeframes to this marker")
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -98,12 +98,12 @@ struct MarkerPlacementTimeframesTab: View {
             HStack(spacing: 10) {
                 Image(systemName: "rectangle.2.swap")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mirror Chart Setup")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text("Copy current chart indicators and drawings to this marker")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
@@ -168,7 +168,7 @@ struct MarkerPlacementTimeframesTab: View {
                 HStack(spacing: 6) {
                     Text(timeframe.shortName)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     Text(timeframe.displayName)
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
@@ -213,7 +213,7 @@ struct MarkerPlacementTimeframesTab: View {
                     Text(isLinked ? "Unlink" : "Link")
                         .font(.system(size: 10, weight: .bold))
                 }
-                .foregroundColor(isLinked ? .white : AppColors.surfaceWhite88)
+                .foregroundColor(isLinked ? AppColors.onAccentForeground : AppColors.surfaceWhite88)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(
@@ -271,7 +271,7 @@ struct MarkerPlacementTimeframesTab: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(displayShortName)
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                         Text(displayName)
                             .font(.caption2)
                             .foregroundColor(AppColors.greyText)

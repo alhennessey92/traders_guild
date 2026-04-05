@@ -204,7 +204,7 @@ struct ManageGuildWatchlistView: View {
                     .foregroundColor(AppColors.whiteText)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(AppColors.surfaceWhite05))
+                    .background(RoundedRectangle(cornerRadius: 8).fill(AppColors.symbolSheetGroupedPanelFill))
             }
 
             if canManage {
@@ -213,13 +213,13 @@ struct ManageGuildWatchlistView: View {
                         Task { await reviewRequest(request, action: "approved") }
                     } label: {
                         HStack(spacing: 6) {
-                            if busy { ProgressView().scaleEffect(0.7).tint(.white) }
+                            if busy { ProgressView().scaleEffect(0.7).tint(AppColors.onAccentForeground) }
                             Image(systemName: "checkmark.circle.fill")
                             Text("Approve")
                         }
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.onAccentForeground)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Capsule().fill(AppColors.statusPositive60))
@@ -252,7 +252,7 @@ struct ManageGuildWatchlistView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
@@ -366,13 +366,13 @@ struct ManageGuildWatchlistView: View {
                     Task { await addSymbolToGuild(symbol) }
                 } label: {
                     HStack(spacing: 6) {
-                        if busy { ProgressView().scaleEffect(0.65).tint(.white) }
+                        if busy { ProgressView().scaleEffect(0.65).tint(AppColors.onAccentForeground) }
                         Image(systemName: "plus.circle.fill")
                         Text("Add")
                     }
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(Capsule().fill(AppColors.accentColor))
@@ -385,10 +385,10 @@ struct ManageGuildWatchlistView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 0.5)
+                        .stroke(AppColors.markerListCapsuleStroke, lineWidth: 0.5)
                 )
         )
     }
@@ -432,7 +432,7 @@ struct ManageGuildWatchlistView: View {
                     Task { await removeSymbolFromGuild(symbol) }
                 } label: {
                     HStack(spacing: 6) {
-                        if busy { ProgressView().scaleEffect(0.65).tint(.white) }
+                        if busy { ProgressView().scaleEffect(0.65).tint(AppColors.onAccentForeground) }
                         Image(systemName: "trash")
                         Text("Remove")
                     }
@@ -451,10 +451,10 @@ struct ManageGuildWatchlistView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.surfaceWhite08, lineWidth: 0.5)
+                        .stroke(AppColors.markerListCapsuleStroke, lineWidth: 0.5)
                 )
         )
     }

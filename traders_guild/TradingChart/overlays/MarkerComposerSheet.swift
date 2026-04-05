@@ -109,7 +109,7 @@ struct MarkerComposerSheet: View {
                             .font(.caption2)
                             .opacity(0.65)
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
@@ -131,7 +131,7 @@ struct MarkerComposerSheet: View {
             Text("Components")
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -160,7 +160,7 @@ struct MarkerComposerSheet: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
                         .background(Capsule().fill(component.componentType.color.opacity(0.14)))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     }
                 }
             }
@@ -221,7 +221,7 @@ struct MarkerComposerSheet: View {
                             .padding(.vertical, 7)
                             .frame(maxWidth: .infinity)
                             .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.primaryForeground)
                         }
                         .buttonStyle(.plain)
                     }
@@ -275,7 +275,7 @@ struct MarkerComposerSheet: View {
             Spacer()
             Text(String(format: "%.5f", price))
                 .font(.caption2.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.primaryForeground)
         }
         .padding(.horizontal, 8)
         .frame(width: width, height: 20)

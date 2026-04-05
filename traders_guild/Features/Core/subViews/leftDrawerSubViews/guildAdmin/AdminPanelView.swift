@@ -448,7 +448,7 @@ struct CreateEventView: View {
                                 )
                                 .datePickerStyle(.compact)
                                 .labelsHidden()
-                                .colorScheme(.dark)
+                                .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
                             }
 
                             AdminInputField(

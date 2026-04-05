@@ -213,7 +213,7 @@ struct WatchlistView: View {
                         Text("Managed by guild admins")
                             .font(.system(size: 11))
                     }
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.secondaryForeground)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
                     
@@ -374,7 +374,7 @@ struct WatchlistView: View {
                         .foregroundColor(AppColors.surfaceGray50)
                     Text("Search for symbols")
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                     Text("Find symbols to add to your personal watchlist")
                         .font(.caption)
                         .foregroundColor(AppColors.surfaceGray70)
@@ -602,11 +602,11 @@ struct PersonalWatchlistRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(symbol.ticker)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     
                     Text(symbol.displayName)
                         .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                         .lineLimit(1)
 
                     FlowLayout(spacing: 6) {
@@ -625,7 +625,7 @@ struct PersonalWatchlistRow: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(symbol.priceFormatted ?? "--")
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
 
                     HStack(spacing: 2) {
                         Image(systemName: (symbol.isUp ?? false) ? "arrow.up.right" : "arrow.down.right")
@@ -648,7 +648,7 @@ struct PersonalWatchlistRow: View {
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(isCurrentSymbol ? AppColors.statusInfo20 :
-                          isJustSelected ? AppColors.statusPositive20 : AppColors.surfaceWhite05)
+                          isJustSelected ? AppColors.statusPositive20 : AppColors.symbolSheetGroupedPanelFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -685,11 +685,11 @@ struct GuildWatchlistRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(symbol.ticker)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     
                     Text(symbol.displayName)
                         .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                         .lineLimit(1)
 
                     FlowLayout(spacing: 6) {
@@ -708,7 +708,7 @@ struct GuildWatchlistRow: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(symbol.priceFormatted ?? "--")
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
 
                     HStack(spacing: 2) {
                         Image(systemName: (symbol.isUp ?? false) ? "arrow.up.right" : "arrow.down.right")
@@ -724,7 +724,7 @@ struct GuildWatchlistRow: View {
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(isCurrentSymbol ? AppColors.statusInfo20 :
-                          isJustSelected ? AppColors.statusPositive20 : AppColors.surfaceWhite05)
+                          isJustSelected ? AppColors.statusPositive20 : AppColors.symbolSheetGroupedPanelFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -756,11 +756,11 @@ struct SearchResultSymbolRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(symbol.ticker)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                     
                     Text(symbol.displayName)
                         .font(.system(size: 11))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.secondaryForeground)
                         .lineLimit(1)
 
                     FlowLayout(spacing: 6) {
@@ -785,7 +785,7 @@ struct SearchResultSymbolRow: View {
                                 : (inPersonal ? .yellow : .gray)
                         )
                         .frame(width: 32, height: 32)
-                        .background(inPersonal ? AppColors.statusHighlight20 : AppColors.surfaceWhite10)
+                        .background(inPersonal ? AppColors.statusHighlight20 : AppColors.panelFillEmphasis)
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -800,7 +800,7 @@ struct SearchResultSymbolRow: View {
             .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.surfaceWhite05)
+                    .fill(AppColors.symbolSheetGroupedPanelFill)
             )
         }
         .opacity(symbol.isSelectableForActiveProvider ? 1.0 : 0.65)

@@ -17,6 +17,7 @@ private struct GuildFlowBackground: View {
                 .background(.ultraThinMaterial)
             AppColors.sheetBackground
             StaticPatternView()
+                .opacity(AppColors.guildFlowPatternOpacityScale)
         }
         .ignoresSafeArea()
     }
@@ -147,9 +148,15 @@ struct SwitchGuildView: View {
 
                 DrawerActionButton(
                     title: "Create a Guild",
-                    backgroundColor: AppColors.whiteText.opacity(0.8),
-                    foregroundColor: AppColors.systemBlack,
-                    strokeColor: AppColors.systemBlack,
+                    backgroundColor: ThemeManager.shared.currentTheme == .lightGrey
+                        ? AppColors.standardSearchFieldFill
+                        : AppColors.whiteText.opacity(0.8),
+                    foregroundColor: ThemeManager.shared.currentTheme == .lightGrey
+                        ? AppColors.primaryForeground
+                        : AppColors.systemBlack,
+                    strokeColor: ThemeManager.shared.currentTheme == .lightGrey
+                        ? AppColors.standardSearchFieldStroke
+                        : AppColors.systemBlack,
                     strokeWidth: 0.5,
                     action: {
                         showCreateGuild = true
@@ -179,6 +186,7 @@ struct SwitchGuildView: View {
                     .background(.ultraThinMaterial)
                 AppColors.sheetBackground
                 StaticPatternView()
+                    .opacity(AppColors.guildFlowPatternOpacityScale)
             }
         )
     }
@@ -354,10 +362,19 @@ struct GuildSwitchRow: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isCurrentGuild ? AppColors.accentColor.opacity(0.16) : AppColors.gradientBackgroundDark.opacity(0.42))
+                    .fill(
+                        isCurrentGuild
+                            ? AppColors.accentColor.opacity(CGFloat(AppColors.guildSwitchRowSelectedFillOpacity))
+                            : AppColors.gradientBackgroundDark.opacity(0.42)
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isCurrentGuild ? AppColors.accentColor.opacity(0.38) : AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                            .stroke(
+                                isCurrentGuild
+                                    ? AppColors.accentColor.opacity(CGFloat(AppColors.guildSwitchRowSelectedStrokeOpacity))
+                                    : AppColors.whiteText.opacity(0.16),
+                                lineWidth: 1
+                            )
                     )
             )
         }
@@ -516,10 +533,19 @@ struct JoinGuildView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(AppColors.unhighlightedTextBoxBackground.opacity(0.92))
+                        .background(
+                            ThemeManager.shared.currentTheme == .lightGrey
+                                ? AppColors.standardSearchFieldFill
+                                : AppColors.unhighlightedTextBoxBackground.opacity(0.92)
+                        )
                         .overlay(
                             Capsule()
-                                .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
+                                .stroke(
+                                    ThemeManager.shared.currentTheme == .lightGrey
+                                        ? AppColors.standardSearchFieldStroke
+                                        : AppColors.whiteText.opacity(0.2),
+                                    lineWidth: 1
+                                )
                         )
                         .clipShape(Capsule())
 
@@ -528,10 +554,19 @@ struct JoinGuildView: View {
                                 .font(.title3)
                                 .foregroundColor(AppColors.whiteText.opacity(0.8))
                                 .frame(width: 40, height: 40)
-                                .background(AppColors.unhighlightedTextBoxBackground.opacity(0.92))
+                                .background(
+                                    ThemeManager.shared.currentTheme == .lightGrey
+                                        ? AppColors.standardSearchFieldFill
+                                        : AppColors.unhighlightedTextBoxBackground.opacity(0.92)
+                                )
                                 .overlay(
                                     Circle()
-                                        .stroke(AppColors.whiteText.opacity(0.2), lineWidth: 1)
+                                        .stroke(
+                                            ThemeManager.shared.currentTheme == .lightGrey
+                                                ? AppColors.standardSearchFieldStroke
+                                                : AppColors.whiteText.opacity(0.2),
+                                            lineWidth: 1
+                                        )
                                 )
                                 .clipShape(Circle())
                         }
@@ -812,7 +847,7 @@ struct JoinGuildFilterSheet: View {
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Reset") {
@@ -1515,7 +1550,7 @@ struct JoinGuildFormView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 Divider()
@@ -1669,10 +1704,19 @@ struct CreateGuildView: View {
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                .fill(
+                    ThemeManager.shared.currentTheme == .lightGrey
+                        ? AppColors.standardSearchFieldFill
+                        : AppColors.unhighlightedTextBoxBackground.opacity(0.88)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                        .stroke(
+                            ThemeManager.shared.currentTheme == .lightGrey
+                                ? AppColors.standardSearchFieldStroke
+                                : AppColors.whiteText.opacity(0.15),
+                            lineWidth: 1
+                        )
                 )
         )
     }

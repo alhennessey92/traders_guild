@@ -84,7 +84,7 @@ struct AppleProfileCompletionView: View {
                         )
                         .datePickerStyle(.wheel)
                         .labelsHidden()
-                        .colorScheme(.dark)
+                        .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, 20)
                         .onChange(of: dateOfBirth) { _, _ in

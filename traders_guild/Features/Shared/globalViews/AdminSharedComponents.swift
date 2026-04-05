@@ -65,7 +65,7 @@ struct AdminSectionCard<Content: View>: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.surfaceWhite05)
+                .fill(AppColors.symbolSheetGroupedPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
@@ -168,7 +168,7 @@ struct AdminToggleRow: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.surfaceWhite03)
+                .fill(AppColors.insetPanelBackground)
         )
     }
 }

@@ -81,7 +81,7 @@ struct MarkerPlacementIndicatorsTab: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Indicators")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
                 Text("Attach and configure marker indicator context")
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -142,7 +142,7 @@ struct MarkerPlacementIndicatorsTab: View {
                 selectedSubTab = .trend
             }
             .font(.caption2.weight(.semibold))
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.onAccentForeground)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(
@@ -191,7 +191,11 @@ struct MarkerPlacementIndicatorsTab: View {
                         .fontWeight(.semibold)
                     Spacer(minLength: 0)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(
+                    activeChartIndicators.isEmpty
+                        ? AppColors.primaryForeground
+                        : AppColors.onAccentForeground
+                )
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
                 .background(
@@ -228,7 +232,7 @@ struct MarkerPlacementIndicatorsTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.subheadline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.primaryForeground)
 
                 HStack(spacing: 6) {
                     Text(subtitle)
@@ -300,7 +304,7 @@ struct MarkerPlacementIndicatorsTab: View {
                         .foregroundColor(AppColors.surfaceWhite88)
                     Text(item.title)
                         .font(.subheadline)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.primaryForeground)
                 }
 
                 HStack(spacing: 6) {
