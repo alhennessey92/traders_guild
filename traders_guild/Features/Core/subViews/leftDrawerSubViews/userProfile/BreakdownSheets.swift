@@ -139,7 +139,7 @@ struct GlobalReputationBreakdownSheetView: View {
             lastUpdatedAt = Date()
         } catch {
             if error is CancellationError { return }
-            errorMessage = error.localizedDescription
+            errorMessage = RLUserFacingErrorMapper.message(from: error)
         }
     }
 }
@@ -264,7 +264,7 @@ struct GlobalAccuracyBreakdownSheetView: View {
             lastUpdatedAt = Date()
         } catch {
             if error is CancellationError { return }
-            errorMessage = error.localizedDescription
+            errorMessage = RLUserFacingErrorMapper.message(from: error)
         }
     }
 }
@@ -413,7 +413,7 @@ struct GuildReputationBreakdownSheetView: View {
             lastUpdatedAt = Date()
         } catch {
             if error is CancellationError { return }
-            errorMessage = error.localizedDescription
+            errorMessage = RLUserFacingErrorMapper.message(from: error)
         }
     }
 
@@ -547,7 +547,7 @@ struct GuildAccuracyBreakdownSheetView: View {
             lastUpdatedAt = Date()
         } catch {
             if error is CancellationError { return }
-            errorMessage = error.localizedDescription
+            errorMessage = RLUserFacingErrorMapper.message(from: error)
         }
     }
 }

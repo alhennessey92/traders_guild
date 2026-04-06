@@ -538,14 +538,14 @@ struct UserGlobalSheetView: View {
             globalStats = try await rlAppState.fetchCurrentUserStatistics()
         } catch {
             if isCancellationError(error) { return }
-            errors.append("Global stats: \(error.localizedDescription)")
+            errors.append("Global stats: \(RLUserFacingErrorMapper.message(from: error))")
         }
 
         do {
             globalRepData = try await rlAppState.realApi.getMyGlobalReputation()
         } catch {
             if isCancellationError(error) { return }
-            errors.append("Global reputation: \(error.localizedDescription)")
+            errors.append("Global reputation: \(RLUserFacingErrorMapper.message(from: error))")
         }
 
         do {
@@ -553,7 +553,7 @@ struct UserGlobalSheetView: View {
             rlAppState.currentGlobalAccuracy = globalAccuracyData?.accuracyRate
         } catch {
             if isCancellationError(error) { return }
-            errors.append("Global accuracy: \(error.localizedDescription)")
+            errors.append("Global accuracy: \(RLUserFacingErrorMapper.message(from: error))")
         }
 
         do {
@@ -562,7 +562,7 @@ struct UserGlobalSheetView: View {
         } catch {
             if isCancellationError(error) { return }
             userGuilds = rlAppState.userGuilds
-            errors.append("Guild memberships: \(error.localizedDescription)")
+            errors.append("Guild memberships: \(RLUserFacingErrorMapper.message(from: error))")
         }
 
         // /users/me/guilds updates last_seen/is_online; refresh user after this call.
@@ -570,7 +570,7 @@ struct UserGlobalSheetView: View {
             rlAppState.currentUser = try await rlAppState.realApi.getCurrentUser()
         } catch {
             if isCancellationError(error) { return }
-            errors.append("Account info: \(error.localizedDescription)")
+            errors.append("Account info: \(RLUserFacingErrorMapper.message(from: error))")
         }
 
         await rlAppState.refreshCurrentGuildReputation()
@@ -581,7 +581,7 @@ struct UserGlobalSheetView: View {
             hasMoreActivity = activityResponse.hasMore
         } catch {
             if isCancellationError(error) { return }
-            errors.append("Activity feed: \(error.localizedDescription)")
+            errors.append("Activity feed: \(RLUserFacingErrorMapper.message(from: error))")
         }
 
         if !errors.isEmpty {

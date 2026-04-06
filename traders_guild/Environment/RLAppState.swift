@@ -405,9 +405,11 @@ class RLAppState: ObservableObject {
             return
         }
 
+        let mappedMessage = RLUserFacingErrorMapper.message(from: error)
+        let resolvedTitle = title == "Error" ? RLUserFacingCopy.text(.errorTitle) : title
         let alert = RLAppAlert(
-            title: title,
-            message: error.localizedDescription,
+            title: resolvedTitle,
+            message: mappedMessage,
             severity: .error,
             style: style
         )
@@ -415,6 +417,10 @@ class RLAppState: ObservableObject {
         if style == .toast {
             ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
         }
+    }
+
+    func userSafeMessage(for error: Error) -> String {
+        RLUserFacingErrorMapper.message(from: error)
     }
     
     func showError(title: String, message: String, severity: RLAlertSeverity = .error, style: RLAlertDisplayStyle = .alert) {
@@ -430,7 +436,7 @@ class RLAppState: ObservableObject {
         }
     }
     
-    func showSuccess(_ message: String, title: String = "Success") {
+    func showSuccess(_ message: String, title: String = RLUserFacingCopy.text(.successTitle)) {
         let alert = RLAppAlert(
             title: title,
             message: message,
@@ -441,7 +447,7 @@ class RLAppState: ObservableObject {
         ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
-    func showInfo(_ message: String, title: String = "Info") {
+    func showInfo(_ message: String, title: String = RLUserFacingCopy.text(.infoTitle)) {
         let alert = RLAppAlert(
             title: title,
             message: message,
@@ -452,7 +458,7 @@ class RLAppState: ObservableObject {
         ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
-    func showWarning(_ message: String, title: String = "Warning") {
+    func showWarning(_ message: String, title: String = RLUserFacingCopy.text(.warningTitle)) {
         let alert = RLAppAlert(
             title: title,
             message: message,
@@ -505,7 +511,7 @@ class RLAppState: ObservableObject {
             onboardingState = beginOnboarding ? .accountCreated : nil
 
             if !beginOnboarding {
-                showSuccess("Welcome to Traders Guild, \(response.user.username)!")
+                showSuccess(RLUserFacingCopy.format(.successWelcomeUser, response.user.username))
             }
             if beginOnboarding {
                 isOnboardingFlowActive = true
@@ -829,7 +835,7 @@ class RLAppState: ObservableObject {
         }
 
         clearLocalSessionState(clearAlertState: true)
-        showInfo("You've been logged out")
+        showInfo(RLUserFacingCopy.text(.infoLoggedOut))
     }
 
     /// Leave signup/onboarding mid-flow: revoke tokens, clear local session, return user to welcome/sign-in.
@@ -839,7 +845,7 @@ class RLAppState: ObservableObject {
             await realApi.logout()
         }
         clearLocalSessionState(clearAlertState: true)
-        showInfo("You can sign in again or start signup over.")
+        showInfo(RLUserFacingCopy.text(.infoSignInAgain))
     }
 
     func completeOnboardingAndEnterApp() {
@@ -983,7 +989,7 @@ class RLAppState: ObservableObject {
             if case BiometricAuthManager.BiometricError.authenticationFailed = error {
                 biometricUnlockErrorMessage = "Unlock cancelled or failed."
             } else {
-                biometricUnlockErrorMessage = error.localizedDescription
+                biometricUnlockErrorMessage = RLUserFacingErrorMapper.message(from: error)
             }
         }
     }
@@ -1289,7 +1295,7 @@ class RLAppState: ObservableObject {
             // Select the newly joined guild.
             selectGuild(guildWithMembership, showTransition: showTransition)
             
-            showSuccess("Joined \(guildWithMembership.guild.name) successfully!")
+            showSuccess(RLUserFacingCopy.format(.successJoinedGuildNamed, guildWithMembership.guild.name))
             return guildWithMembership
         } catch {
             if case APIError.badRequest(let detail) = error, detail == "approval_required" {
@@ -1394,7 +1400,7 @@ class RLAppState: ObservableObject {
             // Select the newly created guild (show transition)
             selectGuild(guildWithMembership, showTransition: true)
             
-            showSuccess("Created \(guildWithMembership.guild.name) successfully!")
+            showSuccess(RLUserFacingCopy.format(.successCreatedGuildNamed, guildWithMembership.guild.name))
             return guildWithMembership
         } catch {
             if case APIError.badRequest(let detail) = error, detail == "guild_create_limit_reached" {
@@ -1452,7 +1458,7 @@ class RLAppState: ObservableObject {
     func submitGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {
         do {
             let result = try await realApi.createGuildJoinRequest(guildId: guildId, note: note, answers: answers)
-            showSuccess("Join request submitted")
+            showSuccess(RLUserFacingCopy.text(.successJoinRequestSubmitted))
             return result
         } catch {
             showError(error, title: "Failed to Submit Request", style: .toast)
@@ -1477,7 +1483,7 @@ class RLAppState: ObservableObject {
                 requestId: requestId,
                 reviewNote: reviewNote
             )
-            showSuccess("Join request approved")
+            showSuccess(RLUserFacingCopy.text(.successJoinRequestApproved))
             return response
         } catch {
             showError(error, title: "Failed to Approve Request", style: .toast)
@@ -1492,7 +1498,7 @@ class RLAppState: ObservableObject {
                 requestId: requestId,
                 reviewNote: reviewNote
             )
-            showSuccess("Join request declined")
+            showSuccess(RLUserFacingCopy.text(.successJoinRequestDeclined))
             return response
         } catch {
             showError(error, title: "Failed to Decline Request", style: .toast)
@@ -1553,7 +1559,7 @@ class RLAppState: ObservableObject {
                 isImportant: isImportant
             )
             
-            showSuccess("Announcement posted!")
+            showSuccess(RLUserFacingCopy.text(.successAnnouncementPosted))
             return response
         } catch {
             showError(error, title: "Failed to Create Announcement", style: .toast)
@@ -1661,7 +1667,7 @@ class RLAppState: ObservableObject {
                 authorMembership: authorMembership
             )
             
-            showSuccess("Event created!")
+            showSuccess(RLUserFacingCopy.text(.successEventCreated))
             return fullResponse
         } catch {
             showError(error, title: "Failed to Create Event", style: .toast)
@@ -1754,7 +1760,7 @@ class RLAppState: ObservableObject {
             let updated = try await realApi.updateGuild(guildId: guild.id, name: name, description: description, isOpen: isOpen)
             // Update local state
             self.currentGuild = updated
-            showSuccess("Guild settings updated!")
+            showSuccess(RLUserFacingCopy.text(.successGuildSettingsUpdated))
             return updated
         } catch {
             showError(error, title: "Failed to Update Guild", style: .toast)
@@ -1781,7 +1787,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
         do {
             let invitation = try await realApi.createGuildInvite(guildId: guild.id, username: username)
-            showSuccess("Invite sent!")
+            showSuccess(RLUserFacingCopy.text(.successInviteSent))
             return invitation
         } catch {
             showError(error, title: "Failed to Send Invite", style: .toast)
@@ -1806,7 +1812,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { return }
         do {
             _ = try await realApi.cancelGuildInvite(guildId: guild.id, inviteId: inviteId)
-            showSuccess("Invite cancelled")
+            showSuccess(RLUserFacingCopy.text(.successInviteCancelled))
         } catch {
             showError(error, title: "Failed to Cancel Invite", style: .toast)
             throw error
@@ -1817,7 +1823,7 @@ class RLAppState: ObservableObject {
     func acceptGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLGuildWithMembership {
         do {
             let result = try await realApi.acceptGuildInvite(guildId: guildId, inviteId: inviteId)
-            showSuccess("Joined guild!")
+            showSuccess(RLUserFacingCopy.text(.successJoinedGuild))
             return result
         } catch {
             showError(error, title: "Failed to Accept Invite", style: .toast)
@@ -1842,7 +1848,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
         do {
             let ban = try await realApi.banMember(guildId: guild.id, userId: userId, reason: reason)
-            showSuccess("Member banned")
+            showSuccess(RLUserFacingCopy.text(.successMemberBanned))
             return ban
         } catch {
             showError(error, title: "Failed to Ban Member", style: .toast)
@@ -1855,7 +1861,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { return }
         do {
             _ = try await realApi.unbanMember(guildId: guild.id, banId: banId)
-            showSuccess("Member unbanned")
+            showSuccess(RLUserFacingCopy.text(.successMemberUnbanned))
         } catch {
             showError(error, title: "Failed to Unban Member", style: .toast)
             throw error
@@ -1879,7 +1885,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { return }
         do {
             _ = try await realApi.kickMember(guildId: guild.id, userId: userId)
-            showSuccess("Member kicked")
+            showSuccess(RLUserFacingCopy.text(.successMemberKicked))
         } catch {
             showError(error, title: "Failed to Kick Member", style: .toast)
             throw error
@@ -1893,7 +1899,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { return }
         do {
             _ = try await realApi.muteMember(guildId: guild.id, userId: userId, durationMinutes: durationMinutes, reason: reason)
-            showSuccess("Member muted")
+            showSuccess(RLUserFacingCopy.text(.successMemberMuted))
         } catch {
             showError(error, title: "Failed to Mute Member", style: .toast)
             throw error
@@ -1905,7 +1911,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { return }
         do {
             _ = try await realApi.unmuteMember(guildId: guild.id, userId: userId)
-            showSuccess("Member unmuted")
+            showSuccess(RLUserFacingCopy.text(.successMemberUnmuted))
         } catch {
             showError(error, title: "Failed to Unmute Member", style: .toast)
             throw error
@@ -1917,7 +1923,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { return }
         do {
             _ = try await realApi.suspendMember(guildId: guild.id, userId: userId, durationMinutes: durationMinutes, reason: reason)
-            showSuccess("Member suspended")
+            showSuccess(RLUserFacingCopy.text(.successMemberSuspended))
         } catch {
             showError(error, title: "Failed to Suspend Member", style: .toast)
             throw error
@@ -1929,7 +1935,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { return }
         do {
             _ = try await realApi.unsuspendMember(guildId: guild.id, userId: userId)
-            showSuccess("Member unsuspended")
+            showSuccess(RLUserFacingCopy.text(.successMemberUnsuspended))
         } catch {
             showError(error, title: "Failed to Unsuspend Member", style: .toast)
             throw error
@@ -1943,7 +1949,7 @@ class RLAppState: ObservableObject {
         guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
         do {
             let result = try await realApi.changeMemberRole(guildId: guild.id, userId: userId, role: role)
-            showSuccess("Role updated to \(role)")
+            showSuccess(RLUserFacingCopy.format(.successRoleUpdated, role))
             return result
         } catch {
             showError(error, title: "Failed to Change Role", style: .toast)
@@ -1974,7 +1980,7 @@ class RLAppState: ObservableObject {
         }
         do {
             let result = try await realApi.resolveReport(guildId: guild.id, reportId: reportId, action: action, note: note)
-            showSuccess("Report \(action)")
+            showSuccess(RLUserFacingCopy.format(.successReportAction, action))
             return result
         } catch {
             showError(error, title: "Failed to Resolve Report", style: .toast)
@@ -2026,7 +2032,7 @@ class RLAppState: ObservableObject {
     func updateCurrentUserProfile(_ updateRequest: RLUserProfileUpdateRequest) async throws -> RLUserProfileDTO {
         do {
             let response = try await realApi.updateCurrentUserProfile(updateRequest)
-            showSuccess("Profile updated")
+            showSuccess(RLUserFacingCopy.text(.successProfileUpdated))
             return response
         } catch {
             showError(error, title: "Failed to Update Profile", style: .toast)
@@ -2045,7 +2051,7 @@ class RLAppState: ObservableObject {
             let request = RLBasicUserUpdateRequest(displayName: displayName, username: username)
             let updated = try await realApi.updateBasicUserInfo(request)
             currentUser = updated
-            showSuccess("Profile updated")
+            showSuccess(RLUserFacingCopy.text(.successProfileUpdated))
             return updated
         } catch {
             showError(error, title: "Failed to Update Profile", style: .toast)
@@ -2060,7 +2066,7 @@ class RLAppState: ObservableObject {
             if let updatedUser = try? await realApi.getCurrentUser() {
                 currentUser = updatedUser
             }
-            showSuccess("Avatar updated")
+            showSuccess(RLUserFacingCopy.text(.successAvatarUpdated))
             return response
         } catch {
             showError(error, title: "Failed to Upload Avatar", style: .toast)
@@ -2075,7 +2081,7 @@ class RLAppState: ObservableObject {
             if let updatedUser = try? await realApi.getCurrentUser() {
                 currentUser = updatedUser
             }
-            showSuccess("Avatar removed")
+            showSuccess(RLUserFacingCopy.text(.successAvatarRemoved))
             return response
         } catch {
             showError(error, title: "Failed to Remove Avatar", style: .toast)
@@ -2177,7 +2183,7 @@ class RLAppState: ObservableObject {
         do {
             let request = RLEmailChangeRequest(newEmail: newEmail, currentPassword: currentPassword)
             let response = try await realApi.requestEmailChange(request)
-            showSuccess("Verification email sent")
+            showSuccess(RLUserFacingCopy.text(.successVerificationEmailSent))
             return response
         } catch {
             showError(error, title: "Failed to Change Email", style: .toast)
@@ -2190,7 +2196,7 @@ class RLAppState: ObservableObject {
         do {
             let request = RLPasswordChangeRequest(currentPassword: currentPassword, newPassword: newPassword)
             let response = try await realApi.changePassword(request)
-            showSuccess("Password updated")
+            showSuccess(RLUserFacingCopy.text(.successPasswordUpdated))
             return response
         } catch {
             showError(error, title: "Failed to Change Password", style: .toast)
@@ -2207,7 +2213,7 @@ class RLAppState: ObservableObject {
             if let updatedUser = try? await realApi.getCurrentUser() {
                 currentUser = updatedUser
             }
-            showSuccess("Date of birth updated")
+            showSuccess(RLUserFacingCopy.text(.successDateOfBirthUpdated))
             return response
         } catch {
             showError(error, title: "Failed to Update Date of Birth", style: .toast)
@@ -2229,7 +2235,7 @@ class RLAppState: ObservableObject {
     func requestDataExportForUser() async throws -> RLDetailResponseDTO {
         do {
             let response = try await realApi.requestDataExport()
-            showSuccess("Data export requested")
+            showSuccess(RLUserFacingCopy.text(.successDataExportRequested))
             return response
         } catch {
             showError(error, title: "Failed to Request Data Export", style: .toast)
@@ -2253,7 +2259,7 @@ class RLAppState: ObservableObject {
                 deviceInfo: includeDeviceInfo ? buildDeviceInfo() : nil
             )
             let response = try await realApi.submitSupportTicket(request)
-            showSuccess("Support ticket submitted")
+            showSuccess(RLUserFacingCopy.text(.successSupportTicketSubmitted))
             return response
         } catch {
             showError(error, title: "Failed to Send Support Ticket", style: .toast)
@@ -2347,7 +2353,7 @@ class RLAppState: ObservableObject {
                 throw APIError.badRequest("Friend requests are disabled in your settings")
             }
             let response = try await realApi.sendFriendRequest(toMembershipId: toMembershipId, message: message)
-            showSuccess("Friend request sent")
+            showSuccess(RLUserFacingCopy.text(.successFriendRequestSent))
             return response
         } catch {
             showError(error, title: "Failed to Send Friend Request", style: .toast)
@@ -2359,7 +2365,7 @@ class RLAppState: ObservableObject {
     func acceptFriendRequest(requestId: UUID) async throws -> RLFriendshipResponseDTO {
         do {
             let response = try await realApi.acceptFriendRequest(requestId: requestId)
-            showSuccess("Friend request accepted")
+            showSuccess(RLUserFacingCopy.text(.successFriendRequestAccepted))
             return response
         } catch {
             showError(error, title: "Failed to Accept Request", style: .toast)
@@ -2371,7 +2377,7 @@ class RLAppState: ObservableObject {
     func declineFriendRequest(requestId: UUID) async throws -> RLDetailResponseDTO {
         do {
             let response = try await realApi.declineFriendRequest(requestId: requestId)
-            showSuccess("Friend request declined")
+            showSuccess(RLUserFacingCopy.text(.successFriendRequestDeclined))
             return response
         } catch {
             showError(error, title: "Failed to Decline Request", style: .toast)
@@ -2383,7 +2389,7 @@ class RLAppState: ObservableObject {
     func removeFriend(membershipId: UUID) async throws -> RLDetailResponseDTO {
         do {
             let response = try await realApi.removeFriend(membershipId: membershipId)
-            showSuccess("Friend removed")
+            showSuccess(RLUserFacingCopy.text(.successFriendRemoved))
             return response
         } catch {
             showError(error, title: "Failed to Remove Friend", style: .toast)
@@ -2401,7 +2407,7 @@ class RLAppState: ObservableObject {
     func blockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
         do {
             let response = try await realApi.blockUser(membershipId: membershipId)
-            showSuccess("User blocked")
+            showSuccess(RLUserFacingCopy.text(.successUserBlocked))
             return response
         } catch {
             showError(error, title: "Failed to Block User", style: .toast)
@@ -2413,7 +2419,7 @@ class RLAppState: ObservableObject {
     func unblockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
         do {
             let response = try await realApi.unblockUser(membershipId: membershipId)
-            showSuccess("User unblocked")
+            showSuccess(RLUserFacingCopy.text(.successUserUnblocked))
             return response
         } catch {
             showError(error, title: "Failed to Unblock User", style: .toast)
@@ -2784,7 +2790,7 @@ class RLAppState: ObservableObject {
                 messageId: messageId,
                 content: content
             )
-            showSuccess("Message updated")
+            showSuccess(RLUserFacingCopy.text(.successMessageUpdated))
             return message
         } catch {
             showError(error, title: "Failed to Edit Message", style: .toast)
@@ -2803,7 +2809,7 @@ class RLAppState: ObservableObject {
                 chatroomId: chatroomId,
                 messageId: messageId
             )
-            showSuccess("Message deleted")
+            showSuccess(RLUserFacingCopy.text(.successMessageDeleted))
         } catch {
             showError(error, title: "Failed to Delete Message", style: .toast)
             throw error
@@ -2878,14 +2884,14 @@ class RLAppState: ObservableObject {
                 isMuted: isMuted
             )
             if isPinned == true {
-                showSuccess("Chatroom pinned")
+                showSuccess(RLUserFacingCopy.text(.successChatroomPinned))
             } else if isPinned == false {
-                showSuccess("Chatroom unpinned")
+                showSuccess(RLUserFacingCopy.text(.successChatroomUnpinned))
             }
             if isMuted == true {
-                showSuccess("Chatroom muted")
+                showSuccess(RLUserFacingCopy.text(.successChatroomMuted))
             } else if isMuted == false {
-                showSuccess("Chatroom unmuted")
+                showSuccess(RLUserFacingCopy.text(.successChatroomUnmuted))
             }
             return settings
         } catch {
@@ -2910,7 +2916,7 @@ class RLAppState: ObservableObject {
                 description: description,
                 icon: icon
             )
-            showSuccess("Chatroom created")
+            showSuccess(RLUserFacingCopy.text(.successChatroomCreated))
             return chatroom
         } catch {
             showError(error, title: "Failed to Create Chatroom", style: .toast)
@@ -2936,7 +2942,7 @@ class RLAppState: ObservableObject {
                 description: description,
                 icon: icon
             )
-            showSuccess("Chatroom updated")
+            showSuccess(RLUserFacingCopy.text(.successChatroomUpdated))
             return chatroom
         } catch {
             showError(error, title: "Failed to Update Chatroom", style: .toast)
@@ -2951,7 +2957,7 @@ class RLAppState: ObservableObject {
         }
         do {
             _ = try await realApi.deleteChatroom(guildId: guild.id, chatroomId: chatroomId)
-            showSuccess("Chatroom archived")
+            showSuccess(RLUserFacingCopy.text(.successChatroomArchived))
         } catch {
             showError(error, title: "Failed to Archive Chatroom", style: .toast)
             throw error
@@ -3082,7 +3088,7 @@ class RLAppState: ObservableObject {
                 messageId: messageId,
                 content: content
             )
-            showSuccess("Message updated")
+            showSuccess(RLUserFacingCopy.text(.successMessageUpdated))
             return message
         } catch {
             showError(error, title: "Failed to Edit Message", style: .toast)
@@ -3101,7 +3107,7 @@ class RLAppState: ObservableObject {
                 threadId: threadId,
                 messageId: messageId
             )
-            showSuccess("Message deleted")
+            showSuccess(RLUserFacingCopy.text(.successMessageDeleted))
         } catch {
             showError(error, title: "Failed to Delete Message", style: .toast)
             throw error
@@ -3166,7 +3172,7 @@ class RLAppState: ObservableObject {
         }
         do {
             _ = try await realApi.deleteDMThread(guildId: guild.id, threadId: threadId)
-            showSuccess("Conversation deleted")
+            showSuccess(RLUserFacingCopy.text(.successConversationDeleted))
         } catch {
             showError(error, title: "Failed to Delete Conversation", style: .toast)
             throw error
@@ -3537,7 +3543,7 @@ class RLAppState: ObservableObject {
     func addToGuildWatchlist(guildId: UUID, symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
         do {
             let result = try await realApi.addToGuildWatchlist(guildId: guildId, symbolId: symbolId)
-            showSuccess("Added to guild watchlist")
+            showSuccess(RLUserFacingCopy.text(.successAddedGuildWatchlist))
             return result
         } catch {
             showError(error, title: "Failed to Add Symbol", style: .toast)
@@ -3549,7 +3555,7 @@ class RLAppState: ObservableObject {
     func removeFromGuildWatchlist(guildId: UUID, symbolId: UUID) async throws {
         do {
             _ = try await realApi.removeFromGuildWatchlist(guildId: guildId, symbolId: symbolId)
-            showSuccess("Removed from guild watchlist")
+            showSuccess(RLUserFacingCopy.text(.successRemovedGuildWatchlist))
         } catch {
             showError(error, title: "Failed to Remove Symbol", style: .toast)
             throw error
@@ -3560,7 +3566,7 @@ class RLAppState: ObservableObject {
     func addToPersonalWatchlist(symbolId: UUID) async throws -> RLWatchlistSymbolDTO {
         do {
             let result = try await realApi.addToPersonalWatchlist(symbolId: symbolId)
-            showSuccess("Added to watchlist")
+            showSuccess(RLUserFacingCopy.text(.successAddedWatchlist))
             return result
         } catch {
             showError(error, title: "Failed to Add Symbol", style: .toast)
@@ -3572,7 +3578,7 @@ class RLAppState: ObservableObject {
     func removeFromPersonalWatchlist(symbolId: UUID) async throws {
         do {
             _ = try await realApi.removeFromPersonalWatchlist(symbolId: symbolId)
-            showSuccess("Removed from watchlist")
+            showSuccess(RLUserFacingCopy.text(.successRemovedWatchlist))
         } catch {
             showError(error, title: "Failed to Remove Symbol", style: .toast)
             throw error
@@ -3593,7 +3599,7 @@ class RLAppState: ObservableObject {
     func requestGuildWatchlistAddition(guildId: UUID, symbolId: UUID) async throws {
         do {
             _ = try await realApi.requestGuildWatchlistAddition(guildId: guildId, symbolId: symbolId)
-            showSuccess("Request submitted")
+            showSuccess(RLUserFacingCopy.text(.successRequestSubmitted))
         } catch {
             showError(error, title: "Failed to Request Watchlist Add", style: .toast)
             throw error
@@ -3723,7 +3729,7 @@ class RLAppState: ObservableObject {
     func reportChatroom(guildId: UUID, chatroomId: UUID, reason: String) async throws {
         do {
             _ = try await realApi.reportChatroom(guildId: guildId, chatroomId: chatroomId, reason: reason)
-            showSuccess("Report submitted")
+            showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
         } catch {
             showError(error, title: "Failed to Report Chatroom", style: .toast)
             throw error
@@ -3733,7 +3739,7 @@ class RLAppState: ObservableObject {
     func reportUser(guildId: UUID, userId: UUID, reason: String) async throws {
         do {
             _ = try await realApi.reportUser(guildId: guildId, userId: userId, reason: reason)
-            showSuccess("Report submitted")
+            showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
         } catch {
             showError(error, title: "Failed to Report User", style: .toast)
             throw error
@@ -3743,7 +3749,7 @@ class RLAppState: ObservableObject {
     func shareEvent(guildId: UUID, eventId: UUID, friendId: UUID) async throws {
         do {
             _ = try await realApi.shareEvent(guildId: guildId, eventId: eventId, friendId: friendId)
-            showSuccess("Event shared")
+            showSuccess(RLUserFacingCopy.text(.successEventShared))
         } catch {
             showError(error, title: "Failed to Share Event", style: .toast)
             throw error

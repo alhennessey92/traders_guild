@@ -3197,6 +3197,12 @@ struct PushNotificationSettingsView: View {
             prefs = try await rlAppState.realApi.getPushPreferences()
         } catch {
             print("⚠️ Failed to load push preferences: \(error.localizedDescription)")
+            rlAppState.showError(
+                title: RLUserFacingCopy.text(.warningTitle),
+                message: RLUserFacingCopy.text(.warningPushPreferencesLoadFailed),
+                severity: .warning,
+                style: .toast
+            )
         }
         isLoading = false
     }
@@ -3223,6 +3229,12 @@ struct PushNotificationSettingsView: View {
                 prefs = try await rlAppState.realApi.updatePushPreferences(update)
             } catch {
                 print("⚠️ Failed to save push preference: \(error.localizedDescription)")
+                rlAppState.showError(
+                    title: RLUserFacingCopy.text(.warningTitle),
+                    message: RLUserFacingCopy.text(.warningPushPreferencesSaveFailed),
+                    severity: .warning,
+                    style: .toast
+                )
             }
         }
     }

@@ -309,7 +309,7 @@ struct LeftDrawerMainView: View {
 
             case .event(let eventId):
                 guard let guildId = rlAppState.currentGuild?.id else {
-                    rlAppState.showInfo("Select a guild first")
+                    rlAppState.showInfo(RLUserFacingCopy.text(.errorSelectGuildFirst))
                     return
                 }
                 let event: RLGuildEventWithAuthorDTO?
@@ -335,7 +335,7 @@ struct LeftDrawerMainView: View {
 
             case .guildMemberProfile(let userId):
                 guard let guildId = rlAppState.currentGuild?.id else {
-                    rlAppState.showInfo("Select a guild first")
+                    rlAppState.showInfo(RLUserFacingCopy.text(.errorSelectGuildFirst))
                     return
                 }
                 let member: RLGuildMemberDTO

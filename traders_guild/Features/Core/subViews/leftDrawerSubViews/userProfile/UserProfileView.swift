@@ -273,7 +273,7 @@ struct UserProfileDetailView: View {
                 loadedGuildActivity = activity.items
             } catch {
                 if !isCancellationError(error) {
-                    loadedGuildActivityError = error.localizedDescription
+                    loadedGuildActivityError = RLUserFacingErrorMapper.message(from: error)
                 }
             }
         } else {

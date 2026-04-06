@@ -532,7 +532,7 @@ struct RLMessagingSheet: View {
                         content: newContent
                     )
                 }
-                appState.showSuccess("Message updated")
+                appState.showSuccess(RLUserFacingCopy.text(.successMessageUpdated))
             }
         }
         .sheet(item: $reportTarget) { target in
@@ -816,7 +816,7 @@ struct RLMessagingSheet: View {
                             Task { await deleteChatroomMessage(message) }
                         },
                         onCopy: { _ in
-                            appState.showSuccess("Copied to clipboard")
+                            appState.showSuccess(RLUserFacingCopy.text(.successCopiedToClipboard))
                         },
                         onReport: { message in
                             reportTarget = .chatroom(message)
@@ -842,7 +842,7 @@ struct RLMessagingSheet: View {
                             Task { await deleteDMMessage(message) }
                         },
                         onCopy: { _ in
-                            appState.showSuccess("Copied to clipboard")
+                            appState.showSuccess(RLUserFacingCopy.text(.successCopiedToClipboard))
                         },
                         onReport: { message in
                             reportTarget = .dm(message)
@@ -1078,7 +1078,7 @@ struct RLMessagingSheet: View {
                     reason: reason
                 )
             }
-            appState.showSuccess("Report submitted")
+            appState.showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
         } catch {
             appState.showError(error, title: "Failed to Report", style: .toast)
         }
@@ -1348,7 +1348,11 @@ struct RLChatroomFooterView: View {
 
     private func sendComposedMessage(_ payload: ChatComposerPayload) async {
         guard chatroom.canSendMessages else {
-            appState.showError(title: "Cannot Send", message: "You don't have permission to send messages here", style: .toast)
+            appState.showError(
+                title: "Cannot Send",
+                message: RLUserFacingCopy.text(.errorCannotSendNoPermission),
+                style: .toast
+            )
             return
         }
 
@@ -1404,7 +1408,11 @@ struct RLChatroomFooterView: View {
         guard !payload.attachments.isEmpty else { return }
         guard let guild = appState.currentGuild else { return }
         guard chatroom.canSendMessages else {
-            appState.showError(title: "Cannot Send", message: "You don't have permission to send messages here", style: .toast)
+            appState.showError(
+                title: "Cannot Send",
+                message: RLUserFacingCopy.text(.errorCannotSendNoPermission),
+                style: .toast
+            )
             return
         }
 
@@ -1477,7 +1485,11 @@ struct RLDMFooterView: View {
 
     private func sendComposedMessage(_ payload: ChatComposerPayload) async {
         if thread.isBlocked {
-            appState.showError(title: "Cannot Send", message: "You have blocked this user", style: .toast)
+            appState.showError(
+                title: "Cannot Send",
+                message: RLUserFacingCopy.text(.errorCannotSendBlockedUser),
+                style: .toast
+            )
             return
         }
 
@@ -1533,7 +1545,11 @@ struct RLDMFooterView: View {
         guard let guild = appState.currentGuild else { return }
 
         if thread.isBlocked {
-            appState.showError(title: "Cannot Send", message: "You have blocked this user", style: .toast)
+            appState.showError(
+                title: "Cannot Send",
+                message: RLUserFacingCopy.text(.errorCannotSendBlockedUser),
+                style: .toast
+            )
             return
         }
 

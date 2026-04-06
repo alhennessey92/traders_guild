@@ -107,7 +107,7 @@ struct traders_guildApp: App {
                     set: { if !$0 { rlAppState.clearAlert() } }
                 )
             ) {
-                Button("OK", role: .cancel) {
+                Button(RLUserFacingCopy.text(.actionOk), role: .cancel) {
                     rlAppState.clearAlert()
                 }
             } message: {

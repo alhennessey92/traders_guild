@@ -85,13 +85,13 @@ enum APIError: LocalizedError {
     
     var errorDescription: String? {
         switch self {
-        case .invalidURL: return "Invalid URL"
-        case .invalidResponse: return "Invalid response from server"
-        case .serverError(let code, let msg): return "Server error (\(code)): \(msg)"
-        case .unauthorized: return "Please log in again"
-        case .badRequest(let msg): return msg
-        case .decodingError(let msg): return "Failed to parse response: \(msg)"
-        case .networkError(let msg): return "Network error: \(msg)"
+        case .invalidURL: return "Unable to complete the request."
+        case .invalidResponse: return "Invalid response from server."
+        case .serverError: return "Service is temporarily unavailable."
+        case .unauthorized: return "Please log in again."
+        case .badRequest: return "We couldn't complete that request."
+        case .decodingError: return "Unexpected response received."
+        case .networkError: return "Network issue detected."
         }
     }
 }
@@ -240,8 +240,11 @@ class RealAPIService {
             if let urlError = error as? URLError, urlError.code == .cancelled {
                 throw CancellationError()
             }
+            #if DEBUG
             let context = "\(request.url?.absoluteString ?? "\(service.baseURL)\(endpoint)") [mode=\(AppConfig.apiRoutingMode.rawValue)]"
-            throw APIError.networkError("\(error.localizedDescription) | \(context)")
+            print("❌ API network request failed: \(error.localizedDescription) | \(context)")
+            #endif
+            throw APIError.networkError("request_failed")
         }
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -312,7 +315,7 @@ class RealAPIService {
             #if DEBUG
             printDecodingError(error)
             #endif
-            throw APIError.decodingError(error.localizedDescription)
+            throw APIError.decodingError("response_decode_failed")
         }
     }
     

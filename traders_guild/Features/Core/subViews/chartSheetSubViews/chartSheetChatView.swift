@@ -255,7 +255,7 @@ struct ImprovedChartSheetChatView: View {
                     Task { await deleteMessage(message) }
                 },
                 onCopy: { _ in
-                    rlAppState.showSuccess("Copied to clipboard")
+                    rlAppState.showSuccess(RLUserFacingCopy.text(.successCopiedToClipboard))
                 },
                 onReport: { message in
                     messageToReport = message
@@ -274,7 +274,7 @@ struct ImprovedChartSheetChatView: View {
         do {
             try await chartChatManager.deleteMessage(messageId: message.id)
             HapticFeedback.medium.trigger()
-            rlAppState.showSuccess("Message deleted")
+            rlAppState.showSuccess(RLUserFacingCopy.text(.successMessageDeleted))
         } catch {
             rlAppState.showError(error, title: "Failed to Delete", style: .toast)
         }
@@ -287,7 +287,7 @@ struct ImprovedChartSheetChatView: View {
                 newContent: newContent
             )
             HapticFeedback.light.trigger()
-            rlAppState.showSuccess("Message updated")
+            rlAppState.showSuccess(RLUserFacingCopy.text(.successMessageUpdated))
         } catch {
             rlAppState.showError(error, title: "Failed to Edit", style: .toast)
         }
@@ -302,7 +302,7 @@ struct ImprovedChartSheetChatView: View {
                 messageId: message.id,
                 reason: reason
             )
-            rlAppState.showSuccess("Report submitted")
+            rlAppState.showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
         } catch {
             rlAppState.showError(error, title: "Failed to Report", style: .toast)
         }
@@ -412,7 +412,7 @@ struct ChartMessageRow: View {
             onEdit: canEditMessage ? onEdit : nil,
             onDelete: canDeleteMessage ? onDelete : nil,
             onReport: !message.isCurrentUserMessage ? onReport : nil,
-            onCopy: { rlAppState.showSuccess("Copied to clipboard") },
+            onCopy: { rlAppState.showSuccess(RLUserFacingCopy.text(.successCopiedToClipboard)) },
             onReply: onReply,
             onToggleReaction: onReactionSelected,
             onVisibleReactionTap: onVisibleReactionTap,

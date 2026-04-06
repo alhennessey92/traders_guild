@@ -466,7 +466,7 @@ struct TopMarkersView: View {
         } catch {
             guard !isCancellationError(error) else { return }
             applyIfCurrentRequest(requestId) {
-                loadError = error.localizedDescription
+                loadError = RLUserFacingErrorMapper.message(from: error)
                 isLoading = false
             }
         }

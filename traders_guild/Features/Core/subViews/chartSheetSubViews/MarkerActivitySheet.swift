@@ -183,7 +183,7 @@ struct MarkerActivitySheet: View {
             markers = response.mine.sorted { $0.createdAt > $1.createdAt }
             await loadLiveSymbols(for: markers)
         } catch {
-            loadError = error.localizedDescription
+            loadError = RLUserFacingErrorMapper.message(from: error)
         }
         isLoading = false
     }

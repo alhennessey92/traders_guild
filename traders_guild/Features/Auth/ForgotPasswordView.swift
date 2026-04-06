@@ -347,7 +347,11 @@ struct ForgotPasswordView: View {
             _ = try await RLAppState.requestPasswordReset(identifier: normalizedIdentifier)
             requestSubmitted = true
         } catch {
-            return
+            RLAppState.showError(
+                title: RLUserFacingCopy.text(.errorTitle),
+                message: RLUserFacingCopy.text(.infoPasswordResetRequestFailed),
+                style: .toast
+            )
         }
     }
 
@@ -381,7 +385,11 @@ struct ForgotPasswordView: View {
             RLAppState.setPendingPasswordResetToken(nil)
             dismiss()
         } catch {
-            return
+            RLAppState.showError(
+                title: RLUserFacingCopy.text(.errorTitle),
+                message: RLUserFacingCopy.text(.infoPasswordResetFailed),
+                style: .toast
+            )
         }
     }
 }

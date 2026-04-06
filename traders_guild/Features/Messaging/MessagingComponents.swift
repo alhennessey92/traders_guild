@@ -2119,7 +2119,7 @@ struct UnifiedEditMessageSheet: View {
                                     try await onSave(editedText)
                                     dismiss()
                                 } catch {
-                                    errorMessage = error.localizedDescription
+                                    errorMessage = RLUserFacingErrorMapper.message(from: error)
                                 }
                                 isSaving = false
                             }
@@ -3889,7 +3889,11 @@ struct RLChatroomSettingsView: View {
     private func reportChatroom(reason: String) {
         Task {
             guard let guildId = rlAppState.currentGuild?.id else {
-                rlAppState.showError(title: "No Guild Selected", message: "Please select a guild first.", style: .toast)
+                rlAppState.showError(
+                    title: RLUserFacingCopy.text(.errorNoGuildSelected),
+                    message: RLUserFacingCopy.text(.errorSelectGuildFirst),
+                    style: .toast
+                )
                 return
             }
             do {

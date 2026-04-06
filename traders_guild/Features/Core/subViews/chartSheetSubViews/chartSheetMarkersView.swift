@@ -1048,7 +1048,7 @@ struct chartSheetMarkersView: View {
         } catch {
             guard !isCancellationError(error) else { return }
             await MainActor.run {
-                activityLoadError = error.localizedDescription
+                activityLoadError = RLUserFacingErrorMapper.message(from: error)
                 isLoadingActivity = false
                 isRefreshingActivity = false
             }

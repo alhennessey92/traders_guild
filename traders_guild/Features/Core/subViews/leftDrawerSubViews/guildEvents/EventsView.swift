@@ -351,7 +351,11 @@ struct EventDetailView: View {
     private func shareEvent() {
         Task {
             guard let guildId = rlAppState.currentGuild?.id else {
-                rlAppState.showError(title: "No Guild Selected", message: "Please select a guild first.", style: .toast)
+                rlAppState.showError(
+                    title: RLUserFacingCopy.text(.errorNoGuildSelected),
+                    message: RLUserFacingCopy.text(.errorSelectGuildFirst),
+                    style: .toast
+                )
                 return
             }
             guard let friendId = selectedFriendToShare else {

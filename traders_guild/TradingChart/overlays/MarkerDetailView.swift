@@ -185,7 +185,7 @@ struct MarkerDetailView: View {
                     markerId: marker.id,
                     reason: reason
                 )
-                rlAppState.showSuccess("Report submitted")
+                rlAppState.showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
             } catch {
                 rlAppState.showError(error, title: "Failed to Report", style: .toast)
             }
@@ -428,7 +428,7 @@ struct MarkerShareSheet: View {
             symbolTicker = try? await rlAppState.realApi.getSymbol(symbolId: marker.symbolId).ticker
         } catch {
             if error is CancellationError { return }
-            loadError = error.localizedDescription
+            loadError = RLUserFacingErrorMapper.message(from: error)
         }
     }
 
@@ -675,7 +675,7 @@ struct CommentsView: View {
                     handleDeleteComment(comment)
                 },
                 onCopy: { _ in
-                    rlAppState.showSuccess("Copied to clipboard")
+                    rlAppState.showSuccess(RLUserFacingCopy.text(.successCopiedToClipboard))
                 },
                 onReport: { comment in
                     commentToReport = comment
@@ -901,7 +901,7 @@ struct CommentsView: View {
                     commentId: comment.id,
                     reason: reason
                 )
-                rlAppState.showSuccess("Report submitted")
+                rlAppState.showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
             } catch {
                 rlAppState.showError(error, title: "Failed to Report", style: .toast)
             }
@@ -969,7 +969,7 @@ struct MarkerCommentRow: View {
             onAuthorTap: { onAuthorTap?(comment.author) },
             onDelete: onDelete,
             onReport: !comment.isCurrentUserMessage ? onReport : nil,
-            onCopy: { rlAppState.showSuccess("Copied to clipboard") },
+            onCopy: { rlAppState.showSuccess(RLUserFacingCopy.text(.successCopiedToClipboard)) },
             onReply: onReply,
             onToggleReaction: onReactionSelected,
             onVisibleReactionTap: onVisibleReactionTap

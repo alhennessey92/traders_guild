@@ -212,7 +212,7 @@ class ChartViewModel: ObservableObject {
             }
             
         } catch {
-            errorMessage = "Failed to load watchlists: \(error.localizedDescription)"
+            errorMessage = RLUserFacingErrorMapper.message(from: error)
             appState.showError(error, title: "Failed to Load Chart Data", style: .toast)
         }
         
@@ -278,7 +278,7 @@ class ChartViewModel: ObservableObject {
                 )
                 return
             }
-            errorMessage = "Failed to load chart data: \(error.localizedDescription)"
+            errorMessage = RLUserFacingErrorMapper.message(from: error)
             appState.showError(error, title: "Failed to Load Chart", style: .toast)
             // Clear candles on error - don't show stale or mock data
             dataManager.updateWithMarketData([])
@@ -413,7 +413,11 @@ class ChartViewModel: ObservableObject {
             // No guild selected - show error
             unsubscribeFromRealTimeTicks()
             errorMessage = "No guild selected"
-            appState.showError(title: "No Guild", message: "Please select a guild to view charts", style: .toast)
+            appState.showError(
+                title: RLUserFacingCopy.text(.errorNoGuildSelected),
+                message: RLUserFacingCopy.text(.errorSelectGuildFirst),
+                style: .toast
+            )
             dataManager.updateWithMarketData([])
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
             return
@@ -448,7 +452,11 @@ class ChartViewModel: ObservableObject {
             // No symbol/guild - show error
             unsubscribeFromRealTimeTicks()
             errorMessage = "No symbol or guild selected"
-            appState.showError(title: "No Chart Data", message: "Please select a symbol and guild", style: .toast)
+            appState.showError(
+                title: "No Chart Data",
+                message: RLUserFacingCopy.text(.errorNoChartDataSelection),
+                style: .toast
+            )
             dataManager.updateWithMarketData([])
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
             return
