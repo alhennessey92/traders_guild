@@ -1239,10 +1239,8 @@ private struct MarkerFilterSettingsSheet: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 30)
-
-                Divider()
-                    .background(AppColors.surfaceWhite15)
-                    .padding(.top, 12)
+                .padding(.bottom, 12)
+                .adminSheetChrome(edge: .top)
 
                 ScrollView {
                     VStack(spacing: 12) {
@@ -1315,29 +1313,17 @@ private struct MarkerFilterSettingsSheet: View {
                     .padding(.top, 12)
                 }
 
-                Button {
-                    isPresented = false
-                } label: {
-                    Text("Done")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(AppColors.onAccentForeground)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.accentColor)
-                        )
-                }
-                .buttonStyle(.plain)
+                AdminFooterActions(
+                    primaryTitle: "Done",
+                    onCancel: { isPresented = false },
+                    onPrimary: { isPresented = false }
+                )
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+                .adminSheetChrome(edge: .bottom)
             }
 
-            Button(action: { isPresented = false }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(AppColors.greyText)
-            }
+            SheetCloseButton(action: { isPresented = false })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }

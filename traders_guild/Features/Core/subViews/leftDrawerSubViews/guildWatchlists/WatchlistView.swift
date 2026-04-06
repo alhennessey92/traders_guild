@@ -101,6 +101,8 @@ struct WatchlistView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 20)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapAndDragBackground()
             .refreshable {
                 await refreshWatchlist()
             }

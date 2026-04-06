@@ -237,6 +237,8 @@ struct EditProfileView: View {
                         Spacer(minLength: 100)
                     }
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .dismissKeyboardOnTapAndDragBackground()
             }
         }
         .task {
@@ -697,6 +699,8 @@ struct ChangeEmailView: View {
                     Spacer(minLength: 100)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapAndDragBackground()
         }
         .alert("Verification Email Sent", isPresented: $showSuccessAlert) {
             Button("OK") { onBack() }
@@ -862,6 +866,8 @@ struct ChangePasswordView: View {
                     Spacer(minLength: 100)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTapAndDragBackground()
         }
         .alert("Password Updated", isPresented: $showSuccessAlert) {
             Button("OK") { onBack() }
@@ -1792,8 +1798,11 @@ struct HelpCenterView: View {
                     }
                     .padding(.top, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .dismissKeyboardOnTapAndDragBackground()
             }
         }
+        .dismissKeyboardOnTapAndDragBackground()
     }
 }
 
@@ -1895,13 +1904,17 @@ struct ContactSupportView: View {
     }
 
     private let categories = [
-        ("general", "General Question", "questionmark.circle.fill"),
-        ("bug", "Report a Bug", "ant.fill"),
-        ("account", "Account Issue", "person.circle.fill"),
-        ("billing", "Billing Question", "creditcard.fill"),
-        ("feedback", "Feedback", "star.fill"),
-        ("safety", "Safety Concern", "exclamationmark.shield.fill")
+        SupportCategoryOption(id: "general", title: "General Question", icon: "questionmark.circle.fill", subtitle: "Product questions and how-to help"),
+        SupportCategoryOption(id: "bug", title: "Report a Bug", icon: "ant.fill", subtitle: "Technical issues or broken flows"),
+        SupportCategoryOption(id: "account", title: "Account Issue", icon: "person.circle.fill", subtitle: "Login, profile, or access problems"),
+        SupportCategoryOption(id: "billing", title: "Billing Question", icon: "creditcard.fill", subtitle: "Subscriptions and payment questions"),
+        SupportCategoryOption(id: "feedback", title: "Feedback", icon: "star.fill", subtitle: "Ideas and product suggestions"),
+        SupportCategoryOption(id: "safety", title: "Safety Concern", icon: "exclamationmark.shield.fill", subtitle: "Harassment, scams, or urgent trust issues")
     ]
+
+    private var selectedCategoryOption: SupportCategoryOption {
+        categories.first(where: { $0.id == category }) ?? categories[0]
+    }
     
     private var isValid: Bool {
         !subject.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -1921,45 +1934,44 @@ struct ContactSupportView: View {
                         SettingsSubViewHeader(title: "Contact Support", onBack: onBack)
 
                         VStack(spacing: 24) {
-                            // Info text
-                            VStack(spacing: 8) {
-                                Image(systemName: "envelope.fill")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(AppColors.accentColor)
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "envelope.fill")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(AppColors.accentColor)
+                                        .frame(width: 36, height: 36)
+                                        .background(
+                                            Circle()
+                                                .fill(AppColors.accentColor.opacity(0.16))
+                                        )
 
-                                Text("How can we help?")
-                                    .font(.title3)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(AppColors.whiteText)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("How can we help?")
+                                            .font(.headline)
+                                            .foregroundColor(AppColors.whiteText)
+                                        Text("We typically respond within 24 hours.")
+                                            .font(.caption)
+                                            .foregroundColor(AppColors.greyText)
+                                    }
 
-                                Text("We typically respond within 24 hours")
+                                    Spacer()
+                                }
+
+                                Text("Choose the closest category, give us a short subject, then include any details that will help us reproduce or understand the issue.")
                                     .font(.caption)
                                     .foregroundColor(AppColors.greyText)
                             }
+                            .padding(16)
+                            .background(AppColors.insetPanelBackground)
+                            .cornerRadius(14)
                             .padding(.top, 20)
 
                             // Category selection
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Category")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(AppColors.greyText)
-
-                                LazyVGrid(columns: [
-                                    GridItem(.flexible(), spacing: 12),
-                                    GridItem(.flexible(), spacing: 12)
-                                ], spacing: 12) {
-                                    ForEach(categories, id: \.0) { cat in
-                                        CategoryChip(
-                                            id: cat.0,
-                                            name: cat.1,
-                                            icon: cat.2,
-                                            isSelected: category == cat.0,
-                                            onTap: { category = cat.0 }
-                                        )
-                                    }
-                                }
-                            }
+                            SupportCategoryMenuField(
+                                title: "Category",
+                                selection: $category,
+                                options: categories
+                            )
 
                             // Subject
                             SettingsTextField(
@@ -1971,31 +1983,13 @@ struct ContactSupportView: View {
                             .focused($focusedField, equals: .subject)
 
                             // Message
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Message")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(AppColors.greyText)
-
-                                TextEditor(text: $message)
-                                    .frame(minHeight: 150)
-                                    .padding(12)
-                                    .background(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
-                                    .cornerRadius(12)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                    )
-                                    .foregroundColor(AppColors.whiteText)
-                                    .focused($focusedField, equals: .message)
-
-                                HStack {
-                                    Spacer()
-                                    Text("\(message.count)/5000")
-                                        .font(.caption)
-                                        .foregroundColor(message.count > 5000 ? .red : AppColors.greyText)
-                                }
-                            }
+                            SupportMessageEditorCard(
+                                title: "Message",
+                                text: $message,
+                                placeholder: "Tell us what happened, what you expected, and any steps that reproduce it.",
+                                characterLimit: 5000,
+                                minHeight: 150
+                            )
 
                             // Error message
                             if let errorMessage {
@@ -2029,6 +2023,16 @@ struct ContactSupportView: View {
                             .padding()
                             .background(AppColors.insetPanelBackground)
                             .cornerRadius(12)
+
+                            HStack(spacing: 10) {
+                                Image(systemName: selectedCategoryOption.icon)
+                                    .foregroundColor(AppColors.accentColor)
+                                Text("Selected: \(selectedCategoryOption.title)")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 4)
                         }
                         .padding(.horizontal, 25)
                         .padding(.bottom, 24)
@@ -2067,6 +2071,7 @@ struct ContactSupportView: View {
     private func sendTicket() {
         guard isValid else { return }
         focusedField = nil
+        dismissKeyboard()
         errorMessage = nil
         isSending = true
 
@@ -2094,33 +2099,115 @@ struct ContactSupportView: View {
     }
 }
 
-struct CategoryChip: View {
+struct SupportCategoryOption: Identifiable, Hashable {
     let id: String
-    let name: String
+    let title: String
     let icon: String
-    let isSelected: Bool
-    let onTap: () -> Void
-    
+    let subtitle: String
+}
+
+struct SupportCategoryMenuField: View {
+    let title: String
+    @Binding var selection: String
+    let options: [SupportCategoryOption]
+
+    private var selectedOption: SupportCategoryOption? {
+        options.first(where: { $0.id == selection })
+    }
+
     var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 24))
-                Text(name)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.greyText)
+
+            Menu {
+                ForEach(options) { option in
+                    Button {
+                        selection = option.id
+                    } label: {
+                        Label(option.title, systemImage: option.icon)
+                    }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: selectedOption?.icon ?? "questionmark.circle.fill")
+                        .foregroundColor(AppColors.accentColor)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selectedOption?.title ?? "Select category")
+                            .foregroundColor(AppColors.whiteText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let subtitle = selectedOption?.subtitle {
+                            Text(subtitle)
+                                .font(.caption2)
+                                .foregroundColor(AppColors.greyText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.greyText)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppColors.standardSearchFieldFill)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
+                )
             }
-            .foregroundColor(isSelected ? AppColors.accentColor : AppColors.whiteText.opacity(0.7))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(isSelected ? AppColors.accentColor.opacity(0.2) : AppColors.symbolSheetGroupedPanelFill)
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? AppColors.accentColor : Color.clear, lineWidth: 2)
-            )
+        }
+    }
+}
+
+struct SupportMessageEditorCard: View {
+    let title: String
+    @Binding var text: String
+    let placeholder: String
+    let characterLimit: Int
+    let minHeight: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.greyText)
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $text)
+                    .frame(minHeight: minHeight)
+                    .padding(12)
+                    .background(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                    )
+                    .foregroundColor(AppColors.whiteText)
+                    .scrollContentBackground(.hidden)
+
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(placeholder)
+                        .font(.body)
+                        .foregroundColor(AppColors.greyText.opacity(0.75))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 22)
+                        .allowsHitTesting(false)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Text("\(text.count)/\(characterLimit)")
+                    .font(.caption)
+                    .foregroundColor(text.count > characterLimit ? .red : AppColors.greyText)
+            }
         }
     }
 }
@@ -2202,6 +2289,51 @@ struct TermsPrivacyView: View {
 // MARK: - About View
 // ================================================================================================
 
+private struct AppIconPreviewView: View {
+    var body: some View {
+        ZStack {
+            if let backgroundImage = bundleImage(named: "appiconbg 2") {
+                backgroundImage
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Circle()
+                    .fill(AppColors.accentColor.opacity(0.3))
+            }
+
+            if let logoImage = bundleImage(named: "TG 3") {
+                logoImage
+                    .resizable()
+                    .scaledToFit()
+                    .padding(18)
+            } else {
+                Text("TG")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(AppColors.accentColor)
+            }
+        }
+        .frame(width: 100, height: 100)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
+        )
+        .shadow(color: AppColors.surfaceBlack20, radius: 12, x: 0, y: 6)
+    }
+
+    private func bundleImage(named name: String) -> Image? {
+        guard let url = Bundle.main.url(
+            forResource: name,
+            withExtension: "png",
+            subdirectory: "AppIcon.icon/Assets"
+        ),
+        let image = UIImage(contentsOfFile: url.path) else {
+            return nil
+        }
+        return Image(uiImage: image)
+    }
+}
+
 struct AboutView: View {
     let onBack: () -> Void
     
@@ -2225,34 +2357,7 @@ struct AboutView: View {
                     VStack(spacing: 32) {
                         // App logo and name
                         VStack(spacing: 16) {
-                            ZStack {
-                                if UIImage(named: "appiconbg") != nil {
-                                    Image("appiconbg")
-                                        .resizable()
-                                        .scaledToFill()
-                                } else {
-                                    Circle()
-                                        .fill(AppColors.accentColor.opacity(0.3))
-                                }
-
-                                if UIImage(named: "appiconlogo") != nil {
-                                    Image("appiconlogo")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .padding(18)
-                                } else {
-                                    Text("TG")
-                                        .font(.system(size: 40, weight: .bold))
-                                        .foregroundColor(AppColors.accentColor)
-                                }
-                            }
-                            .frame(width: 100, height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                    .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
-                            )
-                            .shadow(color: AppColors.surfaceBlack20, radius: 12, x: 0, y: 6)
+                            AppIconPreviewView()
                             
                             Text("Traders Guild")
                                 .font(.title2)

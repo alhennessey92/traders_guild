@@ -19,6 +19,7 @@ struct NotificationContractTests {
         let reportId = UUID()
         let guildId = UUID()
         let symbolId = UUID()
+        let userId = UUID()
 
         let eventDestination = RLNotificationDestination(
             type: .event,
@@ -50,10 +51,21 @@ struct NotificationContractTests {
             eventId: nil,
             reportId: nil
         )
+        let friendRequestDestination = RLNotificationDestination(
+            type: .userProfile,
+            userId: userId,
+            guildId: nil,
+            symbolId: nil,
+            chatroomId: nil,
+            announcementId: nil,
+            eventId: nil,
+            reportId: nil
+        )
 
         #expect(eventDestination.navigationDestination == .event(eventId: eventId))
         #expect(reportsDestination.navigationDestination == .adminReports(guildId: guildId, reportId: reportId))
         #expect(chartDestination.navigationDestination == .symbolChart(symbolId: symbolId, ticker: ""))
+        #expect(friendRequestDestination.navigationDestination == .userProfile(userId: userId))
     }
 
     @Test func notificationDTODecodesAdminReportPayload() async throws {
@@ -219,6 +231,50 @@ struct NotificationContractTests {
         #expect(payload.markerNavigationPayload?.markerId == markerId)
         #expect(payload.markerNavigationPayload?.symbolId == symbolId)
         #expect(payload.markerNavigationPayload?.timeframe == "4h")
+    }
+
+    @Test func friendRequestNotificationRoutesToRequestedUserProfile() async throws {
+        let notificationId = UUID()
+        let recipientId = UUID()
+        let requestedUserId = UUID()
+
+        let json = """
+        {
+          "id": "\(notificationId.uuidString)",
+          "recipient_id": "\(recipientId.uuidString)",
+          "notification_type": "friend_request",
+          "title": "Friend request sent to Alice",
+          "body": "Waiting for Alice to respond",
+          "data": {
+            "from_user_id": "\(requestedUserId.uuidString)",
+            "from_username": "alice",
+            "from_display_name": "Alice",
+            "from_avatar_url": "https://example.com/alice.png",
+            "message": "Let's connect"
+          },
+          "destination": {
+            "type": "user_profile",
+            "user_id": "\(requestedUserId.uuidString)"
+          },
+          "is_read": false,
+          "read_at": null,
+          "view_count": 0,
+          "first_viewed_at": null,
+          "last_viewed_at": null,
+          "created_at": "2026-04-06T10:00:00Z",
+          "updated_at": "2026-04-06T10:00:00Z"
+        }
+        """
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+
+        let dto = try decoder.decode(RLNotificationDTO.self, from: Data(json.utf8))
+
+        #expect(dto.type == .friendRequest)
+        #expect(dto.navigationDestination == .userProfile(userId: requestedUserId))
+        #expect(dto.senderAvatarURL == "https://example.com/alice.png")
     }
 
     @Test func markerActivityDTODecodesResolvedPredictionResult() async throws {

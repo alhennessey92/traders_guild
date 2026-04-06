@@ -19,6 +19,42 @@ struct AdminSheetBackground: View {
     }
 }
 
+private struct AdminSheetChrome: View {
+    let edge: VerticalEdge
+
+    var body: some View {
+        Rectangle()
+            .fill(AppColors.sheetBackground.opacity(0.98))
+            .background(.ultraThinMaterial)
+            .overlay(divider, alignment: edge == .top ? .bottom : .top)
+            .overlay(gradient)
+            .ignoresSafeArea(edges: edge == .top ? .top : .bottom)
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(AppColors.surfaceWhite12)
+            .frame(height: 1)
+    }
+
+    private var gradient: some View {
+        LinearGradient(
+            colors: [
+                AppColors.surfaceWhite06,
+                AppColors.surfaceWhite00
+            ],
+            startPoint: edge == .top ? .top : .bottom,
+            endPoint: edge == .top ? .bottom : .top
+        )
+    }
+}
+
+extension View {
+    func adminSheetChrome(edge: VerticalEdge) -> some View {
+        background(AdminSheetChrome(edge: edge))
+    }
+}
+
 struct AdminSheetHeader: View {
     let icon: String
     let iconColor: Color

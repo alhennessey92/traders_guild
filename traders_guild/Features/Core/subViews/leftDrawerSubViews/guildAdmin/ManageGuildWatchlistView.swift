@@ -52,28 +52,20 @@ struct ManageGuildWatchlistView: View {
                 header
                     .padding(.horizontal, 16)
                     .padding(.top, 30)
-
-                Divider()
-                    .background(AppColors.surfaceWhite15)
-                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+                    .adminSheetChrome(edge: .top)
 
                 tabBar
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
-
-                Divider()
-                    .background(AppColors.surfaceWhite15)
-                    .padding(.top, 8)
+                    .padding(.bottom, 8)
+                    .background(AppColors.sheetBackground.opacity(0.98))
 
                 content
                     .padding(.horizontal, 16)
             }
 
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(AppColors.greyText)
-            }
+            SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }

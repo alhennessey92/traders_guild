@@ -41,8 +41,8 @@ struct ManageRolesView: View {
                 )
                 .padding(.horizontal)
                 .padding(.top, 30)
-
-                Divider()
+                .padding(.bottom, 12)
+                .adminSheetChrome(edge: .top)
 
                 // Content
                 if isLoading {
@@ -80,11 +80,7 @@ struct ManageRolesView: View {
             }
 
             // Dismiss button
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.secondary)
-            }
+            SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }

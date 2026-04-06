@@ -720,6 +720,11 @@ struct GuildUserActionButtonsRL: View {
     private var isCurrentUser: Bool {
         member.userId == rlAppState.currentUser?.id
     }
+
+    private var isReported: Bool {
+        guard let guildId = rlAppState.currentGuild?.id else { return false }
+        return rlAppState.hasReportedUser(guildId: guildId, userId: member.userId)
+    }
     
     var body: some View {
         HStack(spacing: 8) {
@@ -784,13 +789,18 @@ struct GuildUserActionButtonsRL: View {
             // Report user (not shown for current user)
             if !isCurrentUser {
                 DrawerActionButton(
-                    imageName: "flag",
-                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.05),
-                    foregroundColor: AppColors.whiteText.opacity(0.8),
-                    strokeColor: AppColors.whiteText.opacity(0.3),
+                    title: isReported ? "Reported" : nil,
+                    imageName: isReported ? "checkmark.shield.fill" : "flag",
+                    backgroundColor: isReported ? AppColors.statusPositive08 : AppColors.gradientBackgroundDark.opacity(0.05),
+                    foregroundColor: isReported ? AppColors.statusPositive90 : AppColors.whiteText.opacity(0.8),
+                    strokeColor: isReported ? AppColors.statusPositive35 : AppColors.whiteText.opacity(0.3),
                     strokeWidth: 0.5,
-                    action: { showReportReasonSheet = true }
+                    action: {
+                        guard !isReported else { return }
+                        showReportReasonSheet = true
+                    }
                 )
+                .disabled(isReported)
             }
         }
         .sheet(isPresented: $showReportReasonSheet) {

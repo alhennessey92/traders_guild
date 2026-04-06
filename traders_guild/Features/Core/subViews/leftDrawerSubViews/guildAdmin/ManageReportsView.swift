@@ -115,18 +115,20 @@ struct ManageReportsView: View {
                 headerView
                     .padding(.horizontal)
                     .padding(.top, 30)
-
-                Divider()
-                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+                    .adminSheetChrome(edge: .top)
 
                 // Status Filter
                 statusFilterBar
                     .padding(.top, 8)
+                    .padding(.bottom, 6)
+                    .background(AppColors.sheetBackground.opacity(0.98))
 
                 // Content Type Filter
                 contentTypeFilterBar
                     .padding(.top, 8)
                     .padding(.bottom, 4)
+                    .background(AppColors.sheetBackground.opacity(0.98))
 
                 Divider()
 
@@ -135,11 +137,7 @@ struct ManageReportsView: View {
             }
 
             // Dismiss button
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(AppColors.greyText)
-            }
+            SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }

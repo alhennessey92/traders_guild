@@ -1745,6 +1745,16 @@ struct RLDetailResponseDTO: Codable {
     let detail: String
 }
 
+struct RLRuntimeFlagsDTO: Codable, Equatable {
+    let betaWelcomeEnabled: Bool
+    let betaFeedbackEnabled: Bool
+
+    static let disabled = RLRuntimeFlagsDTO(
+        betaWelcomeEnabled: false,
+        betaFeedbackEnabled: false
+    )
+}
+
 
 
 // ================================================================================================

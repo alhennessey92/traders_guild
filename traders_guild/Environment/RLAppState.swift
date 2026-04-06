@@ -195,11 +195,14 @@ class RLAppState: ObservableObject {
     private var isConsumingPendingEmailVerificationToken: Bool = false
     
     @Published var showGuildSelectionSheet: Bool = false
+    @Published var showBetaWelcomeSheet: Bool = false
     @Published var showSignupWelcomeCarousel: Bool = false
     @Published var isBiometricAppLockActive: Bool = false
     @Published var isBiometricUnlockInProgress: Bool = false
     @Published var biometricUnlockErrorMessage: String?
     @Published private(set) var biometricUnlockRequestID: UUID?
+    @Published private(set) var runtimeFlags: RLRuntimeFlagsDTO = .disabled
+    @Published private(set) var reportedUserStateVersion: Int = 0
 
     /// Keeps auth/signup onboarding in ContentView even after auth tokens are issued.
     @Published var isOnboardingFlowActive: Bool = false
@@ -237,6 +240,7 @@ class RLAppState: ObservableObject {
     private var lastReachabilitySatisfied: Bool?
     private var hasShownOfflineToastForCurrentEpisode = false
     private var pendingSignupWelcomeUserId: UUID?
+    private let reportedUserStore = ReportedUserStore()
 
     @Published var notificationStats: RLNotificationStatsDTO? {
         didSet {
@@ -921,6 +925,27 @@ class RLAppState: ObservableObject {
 
     func dismissSignupWelcomeCarousel() {
         showSignupWelcomeCarousel = false
+    }
+
+    func dismissBetaWelcomeSheet() {
+        showBetaWelcomeSheet = false
+        presentPendingSignupWelcomeIfNeeded()
+    }
+
+    func refreshRuntimeFlags() async {
+        guard isAuthenticated, accessToken != nil else {
+            runtimeFlags = .disabled
+            return
+        }
+
+        do {
+            runtimeFlags = try await realApi.getRuntimeFlags()
+            presentPendingSignupWelcomeIfNeeded()
+        } catch is CancellationError {
+            return
+        } catch {
+            return
+        }
     }
 
     func armBiometricAppLockIfNeeded(reason: String, autoPromptWhenActive: Bool = true) {
@@ -2446,9 +2471,12 @@ class RLAppState: ObservableObject {
         userGuilds = []
         notificationStats = nil
         showGuildSelectionSheet = false
+        showBetaWelcomeSheet = false
         isHandlingAuthFlow = false
         isOnboardingFlowActive = false
         showSignupWelcomeCarousel = false
+        runtimeFlags = .disabled
+        reportedUserStateVersion = 0
         clearBiometricAppLock()
         pendingSignupWelcomeUserId = nil
         pendingPasswordResetToken = nil
@@ -2589,6 +2617,15 @@ class RLAppState: ObservableObject {
             return
         }
 
+        if runtimeFlags.betaWelcomeEnabled && !hasSeenBetaWelcome(for: userId) {
+            guard !showBetaWelcomeSheet else { return }
+            markBetaWelcomeSeen(for: userId)
+            showBetaWelcomeSheet = true
+            return
+        }
+
+        guard !showBetaWelcomeSheet else { return }
+
         markSignupWelcomeCarouselSeen(for: userId)
         pendingSignupWelcomeUserId = nil
         showSignupWelcomeCarousel = true
@@ -2604,6 +2641,50 @@ class RLAppState: ObservableObject {
 
     private func signupWelcomeCarouselKey(for userId: UUID) -> String {
         "\(keychainPrefix)signup_welcome_seen_\(userId.uuidString)"
+    }
+
+    private func hasSeenBetaWelcome(for userId: UUID) -> Bool {
+        UserDefaults.standard.bool(forKey: betaWelcomeKey(for: userId))
+    }
+
+    private func markBetaWelcomeSeen(for userId: UUID) {
+        UserDefaults.standard.set(true, forKey: betaWelcomeKey(for: userId))
+    }
+
+    private func betaWelcomeKey(for userId: UUID) -> String {
+        "\(keychainPrefix)beta_welcome_seen_\(userId.uuidString)"
+    }
+
+    func hasReportedUser(guildId: UUID, userId: UUID) -> Bool {
+        guard let reporterUserId = currentUser?.id else { return false }
+        return reportedUserStore.isReported(
+            reporterUserId: reporterUserId,
+            guildId: guildId,
+            reportedUserId: userId,
+            namespace: AppConfig.sessionStorageNamespace
+        )
+    }
+
+    private func markReportedUser(guildId: UUID, userId: UUID) {
+        guard let reporterUserId = currentUser?.id else { return }
+        reportedUserStore.markReported(
+            reporterUserId: reporterUserId,
+            guildId: guildId,
+            reportedUserId: userId,
+            namespace: AppConfig.sessionStorageNamespace
+        )
+        reportedUserStateVersion += 1
+    }
+
+    private func isDuplicateUserReportError(_ error: Error) -> Bool {
+        switch error {
+        case APIError.serverError(let statusCode, let detail):
+            return statusCode == 409 && detail.localizedCaseInsensitiveContains("already reported")
+        case APIError.badRequest(let detail):
+            return detail.localizedCaseInsensitiveContains("already reported")
+        default:
+            return false
+        }
     }
 
     // MARK: - In-App Tutorial Persistence
@@ -3739,8 +3820,14 @@ class RLAppState: ObservableObject {
     func reportUser(guildId: UUID, userId: UUID, reason: String) async throws {
         do {
             _ = try await realApi.reportUser(guildId: guildId, userId: userId, reason: reason)
+            markReportedUser(guildId: guildId, userId: userId)
             showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
         } catch {
+            if isDuplicateUserReportError(error) {
+                markReportedUser(guildId: guildId, userId: userId)
+                showInfo("You already reported this user. Moderators will review it.")
+                return
+            }
             showError(error, title: "Failed to Report User", style: .toast)
             throw error
         }

@@ -39,10 +39,8 @@ struct GuildSettingsView: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 30)
-
-                Divider()
-                    .background(AppColors.surfaceWhite15)
-                    .padding(.top, 12)
+                .padding(.bottom, 12)
+                .adminSheetChrome(edge: .top)
 
                 ScrollView {
                     VStack(spacing: 12) {
@@ -79,13 +77,10 @@ struct GuildSettingsView: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+                .adminSheetChrome(edge: .bottom)
             }
 
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.secondary)
-            }
+            SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }

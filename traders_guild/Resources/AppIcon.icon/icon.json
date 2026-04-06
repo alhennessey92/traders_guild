@@ -16,14 +16,13 @@
     {
       "layers" : [
         {
-          "image-name" : "TG 3.png",
-          "name" : "iconText"
-        },
-        {
-          "blend-mode" : "soft-light",
-          "hidden" : false,
           "image-name" : "appiconbg 2.png",
           "name" : "iconBG"
+        },
+        {
+          "hidden" : false,
+          "image-name" : "TG 3.png",
+          "name" : "iconText"
         }
       ],
       "shadow" : {
@@ -31,8 +30,7 @@
         "opacity" : 0.5
       },
       "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
+        "enabled" : false
       }
     }
   ],

@@ -2630,6 +2630,17 @@ extension RealAPIService {
             auth: true
         )
     }
+
+    /// Fetch authenticated runtime feature flags
+    /// GET /users/me/runtime-flags
+    func getRuntimeFlags() async throws -> RLRuntimeFlagsDTO {
+        try await request(
+            "/users/me/runtime-flags",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
 }
 
 

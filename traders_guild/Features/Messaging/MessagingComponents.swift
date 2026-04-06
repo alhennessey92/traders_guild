@@ -4028,13 +4028,16 @@ struct RLDMSettingsView: View {
                         }
 
                         SettingsButtonRow(
-                            icon: "exclamationmark.triangle.fill",
-                            title: "Report User",
-                            subtitle: "Report inappropriate behavior",
-                            iconColor: .red
+                            icon: isReported ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
+                            title: isReported ? "Reported" : "Report User",
+                            subtitle: isReported ? "Moderators will review your report" : "Report inappropriate behavior",
+                            iconColor: isReported ? .green : .red
                         ) {
+                            guard !isReported else { return }
                             showReportOptions = true
                         }
+                        .disabled(isReported)
+                        .opacity(isReported ? 0.72 : 1)
                     }
 
                     Divider()
@@ -4106,6 +4109,10 @@ struct RLDMSettingsView: View {
         }
     }
     
+    private var isReported: Bool {
+        rlAppState.hasReportedUser(guildId: thread.guildId, userId: participant.userId)
+    }
+
     private func muteConversation(duration: MuteDuration) {
         rlAppState.showSuccess("Conversation muted for \(duration.displayName)")
     }

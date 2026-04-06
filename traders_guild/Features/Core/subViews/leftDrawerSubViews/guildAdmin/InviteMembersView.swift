@@ -33,8 +33,6 @@ struct InviteMembersView: View {
                 .padding(.horizontal)
                 .padding(.top, 30)
 
-                Divider()
-
                 // Search Section
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Search Users")
@@ -57,6 +55,8 @@ struct InviteMembersView: View {
                         }
                     }
                 }
+                .padding(.bottom, 12)
+                .adminSheetChrome(edge: .top)
 
                 // Content
                 ScrollView {
@@ -121,11 +121,7 @@ struct InviteMembersView: View {
             }
 
             // Dismiss button
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.secondary)
-            }
+            SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }

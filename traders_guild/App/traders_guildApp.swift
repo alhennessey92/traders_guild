@@ -127,6 +127,14 @@ struct traders_guildApp: App {
                 BiometricEnrollmentView()
                     .environmentObject(rlAppState)
             }
+            .sheet(isPresented: $rlAppState.showBetaWelcomeSheet, onDismiss: {
+                rlAppState.dismissBetaWelcomeSheet()
+            }) {
+                BetaWelcomeSheetView()
+                    .environmentObject(rlAppState)
+                    .presentationDetents([.fraction(0.56)])
+                    .presentationDragIndicator(.visible)
+            }
             .sheet(isPresented: $rlAppState.showSignupWelcomeCarousel, onDismiss: {
                 rlAppState.dismissSignupWelcomeCarousel()
             }) {
@@ -134,6 +142,10 @@ struct traders_guildApp: App {
                     .environmentObject(rlAppState)
                     .presentationDetents([.fraction(0.58)])
                     .presentationDragIndicator(.visible)
+            }
+            .task(id: rlAppState.isAuthenticated) {
+                guard rlAppState.isAuthenticated else { return }
+                await rlAppState.refreshRuntimeFlags()
             }
             .task(id: rlAppState.pendingEmailVerificationToken) {
                 guard let token = rlAppState.pendingEmailVerificationToken,

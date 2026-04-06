@@ -29,10 +29,8 @@ struct ManageChatroomsView: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 30)
-
-                Divider()
-                    .background(AppColors.surfaceWhite15)
-                    .padding(.top, 12)
+                .padding(.bottom, 12)
+                .adminSheetChrome(edge: .top)
 
                 content
                     .padding(.horizontal, 16)
@@ -40,11 +38,7 @@ struct ManageChatroomsView: View {
                     .padding(.bottom, 16)
             }
 
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.secondary)
-            }
+            SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
@@ -391,6 +385,7 @@ private struct ChatroomEditorSheet: View {
                     onCancel: { dismiss() },
                     onPrimary: { Task { await submit() } }
                 )
+                .adminSheetChrome(edge: .bottom)
             }
             .padding(16)
             .navigationTitle(title)

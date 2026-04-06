@@ -35,6 +35,11 @@ enum DrawerMenuBadge: Equatable {
     case count(Int)
 }
 
+enum DrawerMenuAction {
+    case navigate(DrawerNavigationState)
+    case betaFeedback
+}
+
 /// Identifies which bottom sheet content to present from the left drawer.
 /// Conforms to `Identifiable` for `.sheet(item:)` and `Equatable` to support `.onChange`.
 /// Each case carries the minimal data needed to render its detail view.
@@ -43,6 +48,7 @@ enum BottomSheetContent: Identifiable, Equatable {
     case event(RLGuildEventWithAuthorDTO)  // Uses combined DTO from backend
     case profile
     case guildMemberRL(RLGuildMemberDTO)
+    case betaFeedback
     case createAnnouncement
     case createEvent
     case guildSettings
@@ -59,6 +65,7 @@ enum BottomSheetContent: Identifiable, Equatable {
         case .event(let event): return "event-\(event.id)"
         case .profile: return "profile"
         case .guildMemberRL(let user): return "profile-rl-\(user.id)"
+        case .betaFeedback: return "beta-feedback"
         case .createAnnouncement: return "create-announcement"
         case .createEvent: return "create-event"
         case .guildSettings: return "guild-settings"
@@ -82,6 +89,8 @@ enum BottomSheetContent: Identifiable, Equatable {
             return true
         case (.guildMemberRL(let m1), .guildMemberRL(let m2)):
             return m1.id == m2.id
+        case (.betaFeedback, .betaFeedback):
+            return true
         case (.createAnnouncement, .createAnnouncement):
             return true
         case (.createEvent, .createEvent):
@@ -155,7 +164,8 @@ struct LeftDrawerMainView: View {
                         navigationState: $navigationState,
                         onClose: onClose,
                         dragTranslation: $dragTranslation,
-                        presentProfile: { bottomSheetContent = .profile }
+                        presentProfile: { bottomSheetContent = .profile },
+                        presentBetaFeedback: { bottomSheetContent = .betaFeedback }
                     )
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading),
@@ -265,6 +275,8 @@ struct LeftDrawerMainView: View {
             return [.fraction(0.6), .large]
         case .guildMemberRL:
             return [.fraction(0.6), .large]
+        case .betaFeedback:
+            return [.fraction(0.72), .large]
         case .createAnnouncement:
             return [.large]
         case .createEvent:
@@ -366,6 +378,7 @@ struct MainDrawerView: View {
     let onClose: () -> Void
     @Binding var dragTranslation: CGFloat
     let presentProfile: () -> Void
+    let presentBetaFeedback: () -> Void
     
     @EnvironmentObject var rlAppState: RLAppState
     
@@ -404,22 +417,26 @@ struct MainDrawerView: View {
     
     /// Menu configuration for the left drawer home screen.
     /// Each entry maps to a destination `DrawerNavigationState`.
-    var menuItems: [(icon: String, title: String, state: DrawerNavigationState, badge: DrawerMenuBadge?)] {
-        var items: [(icon: String, title: String, state: DrawerNavigationState, badge: DrawerMenuBadge?)] = [
-            ("megaphone.fill", "Announcements", .announcements, leftDrawerViewModel.hasUnreadAnnouncements ? .unreadDot : nil),
-            ("bell.fill", "Notifications", .notifications, leftDrawerViewModel.hasUnreadNotifications ? .unreadDot : nil),
-            ("target", "Markers", .topMarkers, nil),
-            ("trophy.fill", "Leaderboard", .leaderboard, nil),
-            ("star.fill", "Watchlists", .guildWatchlist, nil),
-            ("calendar.badge.clock", "Events", .events, leftDrawerViewModel.hasUnreadEvents ? .unreadDot : nil),
-            ("person.2.fill", "User List", .userList, nil),
-            ("chart.bar.fill", "Statistics", .statistics, nil)
+    var menuItems: [(icon: String, title: String, badge: DrawerMenuBadge?, action: DrawerMenuAction)] {
+        var items: [(icon: String, title: String, badge: DrawerMenuBadge?, action: DrawerMenuAction)] = [
+            ("megaphone.fill", "Announcements", leftDrawerViewModel.hasUnreadAnnouncements ? .unreadDot : nil, .navigate(.announcements)),
+            ("bell.fill", "Notifications", leftDrawerViewModel.hasUnreadNotifications ? .unreadDot : nil, .navigate(.notifications)),
+            ("target", "Markers", nil, .navigate(.topMarkers)),
+            ("trophy.fill", "Leaderboard", nil, .navigate(.leaderboard)),
+            ("star.fill", "Watchlists", nil, .navigate(.guildWatchlist)),
+            ("calendar.badge.clock", "Events", leftDrawerViewModel.hasUnreadEvents ? .unreadDot : nil, .navigate(.events)),
+            ("person.2.fill", "User List", nil, .navigate(.userList)),
+            ("chart.bar.fill", "Statistics", nil, .navigate(.statistics))
         ]
+
+        if rlAppState.runtimeFlags.betaFeedbackEnabled {
+            items.append(("flask.fill", "Beta Feedback", nil, .betaFeedback))
+        }
         
         // Add Admin/Mod Panel for moderators and admins
         if rlAppState.canModerate {
             let panelTitle = rlAppState.isGuildOwner ? "Owner Panel" : (rlAppState.canAdmin ? "Admin Panel" : "Mod Panel")
-            items.append(("shield.checkered", panelTitle, .adminPanel, nil))
+            items.append(("shield.checkered", panelTitle, nil, .navigate(.adminPanel)))
         }
         
         return items
@@ -565,8 +582,13 @@ struct MainDrawerView: View {
                             title: item.title,
                             badge: item.badge,
                             action: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    navigationState = item.state
+                                switch item.action {
+                                case .navigate(let state):
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        navigationState = state
+                                    }
+                                case .betaFeedback:
+                                    presentBetaFeedback()
                                 }
                             }
                         )
@@ -887,6 +909,8 @@ struct BottomSheetView: View {
                     .environmentObject(leftDrawerViewModel)
             case .guildMemberRL(let member):
                 GuildUserDetailViewRL(member: member)
+            case .betaFeedback:
+                BetaFeedbackView()
             case .createAnnouncement:
                 CreateAnnouncementView()
             case .createEvent:

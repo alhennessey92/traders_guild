@@ -2025,6 +2025,8 @@ struct CreateGuildView: View {
                         }
                     }
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .dismissKeyboardOnTapAndDragBackground()
             }
         }
         .toolbar(.hidden, for: .navigationBar)
