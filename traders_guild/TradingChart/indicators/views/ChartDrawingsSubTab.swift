@@ -10,6 +10,8 @@ private struct DrawingColorOption: Identifiable {
 struct ChartDrawingsSubTab: View {
     @ObservedObject var drawingManager: ChartDrawingManager
     var onBeginInteractiveDrawing: (() -> Void)? = nil
+    var defaultAnchorTime: Date? = nil
+    var defaultAnchorPrice: Double? = nil
 
     @State private var selectedSubTab: DrawingSubTab = .lines
     @State private var selectedColorHex: String = "#10B981"
@@ -386,7 +388,12 @@ struct ChartDrawingsSubTab: View {
             HapticFeedback.light.trigger()
             return
         }
-        _ = drawingManager.addDrawing(type: .textNote, colorHex: selectedColorHex, note: "Add your context")
+        _ = drawingManager.addDrawing(
+            type: .textNote,
+            points: annotationAnchorPoint.map { [$0] } ?? [],
+            colorHex: selectedColorHex,
+            note: "Add your context"
+        )
         infoMessage = "Added Text Note."
         limitWarning = nil
     }
@@ -402,9 +409,19 @@ struct ChartDrawingsSubTab: View {
             HapticFeedback.light.trigger()
             return
         }
-        _ = drawingManager.addDrawing(type: .emoji, colorHex: selectedColorHex, emoji: emoji)
+        _ = drawingManager.addDrawing(
+            type: .emoji,
+            points: annotationAnchorPoint.map { [$0] } ?? [],
+            colorHex: selectedColorHex,
+            emoji: emoji
+        )
         infoMessage = "Added Emoji."
         limitWarning = nil
+    }
+
+    private var annotationAnchorPoint: ChartDrawingPoint? {
+        guard let defaultAnchorTime, let defaultAnchorPrice else { return nil }
+        return ChartDrawingPoint(time: defaultAnchorTime, price: defaultAnchorPrice)
     }
 
     private func noteBinding(for drawingId: UUID, fallback: String) -> Binding<String> {

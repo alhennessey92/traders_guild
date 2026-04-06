@@ -69,10 +69,7 @@ struct ImprovedChartSheetChatView: View {
         VStack(spacing: 0) {
             // Header - compact and clean
             chartChatHeader(for: chat)
-            
-            Divider()
-                .background(AppColors.surfaceGray30)
-            
+
             // Messages area
             if chartChatManager.messages.isEmpty {
                 emptyMessagesView
@@ -80,6 +77,7 @@ struct ImprovedChartSheetChatView: View {
                 messagesScrollView
             }
         }
+        .background(ChatBackground())
         .sheet(isPresented: $showEditSheet) {
             if let message = messageToEdit {
                 UnifiedEditMessageSheet(originalContent: message.content) { newContent in
@@ -116,61 +114,53 @@ struct ImprovedChartSheetChatView: View {
     
     // MARK: - Chat Header
     private func chartChatHeader(for chat: RLChartChatDTO) -> some View {
-        HStack(spacing: 12) {
-            if let symbol = chartViewModel.currentSymbol, symbol.id == chat.symbolId {
-                TradingSymbolIconView(
-                    symbol: symbol,
-                    size: 40,
-                    cornerRadiusRatio: 0.22,
-                    strokeOpacity: 0.18,
-                    showShadow: true
-                )
-            } else {
-                TickerSymbolIconView(
-                    ticker: chat.symbolTicker,
-                    size: 40,
-                    cornerRadiusRatio: 0.22,
-                    strokeOpacity: 0.18,
-                    showShadow: true
-                )
+        ChatSurfaceHeader(horizontalPadding: 16, topPadding: 20, bottomPadding: 14) {
+            HStack(spacing: 12) {
+                if let symbol = chartViewModel.currentSymbol, symbol.id == chat.symbolId {
+                    TradingSymbolIconView(
+                        symbol: symbol,
+                        size: 40,
+                        cornerRadiusRatio: 0.22,
+                        strokeOpacity: 0.18,
+                        showShadow: true
+                    )
+                } else {
+                    TickerSymbolIconView(
+                        ticker: chat.symbolTicker,
+                        size: 40,
+                        cornerRadiusRatio: 0.22,
+                        strokeOpacity: 0.18,
+                        showShadow: true
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(chat.symbolTicker)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.primaryForeground)
+
+                    Text(chat.guildName)
+                        .font(.caption)
+                        .foregroundColor(AppColors.secondaryForeground)
+                }
+
+                Spacer(minLength: 0)
+
+                if chat.hasUnread {
+                    Text("\(chat.unreadCount)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.onAccentForeground)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(AppColors.accentColor)
+                        .clipShape(Capsule())
+                }
+
+                ActiveUsersPill(count: chat.activeUserCount)
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(chat.symbolTicker)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.primaryForeground)
-
-                Text(chat.guildName)
-                    .font(.caption)
-                    .foregroundColor(AppColors.secondaryForeground)
-            }
-
-            Spacer(minLength: 0)
-
-            if chat.hasUnread {
-                Text("\(chat.unreadCount)")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.onAccentForeground)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(AppColors.accentColor)
-                    .clipShape(Capsule())
-            }
-
-            ActiveUsersPill(count: chat.activeUserCount)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
-        .padding(.top, 20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ZStack {
-                AppColors.sheetBackground
-                AppColors.symbolSheetGroupedPanelFill
-            }
-        )
     }
     
     // MARK: - Empty Messages View (Using Unified ChatEmptyStateView)

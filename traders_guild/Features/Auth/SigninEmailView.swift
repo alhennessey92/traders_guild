@@ -78,7 +78,7 @@ struct SigninEmailView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .scrollDismissesKeyboard(.interactively)
-            .dismissKeyboardOnTapBackground()
+            .dismissKeyboardOnTapAndDragBackground()
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .toolbar {
@@ -98,7 +98,7 @@ struct SigninEmailView: View {
                         .foregroundColor(AppColors.fadedBackground)
                 }
             }
-            .safeAreaInset(edge: .bottom) {
+            .keyboardPinnedBottomInset {
                 VStack(spacing: 0) {
                     Divider()
                         .frame(height: 1)

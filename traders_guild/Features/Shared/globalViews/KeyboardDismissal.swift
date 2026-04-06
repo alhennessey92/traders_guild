@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct DismissKeyboardOnTapBackground: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
@@ -16,6 +17,19 @@ struct DismissKeyboardOnTapBackground: UIViewRepresentable {
 extension View {
     func dismissKeyboardOnTapBackground() -> some View {
         background(DismissKeyboardOnTapBackground())
+    }
+
+    func dismissKeyboardOnTapAndDragBackground(minimumVerticalTranslation: CGFloat = 14) -> some View {
+        dismissKeyboardOnTapBackground()
+            .simultaneousGesture(
+                DragGesture(minimumDistance: minimumVerticalTranslation)
+                    .onChanged { value in
+                        guard value.translation.height > minimumVerticalTranslation,
+                              abs(value.translation.height) > abs(value.translation.width) else { return }
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    },
+                including: .subviews
+            )
     }
 
     func dismissKeyboard() {

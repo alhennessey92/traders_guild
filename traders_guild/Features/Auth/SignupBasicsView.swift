@@ -176,7 +176,7 @@ struct SignupBasicsView: View {
             }
         }
         .interactiveDismissDisabled(rlAppState.accountCreatedDuringOnboarding)
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
@@ -311,7 +311,7 @@ struct SignupInterestsView: View {
             }
         }
         .interactiveDismissDisabled(rlAppState.accountCreatedDuringOnboarding)
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)

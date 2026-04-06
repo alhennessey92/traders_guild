@@ -174,14 +174,14 @@ struct ChartMarkerUI: Identifiable, Hashable {
     }
     
     init(marker: RLChartMarkerDTO, candleIndex: Int) {
-        self.marker = marker
+        self.marker = marker.normalizedAnnotationAnchors()
         self.candleIndex = candleIndex
         self.isVisible = marker.isVisible
     }
-    
+
     func withMarker(_ newMarker: RLChartMarkerDTO) -> ChartMarkerUI {
         var updated = self
-        updated.marker = newMarker
+        updated.marker = newMarker.normalizedAnnotationAnchors()
         return updated
     }
     
@@ -207,6 +207,55 @@ struct ChartMarkerUI: Identifiable, Hashable {
 }
 
 extension RLChartMarkerDTO {
+    func normalizedAnnotationAnchors() -> RLChartMarkerDTO {
+        let fallbackAnchorTime = anchorComponent?.payload.anchorTime ?? candleTimestamp
+        let fallbackAnchorPrice = anchorComponent?.payload.levelPrice ?? price
+
+        let normalizedComponents = components.map { component in
+            switch component.payload {
+            case let .note(payload):
+                guard payload.anchorTime == nil || payload.anchorPrice == nil else { return component }
+                return RLMarkerComponentDTO(
+                    id: component.id,
+                    componentType: component.componentType,
+                    payload: .note(
+                        NotePayload(
+                            text: payload.text,
+                            offsetX: payload.offsetX,
+                            offsetY: payload.offsetY,
+                            anchorTime: payload.anchorTime ?? fallbackAnchorTime,
+                            anchorPrice: payload.anchorPrice ?? fallbackAnchorPrice
+                        )
+                    ),
+                    ordering: component.ordering
+                )
+
+            case let .reactionEmoji(payload):
+                guard payload.anchorTime == nil || payload.anchorPrice == nil else { return component }
+                return RLMarkerComponentDTO(
+                    id: component.id,
+                    componentType: component.componentType,
+                    payload: .reactionEmoji(
+                        EmojiPayload(
+                            emoji: payload.emoji,
+                            offsetX: payload.offsetX,
+                            offsetY: payload.offsetY,
+                            anchorTime: payload.anchorTime ?? fallbackAnchorTime,
+                            anchorPrice: payload.anchorPrice ?? fallbackAnchorPrice
+                        )
+                    ),
+                    ordering: component.ordering
+                )
+
+            default:
+                return component
+            }
+        }
+
+        guard normalizedComponents != components else { return self }
+        return updating(components: normalizedComponents)
+    }
+
     func updating(
         intent: String? = nil,
         title: String? = nil,

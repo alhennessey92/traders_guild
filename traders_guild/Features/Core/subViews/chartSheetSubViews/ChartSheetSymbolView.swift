@@ -67,24 +67,29 @@ struct ChartSheetSymbolView: View {
     }
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Current Symbol Header
-            currentSymbolHeader
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 20) {
+                // Current Symbol Header
+                currentSymbolHeader
 
-            // Symbol Details
-            currentSymbolDetailsSection
-            
-            // Loading indicator
-            if chartViewModel.isLoadingData {
-                loadingIndicator
+                // Symbol Details
+                currentSymbolDetailsSection
+                
+                // Loading indicator
+                if chartViewModel.isLoadingData {
+                    loadingIndicator
+                }
+                
+                // Timeframe Selector
+                timeframeSection
+                
+                // Watchlist Section with Tabs
+                watchlistSection
             }
-            
-            // Timeframe Selector
-            timeframeSection
-            
-            // Watchlist Section with Tabs
-            watchlistSection
+            .padding(.bottom, 32)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnTapAndDragBackground()
         //.background(UnifiedStaticBackground())
         .confirmationDialog(
             "Remove from Personal Watchlist?",
@@ -165,7 +170,7 @@ struct ChartSheetSymbolView: View {
                             FlowLayout(spacing: 5) {
                                 Text(symbol.ticker)
                                     .font(.system(size: 11))
-                                    .foregroundColor(AppColors.surfaceWhite60)
+                                    .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
 
                                 // Market status
                                 SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
@@ -182,11 +187,11 @@ struct ChartSheetSymbolView: View {
 
                                 Text("•")
                                     .font(.system(size: 9))
-                                    .foregroundColor(AppColors.surfaceWhite40)
+                                    .foregroundColor(AppColors.surfaceDetailQuaternaryForeground)
 
                                 Text(symbol.assetClass.capitalized)
                                     .font(.system(size: 11))
-                                    .foregroundColor(AppColors.surfaceWhite60)
+                                    .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
                             }
                         }
                         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -347,7 +352,7 @@ struct ChartSheetSymbolView: View {
                     if isAddingToPersonal {
                         ProgressView()
                             .scaleEffect(0.6)
-                            .tint(inPersonal ? .yellow : AppColors.surfaceWhite70)
+                            .tint(inPersonal ? .yellow : AppColors.surfaceDetailSecondaryForeground)
                     } else {
                         Image(systemName: inPersonal ? "star.fill" : "star")
                             .font(.system(size: 12, weight: .semibold))
@@ -355,7 +360,7 @@ struct ChartSheetSymbolView: View {
                     Text("Personal")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(inPersonal ? .yellow : AppColors.surfaceWhite70)
+                .foregroundColor(inPersonal ? .yellow : AppColors.surfaceDetailSecondaryForeground)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
@@ -392,7 +397,7 @@ struct ChartSheetSymbolView: View {
                     if isRequestingGuild {
                         ProgressView()
                             .scaleEffect(0.6)
-                            .tint((inGuild || isRequested) ? .blue : AppColors.surfaceWhite70)
+                            .tint((inGuild || isRequested) ? .blue : AppColors.surfaceDetailSecondaryForeground)
                     } else {
                         Image(systemName: guildButtonIcon(inGuild: inGuild, isRequested: isRequested, canManage: canDirectlyManageGuildWatchlist))
                             .font(.system(size: 12, weight: .semibold))
@@ -556,7 +561,7 @@ struct ChartSheetSymbolView: View {
     private func guildButtonForegroundColor(inGuild: Bool, isRequested: Bool) -> Color {
         if inGuild { return .blue }
         if isRequested { return .orange }
-        return AppColors.surfaceWhite70
+        return AppColors.surfaceDetailSecondaryForeground
     }
 
     private func guildButtonBackgroundColor(inGuild: Bool, isRequested: Bool) -> Color {
@@ -963,7 +968,7 @@ struct AssetClassBadge: View {
             Text(assetClass.rawValue)
                 .font(.system(size: 10, weight: .medium))
         }
-        .foregroundColor(AppColors.surfaceWhite70)
+        .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(AppColors.surfaceWhite10)
@@ -1304,7 +1309,7 @@ struct SymbolProviderBadge: View {
     var body: some View {
         Text(provider)
             .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(AppColors.surfaceWhite90)
+            .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 6)
@@ -1318,7 +1323,7 @@ struct UnsupportedSymbolBadge: View {
     var body: some View {
         Text("Unsupported")
             .font(.system(size: 9, weight: .bold))
-            .foregroundColor(AppColors.surfaceWhite95)
+            .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(AppColors.statusNegative35)
@@ -1363,7 +1368,7 @@ struct SymbolActivityBadge: View {
                 .font(.system(size: 9, weight: .semibold))
                 .lineLimit(1)
         }
-        .foregroundColor(AppColors.surfaceWhite95)
+        .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
         .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
@@ -1380,12 +1385,12 @@ private struct SymbolDetailRow: View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(title)
                 .font(.caption)
-                .foregroundColor(AppColors.surfaceWhite65)
+                .foregroundColor(AppColors.surfaceDetailTertiaryForeground)
                 .frame(width: 110, alignment: .leading)
 
             Text(value)
                 .font(.caption.weight(.medium))
-                .foregroundColor(AppColors.surfaceWhite92)
+                .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -1507,10 +1512,10 @@ struct MarketSessionTimeline: View {
             HStack(spacing: 6) {
                 Image(systemName: "clock")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite70)
+                    .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
                 Text(exchangeTimeString)
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite90)
+                    .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
                 Spacer()
                 Text(countdownText)
                     .font(.system(size: 11, weight: .medium))
@@ -1531,7 +1536,7 @@ struct MarketSessionTimeline: View {
                 .fill(AppColors.symbolDetailCardFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                        .stroke(AppColors.symbolDetailCardStroke, lineWidth: 1)
                 )
         )
         .onReceive(timer) { _ in now = Date() }
@@ -1568,12 +1573,12 @@ struct MarketSessionTimeline: View {
 
                 Text(timeLabel(session.openHour, session.openMinute))
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite50)
+                    .foregroundColor(AppColors.surfaceDetailQuaternaryForeground)
                     .offset(x: max(0, openX - 10), y: 12)
 
                 Text(timeLabel(session.closeHour, session.closeMinute))
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite50)
+                    .foregroundColor(AppColors.surfaceDetailQuaternaryForeground)
                     .offset(x: min(w - 28, closeX - 10), y: 12)
             }
         }
@@ -1617,7 +1622,7 @@ struct MarketSessionTimeline: View {
                     ForEach(Array(["S", "M", "T", "W", "T", "F", "S"].enumerated()), id: \.offset) { _, day in
                         Text(day)
                             .font(.system(size: 7, weight: .medium, design: .monospaced))
-                            .foregroundColor(AppColors.surfaceWhite40)
+                            .foregroundColor(AppColors.surfaceDetailQuaternaryForeground)
                             .frame(width: dayWidth)
                     }
                 }
@@ -1651,7 +1656,7 @@ struct MarketSessionTimeline: View {
 
                 Text("24/7")
                     .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(AppColors.surfaceWhite50)
+                    .foregroundColor(AppColors.surfaceDetailQuaternaryForeground)
                     .offset(x: w / 2 - 10, y: 12)
             }
         }

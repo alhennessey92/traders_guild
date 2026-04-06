@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 
 // ================================================================================================
@@ -2034,6 +2035,7 @@ struct ContactSupportView: View {
                     }
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .dismissKeyboardOnTapAndDragBackground()
             } footer: {
                 VStack(spacing: 0) {
                     Divider()
@@ -2049,15 +2051,6 @@ struct ContactSupportView: View {
                     .padding(.top, 16)
                     .padding(.bottom, 20)
                     .background(AppColors.sheetBackground)
-                }
-            }
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        focusedField = nil
-                    }
-                    .foregroundColor(AppColors.accentColor)
                 }
             }
         }
@@ -2232,14 +2225,34 @@ struct AboutView: View {
                     VStack(spacing: 32) {
                         // App logo and name
                         VStack(spacing: 16) {
-                            Circle()
-                                .fill(AppColors.accentColor.opacity(0.3))
-                                .frame(width: 100, height: 100)
-                                .overlay(
+                            ZStack {
+                                if UIImage(named: "appiconbg") != nil {
+                                    Image("appiconbg")
+                                        .resizable()
+                                        .scaledToFill()
+                                } else {
+                                    Circle()
+                                        .fill(AppColors.accentColor.opacity(0.3))
+                                }
+
+                                if UIImage(named: "appiconlogo") != nil {
+                                    Image("appiconlogo")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .padding(18)
+                                } else {
                                     Text("TG")
                                         .font(.system(size: 40, weight: .bold))
                                         .foregroundColor(AppColors.accentColor)
-                                )
+                                }
+                            }
+                            .frame(width: 100, height: 100)
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
+                            )
+                            .shadow(color: AppColors.surfaceBlack20, radius: 12, x: 0, y: 6)
                             
                             Text("Traders Guild")
                                 .font(.title2)
@@ -2609,7 +2622,7 @@ struct SettingsTextField: View {
         if error != nil {
             return AppColors.bearCandleRed.opacity(isFocused ? 0.95 : 0.75)
         }
-        return isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.whiteText.opacity(0.15)
+        return isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.standardSearchFieldStroke
     }
 
     var body: some View {
@@ -2639,7 +2652,7 @@ struct SettingsTextField: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                    .fill(AppColors.standardSearchFieldFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -2701,11 +2714,11 @@ struct SettingsDropdownField: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                        .fill(AppColors.standardSearchFieldFill)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                        .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
                 )
             }
         }
@@ -2725,7 +2738,7 @@ struct SettingsSecureField: View {
         if error != nil {
             return AppColors.bearCandleRed.opacity(isFocused ? 0.95 : 0.75)
         }
-        return isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.whiteText.opacity(0.15)
+        return isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.standardSearchFieldStroke
     }
 
     var body: some View {
@@ -2759,7 +2772,7 @@ struct SettingsSecureField: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                    .fill(AppColors.standardSearchFieldFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)

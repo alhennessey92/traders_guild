@@ -230,6 +230,150 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func switchingAwayFromReactionIntentRemovesReactionEmojiState() {
+        let state = MarkerPlacementState()
+        let anchorTime = Date(timeIntervalSince1970: 1_700_000_000)
+
+        state.reset(to: .reaction, anchorTime: anchorTime, anchorPrice: 101.25)
+        state.upsertComponent(
+            .reactionEmoji,
+            payload: .reactionEmoji(state.anchoredEmojiPayload(emoji: "🔥"))
+        )
+
+        guard case let .reactionEmoji(payload)? = state.component(.reactionEmoji)?.payload else {
+            Issue.record("Expected reaction emoji draft before switching intents")
+            return
+        }
+        #expect(payload.emoji == "🔥")
+
+        state.setIntent(.analysis)
+
+        #expect(state.intent == .analysis)
+        #expect(state.component(.reactionEmoji) == nil)
+
+        let request = state.buildCreateRequest(
+            symbolId: UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!,
+            timeframe: RLChartTimeframe.h1.toBackendString()
+        )
+        #expect(request.components.contains(where: { $0.componentType == RLComponentType.reactionEmoji.rawValue }) == false)
+    }
+
+    @Test
+    func chartMarkerUINormalizesMissingAnnotationAnchors() {
+        let anchorTime = Date(timeIntervalSince1970: 1_700_000_321)
+        let anchorPrice = 104.75
+        let components = [
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.anchor.rawValue,
+                payload: .anchor(AnchorPayload(time: anchorTime, price: anchorPrice)),
+                ordering: 0
+            ),
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.textNote.rawValue,
+                payload: .note(NotePayload(text: "Hold here")),
+                ordering: 1
+            ),
+            RLMarkerComponentDTO(
+                id: UUID(),
+                componentType: RLComponentType.reactionEmoji.rawValue,
+                payload: .reactionEmoji(EmojiPayload(emoji: "🔥")),
+                ordering: 2
+            ),
+        ]
+
+        let marker = makeMarkerDTO(
+            author: makeMember(
+                userId: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!,
+                username: "author"
+            ),
+            intent: .reaction,
+            title: "Anchor Fix",
+            components: components,
+            candleTimestamp: anchorTime
+        )
+        let normalized = ChartMarkerUI(marker: marker, candleIndex: 12)
+
+        let notePayload = normalized.marker.components.first {
+            $0.componentType == RLComponentType.textNote.rawValue
+        }?.payload
+        let emojiPayload = normalized.marker.components.first {
+            $0.componentType == RLComponentType.reactionEmoji.rawValue
+        }?.payload
+
+        if case let .note(note)? = notePayload {
+            #expect(note.anchorTime == anchorTime)
+            #expect(note.anchorPrice == anchorPrice)
+        } else {
+            Issue.record("Expected normalized note payload")
+        }
+
+        if case let .reactionEmoji(emoji)? = emojiPayload {
+            #expect(emoji.anchorTime == anchorTime)
+            #expect(emoji.anchorPrice == anchorPrice)
+        } else {
+            Issue.record("Expected normalized reaction emoji payload")
+        }
+    }
+
+    @Test
+    func chartDrawingManagerCanCreateAnchoredEmojiAndNoteDrawings() {
+        let manager = ChartDrawingManager()
+        let anchor = ChartDrawingPoint(
+            time: Date(timeIntervalSince1970: 1_700_001_000),
+            price: 99.25
+        )
+
+        _ = manager.addDrawing(
+            type: .textNote,
+            points: [anchor],
+            colorHex: ChartDrawingType.textNote.defaultColorHex,
+            note: "Anchored note"
+        )
+        _ = manager.addDrawing(
+            type: .emoji,
+            points: [anchor],
+            colorHex: ChartDrawingType.emoji.defaultColorHex,
+            emoji: "🔥"
+        )
+
+        let noteDrawing = manager.drawings.first { $0.type == .textNote }
+        let emojiDrawing = manager.drawings.first { $0.type == .emoji }
+
+        #expect(noteDrawing?.points == [anchor])
+        #expect(emojiDrawing?.points == [anchor])
+    }
+
+    @Test
+    func legacyAnnotationNormalizationFreezesMissingPointAtFallbackOnce() {
+        let fallbackTime = Date(timeIntervalSince1970: 1_700_002_000)
+        let fallbackPrice = 108.5
+        let original = ChartDrawing(
+            type: .emoji,
+            colorHex: ChartDrawingType.emoji.defaultColorHex,
+            emoji: "🔥"
+        )
+
+        let normalized = ChartDrawingBridge.normalizedAnnotationDrawing(
+            from: original,
+            fallbackAnchorTime: fallbackTime,
+            fallbackAnchorPrice: fallbackPrice
+        )
+
+        #expect(normalized.points == [ChartDrawingPoint(time: fallbackTime, price: fallbackPrice)])
+
+        let laterFallback = Date(timeIntervalSince1970: 1_700_003_000)
+        let frozen = ChartDrawingBridge.normalizedAnnotationDrawing(
+            from: normalized,
+            fallbackAnchorTime: laterFallback,
+            fallbackAnchorPrice: 999
+        )
+
+        #expect(frozen.points == normalized.points)
+    }
+
+    @Test
     func prePlacementSnapshotRetainsMirrorSourceAndAttachesIndicators() {
         var activeBeforePlacement = ActiveIndicators()
         activeBeforePlacement.rsi = RSIConfig(period: 14)

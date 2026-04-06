@@ -127,7 +127,7 @@ struct ForgotPasswordView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .scrollDismissesKeyboard(.interactively)
-            .dismissKeyboardOnTapBackground()
+            .dismissKeyboardOnTapAndDragBackground()
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .toolbar {
@@ -148,7 +148,7 @@ struct ForgotPasswordView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             forgotPasswordFooter
         }
         .onAppear {

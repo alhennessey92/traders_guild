@@ -517,12 +517,23 @@ class ChartViewModel: ObservableObject {
     }
 
     private func syncChartDrawingPlacementFromManager() {
-        guard !isApplyingChartDrawingPlacementToManager else { return }
+        guard !isApplyingChartDrawingPlacementToManager, !isSyncingChartDrawingPlacementFromManager else { return }
         isSyncingChartDrawingPlacementFromManager = true
         defer { isSyncingChartDrawingPlacementFromManager = false }
 
         let anchorTime = dataManager.candles.last?.timestamp ?? Date()
         let anchorPrice = dataManager.candles.last?.close ?? 0
+        let normalizedDrawings = chartDrawingManager.drawings.map {
+            ChartDrawingBridge.normalizedAnnotationDrawing(
+                from: $0,
+                fallbackAnchorTime: anchorTime,
+                fallbackAnchorPrice: anchorPrice
+            )
+        }
+
+        if normalizedDrawings != chartDrawingManager.drawings {
+            chartDrawingManager.setDrawings(normalizedDrawings)
+        }
 
         let preservedNonDrawingComponents = chartComponentsPlacementState.components.filter {
             $0.componentType != .anchor && !isChartDrawingPlacementComponent($0.componentType)
@@ -541,7 +552,7 @@ class ChartViewModel: ObservableObject {
             )
         ]
         nextComponents.append(contentsOf: preservedNonDrawingComponents)
-        nextComponents.append(contentsOf: chartDrawingManager.drawings.map {
+        nextComponents.append(contentsOf: normalizedDrawings.map {
             ChartDrawingBridge.markerDraft(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
         })
         chartComponentsPlacementState.components = nextComponents

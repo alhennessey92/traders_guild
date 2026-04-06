@@ -2285,7 +2285,7 @@ struct ChartMarkerSystem {
         if isAlert, let severity = markerSeverity {
             drawContext.fill(circlePath, with: .color(severity.color.opacity(0.30)))
         } else {
-            drawContext.fill(circlePath, with: .color(Color.white.opacity(0.06)))
+            drawContext.fill(circlePath, with: .color(AppColors.canvasMarkerNeutralTint))
         }
 
         // 4. Stroke — thin white for standard, colored + thicker for alerts

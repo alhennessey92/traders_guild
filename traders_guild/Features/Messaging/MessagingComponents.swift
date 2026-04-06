@@ -248,6 +248,17 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable, MarkerListItemData {
     }
 }
 
+struct ChatComposerLayoutMetrics {
+    static let barHeight: CGFloat = 44
+    static let containerHorizontalPadding: CGFloat = 16
+    static let containerVerticalPadding: CGFloat = 10
+    static let attachmentPanelGap: CGFloat = 12
+
+    static var attachmentPanelBottomOffset: CGFloat {
+        barHeight + containerVerticalPadding + attachmentPanelGap
+    }
+}
+
 struct ChatReplyDraft: Equatable, Identifiable {
     let messageId: UUID
     let authorDisplayName: String
@@ -590,6 +601,9 @@ struct ChatInputFooter: View {
     @State private var markerPickerError: String? = nil
 
     private var isLightGreyChrome: Bool { ThemeManager.shared.currentTheme == .lightGrey }
+    private var actionPanelBottomOffset: CGFloat {
+        ChatComposerLayoutMetrics.attachmentPanelBottomOffset
+    }
 
     private var composerAccessoryIdleColor: Color {
         isLightGreyChrome ? AppColors.standardSearchFieldAccessory : Color.secondary
@@ -628,21 +642,6 @@ struct ChatInputFooter: View {
                     .padding(.top, 10)
                     .padding(.bottom, 10)
                     .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
-            if showActionPanel {
-                attachmentActionPanel
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .gesture(
-                        DragGesture(minimumDistance: 20)
-                            .onEnded { value in
-                                if value.translation.height > 40 {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        showActionPanel = false
-                                    }
-                                }
-                            }
-                    )
             }
 
             // @mention autocomplete suggestions
@@ -752,30 +751,44 @@ struct ChatInputFooter: View {
                     }
                 }
                 .padding(.leading, 10)
-                .frame(height: 44)
+                .frame(height: ChatComposerLayoutMetrics.barHeight)
                 .background(
-                    Group {
-                        if isLightGreyChrome {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 25)
-                                    .fill(AppColors.standardSearchFieldFill)
-                                RoundedRectangle(cornerRadius: 25)
-                                    .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
-                            }
-                        } else {
+                    RoundedRectangle(cornerRadius: 25)
+                        .fill(AppColors.standardSearchFieldFill)
+                        .overlay(
                             RoundedRectangle(cornerRadius: 25)
-                                .fill(AppColors.whiteText.opacity(0.08))
-                        }
-                    }
+                                .stroke(
+                                    AppColors.standardSearchFieldStroke.opacity(isLightGreyChrome ? 1 : 0.85),
+                                    lineWidth: 1
+                                )
+                        )
                 )
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, ChatComposerLayoutMetrics.containerHorizontalPadding)
+            .padding(.vertical, ChatComposerLayoutMetrics.containerVerticalPadding)
         }
         .background(
             ChatChromeBarBackground()
                 .ignoresSafeArea(edges: .bottom)
         )
+        .overlay(alignment: .bottom) {
+            if showActionPanel {
+                attachmentActionPanel
+                    .padding(.bottom, actionPanelBottomOffset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .gesture(
+                        DragGesture(minimumDistance: 20)
+                            .onEnded { value in
+                                if value.translation.height > 40 {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        showActionPanel = false
+                                    }
+                                }
+                            }
+                    )
+                    .zIndex(1)
+            }
+        }
         .compositingGroup()
         .onChange(of: showActionPanel) { _, newValue in
             isActionPanelVisible?.wrappedValue = newValue
@@ -910,19 +923,10 @@ struct ChatInputFooter: View {
         .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            AppColors.composerActionPanelGradientLeading,
-                            AppColors.composerActionPanelGradientTrailing,
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(AppColors.panelFillEmphasis)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppColors.surfaceWhite20, lineWidth: 1)
+                        .stroke(AppColors.standardSearchFieldStroke.opacity(0.8), lineWidth: 1)
                 )
         )
         .padding(.horizontal, 16)
@@ -1496,8 +1500,7 @@ struct ChatBackground: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            StaticPatternView()
-                .opacity(patternOpacity)
+            StaticPatternView(targetOpacity: patternOpacity)
         }
     }
 }
@@ -2159,9 +2162,33 @@ struct ChatHeader<LeftContent: View, CenterContent: View, RightContent: View>: V
             .padding(.horizontal, 20)
             .padding(.top, 20)
             .padding(.bottom, 16)
-            .background(AppColors.sheetBackground)
+            .background(ChatChromeBarBackground())
             
             Divider()
+        }
+    }
+}
+
+struct ChatSurfaceHeader<Content: View>: View {
+    var horizontalPadding: CGFloat = 16
+    var topPadding: CGFloat = 20
+    var bottomPadding: CGFloat = 14
+    var showsDivider: Bool = true
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content()
+                .padding(.horizontal, horizontalPadding)
+                .padding(.top, topPadding)
+                .padding(.bottom, bottomPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(ChatChromeBarBackground())
+
+            if showsDivider {
+                Divider()
+                    .background(AppColors.surfaceGray30)
+            }
         }
     }
 }

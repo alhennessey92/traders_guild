@@ -79,7 +79,7 @@ struct RLUserDMRowView: View {
                         Text(participant.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundColor(thread.isBlocked ? AppColors.greyText : AppColors.whiteText)
+                            .foregroundColor(thread.isBlocked ? AppColors.greyText : AppColors.listRowPrimaryForeground)
                         
                         // Friend indicator
                         if participant.isFriend {
@@ -103,7 +103,7 @@ struct RLUserDMRowView: View {
                     if let lastMessage = thread.lastMessage {
                         Text(lastMessage.content)
                             .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.5))
+                            .foregroundColor(AppColors.listRowSecondaryForeground)
                             .lineLimit(1)
                     }
                 }
@@ -115,7 +115,7 @@ struct RLUserDMRowView: View {
                     // Last activity time
                     Text(thread.lastActivityFormatted)
                         .font(.caption2)
-                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                        .foregroundColor(AppColors.listRowTertiaryForeground)
                     
                     // Unread badge (numbered, matching chatroom rows)
                     if thread.hasUnread {

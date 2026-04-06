@@ -180,7 +180,7 @@ struct SignupGuildView: View {
                     .padding(.top, 20)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .dismissKeyboardOnTapBackground()
+                .dismissKeyboardOnTapAndDragBackground()
             }
         }
         .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
@@ -206,7 +206,7 @@ struct SignupGuildView: View {
                     .foregroundColor(AppColors.fadedBackground)
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
@@ -646,7 +646,7 @@ struct SignupProfileSetupView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .dismissKeyboardOnTapBackground()
+            .dismissKeyboardOnTapAndDragBackground()
         }
         .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
@@ -671,7 +671,7 @@ struct SignupProfileSetupView: View {
                     .foregroundColor(AppColors.fadedBackground)
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 10) {
                 Divider()
                     .frame(height: 1)

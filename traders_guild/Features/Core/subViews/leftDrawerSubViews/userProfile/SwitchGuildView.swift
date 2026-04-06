@@ -125,13 +125,6 @@ struct SwitchGuildView: View {
             
             Divider()
 
-            Text("Guild actions")
-                .font(.caption)
-                .foregroundColor(AppColors.greyText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 25)
-                .padding(.top, 10)
-
             HStack(spacing: 8) {
                 DrawerActionButton(
                     title: "Join a Guild",
@@ -164,7 +157,7 @@ struct SwitchGuildView: View {
                 )
             }
             .padding(.horizontal, 25)
-            .padding(.top, 6)
+            .padding(.top, 10)
             .padding(.bottom, 14)
             .background(AppColors.sheetBackground)
         }
@@ -1247,7 +1240,7 @@ struct GuildDetailView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                 if isJoining {
@@ -1551,7 +1544,7 @@ struct JoinGuildFormView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                 if isSubmitting {
@@ -2035,7 +2028,7 @@ struct CreateGuildView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                 if isCreating {

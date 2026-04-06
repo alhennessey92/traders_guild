@@ -16,22 +16,14 @@
     {
       "layers" : [
         {
-          "glass" : true,
-          "image-name" : "appiconlogo.png",
-          "name" : "appiconlogo",
-          "position" : {
-            "scale" : 1,
-            "translation-in-points" : [
-              0,
-              0
-            ]
-          }
+          "image-name" : "TG 3.png",
+          "name" : "iconText"
         },
         {
-          "blend-mode" : "normal",
-          "glass" : true,
-          "image-name" : "appiconbg.png",
-          "name" : "appiconbg"
+          "blend-mode" : "soft-light",
+          "hidden" : false,
+          "image-name" : "appiconbg 2.png",
+          "name" : "iconBG"
         }
       ],
       "shadow" : {

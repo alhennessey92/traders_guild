@@ -4659,17 +4659,11 @@ struct TradingChartView: View {
         guard let anchorPrice else { return nil }
 
         let anchorY = coordinateSystem.yPosition(forPrice: anchorPrice)
-        let anchorX: CGFloat
-        if let anchorTime,
-           let anchorIndex = coordinateSystem.candleIndex(forTimestamp: anchorTime) {
-            anchorX = coordinateSystem.xCenterPosition(forCandleIndex: anchorIndex)
-        } else if effectiveCandleIndex >= 0 && effectiveCandleIndex < chartData.candles.count {
-            anchorX = coordinateSystem.xCenterPosition(forCandleIndex: effectiveCandleIndex)
-        } else if let lastIndex = chartData.candles.indices.last {
-            anchorX = coordinateSystem.xCenterPosition(forCandleIndex: lastIndex)
-        } else {
+        guard let anchorTime,
+              let anchorIndex = coordinateSystem.candleIndex(forTimestamp: anchorTime) else {
             return nil
         }
+        let anchorX = coordinateSystem.xCenterPosition(forCandleIndex: anchorIndex)
 
         return CGPoint(x: anchorX, y: anchorY)
     }

@@ -64,23 +64,24 @@ struct UnifiedDisclosureGroup<Content: View>: View {
                     
                     Text("(\(count))")
                         .font(.caption)
-                        .foregroundColor(AppColors.surfaceWhite50)
+                        .foregroundColor(AppColors.disclosureMetaForeground)
                     
                     Spacer()
                     
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite50)
+                        .foregroundColor(AppColors.disclosureChevronForeground)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(
-                    LinearGradient(
-                        colors: [AppColors.subtleSurfaceOverlay08, AppColors.subtleSurfaceOverlay04],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+                    Capsule()
+                        .fill(AppColors.standardSearchFieldFill)
+                        .overlay(
+                            Capsule()
+                                .stroke(AppColors.standardSearchFieldStroke.opacity(0.85), lineWidth: 1)
+                        )
                 )
                 .clipShape(Capsule())
             }
@@ -137,20 +138,12 @@ struct UnifiedDisclosureGroupCustomHeader<Header: View, Content: View>: View {
 
 @ViewBuilder
 private func unifiedSearchCapsuleBackground() -> some View {
-    if ThemeManager.shared.currentTheme == .lightGrey {
-        ZStack {
-            Capsule()
-                .fill(AppColors.standardSearchFieldFill)
+    Capsule()
+        .fill(AppColors.standardSearchFieldFill)
+        .overlay(
             Capsule()
                 .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
-        }
-    } else {
-        LinearGradient(
-            colors: [AppColors.searchBarGradientLeading, AppColors.searchBarGradientTrailing],
-            startPoint: .leading,
-            endPoint: .trailing
         )
-    }
 }
 
 private var unifiedSearchAccessoryForeground: Color {
@@ -489,10 +482,10 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
                 if let count = count, count > 0 {
                     Text("(\(count))")
                         .font(.system(size: size.labelSize - 2))
-                        .foregroundColor(isSelected ? AppColors.surfaceWhite70 : AppColors.tabPillUnselectedLabel)
+                        .foregroundColor(isSelected ? AppColors.tabPillSelectedLabel : AppColors.tabPillUnselectedLabel)
                 }
             }
-            .foregroundColor(isSelected ? .white : AppColors.tabPillUnselectedLabel)
+            .foregroundColor(isSelected ? AppColors.tabPillSelectedLabel : AppColors.tabPillUnselectedLabel)
             .padding(.horizontal, isSelected ? size.horizontalPadding : size.horizontalPadding - 2)
             .padding(.vertical, size.verticalPadding)
             .background(
@@ -593,7 +586,7 @@ struct UnifiedCategoryTabButton<Tab: UnifiedTabItem>: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            .foregroundColor(isSelected ? .white : AppColors.tabPillUnselectedLabel)
+            .foregroundColor(isSelected ? AppColors.tabPillSelectedLabel : AppColors.tabPillUnselectedLabel)
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
             .background(isSelected ? selectedGradient : unselectedGradient)
@@ -753,7 +746,7 @@ struct UnifiedEmptyState: View {
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(AppColors.surfaceWhite70)
+                .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
             
             if let subtitle = subtitle {
                 Text(subtitle)
@@ -781,11 +774,11 @@ struct UnifiedNoResultsState: View {
             
             Text(searchText.isEmpty ? message : "No results for '\(searchText)'")
                 .font(.subheadline)
-                .foregroundColor(AppColors.surfaceWhite50)
-            
+                .foregroundColor(AppColors.disclosureMetaForeground)
+
             Text(suggestion)
                 .font(.caption)
-                .foregroundColor(AppColors.surfaceWhite40)
+                .foregroundColor(AppColors.surfaceDetailQuaternaryForeground)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -2497,7 +2490,7 @@ struct UnifiedSetupProgressStrip: View {
             Spacer()
 
             Text("ENTRY \(priceText(metrics.entryPrice))")
-                .foregroundColor(AppColors.surfaceWhite70)
+                .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
 
             Spacer()
 
@@ -2524,9 +2517,9 @@ struct UnifiedSetupProgressStrip: View {
             VStack(spacing: 1) {
                 Text("ENTRY")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(AppColors.surfaceWhite50)
+                    .foregroundColor(AppColors.surfaceDetailQuaternaryForeground)
                 Text(priceText(metrics.entryPrice))
-                    .foregroundColor(AppColors.surfaceWhite70)
+                    .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
             }
 
             Spacer()

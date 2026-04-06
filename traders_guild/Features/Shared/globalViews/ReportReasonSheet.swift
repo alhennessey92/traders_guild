@@ -65,45 +65,60 @@ struct ReportReasonSheet: View {
     }
 
     var body: some View {
-        NavigationView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(message)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal)
-                    .padding(.bottom, 16)
+        NavigationStack {
+            ZStack {
+                AppColors.sheetBackground
+                    .ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(reasons, id: \.rawValue) { reason in
-                            Button {
-                                onReasonSelected(reason.apiValue)
-                            } label: {
-                                HStack {
-                                    Text(reason.displayName)
-                                        .font(.body)
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(PlainButtonStyle())
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text(message)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
 
-                            if reason != reasons.last {
-                                Divider()
-                                    .padding(.leading, 16)
+                        VStack(spacing: 10) {
+                            ForEach(reasons, id: \.rawValue) { reason in
+                                Button {
+                                    onReasonSelected(reason.apiValue)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(reason.displayName)
+                                                .font(.body.weight(.semibold))
+                                                .foregroundColor(AppColors.primaryForeground)
+                                            Text("Send this reason to moderators for review.")
+                                                .font(.caption)
+                                                .foregroundColor(AppColors.greyText)
+                                        }
+
+                                        Spacer()
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundColor(AppColors.adaptiveAccessoryForeground)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(AppColors.panelFillEmphasis)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 14)
+                                                    .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
+                                            )
+                                    )
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 24)
                     }
-                    .background(Color(.systemBackground))
                 }
             }
-            .background(Color(.systemGroupedBackground))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -111,6 +126,7 @@ struct ReportReasonSheet: View {
                     Button("Cancel") {
                         onCancel()
                     }
+                    .foregroundColor(AppColors.accentColor)
                 }
             }
         }

@@ -261,6 +261,10 @@ struct ChartSettingsView: View {
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(AppColors.insetPanelBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AppColors.standardSearchFieldStroke.opacity(0.65), lineWidth: 1)
+                )
         )
     }
 
@@ -276,6 +280,10 @@ struct ChartSettingsView: View {
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(AppColors.insetPanelBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(AppColors.standardSearchFieldStroke.opacity(0.65), lineWidth: 1)
+                    )
             )
     }
 
@@ -317,6 +325,10 @@ struct ChartSettingsView: View {
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(AppColors.insetPanelBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AppColors.standardSearchFieldStroke.opacity(0.65), lineWidth: 1)
+                )
         )
     }
 }

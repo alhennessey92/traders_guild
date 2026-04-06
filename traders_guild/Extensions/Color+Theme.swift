@@ -207,6 +207,7 @@ enum AppColors {
     static let surfaceWhite11 = systemWhite.opacity(0.11)
     static let surfaceWhite12 = systemWhite.opacity(0.12)
     static let surfaceWhite14 = systemWhite.opacity(0.14)
+    static let surfaceWhite16 = systemWhite.opacity(0.16)
     static let surfaceWhite15 = systemWhite.opacity(0.15)
     static let surfaceWhite18 = systemWhite.opacity(0.18)
     static let surfaceWhite20 = systemWhite.opacity(0.2)
@@ -622,10 +623,10 @@ enum AppColors {
         isLightGrey ? placementBarUnselectedForeground : gradientBackgroundDark.opacity(0.8)
     }
 
-    /// Canvas marker blob fill. Dark/MidGrey: near-black; LightGrey: mid grey so white glyphs read.
+    /// Canvas marker blob fill. Dark/MidGrey: near-black; LightGrey: softened mid-grey so marker chrome doesn't feel too heavy.
     static var canvasMarkerFill: Color {
         isLightGrey
-            ? Color(red: 102.0 / 255, green: 106.0 / 255, blue: 116.0 / 255).opacity(0.92)
+            ? Color(red: 136.0 / 255, green: 140.0 / 255, blue: 150.0 / 255).opacity(0.90)
             : Color(white: 0.11).opacity(0.94)
     }
 
@@ -633,6 +634,11 @@ enum AppColors {
     static var canvasMarkerShadow: Color {
         isLightGrey ? Color.black.opacity(0.10)
                     : Color.black.opacity(0.25)
+    }
+
+    /// Extra tint over non-alert markers so lightGrey markers feel softer without losing contrast.
+    static var canvasMarkerNeutralTint: Color {
+        isLightGrey ? Color.white.opacity(0.12) : Color.white.opacity(0.06)
     }
 
     /// Viewport dimming color for timeframe panels. Black on all themes.
@@ -648,30 +654,30 @@ enum AppColors {
     /// Chat / DM list row pill. Dark/Mid: white 3% / 10% pressed.
     static var messagingListRowFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.07)
-        case .midGrey, .dark: return Color.white.opacity(0.03)
+        case .lightGrey: return tgWhiteText.opacity(0.10)
+        case .midGrey, .dark: return Color.white.opacity(0.10)
         }
     }
 
     static var messagingListRowFillPressed: Color {
         switch theme {
         case .lightGrey: return tgWhiteText.opacity(0.12)
-        case .midGrey, .dark: return Color.white.opacity(0.10)
+        case .midGrey, .dark: return Color.white.opacity(0.14)
         }
     }
 
     /// Guild user list row. Dark/Mid: white 3% / 6% pressed.
     static var userListRowFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.07)
-        case .midGrey, .dark: return Color.white.opacity(0.03)
+        case .lightGrey: return tgWhiteText.opacity(0.10)
+        case .midGrey, .dark: return Color.white.opacity(0.09)
         }
     }
 
     static var userListRowFillPressed: Color {
         switch theme {
         case .lightGrey: return tgWhiteText.opacity(0.11)
-        case .midGrey, .dark: return Color.white.opacity(0.06)
+        case .midGrey, .dark: return Color.white.opacity(0.12)
         }
     }
 
@@ -708,8 +714,8 @@ enum AppColors {
     /// Symbol sheet timeframe section container. Dark/Mid: surfaceWhite05.
     static var symbolSheetGroupedPanelFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.12)
-        case .midGrey, .dark: return surfaceWhite05
+        case .lightGrey: return tgWhiteText.opacity(0.16)
+        case .midGrey, .dark: return surfaceWhite12
         }
     }
 
@@ -732,14 +738,14 @@ enum AppColors {
     static var markerListCapsuleFill: Color {
         switch theme {
         case .lightGrey: return tgWhiteText.opacity(0.07)
-        case .midGrey, .dark: return surfaceWhite04
+        case .midGrey, .dark: return surfaceWhite10
         }
     }
 
     static var markerListCapsuleStroke: Color {
         switch theme {
         case .lightGrey: return tgWhiteText.opacity(0.11)
-        case .midGrey, .dark: return surfaceWhite08
+        case .midGrey, .dark: return surfaceWhite18
         }
     }
 
@@ -800,15 +806,15 @@ enum AppColors {
     /// Symbol details expanded card. Dark/Mid: surfaceWhite08 fill / surfaceWhite12 stroke.
     static var symbolDetailCardFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.07)
-        case .midGrey, .dark: return surfaceWhite08
+        case .lightGrey: return tgWhiteText.opacity(0.11)
+        case .midGrey, .dark: return surfaceWhite16
         }
     }
 
     static var symbolDetailCardStroke: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.12)
-        case .midGrey, .dark: return surfaceWhite12
+        case .lightGrey: return tgWhiteText.opacity(0.20)
+        case .midGrey, .dark: return surfaceWhite24
         }
     }
 
@@ -821,11 +827,76 @@ enum AppColors {
         isLightGrey ? tgMidGrey : Color.white.opacity(0.5)
     }
 
+    /// Count/meta text on disclosure headers and compact chrome.
+    static var disclosureMetaForeground: Color {
+        isLightGrey ? secondaryForeground : surfaceWhite50
+    }
+
+    static var disclosureChevronForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.82) : surfaceWhite50
+    }
+
+    /// Selected label on shared capsule tabs.
+    static var tabPillSelectedLabel: Color {
+        isLightGrey ? primaryForeground : .white
+    }
+
+    /// Primary/secondary text for list rows that sit on adaptive light surfaces in lightGrey.
+    static var listRowPrimaryForeground: Color {
+        isLightGrey ? primaryForeground : whiteText
+    }
+
+    static var listRowSecondaryForeground: Color {
+        isLightGrey ? secondaryForeground : whiteText.opacity(0.6)
+    }
+
+    static var listRowTertiaryForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.88) : whiteText.opacity(0.5)
+    }
+
+    static var listRowChevronForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.65) : whiteText.opacity(0.3)
+    }
+
+    /// Drawer headers sit on the same pale chrome as other lightGrey surfaces.
+    static var drawerHeaderPrimaryForeground: Color {
+        isLightGrey ? primaryForeground : whiteText
+    }
+
+    static var drawerHeaderSecondaryForeground: Color {
+        isLightGrey ? secondaryForeground : whiteText.opacity(0.7)
+    }
+
+    static var drawerSectionTitleForeground: Color {
+        isLightGrey ? primaryForeground.opacity(0.96) : whiteText.opacity(0.95)
+    }
+
+    static var drawerSectionDismissForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.9) : whiteText.opacity(0.8)
+    }
+
+    /// Text/icons that sit inside symbol detail cards and similar pale surfaces.
+    static var surfaceDetailPrimaryForeground: Color {
+        isLightGrey ? primaryForeground : surfaceWhite92
+    }
+
+    static var surfaceDetailSecondaryForeground: Color {
+        isLightGrey ? secondaryForeground : surfaceWhite70
+    }
+
+    static var surfaceDetailTertiaryForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.9) : surfaceWhite65
+    }
+
+    static var surfaceDetailQuaternaryForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.78) : surfaceWhite50
+    }
+
     // MARK: - Chat background overlays & pattern strength
 
     static var chatBackgroundOverlayStandardStart: Color {
         switch theme {
-        case .lightGrey: return Color.black.opacity(0.045)
+        case .lightGrey: return Color.black.opacity(0.03)
         case .midGrey, .dark: return surfaceWhite03
         }
     }
@@ -846,12 +917,12 @@ enum AppColors {
         }
     }
 
-    /// Multiplier on `StaticPatternView` when used inside `ChatBackground`.
-    static var chatBackgroundPatternMultiplyStandard: Double { isLightGrey ? 0.24 : 0.06 }
-    static var chatBackgroundPatternMultiplyElevated: Double { isLightGrey ? 0.30 : 0.10 }
+    /// Target opacity for the chat message-area pattern. Use a direct value rather than multiplying the inline pattern twice.
+    static var chatBackgroundPatternMultiplyStandard: Double { isLightGrey ? 0.026 : 0.020 }
+    static var chatBackgroundPatternMultiplyElevated: Double { isLightGrey ? 0.036 : 0.028 }
 
     /// Scales `StaticPatternView` in guild discover/switch/create flows (lightGrey only).
-    static var guildFlowPatternOpacityScale: Double { isLightGrey ? 0.58 : 1.0 }
+    static var guildFlowPatternOpacityScale: Double { isLightGrey ? 0.42 : 1.0 }
 
     /// Selected row highlight on guild switch list (accent fill/stroke opacity).
     static var guildSwitchRowSelectedFillOpacity: Double { isLightGrey ? 0.24 : 0.16 }
@@ -859,11 +930,11 @@ enum AppColors {
 
     /// Discover-style search field (capsule fill + stroke). Light uses explicit fill; dark/mid keep gradient-leading as flat fallback.
     static var standardSearchFieldFill: Color {
-        isLightGrey ? unhighlightedTextBoxBackground.opacity(0.92) : searchBarGradientLeading
+        isLightGrey ? tgWhiteText.opacity(0.10) : surfaceWhite16
     }
 
     static var standardSearchFieldStroke: Color {
-        isLightGrey ? tgWhiteText.opacity(0.2) : surfaceWhite12
+        isLightGrey ? tgWhiteText.opacity(0.24) : surfaceWhite24
     }
 
     static var standardSearchFieldAccessory: Color {
@@ -887,10 +958,10 @@ enum AppColors {
     static var inlineHoneycombPatternOpacity: Double { isLightGrey ? 0.055 : 0.02 }
 
     /// `StaticMessagingBackgroundView` honeycomb fade-in target.
-    static var messagingSheetHoneycombPatternOpacity: Double { isLightGrey ? 0.048 : 0.02 }
+    static var messagingSheetHoneycombPatternOpacity: Double { isLightGrey ? 0.032 : 0.02 }
 
     /// Main chart root honeycomb (light theme only branch uses this).
-    static let chartLightGreyHoneycombOpacity: Double = 0.028
+    static let chartLightGreyHoneycombOpacity: Double = 0.018
 
     /// Modal surfaces that used `UIColor.systemBackground` / `systemGray6`. Light: TG palette; dark/mid: system dynamic.
     static var duplicateDialogCardBackground: Color {
@@ -910,16 +981,16 @@ enum AppColors {
     /// Profile/settings inset blocks (was surfaceWhite03). Dark/Mid: unchanged.
     static var insetPanelBackground: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.05)
-        case .midGrey, .dark: return surfaceWhite03
+        case .lightGrey: return tgWhiteText.opacity(0.09)
+        case .midGrey, .dark: return surfaceWhite10
         }
     }
 
     /// Stronger flat panel (was surfaceWhite10).
     static var panelFillEmphasis: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.11)
-        case .midGrey, .dark: return surfaceWhite10
+        case .lightGrey: return tgWhiteText.opacity(0.16)
+        case .midGrey, .dark: return surfaceWhite18
         }
     }
 

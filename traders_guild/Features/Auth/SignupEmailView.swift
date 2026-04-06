@@ -199,7 +199,7 @@ struct SignupEmailView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .scrollDismissesKeyboard(.interactively)
-            .dismissKeyboardOnTapBackground()
+            .dismissKeyboardOnTapAndDragBackground()
             .onChange(of: email) { _, _ in
                 emailAvailabilityError = nil
             }
@@ -235,7 +235,7 @@ struct SignupEmailView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)

@@ -482,12 +482,12 @@ struct MainDrawerView: View {
                     Text("\(memberCount)")
                         .font(.caption)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.whiteText)
+                        .foregroundColor(AppColors.drawerHeaderPrimaryForeground)
                     + Text(" Members")
                         .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        .foregroundColor(AppColors.drawerHeaderSecondaryForeground)
                     Circle()
-                        .fill(AppColors.whiteText.opacity(0.7))
+                        .fill(AppColors.drawerHeaderSecondaryForeground)
                         .frame(width: 5, height: 5)
                         .padding(.top, 1)
                         .padding(.leading, 3)
@@ -495,10 +495,10 @@ struct MainDrawerView: View {
                     Text("\(onlineCount)")
                         .font(.caption)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.whiteText)
+                        .foregroundColor(AppColors.drawerHeaderPrimaryForeground)
                     + Text(" Online")
                         .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        .foregroundColor(AppColors.drawerHeaderSecondaryForeground)
                     Circle()
                         .fill(AppColors.bullCandleGreen)
                         .frame(width: 7, height: 7)
@@ -520,9 +520,9 @@ struct MainDrawerView: View {
                         .foregroundColor(AppColors.accentColor)
                     + Text(" Guild Reputation")
                         .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        .foregroundColor(AppColors.drawerHeaderSecondaryForeground)
                     Circle()
-                        .fill(AppColors.whiteText.opacity(0.7))
+                        .fill(AppColors.drawerHeaderSecondaryForeground)
                         .frame(width: 5, height: 5)
                         .padding(.top, 1)
                         .padding(.leading, 3)
@@ -530,17 +530,17 @@ struct MainDrawerView: View {
                     Text(guildAccuracyDisplay)
                         .font(.caption)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.whiteText)
+                        .foregroundColor(AppColors.drawerHeaderPrimaryForeground)
                     + Text(" Guild Accuracy")
                         .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        .foregroundColor(AppColors.drawerHeaderSecondaryForeground)
                     Spacer()
                 }
                 .padding(.top, 6)
                 
                 Text("\(rlGuild.description ?? "No Description Provided")")
                     .font(.caption)
-                    .foregroundColor(AppColors.whiteText.opacity(0.7))
+                    .foregroundColor(AppColors.drawerHeaderSecondaryForeground)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 4)
                     .multilineTextAlignment(.leading)
@@ -590,9 +590,9 @@ struct MainDrawerView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
-                            .tint(AppColors.whiteText)
+                            .tint(AppColors.drawerHeaderPrimaryForeground)
                         Text("Loading...")
-                            .foregroundColor(AppColors.whiteText)
+                            .foregroundColor(AppColors.drawerHeaderPrimaryForeground)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(AppColors.gradientBackgroundDark.opacity(0.9))
@@ -669,7 +669,7 @@ struct SectionDrawerView: View {
                                 .font(.headline)
                                 .fontWeight(.medium)
                         }
-                        .foregroundColor(AppColors.whiteText.opacity(0.95))
+                        .foregroundColor(AppColors.drawerSectionTitleForeground)
                     }
                     
                     Spacer()
@@ -680,7 +680,7 @@ struct SectionDrawerView: View {
                         Image(systemName: "xmark")
                             .font(.title3)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText.opacity(0.8))
+                            .foregroundColor(AppColors.drawerSectionDismissForeground)
                             
                     }
                 }
@@ -692,7 +692,7 @@ struct SectionDrawerView: View {
                     Text(sectionTitle)
                         .font(.title)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.whiteText)
+                        .foregroundColor(AppColors.drawerSectionTitleForeground)
                     
                     Spacer(minLength: 0)
                 }
@@ -817,13 +817,13 @@ struct DrawerMenuButton: View {
                 Image(systemName: icon)
                     .font(.headline)
                     .fontWeight(.medium)
-                    .foregroundColor(AppColors.whiteText)
+                    .foregroundColor(AppColors.drawerHeaderPrimaryForeground)
                     .frame(width: 38, alignment: .leading)
                 
                 Text(title)
                     .font(.title3)
                     .fontWeight(.semibold)
-                    .foregroundColor(AppColors.whiteText)
+                    .foregroundColor(AppColors.drawerHeaderPrimaryForeground)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let badge {

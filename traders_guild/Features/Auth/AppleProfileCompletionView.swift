@@ -104,7 +104,7 @@ struct AppleProfileCompletionView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .scrollDismissesKeyboard(.interactively)
-            .dismissKeyboardOnTapBackground()
+            .dismissKeyboardOnTapAndDragBackground()
             .onAppear {
                 if name.isEmpty {
                     name = data.name
@@ -123,16 +123,9 @@ struct AppleProfileCompletionView: View {
                         .fontWeight(.heavy)
                         .foregroundColor(AppColors.fadedBackground)
                 }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        dismissKeyboard()
-                    }
-                    .font(.subheadline.weight(.semibold))
-                }
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)

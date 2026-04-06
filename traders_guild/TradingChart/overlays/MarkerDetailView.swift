@@ -583,9 +583,6 @@ struct CommentsView: View {
         VStack(spacing: 0) {
             markerChatHeader
 
-            Divider()
-                .background(AppColors.surfaceGray30)
-
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     if sortedComments.isEmpty {
@@ -662,6 +659,7 @@ struct CommentsView: View {
                 }
             }
         }
+        .background(ChatBackground())
         .overlay {
             ChatSurfaceOverlayHost(
                 messages: sortedComments,
@@ -688,7 +686,7 @@ struct CommentsView: View {
                 }
             )
         }
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset(mode: .chat, background: AnyView(ChatChromeBarBackground())) {
             MarkerCommentInputFooter(
                 commentText: $commentText,
                 replyDraft: $replyDraft,
@@ -728,32 +726,31 @@ struct CommentsView: View {
     }
 
     private var markerChatHeader: some View {
-        HStack(spacing: 12) {
-            UnifiedMarkerBadge(
-                intent: liveMarker.intent,
-                alertSeverity: liveMarker.alertSeverity,
-                sizeToken: .medium,
-                emoji: liveMarker.intent == .reaction ? liveMarker.selectedEmoji : nil
-            )
+        ChatSurfaceHeader(horizontalPadding: 16, topPadding: 20, bottomPadding: 16) {
+            HStack(spacing: 12) {
+                UnifiedMarkerBadge(
+                    intent: liveMarker.intent,
+                    alertSeverity: liveMarker.alertSeverity,
+                    sizeToken: .medium,
+                    emoji: liveMarker.intent == .reaction ? liveMarker.selectedEmoji : nil
+                )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(liveMarker.intent.displayName) Chat")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.primaryForeground)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(liveMarker.intent.displayName) Chat")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.primaryForeground)
 
-                Text("@\(liveMarker.author.username) • \(liveMarker.timeframe.uppercased()) • \(comments.count) comments")
-                    .font(.caption)
-                    .foregroundColor(AppColors.secondaryForeground)
+                    Text("@\(liveMarker.author.username) • \(liveMarker.timeframe.uppercased()) • \(comments.count) comments")
+                        .font(.caption)
+                        .foregroundColor(AppColors.secondaryForeground)
+                }
+
+                Spacer()
+
+                ActiveUsersPill(count: participantCount)
             }
-
-            Spacer()
-
-            ActiveUsersPill(count: participantCount)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
-        .padding(.top, 20)
     }
     
     // MARK: - Actions

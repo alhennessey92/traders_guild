@@ -2133,7 +2133,6 @@ struct ChartBottomSheet: View {
     private var shouldIgnoreKeyboardSafeArea: Bool {
         if isMarkerDetailActive && markerDetailTab == .chat { return false }
         if selectedView == .chat && isExpanded { return false }
-        if controlViewModel.isMarkerPlacementMode && placementState.isTextInputFocused { return false }
         return true
     }
 
@@ -2149,7 +2148,11 @@ struct ChartBottomSheet: View {
     var body: some View {
         Group {
             if selectedView == .chat && isExpanded && !controlViewModel.isMarkerPlacementMode && !isMarkerDetailActive {
-                KeyboardAwareBottomInsetContainer(showsDivider: true) {
+                KeyboardAwareBottomInsetContainer(
+                    showsDivider: true,
+                    mode: .chat,
+                    footerBackground: AnyView(ChatChromeBarBackground())
+                ) {
                     sheetPrimaryContent
                 } footer: {
                     chatInputFooter
@@ -2511,6 +2514,7 @@ struct ChartBottomSheet: View {
         }
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard)
+        .background(bottomTabBarContainerBackground)
         .background(
             GeometryReader { geo in
                 let frame = geo.frame(in: .global)
@@ -2541,6 +2545,15 @@ struct ChartBottomSheet: View {
 
     private var bottomBarUnselectedForeground: Color {
         AppColors.placementBarUnselectedForeground
+    }
+
+    private var bottomTabBarContainerBackground: Color {
+        switch ThemeManager.shared.currentTheme {
+        case .lightGrey, .dark:
+            return AppColors.sheetBackground
+        case .midGrey:
+            return .clear
+        }
     }
 
     private var placementTabBar: some View {
@@ -2632,6 +2645,7 @@ struct ChartBottomSheet: View {
         }
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard)
+        .background(bottomTabBarContainerBackground)
     }
     
     
@@ -2958,6 +2972,7 @@ struct ChartBottomSheet: View {
         }
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard, edges: markerDetailTab == .chat ? [] : .bottom)
+        .background(bottomTabBarContainerBackground)
     }
 
     private var canEditSelectedMarker: Bool {

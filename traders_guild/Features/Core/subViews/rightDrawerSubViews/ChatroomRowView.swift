@@ -36,7 +36,7 @@ struct RLChatroomRowView: View {
                     Text(chatroom.displayIcon)
                         .font(.title2.weight(.bold))
                         .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        .foregroundColor(AppColors.listRowSecondaryForeground)
                     
                     // Pinned indicator
                     if chatroom.isPinned {
@@ -53,7 +53,7 @@ struct RLChatroomRowView: View {
                         Text(chatroom.name)
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppColors.whiteText)
+                            .foregroundColor(AppColors.listRowPrimaryForeground)
                         
                         if chatroom.isMuted {
                             Image(systemName: "speaker.slash.fill")
@@ -70,7 +70,7 @@ struct RLChatroomRowView: View {
                             Text(lastMessage.content)
                         }
                         .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        .foregroundColor(AppColors.listRowSecondaryForeground)
                         .lineLimit(1)
                     } else {
                         Text(
@@ -79,7 +79,7 @@ struct RLChatroomRowView: View {
                             : "No description yet"
                         )
                         .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.6))
+                        .foregroundColor(AppColors.listRowSecondaryForeground)
                         .lineLimit(1)
                     }
                 }
@@ -90,7 +90,7 @@ struct RLChatroomRowView: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(chatroom.lastActivityFormatted)
                         .font(.caption2)
-                        .foregroundColor(AppColors.whiteText.opacity(0.5))
+                        .foregroundColor(AppColors.listRowTertiaryForeground)
                     
                     HStack(spacing: 6) {
                         // Unread badge
@@ -114,7 +114,7 @@ struct RLChatroomRowView: View {
                         
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.3))
+                            .foregroundColor(AppColors.listRowChevronForeground)
                     }
                 }
             }

@@ -105,7 +105,7 @@ struct GuildSelectionFullView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
                     .background(AppColors.surfaceGray30)

@@ -538,7 +538,7 @@ struct RLMemberRowView: View {
                         Text(member.username)
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundColor(member.isBlocked ? AppColors.greyText : AppColors.whiteText)
+                            .foregroundColor(member.isBlocked ? AppColors.greyText : AppColors.listRowPrimaryForeground)
 
                         if member.isFriend {
                             Image(systemName: "person.crop.circle")

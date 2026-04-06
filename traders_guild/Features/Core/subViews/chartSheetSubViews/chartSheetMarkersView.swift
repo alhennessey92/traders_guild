@@ -1123,16 +1123,8 @@ private struct MarkerPlacementOptionRow: View {
         isActive ? AppColors.statusNegative95 : intent.color
     }
 
-    private var rowBackgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [AppColors.searchBarGradientLeading, AppColors.searchBarGradientTrailing],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     private var rowBorderColor: Color {
-        AppColors.panelFillEmphasis
+        AppColors.standardSearchFieldStroke
     }
 
     var body: some View {
@@ -1174,25 +1166,26 @@ private struct MarkerPlacementOptionRow: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(AppColors.surfaceWhite84)
                         .frame(width: 28, height: 28)
-                        .background(AppColors.symbolDetailCardFill)
-                        .clipShape(Circle())
+                        .background(
+                            Circle()
+                                .fill(AppColors.symbolDetailCardFill)
+                                .overlay(
+                                    Circle()
+                                        .stroke(AppColors.symbolDetailCardStroke.opacity(0.85), lineWidth: 1)
+                                )
+                        )
                 }
                 .padding(.leading, 8)
                 .padding(.trailing, 14)
             }
             .padding(.vertical, 10)
             .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(rowBackgroundGradient)
-                    PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
-                        .opacity(0.02)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-            )
-            .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(rowBorderColor, lineWidth: 1)
+                    .fill(isActive ? AppColors.panelFillEmphasis : AppColors.standardSearchFieldFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(rowBorderColor, lineWidth: 1)
+                    )
             )
         }
         .buttonStyle(.plain)
@@ -1210,8 +1203,14 @@ private struct MarkerSettingsButton: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(AppColors.surfaceWhite85)
                 .frame(width: 34, height: 34)
-                .background(AppColors.symbolDetailCardFill)
-                .clipShape(Circle())
+                .background(
+                    Circle()
+                        .fill(AppColors.symbolDetailCardFill)
+                        .overlay(
+                            Circle()
+                                .stroke(AppColors.symbolDetailCardStroke.opacity(0.85), lineWidth: 1)
+                        )
+                )
         }
         .accessibilityLabel("Marker settings")
     }

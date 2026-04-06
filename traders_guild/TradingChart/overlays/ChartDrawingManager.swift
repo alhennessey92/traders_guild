@@ -197,6 +197,7 @@ final class ChartDrawingManager: ObservableObject {
     @discardableResult
     func addDrawing(
         type: ChartDrawingType,
+        points: [ChartDrawingPoint] = [],
         colorHex: String? = nil,
         lineStyle: MarkerDrawingLineStyle? = nil,
         lineWidth: Double? = nil,
@@ -205,6 +206,7 @@ final class ChartDrawingManager: ObservableObject {
     ) -> UUID {
         let drawing = ChartDrawing(
             type: type,
+            points: points,
             colorHex: colorHex ?? type.defaultColorHex,
             lineStyle: lineStyle,
             lineWidth: lineWidth,

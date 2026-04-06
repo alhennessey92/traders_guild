@@ -63,6 +63,10 @@ struct SettingsToggleRow: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(AppColors.insetPanelBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.standardSearchFieldStroke.opacity(0.7), lineWidth: 1)
+                )
         )
     }
 }
@@ -113,11 +117,11 @@ struct SettingsButtonRow: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.whiteText.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(AppColors.whiteText.opacity(0.1), lineWidth: 0.5)
+                    .fill(AppColors.panelFillEmphasis)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(AppColors.standardSearchFieldStroke.opacity(0.8), lineWidth: 1)
+                    )
             )
         }
         .buttonStyle(PlainButtonStyle())

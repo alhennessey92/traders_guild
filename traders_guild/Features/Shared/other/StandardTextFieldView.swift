@@ -63,7 +63,7 @@ struct StandardTextFieldView: View {
     private var strokeColor: Color {
         switch validationState {
         case .neutral:
-            return isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.whiteText.opacity(0.15)
+            return isFocused ? AppColors.whiteText.opacity(0.45) : AppColors.standardSearchFieldStroke
         case .valid:
             return AppColors.bullCandleGreen.opacity(isFocused ? 0.95 : 0.75)
         case .invalid:
@@ -116,7 +116,7 @@ struct StandardTextFieldView: View {
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                .fill(AppColors.standardSearchFieldFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(strokeColor, lineWidth: 1)

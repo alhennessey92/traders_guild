@@ -1,6 +1,24 @@
 import Foundation
 
 enum ChartDrawingBridge {
+    static func normalizedAnnotationDrawing(
+        from drawing: ChartDrawing,
+        fallbackAnchorTime: Date,
+        fallbackAnchorPrice: Double
+    ) -> ChartDrawing {
+        switch drawing.type {
+        case .textNote, .emoji:
+            guard drawing.points.isEmpty else { return drawing }
+            var normalized = drawing
+            normalized.points = [
+                ChartDrawingPoint(time: fallbackAnchorTime, price: fallbackAnchorPrice),
+            ]
+            return normalized
+        default:
+            return drawing
+        }
+    }
+
     static func markerDraft(
         from drawing: ChartDrawing,
         anchorTime: Date,

@@ -56,6 +56,10 @@ struct UserRowView: View {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(isPressed ? AppColors.userListRowFillPressed : AppColors.userListRowFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppColors.standardSearchFieldStroke.opacity(0.6), lineWidth: 1)
+                    )
             )
         }
         .buttonStyle(PlainButtonStyle())

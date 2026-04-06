@@ -96,6 +96,8 @@ struct MarkerPlacementGeneralTab: View {
             }
             .padding(.trailing, 2)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnTapAndDragBackground()
         .onAppear {
             syncNewsURLFromComponent()
             if placementState.alertSeverity == nil {
@@ -120,15 +122,6 @@ struct MarkerPlacementGeneralTab: View {
                     pendingIntentSwitch = nil
                 }
             )
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    focusedInput = nil
-                }
-                .font(.subheadline.weight(.semibold))
-            }
         }
     }
 
@@ -518,26 +511,6 @@ struct MarkerPlacementGeneralTab: View {
                         )
                 )
                 .frame(width: 132)
-
-            if focusedInput == .level(componentType.rawValue) {
-                Button("Done") {
-                    focusedInput = nil
-                    HapticFeedback.light.trigger()
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundColor(placementState.intent.color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(placementState.intent.color.opacity(0.18))
-                        .overlay(
-                            Capsule()
-                                .stroke(placementState.intent.color.opacity(0.45), lineWidth: 1)
-                        )
-                )
-                .buttonStyle(.plain)
-            }
         }
     }
 
@@ -716,33 +689,14 @@ struct MarkerPlacementGeneralTab: View {
             .focused($focusedInput, equals: focus)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .padding(.trailing, focusedInput == focus ? 52 : 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.whiteText.opacity(0.09), AppColors.whiteText.opacity(0.06)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(AppColors.standardSearchFieldFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                            .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
                     )
             )
-            .overlay(alignment: .trailing) {
-                if focusedInput == focus {
-                    Button("Save") {
-                        focusedInput = nil
-                        HapticFeedback.light.trigger()
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(placementState.intent.color)
-                    .padding(.trailing, 10)
-                    .buttonStyle(.plain)
-                }
-            }
     }
 
     private var statsRow: some View {
@@ -1034,25 +988,25 @@ struct MarkerPlacementGeneralTab: View {
 
         switch intent {
         case .analysis:
-            return Set<RLComponentType>([.anchor, .levelSupport, .levelResistance, .textNote, .reactionEmoji, .timeframeLink, .linkURL])
+            return Set<RLComponentType>([.anchor, .levelSupport, .levelResistance, .textNote, .timeframeLink, .linkURL])
                 .union(drawingAndIndicators)
         case .setup:
-            return Set<RLComponentType>([.anchor, .levelEntry, .levelSl, .levelTp, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .levelEntry, .levelSl, .levelTp, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .news:
-            return Set<RLComponentType>([.anchor, .linkURL, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .linkURL, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .poll, .question:
-            return Set<RLComponentType>([.anchor, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .reaction:
             return Set<RLComponentType>([.anchor, .reactionEmoji, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .alert:
-            return Set<RLComponentType>([.anchor, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .personal:
-            return Set<RLComponentType>([.anchor, .levelSupport, .levelResistance, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .levelSupport, .levelResistance, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         }
     }

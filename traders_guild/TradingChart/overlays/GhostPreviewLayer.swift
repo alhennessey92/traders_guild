@@ -446,7 +446,7 @@ struct GhostPreviewLayer: View {
 
     @ViewBuilder
     private func annotationView(for draft: MarkerComponentDraft) -> some View {
-        if let anchorPoint = annotationAnchorPoint {
+        if let anchorPoint = annotationAnchorPoint(for: draft.payload) {
             let offset = annotationOffset(for: draft.payload)
             let x = anchorPoint.x + CGFloat(offset.x)
             let y = anchorPoint.y + CGFloat(offset.y)
@@ -572,14 +572,30 @@ struct GhostPreviewLayer: View {
             }
     }
 
-    private var annotationAnchorPoint: CGPoint? {
-        guard let anchor = placementState.anchorDraft,
-              let anchorPrice = anchor.payload.levelPrice,
+    private func annotationAnchorPoint(for payload: MarkerComponentPayload) -> CGPoint? {
+        let fallbackAnchorTime = placementState.anchorDraft?.payload.anchorTime
+        let fallbackAnchorPrice = placementState.anchorDraft?.payload.levelPrice
+
+        let anchorTime: Date?
+        let anchorPrice: Double?
+        switch payload {
+        case let .note(note):
+            anchorTime = note.anchorTime ?? fallbackAnchorTime
+            anchorPrice = note.anchorPrice ?? fallbackAnchorPrice
+        case let .reactionEmoji(emoji):
+            anchorTime = emoji.anchorTime ?? fallbackAnchorTime
+            anchorPrice = emoji.anchorPrice ?? fallbackAnchorPrice
+        default:
+            anchorTime = fallbackAnchorTime
+            anchorPrice = fallbackAnchorPrice
+        }
+
+        guard let anchorPrice,
               let anchorY = yForPrice(anchorPrice),
               anchorY.isFinite else {
             return nil
         }
-        let anchorX = xForTime?(anchor.payload.anchorTime ?? Date()) ?? width * 0.5
+        let anchorX = xForTime?(anchorTime ?? Date()) ?? width * 0.5
         guard anchorX.isFinite else { return nil }
         return CGPoint(x: anchorX, y: anchorY)
     }

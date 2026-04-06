@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 @testable import traders_guild
@@ -52,5 +53,53 @@ struct ChatSurfaceOverlayCoordinatorTests {
 
         #expect(coordinator.presentation == .reactionReactors(messageID: messageID, reactions: reactions))
         #expect(coordinator.isComposerActionPanelVisible == false)
+    }
+
+    @Test
+    func presentingAnotherOverlayKeepsComposerPanelDismissedAndReplacesPreviousOverlay() {
+        let coordinator = ChatSurfaceOverlayCoordinator()
+        let firstMessageID = UUID()
+        let secondMessageID = UUID()
+        let reactions = [RLMessageReactionDTO(emoji: "🚀", count: 2, reactedByCurrentUser: false)]
+
+        coordinator.setComposerActionPanelVisible(true)
+        coordinator.presentReactionReactors(for: firstMessageID, reactions: reactions)
+        coordinator.presentActions(for: secondMessageID)
+
+        #expect(coordinator.presentation == .messageActions(messageID: secondMessageID))
+        #expect(coordinator.isComposerActionPanelVisible == false)
+    }
+
+    @Test
+    func chatFooterLayoutDoesNotAddExtraBottomPaddingWhenKeyboardIsVisible() {
+        let layout = KeyboardPinnedFooterLayout.resolve(
+            mode: .chat,
+            geometryBottomInset: 336,
+            hardwareBottomInset: 34
+        )
+
+        #expect(layout.footerBottomPadding == 0)
+    }
+
+    @Test
+    func chatFooterLayoutUsesLoweredHardwareInsetWhenKeyboardIsHidden() {
+        let layout = KeyboardPinnedFooterLayout.resolve(
+            mode: .chat,
+            geometryBottomInset: 34,
+            hardwareBottomInset: 34
+        )
+
+        #expect(layout.footerBottomPadding == 26)
+    }
+
+    @Test
+    func attachmentPanelOffsetTracksComposerMetrics() {
+        #expect(
+            ChatComposerLayoutMetrics.attachmentPanelBottomOffset
+            == ChatComposerLayoutMetrics.barHeight
+                + ChatComposerLayoutMetrics.containerVerticalPadding
+                + ChatComposerLayoutMetrics.attachmentPanelGap
+        )
+        #expect(ChatComposerLayoutMetrics.attachmentPanelBottomOffset == 66)
     }
 }

@@ -21,8 +21,14 @@ struct MarkerSymbolID: Hashable {
 enum MarkerVisualSpec {
     // MARK: - Glass Material
 
+    private static var isLightGreyTheme: Bool {
+        ThemeManager.shared.currentTheme == .lightGrey
+    }
+
     /// Thin white stroke matching iOS glass button style.
-    static let glassStrokeColor: Color = AppColors.surfaceWhite24
+    static var glassStrokeColor: Color {
+        isLightGreyTheme ? Color.black.opacity(0.12) : AppColors.surfaceWhite24
+    }
     static let glassStrokeWidth: CGFloat = 0.8
     static let glassShadowRadius: CGFloat = 2
     static let glassShadowOpacity: Double = 0.35
@@ -35,7 +41,7 @@ enum MarkerVisualSpec {
         if intent == .alert, let severity {
             return severity.color.opacity(0.25)
         }
-        return Color.white.opacity(0.06)
+        return isLightGreyTheme ? Color.white.opacity(0.12) : Color.white.opacity(0.06)
     }
 
     // MARK: - Border
@@ -83,7 +89,11 @@ enum MarkerVisualSpec {
 
     // MARK: - Icon
 
-    static let iconBaseColor: Color = Color(hex: "#D9D9D9") ?? Color(white: 0.85)
+    static var iconBaseColor: Color {
+        isLightGreyTheme
+            ? (Color(hex: "#676D78") ?? Color(red: 103.0 / 255, green: 109.0 / 255, blue: 120.0 / 255))
+            : (Color(hex: "#D9D9D9") ?? Color(white: 0.85))
+    }
 
     static func symbol(
         for intent: RLMarkerIntent,

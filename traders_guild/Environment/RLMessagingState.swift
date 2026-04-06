@@ -198,7 +198,6 @@ struct RLMessagingSheet: View {
     @State private var showUserProfile = false
     @State private var selectedChatroomUser: RLGuildMemberDTO? = nil
     @State private var showSettings = false
-    @State private var showSearch = false
     @State private var hasMarkedAsRead = false
     @State private var typingWorkItem: DispatchWorkItem? = nil
     @State private var hasSentTyping: Bool = false
@@ -336,10 +335,13 @@ struct RLMessagingSheet: View {
     
     // MARK: - Messaging View
     private var messagingView: some View {
-        KeyboardAwareBottomInsetContainer(showsDivider: true) {
+        KeyboardAwareBottomInsetContainer(
+            showsDivider: true,
+            mode: .chat,
+            footerBackground: AnyView(ChatChromeBarBackground())
+        ) {
             VStack(spacing: 0) {
-                // Header section
-                VStack(spacing: 0) {
+                ChatSurfaceHeader(horizontalPadding: 20, topPadding: 20, bottomPadding: 16) {
                     HStack {
                         // Settings button
                         ChatSettingsButton {
@@ -368,19 +370,6 @@ struct RLMessagingSheet: View {
                         }
                         
                         Spacer()
-                        
-                        // Search button (chatrooms only)
-                        if case .chatroom = contentType {
-                            Button {
-                                showSearch = true
-                                HapticFeedback.light.trigger()
-                            } label: {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(AppColors.whiteText.opacity(0.6))
-                                    .frame(width: 32, height: 32)
-                            }
-                        }
 
                         // Close button
                         ChatDismissButton {
@@ -388,12 +377,6 @@ struct RLMessagingSheet: View {
                             dismiss()
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 16)
-                    .background(ChatChromeBarBackground())
-
-                    Divider()
                 }
 
                 // Messages list
@@ -568,10 +551,6 @@ struct RLMessagingSheet: View {
                     reportTarget = nil
                 }
             )
-        }
-        .sheet(isPresented: $showSearch) {
-            ChatSearchView()
-                .environmentObject(appState)
         }
     }
 
@@ -815,6 +794,7 @@ struct RLMessagingSheet: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isNearBottom)
                 }
             }
+            .background(ChatBackground())
         }
         .overlay {
             ZStack {

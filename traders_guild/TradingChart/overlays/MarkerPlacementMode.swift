@@ -2229,25 +2229,25 @@ final class MarkerPlacementState: ObservableObject {
 
         switch intent {
         case .analysis:
-            return Set<RLComponentType>([.anchor, .levelSupport, .levelResistance, .textNote, .reactionEmoji, .timeframeLink, .linkURL])
+            return Set<RLComponentType>([.anchor, .levelSupport, .levelResistance, .textNote, .timeframeLink, .linkURL])
                 .union(drawingAndIndicators)
         case .setup:
-            return Set<RLComponentType>([.anchor, .levelEntry, .levelSl, .levelTp, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .levelEntry, .levelSl, .levelTp, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .news:
-            return Set<RLComponentType>([.anchor, .textNote, .reactionEmoji, .timeframeLink, .linkURL])
+            return Set<RLComponentType>([.anchor, .textNote, .timeframeLink, .linkURL])
                 .union(drawingAndIndicators)
         case .poll, .question:
-            return Set<RLComponentType>([.anchor, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .reaction:
             return Set<RLComponentType>([.anchor, .reactionEmoji, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .alert:
-            return Set<RLComponentType>([.anchor, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         case .personal:
-            return Set<RLComponentType>([.anchor, .levelSupport, .levelResistance, .textNote, .reactionEmoji, .timeframeLink])
+            return Set<RLComponentType>([.anchor, .levelSupport, .levelResistance, .textNote, .timeframeLink])
                 .union(drawingAndIndicators)
         }
     }

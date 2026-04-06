@@ -18,7 +18,7 @@ struct EmailVerificationView: View {
 
     let userEmail: String
     let onContinue: () -> Void
-    /// When `false` (e.g. opened from settings), hide “Continue without verifying” and show a Done toolbar action.
+    /// When `false` (e.g. opened from settings), hide the skip action and keep the flow sheet-driven.
     var showSkipUnverifiedOption: Bool = true
 
     private var canResend: Bool {
@@ -85,19 +85,22 @@ struct EmailVerificationView: View {
                             let char = index < verificationCode.count
                                 ? String(verificationCode[verificationCode.index(verificationCode.startIndex, offsetBy: index)])
                                 : ""
+                            let activeIndex = min(verificationCode.count, 4)
+                            let isFilled = index < verificationCode.count
+                            let isActive = codeFieldFocused && index == activeIndex
                             Text(char)
                                 .font(.system(size: 24, weight: .bold, design: .monospaced))
                                 .foregroundColor(AppColors.whiteText)
                                 .frame(width: 48, height: 56)
-                                .background(AppColors.symbolSheetGroupedPanelFill)
+                                .background(AppColors.standardSearchFieldFill)
                                 .cornerRadius(10)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
                                         .stroke(
-                                            index < verificationCode.count
+                                            isFilled
                                                 ? AppColors.accentColor
-                                                : AppColors.surfaceWhite10,
-                                            lineWidth: index == verificationCode.count ? 2 : 1
+                                                : (isActive ? AppColors.accentColor : AppColors.standardSearchFieldStroke),
+                                            lineWidth: isActive ? 2 : 1
                                         )
                                 )
                         }
@@ -111,6 +114,7 @@ struct EmailVerificationView: View {
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .keyboardType(.asciiCapable)
+                            .textContentType(.oneTimeCode)
                             .opacity(0)
                             .onChange(of: verificationCode) { _, newValue in
                                 let filtered = String(newValue.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(5))
@@ -142,7 +146,7 @@ struct EmailVerificationView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .scrollDismissesKeyboard(.interactively)
-            .dismissKeyboardOnTapBackground()
+            .dismissKeyboardOnTapAndDragBackground()
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
             .toolbar {
@@ -152,18 +156,9 @@ struct EmailVerificationView: View {
                         .fontWeight(.heavy)
                         .foregroundColor(AppColors.fadedBackground)
                 }
-                if !showSkipUnverifiedOption {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Done") {
-                            dismiss()
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(AppColors.accentColor)
-                    }
-                }
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        .keyboardPinnedBottomInset {
             VStack(spacing: 10) {
                 Divider()
                     .frame(height: 1)
@@ -203,7 +198,7 @@ struct EmailVerificationView: View {
                             title: "Continue without verifying",
                             iconName: "arrow.right",
                             backgroundColor: AppColors.unhighlightedButtonBackground,
-                            foregroundColor: AppColors.whiteText
+                            foregroundColor: AppColors.gradientBackgroundDark
                         )
                     }
                 }
@@ -213,6 +208,7 @@ struct EmailVerificationView: View {
             .background(AppColors.sheetBackground)
         }
         .onDisappear {
+            codeFieldFocused = false
             resendTimer?.invalidate()
         }
     }

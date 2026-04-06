@@ -92,6 +92,7 @@ struct StaticMessagingBackgroundView: View {
 
 struct StaticPatternView: View {
     @State private var patternOpacity: Double = 0
+    var targetOpacity: Double = AppColors.inlineHoneycombPatternOpacity
 
     var body: some View {
         ZStack {
@@ -102,7 +103,7 @@ struct StaticPatternView: View {
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeIn(duration: 1.5)) {
-                patternOpacity = AppColors.inlineHoneycombPatternOpacity
+                patternOpacity = targetOpacity
             }
         }
     }
