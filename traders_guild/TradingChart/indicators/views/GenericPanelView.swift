@@ -454,7 +454,16 @@ struct GenericIndicatorPanelView: View {
                 timeframe: timeframe,
                 timeZone: chartData.currentSymbol?.exchangeTimeZone ?? .current
             )
-            .position(x: xPosition, y: CrosshairTimeLabel.indicatorHeight * 0.5)
+            .position(
+                x: CrosshairTimeLabel.clampedCenterX(
+                    rawX: xPosition,
+                    timestamp: timestamp,
+                    timeframe: timeframe,
+                    timeZone: chartData.currentSymbol?.exchangeTimeZone ?? .current,
+                    availableWidth: UIScreen.main.bounds.width
+                ),
+                y: CrosshairTimeLabel.indicatorHeight * 0.5
+            )
         }
     }
     

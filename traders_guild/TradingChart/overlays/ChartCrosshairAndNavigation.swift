@@ -45,10 +45,7 @@ struct CrosshairView: View {
     @ObservedObject var crosshairManager: CrosshairManager
     let chartSize: CGSize
     let chartData: ChartDataManager
-    
-    // RSI Panel state - for positioning time label correctly
-    var rsiPanelActive: Bool = false
-    var rsiPanelHeight: CGFloat = 120
+    var showsTimeLabelOnMainXAxis: Bool = true
     
     // Indicator manager for showing indicator values
     var indicatorManager: IndicatorManager? = nil
@@ -76,8 +73,7 @@ struct CrosshairView: View {
         crosshairManager: CrosshairManager,
         chartSize: CGSize,
         chartData: ChartDataManager,
-        rsiPanelActive: Bool,
-        rsiPanelHeight: CGFloat,
+        showsTimeLabelOnMainXAxis: Bool,
         indicatorManager: IndicatorManager?,
         timeframe: RLChartTimeframe,
         timeZone: TimeZone = .current
@@ -85,8 +81,7 @@ struct CrosshairView: View {
         self.crosshairManager = crosshairManager
         self.chartSize = chartSize
         self.chartData = chartData
-        self.rsiPanelActive = rsiPanelActive
-        self.rsiPanelHeight = rsiPanelHeight
+        self.showsTimeLabelOnMainXAxis = showsTimeLabelOnMainXAxis
         self.indicatorManager = indicatorManager
         self.timeframe = timeframe
         self.timeZone = timeZone
@@ -97,7 +92,7 @@ struct CrosshairView: View {
     private var timeLabelY: CGFloat {
         CrosshairTimeLabel.mainChartCenterY(
             chartHeight: chartSize.height,
-            showsMainXAxisLabels: !rsiPanelActive
+            showsMainXAxisLabels: showsTimeLabelOnMainXAxis
         )
     }
     
@@ -134,11 +129,18 @@ struct CrosshairView: View {
                 )
                 .position(x: chartSize.width - 35, y: crosshairManager.position.y)
                 
-                // Time label on X-axis - only show when RSI panel is NOT active
-                // (RSI panel has its own time label on its x-axis)
-                if !rsiPanelActive, let candle = crosshairManager.targetCandle {
+                if showsTimeLabelOnMainXAxis, let candle = crosshairManager.targetCandle {
                     CrosshairTimeLabel(timestamp: candle.timestamp, timeframe: timeframe, timeZone: timeZone)
-                        .position(x: crosshairManager.position.x, y: timeLabelY)
+                        .position(
+                            x: CrosshairTimeLabel.clampedCenterX(
+                                rawX: crosshairManager.position.x,
+                                timestamp: candle.timestamp,
+                                timeframe: timeframe,
+                                timeZone: timeZone,
+                                availableWidth: chartSize.width
+                            ),
+                            y: timeLabelY
+                        )
                 }
                 
                 // Compact info popup with indicator values
@@ -211,6 +213,29 @@ struct CrosshairTimeLabel: View {
         return chartHeight - bottomAreaHeight + (indicatorHeight * 0.5) - compactBandLift
     }
 
+    static func estimatedWidth(
+        for timestamp: Date,
+        timeframe: RLChartTimeframe,
+        timeZone: TimeZone
+    ) -> CGFloat {
+        let text = MarkerPlacementLabelFormatter.format(timestamp, timeframe: timeframe, timeZone: timeZone)
+        return min(168, max(64, CGFloat(text.count) * 7.0 + 18))
+    }
+
+    static func clampedCenterX(
+        rawX: CGFloat,
+        timestamp: Date,
+        timeframe: RLChartTimeframe,
+        timeZone: TimeZone,
+        availableWidth: CGFloat,
+        horizontalInset: CGFloat = 6
+    ) -> CGFloat {
+        let halfWidth = estimatedWidth(for: timestamp, timeframe: timeframe, timeZone: timeZone) * 0.5
+        let minX = horizontalInset + halfWidth
+        let maxX = max(minX, availableWidth - horizontalInset - halfWidth)
+        return min(max(rawX, minX), maxX)
+    }
+
     let timestamp: Date
     var timeframe: RLChartTimeframe = .h1
     var timeZone: TimeZone = .current
@@ -249,6 +274,7 @@ struct CrosshairTimeLabel: View {
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
             .foregroundColor(textColor)
             .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
             .frame(height: Self.indicatorHeight)
             .background(

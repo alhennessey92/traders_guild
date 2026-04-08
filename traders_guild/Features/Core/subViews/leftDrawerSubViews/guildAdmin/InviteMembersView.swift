@@ -64,7 +64,7 @@ struct InviteMembersView: View {
                         // Search Results
                         if !searchResults.isEmpty {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Results")
+                                Text(searchText.isEmpty ? "Recommended" : "Results")
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.secondary)
@@ -74,8 +74,8 @@ struct InviteMembersView: View {
                                     searchResultRow(user: user)
                                 }
                             }
-                        } else if !searchText.isEmpty && !isSearching {
-                            Text("No users found")
+                        } else if !isSearching {
+                            Text(searchText.isEmpty ? "No recommendations available right now" : "No users found")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .frame(maxWidth: .infinity)
@@ -131,6 +131,7 @@ struct InviteMembersView: View {
         }
         .onAppear {
             loadPendingInvites()
+            Task { await performSearch(query: "") }
         }
     }
 
@@ -168,6 +169,11 @@ struct InviteMembersView: View {
                 Text("@\(user.username)")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                if let guildName = user.guildName, !guildName.isEmpty {
+                    Text(user.guildRole.map { "\(guildName) • \($0.capitalized)" } ?? guildName)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.accentColor)
+                }
             }
 
             Spacer()
@@ -268,10 +274,6 @@ struct InviteMembersView: View {
 
     private func debounceSearch(query: String) {
         searchTask?.cancel()
-        guard query.count >= 2 else {
-            searchResults = []
-            return
-        }
         searchTask = Task {
             try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
             guard !Task.isCancelled else { return }
@@ -303,7 +305,10 @@ struct InviteMembersView: View {
                         displayName: user.displayName,
                         avatarUrl: user.avatarUrl,
                         isMember: user.isMember,
-                        hasPendingInvite: true
+                        hasPendingInvite: true,
+                        guildId: user.guildId,
+                        guildName: user.guildName,
+                        guildRole: user.guildRole
                     )
                 }
                 // Add to pending invites
@@ -329,7 +334,10 @@ struct InviteMembersView: View {
                         displayName: user.displayName,
                         avatarUrl: user.avatarUrl,
                         isMember: user.isMember,
-                        hasPendingInvite: false
+                        hasPendingInvite: false,
+                        guildId: user.guildId,
+                        guildName: user.guildName,
+                        guildRole: user.guildRole
                     )
                 }
             } catch {

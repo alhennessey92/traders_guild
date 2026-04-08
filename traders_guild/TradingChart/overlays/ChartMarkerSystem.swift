@@ -321,63 +321,15 @@ class MarkerManager: ObservableObject {
         self.currentGuildId = guildId
         
         do {
-            // Fetch markers from RealAPIService (paged)
-            let timeframeString = timeframe.toBackendString()
-            let startTime = candles.first?.timestamp
-            let endTime = candles.last?.timestamp
-            var cursor: String?
-            var pageCount = 0
-            let maxPages = 10
-            var fetchedMarkers: [RLChartMarkerDTO] = []
-
-            repeat {
-                let markersListDTO = try await api.getMarkers(
-                    guildId: guildId,
-                    symbolId: symbolId,
-                    timeframe: timeframeString,
-                    limit: 100,
-                    cursor: cursor,
-                    startTime: startTime,
-                    endTime: endTime
-                )
-                fetchedMarkers.append(contentsOf: markersListDTO.markers)
-                cursor = markersListDTO.nextCursor
-                pageCount += 1
-
-                if !markersListDTO.hasMore || cursor == nil {
-                    break
-                }
-            } while pageCount < maxPages
-            
-            // Convert RLChartMarkerUI to ChartMarkerUI (UI model)
-            var convertedMarkers: [ChartMarkerUI] = []
-            for rlMarker in fetchedMarkers {
-                guard canRenderMarker(rlMarker) else { continue }
-                if let candleIndex = findCandleIndex(timestamp: rlMarker.candleTimestamp, in: candles) {
-                    convertedMarkers.append(ChartMarkerUI(marker: rlMarker, candleIndex: candleIndex))
-                }
-            }
-            
-            // Update prices based on candle data (if needed)
-            // Note: Prices should already be correct from backend, but verify alignment
-            var positionedMarkers = convertedMarkers
-            
-            // Reset positioning fields for proper recalculation
-            for i in 0..<positionedMarkers.count {
-                positionedMarkers[i].positionedBelow = false
-                positionedMarkers[i].proximityTier = 0
-                positionedMarkers[i].stackIndex = 0
-                positionedMarkers[i].isVisible = true
-            }
-            
-            // Sort by creation date before recalculating positions
-            positionedMarkers.sort { $0.createdAt < $1.createdAt }
-            
-            // Calculate proper positions
-            positionedMarkers = MarkerPositionCalculator.assignStablePositions(
-                markers: positionedMarkers,
-                candles: candles
+            let fetchedMarkers = try await fetchMarkerDTOs(
+                api: api,
+                guildId: guildId,
+                symbolId: symbolId,
+                timeframe: timeframe,
+                startTime: candles.first?.timestamp,
+                endTime: candles.last?.timestamp
             )
+            let positionedMarkers = positionedMarkers(from: fetchedMarkers, candles: candles)
             
             await MainActor.run {
                 self.markers = positionedMarkers
@@ -388,6 +340,125 @@ class MarkerManager: ObservableObject {
         } catch {
             print("Failed to load markers: \(error)")
         }
+    }
+
+    func mergeMarkersFromAPI(
+        api: any MarkerAPIClient,
+        symbolId: UUID,
+        symbol: String,
+        guildId: UUID,
+        timeframe: RLChartTimeframe,
+        candles: [RLCandleDTO],
+        startTime: Date?,
+        endTime: Date?
+    ) async {
+        configure(api: api, symbolId: symbolId, timeframe: timeframe)
+        self.currentGuildId = guildId
+
+        do {
+            let fetchedMarkers = try await fetchMarkerDTOs(
+                api: api,
+                guildId: guildId,
+                symbolId: symbolId,
+                timeframe: timeframe,
+                startTime: startTime,
+                endTime: endTime
+            )
+            let newMarkers = positionedMarkers(from: fetchedMarkers, candles: candles)
+
+            await MainActor.run {
+                var mergedById: [UUID: ChartMarkerUI] = [:]
+                for marker in self.markers {
+                    mergedById[marker.id] = marker
+                }
+                for marker in newMarkers {
+                    mergedById[marker.id] = marker
+                }
+
+                var mergedMarkers = Array(mergedById.values)
+                for i in 0..<mergedMarkers.count {
+                    if let newIndex = self.findCandleIndex(timestamp: mergedMarkers[i].candleTimestamp, in: candles) {
+                        mergedMarkers[i].candleIndex = newIndex
+                    }
+                }
+                mergedMarkers.sort { $0.createdAt < $1.createdAt }
+                mergedMarkers = MarkerPositionCalculator.assignStablePositions(
+                    markers: mergedMarkers,
+                    candles: candles
+                )
+                self.markers = mergedMarkers
+                if let selected = self.selectedMarker,
+                   let refreshed = mergedMarkers.first(where: { $0.id == selected.id }) {
+                    self.selectedMarker = refreshed
+                }
+            }
+
+            subscribeToMarkerChannel(guildId: guildId)
+        } catch {
+            print("Failed to merge markers: \(error)")
+        }
+    }
+
+    private func fetchMarkerDTOs(
+        api: any MarkerAPIClient,
+        guildId: UUID,
+        symbolId: UUID,
+        timeframe: RLChartTimeframe,
+        startTime: Date?,
+        endTime: Date?
+    ) async throws -> [RLChartMarkerDTO] {
+        let timeframeString = timeframe.toBackendString()
+        var cursor: String?
+        var pageCount = 0
+        let maxPages = 10
+        var fetchedMarkers: [RLChartMarkerDTO] = []
+
+        repeat {
+            let markersListDTO = try await api.getMarkers(
+                guildId: guildId,
+                symbolId: symbolId,
+                timeframe: timeframeString,
+                limit: 100,
+                cursor: cursor,
+                startTime: startTime,
+                endTime: endTime
+            )
+            fetchedMarkers.append(contentsOf: markersListDTO.markers)
+            cursor = markersListDTO.nextCursor
+            pageCount += 1
+
+            if !markersListDTO.hasMore || cursor == nil {
+                break
+            }
+        } while pageCount < maxPages
+
+        return fetchedMarkers
+    }
+
+    private func positionedMarkers(
+        from fetchedMarkers: [RLChartMarkerDTO],
+        candles: [RLCandleDTO]
+    ) -> [ChartMarkerUI] {
+        var convertedMarkers: [ChartMarkerUI] = []
+        for rlMarker in fetchedMarkers {
+            guard canRenderMarker(rlMarker) else { continue }
+            if let candleIndex = findCandleIndex(timestamp: rlMarker.candleTimestamp, in: candles) {
+                convertedMarkers.append(ChartMarkerUI(marker: rlMarker, candleIndex: candleIndex))
+            }
+        }
+
+        for i in 0..<convertedMarkers.count {
+            convertedMarkers[i].positionedBelow = false
+            convertedMarkers[i].proximityTier = 0
+            convertedMarkers[i].stackIndex = 0
+            convertedMarkers[i].isVisible = true
+        }
+
+        convertedMarkers.sort { $0.createdAt < $1.createdAt }
+        return MarkerPositionCalculator.assignStablePositions(
+            markers: convertedMarkers,
+            candles: candles
+        )
     }
 
     private func findCandleIndex(timestamp: Date, in candles: [RLCandleDTO]) -> Int? {

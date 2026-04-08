@@ -104,6 +104,16 @@ struct RLMessageReactionReactorsDTO: Codable, Equatable, Hashable {
     let reactors: [RLGuildMemberDTO]
 }
 
+struct RLMessageAttachmentDTO: Codable, Equatable, Hashable, Identifiable {
+    let attachmentUrl: String
+    let attachmentType: String?
+    let attachmentName: String?
+
+    var id: String {
+        "\(attachmentUrl)|\(attachmentName ?? "")"
+    }
+}
+
 // MARK: - Chatroom Message
 
 /// Individual chatroom message response
@@ -122,6 +132,7 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let attachments: [RLMessageAttachmentDTO]
     let replyPreview: RLMessageReplyPreviewDTO?
     var reactions: [RLMessageReactionDTO]
     
@@ -135,6 +146,7 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.id == rhs.id &&
         lhs.content == rhs.content &&
         lhs.isEdited == rhs.isEdited &&
+        lhs.attachments == rhs.attachments &&
         lhs.replyPreview == rhs.replyPreview &&
         lhs.reactions == rhs.reactions
     }
@@ -165,6 +177,7 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
         chatroomId: UUID,
         content: String,
         author: RLGuildMemberDTO,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyPreview: RLMessageReplyPreviewDTO? = nil
     ) -> RLChatroomMessageDTO {
         let now = Date()
@@ -181,9 +194,10 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
             isCurrentUserMessage: true,
             canEdit: true,
             canDelete: true,
-            attachmentUrl: nil,
-            attachmentType: nil,
-            attachmentName: nil,
+            attachmentUrl: attachments.first?.attachmentUrl,
+            attachmentType: attachments.first?.attachmentType,
+            attachmentName: attachments.first?.attachmentName,
+            attachments: attachments,
             replyPreview: replyPreview,
             reactions: []
         )
@@ -358,6 +372,7 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let attachments: [RLMessageAttachmentDTO]
     let replyPreview: RLMessageReplyPreviewDTO?
     var reactions: [RLMessageReactionDTO]
     
@@ -372,6 +387,7 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.content == rhs.content &&
         lhs.isEdited == rhs.isEdited &&
         lhs.isRead == rhs.isRead &&
+        lhs.attachments == rhs.attachments &&
         lhs.replyPreview == rhs.replyPreview &&
         lhs.reactions == rhs.reactions
     }
@@ -401,6 +417,7 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
         dmId: UUID,
         content: String,
         author: RLGuildMemberDTO,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyPreview: RLMessageReplyPreviewDTO? = nil
     ) -> RLDMMessageDTO {
         let now = Date()
@@ -418,9 +435,10 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
             canEdit: true,
             canDelete: true,
             isRead: false,
-            attachmentUrl: nil,
-            attachmentType: nil,
-            attachmentName: nil,
+            attachmentUrl: attachments.first?.attachmentUrl,
+            attachmentType: attachments.first?.attachmentType,
+            attachmentName: attachments.first?.attachmentName,
+            attachments: attachments,
             replyPreview: replyPreview,
             reactions: []
         )
@@ -533,6 +551,7 @@ struct RLSendMessageRequest: Codable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let attachments: [RLMessageAttachmentDTO]?
     let replyToMessageId: UUID?
 
     init(
@@ -540,12 +559,14 @@ struct RLSendMessageRequest: Codable {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO]? = nil,
         replyToMessageId: UUID? = nil
     ) {
         self.content = content
         self.attachmentUrl = attachmentUrl
         self.attachmentType = attachmentType
         self.attachmentName = attachmentName
+        self.attachments = attachments
         self.replyToMessageId = replyToMessageId
     }
 }

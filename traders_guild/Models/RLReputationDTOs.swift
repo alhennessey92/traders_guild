@@ -573,6 +573,27 @@ struct RLAccuracyLeaderboardDTO: Codable {
     let minPredictionsThreshold: Int
 }
 
+struct RLGlobalUserLeaderboardMemberDTO: Codable, Identifiable, Equatable {
+    let userId: UUID
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+    let isOnline: Bool
+    let globalReputation: Int
+    let accuracyRate: Double
+    let totalPredictions: Int
+    let guildId: UUID?
+    let guildName: String?
+    let guildRole: String?
+
+    var id: UUID { userId }
+}
+
+struct RLGlobalUserLeaderboardDTO: Codable {
+    let members: [RLGlobalUserLeaderboardMemberDTO]
+    let totalMembers: Int
+}
+
 
 // MARK: - Accuracy WebSocket Payload
 

@@ -1856,6 +1856,9 @@ struct RLUserSearchResultDTO: Codable, Identifiable {
     let avatarUrl: String?
     let isMember: Bool
     let hasPendingInvite: Bool
+    let guildId: UUID?
+    let guildName: String?
+    let guildRole: String?
 
     var id: UUID { userId }
 }

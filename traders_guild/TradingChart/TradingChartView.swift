@@ -257,6 +257,8 @@ struct TradingChartView: View {
     /// Label-strip reserve currently present at the bottom chart/panel boundary.
     /// Used to avoid double-counting that strip in control/info offsets.
     var panelBottomBoundaryLabelReserve: CGFloat = 0
+    /// Extra clearance for floating controls when multiple lower panels are expanded.
+    var floatingOverlayPanelClearance: CGFloat = 0
 
     /// Current user/guild context for marker ownership and filtering.
     private let currentUserId: UUID
@@ -584,7 +586,8 @@ struct TradingChartView: View {
         rsiPanelHeight: Binding<CGFloat> = .constant(120),
         activeTimeframeLegendEntries: [ActiveIndicatorLegendEntry] = [],
         indicatorPanelBottomPadding: CGFloat = 0,
-        panelBottomBoundaryLabelReserve: CGFloat = 0
+        panelBottomBoundaryLabelReserve: CGFloat = 0,
+        floatingOverlayPanelClearance: CGFloat = 0
     ) {
         let resolvedMember = currentUserMember ?? RLGuildMemberDTO(
             membershipId: UUID(),
@@ -627,6 +630,7 @@ struct TradingChartView: View {
         self.activeTimeframeLegendEntries = activeTimeframeLegendEntries
         self.indicatorPanelBottomPadding = indicatorPanelBottomPadding
         self.panelBottomBoundaryLabelReserve = panelBottomBoundaryLabelReserve
+        self.floatingOverlayPanelClearance = floatingOverlayPanelClearance
     }
     
     // MARK: - Target Line Helpers
@@ -1005,6 +1009,7 @@ struct TradingChartView: View {
                     coordinateSystem: coordinateSystem,
                     size: geometry.size
                 )
+                requestOlderCandlesIfNeeded(chartWidth: geometry.size.width)
             }
             .onChange(of: markerManager.selectedMarker?.id) { _, newId in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
@@ -1024,12 +1029,14 @@ struct TradingChartView: View {
             }
             .onChange(of: gestureState.panOffset.width) { _, _ in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                requestOlderCandlesIfNeeded(chartWidth: geometry.size.width)
             }
             .onChange(of: gestureState.candleWidthScale) { _, _ in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
             }
             .onChange(of: chartData.candles.count) { _, _ in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                requestOlderCandlesIfNeeded(chartWidth: geometry.size.width)
                 chartViewModel.updateChartDrawingPlacementAnchor(
                     time: chartData.candles.last?.timestamp,
                     price: chartData.candles.last?.close
@@ -1294,8 +1301,7 @@ struct TradingChartView: View {
                 crosshairManager: crosshairManager,
                 chartSize: geometry.size,
                 chartData: chartData,
-                rsiPanelActive: indicatorManager.shouldShowAnyPanel,
-                rsiPanelHeight: rsiPanelHeight,
+                showsTimeLabelOnMainXAxis: !panelOwnsBottomXAxisStrip,
                 indicatorManager: indicatorManager,
                 timeframe: chartViewModel.currentTimeframe,
                 timeZone: axisTimeZone
@@ -1464,10 +1470,7 @@ struct TradingChartView: View {
     }
 
     private func priceIndicatorBottomExclusionHeight(geometry: GeometryProxy) -> CGFloat {
-        let panelPadding = ChartPanelReserveCalculator.normalizedPanelReserve(
-            totalPanelReserve: indicatorPanelBottomPadding,
-            bottomBoundaryLabelReserve: panelBottomBoundaryLabelReserve
-        )
+        let panelPadding = indicatorPanelBottomPadding + floatingOverlayPanelClearance
         let controlsBottomPadding = geometry.size.height * 0.085 + 34 + panelPadding
         let controlRowHeight: CGFloat = 28
         return controlsBottomPadding + controlRowHeight
@@ -2704,6 +2707,13 @@ struct TradingChartView: View {
     }
     
     private func handleCandleCountChange(oldCount: Int, newCount: Int) {
+        let historicalPrependedCount = chartData.consumeLastPrependedCandleCount()
+        if historicalPrependedCount > 0 {
+            indicatorManager.recalculateIndicators(candles: chartData.candles)
+            markerManager.recalculateCandleIndices(candles: chartData.candles)
+            return
+        }
+
         if abs(newCount - oldCount) > 10 {
             resetChartToMostRecentCandles()
         }
@@ -2727,6 +2737,29 @@ struct TradingChartView: View {
     }
     
     // MARK: - Helper Functions
+
+    private func requestOlderCandlesIfNeeded(chartWidth: CGFloat) {
+        guard chartViewModel.hasMoreHistoricalCandles,
+              !chartViewModel.isLoadingOlderCandles,
+              !isChartLoading,
+              !chartData.candles.isEmpty,
+              totalCandleWidth > 0,
+              chartWidth > 0 else {
+            return
+        }
+
+        let visibleStartIndex = max(0, Int(floor(-gestureState.panOffset.width / totalCandleWidth)))
+        let visibleCandleCount = max(1, Int(ceil(chartWidth / totalCandleWidth)))
+        let preloadThreshold = max(40, visibleCandleCount)
+        guard visibleStartIndex <= preloadThreshold else { return }
+
+        Task { @MainActor in
+            await chartViewModel.loadOlderCandlesIfNeeded(
+                visibleStartIndex: visibleStartIndex,
+                preloadThreshold: preloadThreshold
+            )
+        }
+    }
     
     private func calculateCenterCandleIndex() -> Int {
         let totalOffset = gestureState.panOffset.width
@@ -5062,7 +5095,16 @@ struct TradingChartView: View {
                     timeframe: chartViewModel.currentTimeframe,
                     timeZone: axisTimeZone
                 )
-                .position(x: guideX, y: timeLabelY)
+                .position(
+                    x: CrosshairTimeLabel.clampedCenterX(
+                        rawX: guideX,
+                        timestamp: guidePoint.time,
+                        timeframe: chartViewModel.currentTimeframe,
+                        timeZone: axisTimeZone,
+                        availableWidth: geometry.size.width
+                    ),
+                    y: timeLabelY
+                )
             }
             .allowsHitTesting(false)
         )
@@ -5506,19 +5548,16 @@ struct TradingChartView: View {
             chartHeight: geometry.size.height,
             includeLabelStrip: !panelOwnsBottomXAxisStrip
         )
-        let normalizedIndicatorReserve = ChartPanelReserveCalculator.normalizedPanelReserve(
-            totalPanelReserve: indicatorPanelBottomPadding,
-            bottomBoundaryLabelReserve: panelBottomBoundaryLabelReserve
-        )
+        let panelStackReserve = indicatorPanelBottomPadding + floatingOverlayPanelClearance
         let markerInfoGap: CGFloat = 5
         // Viewing mode: float above active indicator panels as well.
         if controlViewModel.isMarkerViewingMode {
-            return xAxisReserve + normalizedIndicatorReserve + geometry.safeAreaInsets.bottom + markerInfoGap
+            return xAxisReserve + panelStackReserve + geometry.safeAreaInsets.bottom + markerInfoGap
         }
         let controlsReserve: CGFloat = !isMarkerPlacementMode
             ? 40
             : 0
-        return xAxisReserve + normalizedIndicatorReserve + controlsReserve + geometry.safeAreaInsets.bottom + markerInfoGap
+        return xAxisReserve + panelStackReserve + controlsReserve + geometry.safeAreaInsets.bottom + markerInfoGap
     }
 
     private func xAxisReservedBandHeight(chartHeight: CGFloat, includeLabelStrip: Bool) -> CGFloat {
@@ -5560,10 +5599,7 @@ struct TradingChartView: View {
         if let draft = selectedDrawingToolbarDraft,
            let drawingState = activeInteractiveDrawingState {
             let bottomAreaHeight = geometry.size.height * 0.085 + 34
-            let panelPadding = ChartPanelReserveCalculator.normalizedPanelReserve(
-                totalPanelReserve: indicatorPanelBottomPadding,
-                bottomBoundaryLabelReserve: panelBottomBoundaryLabelReserve
-            )
+            let panelPadding = indicatorPanelBottomPadding + floatingOverlayPanelClearance
             let toolbarWidth = max(280, geometry.size.width - yAxisWidth - 16)
 
             VStack {
@@ -6087,10 +6123,7 @@ struct TradingChartView: View {
     func chartControlsBox(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.085 + 34
         let yAxisTrailingInset: CGFloat = yAxisWidth + 4
-        let panelPadding = ChartPanelReserveCalculator.normalizedPanelReserve(
-            totalPanelReserve: indicatorPanelBottomPadding,
-            bottomBoundaryLabelReserve: panelBottomBoundaryLabelReserve
-        )
+        let panelPadding = indicatorPanelBottomPadding + floatingOverlayPanelClearance
 
         VStack {
             Spacer()

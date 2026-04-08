@@ -65,6 +65,7 @@ class LeftDrawerViewModel: ObservableObject {
 
     // Accuracy leaderboard
     @Published var accuracyLeaderboard: [RLAccuracyLeaderboardMemberDTO] = []
+    @Published var accuracyLeaderboardMinPredictions: Int = 10
     @Published var isLoadingAccuracyLeaderboard: Bool = false
 
     @Published var guildTradingWatchlist: [RLTradingSymbolDTO] = []
@@ -634,6 +635,7 @@ class LeftDrawerViewModel: ObservableObject {
             let response = try await rlAppState.realApi.getGuildAccuracyLeaderboard(guildId: guildId)
             await MainActor.run {
                 self.accuracyLeaderboard = response.members
+                self.accuracyLeaderboardMinPredictions = response.minPredictionsThreshold
             }
         } catch is CancellationError {
             print("📋 refreshAccuracyLeaderboard: Cancelled")

@@ -66,7 +66,11 @@ class ChartViewModel: ObservableObject {
     @Published var activeMarketProvider: String?
     @Published var activeMarketProviderUpdatedAt: Date?
     @Published var isLoadingData: Bool = false
+    @Published private(set) var isLoadingOlderCandles: Bool = false
+    @Published private(set) var hasMoreHistoricalCandles: Bool = false
     @Published var errorMessage: String?
+    private var earliestHistoricalCandleTimestamp: Date?
+    private let historicalCandlePageSize = 1000
     
     // MARK: - Watchlists
     
@@ -222,7 +226,13 @@ class ChartViewModel: ObservableObject {
     }
     
     /// Load chart data (symbol + candles + markers) from backend
-    private func loadChartData(symbolId: UUID, guildId: UUID, timeframe: RLChartTimeframe, skipSubscribe: Bool = false) async {
+    private func loadChartData(
+        symbolId: UUID,
+        guildId: UUID,
+        timeframe: RLChartTimeframe,
+        skipSubscribe: Bool = false,
+        mergeWithExisting: Bool = false
+    ) async {
         do {
             let timeframeString = timeframe.toBackendString()
             let chartData = try await api.getChartData(
@@ -244,8 +254,17 @@ class ChartViewModel: ObservableObject {
             dataManager.currentSymbol = chartData.symbol
             dataManager.currentTimeframe = timeframe
 
-            // Update candles
-            dataManager.updateWithMarketData(chartData.candles)
+            if mergeWithExisting, !dataManager.candles.isEmpty {
+                let prependedCount = dataManager.mergeHistoricalMarketData(chartData.candles)
+                if prependedCount > 0 {
+                    gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
+                }
+                hasMoreHistoricalCandles = hasMoreHistoricalCandles || chartData.hasMoreCandles
+            } else {
+                dataManager.updateWithMarketData(chartData.candles)
+                hasMoreHistoricalCandles = chartData.hasMoreCandles
+            }
+            earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp
             reconcileCurrentCandleWithSymbolSnapshot(chartData.symbol)
             noteRealtimeMarketEvent()
 
@@ -257,14 +276,27 @@ class ChartViewModel: ObservableObject {
 
             // Update markers (if markerManager is set)
             if let markerManager = markerManager {
-                await markerManager.loadMarkersFromAPI(
-                    api: api,
-                    symbolId: chartData.symbol.id,
-                    symbol: chartData.symbol.ticker,
-                    guildId: guildId,
-                    timeframe: timeframe,
-                    candles: dataManager.candles
-                )
+                if mergeWithExisting {
+                    await markerManager.mergeMarkersFromAPI(
+                        api: api,
+                        symbolId: chartData.symbol.id,
+                        symbol: chartData.symbol.ticker,
+                        guildId: guildId,
+                        timeframe: timeframe,
+                        candles: dataManager.candles,
+                        startTime: chartData.candles.first?.timestamp,
+                        endTime: chartData.candles.last?.timestamp
+                    )
+                } else {
+                    await markerManager.loadMarkersFromAPI(
+                        api: api,
+                        symbolId: chartData.symbol.id,
+                        symbol: chartData.symbol.ticker,
+                        guildId: guildId,
+                        timeframe: timeframe,
+                        candles: dataManager.candles
+                    )
+                }
             }
 
         } catch {
@@ -282,6 +314,8 @@ class ChartViewModel: ObservableObject {
             appState.showError(error, title: "Failed to Load Chart", style: .toast)
             // Clear candles on error - don't show stale or mock data
             dataManager.updateWithMarketData([])
+            earliestHistoricalCandleTimestamp = nil
+            hasMoreHistoricalCandles = false
         }
     }
 
@@ -315,6 +349,8 @@ class ChartViewModel: ObservableObject {
 
         errorMessage = "No symbols supported by active provider"
         dataManager.updateWithMarketData([])
+        earliestHistoricalCandleTimestamp = nil
+        hasMoreHistoricalCandles = false
         appState.showError(
             title: "No Supported Symbols",
             message: detail.isEmpty
@@ -368,6 +404,7 @@ class ChartViewModel: ObservableObject {
         let endTime = timestamp.addingTimeInterval(targetTimeframe.seconds * Double(halfWindowCandles))
 
         do {
+            let previousFirstTimestamp = dataManager.candles.first?.timestamp
             let candlesResponse = try await api.getCandles(
                 symbolId: symbol.id,
                 timeframe: targetTimeframe.toBackendString(),
@@ -378,24 +415,98 @@ class ChartViewModel: ObservableObject {
 
             dataManager.currentSymbol = symbol
             dataManager.currentTimeframe = targetTimeframe
-            dataManager.updateWithMarketData(candlesResponse.candles)
+            let prependedCount = dataManager.mergeHistoricalMarketData(candlesResponse.candles)
+            if prependedCount > 0 {
+                gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
+            }
+            earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp
+            hasMoreHistoricalCandles = candlesResponse.hasMore
             reconcileCurrentCandleWithSymbolSnapshot(symbol)
             noteRealtimeMarketEvent()
 
             if let markerManager {
-                await markerManager.loadMarkersFromAPI(
+                await markerManager.mergeMarkersFromAPI(
                     api: api,
                     symbolId: symbol.id,
                     symbol: symbol.ticker,
                     guildId: guildId,
                     timeframe: targetTimeframe,
-                    candles: dataManager.candles
+                    candles: dataManager.candles,
+                    startTime: candlesResponse.candles.first?.timestamp,
+                    endTime: previousFirstTimestamp ?? candlesResponse.candles.last?.timestamp
                 )
             }
 
             indicatorManager.recalculateIndicators(candles: dataManager.candles)
         } catch {
             print("Failed to load navigation window: \(error)")
+        }
+    }
+
+    @discardableResult
+    func loadOlderCandlesIfNeeded(
+        visibleStartIndex: Int,
+        preloadThreshold: Int
+    ) async -> Int {
+        guard visibleStartIndex <= preloadThreshold else { return 0 }
+        return await loadOlderCandles()
+    }
+
+    @discardableResult
+    func loadOlderCandles() async -> Int {
+        guard let symbol = currentSymbol,
+              let guildId = appState.currentGuild?.id,
+              hasMoreHistoricalCandles,
+              !isLoadingOlderCandles,
+              !isLoadingData else {
+            return 0
+        }
+
+        let endTime = earliestHistoricalCandleTimestamp ?? dataManager.candles.first?.timestamp
+        guard let endTime else { return 0 }
+
+        isLoadingOlderCandles = true
+        defer { isLoadingOlderCandles = false }
+
+        do {
+            let previousFirstTimestamp = dataManager.candles.first?.timestamp
+            let candlesResponse = try await api.getCandles(
+                symbolId: symbol.id,
+                timeframe: currentTimeframe.toBackendString(),
+                limit: historicalCandlePageSize,
+                endTime: endTime,
+                continuousTime: true
+            )
+
+            let prependedCount = dataManager.mergeHistoricalMarketData(candlesResponse.candles)
+            if prependedCount > 0 {
+                gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
+            }
+
+            earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp ?? candlesResponse.earliestTimestamp
+            hasMoreHistoricalCandles = candlesResponse.hasMore && prependedCount > 0
+
+            if prependedCount > 0, let markerManager {
+                await markerManager.mergeMarkersFromAPI(
+                    api: api,
+                    symbolId: symbol.id,
+                    symbol: symbol.ticker,
+                    guildId: guildId,
+                    timeframe: currentTimeframe,
+                    candles: dataManager.candles,
+                    startTime: dataManager.candles.first?.timestamp,
+                    endTime: previousFirstTimestamp ?? candlesResponse.candles.last?.timestamp
+                )
+                markerManager.recalculateCandleIndices(candles: dataManager.candles)
+            }
+
+            if prependedCount > 0 {
+                indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            }
+            return prependedCount
+        } catch {
+            print("Failed to load older candles: \(error)")
+            return 0
         }
     }
     
@@ -720,12 +831,13 @@ class ChartViewModel: ObservableObject {
 
         print("🔄 [Chart] Resyncing active chart (\(reason))")
         subscribeToRealTimeTicks(guildId: guildId, symbolId: symbol.id, timeframe: currentTimeframe)
-        await loadChartData(
-            symbolId: symbol.id,
-            guildId: guildId,
-            timeframe: currentTimeframe,
-            skipSubscribe: true
-        )
+            await loadChartData(
+                symbolId: symbol.id,
+                guildId: guildId,
+                timeframe: currentTimeframe,
+                skipSubscribe: true,
+                mergeWithExisting: true
+            )
         indicatorManager.recalculateIndicators(candles: dataManager.candles)
         needsRealtimeResync = false
     }

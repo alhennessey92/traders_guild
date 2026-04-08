@@ -29,19 +29,36 @@ struct TimeframePanelView: View {
     var minPanelHeight: CGFloat = 80
     var maxPanelHeight: CGFloat = 250
     var isBottomPanel: Bool = false
+    var bottomAxisOverlayTimestamp: Date? = nil
+    var bottomAxisOverlayStyle: CrosshairTimeLabelStyle = .standard
 
     // MARK: - Private State
 
     @State private var isDraggingHandle = false
     @State private var dragStartHeight: CGFloat = 0
     @State private var lastDragTranslation: CGSize = .zero
+    @State private var isYAxisGestureActive = false
+    @State private var isBodyPinchActive = false
+    @State private var initialCandleWidthScale: CGFloat = 1.0
+    @State private var initialHorizontalOffset: CGFloat = 0
+    @State private var pinchCenterX: CGFloat = 0
+    @State private var yAxisDragStart: CGFloat = 0
+    @State private var initialPriceScale: CGFloat = 1.0
+    @State private var initialVerticalOffset: CGFloat = 0
     @State private var hasCenteredOnMarker = false
+    @State private var lastKnownChartWidth: CGFloat = UIScreen.main.bounds.width
 
     private let livePriceBadgeWidth: CGFloat = 46
     private let livePriceBadgeHeight: CGFloat = 16
-    private let yAxisOverlayWidth: CGFloat = 33
+    private let yAxisOverlayWidth: CGFloat = ChartAxisMetrics.yAxisLaneWidth
     private let livePriceTopClearance: CGFloat = 24
     private let livePriceBottomClearance: CGFloat = 10
+    private let pinchSensitivity: CGFloat = 0.7
+    private let yAxisSensitivity: CGFloat = 0.7
+    private let maxVerticalScale: CGFloat = 5.0
+    private let minVerticalScale: CGFloat = 0.5
+    private let maxHorizontalScale: CGFloat = 3.0
+    private let minHorizontalScale: CGFloat = 0.15
 
     // MARK: - Computed
 
@@ -63,6 +80,10 @@ struct TimeframePanelView: View {
 
     private var totalOffset: CGFloat {
         gestureState.panOffset.width
+    }
+
+    private var plotWidth: CGFloat {
+        max(1, lastKnownChartWidth - yAxisOverlayWidth)
     }
 
     private var markerCandleIndex: Int? {
@@ -112,7 +133,9 @@ struct TimeframePanelView: View {
         showMarkerLine: Bool = false,
         minPanelHeight: CGFloat = 80,
         maxPanelHeight: CGFloat = 250,
-        isBottomPanel: Bool = false
+        isBottomPanel: Bool = false,
+        bottomAxisOverlayTimestamp: Date? = nil,
+        bottomAxisOverlayStyle: CrosshairTimeLabelStyle = .standard
     ) {
         self._entry = ObservedObject(wrappedValue: entry)
         self._dataManager = ObservedObject(wrappedValue: entry.dataManager)
@@ -128,6 +151,8 @@ struct TimeframePanelView: View {
         self.minPanelHeight = minPanelHeight
         self.maxPanelHeight = maxPanelHeight
         self.isBottomPanel = isBottomPanel
+        self.bottomAxisOverlayTimestamp = bottomAxisOverlayTimestamp
+        self.bottomAxisOverlayStyle = bottomAxisOverlayStyle
     }
 
     // MARK: - Body
@@ -142,9 +167,7 @@ struct TimeframePanelView: View {
                     .contentShape(Rectangle())
                     .gesture(panGesture)
                     .simultaneousGesture(pinchGesture)
-                if isBottomPanel {
-                    xAxisLabels
-                }
+                xAxisLabels
             }
         }
         .overlay(
@@ -159,9 +182,16 @@ struct TimeframePanelView: View {
         }
         .onChange(of: dataManager.candles.count) { _, _ in
             centerOnMarkerIfNeeded()
+            requestOlderCandlesIfNeeded(chartWidth: plotWidth)
         }
         .onChange(of: maxPanelHeight) { _, newValue in
             entry.clampPresentation(minHeight: minPanelHeight, maxHeight: newValue)
+        }
+        .onChange(of: gestureState.panOffset.width) { _, _ in
+            requestOlderCandlesIfNeeded(chartWidth: plotWidth)
+        }
+        .onChange(of: gestureState.candleWidthScale) { _, _ in
+            requestOlderCandlesIfNeeded(chartWidth: plotWidth)
         }
     }
 
@@ -173,7 +203,7 @@ struct TimeframePanelView: View {
         gestureState.centerOn(
             candleIndex: index,
             totalCandleWidth: totalCandleWidth,
-            chartWidth: UIScreen.main.bounds.width
+            chartWidth: plotWidth
         )
     }
 
@@ -182,13 +212,14 @@ struct TimeframePanelView: View {
     private var panGesture: some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
+                guard !isYAxisGestureActive, !isBodyPinchActive else { return }
                 if lastDragTranslation == .zero {
                     gestureState.beginDrag()
                 }
                 let incrementalX = value.translation.width - lastDragTranslation.width
                 gestureState.applyPan(
                     translationX: incrementalX,
-                    chartWidth: UIScreen.main.bounds.width,
+                    chartWidth: plotWidth,
                     candleCount: dataManager.candles.count,
                     candleWidth: totalCandleWidth
                 )
@@ -203,10 +234,87 @@ struct TimeframePanelView: View {
     private var pinchGesture: some Gesture {
         MagnificationGesture()
             .onChanged { scale in
-                gestureState.applyPinch(scale: scale)
+                guard !isYAxisGestureActive else { return }
+                if !isBodyPinchActive {
+                    isBodyPinchActive = true
+                    initialCandleWidthScale = gestureState.candleWidthScale
+                    initialHorizontalOffset = gestureState.panOffset.width
+                    pinchCenterX = plotWidth / 2
+                }
+
+                let dampedScale = 1 + (scale - 1) * pinchSensitivity
+                let proposedScale = initialCandleWidthScale * dampedScale
+                let clampedScale = min(maxHorizontalScale, max(minHorizontalScale, proposedScale))
+                let oldTotalWidth = baseCandleWidth * initialCandleWidthScale + candleSpacing
+                let newTotalWidth = baseCandleWidth * clampedScale + candleSpacing
+                let totalWidthRatio = newTotalWidth / max(oldTotalWidth, 0.0001)
+                let proposedOffset = initialHorizontalOffset * totalWidthRatio + pinchCenterX * (1.0 - totalWidthRatio)
+
+                gestureState.candleWidthScale = clampedScale
+                gestureState.panOffset.width = clampedHorizontalPanOffset(
+                    proposedOffset: proposedOffset,
+                    chartWidth: plotWidth,
+                    candleWidthScale: clampedScale
+                )
             }
             .onEnded { _ in
+                isBodyPinchActive = false
                 gestureState.endPinch()
+            }
+    }
+
+    private var yAxisDragGesture: some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                if !isYAxisGestureActive {
+                    isYAxisGestureActive = true
+                    yAxisDragStart = value.startLocation.y
+                    initialPriceScale = gestureState.priceScale
+                    initialVerticalOffset = gestureState.verticalPanOffset
+                }
+
+                let dragDistance = value.location.y - yAxisDragStart
+                let scaleMultiplier = 1.0 - (dragDistance / 300.0) * yAxisSensitivity
+                let proposedScale = initialPriceScale * scaleMultiplier
+                gestureState.applyPriceScale(
+                    proposedScale: proposedScale,
+                    initialPriceScale: initialPriceScale,
+                    initialVerticalOffset: initialVerticalOffset,
+                    anchorY: panelHeight / 2,
+                    panelHeight: panelHeight,
+                    minScale: minVerticalScale,
+                    maxScale: maxVerticalScale
+                )
+            }
+            .onEnded { _ in
+                isYAxisGestureActive = false
+            }
+    }
+
+    private var yAxisPinchGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { scale in
+                if !isYAxisGestureActive {
+                    isYAxisGestureActive = true
+                    initialPriceScale = gestureState.priceScale
+                    initialVerticalOffset = gestureState.verticalPanOffset
+                }
+
+                let dampedScale = 1 + (scale - 1) * (yAxisSensitivity * 0.7)
+                let proposedScale = initialPriceScale * dampedScale
+                gestureState.applyPriceScale(
+                    proposedScale: proposedScale,
+                    initialPriceScale: initialPriceScale,
+                    initialVerticalOffset: initialVerticalOffset,
+                    anchorY: panelHeight / 2,
+                    panelHeight: panelHeight,
+                    minScale: minVerticalScale,
+                    maxScale: maxVerticalScale
+                )
+            }
+            .onEnded { _ in
+                gestureState.endPricePinch()
+                isYAxisGestureActive = false
             }
     }
 
@@ -299,28 +407,40 @@ struct TimeframePanelView: View {
         // Force SwiftUI to re-render when gesture state changes
         let _ = gestureState.panOffset.width
         let _ = gestureState.candleWidthScale
+        let _ = gestureState.priceScale
+        let _ = gestureState.verticalPanOffset
 
-        return ZStack {
-            AppColors.chartPanelBackground
+        return GeometryReader { geometry in
+            ZStack {
+                AppColors.chartPanelBackground
 
-            if dataManager.isLoading {
-                ProgressView()
-                    .tint(AppColors.surfaceWhite40)
-            } else if dataManager.candles.isEmpty {
-                Text("No data")
-                    .font(.caption2)
-                    .foregroundColor(AppColors.greyText)
-            } else {
-                Canvas { context, size in
-                    drawPanel(context: context, size: size)
+                if dataManager.isLoading {
+                    ProgressView()
+                        .tint(AppColors.surfaceWhite40)
+                } else if dataManager.candles.isEmpty {
+                    Text("No data")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                } else {
+                    Canvas { context, size in
+                        drawPanel(context: context, size: size)
+                    }
                 }
-            }
 
-            yAxisLabelsOverlay
-            panelHeaderOverlay
-            livePriceBadgeOverlay
+                yAxisLabelsOverlay
+                panelHeaderOverlay
+                livePriceBadgeOverlay
+            }
+            .clipped()
+            .onAppear {
+                lastKnownChartWidth = max(geometry.size.width, 1)
+                requestOlderCandlesIfNeeded(chartWidth: plotWidth)
+            }
+            .onChange(of: geometry.size.width) { _, newValue in
+                lastKnownChartWidth = max(newValue, 1)
+                requestOlderCandlesIfNeeded(chartWidth: max(newValue - yAxisOverlayWidth, 1))
+            }
         }
-        .clipped()
     }
 
     // MARK: - Canvas Drawing
@@ -361,8 +481,7 @@ struct TimeframePanelView: View {
 
         // Draw current price line + badge (live price or latest candle close)
         if let currentPrice = dataManager.livePrice ?? candles.last?.close {
-            let normalizedPrice = (currentPrice - priceRange.min) / (priceRange.max - priceRange.min)
-            let y = topPadding + drawableHeight * (1.0 - CGFloat(normalizedPrice))
+            let y = yPosition(for: currentPrice, priceRange: priceRange, height: drawableHeight, topPadding: topPadding)
             if y >= topPadding && y <= topPadding + drawableHeight {
                 // Dashed price line
                 let lineEndX = max(0, size.width - yAxisOverlayWidth - livePriceBadgeWidth - 6)
@@ -525,7 +644,7 @@ struct TimeframePanelView: View {
             max(visibleStartIndex, visibleStartIndex + Int(size.width / totalCandleWidth) + 3)
         )
         guard visibleStartIndex < visibleEndIndex else { return }
-        let lineEndX = size.width - 30
+        let lineEndX = size.width - yAxisOverlayWidth
 
         for i in visibleStartIndex..<visibleEndIndex {
             guard i < candles.count else { continue }
@@ -610,12 +729,17 @@ struct TimeframePanelView: View {
 
     private var yAxisLabelsOverlay: some View {
         let range = candlePriceRange(candles: dataManager.candles)
-        let mid = (range.max + range.min) / 2
+        let topPadding: CGFloat = 18
+        let bottomPadding: CGFloat = 4
+        let drawableHeight = max(1, panelHeight - topPadding - bottomPadding)
+        let top = price(atY: topPadding, priceRange: range, height: drawableHeight, topPadding: topPadding)
+        let bottom = price(atY: panelHeight - bottomPadding, priceRange: range, height: drawableHeight, topPadding: topPadding)
+        let mid = (top + bottom) / 2
 
         return HStack {
             Spacer()
             VStack {
-                Text(formatAxisPrice(range.max))
+                Text(formatAxisPrice(top))
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundColor(AppColors.surfaceWhite66)
                 Spacer()
@@ -623,15 +747,19 @@ struct TimeframePanelView: View {
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundColor(AppColors.surfaceWhite40)
                 Spacer()
-                Text(formatAxisPrice(range.min))
+                Text(formatAxisPrice(bottom))
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundColor(AppColors.surfaceWhite66)
             }
             .frame(width: 28)
+            .frame(minWidth: yAxisOverlayWidth)
             .padding(.top, 18)
             .padding(.bottom, 4)
             .padding(.trailing, 5)
             .background(AppColors.chartPanelBackgroundDeep.opacity(0.92))
+            .contentShape(Rectangle())
+            .highPriorityGesture(yAxisDragGesture)
+            .simultaneousGesture(yAxisPinchGesture)
         }
     }
 
@@ -724,6 +852,26 @@ struct TimeframePanelView: View {
                     .frame(height: 1)
                     .opacity(0.7)
             }
+
+            if isBottomPanel, let overlayTimestamp = bottomAxisOverlayTimestamp,
+               let overlayX = xPosition(forTimestamp: overlayTimestamp) {
+                CrosshairTimeLabel(
+                    timestamp: overlayTimestamp,
+                    timeframe: dataManager.timeframe,
+                    timeZone: .current,
+                    style: bottomAxisOverlayStyle
+                )
+                .position(
+                    x: CrosshairTimeLabel.clampedCenterX(
+                        rawX: overlayX,
+                        timestamp: overlayTimestamp,
+                        timeframe: dataManager.timeframe,
+                        timeZone: .current,
+                        availableWidth: lastKnownChartWidth
+                    ),
+                    y: CrosshairTimeLabel.indicatorHeight * 0.5
+                )
+            }
         }
         .frame(height: 24)
     }
@@ -752,7 +900,17 @@ struct TimeframePanelView: View {
 
     private func yPosition(for price: Double, priceRange: (min: Double, max: Double), height: CGFloat, topPadding: CGFloat) -> CGFloat {
         let normalized = (price - priceRange.min) / (priceRange.max - priceRange.min)
-        return topPadding + height * (1.0 - CGFloat(normalized))
+        let baseY = topPadding + height * (1.0 - CGFloat(normalized))
+        let centerY = topPadding + height / 2
+        return centerY + (baseY - centerY) * gestureState.priceScale + gestureState.verticalPanOffset
+    }
+
+    private func price(atY y: CGFloat, priceRange: (min: Double, max: Double), height: CGFloat, topPadding: CGFloat) -> Double {
+        guard priceRange.max > priceRange.min, gestureState.priceScale > 0 else { return priceRange.min }
+        let centerY = topPadding + height / 2
+        let unscaledY = ((y - gestureState.verticalPanOffset - centerY) / gestureState.priceScale) + centerY
+        let normalized = 1.0 - ((unscaledY - topPadding) / height)
+        return priceRange.min + Double(normalized) * (priceRange.max - priceRange.min)
     }
 
     private func formatAxisPrice(_ price: Double) -> String {
@@ -763,5 +921,49 @@ struct TimeframePanelView: View {
         } else {
             return String(format: "%.4f", price)
         }
+    }
+
+    private func requestOlderCandlesIfNeeded(chartWidth: CGFloat) {
+        guard chartWidth > 0,
+              !dataManager.candles.isEmpty,
+              totalCandleWidth > 0,
+              dataManager.hasMoreHistoricalCandles,
+              !dataManager.isLoadingOlderCandles,
+              !dataManager.isLoading else {
+            return
+        }
+
+        let visibleStartIndex = max(0, Int(floor(-gestureState.panOffset.width / totalCandleWidth)))
+        let visibleCandleCount = max(1, Int(ceil(chartWidth / totalCandleWidth)))
+        let preloadThreshold = max(24, visibleCandleCount)
+        guard visibleStartIndex <= preloadThreshold else { return }
+
+        Task { @MainActor in
+            let prependedCount = await dataManager.loadOlderCandlesIfNeeded(
+                visibleStartIndex: visibleStartIndex,
+                preloadThreshold: preloadThreshold
+            )
+            if prependedCount > 0 {
+                gestureState.shiftForPrependedCandles(count: prependedCount, totalCandleWidth: totalCandleWidth)
+            }
+        }
+    }
+
+    private func clampedHorizontalPanOffset(
+        proposedOffset: CGFloat,
+        chartWidth: CGFloat,
+        candleWidthScale: CGFloat
+    ) -> CGFloat {
+        let totalWidth = baseCandleWidth * candleWidthScale + candleSpacing
+        let totalContentWidth = CGFloat(dataManager.candles.count) * totalWidth
+        let maxOffset = chartWidth * 0.5
+        let minOffset = -(totalContentWidth - chartWidth * 0.5)
+        return min(maxOffset, max(minOffset, proposedOffset))
+    }
+
+    private func xPosition(forTimestamp timestamp: Date) -> CGFloat? {
+        guard let candleIndex = dataManager.markerCandleIndex(for: timestamp) else { return nil }
+        let rawX = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+        return rawX.isFinite ? rawX : nil
     }
 }

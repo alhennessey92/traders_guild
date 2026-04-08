@@ -2325,8 +2325,8 @@ private struct AppIconPreviewView: View {
         guard let url = Bundle.main.url(
             forResource: name,
             withExtension: "png",
-            subdirectory: "AppIcon.icon/Assets"
-        ),
+            subdirectory: "AppIconPreview/Assets"
+        ) ?? Bundle.main.url(forResource: name, withExtension: "png"),
         let image = UIImage(contentsOfFile: url.path) else {
             return nil
         }

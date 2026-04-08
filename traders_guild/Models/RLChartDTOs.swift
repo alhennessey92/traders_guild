@@ -1090,6 +1090,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let attachments: [RLMessageAttachmentDTO]
     let replyPreview: RLMessageReplyPreviewDTO?
     var reactions: [RLMessageReactionDTO]
 
@@ -1114,6 +1115,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyPreview: RLMessageReplyPreviewDTO? = nil,
         reactions: [RLMessageReactionDTO] = []
     ) {
@@ -1130,6 +1132,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         self.attachmentUrl = attachmentUrl
         self.attachmentType = attachmentType
         self.attachmentName = attachmentName
+        self.attachments = attachments
         self.replyPreview = replyPreview
         self.reactions = reactions
     }
@@ -1144,6 +1147,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.id == rhs.id &&
         lhs.content == rhs.content &&
         lhs.isEdited == rhs.isEdited &&
+        lhs.attachments == rhs.attachments &&
         lhs.replyPreview == rhs.replyPreview &&
         lhs.reactions == rhs.reactions
     }
@@ -1158,7 +1162,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         case createdAt
         case timestampFormatted, isEdited
         case isCurrentUserMessage, canEdit, canDelete
-        case attachmentUrl, attachmentType, attachmentName
+        case attachmentUrl, attachmentType, attachmentName, attachments
         case replyPreview, reactions
     }
 
@@ -1176,6 +1180,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         attachmentUrl = try container.decodeIfPresent(String.self, forKey: .attachmentUrl)
         attachmentType = try container.decodeIfPresent(String.self, forKey: .attachmentType)
         attachmentName = try container.decodeIfPresent(String.self, forKey: .attachmentName)
+        attachments = try container.decodeIfPresent([RLMessageAttachmentDTO].self, forKey: .attachments) ?? []
         replyPreview = try container.decodeIfPresent(RLMessageReplyPreviewDTO.self, forKey: .replyPreview)
         reactions = try container.decodeIfPresent([RLMessageReactionDTO].self, forKey: .reactions) ?? []
 
@@ -1201,6 +1206,7 @@ struct RLMarkerCommentDTO: Codable, Identifiable, Equatable, Hashable {
         try container.encodeIfPresent(attachmentUrl, forKey: .attachmentUrl)
         try container.encodeIfPresent(attachmentType, forKey: .attachmentType)
         try container.encodeIfPresent(attachmentName, forKey: .attachmentName)
+        try container.encode(attachments, forKey: .attachments)
         try container.encodeIfPresent(replyPreview, forKey: .replyPreview)
         try container.encode(reactions, forKey: .reactions)
     }
@@ -1939,6 +1945,7 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let attachments: [RLMessageAttachmentDTO]
     let replyPreview: RLMessageReplyPreviewDTO?
     var reactions: [RLMessageReactionDTO]
 
@@ -1970,7 +1977,7 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
         case createdAt
         case timestampFormatted, isEdited
         case isCurrentUserMessage, canEdit, canDelete
-        case attachmentUrl, attachmentType, attachmentName
+        case attachmentUrl, attachmentType, attachmentName, attachments
         case replyPreview, reactions
     }
 
@@ -1988,6 +1995,7 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
         attachmentUrl = try container.decodeIfPresent(String.self, forKey: .attachmentUrl)
         attachmentType = try container.decodeIfPresent(String.self, forKey: .attachmentType)
         attachmentName = try container.decodeIfPresent(String.self, forKey: .attachmentName)
+        attachments = try container.decodeIfPresent([RLMessageAttachmentDTO].self, forKey: .attachments) ?? []
         replyPreview = try container.decodeIfPresent(RLMessageReplyPreviewDTO.self, forKey: .replyPreview)
         reactions = try container.decodeIfPresent([RLMessageReactionDTO].self, forKey: .reactions) ?? []
 
@@ -2013,6 +2021,7 @@ struct RLChartChatMessageDTO: Codable, Identifiable, Equatable, Hashable {
         try container.encodeIfPresent(attachmentUrl, forKey: .attachmentUrl)
         try container.encodeIfPresent(attachmentType, forKey: .attachmentType)
         try container.encodeIfPresent(attachmentName, forKey: .attachmentName)
+        try container.encode(attachments, forKey: .attachments)
         try container.encodeIfPresent(replyPreview, forKey: .replyPreview)
         try container.encode(reactions, forKey: .reactions)
     }
@@ -2330,6 +2339,7 @@ struct RLSendChartChatMessageRequest: Codable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentName: String?
+    let attachments: [RLMessageAttachmentDTO]?
     let replyToMessageId: UUID?
 
     init(
@@ -2337,12 +2347,14 @@ struct RLSendChartChatMessageRequest: Codable {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO]? = nil,
         replyToMessageId: UUID? = nil
     ) {
         self.content = content
         self.attachmentUrl = attachmentUrl
         self.attachmentType = attachmentType
         self.attachmentName = attachmentName
+        self.attachments = attachments
         self.replyToMessageId = replyToMessageId
     }
 }

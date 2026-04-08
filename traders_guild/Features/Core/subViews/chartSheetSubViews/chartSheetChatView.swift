@@ -80,7 +80,7 @@ struct ImprovedChartSheetChatView: View {
         .background(ChatBackground())
         .sheet(isPresented: $showEditSheet) {
             if let message = messageToEdit {
-                UnifiedEditMessageSheet(originalContent: message.content) { newContent in
+                UnifiedEditMessageSheet(originalContent: ChatMessageVisibleText.value(for: message)) { newContent in
                     await editMessage(message, newContent: newContent)
                 }
             }
@@ -217,7 +217,10 @@ struct ImprovedChartSheetChatView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
-                .padding(.bottom, 20)
+                .padding(.bottom, 36)
+                Color.clear
+                    .frame(height: 18)
+                    .id("bottomAnchor")
             }
             .scrollDismissesKeyboard(.interactively)
             .onTapGesture {
@@ -225,15 +228,30 @@ struct ImprovedChartSheetChatView: View {
                 onBackgroundTap?()
             }
             .onChange(of: chartChatManager.messages.count) { _ in
-                if let lastMessage = chartChatManager.messages.last {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo("bottomAnchor", anchor: .bottom)
+                }
+            }
+            .onChange(of: chartChatManager.isLoadingChat) { _, isLoading in
+                guard !isLoading else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        proxy.scrollTo("bottomAnchor", anchor: .bottom)
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("bottomAnchor", anchor: .bottom)
                     }
                 }
             }
             .onAppear {
-                if let lastMessage = chartChatManager.messages.last {
-                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                proxy.scrollTo("bottomAnchor", anchor: .bottom)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    proxy.scrollTo("bottomAnchor", anchor: .bottom)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                    proxy.scrollTo("bottomAnchor", anchor: .bottom)
                 }
             }
         }
@@ -389,19 +407,6 @@ struct ChartMessageRow: View {
     
     @EnvironmentObject var rlAppState: RLAppState
     
-    private var canDeleteMessage: Bool {
-        // Check if current user can delete this message
-        // For now, allow deletion if it's the current user's message or if user is admin
-        guard let currentMembership = rlAppState.currentMembership else {
-            return false
-        }
-        return message.isCurrentUserMessage || currentMembership.canModerate
-    }
-    
-    private var canEditMessage: Bool {
-        return message.isCurrentUserMessage
-    }
-    
     var body: some View {
         RLChatMessageBubble(
             message: message,
@@ -409,11 +414,11 @@ struct ChartMessageRow: View {
             isGrouped: isGrouped,
             onAvatarTap: { onAuthorTap(message.author) },
             onAuthorTap: { onAuthorTap(message.author) },
-            onEdit: canEditMessage ? onEdit : nil,
-            onDelete: canDeleteMessage ? onDelete : nil,
+            onEdit: message.canEdit ? onEdit : nil,
+            onDelete: message.canDelete ? onDelete : nil,
             onReport: !message.isCurrentUserMessage ? onReport : nil,
             onCopy: { rlAppState.showSuccess(RLUserFacingCopy.text(.successCopiedToClipboard)) },
-            onReply: onReply,
+            onReply: message.isCurrentUserMessage ? nil : onReply,
             onToggleReaction: onReactionSelected,
             onVisibleReactionTap: onVisibleReactionTap,
             onMarkerShareTap: { payload in

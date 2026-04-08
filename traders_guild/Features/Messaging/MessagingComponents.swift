@@ -251,7 +251,7 @@ struct ChatMarkerLinkDraft: Equatable, Identifiable, MarkerListItemData {
 struct ChatComposerLayoutMetrics {
     static let barHeight: CGFloat = 44
     static let containerHorizontalPadding: CGFloat = 16
-    static let containerVerticalPadding: CGFloat = 10
+    static let containerVerticalPadding: CGFloat = 8
     static let attachmentPanelGap: CGFloat = 12
 
     static var attachmentPanelBottomOffset: CGFloat {
@@ -279,7 +279,7 @@ struct ChatReplyDraft: Equatable, Identifiable {
 struct ChatComposerPayload: Equatable {
     let text: String
     let attachments: [ChatAttachmentDraft]
-    let markerShareDraft: ChatMarkerLinkDraft?
+    let markerShareDrafts: [ChatMarkerLinkDraft]
     let replyDraft: ChatReplyDraft?
 
     init(
@@ -290,30 +290,33 @@ struct ChatComposerPayload: Equatable {
     ) {
         self.text = text
         self.attachments = attachment.map { [$0] } ?? []
-        self.markerShareDraft = markerShareDraft
+        self.markerShareDrafts = markerShareDraft.map { [$0] } ?? []
         self.replyDraft = replyDraft
     }
 
     init(
         text: String,
         attachments: [ChatAttachmentDraft],
-        markerShareDraft: ChatMarkerLinkDraft? = nil,
+        markerShareDrafts: [ChatMarkerLinkDraft] = [],
         replyDraft: ChatReplyDraft? = nil
     ) {
         self.text = text
         self.attachments = attachments
-        self.markerShareDraft = markerShareDraft
+        self.markerShareDrafts = markerShareDrafts
         self.replyDraft = replyDraft
     }
 
     var hasBodyContent: Bool {
-        !text.isEmpty || markerShareDraft != nil
+        !text.isEmpty || !markerShareDrafts.isEmpty || !attachments.isEmpty
     }
 
     func encodedContent(fallback: String = "") -> String {
         let note = text.isEmpty ? fallback : text
-        guard let markerShareDraft else { return note }
-        return MarkerShareCodec.buildMessage(note: note, payload: markerShareDraft.payload)
+        guard !markerShareDrafts.isEmpty else { return note }
+        return MarkerShareCodec.buildMessage(
+            note: note,
+            payloads: markerShareDrafts.map(\.payload)
+        )
     }
 }
 
@@ -321,15 +324,16 @@ extension ChatReplyDraft {
     init<Message: RLChatMessageDisplayable>(message: Message) {
         self.messageId = message.id
         self.authorDisplayName = message.authorUsername
-        if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            self.contentPreview = message.content
-        } else if let attachmentName = message.attachmentName, !attachmentName.isEmpty {
+        let visibleText = ChatMessageVisibleText.value(for: message)
+        if !visibleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self.contentPreview = visibleText
+        } else if let attachmentName = message.messageAttachments.first?.attachmentName, !attachmentName.isEmpty {
             self.contentPreview = attachmentName
         } else {
             self.contentPreview = "Attachment"
         }
-        self.attachmentType = message.attachmentType
-        self.attachmentName = message.attachmentName
+        self.attachmentType = message.messageAttachments.first?.attachmentType
+        self.attachmentName = message.messageAttachments.first?.attachmentName
     }
 }
 
@@ -493,28 +497,40 @@ enum MarkerShareCodec {
     private static let tokenSuffix = "]]"
 
     static func buildMessage(note: String, payload: MarkerSharePayloadV1) -> String {
-        guard let token = encodedToken(for: payload) else {
-            let fallback = note.trimmingCharacters(in: .whitespacesAndNewlines)
-            return fallback.isEmpty ? "Shared marker \(payload.markerId.uuidString.prefix(8).uppercased())" : fallback
-        }
+        buildMessage(note: note, payloads: [payload])
+    }
+
+    static func buildMessage(note: String, payloads: [MarkerSharePayloadV1]) -> String {
+        let tokens = payloads.compactMap(encodedToken(for:))
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedNote.isEmpty {
-            return token
+        guard !tokens.isEmpty else { return trimmedNote }
+        guard !trimmedNote.isEmpty else {
+            return tokens.joined(separator: "\n\n")
         }
-        return "\(trimmedNote)\n\n\(token)"
+        return ([trimmedNote] + tokens).joined(separator: "\n\n")
     }
 
     static func extract(from content: String) -> (payload: MarkerSharePayloadV1, visibleText: String)? {
-        guard let start = content.range(of: tokenPrefix) else { return nil }
-        guard let suffixRange = content[start.upperBound...].range(of: tokenSuffix) else { return nil }
+        guard let extracted = extractAll(from: content),
+              let first = extracted.payloads.first else { return nil }
+        return (first, extracted.visibleText)
+    }
 
-        let encoded = String(content[start.upperBound..<suffixRange.lowerBound])
-        guard let payload = decodePayload(from: encoded) else { return nil }
+    static func extractAll(from content: String) -> (payloads: [MarkerSharePayloadV1], visibleText: String)? {
+        var mutableContent = content
+        var payloads: [MarkerSharePayloadV1] = []
 
-        var visible = content
-        visible.removeSubrange(start.lowerBound..<suffixRange.upperBound)
-        visible = visible.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (payload, visible)
+        while let start = mutableContent.range(of: tokenPrefix),
+              let suffixRange = mutableContent[start.upperBound...].range(of: tokenSuffix) {
+            let encoded = String(mutableContent[start.upperBound..<suffixRange.lowerBound])
+            if let payload = decodePayload(from: encoded) {
+                payloads.append(payload)
+            }
+            mutableContent.removeSubrange(start.lowerBound..<suffixRange.upperBound)
+        }
+
+        let visibleText = mutableContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        return payloads.isEmpty ? nil : (payloads, visibleText)
     }
 
     private static func encodedToken(for payload: MarkerSharePayloadV1) -> String? {
@@ -560,12 +576,18 @@ enum MarkerShareCodec {
     }
 }
 
+enum ChatMessageVisibleText {
+    static func value<Message: RLChatMessageDisplayable>(for message: Message) -> String {
+        MarkerShareCodec.extractAll(from: message.content)?.visibleText ?? message.content
+    }
+}
+
 struct ChatInputFooter: View {
     @Binding var messageText: String
     var replyDraft: Binding<ChatReplyDraft?>? = nil
     let placeholder: String
     let isSending: Bool
-    let onSend: (ChatComposerPayload) -> Void
+    let onSend: @MainActor (ChatComposerPayload) async -> Bool
     var allowsMarkerLinkAttachment: Bool = false
     var markerFilter: ChatMarkerFilter? = nil
 
@@ -595,10 +617,11 @@ struct ChatInputFooter: View {
     @State private var showDocumentPicker = false
     @State private var showMarkerPicker = false
     @State private var selectedAttachments: [ChatAttachmentDraft] = []
-    @State private var selectedMarkerDraft: ChatMarkerLinkDraft? = nil
+    @State private var selectedMarkerDrafts: [ChatMarkerLinkDraft] = []
     @State private var markerDrafts: [ChatMarkerLinkDraft] = []
     @State private var isLoadingMarkerDrafts = false
     @State private var markerPickerError: String? = nil
+    @State private var isDispatchingSend = false
 
     private var isLightGreyChrome: Bool { ThemeManager.shared.currentTheme == .lightGrey }
     private var actionPanelBottomOffset: CGFloat {
@@ -741,7 +764,7 @@ struct ChatInputFooter: View {
                         }
                         .compositingGroup()
 
-                        if isSending {
+                        if isSending || isDispatchingSend {
                             ProgressView()
                                 .scaleEffect(0.8)
                                 .frame(width: 40, height: 40)
@@ -862,7 +885,9 @@ struct ChatInputFooter: View {
                     Task { await loadMarkerDrafts() }
                 },
                 onSelect: { draft in
-                    selectedMarkerDraft = draft
+                    if !selectedMarkerDrafts.contains(where: { $0.id == draft.id }) {
+                        selectedMarkerDrafts.append(draft)
+                    }
                     showMarkerPicker = false
                 }
             )
@@ -1021,13 +1046,15 @@ struct ChatInputFooter: View {
     }
 
     private var hasDraftContent: Bool {
-        replyDraft?.wrappedValue != nil || !selectedAttachments.isEmpty || selectedMarkerDraft != nil
+        replyDraft?.wrappedValue != nil || !selectedAttachments.isEmpty || !selectedMarkerDrafts.isEmpty
     }
 
     private var canSend: Bool {
-        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !selectedAttachments.isEmpty ||
-        selectedMarkerDraft != nil
+        !isDispatchingSend && (
+            !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !selectedAttachments.isEmpty ||
+            !selectedMarkerDrafts.isEmpty
+        )
     }
 
     // MARK: - Attachment Draft Row
@@ -1060,7 +1087,7 @@ struct ChatInputFooter: View {
                 Button("Remove all") {
                     withAnimation {
                         selectedAttachments = []
-                        selectedMarkerDraft = nil
+                        selectedMarkerDrafts = []
                         replyDraft?.wrappedValue = nil
                     }
                 }
@@ -1073,8 +1100,8 @@ struct ChatInputFooter: View {
                     ForEach(Array(selectedAttachments.enumerated()), id: \.offset) { index, attachment in
                         attachmentPreviewChip(for: attachment, at: index)
                     }
-                    if let selectedMarkerDraft {
-                        markerPreviewChip(for: selectedMarkerDraft)
+                    ForEach(selectedMarkerDrafts) { markerDraft in
+                        markerPreviewChip(for: markerDraft)
                     }
                 }
             }
@@ -1094,25 +1121,27 @@ struct ChatInputFooter: View {
     private var draftSummaryText: String {
         let attachCount = selectedAttachments.count
         let hasAttach = attachCount > 0
-        let hasMarker = selectedMarkerDraft != nil
+        let markerCount = selectedMarkerDrafts.count
+        let hasMarker = markerCount > 0
         let hasReply = replyDraft?.wrappedValue != nil
         let attachLabel = attachCount == 1 ? "1 attachment" : "\(attachCount) attachments"
+        let markerLabel = markerCount == 1 ? "1 marker link" : "\(markerCount) marker links"
 
         switch (hasAttach, hasMarker, hasReply) {
         case (false, false, true):
             return "Reply ready"
         case (false, true, false):
-            return "1 marker link ready"
+            return "\(markerLabel) ready"
         case (true, false, false):
             return "\(attachLabel) ready"
         case (true, true, false):
-            return "\(attachLabel) + marker link ready"
+            return "\(attachLabel) + \(markerLabel) ready"
         case (true, false, true):
             return "Reply + \(attachLabel) ready"
         case (false, true, true):
-            return "Reply + marker link ready"
+            return "Reply + \(markerLabel) ready"
         case (true, true, true):
-            return "Reply + \(attachLabel) + marker link ready"
+            return "Reply + \(attachLabel) + \(markerLabel) ready"
         case (false, false, false):
             return "Draft ready"
         }
@@ -1215,7 +1244,7 @@ struct ChatInputFooter: View {
             subtitle: marker.cleanedNotePreview ?? marker.createdAt.formatted(date: .abbreviated, time: .shortened),
             style: .attachmentDraft,
             trailingAction: {
-                withAnimation { selectedMarkerDraft = nil }
+                withAnimation { selectedMarkerDrafts.removeAll { $0.id == marker.id } }
             }
         )
     }
@@ -1242,7 +1271,7 @@ struct ChatInputFooter: View {
     private func clearComposerDrafts() {
         messageText = ""
         selectedAttachments = []
-        selectedMarkerDraft = nil
+        selectedMarkerDrafts = []
         setReplyDraft(nil)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             showActionPanel = false
@@ -1280,18 +1309,26 @@ struct ChatInputFooter: View {
 
     private func sendComposedMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isSending, (!selectedAttachments.isEmpty || !trimmed.isEmpty || selectedMarkerDraft != nil || currentReplyDraft() != nil) else { return }
+        guard !isSending,
+              !isDispatchingSend,
+              (!selectedAttachments.isEmpty || !trimmed.isEmpty || !selectedMarkerDrafts.isEmpty || currentReplyDraft() != nil) else {
+            return
+        }
 
-        onSend(
-            ChatComposerPayload(
-                text: trimmed,
-                attachments: selectedAttachments,
-                markerShareDraft: selectedMarkerDraft,
-                replyDraft: currentReplyDraft()
-            )
+        let payload = ChatComposerPayload(
+            text: trimmed,
+            attachments: selectedAttachments,
+            markerShareDrafts: selectedMarkerDrafts,
+            replyDraft: currentReplyDraft()
         )
-
-        clearComposerDrafts()
+        isDispatchingSend = true
+        Task { @MainActor in
+            let didSend = await onSend(payload)
+            isDispatchingSend = false
+            if didSend {
+                clearComposerDrafts()
+            }
+        }
     }
 
     /// Insert selected @mention into the text, replacing the partial @query
@@ -2039,7 +2076,7 @@ struct ChatScrollView<Message: RLChatMessageDisplayable, Content: View>: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
-                .padding(.bottom, 20)
+                .padding(.bottom, 32)
             }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.count) { _ in
@@ -2519,6 +2556,7 @@ protocol RLChatMessageDisplayable: Identifiable {
     var attachmentUrl: String? { get }
     var attachmentType: String? { get }
     var attachmentName: String? { get }
+    var messageAttachments: [RLMessageAttachmentDTO] { get }
     var replyPreview: RLMessageReplyPreviewDTO? { get }
     var reactions: [RLMessageReactionDTO] { get }
 }
@@ -2721,24 +2759,26 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     /// Whether the text content is just the attachment filename (should be hidden for images).
     private var textIsJustFilename: Bool {
         let trimmedText = displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmedText.isEmpty && trimmedText == message.attachmentName
+        return !trimmedText.isEmpty && trimmedText == message.messageAttachments.first?.attachmentName
     }
 
     /// Whether this message contains only an image attachment with no text content.
     private var isImageOnlyMessage: Bool {
-        let hasImage = message.attachmentType?.hasPrefix("image/") == true
-            && message.attachmentUrl?.isEmpty == false
+        let hasImage = message.messageAttachments.contains {
+            $0.attachmentType?.hasPrefix("image/") == true && !$0.attachmentUrl.isEmpty
+        }
         let trimmedText = displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasText = (!trimmedText.isEmpty && !textIsJustFilename) || message.isEdited
         let hasReply = message.replyPreview != nil
-        let hasMarkerShare = markerShareContent != nil
+        let hasMarkerShare = !markerShareContents.isEmpty
         return hasImage && !hasText && !hasReply && !hasMarkerShare
     }
 
     /// Whether this message has an image with accompanying text (caption).
     private var isImageWithCaptionMessage: Bool {
-        let hasImage = message.attachmentType?.hasPrefix("image/") == true
-            && message.attachmentUrl?.isEmpty == false
+        let hasImage = message.messageAttachments.contains {
+            $0.attachmentType?.hasPrefix("image/") == true && !$0.attachmentUrl.isEmpty
+        }
         let trimmedText = displayMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
         return hasImage && !trimmedText.isEmpty && !textIsJustFilename
     }
@@ -2750,11 +2790,15 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
             }
 
             // Attachment preview (if present)
-            if let attachmentUrl = message.attachmentUrl, !attachmentUrl.isEmpty {
-                attachmentView(url: attachmentUrl, type: message.attachmentType, name: message.attachmentName)
+            ForEach(message.messageAttachments) { attachment in
+                attachmentView(
+                    url: attachment.attachmentUrl,
+                    type: attachment.attachmentType,
+                    name: attachment.attachmentName
+                )
             }
 
-            if let markerShare = markerShareContent {
+            ForEach(Array(markerShareContents.enumerated()), id: \.offset) { _, markerShare in
                 MarkerShareCard(
                     payload: markerShare.payload,
                     isCurrentUserMessage: message.isCurrentUserMessage,
@@ -2896,12 +2940,14 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         return "doc.fill"
     }
 
-    private var markerShareContent: (payload: MarkerSharePayloadV1, visibleText: String)? {
-        MarkerShareCodec.extract(from: message.content)
+    private var markerShareContents: [(payload: MarkerSharePayloadV1, visibleText: String)] {
+        MarkerShareCodec.extractAll(from: message.content)?.payloads.map { payload in
+            (payload: payload, visibleText: ChatMessageVisibleText.value(for: message))
+        } ?? []
     }
 
     private var displayMessageText: String {
-        markerShareContent?.visibleText ?? message.content
+        ChatMessageVisibleText.value(for: message)
     }
     
     // MARK: - Timestamp Row
@@ -3015,10 +3061,11 @@ struct ChatSurfaceOverlayHost<Message: RLChatMessageDisplayable>: View {
                             authorUsername: message.authorUsername,
                             previewText: previewText(for: message),
                             currentUserReactions: Set(message.reactions.filter(\.reactedByCurrentUser).map(\.emoji)),
-                            canEdit: message.canEdit && onEdit != nil,
-                            canDelete: message.canDelete && onDelete != nil,
+                            canReact: !message.isCurrentUserMessage && onQuickReactionSelected != nil,
+                            canEdit: message.isCurrentUserMessage && message.canEdit && onEdit != nil,
+                            canDelete: message.isCurrentUserMessage && message.canDelete && onDelete != nil,
                             canReport: !message.isCurrentUserMessage && onReport != nil,
-                            canReply: onReply != nil,
+                            canReply: !message.isCurrentUserMessage && onReply != nil,
                             onEmojiSelected: { emoji in
                                 onQuickReactionSelected?(message, emoji)
                                 chatSurfaceOverlayCoordinator.dismissOverlay()
@@ -3105,19 +3152,27 @@ struct ChatSurfaceOverlayHost<Message: RLChatMessageDisplayable>: View {
     }
 
     private func previewText(for message: Message) -> String {
-        if let markerShare = MarkerShareCodec.extract(from: message.content) {
+        if let markerShare = MarkerShareCodec.extractAll(from: message.content) {
             let visibleText = markerShare.visibleText.trimmingCharacters(in: .whitespacesAndNewlines)
             if !visibleText.isEmpty {
                 return visibleText
             }
+            if markerShare.payloads.count == 1 {
+                return "Shared marker"
+            }
+            return "Shared \(markerShare.payloads.count) markers"
         }
 
-        let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            return trimmed
+        let visibleText = ChatMessageVisibleText.value(for: message).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !visibleText.isEmpty {
+            return visibleText
         }
 
-        if let attachmentName = message.attachmentName, !attachmentName.isEmpty {
+        if message.messageAttachments.count > 1 {
+            return "\(message.messageAttachments.count) attachments"
+        }
+
+        if let attachmentName = message.messageAttachments.first?.attachmentName, !attachmentName.isEmpty {
             return attachmentName
         }
 
@@ -3129,6 +3184,7 @@ private struct ChatCenteredMessageActionCard: View {
     let authorUsername: String
     let previewText: String
     let currentUserReactions: Set<String>
+    let canReact: Bool
     let canEdit: Bool
     let canDelete: Bool
     let canReport: Bool
@@ -3185,42 +3241,42 @@ private struct ChatCenteredMessageActionCard: View {
             }
             .padding(.horizontal, 4)
 
-            // Quick reaction emoji row (scrollable for expanded set)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(quickEmojis, id: \.self) { emoji in
-                        let isAlreadyReacted = currentUserReactions.contains(emoji)
-                        Button {
-                            tappedEmoji = emoji
-                            HapticFeedback.light.trigger()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                onEmojiSelected(emoji)
+            if canReact {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(quickEmojis, id: \.self) { emoji in
+                            let isAlreadyReacted = currentUserReactions.contains(emoji)
+                            Button {
+                                tappedEmoji = emoji
+                                HapticFeedback.light.trigger()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    onEmojiSelected(emoji)
+                                }
+                            } label: {
+                                Text(emoji)
+                                    .font(.title2)
+                                    .frame(width: 48, height: 48)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(isAlreadyReacted ? AppColors.accentDarkColor.opacity(0.4) : AppColors.surfaceWhite06)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                    .stroke(isAlreadyReacted ? AppColors.accentColor.opacity(0.7) : AppColors.surfaceWhite12, lineWidth: isAlreadyReacted ? 1.5 : 1)
+                                            )
+                                    )
+                                    .scaleEffect(tappedEmoji == emoji ? 1.25 : 1.0)
+                                    .animation(.spring(response: 0.25, dampingFraction: 0.5), value: tappedEmoji)
                             }
-                        } label: {
-                            Text(emoji)
-                                .font(.title2)
-                                .frame(width: 48, height: 48)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(isAlreadyReacted ? AppColors.accentDarkColor.opacity(0.4) : AppColors.surfaceWhite06)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .stroke(isAlreadyReacted ? AppColors.accentColor.opacity(0.7) : AppColors.surfaceWhite12, lineWidth: isAlreadyReacted ? 1.5 : 1)
-                                        )
-                                )
-                                .scaleEffect(tappedEmoji == emoji ? 1.25 : 1.0)
-                                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: tappedEmoji)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
-            }
 
-            // Divider
-            Rectangle()
-                .fill(AppColors.symbolDetailCardFill)
-                .frame(height: 1)
-                .padding(.horizontal, 4)
+                Rectangle()
+                    .fill(AppColors.symbolDetailCardFill)
+                    .frame(height: 1)
+                    .padding(.horizontal, 4)
+            }
 
             // Action buttons
             VStack(spacing: 2) {
@@ -3616,6 +3672,15 @@ extension RLChatroomMessageDTO: RLChatMessageDisplayable {
     var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
+    var messageAttachments: [RLMessageAttachmentDTO] {
+        if !attachments.isEmpty {
+            return attachments
+        }
+        if let attachmentUrl, !attachmentUrl.isEmpty {
+            return [RLMessageAttachmentDTO(attachmentUrl: attachmentUrl, attachmentType: attachmentType, attachmentName: attachmentName)]
+        }
+        return []
+    }
 }
 
 extension RLDMMessageDTO: RLChatMessageDisplayable {
@@ -3629,6 +3694,15 @@ extension RLDMMessageDTO: RLChatMessageDisplayable {
     var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
+    var messageAttachments: [RLMessageAttachmentDTO] {
+        if !attachments.isEmpty {
+            return attachments
+        }
+        if let attachmentUrl, !attachmentUrl.isEmpty {
+            return [RLMessageAttachmentDTO(attachmentUrl: attachmentUrl, attachmentType: attachmentType, attachmentName: attachmentName)]
+        }
+        return []
+    }
 }
 
 extension RLChartChatMessageDTO: RLChatMessageDisplayable {
@@ -3642,6 +3716,15 @@ extension RLChartChatMessageDTO: RLChatMessageDisplayable {
     var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
+    var messageAttachments: [RLMessageAttachmentDTO] {
+        if !attachments.isEmpty {
+            return attachments
+        }
+        if let attachmentUrl, !attachmentUrl.isEmpty {
+            return [RLMessageAttachmentDTO(attachmentUrl: attachmentUrl, attachmentType: attachmentType, attachmentName: attachmentName)]
+        }
+        return []
+    }
 }
 
 extension RLMarkerCommentDTO: RLChatMessageDisplayable {
@@ -3655,6 +3738,12 @@ extension RLMarkerCommentDTO: RLChatMessageDisplayable {
     var authorAccuracy: Double? { author.accuracyRate }
     var authorIsFriend: Bool { author.isFriend }
     var authorIsBlocked: Bool { author.isBlocked }
+    var messageAttachments: [RLMessageAttachmentDTO] {
+        if let attachmentUrl, !attachmentUrl.isEmpty {
+            return [RLMessageAttachmentDTO(attachmentUrl: attachmentUrl, attachmentType: attachmentType, attachmentName: attachmentName)]
+        }
+        return []
+    }
 }
 
 

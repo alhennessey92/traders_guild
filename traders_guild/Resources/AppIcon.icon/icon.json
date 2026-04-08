@@ -16,13 +16,21 @@
     {
       "layers" : [
         {
-          "image-name" : "appiconbg 2.png",
-          "name" : "iconBG"
+          "image-name" : "TG 6.png",
+          "name" : "TG 6",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              140.79286825611507
+            ]
+          }
         },
         {
+          "blend-mode" : "soft-light",
           "hidden" : false,
-          "image-name" : "TG 3.png",
-          "name" : "iconText"
+          "image-name" : "appiconbg 2.png",
+          "name" : "iconBG"
         }
       ],
       "shadow" : {
@@ -30,7 +38,8 @@
         "opacity" : 0.5
       },
       "translucency" : {
-        "enabled" : false
+        "enabled" : true,
+        "value" : 0.5
       }
     }
   ],

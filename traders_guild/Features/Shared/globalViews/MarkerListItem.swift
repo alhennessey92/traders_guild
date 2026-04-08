@@ -619,6 +619,13 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             VStack(alignment: .leading, spacing: 8) {
                 if let outcome {
                     HStack(spacing: 6) {
+                        MarkerActivityMetaChip(
+                            icon: outcome.displayIcon,
+                            text: outcome.displayLabel,
+                            tint: outcomeTint(outcome),
+                            background: outcomeTint(outcome).opacity(0.15)
+                        )
+
                         if let pnl = outcome.pnl {
                             MarkerActivityMetaChip(
                                 icon: outcome.isWin ? "arrow.up.right" : "arrow.down.right",
@@ -632,6 +639,15 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                                 text: "No score impact",
                                 tint: AppColors.surfaceGray90,
                                 background: AppColors.metaChipNeutralBackground
+                            )
+                        }
+
+                        if let repImpact = reputationImpactText(for: outcome) {
+                            MarkerActivityMetaChip(
+                                icon: "sparkles",
+                                text: repImpact,
+                                tint: AppColors.accentColor,
+                                background: AppColors.accentColor.opacity(0.14)
                             )
                         }
 
@@ -813,5 +829,18 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             return String(format: "%.4f", price)
         }
         return String(format: "%.6f", price)
+    }
+
+    private func reputationImpactText(for outcome: SetupOutcome) -> String? {
+        var segments: [String] = []
+        if let guildRepDelta = outcome.guildRepDelta {
+            let prefix = guildRepDelta >= 0 ? "+" : ""
+            segments.append("Guild \(prefix)\(guildRepDelta)")
+        }
+        if let globalRepDelta = outcome.globalRepDelta {
+            let prefix = globalRepDelta >= 0 ? "+" : ""
+            segments.append("Global \(prefix)\(globalRepDelta)")
+        }
+        return segments.isEmpty ? nil : segments.joined(separator: " • ")
     }
 }

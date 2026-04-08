@@ -623,9 +623,9 @@ struct CommentsView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
-                        .padding(.bottom, 20)
+                        .padding(.bottom, 40)
                         Color.clear
-                            .frame(height: 0)
+                            .frame(height: 18)
                             .id("bottom")
                     }
                 }
@@ -635,10 +635,8 @@ struct CommentsView: View {
                     chatSurfaceOverlayCoordinator.dismissAll()
                 }
                 .onChange(of: comments.count) { _ in
-                    if let lastComment = sortedComments.last {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(lastComment.id, anchor: UnitPoint.bottom)
-                        }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
                     }
                 }
                 .onChange(of: isCommentInputFocused) { focused in
@@ -651,9 +649,11 @@ struct CommentsView: View {
                     }
                 }
                 .onAppear {
-                    if !sortedComments.isEmpty, let lastComment = sortedComments.last {
-                        proxy.scrollTo(lastComment.id, anchor: UnitPoint.bottom)
-                    } else {
+                    proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
                         proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
                     }
                 }
@@ -693,7 +693,7 @@ struct CommentsView: View {
                 isInputFocused: _isCommentInputFocused,
                 isSending: isSendingComment,
                 onSend: { payload in
-                    handleAddComment(payload)
+                    await handleAddComment(payload)
                 },
                 selectedDetent: $selectedDetent,
                 isActionPanelVisible: actionPanelVisibility,
@@ -755,9 +755,11 @@ struct CommentsView: View {
     
     // MARK: - Actions
     
-    private func handleAddComment(_ payload: ChatComposerPayload) {
+    private func handleAddComment(_ payload: ChatComposerPayload) async -> Bool {
         let trimmed = payload.text
-        guard !trimmed.isEmpty || !payload.attachments.isEmpty || payload.replyDraft != nil else { return }
+        guard !trimmed.isEmpty || !payload.attachments.isEmpty || payload.replyDraft != nil else {
+            return false
+        }
 
         HapticFeedback.light.trigger()
         
@@ -769,7 +771,7 @@ struct CommentsView: View {
                 await sendCommentWithAttachments(caption: trimmed, attachments: payload.attachments)
                 isSendingComment = false
             }
-            return
+            return true
         }
 
         // Add comment through marker manager (optimistic update happens there)
@@ -782,6 +784,7 @@ struct CommentsView: View {
             isSendingComment = false
             replyDraft = nil
         }
+        return true
     }
 
     private func sendCommentWithAttachments(caption: String, attachments: [ChatAttachmentDraft]) async {
@@ -916,7 +919,7 @@ struct MarkerCommentInputFooter: View {
     @Binding var replyDraft: ChatReplyDraft?
     @FocusState var isInputFocused: Bool
     let isSending: Bool
-    let onSend: (ChatComposerPayload) -> Void
+    let onSend: @MainActor (ChatComposerPayload) async -> Bool
     @Binding var selectedDetent: PresentationDetent
     var isActionPanelVisible: Binding<Bool>? = nil
     var onBack: (() -> Void)? = nil

@@ -100,3 +100,55 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 [Fixed] 25. Need to add a beta welcome screen like the tutorial section, but appears before the tutorial section, maybe make it appear in auth welcome view, so the first thing beta testers see, describing to them the reasoning behind the beta testing, anything they need to know, explain the process for the future - future plans, how to submit thoughts and issues in the new beta contact form we will create in number 26. Need to be able to turn this off in admin settings for the app
 
 [Fixed] 26. Create a beta tester contact form that appears as a option in the left drawer under the statistics button. It should open a sheet, that can allow users to submit feedback, information, bug reports etc...These reports need to go to a new table or area for me to review - needs to fit in with the look and ui of the app/themes. Need to be able to turn this off when beta is done in the admin app settings
+
+
+27. APN notification needs app logo still not fixed
+
+28. Reputation earned on setup tracked should be relative to risk reward, timeframe, capped to a min and max, so it adjusts on the tp and sl position
+
+29. Synthetic users not posting on other timeframes only 1 min and need more often, left over night and only one set of markers were placed and time went nearly 10 hours and still no more, plus none on any other timeframes, need to make much more activity - want to simulate an active app
+
+
+30. Candle data only goes back specific amount, looking now for some reason the 5 min goes back to 9am yesterdam and 1 min goes back to 9 am today but havent reset any data, been running for a week, there should be no limit to past data, as user goes back a certain amount should keep re loading past candles/markers etc...
+
+31. Gesture control in timeframes - i.e. pinching for x axis zoom on chart and sliding on y axis like with the main chart
+
+32. Each timeframe needs its own x axis relative to itself - when two time frames stacked, the top timeframe doesnt have a x axis relative to itself so hard to determine its current time
+
+33. When 2 timeframes active the chart buttons at bottom which should sit above the timeframe are slightly below the top timeframe by a small amount, fine with 1 active timeframe but issue with 2
+
+34. Not sure if issue with no 30 but when clicking markers in left drawer they are not being shown and y axis sometimes get hidden, no way to get out of this so have to restart app, but some of these candles are older than the 9 am so maybe that is it. So maybe address no 30 and we will see about this after. just created new marker and went straight to it from left drawer
+
+
+
+
+
+[Fixed] 35. Markers need a better resolved info in list view at the moment don’t display a lot such as in profile marker view
+
+[Fixed] 36. In chat interfaces the bottom message input section needs to sit lower as the lowest  / newest message actually sits under the message input section a little, used to sit lower in the device, currently a large gap between bottom of device and start of message input section
+
+[Fixed] 37. When adding multiple items like images, files, markers etc... need to group together in a single message bubble. This includes when markers are added with images etc as well all contained in one message bubble
+
+38. App feels laggy when opening bottom bar especially and sometimes when panning around. Left and right drawers open smoothly so they aren’t a problem. But mainly when opening the bottom bar section its not smooth, like theres small delays in it opening and closing
+
+[Fixed] 39. Need to check all options work in message detail like delete, edit, reply etc. options should be different for users own message - can’t reply or add emoji etc… noticed certain actions don’t work like delete. Shouldn’t be able to delete other users message 
+
+[Fixed] 40. User accuracy in leaderboard appears in final section but not guild as says need 10 predictions
+
+[Fixed] 41. Need to show guild in global leaderboard list view items so user knows which guild they ar epart of as its a global section across all guilds
+
+[Fixed] 42. Admin section current guild watchlist remove search and add search as tab with box in there and list all symbols underneath with no entry in search
+
+[Fixed] 43. Guild settings needs to be guild details as more of a details section 
+
+[Fixed] 44. Admin section - invite members - search section is weird with wrong background and placement. Should also show relevant users on no search entry like maybe those in other guilds to the admin
+
+[Fixed] 45. Gestures still not working right in timeframe - y axis pan scale not working, should be able to pan up and down on the y axis to change candle height like the main chart and the pinch on timeframe chart is making it go wild rather than controlled, smooth, steady zoom in and out like the main chart
+
+[Fixed] 46. Bottom chart buttons still semi hidden with 2 or more timeframes same for normal indicator panels. Ok with just one panel active, and Ok when bottom panel is open and second panel is open, but soon as that closes the chart buttons fall behind top panel slightly. Don’t maintain their normal spacing to top of panel
+
+[Fixed] 47. Crosshair white x axis time indicator still sitting too high in x axis. Getting cutoff by bottom of timeframe x axis or panel when active
+
+[Fixed] 48. Candle data still not being paginated in as user pans back in time, 5 min went back to friday which i think is correct, but 1min only went back to 4.40am today, so needs checking
+
+[Fixed] 49. Synthetic user marker system is still not great, they are placing markers but usually in clusters in small time and then nothing for a while, needs to be more consistent and realistic

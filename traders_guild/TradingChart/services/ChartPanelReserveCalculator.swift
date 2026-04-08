@@ -45,11 +45,22 @@ enum ChartPanelReserveCalculator {
         return panelResizeHandleHeight
     }
 
+    private static func expandedPanelCount(in panelHeights: [CGFloat]) -> Int {
+        panelHeights.reduce(0) { count, height in
+            count + (effectivePanelHeight(height) > 0 ? 1 : 0)
+        }
+    }
+
+    private static func timeframeStackReserve(for panelHeights: [CGFloat]) -> CGFloat {
+        stackBaseReserve(for: panelHeights)
+            + CGFloat(expandedPanelCount(in: panelHeights)) * panelXAxisLabelStripHeight
+    }
+
     static func combinedLayout(
         timeframePanelHeights: [CGFloat],
         indicatorPanelHeights: [CGFloat]
     ) -> CombinedChartPanelLayout {
-        var totalReserve = stackBaseReserve(for: timeframePanelHeights)
+        var totalReserve = timeframeStackReserve(for: timeframePanelHeights)
         totalReserve += stackBaseReserve(for: indicatorPanelHeights)
 
         let bottomOwner: ChartPanelStackOwner?
@@ -61,7 +72,7 @@ enum ChartPanelReserveCalculator {
             bottomOwner = nil
         }
 
-        if bottomOwner != nil {
+        if case .indicator = bottomOwner {
             totalReserve += panelXAxisLabelStripHeight
         }
 
@@ -93,6 +104,12 @@ enum ChartPanelReserveCalculator {
         }
 
         return total
+    }
+
+    /// Height reserve for timeframe panels. Every expanded timeframe panel owns its
+    /// own x-axis strip, unlike indicator panels where only the bottom panel owns one.
+    static func timeframeStackReserve(panelHeights: [CGFloat]) -> CGFloat {
+        timeframeStackReserve(for: panelHeights)
     }
 
     /// Label strip reserve that sits at the chart/panel boundary.

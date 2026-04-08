@@ -18,6 +18,8 @@ class TimeframePanelDataManager: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     @Published var livePrice: Double?
+    @Published private(set) var isLoadingOlderCandles: Bool = false
+    @Published private(set) var hasMoreHistoricalCandles: Bool = false
 
     let timeframe: RLChartTimeframe
     let ownerToken: String
@@ -30,6 +32,8 @@ class TimeframePanelDataManager: ObservableObject {
     private var currentCandleChannel: String?
     private var currentSymbolId: UUID?
     private var currentGuildId: UUID?
+    private var earliestHistoricalCandleTimestamp: Date?
+    private let historicalPageSize: Int
 
     // MARK: - Init
 
@@ -37,6 +41,7 @@ class TimeframePanelDataManager: ObservableObject {
         self.timeframe = timeframe
         self.api = api
         self.ownerToken = ownerToken
+        self.historicalPageSize = max(timeframe.initialCandlesCount, 320)
     }
 
     deinit {
@@ -63,6 +68,8 @@ class TimeframePanelDataManager: ObservableObject {
             )
             candles = chartData.candles
             livePrice = candles.last?.close
+            earliestHistoricalCandleTimestamp = candles.first?.timestamp
+            hasMoreHistoricalCandles = chartData.hasMoreCandles
             print("[TimeframePanel] Loaded \(candles.count) candles for \(timeframe.shortName)")
 
             // Subscribe to real-time updates for this symbol/timeframe
@@ -71,6 +78,8 @@ class TimeframePanelDataManager: ObservableObject {
             print("[TimeframePanel] Failed to load \(timeframe.shortName): \(error)")
             errorMessage = "Failed to load \(timeframe.shortName) data"
             candles = []
+            earliestHistoricalCandleTimestamp = nil
+            hasMoreHistoricalCandles = false
         }
 
         isLoading = false
@@ -80,6 +89,49 @@ class TimeframePanelDataManager: ObservableObject {
     func refreshIfPossible() async {
         guard let currentSymbolId, let currentGuildId else { return }
         await loadCandles(symbolId: currentSymbolId, guildId: currentGuildId)
+    }
+
+    @MainActor
+    func loadOlderCandlesIfNeeded(
+        visibleStartIndex: Int,
+        preloadThreshold: Int
+    ) async -> Int {
+        guard visibleStartIndex <= preloadThreshold else { return 0 }
+        return await loadOlderCandles()
+    }
+
+    @MainActor
+    func loadOlderCandles() async -> Int {
+        guard let currentSymbolId,
+              hasMoreHistoricalCandles,
+              !isLoading,
+              !isLoadingOlderCandles else {
+            return 0
+        }
+
+        let endTime = earliestHistoricalCandleTimestamp ?? candles.first?.timestamp
+        guard let endTime else { return 0 }
+
+        isLoadingOlderCandles = true
+        defer { isLoadingOlderCandles = false }
+
+        do {
+            let response = try await api.getCandles(
+                symbolId: currentSymbolId,
+                timeframe: timeframe.toBackendString(),
+                limit: historicalPageSize,
+                endTime: endTime,
+                continuousTime: true
+            )
+            let prependedCount = mergeHistoricalCandles(response.candles)
+            earliestHistoricalCandleTimestamp = candles.first?.timestamp ?? response.earliestTimestamp
+            hasMoreHistoricalCandles = response.hasMore && prependedCount > 0
+            livePrice = candles.last?.close ?? livePrice
+            return prependedCount
+        } catch {
+            print("[TimeframePanel] Failed to load older \(timeframe.shortName) candles: \(error)")
+            return 0
+        }
     }
 
     // MARK: - Real-Time Subscription
@@ -208,5 +260,23 @@ class TimeframePanelDataManager: ObservableObject {
     /// Latest close price for header display.
     var latestClose: Double? {
         candles.last?.close
+    }
+
+    private func mergeHistoricalCandles(_ incoming: [RLCandleDTO]) -> Int {
+        guard !incoming.isEmpty else { return 0 }
+
+        let oldFirstTimestamp = candles.first?.timestamp
+        let existingTimestamps = Set(candles.map(\.timestamp))
+        let prependedCount = incoming.filter { candle in
+            guard let oldFirstTimestamp else { return false }
+            return candle.timestamp < oldFirstTimestamp && !existingTimestamps.contains(candle.timestamp)
+        }.count
+
+        var byTimestamp: [Date: RLCandleDTO] = [:]
+        for candle in incoming + candles {
+            byTimestamp[candle.timestamp] = candle
+        }
+        candles = byTimestamp.values.sorted { $0.timestamp < $1.timestamp }
+        return prependedCount
     }
 }

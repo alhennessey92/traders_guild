@@ -1741,6 +1741,7 @@ extension RealAPIService {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyToMessageId: UUID? = nil
     ) async throws -> RLChatroomMessageDTO {
         let body = RLSendMessageRequest(
@@ -1748,6 +1749,7 @@ extension RealAPIService {
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
             attachmentName: attachmentName,
+            attachments: attachments.isEmpty ? nil : attachments,
             replyToMessageId: replyToMessageId
         )
         return try await request(
@@ -1973,6 +1975,7 @@ extension RealAPIService {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyToMessageId: UUID? = nil
     ) async throws -> RLDMMessageDTO {
         let body = RLSendMessageRequest(
@@ -1980,6 +1983,7 @@ extension RealAPIService {
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
             attachmentName: attachmentName,
+            attachments: attachments.isEmpty ? nil : attachments,
             replyToMessageId: replyToMessageId
         )
         return try await request(
@@ -3435,6 +3439,7 @@ extension RealAPIService {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyToMessageId: UUID? = nil
     ) async throws -> RLChartChatMessageDTO {
         let body = RLSendChartChatMessageRequest(
@@ -3442,6 +3447,7 @@ extension RealAPIService {
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
             attachmentName: attachmentName,
+            attachments: attachments.isEmpty ? nil : attachments,
             replyToMessageId: replyToMessageId
         )
         return try await request(
@@ -3720,6 +3726,14 @@ extension RealAPIService {
     func getGuildAccuracyLeaderboard(guildId: UUID, minPredictions: Int = 10, limit: Int = 50) async throws -> RLAccuracyLeaderboardDTO {
         return try await request(
             "/reputation/guilds/\(guildId.uuidString)/accuracy-leaderboard?min_predictions=\(minPredictions)&limit=\(limit)",
+            service: .reputation,
+            auth: true
+        )
+    }
+
+    func getGlobalUsersLeaderboard(limit: Int = 100, minPredictions: Int = 0) async throws -> RLGlobalUserLeaderboardDTO {
+        return try await request(
+            "/reputation/global-users-leaderboard?limit=\(limit)&min_predictions=\(minPredictions)",
             service: .reputation,
             auth: true
         )

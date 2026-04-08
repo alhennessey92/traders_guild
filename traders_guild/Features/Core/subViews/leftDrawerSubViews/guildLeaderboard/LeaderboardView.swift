@@ -81,6 +81,7 @@ private struct GlobalUserRankEntry: Identifiable {
     let isFriend: Bool
     let globalReputation: Int
     let accuracyRate: Double?
+    let guildName: String?
     let guildMember: RLGuildMemberDTO?
 
     var id: UUID { userId }
@@ -119,6 +120,9 @@ struct LeaderboardListView: View {
     @State private var discoveredGuilds: [RLGuildDTO] = []
     @State private var joinedGuildAccuracy: [UUID: Double] = [:]
     @State private var isLoadingGlobalGuilds: Bool = false
+    @State private var globalUserLeaderboard: [RLGlobalUserLeaderboardMemberDTO] = []
+    @State private var isLoadingGlobalUsers: Bool = false
+    @State private var currentGuildAccuracyProfile: RLAccuracyProfileDTO? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -216,19 +220,23 @@ private extension LeaderboardListView {
     func initialLoad() async {
         if let guildId = rlAppState.currentGuild?.id, leftDrawerViewModel.accuracyLeaderboard.isEmpty {
             await leftDrawerViewModel.refreshAccuracyLeaderboard(guildId: guildId, rlAppState: rlAppState)
+            await refreshCurrentGuildAccuracyProfile(guildId: guildId)
         }
+        await refreshGlobalUsers()
         await refreshGlobalGuildData()
     }
 
     func refreshLeaderboard() async {
         async let globalTask: Void = refreshGlobalGuildData()
+        async let globalUsersTask: Void = refreshGlobalUsers()
         if let guild = rlAppState.currentGuild {
             async let membersTask: Void = leftDrawerViewModel.refreshGuildMembers(guildId: guild.id, rlAppState: rlAppState)
             async let friendsTask: Void = leftDrawerViewModel.refreshFriends(guildId: guild.id, rlAppState: rlAppState)
             async let accuracyTask: Void = leftDrawerViewModel.refreshAccuracyLeaderboard(guildId: guild.id, rlAppState: rlAppState)
-            _ = await (membersTask, friendsTask, accuracyTask, globalTask)
+            async let currentAccuracyTask: Void = refreshCurrentGuildAccuracyProfile(guildId: guild.id)
+            _ = await (membersTask, friendsTask, accuracyTask, currentAccuracyTask, globalTask, globalUsersTask)
         } else {
-            _ = await globalTask
+            _ = await (globalTask, globalUsersTask)
         }
     }
 
@@ -276,13 +284,16 @@ private extension LeaderboardListView {
     }
 
     var globalUsersByReputation: [GlobalUserRankEntry] {
-        mergedGlobalUsers.sorted { $0.globalReputation > $1.globalReputation }
+        globalUserLeaderboard
+            .sorted { $0.globalReputation > $1.globalReputation }
+            .map(globalEntry)
     }
 
     var globalUsersByAccuracy: [GlobalUserRankEntry] {
-        mergedGlobalUsers
-            .filter { $0.accuracyRate != nil }
-            .sorted { ($0.accuracyRate ?? 0) > ($1.accuracyRate ?? 0) }
+        globalUserLeaderboard
+            .filter { $0.totalPredictions > 0 }
+            .sorted { $0.accuracyRate > $1.accuracyRate }
+            .map(globalEntry)
     }
 
     var globalGuildsByReputation: [GlobalGuildRankEntry] {
@@ -311,63 +322,43 @@ private extension LeaderboardListView {
             .sorted { ($0.averageAccuracy ?? 0) > ($1.averageAccuracy ?? 0) }
     }
 
-    var mergedGlobalUsers: [GlobalUserRankEntry] {
-        var byUserId: [UUID: GlobalUserRankEntry] = [:]
+    func globalEntry(from member: RLGlobalUserLeaderboardMemberDTO) -> GlobalUserRankEntry {
+        let guildMember = leftDrawerViewModel.guildMembers.first(where: { $0.userId == member.userId })
+        let roleText = member.guildRole?.capitalized ?? (member.guildName == nil ? "No Guild" : "Guild Member")
+        return GlobalUserRankEntry(
+            userId: member.userId,
+            username: member.username,
+            displayName: member.displayName,
+            avatarUrl: member.avatarUrl,
+            isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline),
+            roleText: roleText,
+            roleColor: AppColors.greyText,
+            isBlocked: guildMember?.isBlocked ?? false,
+            isFriend: guildMember?.isFriend ?? false,
+            globalReputation: member.globalReputation,
+            accuracyRate: member.accuracyRate,
+            guildName: member.guildName,
+            guildMember: guildMember
+        )
+    }
 
-        for member in leftDrawerViewModel.guildMembers {
-            byUserId[member.userId] = GlobalUserRankEntry(
-                userId: member.userId,
-                username: member.username,
-                displayName: member.displayName,
-                avatarUrl: member.avatarUrl,
-                isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: member.isOnline),
-                roleText: member.memberRole.displayName,
-                roleColor: member.memberRole.color,
-                isBlocked: member.isBlocked,
-                isFriend: member.isFriend,
-                globalReputation: member.globalReputation,
-                accuracyRate: member.accuracyRate,
-                guildMember: member
-            )
+    func refreshGlobalUsers() async {
+        isLoadingGlobalUsers = true
+        defer { isLoadingGlobalUsers = false }
+        do {
+            let response = try await rlAppState.realApi.getGlobalUsersLeaderboard(limit: 100, minPredictions: 0)
+            globalUserLeaderboard = response.members
+        } catch {
+            globalUserLeaderboard = []
         }
+    }
 
-        for friend in leftDrawerViewModel.friendsRL {
-            if let existing = byUserId[friend.userId] {
-                byUserId[friend.userId] = GlobalUserRankEntry(
-                    userId: existing.userId,
-                    username: existing.username,
-                    displayName: existing.displayName,
-                    avatarUrl: existing.avatarUrl ?? friend.avatarUrl,
-                    isOnline: rlAppState.effectiveOnlineStatus(userId: friend.userId, fallback: friend.isOnline),
-                    roleText: existing.roleText,
-                    roleColor: existing.roleColor,
-                    isBlocked: existing.isBlocked,
-                    isFriend: true,
-                    globalReputation: max(existing.globalReputation, friend.globalReputation),
-                    accuracyRate: existing.accuracyRate,
-                    guildMember: existing.guildMember
-                )
-            } else {
-                let role = roleForFriend(friend)
-                let guildMember = leftDrawerViewModel.guildMembers.first(where: { $0.userId == friend.userId })
-                byUserId[friend.userId] = GlobalUserRankEntry(
-                    userId: friend.userId,
-                    username: friend.username,
-                    displayName: friend.displayName,
-                    avatarUrl: friend.avatarUrl,
-                    isOnline: rlAppState.effectiveOnlineStatus(userId: friend.userId, fallback: friend.isOnline),
-                    roleText: role.text,
-                    roleColor: role.color,
-                    isBlocked: false,
-                    isFriend: true,
-                    globalReputation: friend.globalReputation,
-                    accuracyRate: guildMember?.accuracyRate,
-                    guildMember: guildMember
-                )
-            }
+    func refreshCurrentGuildAccuracyProfile(guildId: UUID) async {
+        do {
+            currentGuildAccuracyProfile = try await rlAppState.realApi.getMyGuildAccuracy(guildId: guildId)
+        } catch {
+            currentGuildAccuracyProfile = nil
         }
-
-        return Array(byUserId.values)
     }
 
     func refreshGlobalGuildData() async {
@@ -453,24 +444,34 @@ private extension LeaderboardListView {
                 UnifiedLoadingState(message: "Loading guild accuracy...")
                     .padding(.top, 40)
             } else if leftDrawerViewModel.accuracyLeaderboard.isEmpty {
-                UnifiedEmptyState(
-                    icon: "target",
-                    title: "No accuracy data",
-                    subtitle: "Members need at least 10 predictions to appear"
-                )
-                .padding(.top, 40)
+                VStack(spacing: 10) {
+                    if let progressCard = guildAccuracyProgressCard {
+                        progressCard
+                    }
+                    UnifiedEmptyState(
+                        icon: "target",
+                        title: "No accuracy data",
+                        subtitle: "Members need at least \(leftDrawerViewModel.accuracyLeaderboardMinPredictions) predictions to appear"
+                    )
+                    .padding(.top, 20)
+                }
             } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(leftDrawerViewModel.accuracyLeaderboard) { member in
-                        AccuracyLeaderboardRow(
-                            member: member,
-                            isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: false),
-                            onTap: {
-                                if let guildMember = leftDrawerViewModel.guildMembers.first(where: { $0.userId == member.userId }) {
-                                    openProfile(for: guildMember)
+                VStack(spacing: 10) {
+                    if let progressCard = guildAccuracyProgressCard {
+                        progressCard
+                    }
+                    LazyVStack(spacing: 8) {
+                        ForEach(leftDrawerViewModel.accuracyLeaderboard) { member in
+                            AccuracyLeaderboardRow(
+                                member: member,
+                                isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: false),
+                                onTap: {
+                                    if let guildMember = leftDrawerViewModel.guildMembers.first(where: { $0.userId == member.userId }) {
+                                        openProfile(for: guildMember)
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -479,11 +480,14 @@ private extension LeaderboardListView {
 
     var globalUsersReputationContent: some View {
         Group {
-            if globalUsersByReputation.isEmpty {
+            if isLoadingGlobalUsers && globalUsersByReputation.isEmpty {
+                UnifiedLoadingState(message: "Loading global users...")
+                    .padding(.top, 40)
+            } else if globalUsersByReputation.isEmpty {
                 UnifiedEmptyState(
                     icon: "person.2",
                     title: "No global user data",
-                    subtitle: "As members and friends load, global user rankings will appear"
+                    subtitle: "Global user rankings will appear once the leaderboard loads"
                 )
                 .padding(.top, 40)
             } else {
@@ -499,6 +503,7 @@ private extension LeaderboardListView {
                             isBlocked: user.isBlocked,
                             isFriend: user.isFriend,
                             reputation: user.globalReputation,
+                            secondaryLabel: user.guildName,
                             rank: index + 1,
                             onTap: { openProfile(for: user) }
                         )
@@ -510,11 +515,14 @@ private extension LeaderboardListView {
 
     var globalUsersAccuracyContent: some View {
         Group {
-            if globalUsersByAccuracy.isEmpty {
+            if isLoadingGlobalUsers && globalUsersByAccuracy.isEmpty {
+                UnifiedLoadingState(message: "Loading user accuracy...")
+                    .padding(.top, 40)
+            } else if globalUsersByAccuracy.isEmpty {
                 UnifiedEmptyState(
                     icon: "target",
                     title: "No user accuracy data",
-                    subtitle: "Accuracy rankings appear when tracked members have prediction history"
+                    subtitle: "Accuracy rankings appear when global prediction history is available"
                 )
                 .padding(.top, 40)
             } else {
@@ -526,6 +534,7 @@ private extension LeaderboardListView {
                             avatarUrl: user.avatarUrl,
                             isOnline: user.isOnline,
                             accuracyRate: user.accuracyRate ?? 0,
+                            contextLabel: user.guildName,
                             rank: index + 1,
                             onTap: { openProfile(for: user) }
                         )
@@ -605,6 +614,43 @@ private extension LeaderboardListView {
         } else {
             rlAppState.showInfo("Open user profile from your guild member list for full detail")
         }
+    }
+
+    var guildAccuracyProgressCard: AnyView? {
+        guard let currentGuildAccuracyProfile,
+              currentGuildAccuracyProfile.totalPredictions > 0,
+              currentGuildAccuracyProfile.totalPredictions < leftDrawerViewModel.accuracyLeaderboardMinPredictions else {
+            return nil
+        }
+
+        let remaining = max(0, leftDrawerViewModel.accuracyLeaderboardMinPredictions - currentGuildAccuracyProfile.totalPredictions)
+        return AnyView(
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Your Progress")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText)
+
+                Text("\(currentGuildAccuracyProfile.totalPredictions) predictions logged. \(remaining) more needed for the guild ranking.")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+
+                ProgressView(
+                    value: Double(currentGuildAccuracyProfile.totalPredictions),
+                    total: Double(leftDrawerViewModel.accuracyLeaderboardMinPredictions)
+                )
+                .tint(AppColors.accentColor)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(AppColors.messagingListRowFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                    )
+            )
+        )
     }
 
     func openProfile(for member: RLGuildMemberDTO) {
@@ -731,6 +777,7 @@ private struct GlobalUserAccuracyRow: View {
     let avatarUrl: String?
     let isOnline: Bool
     let accuracyRate: Double
+    let contextLabel: String?
     let rank: Int
     let onTap: () -> Void
 
@@ -780,6 +827,12 @@ private struct GlobalUserAccuracyRow: View {
                     Text("Tracked accuracy")
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
+
+                    if let contextLabel, !contextLabel.isEmpty {
+                        Text(contextLabel)
+                            .font(.caption2)
+                            .foregroundColor(AppColors.accentColor)
+                    }
                 }
 
                 Spacer()
@@ -929,10 +982,39 @@ private struct LeaderboardMemberRow: View {
     let isBlocked: Bool
     let isFriend: Bool
     let reputation: Int
+    let secondaryLabel: String?
     let rank: Int
     let onTap: () -> Void
 
     @State private var isPressed: Bool = false
+
+    init(
+        displayName: String,
+        username: String,
+        avatarUrl: String?,
+        isOnline: Bool,
+        roleText: String,
+        roleColor: Color,
+        isBlocked: Bool,
+        isFriend: Bool,
+        reputation: Int,
+        secondaryLabel: String? = nil,
+        rank: Int,
+        onTap: @escaping () -> Void
+    ) {
+        self.displayName = displayName
+        self.username = username
+        self.avatarUrl = avatarUrl
+        self.isOnline = isOnline
+        self.roleText = roleText
+        self.roleColor = roleColor
+        self.isBlocked = isBlocked
+        self.isFriend = isFriend
+        self.reputation = reputation
+        self.secondaryLabel = secondaryLabel
+        self.rank = rank
+        self.onTap = onTap
+    }
 
     private var rankColor: Color {
         switch rank {
@@ -987,6 +1069,13 @@ private struct LeaderboardMemberRow: View {
                         .foregroundColor(roleColor)
                         .fontWeight(.semibold)
                         .lineLimit(1)
+
+                    if let secondaryLabel, !secondaryLabel.isEmpty {
+                        Text(secondaryLabel)
+                            .font(.caption2)
+                            .foregroundColor(AppColors.accentColor)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer()

@@ -477,6 +477,36 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func timeframePanelReserveIncludesAxisStripForEveryExpandedPanel() {
+        let twoPanelReserve = ChartPanelReserveCalculator.timeframeStackReserve(panelHeights: [120, 130])
+        #expect(abs(twoPanelReserve - 342) < 0.0001)
+
+        let layout = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [120, 130],
+            indicatorPanelHeights: []
+        )
+        #expect(layout.bottomOwner == .timeframe(index: 1))
+        #expect(layout.bottomBoundaryLabelReserve == 0)
+        #expect(abs(layout.totalReserve - 342) < 0.0001)
+    }
+
+    @Test
+    func timeframePanelGestureStateTracksXAxisAndYAxisIndependently() {
+        let state = TimeframePanelGestureState()
+        state.applyPinch(scale: 1.5)
+        let xZoom = state.candleWidthScale
+        let xPan = state.panOffset
+
+        state.applyVerticalPan(deltaY: 40, panelHeight: 180)
+        state.applyPricePinch(scale: 1.4, panelHeight: 180)
+
+        #expect(state.candleWidthScale == xZoom)
+        #expect(state.panOffset == xPan)
+        #expect(state.verticalPanOffset > 0)
+        #expect(state.priceScale > 1)
+    }
+
+    @Test
     func timeframePanelSourcesStayIsolatedAcrossModeSwitches() {
         let manager = TimeframePanelManager()
 
@@ -1100,7 +1130,7 @@ struct MarkerPlanFixesTests {
         )
         #expect(indicatorOwnedLayout.bottomOwner == .indicator(index: 1))
         #expect(indicatorOwnedLayout.bottomBoundaryLabelReserve == ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
-        #expect(abs(indicatorOwnedLayout.totalReserve - 340) < 0.0001)
+        #expect(abs(indicatorOwnedLayout.totalReserve - 364) < 0.0001)
     }
 
     @Test

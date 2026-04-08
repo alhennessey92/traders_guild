@@ -34,8 +34,8 @@ struct GuildSettingsView: View {
                 AdminSheetHeader(
                     icon: "gearshape.fill",
                     iconColor: .blue,
-                    title: "Guild Settings",
-                    subtitle: "Update name, description, and visibility"
+                    title: "Guild Details",
+                    subtitle: "Review guild info and update editable fields"
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 30)
@@ -44,6 +44,21 @@ struct GuildSettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 12) {
+                        if let guild = rlAppState.currentGuild {
+                            AdminSectionCard {
+                                AdminInfoRow(title: "Owner", value: guild.ownerDisplayName ?? guild.ownerUsername ?? "Unknown")
+                                AdminInfoRow(title: "Members", value: "\(guild.memberCount)")
+                                AdminInfoRow(title: "Visibility", value: guild.isOpen ? "Open" : "Invite Only")
+                                AdminInfoRow(title: "Created", value: guild.formattedDate)
+                                if let language = guild.language, !language.isEmpty {
+                                    AdminInfoRow(title: "Language", value: language)
+                                }
+                                if let location = guild.location, !location.isEmpty {
+                                    AdminInfoRow(title: "Location", value: location)
+                                }
+                            }
+                        }
+
                         AdminSectionCard {
                             AdminInputField(
                                 title: "Guild Name",
@@ -69,7 +84,7 @@ struct GuildSettingsView: View {
                 }
 
                 AdminFooterActions(
-                    primaryTitle: "Save Settings",
+                    primaryTitle: "Save Details",
                     primaryDisabled: !isValid || !hasChanges,
                     isSubmitting: isSubmitting,
                     onCancel: { dismiss() },
@@ -109,6 +124,24 @@ struct GuildSettingsView: View {
             dismiss()
         } catch {
             // RLAppState handles toast error.
+        }
+    }
+}
+
+private struct AdminInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+            Spacer()
+            Text(value)
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(AppColors.whiteText)
+                .multilineTextAlignment(.trailing)
         }
     }
 }

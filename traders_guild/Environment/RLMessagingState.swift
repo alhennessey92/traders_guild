@@ -256,9 +256,9 @@ struct RLMessagingSheet: View {
         var originalContent: String {
             switch self {
             case .chatroom(let message):
-                return message.content
+                return ChatMessageVisibleText.value(for: message)
             case .dm(let message):
-                return message.content
+                return ChatMessageVisibleText.value(for: message)
             }
         }
     }
@@ -748,13 +748,14 @@ struct RLMessagingSheet: View {
 
                     // Bottom anchor for scroll tracking
                     Color.clear
-                        .frame(height: 1)
+                        .frame(height: 18)
                         .id("bottomAnchor")
                         .onAppear { isNearBottom = true; newMessageCount = 0 }
                         .onDisappear { isNearBottom = false }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.top, 8)
+                .padding(.bottom, 36)
             }
             .scrollDismissesKeyboard(.interactively)
             .onTapGesture {
@@ -792,6 +793,23 @@ struct RLMessagingSheet: View {
                     .padding(.bottom, 8)
                     .transition(.scale.combined(with: .opacity))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isNearBottom)
+                }
+            }
+            .onChange(of: isLoadingMessages) { _, isLoading in
+                guard !isLoading else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    scrollToBottom(proxy: proxy)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                    scrollToBottom(proxy: proxy)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    scrollToBottom(proxy: proxy)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                    scrollToBottom(proxy: proxy)
                 }
             }
             .background(ChatBackground())
@@ -861,19 +879,8 @@ struct RLMessagingSheet: View {
     }
     
     private func scrollToBottom(proxy: ScrollViewProxy) {
-        switch contentType {
-        case .chatroom:
-            if let lastMessage = chatroomMessages.last {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                }
-            }
-        case .dmThread:
-            if let lastMessage = dmMessages.last {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                }
-            }
+        withAnimation(.easeOut(duration: 0.2)) {
+            proxy.scrollTo("bottomAnchor", anchor: .bottom)
         }
     }
     
@@ -1338,7 +1345,7 @@ struct RLChatroomFooterView: View {
             placeholder: "Message #\(chatroom.name.lowercased().replacingOccurrences(of: " ", with: "-"))...",
             isSending: isSending,
             onSend: { payload in
-                Task { await sendComposedMessage(payload) }
+                await sendComposedMessage(payload)
             },
             allowsMarkerLinkAttachment: true,
             isActionPanelVisible: isActionPanelVisible,
@@ -1346,47 +1353,53 @@ struct RLChatroomFooterView: View {
         )
     }
 
-    private func sendComposedMessage(_ payload: ChatComposerPayload) async {
+    private func sendComposedMessage(_ payload: ChatComposerPayload) async -> Bool {
         guard chatroom.canSendMessages else {
             appState.showError(
                 title: "Cannot Send",
                 message: RLUserFacingCopy.text(.errorCannotSendNoPermission),
                 style: .toast
             )
-            return
+            return false
         }
 
-        if !payload.attachments.isEmpty {
-            await sendAttachments(payload)
-            return
-        }
+        guard payload.hasBodyContent else { return false }
 
-        guard payload.hasBodyContent else { return }
+        isSending = true
+        defer { isSending = false }
 
-        // Optimistic insert — show the message immediately
-        let currentMember = appState.currentGuildMember
-        let pendingMsg: RLChatroomMessageDTO? = currentMember.map {
-            .pending(
-                chatroomId: chatroom.id,
-                content: payload.encodedContent(),
-                author: $0,
-                replyPreview: nil
-            )
-        }
-        if let pendingMsg {
-            onPendingMessage?(pendingMsg)
-        }
-        let pendingId = pendingMsg?.id
-
-        // Clear input immediately for optimistic UX
         let savedText = payload.text
         let savedReply = payload.replyDraft
-        replyDraft = nil
+        var pendingId: UUID? = nil
 
         do {
+            let uploadedAttachments = try await uploadAttachments(payload.attachments)
+
+            // Optimistic insert — show the bundled message immediately
+            let currentMember = appState.currentGuildMember
+            let pendingMsg: RLChatroomMessageDTO? = currentMember.map {
+                .pending(
+                    chatroomId: chatroom.id,
+                    content: payload.encodedContent(),
+                    author: $0,
+                    attachments: uploadedAttachments,
+                    replyPreview: nil
+                )
+            }
+            if let pendingMsg {
+                onPendingMessage?(pendingMsg)
+            }
+            pendingId = pendingMsg?.id
+
+            replyDraft = nil
+
             let message = try await appState.sendChatroomMessage(
                 chatroomId: chatroom.id,
                 content: payload.encodedContent(),
+                attachmentUrl: uploadedAttachments.first?.attachmentUrl,
+                attachmentType: uploadedAttachments.first?.attachmentType,
+                attachmentName: uploadedAttachments.first?.attachmentName,
+                attachments: uploadedAttachments,
                 replyToMessageId: savedReply?.messageId
             )
             if let pendingId {
@@ -1394,6 +1407,7 @@ struct RLChatroomFooterView: View {
             } else {
                 onMessageSent(message)
             }
+            return true
         } catch {
             if let pendingId {
                 onSendFailed?(pendingId)
@@ -1401,57 +1415,32 @@ struct RLChatroomFooterView: View {
             messageText = savedText
             replyDraft = savedReply
             appState.showError(error, title: "Failed to Send Message", style: .toast)
+            return false
         }
     }
 
-    private func sendAttachments(_ payload: ChatComposerPayload) async {
-        guard !payload.attachments.isEmpty else { return }
-        guard let guild = appState.currentGuild else { return }
-        guard chatroom.canSendMessages else {
-            appState.showError(
-                title: "Cannot Send",
-                message: RLUserFacingCopy.text(.errorCannotSendNoPermission),
-                style: .toast
+    private func uploadAttachments(_ drafts: [ChatAttachmentDraft]) async throws -> [RLMessageAttachmentDTO] {
+        guard !drafts.isEmpty else { return [] }
+        guard let guild = appState.currentGuild else { return [] }
+
+        var uploads: [RLMessageAttachmentDTO] = []
+        for attachment in drafts {
+            let upload = try await appState.realApi.uploadChatroomAttachment(
+                guildId: guild.id,
+                chatroomId: chatroom.id,
+                fileData: attachment.data,
+                filename: attachment.filename,
+                mimeType: attachment.mimeType
             )
-            return
-        }
-
-        isSending = true
-        defer { isSending = false }
-
-        do {
-            var isFirstMessage = true
-            for attachment in payload.attachments {
-                let upload = try await appState.realApi.uploadChatroomAttachment(
-                    guildId: guild.id,
-                    chatroomId: chatroom.id,
-                    fileData: attachment.data,
-                    filename: attachment.filename,
-                    mimeType: attachment.mimeType
-                )
-                let content: String
-                if isFirstMessage {
-                    content = payload.encodedContent(
-                        fallback: payload.text.isEmpty ? attachment.filename : payload.text
-                    )
-                } else {
-                    content = attachment.filename
-                }
-                let message = try await appState.sendChatroomMessage(
-                    chatroomId: chatroom.id,
-                    content: content,
+            uploads.append(
+                RLMessageAttachmentDTO(
                     attachmentUrl: upload.attachmentUrl,
                     attachmentType: upload.attachmentType,
-                    attachmentName: upload.attachmentName,
-                    replyToMessageId: payload.replyDraft?.messageId
+                    attachmentName: upload.attachmentName
                 )
-                onMessageSent(message)
-                isFirstMessage = false
-            }
-            replyDraft = nil
-        } catch {
-            appState.showError(error, title: "Failed to Send Attachment", style: .toast)
+            )
         }
+        return uploads
     }
 }
 
@@ -1476,53 +1465,58 @@ struct RLDMFooterView: View {
             placeholder: "Message \(thread.participant.username.lowercased())...",
             isSending: isSending,
             onSend: { payload in
-                Task { await sendComposedMessage(payload) }
+                await sendComposedMessage(payload)
             },
             allowsMarkerLinkAttachment: true,
             isActionPanelVisible: isActionPanelVisible
         )
     }
 
-    private func sendComposedMessage(_ payload: ChatComposerPayload) async {
+    private func sendComposedMessage(_ payload: ChatComposerPayload) async -> Bool {
         if thread.isBlocked {
             appState.showError(
                 title: "Cannot Send",
                 message: RLUserFacingCopy.text(.errorCannotSendBlockedUser),
                 style: .toast
             )
-            return
+            return false
         }
 
-        if !payload.attachments.isEmpty {
-            await sendAttachments(payload)
-            return
-        }
+        guard payload.hasBodyContent else { return false }
 
-        guard payload.hasBodyContent else { return }
-
-        // Optimistic insert
-        let currentMember = appState.currentGuildMember
-        let pendingMsg: RLDMMessageDTO? = currentMember.map {
-            .pending(
-                dmId: thread.id,
-                content: payload.encodedContent(),
-                author: $0,
-                replyPreview: nil
-            )
-        }
-        if let pendingMsg {
-            onPendingMessage?(pendingMsg)
-        }
-        let pendingId = pendingMsg?.id
+        isSending = true
+        defer { isSending = false }
 
         let savedText = payload.text
         let savedReply = payload.replyDraft
-        replyDraft = nil
+        var pendingId: UUID? = nil
 
         do {
+            let uploadedAttachments = try await uploadAttachments(payload.attachments)
+
+            let currentMember = appState.currentGuildMember
+            let pendingMsg: RLDMMessageDTO? = currentMember.map {
+                .pending(
+                    dmId: thread.id,
+                    content: payload.encodedContent(),
+                    author: $0,
+                    attachments: uploadedAttachments,
+                    replyPreview: nil
+                )
+            }
+            if let pendingMsg {
+                onPendingMessage?(pendingMsg)
+            }
+            pendingId = pendingMsg?.id
+
+            replyDraft = nil
             let message = try await appState.sendDMMessage(
                 threadId: thread.id,
                 content: payload.encodedContent(),
+                attachmentUrl: uploadedAttachments.first?.attachmentUrl,
+                attachmentType: uploadedAttachments.first?.attachmentType,
+                attachmentName: uploadedAttachments.first?.attachmentName,
+                attachments: uploadedAttachments,
                 replyToMessageId: savedReply?.messageId
             )
             if let pendingId {
@@ -1530,6 +1524,7 @@ struct RLDMFooterView: View {
             } else {
                 onMessageSent(message)
             }
+            return true
         } catch {
             if let pendingId {
                 onSendFailed?(pendingId)
@@ -1537,58 +1532,32 @@ struct RLDMFooterView: View {
             messageText = savedText
             replyDraft = savedReply
             appState.showError(error, title: "Failed to Send Message", style: .toast)
+            return false
         }
     }
 
-    private func sendAttachments(_ payload: ChatComposerPayload) async {
-        guard !payload.attachments.isEmpty else { return }
-        guard let guild = appState.currentGuild else { return }
+    private func uploadAttachments(_ drafts: [ChatAttachmentDraft]) async throws -> [RLMessageAttachmentDTO] {
+        guard !drafts.isEmpty else { return [] }
+        guard let guild = appState.currentGuild else { return [] }
 
-        if thread.isBlocked {
-            appState.showError(
-                title: "Cannot Send",
-                message: RLUserFacingCopy.text(.errorCannotSendBlockedUser),
-                style: .toast
+        var uploads: [RLMessageAttachmentDTO] = []
+        for attachment in drafts {
+            let upload = try await appState.realApi.uploadDMAttachment(
+                guildId: guild.id,
+                threadId: thread.id,
+                fileData: attachment.data,
+                filename: attachment.filename,
+                mimeType: attachment.mimeType
             )
-            return
-        }
-
-        isSending = true
-        defer { isSending = false }
-
-        do {
-            var isFirstMessage = true
-            for attachment in payload.attachments {
-                let upload = try await appState.realApi.uploadDMAttachment(
-                    guildId: guild.id,
-                    threadId: thread.id,
-                    fileData: attachment.data,
-                    filename: attachment.filename,
-                    mimeType: attachment.mimeType
-                )
-                let content: String
-                if isFirstMessage {
-                    content = payload.encodedContent(
-                        fallback: payload.text.isEmpty ? attachment.filename : payload.text
-                    )
-                } else {
-                    content = attachment.filename
-                }
-                let message = try await appState.sendDMMessage(
-                    threadId: thread.id,
-                    content: content,
+            uploads.append(
+                RLMessageAttachmentDTO(
                     attachmentUrl: upload.attachmentUrl,
                     attachmentType: upload.attachmentType,
-                    attachmentName: upload.attachmentName,
-                    replyToMessageId: payload.replyDraft?.messageId
+                    attachmentName: upload.attachmentName
                 )
-                onMessageSent(message)
-                isFirstMessage = false
-            }
-            replyDraft = nil
-        } catch {
-            appState.showError(error, title: "Failed to Send Attachment", style: .toast)
+            )
         }
+        return uploads
     }
 }
 

@@ -24,6 +24,8 @@ struct TimeframePanelContainer: View {
     var showMarkerLine: Bool = false
     var indicatorPanelCount: Int = 0
     var bottomAxisPanelIndex: Int? = nil
+    var bottomAxisOverlayTimestamp: Date? = nil
+    var bottomAxisOverlayStyle: CrosshairTimeLabelStyle = .standard
 
     // MARK: - Computed
 
@@ -55,7 +57,9 @@ struct TimeframePanelContainer: View {
                         showMarkerLine: showMarkerLine,
                         minPanelHeight: TimeframePanelManager.minPanelHeight,
                         maxPanelHeight: adjustedMaxHeight,
-                        isBottomPanel: bottomAxisPanelIndex == index
+                        isBottomPanel: bottomAxisPanelIndex == index,
+                        bottomAxisOverlayTimestamp: bottomAxisOverlayTimestamp,
+                        bottomAxisOverlayStyle: bottomAxisOverlayStyle
                     )
                 }
             }
@@ -65,6 +69,6 @@ struct TimeframePanelContainer: View {
     // MARK: - Total Height
 
     var totalPanelHeight: CGFloat {
-        ChartPanelReserveCalculator.stackReserve(panelHeights: timeframePanelManager.panels.map(\.currentHeight))
+        ChartPanelReserveCalculator.timeframeStackReserve(panelHeights: timeframePanelManager.panels.map(\.currentHeight))
     }
 }

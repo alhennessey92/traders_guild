@@ -171,6 +171,25 @@ struct MainView: View {
         timeframePanelManager.panels.map(\.currentHeight)
     }
 
+    private var expandedAuxiliaryPanelCount: Int {
+        let threshold = ChartPanelReserveCalculator.expandedPanelHeightThreshold
+        let expandedTimeframes = timeframePanelHeights.filter { $0 > threshold }.count
+        let expandedIndicators = indicatorPanelHeights.filter { $0 > threshold }.count
+        return expandedTimeframes + expandedIndicators
+    }
+
+    private var chartFloatingOverlayClearance: CGFloat {
+        guard chartPanelsTotalHeight > 0 else { return 0 }
+        switch expandedAuxiliaryPanelCount {
+        case 0:
+            return 8
+        case 1:
+            return 1
+        default:
+            return 0
+        }
+    }
+
     private var chartPanelLayout: CombinedChartPanelLayout {
         ChartPanelReserveCalculator.combinedLayout(
             timeframePanelHeights: timeframePanelHeights,
@@ -194,6 +213,20 @@ struct MainView: View {
     private var bottomIndicatorAxisPanelIndex: Int? {
         guard case .indicator(let index) = chartPanelLayout.bottomOwner else { return nil }
         return index
+    }
+
+    private var bottomAxisOverlayTimestamp: Date? {
+        if chartGestureState.crosshairActive {
+            return chartGestureState.crosshairTimestamp
+        }
+        if chartGestureState.markerPlacementGuide.isActive {
+            return chartGestureState.markerPlacementGuide.timestamp
+        }
+        return nil
+    }
+
+    private var bottomAxisOverlayStyle: CrosshairTimeLabelStyle {
+        chartGestureState.crosshairActive ? .standard : .markerPlacement
     }
 
     /// When the bottom panel is collapsed, lift the panel stack so it doesn't cover
@@ -350,7 +383,9 @@ struct MainView: View {
                             mainChartTimeframeSeconds: chartViewModel.currentTimeframe.seconds,
                             showMarkerLine: chartViewModel.selectedMarkerForSheet != nil || placementState.anchorDraft != nil,
                             indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count,
-                            bottomAxisPanelIndex: bottomTimeframeAxisPanelIndex
+                            bottomAxisPanelIndex: bottomTimeframeAxisPanelIndex,
+                            bottomAxisOverlayTimestamp: bottomAxisOverlayTimestamp,
+                            bottomAxisOverlayStyle: bottomAxisOverlayStyle
                         )
 
                         // Indicator panels
@@ -424,6 +459,8 @@ struct MainView: View {
             }
             .ignoresSafeArea(.keyboard, edges: showRightDrawer ? .bottom : [])
             .onPreferenceChange(SpotlightFrameKey.self) { frames in
+                guard tutorialManager.isActive else { return }
+                guard tutorialManager.spotlightFrames != frames else { return }
                 tutorialManager.spotlightFrames = frames
             }
             .ignoresSafeArea()
@@ -1040,7 +1077,8 @@ struct MainView: View {
             rsiPanelHeight: $rsiPanelHeight,
             activeTimeframeLegendEntries: activeTimeframeLegendEntries,
             indicatorPanelBottomPadding: chartPanelsTotalHeight,
-            panelBottomBoundaryLabelReserve: chartPanelsBottomLabelStripReserve
+            panelBottomBoundaryLabelReserve: chartPanelsBottomLabelStripReserve,
+            floatingOverlayPanelClearance: chartFloatingOverlayClearance
         )
     }
 
@@ -2164,18 +2202,20 @@ struct ChartBottomSheet: View {
                 }
             }
         }
-        .background(
-            GeometryReader { geo in
-                let frame = geo.frame(in: .global)
-                Color.clear
-                    .onAppear {
-                        tutorialManager.spotlightFrames["bottom-sheet"] = frame
-                    }
-                    .onChange(of: frame) { _, newFrame in
-                        tutorialManager.spotlightFrames["bottom-sheet"] = newFrame
-                    }
+        .background {
+            if tutorialManager.isActive {
+                GeometryReader { geo in
+                    let frame = geo.frame(in: .global)
+                    Color.clear
+                        .onAppear {
+                            tutorialManager.spotlightFrames["bottom-sheet"] = frame
+                        }
+                        .onChange(of: frame) { _, newFrame in
+                            tutorialManager.spotlightFrames["bottom-sheet"] = newFrame
+                        }
+                }
             }
-        )
+        }
         .animation(.easeInOut(duration: 0.3), value: selectedView)
         .animation(.easeInOut(duration: 0.3), value: isMarkerDetailActive)
         .animation(nil, value: shouldIgnoreKeyboardSafeArea)
@@ -2325,9 +2365,7 @@ struct ChartBottomSheet: View {
             placeholder: "Message #\(chartChatManager.activeChartChat?.symbolTicker.lowercased() ?? "chat")...",
             isSending: isSendingChartMessage,
             onSend: { payload in
-                Task {
-                    await sendChartComposedMessage(payload)
-                }
+                await sendChartComposedMessage(payload)
             },
             allowsMarkerLinkAttachment: true,
             selectedDetent: $selectedDetent,
@@ -2354,73 +2392,57 @@ struct ChartBottomSheet: View {
 
     // MARK: - Chat Message Sending
     
-    private func sendChartComposedMessage(_ payload: ChatComposerPayload) async {
-        guard !isSendingChartMessage else { return }
+    private func sendChartComposedMessage(_ payload: ChatComposerPayload) async -> Bool {
+        guard !isSendingChartMessage else { return false }
         isSendingChartMessage = true
         defer { isSendingChartMessage = false }
 
-        if !payload.attachments.isEmpty {
-            await sendChartAttachments(payload: payload)
-            return
-        }
-
-        guard payload.hasBodyContent else { return }
+        guard payload.hasBodyContent else { return false }
 
         do {
+            let uploadedAttachments = try await uploadChartAttachments(payload.attachments)
             try await chartChatManager.sendMessage(
                 content: payload.encodedContent(),
+                attachmentUrl: uploadedAttachments.first?.attachmentUrl,
+                attachmentType: uploadedAttachments.first?.attachmentType,
+                attachmentName: uploadedAttachments.first?.attachmentName,
+                attachments: uploadedAttachments,
                 replyToMessageId: payload.replyDraft?.messageId
             )
             HapticFeedback.light.trigger()
             chartReplyDraft = nil
+            return true
         } catch {
             rlAppState.showError(error, title: "Failed to Send Message", style: .toast)
+            return false
         }
     }
 
-    private func sendChartAttachments(payload: ChatComposerPayload) async {
+    private func uploadChartAttachments(_ drafts: [ChatAttachmentDraft]) async throws -> [RLMessageAttachmentDTO] {
+        guard !drafts.isEmpty else { return [] }
         guard let guildId = rlAppState.currentGuild?.id,
               let chatId = chartChatManager.activeChartChat?.id else {
-            rlAppState.showError(
-                title: "Unable to Send",
-                message: "No active chart chat was found.",
-                style: .toast
-            )
-            return
+            throw RLAppError.noGuildSelected
         }
 
-        do {
-            var isFirstMessage = true
-            for attachment in payload.attachments {
-                let upload = try await rlAppState.realApi.uploadChartChatAttachment(
-                    guildId: guildId,
-                    chatId: chatId,
-                    fileData: attachment.data,
-                    filename: attachment.filename,
-                    mimeType: attachment.mimeType
-                )
-                let content: String
-                if isFirstMessage {
-                    content = payload.encodedContent(
-                        fallback: payload.text.isEmpty ? attachment.filename : payload.text
-                    )
-                } else {
-                    content = attachment.filename
-                }
-                try await chartChatManager.sendMessage(
-                    content: content,
+        var uploads: [RLMessageAttachmentDTO] = []
+        for attachment in drafts {
+            let upload = try await rlAppState.realApi.uploadChartChatAttachment(
+                guildId: guildId,
+                chatId: chatId,
+                fileData: attachment.data,
+                filename: attachment.filename,
+                mimeType: attachment.mimeType
+            )
+            uploads.append(
+                RLMessageAttachmentDTO(
                     attachmentUrl: upload.attachmentUrl,
                     attachmentType: upload.attachmentType,
-                    attachmentName: upload.attachmentName,
-                    replyToMessageId: payload.replyDraft?.messageId
+                    attachmentName: upload.attachmentName
                 )
-                isFirstMessage = false
-            }
-            HapticFeedback.light.trigger()
-            chartReplyDraft = nil
-        } catch {
-            rlAppState.showError(error, title: "Failed to Send Attachment", style: .toast)
+            )
         }
+        return uploads
     }
     
     // MARK: - Standard Tab Bar
@@ -2515,18 +2537,20 @@ struct ChartBottomSheet: View {
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard)
         .background(bottomTabBarContainerBackground)
-        .background(
-            GeometryReader { geo in
-                let frame = geo.frame(in: .global)
-                Color.clear
-                    .onAppear {
-                        tutorialManager.spotlightFrames["bottom-bar"] = frame
-                    }
-                    .onChange(of: frame) { _, newFrame in
-                        tutorialManager.spotlightFrames["bottom-bar"] = newFrame
-                    }
+        .background {
+            if tutorialManager.isActive {
+                GeometryReader { geo in
+                    let frame = geo.frame(in: .global)
+                    Color.clear
+                        .onAppear {
+                            tutorialManager.spotlightFrames["bottom-bar"] = frame
+                        }
+                        .onChange(of: frame) { _, newFrame in
+                            tutorialManager.spotlightFrames["bottom-bar"] = newFrame
+                        }
+                }
             }
-        )
+        }
     }
 
     // MARK: - Placement Tab Bar

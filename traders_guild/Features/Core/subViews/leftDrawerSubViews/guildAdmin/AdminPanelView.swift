@@ -10,7 +10,7 @@
 //  traders_guild
 //
 //  Admin Panel for Left Drawer - Moderator/Admin Only Features
-//  Includes: Create Announcements, Create Events, Guild Settings, Reports, Invite Members, Manage Members, Manage Roles
+//  Includes: Create Announcements, Create Events, Guild Details, Reports, Invite Members, Manage Members, Manage Roles
 //
 
 import SwiftUI
@@ -100,10 +100,10 @@ struct AdminPanelListView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             
-            // Guild Settings Section - Admin/Owner only
+            // Guild Details Section - Admin/Owner only
             if rlAppState.canAdmin {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Guild Settings")
+                    Text("Guild Details")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.whiteText.opacity(0.7))
@@ -111,7 +111,7 @@ struct AdminPanelListView: View {
 
                     AdminActionButton(
                         icon: "gearshape.fill",
-                        title: "Guild Settings",
+                        title: "Guild Details",
                         subtitle: "Update name, description & visibility",
                         iconColor: .gray
                     ) {

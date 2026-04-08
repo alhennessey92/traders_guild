@@ -8,6 +8,7 @@ enum KeyboardPinnedBottomInsetMode {
 
 struct KeyboardPinnedFooterLayout: Equatable {
     let footerBottomPadding: CGFloat
+    let contentBottomPadding: CGFloat
 
     static func resolve(
         mode: KeyboardPinnedBottomInsetMode,
@@ -18,15 +19,22 @@ struct KeyboardPinnedFooterLayout: Equatable {
         let keyboardVisible = geometryBottomInset > clampedHardwareInset + 1
 
         if keyboardVisible {
-            return KeyboardPinnedFooterLayout(footerBottomPadding: 0)
+            return KeyboardPinnedFooterLayout(
+                footerBottomPadding: 0,
+                contentBottomPadding: mode == .chat ? 48 : 0
+            )
         }
 
         switch mode {
         case .standard:
-            return KeyboardPinnedFooterLayout(footerBottomPadding: clampedHardwareInset)
+            return KeyboardPinnedFooterLayout(
+                footerBottomPadding: clampedHardwareInset,
+                contentBottomPadding: 0
+            )
         case .chat:
             return KeyboardPinnedFooterLayout(
-                footerBottomPadding: max(clampedHardwareInset - 8, 0)
+                footerBottomPadding: max(clampedHardwareInset - 28, 0),
+                contentBottomPadding: 48
             )
         }
     }
@@ -69,7 +77,7 @@ private struct KeyboardPinnedBottomInsetModifier<Footer: View>: ViewModifier {
             ZStack(alignment: .bottom) {
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.bottom, footerHeight)
+                    .padding(.bottom, footerHeight + layout.contentBottomPadding)
 
                 VStack(spacing: 0) {
                     if showsDivider {

@@ -8,6 +8,7 @@ import SwiftUI
 private enum GuildWatchlistAdminTab: String, CaseIterable, UnifiedTabItem {
     case requests = "Requests"
     case current = "Current"
+    case search = "Search"
 
     var title: String { rawValue }
 
@@ -17,6 +18,8 @@ private enum GuildWatchlistAdminTab: String, CaseIterable, UnifiedTabItem {
             return "tray.and.arrow.down.fill"
         case .current:
             return "list.bullet"
+        case .search:
+            return "magnifyingglass"
         }
     }
 }
@@ -29,6 +32,7 @@ struct ManageGuildWatchlistView: View {
     @State private var selectedTab: GuildWatchlistAdminTab = .requests
     @State private var pendingRequests: [RLGuildWatchlistRequestResponseDTO] = []
     @State private var guildSymbols: [RLTradingSymbolDTO] = []
+    @State private var globalSymbols: [RLTradingSymbolDTO] = []
 
     @State private var isLoading: Bool = true
     @State private var isSearching: Bool = false
@@ -113,6 +117,8 @@ struct ManageGuildWatchlistView: View {
             return pendingRequests.count
         case .current:
             return 0
+        case .search:
+            return 0
         }
     }
 
@@ -131,6 +137,8 @@ struct ManageGuildWatchlistView: View {
                 requestsContent
             case .current:
                 currentWatchlistContent
+            case .search:
+                searchContent
             }
         }
     }
@@ -255,10 +263,6 @@ struct ManageGuildWatchlistView: View {
     private var currentWatchlistContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                if canManage {
-                    addSymbolSection
-                }
-
                 Text("Current Guild Watchlist")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -282,9 +286,18 @@ struct ManageGuildWatchlistView: View {
         }
     }
 
+    private var searchContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                addSymbolSection
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
     private var addSymbolSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Add Symbol")
+            Text("Search Symbols")
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundColor(AppColors.greyText)
@@ -301,14 +314,24 @@ struct ManageGuildWatchlistView: View {
             if isSearching {
                 ProgressView("Searching...")
                     .font(.caption)
-            } else if !searchText.isEmpty {
+            } else {
+                if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("Browse global symbols")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                }
                 VStack(spacing: 6) {
-                    ForEach(searchResults.prefix(10)) { symbol in
+                    ForEach(displayedSearchResults.prefix(20)) { symbol in
                         searchRow(symbol)
                     }
                 }
             }
         }
+    }
+
+    private var displayedSearchResults: [RLTradingSymbolDTO] {
+        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedQuery.isEmpty ? globalSymbols : searchResults
     }
 
     private func searchRow(_ symbol: RLTradingSymbolDTO) -> some View {
@@ -498,25 +521,31 @@ struct ManageGuildWatchlistView: View {
         do {
             async let requestsTask = rlAppState.fetchGuildWatchlistRequests(status: "pending")
             async let watchlistTask = rlAppState.fetchGuildWatchlist(guildId: guildId)
-            let (requestsResponse, watchlistResponse) = try await (requestsTask, watchlistTask)
+            async let globalSymbolsTask = rlAppState.realApi.getGlobalSymbols(guildId: guildId, limit: 100)
+            let (requestsResponse, watchlistResponse, globalSymbolsResponse) = try await (requestsTask, watchlistTask, globalSymbolsTask)
             pendingRequests = requestsResponse.requests
             guildSymbols = watchlistResponse.symbols.map { $0.symbol }
+            globalSymbols = globalSymbolsResponse.symbols
             leftDrawerViewModel.guildTradingWatchlist = guildSymbols
+            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                searchResults = globalSymbols
+            }
         } catch {
             // Errors are surfaced via RLAppState toasts.
         }
     }
 
     private func performSearch(query: String) {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            searchResults = []
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            searchResults = globalSymbols
             return
         }
         Task {
             isSearching = true
             defer { isSearching = false }
             do {
-                let response = try await rlAppState.realApi.searchSymbols(query: query, limit: 30)
+                let response = try await rlAppState.realApi.searchSymbols(query: trimmedQuery, limit: 30)
                 await MainActor.run {
                     searchResults = response.results
                 }

@@ -46,6 +46,7 @@ class ChartDataManager: ObservableObject {
     @Published var candles: [RLCandleDTO] = []
     @Published var currentPrice: Double = 0
     @Published var priceRange: (min: Double, max: Double) = (0, 0)
+    @Published private(set) var lastPrependedCandleCount: Int = 0
     
     // MARK: - Symbol & Timeframe Context
     
@@ -59,7 +60,7 @@ class ChartDataManager: ObservableObject {
     
     private var timer: Timer?
     private var basePrice: Double = 100.0
-    private let maxCandles = 500
+    private let maxCandles = Int.max
     private let maxRealtimeFallbackInsert = 120
     
     // MARK: - Initialization
@@ -285,7 +286,8 @@ class ChartDataManager: ObservableObject {
     // MARK: - External Data Methods
     
     func updateWithMarketData(_ data: [RLCandleDTO]) {
-        candles = data
+        lastPrependedCandleCount = 0
+        candles = Self.sortedUniqueCandles(data)
         updatePriceRange()
         
         if let lastCandle = candles.last {
@@ -293,8 +295,41 @@ class ChartDataManager: ObservableObject {
             basePrice = lastCandle.close
         }
     }
+
+    @discardableResult
+    func mergeHistoricalMarketData(_ data: [RLCandleDTO]) -> Int {
+        guard !data.isEmpty else {
+            lastPrependedCandleCount = 0
+            return 0
+        }
+
+        let oldFirstTimestamp = candles.first?.timestamp
+        let existingTimestamps = Set(candles.map(\.timestamp))
+        let insertedBeforeFirst = data.filter { candle in
+            guard let oldFirstTimestamp else { return false }
+            return candle.timestamp < oldFirstTimestamp && !existingTimestamps.contains(candle.timestamp)
+        }.count
+
+        lastPrependedCandleCount = insertedBeforeFirst
+        candles = Self.sortedUniqueCandles(data + candles)
+        updatePriceRange()
+
+        if let lastCandle = candles.last {
+            currentPrice = lastCandle.close
+            basePrice = lastCandle.close
+        }
+
+        return insertedBeforeFirst
+    }
+
+    func consumeLastPrependedCandleCount() -> Int {
+        let count = lastPrependedCandleCount
+        lastPrependedCandleCount = 0
+        return count
+    }
     
     func addRealtimeCandle(_ candle: RLCandleDTO) {
+        lastPrependedCandleCount = 0
         candles.append(candle)
         currentPrice = candle.close
         basePrice = candle.close
@@ -377,5 +412,13 @@ class ChartDataManager: ObservableObject {
         } else {
             return String(format: "%.0f", volume)
         }
+    }
+
+    private static func sortedUniqueCandles(_ candles: [RLCandleDTO]) -> [RLCandleDTO] {
+        var byTimestamp: [Date: RLCandleDTO] = [:]
+        for candle in candles {
+            byTimestamp[candle.timestamp] = candle
+        }
+        return byTimestamp.values.sorted { $0.timestamp < $1.timestamp }
     }
 }

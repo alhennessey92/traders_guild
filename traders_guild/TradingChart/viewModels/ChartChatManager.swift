@@ -210,6 +210,7 @@ class ChartChatManager: ObservableObject {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyToMessageId: UUID? = nil
     ) async throws {
         guard let chat = activeChartChat else { return }
@@ -221,6 +222,7 @@ class ChartChatManager: ObservableObject {
             attachmentUrl: attachmentUrl,
             attachmentType: attachmentType,
             attachmentName: attachmentName,
+            attachments: attachments,
             replyToMessageId: replyToMessageId
         )
         

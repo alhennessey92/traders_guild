@@ -76,6 +76,30 @@ struct ChartGapFillRealtimeFallbackTests {
     }
 
     @Test
+    func historicalMergePrependsDedupesAndExposesPrependCount() throws {
+        let manager = ChartDataManager()
+        manager.currentTimeframe = .m1
+        manager.updateWithMarketData([
+            makeCandle("2026-01-01T10:02:00Z", close: 102),
+            makeCandle("2026-01-01T10:03:00Z", close: 103),
+        ])
+
+        let prepended = manager.mergeHistoricalMarketData([
+            makeCandle("2026-01-01T10:00:00Z", close: 100),
+            makeCandle("2026-01-01T10:01:00Z", close: 101),
+            makeCandle("2026-01-01T10:02:00Z", close: 999),
+        ])
+
+        #expect(prepended == 2)
+        #expect(manager.candles.count == 4)
+        #expect(manager.candles.first?.timestamp == (try date("2026-01-01T10:00:00Z")))
+        #expect(manager.candles.last?.timestamp == (try date("2026-01-01T10:03:00Z")))
+        #expect(manager.candles[2].close == 102)
+        #expect(manager.consumeLastPrependedCandleCount() == 2)
+        #expect(manager.consumeLastPrependedCandleCount() == 0)
+    }
+
+    @Test
     func decodeWithoutGapFlagDefaultsToFalse() throws {
         let json = """
         {

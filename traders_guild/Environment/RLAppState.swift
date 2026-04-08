@@ -2834,6 +2834,7 @@ class RLAppState: ObservableObject {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyToMessageId: UUID? = nil
     ) async throws -> RLChatroomMessageDTO {
         guard let guild = currentGuild else {
@@ -2847,6 +2848,7 @@ class RLAppState: ObservableObject {
                 attachmentUrl: attachmentUrl,
                 attachmentType: attachmentType,
                 attachmentName: attachmentName,
+                attachments: attachments,
                 replyToMessageId: replyToMessageId
             )
         } catch {
@@ -3132,6 +3134,7 @@ class RLAppState: ObservableObject {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyToMessageId: UUID? = nil
     ) async throws -> RLDMMessageDTO {
         guard let guild = currentGuild else {
@@ -3145,6 +3148,7 @@ class RLAppState: ObservableObject {
                 attachmentUrl: attachmentUrl,
                 attachmentType: attachmentType,
                 attachmentName: attachmentName,
+                attachments: attachments,
                 replyToMessageId: replyToMessageId
             )
         } catch {
@@ -3757,6 +3761,7 @@ class RLAppState: ObservableObject {
         attachmentUrl: String? = nil,
         attachmentType: String? = nil,
         attachmentName: String? = nil,
+        attachments: [RLMessageAttachmentDTO] = [],
         replyToMessageId: UUID? = nil
     ) async throws -> RLChartChatMessageDTO {
         do {
@@ -3766,6 +3771,7 @@ class RLAppState: ObservableObject {
                 attachmentUrl: attachmentUrl,
                 attachmentType: attachmentType,
                 attachmentName: attachmentName,
+                attachments: attachments,
                 replyToMessageId: replyToMessageId
             )
         } catch {
