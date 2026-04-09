@@ -12,7 +12,7 @@ enum OverlayPanelChrome {
                 .fill(
                     ThemeManager.shared.currentTheme == .dark
                         ? AppColors.surfaceBlack50.opacity(0.96)
-                        : AppColors.panelHeaderBackground
+                        : AppColors.chartOverlayInfoPanelFill
                 )
         }
         .overlay {

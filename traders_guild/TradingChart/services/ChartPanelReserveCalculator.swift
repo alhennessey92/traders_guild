@@ -13,7 +13,19 @@ struct CombinedChartPanelLayout: Equatable {
 
 enum ChartPanelReserveCalculator {
     static let panelResizeHandleHeight: CGFloat = 22
-    static let panelXAxisLabelStripHeight: CGFloat = 24
+    /// Canvas height for time labels (unchanged typography / layout).
+    static let panelXAxisTimeLabelAreaHeight: CGFloat = 24
+    /// Solid strip below labels, matching x-axis fill — keeps times off the physical panel edge.
+    static let panelXAxisLabelBottomFootHeight: CGFloat = 4
+    /// Full stacked-panel x-axis chrome height (labels + foot). Used for layout reserve everywhere.
+    static let panelXAxisLabelStripHeight: CGFloat =
+        panelXAxisTimeLabelAreaHeight + panelXAxisLabelBottomFootHeight
+    /// Consistent gap between chart layout and floating panel stack (avoids jumps when panels expand/collapse).
+    static let panelStackChartUniformGap: CGFloat = 4
+    /// Lifts chart controls off main-chart time labels when no floating panel stack is present.
+    static var mainChartControlRowBaselineClearance: CGFloat {
+        panelStackChartUniformGap + panelXAxisLabelBottomFootHeight + 4
+    }
     /// Heights below this are treated as collapsed to avoid sub-pixel UI jitter.
     static let expandedPanelHeightThreshold: CGFloat = 2
 

@@ -117,7 +117,7 @@ struct SignupUsernameView: View {
                 }
             }
             .interactiveDismissDisabled(rlAppState.accountCreatedDuringOnboarding)
-            .keyboardPinnedBottomInset {
+            .keyboardPinnedBottomInset(background: AnyView(AuthKeyboardFooterChrome())) {
                 VStack(spacing: 0) {
                     Divider()
                         .frame(height: 1)
@@ -138,7 +138,7 @@ struct SignupUsernameView: View {
                         .padding(.trailing)
                     }
                 }
-                .background(AppColors.sheetBackground)
+                .background(Color.clear)
             }
         }
         .onChange(of: username) { _, _ in

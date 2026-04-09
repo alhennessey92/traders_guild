@@ -57,9 +57,9 @@ struct UnifiedComponentsScaffold<Tab: UnifiedTabItem, Content: View>: View where
                 .fill(
                     LinearGradient(
                         colors: [
-                            headerIconTint.opacity(0.22),
-                            headerIconTint.opacity(0.12),
-                            AppColors.whiteText.opacity(0.06),
+                            headerIconTint.opacity(CGFloat(AppColors.componentsScaffoldHeaderLeadingOpacity)),
+                            headerIconTint.opacity(CGFloat(AppColors.componentsScaffoldHeaderMidOpacity)),
+                            AppColors.componentsScaffoldHeaderNeutralEndpoint,
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

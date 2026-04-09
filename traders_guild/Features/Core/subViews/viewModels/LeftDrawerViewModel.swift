@@ -627,9 +627,12 @@ class LeftDrawerViewModel: ObservableObject {
     }
 
     /// Refresh the accuracy leaderboard for the current guild
-    func refreshAccuracyLeaderboard(guildId: UUID, rlAppState: RLAppState) async {
+    @discardableResult
+    func refreshAccuracyLeaderboard(guildId: UUID, rlAppState: RLAppState) async -> Bool {
         isLoadingAccuracyLeaderboard = true
         defer { isLoadingAccuracyLeaderboard = false }
+        let endpoint = "/reputation/guilds/\(guildId.uuidString)/accuracy-leaderboard"
+        print("📊 [Leaderboard] guild-accuracy start endpoint=\(endpoint) guildId=\(guildId.uuidString)")
 
         do {
             let response = try await rlAppState.realApi.getGuildAccuracyLeaderboard(guildId: guildId)
@@ -637,10 +640,44 @@ class LeftDrawerViewModel: ObservableObject {
                 self.accuracyLeaderboard = response.members
                 self.accuracyLeaderboardMinPredictions = response.minPredictionsThreshold
             }
+            print(
+                "✅ [Leaderboard] guild-accuracy success endpoint=\(endpoint) guildId=\(guildId.uuidString) " +
+                "resultClass=success members=\(response.members.count) minPredictions=\(response.minPredictionsThreshold)"
+            )
+            return true
         } catch is CancellationError {
-            print("📋 refreshAccuracyLeaderboard: Cancelled")
+            print("📋 [Leaderboard] guild-accuracy cancelled endpoint=\(endpoint) guildId=\(guildId.uuidString)")
+            return false
         } catch {
-            print("⚠️ Failed to refresh accuracy leaderboard: \(error)")
+            print(
+                "⚠️ [Leaderboard] guild-accuracy failure endpoint=\(endpoint) guildId=\(guildId.uuidString) " +
+                leaderboardRefreshDiagnostic(error)
+            )
+            return false
+        }
+    }
+
+    private func leaderboardRefreshDiagnostic(_ error: Error) -> String {
+        switch error {
+        case let apiError as APIError:
+            switch apiError {
+            case .serverError(let statusCode, let detail):
+                return "resultClass=http status=\(statusCode) reason=\(detail)"
+            case .badRequest(let detail):
+                return "resultClass=badRequest status=400 reason=\(detail)"
+            case .networkError(let detail):
+                return "resultClass=network reason=\(detail)"
+            case .decodingError(let detail):
+                return "resultClass=decode reason=\(detail)"
+            case .unauthorized:
+                return "resultClass=http status=401 reason=unauthorized"
+            case .invalidURL:
+                return "resultClass=client reason=invalid_url"
+            case .invalidResponse:
+                return "resultClass=client reason=invalid_response"
+            }
+        default:
+            return "resultClass=\(String(describing: type(of: error))) reason=\(String(describing: error))"
         }
     }
 

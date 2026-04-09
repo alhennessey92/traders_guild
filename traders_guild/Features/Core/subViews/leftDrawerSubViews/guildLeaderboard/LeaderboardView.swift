@@ -123,6 +123,14 @@ struct LeaderboardListView: View {
     @State private var globalUserLeaderboard: [RLGlobalUserLeaderboardMemberDTO] = []
     @State private var isLoadingGlobalUsers: Bool = false
     @State private var currentGuildAccuracyProfile: RLAccuracyProfileDTO? = nil
+    @State private var hasLoadedGuildAccuracyLeaderboard = false
+    @State private var hasLoadedCurrentGuildAccuracyProfile = false
+    @State private var hasLoadedGlobalUsers = false
+    @State private var hasLoadedDiscoverableGuilds = false
+    @State private var hasLoadedJoinedGuildAccuracy = false
+    @State private var guildAccuracyRefreshHint: String? = nil
+    @State private var globalUsersRefreshHint: String? = nil
+    @State private var globalGuildsRefreshHint: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -218,9 +226,19 @@ struct LeaderboardListView: View {
 
 private extension LeaderboardListView {
     func initialLoad() async {
-        if let guildId = rlAppState.currentGuild?.id, leftDrawerViewModel.accuracyLeaderboard.isEmpty {
-            await leftDrawerViewModel.refreshAccuracyLeaderboard(guildId: guildId, rlAppState: rlAppState)
-            await refreshCurrentGuildAccuracyProfile(guildId: guildId)
+        if let guildId = rlAppState.currentGuild?.id {
+            let leaderboardLoaded: Bool
+            if leftDrawerViewModel.accuracyLeaderboard.isEmpty {
+                leaderboardLoaded = await leftDrawerViewModel.refreshAccuracyLeaderboard(guildId: guildId, rlAppState: rlAppState)
+            } else {
+                hasLoadedGuildAccuracyLeaderboard = true
+                leaderboardLoaded = true
+            }
+            let profileLoaded = await refreshCurrentGuildAccuracyProfile(guildId: guildId)
+            updateGuildAccuracyRefreshHint(
+                leaderboardLoaded: leaderboardLoaded,
+                profileLoaded: profileLoaded
+            )
         }
         await refreshGlobalUsers()
         await refreshGlobalGuildData()
@@ -232,9 +250,15 @@ private extension LeaderboardListView {
         if let guild = rlAppState.currentGuild {
             async let membersTask: Void = leftDrawerViewModel.refreshGuildMembers(guildId: guild.id, rlAppState: rlAppState)
             async let friendsTask: Void = leftDrawerViewModel.refreshFriends(guildId: guild.id, rlAppState: rlAppState)
-            async let accuracyTask: Void = leftDrawerViewModel.refreshAccuracyLeaderboard(guildId: guild.id, rlAppState: rlAppState)
-            async let currentAccuracyTask: Void = refreshCurrentGuildAccuracyProfile(guildId: guild.id)
-            _ = await (membersTask, friendsTask, accuracyTask, currentAccuracyTask, globalTask, globalUsersTask)
+            async let accuracyTask: Bool = leftDrawerViewModel.refreshAccuracyLeaderboard(guildId: guild.id, rlAppState: rlAppState)
+            async let currentAccuracyTask: Bool = refreshCurrentGuildAccuracyProfile(guildId: guild.id)
+            let leaderboardLoaded = await accuracyTask
+            let profileLoaded = await currentAccuracyTask
+            updateGuildAccuracyRefreshHint(
+                leaderboardLoaded: leaderboardLoaded,
+                profileLoaded: profileLoaded
+            )
+            _ = await (membersTask, friendsTask, globalTask, globalUsersTask)
         } else {
             _ = await (globalTask, globalUsersTask)
         }
@@ -343,64 +367,244 @@ private extension LeaderboardListView {
     }
 
     func refreshGlobalUsers() async {
+        let hadCachedData = hasLoadedGlobalUsers || !globalUserLeaderboard.isEmpty
         isLoadingGlobalUsers = true
         defer { isLoadingGlobalUsers = false }
+        let endpoint = "/reputation/global-users-leaderboard"
+        logLeaderboardRefresh(
+            "global-users",
+            status: "start",
+            detail: "endpoint=\(endpoint) cached=\(hadCachedData)"
+        )
         do {
             let response = try await rlAppState.realApi.getGlobalUsersLeaderboard(limit: 100, minPredictions: 0)
             globalUserLeaderboard = response.members
+            hasLoadedGlobalUsers = true
+            globalUsersRefreshHint = nil
+            logLeaderboardRefresh(
+                "global-users",
+                status: "success",
+                detail: "endpoint=\(endpoint) resultClass=success members=\(response.members.count)"
+            )
         } catch {
-            globalUserLeaderboard = []
+            logLeaderboardRefresh(
+                "global-users",
+                status: "failure",
+                detail: leaderboardRefreshDiagnostic(
+                    endpoint: endpoint,
+                    error: error
+                )
+            )
+            globalUsersRefreshHint = hadCachedData
+                ? nil
+                : initialLoadRefreshHint
         }
     }
 
-    func refreshCurrentGuildAccuracyProfile(guildId: UUID) async {
+    @discardableResult
+    func refreshCurrentGuildAccuracyProfile(guildId: UUID) async -> Bool {
+        let endpoint = "/reputation/me/accuracy/guild/\(guildId.uuidString)"
+        logLeaderboardRefresh(
+            "guild-accuracy-profile",
+            status: "start",
+            detail: "endpoint=\(endpoint) guildId=\(guildId.uuidString)"
+        )
         do {
             currentGuildAccuracyProfile = try await rlAppState.realApi.getMyGuildAccuracy(guildId: guildId)
+            hasLoadedCurrentGuildAccuracyProfile = true
+            logLeaderboardRefresh(
+                "guild-accuracy-profile",
+                status: "success",
+                detail: "endpoint=\(endpoint) resultClass=success guildId=\(guildId.uuidString) totalPredictions=\(currentGuildAccuracyProfile?.totalPredictions ?? 0)"
+            )
+            return true
         } catch {
-            currentGuildAccuracyProfile = nil
+            logLeaderboardRefresh(
+                "guild-accuracy-profile",
+                status: "failure",
+                detail: leaderboardRefreshDiagnostic(
+                    endpoint: endpoint,
+                    error: error,
+                    extra: "guildId=\(guildId.uuidString)"
+                )
+            )
+            return false
         }
     }
 
     func refreshGlobalGuildData() async {
         isLoadingGlobalGuilds = true
+        defer { isLoadingGlobalGuilds = false }
+        logLeaderboardRefresh("global-guilds", status: "start")
+
         async let discoverTask = fetchDiscoverableGuilds()
         async let accuracyTask = fetchJoinedGuildAccuracy()
-        discoveredGuilds = await discoverTask
-        joinedGuildAccuracy = await accuracyTask
-        isLoadingGlobalGuilds = false
-    }
+        let discoverResult = await discoverTask
+        let accuracyResult = await accuracyTask
 
-    func fetchDiscoverableGuilds() async -> [RLGuildDTO] {
-        do {
-            return try await rlAppState.realApi.getJoinableGuilds(sort: "reputation", limit: 100)
-        } catch {
-            return []
+        if discoverResult.didSucceed {
+            discoveredGuilds = discoverResult.guilds
+            hasLoadedDiscoverableGuilds = true
+        }
+
+        if accuracyResult.didSucceed {
+            joinedGuildAccuracy = accuracyResult.accuracyByGuild
+            hasLoadedJoinedGuildAccuracy = true
+        }
+
+        if discoverResult.didSucceed && accuracyResult.didSucceed {
+            globalGuildsRefreshHint = nil
+            logLeaderboardRefresh(
+                "global-guilds",
+                status: "success",
+                detail: "discoverable=\(discoveredGuilds.count) joinedAccuracy=\(joinedGuildAccuracy.count)"
+            )
+        } else {
+            let hadCachedData = hasLoadedDiscoverableGuilds || hasLoadedJoinedGuildAccuracy || !discoveredGuilds.isEmpty || !joinedGuildAccuracy.isEmpty
+            globalGuildsRefreshHint = hadCachedData
+                ? nil
+                : initialLoadRefreshHint
+            logLeaderboardRefresh(
+                "global-guilds",
+                status: "failure",
+                detail: "discover=\(discoverResult.didSucceed) accuracy=\(accuracyResult.didSucceed)"
+            )
         }
     }
 
-    func fetchJoinedGuildAccuracy() async -> [UUID: Double] {
-        let joinedGuilds = rlAppState.userGuilds.map(\.guild)
-        guard !joinedGuilds.isEmpty else { return [:] }
+    func fetchDiscoverableGuilds() async -> (guilds: [RLGuildDTO], didSucceed: Bool) {
+        do {
+            return (try await rlAppState.realApi.getJoinableGuilds(sort: "reputation", limit: 100), true)
+        } catch {
+            return ([], false)
+        }
+    }
 
-        return await withTaskGroup(of: (UUID, Double?).self) { group in
+    func fetchJoinedGuildAccuracy() async -> (accuracyByGuild: [UUID: Double], didSucceed: Bool) {
+        let joinedGuilds = rlAppState.userGuilds.map(\.guild)
+        guard !joinedGuilds.isEmpty else { return ([:], true) }
+
+        return await withTaskGroup(of: (UUID, Double?, Bool).self) { group in
             for guild in joinedGuilds {
                 group.addTask {
                     do {
                         let stats = try await rlAppState.realApi.getGuildStatistics(guildId: guild.id)
-                        return (guild.id, stats.averageAccuracy)
+                        return (guild.id, stats.averageAccuracy, true)
                     } catch {
-                        return (guild.id, nil)
+                        return (guild.id, nil, false)
                     }
                 }
             }
 
             var results: [UUID: Double] = [:]
-            for await (guildId, accuracy) in group {
+            var didSucceed = false
+            for await (guildId, accuracy, requestSucceeded) in group {
+                didSucceed = didSucceed || requestSucceeded
                 if let accuracy {
                     results[guildId] = accuracy
                 }
             }
-            return results
+            return (results, didSucceed)
+        }
+    }
+
+    var staleRefreshHint: String {
+        "Live refresh unavailable. Showing last update."
+    }
+
+    var initialLoadRefreshHint: String {
+        "Leaderboard unavailable right now. Pull to retry."
+    }
+
+    var hasGuildAccuracyCachedData: Bool {
+        hasLoadedGuildAccuracyLeaderboard
+            || hasLoadedCurrentGuildAccuracyProfile
+            || !leftDrawerViewModel.accuracyLeaderboard.isEmpty
+            || currentGuildAccuracyProfile != nil
+    }
+
+    func updateGuildAccuracyRefreshHint(leaderboardLoaded: Bool, profileLoaded: Bool) {
+        if leaderboardLoaded {
+            hasLoadedGuildAccuracyLeaderboard = true
+        }
+        if profileLoaded {
+            hasLoadedCurrentGuildAccuracyProfile = true
+        }
+
+        if leaderboardLoaded && profileLoaded {
+            guildAccuracyRefreshHint = nil
+        } else if hasGuildAccuracyCachedData {
+            guildAccuracyRefreshHint = nil
+        } else {
+            guildAccuracyRefreshHint = initialLoadRefreshHint
+        }
+
+        logLeaderboardRefresh(
+            "guild-accuracy",
+            status: leaderboardLoaded && profileLoaded ? "success" : "failure",
+            detail: "leaderboardLoaded=\(leaderboardLoaded) profileLoaded=\(profileLoaded) cached=\(hasGuildAccuracyCachedData)"
+        )
+    }
+
+    func logLeaderboardRefresh(_ surface: String, status: String, detail: String? = nil) {
+        if let detail, !detail.isEmpty {
+            print("📊 [Leaderboard] \(surface) \(status) \(detail)")
+        } else {
+            print("📊 [Leaderboard] \(surface) \(status)")
+        }
+    }
+
+    func leaderboardRefreshDiagnostic(
+        endpoint: String,
+        error: Error,
+        extra: String? = nil
+    ) -> String {
+        let suffix = extra.map { " \($0)" } ?? ""
+        switch error {
+        case let apiError as APIError:
+            switch apiError {
+            case .serverError(let statusCode, let detail):
+                return "endpoint=\(endpoint) resultClass=http status=\(statusCode) reason=\(detail)\(suffix)"
+            case .badRequest(let detail):
+                return "endpoint=\(endpoint) resultClass=badRequest status=400 reason=\(detail)\(suffix)"
+            case .networkError(let detail):
+                return "endpoint=\(endpoint) resultClass=network reason=\(detail)\(suffix)"
+            case .decodingError(let detail):
+                return "endpoint=\(endpoint) resultClass=decode reason=\(detail)\(suffix)"
+            case .unauthorized:
+                return "endpoint=\(endpoint) resultClass=http status=401 reason=unauthorized\(suffix)"
+            case .invalidURL:
+                return "endpoint=\(endpoint) resultClass=client reason=invalid_url\(suffix)"
+            case .invalidResponse:
+                return "endpoint=\(endpoint) resultClass=client reason=invalid_response\(suffix)"
+            }
+        default:
+            return "endpoint=\(endpoint) resultClass=\(String(describing: type(of: error))) reason=\(String(describing: error))\(suffix)"
+        }
+    }
+
+    @ViewBuilder
+    func refreshHintBanner(_ text: String?) -> some View {
+        if let text, !text.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.clockwise.circle")
+                    .font(.caption.weight(.semibold))
+                Text(text)
+                    .font(.caption)
+                    .lineLimit(2)
+            }
+            .foregroundColor(AppColors.chartAxisLabelSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(AppColors.messagingListRowFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                    )
+            )
         }
     }
 
@@ -440,11 +644,16 @@ private extension LeaderboardListView {
 
     var guildAccuracyContent: some View {
         Group {
-            if leftDrawerViewModel.isLoadingAccuracyLeaderboard && leftDrawerViewModel.accuracyLeaderboard.isEmpty {
-                UnifiedLoadingState(message: "Loading guild accuracy...")
-                    .padding(.top, 40)
+            if (leftDrawerViewModel.isLoadingAccuracyLeaderboard || !hasLoadedGuildAccuracyLeaderboard)
+                && leftDrawerViewModel.accuracyLeaderboard.isEmpty {
+                VStack(spacing: 10) {
+                    refreshHintBanner(guildAccuracyRefreshHint)
+                    UnifiedLoadingState(message: "Loading guild accuracy...")
+                        .padding(.top, 40)
+                }
             } else if leftDrawerViewModel.accuracyLeaderboard.isEmpty {
                 VStack(spacing: 10) {
+                    refreshHintBanner(guildAccuracyRefreshHint)
                     if let progressCard = guildAccuracyProgressCard {
                         progressCard
                     }
@@ -457,6 +666,7 @@ private extension LeaderboardListView {
                 }
             } else {
                 VStack(spacing: 10) {
+                    refreshHintBanner(guildAccuracyRefreshHint)
                     if let progressCard = guildAccuracyProgressCard {
                         progressCard
                     }
@@ -480,33 +690,42 @@ private extension LeaderboardListView {
 
     var globalUsersReputationContent: some View {
         Group {
-            if isLoadingGlobalUsers && globalUsersByReputation.isEmpty {
-                UnifiedLoadingState(message: "Loading global users...")
-                    .padding(.top, 40)
+            if (isLoadingGlobalUsers || !hasLoadedGlobalUsers) && globalUsersByReputation.isEmpty {
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalUsersRefreshHint)
+                    UnifiedLoadingState(message: "Loading global users...")
+                        .padding(.top, 40)
+                }
             } else if globalUsersByReputation.isEmpty {
-                UnifiedEmptyState(
-                    icon: "person.2",
-                    title: "No global user data",
-                    subtitle: "Global user rankings will appear once the leaderboard loads"
-                )
-                .padding(.top, 40)
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalUsersRefreshHint)
+                    UnifiedEmptyState(
+                        icon: "person.2",
+                        title: "No global user data",
+                        subtitle: "Global user rankings will appear once the leaderboard loads"
+                    )
+                    .padding(.top, 40)
+                }
             } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(globalUsersByReputation.enumerated()), id: \.element.id) { index, user in
-                        LeaderboardMemberRow(
-                            displayName: user.displayName,
-                            username: user.username,
-                            avatarUrl: user.avatarUrl,
-                            isOnline: user.isOnline,
-                            roleText: user.roleText,
-                            roleColor: user.roleColor,
-                            isBlocked: user.isBlocked,
-                            isFriend: user.isFriend,
-                            reputation: user.globalReputation,
-                            secondaryLabel: user.guildName,
-                            rank: index + 1,
-                            onTap: { openProfile(for: user) }
-                        )
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalUsersRefreshHint)
+                    LazyVStack(spacing: 8) {
+                        ForEach(Array(globalUsersByReputation.enumerated()), id: \.element.id) { index, user in
+                            LeaderboardMemberRow(
+                                displayName: user.displayName,
+                                username: user.username,
+                                avatarUrl: user.avatarUrl,
+                                isOnline: user.isOnline,
+                                roleText: user.roleText,
+                                roleColor: user.roleColor,
+                                isBlocked: user.isBlocked,
+                                isFriend: user.isFriend,
+                                reputation: user.globalReputation,
+                                secondaryLabel: user.guildName,
+                                rank: index + 1,
+                                onTap: { openProfile(for: user) }
+                            )
+                        }
                     }
                 }
             }
@@ -515,29 +734,38 @@ private extension LeaderboardListView {
 
     var globalUsersAccuracyContent: some View {
         Group {
-            if isLoadingGlobalUsers && globalUsersByAccuracy.isEmpty {
-                UnifiedLoadingState(message: "Loading user accuracy...")
-                    .padding(.top, 40)
+            if (isLoadingGlobalUsers || !hasLoadedGlobalUsers) && globalUsersByAccuracy.isEmpty {
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalUsersRefreshHint)
+                    UnifiedLoadingState(message: "Loading user accuracy...")
+                        .padding(.top, 40)
+                }
             } else if globalUsersByAccuracy.isEmpty {
-                UnifiedEmptyState(
-                    icon: "target",
-                    title: "No user accuracy data",
-                    subtitle: "Accuracy rankings appear when global prediction history is available"
-                )
-                .padding(.top, 40)
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalUsersRefreshHint)
+                    UnifiedEmptyState(
+                        icon: "target",
+                        title: "No user accuracy data",
+                        subtitle: "Accuracy rankings appear when global prediction history is available"
+                    )
+                    .padding(.top, 40)
+                }
             } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(globalUsersByAccuracy.enumerated()), id: \.element.id) { index, user in
-                        GlobalUserAccuracyRow(
-                            username: user.username,
-                            displayName: user.displayName,
-                            avatarUrl: user.avatarUrl,
-                            isOnline: user.isOnline,
-                            accuracyRate: user.accuracyRate ?? 0,
-                            contextLabel: user.guildName,
-                            rank: index + 1,
-                            onTap: { openProfile(for: user) }
-                        )
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalUsersRefreshHint)
+                    LazyVStack(spacing: 8) {
+                        ForEach(Array(globalUsersByAccuracy.enumerated()), id: \.element.id) { index, user in
+                            GlobalUserAccuracyRow(
+                                username: user.username,
+                                displayName: user.displayName,
+                                avatarUrl: user.avatarUrl,
+                                isOnline: user.isOnline,
+                                accuracyRate: user.accuracyRate ?? 0,
+                                contextLabel: user.guildName,
+                                rank: index + 1,
+                                onTap: { openProfile(for: user) }
+                            )
+                        }
                     }
                 }
             }
@@ -546,28 +774,37 @@ private extension LeaderboardListView {
 
     var globalGuildsReputationContent: some View {
         Group {
-            if isLoadingGlobalGuilds && globalGuildsByReputation.isEmpty {
-                UnifiedLoadingState(message: "Loading global guilds...")
-                    .padding(.top, 40)
+            if (isLoadingGlobalGuilds || !hasLoadedDiscoverableGuilds) && globalGuildsByReputation.isEmpty {
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalGuildsRefreshHint)
+                    UnifiedLoadingState(message: "Loading global guilds...")
+                        .padding(.top, 40)
+                }
             } else if globalGuildsByReputation.isEmpty {
-                UnifiedEmptyState(
-                    icon: "building.2",
-                    title: "No guild data",
-                    subtitle: "Global guild rankings will appear here"
-                )
-                .padding(.top, 40)
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalGuildsRefreshHint)
+                    UnifiedEmptyState(
+                        icon: "building.2",
+                        title: "No guild data",
+                        subtitle: "Global guild rankings will appear here"
+                    )
+                    .padding(.top, 40)
+                }
             } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(globalGuildsByReputation.enumerated()), id: \.element.id) { index, guild in
-                        GlobalGuildLeaderboardRow(
-                            guildName: guild.name,
-                            memberCount: guild.memberCount,
-                            membersOnline: guild.membersOnline,
-                            reputation: guild.reputationFormatted,
-                            accuracyText: guild.averageAccuracy.map { String(format: "%.1f%%", $0 * 100) },
-                            rank: index + 1,
-                            mode: .reputation
-                        )
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalGuildsRefreshHint)
+                    LazyVStack(spacing: 8) {
+                        ForEach(Array(globalGuildsByReputation.enumerated()), id: \.element.id) { index, guild in
+                            GlobalGuildLeaderboardRow(
+                                guildName: guild.name,
+                                memberCount: guild.memberCount,
+                                membersOnline: guild.membersOnline,
+                                reputation: guild.reputationFormatted,
+                                accuracyText: guild.averageAccuracy.map { String(format: "%.1f%%", $0 * 100) },
+                                rank: index + 1,
+                                mode: .reputation
+                            )
+                        }
                     }
                 }
             }
@@ -576,28 +813,37 @@ private extension LeaderboardListView {
 
     var globalGuildsAccuracyContent: some View {
         Group {
-            if isLoadingGlobalGuilds && globalGuildsByAccuracy.isEmpty {
-                UnifiedLoadingState(message: "Loading guild accuracy...")
-                    .padding(.top, 40)
+            if (isLoadingGlobalGuilds || !hasLoadedJoinedGuildAccuracy) && globalGuildsByAccuracy.isEmpty {
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalGuildsRefreshHint)
+                    UnifiedLoadingState(message: "Loading guild accuracy...")
+                        .padding(.top, 40)
+                }
             } else if globalGuildsByAccuracy.isEmpty {
-                UnifiedEmptyState(
-                    icon: "chart.line.uptrend.xyaxis",
-                    title: "No guild accuracy snapshot",
-                    subtitle: "Join guilds and build predictions to populate this ranking"
-                )
-                .padding(.top, 40)
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalGuildsRefreshHint)
+                    UnifiedEmptyState(
+                        icon: "chart.line.uptrend.xyaxis",
+                        title: "No guild accuracy snapshot",
+                        subtitle: "Join guilds and build predictions to populate this ranking"
+                    )
+                    .padding(.top, 40)
+                }
             } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(globalGuildsByAccuracy.enumerated()), id: \.element.id) { index, guild in
-                        GlobalGuildLeaderboardRow(
-                            guildName: guild.name,
-                            memberCount: guild.memberCount,
-                            membersOnline: guild.membersOnline,
-                            reputation: guild.reputationFormatted,
-                            accuracyText: guild.accuracyFormatted,
-                            rank: index + 1,
-                            mode: .accuracy
-                        )
+                VStack(spacing: 10) {
+                    refreshHintBanner(globalGuildsRefreshHint)
+                    LazyVStack(spacing: 8) {
+                        ForEach(Array(globalGuildsByAccuracy.enumerated()), id: \.element.id) { index, guild in
+                            GlobalGuildLeaderboardRow(
+                                guildName: guild.name,
+                                memberCount: guild.memberCount,
+                                membersOnline: guild.membersOnline,
+                                reputation: guild.reputationFormatted,
+                                accuracyText: guild.accuracyFormatted,
+                                rank: index + 1,
+                                mode: .accuracy
+                            )
+                        }
                     }
                 }
             }

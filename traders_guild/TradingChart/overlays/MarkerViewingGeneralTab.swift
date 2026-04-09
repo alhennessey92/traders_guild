@@ -93,7 +93,7 @@ struct MarkerViewingGeneralTab: View {
                 colors: [
                     heroColor.opacity(0.32),
                     heroColor.opacity(0.15),
-                    AppColors.whiteText.opacity(0.06),
+                    AppColors.componentsScaffoldHeaderNeutralEndpoint,
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -500,7 +500,7 @@ struct MarkerViewingGeneralTab: View {
                 if let pnl = outcome.pnl {
                     Text(pnl >= 0 ? "+\(formattedPrice(pnl))" : formattedPrice(pnl))
                         .font(.system(size: 22, weight: .heavy, design: .monospaced))
-                        .foregroundColor(pnl >= 0 ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                        .foregroundColor(pnl >= 0 ? AppColors.markerPositiveForeground : AppColors.statusNegative85)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 }
@@ -520,7 +520,7 @@ struct MarkerViewingGeneralTab: View {
                         }
                         .foregroundColor(
                             (outcome.guildRepDelta ?? 0) >= 0
-                                ? AppColors.statusPositive90
+                                ? AppColors.markerPositiveForeground
                                 : AppColors.statusNegative85
                         )
                     }
@@ -549,7 +549,7 @@ struct MarkerViewingGeneralTab: View {
                     }
                     .foregroundColor(
                         outcome.affectsPerformance
-                            ? (outcome.isWin ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                            ? (outcome.isWin ? AppColors.markerPositiveForeground : AppColors.statusNegative85)
                             : AppColors.greyText
                     )
                 }
@@ -725,7 +725,7 @@ struct MarkerViewingGeneralTab: View {
                         colors: [
                             tint.opacity(0.22),
                             tint.opacity(0.12),
-                            AppColors.whiteText.opacity(0.06),
+                            AppColors.componentsScaffoldHeaderNeutralEndpoint,
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -746,7 +746,7 @@ struct MarkerViewingGeneralTab: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(AppColors.surfaceWhite74)
+                .foregroundColor(AppColors.disclosureHeaderIconForeground)
                 .frame(width: 18)
 
             Text(title)
@@ -757,7 +757,7 @@ struct MarkerViewingGeneralTab: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(AppColors.surfaceWhite50)
+                .foregroundColor(AppColors.disclosureChevronForeground)
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
         }
         .padding(.horizontal, 14)
@@ -816,7 +816,7 @@ struct MarkerViewingGeneralTab: View {
                                     let isUp = symbol.isUp ?? false
                                     Text(changeStr)
                                         .font(.system(size: 10, weight: .semibold))
-                                        .foregroundColor(isUp ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                                        .foregroundColor(isUp ? AppColors.markerPositiveForeground : AppColors.statusNegative85)
                                 }
                             }
                         }

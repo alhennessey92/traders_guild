@@ -1173,6 +1173,17 @@ class MarkerManager: ObservableObject {
             )
         }
 
+        if didMutateComponents,
+           originalDTO.intentEnum == .setup,
+           originalDTO.trackingEnabled,
+           let trackingState = originalDTO.trackingStateEnum,
+           trackingState != .draft {
+            updatedComponents = originalDTO.components
+            didMutateComponents = false
+        }
+
+        guard note != nil || didMutateComponents else { return }
+
         if let note = note {
             markers[index] = originalMarker.withMarker(originalDTO.updating(note: note))
             syncSelectedMarker(markers[index])

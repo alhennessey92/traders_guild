@@ -152,3 +152,27 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 [Fixed] 48. Candle data still not being paginated in as user pans back in time, 5 min went back to friday which i think is correct, but 1min only went back to 4.40am today, so needs checking
 
 [Fixed] 49. Synthetic user marker system is still not great, they are placing markers but usually in clusters in small time and then nothing for a while, needs to be more consistent and realistic
+
+
+
+
+50. [Fixed] Timeframe panel opposite vertical panning and y axis scaling doesn’t adjust the y axis prices
+
+51. [Fixed] Keep getting can’t update leaderboard when refreshing must be issue with backend
+
+52. Panning around on chart feels laggy when in marker placement and view mode. Ok on standard chart viewing not sure if we are performing a lot of work in background causing this 
+
+53. [Fixed] Timeframe panel changes background when spotlight not in view, this isn’t necessary can remain in its state as when the spotlight slider is in view
+
+54. [Fixed] For setup marker once it’s resolved the chart info box doesn’t need to display the price position slider with to and sl can simply display result of marker like sl hit, risk reward, rep gain etc… 
+
+55. For any new user mid grey theme as default
+
+
+56. Sometimes when removing a horizontal line like resistance gets stuck in a state, flashes in chart info box and in the bottom bar active section and cant remove it unless close app fully. Just tested and hapened again with trendline after deleting 3 other drawings
+
+57. When adding a annotation make the text box simpler on chart and allow to wrap text underneath when user enters new line
+
+58. Adjusting the timeframe panel height adjusts the candle height with it, should stay fixed, only thing that affects candle height in the timeframe panel is by sliding in the y axis
+
+59. When indicator panel is active x axis is great with good distance from x axis on main chart to bottom of indicator panel, but when closing the indicator panel the x axis time text jumps up slightly almost touching the bottom of the indicator panel, need to make sure that there is still a gap, like when open. Fine for timeframe panels so not sure of the difference

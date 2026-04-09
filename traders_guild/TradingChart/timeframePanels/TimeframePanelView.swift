@@ -10,6 +10,54 @@
 import SwiftUI
 
 struct TimeframePanelView: View {
+    private struct TimeframePanelViewport {
+        let rawPriceRange: (min: Double, max: Double)
+        let topPadding: CGFloat
+        let bottomPadding: CGFloat
+        let panelHeight: CGFloat
+        let priceScale: CGFloat
+        let verticalPanOffset: CGFloat
+
+        var drawableHeight: CGFloat {
+            max(1, panelHeight - topPadding - bottomPadding)
+        }
+
+        var contentBottomY: CGFloat {
+            panelHeight - bottomPadding
+        }
+
+        var contentCenterY: CGFloat {
+            topPadding + drawableHeight / 2
+        }
+
+        var transformedTopPrice: Double {
+            price(atY: topPadding)
+        }
+
+        var transformedMidPrice: Double {
+            price(atY: contentCenterY)
+        }
+
+        var transformedBottomPrice: Double {
+            price(atY: contentBottomY)
+        }
+
+        func yPosition(for price: Double) -> CGFloat {
+            let normalized = (price - rawPriceRange.min) / (rawPriceRange.max - rawPriceRange.min)
+            let baseY = topPadding + drawableHeight * (1.0 - CGFloat(normalized))
+            return contentCenterY + (baseY - contentCenterY) * priceScale + verticalPanOffset
+        }
+
+        func price(atY y: CGFloat) -> Double {
+            guard rawPriceRange.max > rawPriceRange.min, priceScale > 0 else {
+                return rawPriceRange.min
+            }
+
+            let unscaledY = ((y - verticalPanOffset - contentCenterY) / priceScale) + contentCenterY
+            let normalized = 1.0 - ((unscaledY - topPadding) / drawableHeight)
+            return rawPriceRange.min + Double(normalized) * (rawPriceRange.max - rawPriceRange.min)
+        }
+    }
 
     // MARK: - Properties
 
@@ -31,6 +79,7 @@ struct TimeframePanelView: View {
     var isBottomPanel: Bool = false
     var bottomAxisOverlayTimestamp: Date? = nil
     var bottomAxisOverlayStyle: CrosshairTimeLabelStyle = .standard
+    private let priceFormatter: (Double) -> String
 
     // MARK: - Private State
 
@@ -47,10 +96,15 @@ struct TimeframePanelView: View {
     @State private var initialVerticalOffset: CGFloat = 0
     @State private var hasCenteredOnMarker = false
     @State private var lastKnownChartWidth: CGFloat = UIScreen.main.bounds.width
+    @State private var lockedRawPriceRange: (min: Double, max: Double)?
 
-    private let livePriceBadgeWidth: CGFloat = 46
-    private let livePriceBadgeHeight: CGFloat = 16
-    private let yAxisOverlayWidth: CGFloat = ChartAxisMetrics.yAxisLaneWidth
+    private let livePriceBadgeWidth: CGFloat = 60
+    private let livePriceBadgeHeight: CGFloat = 20
+    private let livePriceBadgeTrailingInset: CGFloat = 2
+    private let yAxisOverlayWidth: CGFloat = 48
+    private let yAxisLabelWidth: CGFloat = 44
+    private let maxVisibleYAxisLabels = 5
+    private let targetYAxisIntervals: Double = 4
     private let livePriceTopClearance: CGFloat = 24
     private let livePriceBottomClearance: CGFloat = 10
     private let pinchSensitivity: CGFloat = 0.7
@@ -86,6 +140,25 @@ struct TimeframePanelView: View {
         max(1, lastKnownChartWidth - yAxisOverlayWidth)
     }
 
+    private var panelTopPadding: CGFloat {
+        18
+    }
+
+    private var panelBottomPadding: CGFloat {
+        4
+    }
+
+    private var transformedViewport: TimeframePanelViewport {
+        TimeframePanelViewport(
+            rawPriceRange: lockedRawPriceRange ?? candlePriceRange(candles: dataManager.candles),
+            topPadding: panelTopPadding,
+            bottomPadding: panelBottomPadding,
+            panelHeight: panelHeight,
+            priceScale: gestureState.priceScale,
+            verticalPanOffset: gestureState.verticalPanOffset
+        )
+    }
+
     private var markerCandleIndex: Int? {
         dataManager.markerCandleIndex(for: markerTimestamp)
     }
@@ -97,20 +170,10 @@ struct TimeframePanelView: View {
             return nil
         }
 
-        let priceRange = candlePriceRange(candles: candles)
-        guard priceRange.max > priceRange.min else { return nil }
+        let viewport = transformedViewport
+        guard viewport.rawPriceRange.max > viewport.rawPriceRange.min else { return nil }
 
-        let topPadding: CGFloat = 18
-        let bottomPadding: CGFloat = 4
-        let drawableHeight = panelHeight - topPadding - bottomPadding
-        guard drawableHeight > 0 else { return nil }
-
-        let rawY = yPosition(
-            for: currentPrice,
-            priceRange: priceRange,
-            height: drawableHeight,
-            topPadding: topPadding
-        )
+        let rawY = viewport.yPosition(for: currentPrice)
         let minY = livePriceTopClearance + livePriceBadgeHeight / 2
         let maxY = panelHeight - livePriceBottomClearance - livePriceBadgeHeight / 2
         guard maxY > minY else { return nil }
@@ -135,7 +198,8 @@ struct TimeframePanelView: View {
         maxPanelHeight: CGFloat = 250,
         isBottomPanel: Bool = false,
         bottomAxisOverlayTimestamp: Date? = nil,
-        bottomAxisOverlayStyle: CrosshairTimeLabelStyle = .standard
+        bottomAxisOverlayStyle: CrosshairTimeLabelStyle = .standard,
+        formatPrice: @escaping (Double) -> String = TimeframePanelView.defaultPriceFormatter
     ) {
         self._entry = ObservedObject(wrappedValue: entry)
         self._dataManager = ObservedObject(wrappedValue: entry.dataManager)
@@ -153,6 +217,7 @@ struct TimeframePanelView: View {
         self.isBottomPanel = isBottomPanel
         self.bottomAxisOverlayTimestamp = bottomAxisOverlayTimestamp
         self.bottomAxisOverlayStyle = bottomAxisOverlayStyle
+        self.priceFormatter = formatPrice
     }
 
     // MARK: - Body
@@ -179,9 +244,18 @@ struct TimeframePanelView: View {
         .background(AppColors.chartPanelBackgroundMuted)
         .onAppear {
             entry.clampPresentation(minHeight: minPanelHeight, maxHeight: maxPanelHeight)
+            lockInitialPriceRangeIfNeeded()
         }
         .onChange(of: dataManager.candles.count) { _, _ in
             centerOnMarkerIfNeeded()
+            lockInitialPriceRangeIfNeeded()
+            requestOlderCandlesIfNeeded(chartWidth: plotWidth)
+        }
+        .onChange(of: dataManager.dataRevision) { _, _ in
+            lockedRawPriceRange = nil
+            hasCenteredOnMarker = false
+            centerOnMarkerIfNeeded()
+            lockInitialPriceRangeIfNeeded()
             requestOlderCandlesIfNeeded(chartWidth: plotWidth)
         }
         .onChange(of: maxPanelHeight) { _, newValue in
@@ -217,11 +291,14 @@ struct TimeframePanelView: View {
                     gestureState.beginDrag()
                 }
                 let incrementalX = value.translation.width - lastDragTranslation.width
-                gestureState.applyPan(
+                let incrementalY = value.translation.height - lastDragTranslation.height
+                gestureState.applyBodyPan(
                     translationX: incrementalX,
+                    translationY: incrementalY,
                     chartWidth: plotWidth,
                     candleCount: dataManager.candles.count,
-                    candleWidth: totalCandleWidth
+                    candleWidth: totalCandleWidth,
+                    panelHeight: panelHeight
                 )
                 lastDragTranslation = value.translation
             }
@@ -323,27 +400,27 @@ struct TimeframePanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(AppColors.panelHeaderBackground)
+                .fill(AppColors.chartPanelResizeStripBackground)
 
             // Capsule always centered
             Capsule()
-                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
+                .fill(isDraggingHandle ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
                 .frame(width: 36, height: 5)
 
             // Panel label left-aligned
             HStack(spacing: 4) {
                 (Text(dataManager.timeframe.shortName)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppColors.primaryForeground)
+                    .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
                  + Text("  Timeframe")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(AppColors.surfaceWhite50))
+                    .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
                     .lineLimit(1)
 
                 if isCollapsed {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppColors.surfaceWhite80)
+                        .foregroundColor(AppColors.panelResizeHandleChevronForeground)
                 }
 
                 Spacer()
@@ -434,6 +511,7 @@ struct TimeframePanelView: View {
             .clipped()
             .onAppear {
                 lastKnownChartWidth = max(geometry.size.width, 1)
+                lockInitialPriceRangeIfNeeded()
                 requestOlderCandlesIfNeeded(chartWidth: plotWidth)
             }
             .onChange(of: geometry.size.width) { _, newValue in
@@ -448,6 +526,9 @@ struct TimeframePanelView: View {
     private func drawPanel(context: GraphicsContext, size: CGSize) {
         let candles = dataManager.candles
         guard candles.count >= 2 else { return }
+        let viewport = transformedViewport
+        let priceRange = viewport.rawPriceRange
+        guard priceRange.max > priceRange.min else { return }
 
         // Vertical grid
         PanelGridHelper.drawVerticalGridLines(
@@ -457,34 +538,27 @@ struct TimeframePanelView: View {
             actualCandleWidth: actualCandleWidth
         )
 
-        // Price range for this timeframe's candles
-        let priceRange = candlePriceRange(candles: candles)
-        guard priceRange.max > priceRange.min else { return }
-
-        let topPadding: CGFloat = 18
-        let bottomPadding: CGFloat = 4
-        let drawableHeight = size.height - topPadding - bottomPadding
+        drawHorizontalGridLines(context: context, size: size, viewport: viewport)
 
         // Draw candles
         drawCandlesticks(
             context: context, size: size,
-            candles: candles, priceRange: priceRange,
-            drawableHeight: drawableHeight, topPadding: topPadding
+            candles: candles,
+            viewport: viewport
         )
 
         // Draw marker time position indicator
         drawMarkerPositionIndicator(
             context: context, size: size,
-            priceRange: priceRange,
-            drawableHeight: drawableHeight, topPadding: topPadding
         )
 
         // Draw current price line + badge (live price or latest candle close)
         if let currentPrice = dataManager.livePrice ?? candles.last?.close {
-            let y = yPosition(for: currentPrice, priceRange: priceRange, height: drawableHeight, topPadding: topPadding)
-            if y >= topPadding && y <= topPadding + drawableHeight {
+            let y = viewport.yPosition(for: currentPrice)
+            if y >= viewport.topPadding && y <= viewport.contentBottomY {
                 // Dashed price line
-                let lineEndX = max(0, size.width - yAxisOverlayWidth - livePriceBadgeWidth - 6)
+                let livePriceBadgeMinX = max(0, size.width - livePriceBadgeWidth - livePriceBadgeTrailingInset)
+                let lineEndX = livePriceBadgeMinX
                 let linePath = Path { path in
                     path.move(to: CGPoint(x: 0, y: y))
                     path.addLine(to: CGPoint(x: lineEndX, y: y))
@@ -492,7 +566,7 @@ struct TimeframePanelView: View {
                 context.stroke(
                     linePath,
                     with: .color(AppColors.statusHighlight80.opacity(0.6)),
-                    style: StrokeStyle(lineWidth: 0.8, dash: [4, 3])
+                    style: StrokeStyle(lineWidth: 0.9, dash: [4, 3])
                 )
             }
         }
@@ -524,16 +598,25 @@ struct TimeframePanelView: View {
         // Clamp to visible area
         let clampedLeft = max(0, leftX)
         let clampedRight = min(size.width, rightX)
-        guard clampedRight > clampedLeft else { return }
+        let opacity = settings.viewportWindowOpacity
+        let visibleWidth = clampedRight - clampedLeft
+        let minimumVisibleWidth = max(14, totalCandleWidth * 1.25)
+        guard visibleWidth >= minimumVisibleWidth else {
+            drawOffscreenViewportFallback(
+                context: context,
+                size: size,
+                style: settings.viewportWindowStyle,
+                opacity: opacity
+            )
+            return
+        }
 
         let viewportRect = CGRect(
             x: clampedLeft,
             y: 0,
-            width: clampedRight - clampedLeft,
+            width: visibleWidth,
             height: size.height
         )
-
-        let opacity = settings.viewportWindowOpacity
 
         switch settings.viewportWindowStyle {
         case .dimmed:
@@ -586,6 +669,19 @@ struct TimeframePanelView: View {
         }
     }
 
+    private func drawOffscreenViewportFallback(
+        context: GraphicsContext,
+        size: CGSize,
+        style: ViewportWindowStyle,
+        opacity: Double
+    ) {
+        guard style == .dimmed else { return }
+        context.fill(
+            Path(CGRect(origin: .zero, size: size)),
+            with: .color(AppColors.viewportDim.opacity(opacity))
+        )
+    }
+
     /// Interpolates a smooth fractional X position for a given date within the candle array.
     /// This avoids snapping to discrete candle boundaries, producing fluid movement.
     private func interpolatedX(for date: Date, in candles: [RLCandleDTO]) -> CGFloat {
@@ -634,9 +730,7 @@ struct TimeframePanelView: View {
         context: GraphicsContext,
         size: CGSize,
         candles: [RLCandleDTO],
-        priceRange: (min: Double, max: Double),
-        drawableHeight: CGFloat,
-        topPadding: CGFloat
+        viewport: TimeframePanelViewport
     ) {
         let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 1)
         let visibleEndIndex = min(
@@ -645,6 +739,9 @@ struct TimeframePanelView: View {
         )
         guard visibleStartIndex < visibleEndIndex else { return }
         let lineEndX = size.width - yAxisOverlayWidth
+        let isLightGreyChart = ThemeManager.shared.currentTheme == .lightGrey
+        let chartSettings = ChartSettings.shared
+        let bullishPaint = isLightGreyChart ? AppColors.chartBullCandleLightGrey : chartSettings.bullishCandleColor
 
         for i in visibleStartIndex..<visibleEndIndex {
             guard i < candles.count else { continue }
@@ -655,13 +752,13 @@ struct TimeframePanelView: View {
             guard x >= -totalCandleWidth && x <= lineEndX + totalCandleWidth else { continue }
 
             let isBullish = candle.close >= candle.open
-            let candleColor: Color = isBullish ? .green : .red
+            let candleColor: Color = isBullish ? bullishPaint : chartSettings.bearishCandleColor
 
             // Y positions
-            let highY = yPosition(for: candle.high, priceRange: priceRange, height: drawableHeight, topPadding: topPadding)
-            let lowY = yPosition(for: candle.low, priceRange: priceRange, height: drawableHeight, topPadding: topPadding)
-            let openY = yPosition(for: candle.open, priceRange: priceRange, height: drawableHeight, topPadding: topPadding)
-            let closeY = yPosition(for: candle.close, priceRange: priceRange, height: drawableHeight, topPadding: topPadding)
+            let highY = viewport.yPosition(for: candle.high)
+            let lowY = viewport.yPosition(for: candle.low)
+            let openY = viewport.yPosition(for: candle.open)
+            let closeY = viewport.yPosition(for: candle.close)
 
             let centerX = x + actualCandleWidth / 2
 
@@ -682,7 +779,8 @@ struct TimeframePanelView: View {
 
             if isBullish {
                 context.stroke(Path(bodyRect), with: .color(candleColor), lineWidth: 1)
-                context.fill(Path(bodyRect), with: .color(candleColor.opacity(0.3)))
+                let bullFillOpacity = isLightGreyChart ? 1.0 : 0.3
+                context.fill(Path(bodyRect), with: .color(candleColor.opacity(bullFillOpacity)))
             } else {
                 context.fill(Path(bodyRect), with: .color(candleColor))
             }
@@ -691,10 +789,7 @@ struct TimeframePanelView: View {
 
     private func drawMarkerPositionIndicator(
         context: GraphicsContext,
-        size: CGSize,
-        priceRange: (min: Double, max: Double),
-        drawableHeight: CGFloat,
-        topPadding: CGFloat
+        size: CGSize
     ) {
         // Only draw marker line when there's an actual marker context (not default chart mode)
         guard showMarkerLine else { return }
@@ -728,34 +823,12 @@ struct TimeframePanelView: View {
     // MARK: - Y-Axis Labels
 
     private var yAxisLabelsOverlay: some View {
-        let range = candlePriceRange(candles: dataManager.candles)
-        let topPadding: CGFloat = 18
-        let bottomPadding: CGFloat = 4
-        let drawableHeight = max(1, panelHeight - topPadding - bottomPadding)
-        let top = price(atY: topPadding, priceRange: range, height: drawableHeight, topPadding: topPadding)
-        let bottom = price(atY: panelHeight - bottomPadding, priceRange: range, height: drawableHeight, topPadding: topPadding)
-        let mid = (top + bottom) / 2
-
-        return HStack {
+        HStack {
             Spacer()
-            VStack {
-                Text(formatAxisPrice(top))
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite66)
-                Spacer()
-                Text(formatAxisPrice(mid))
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite40)
-                Spacer()
-                Text(formatAxisPrice(bottom))
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite66)
+            Canvas { context, size in
+                drawDynamicYAxisLabels(context: context, size: size, viewport: transformedViewport)
             }
-            .frame(width: 28)
-            .frame(minWidth: yAxisOverlayWidth)
-            .padding(.top, 18)
-            .padding(.bottom, 4)
-            .padding(.trailing, 5)
+            .frame(width: yAxisOverlayWidth)
             .background(AppColors.chartPanelBackgroundDeep.opacity(0.92))
             .contentShape(Rectangle())
             .highPriorityGesture(yAxisDragGesture)
@@ -771,9 +844,10 @@ struct TimeframePanelView: View {
             IndicatorPanelHeaderRow(
                 title: "",
                 valueText: latestPrice.map { formatPrice($0) },
-                valueColor: .white,
+                valueColor: AppColors.timeframePanelHeaderValueForeground,
                 badgeText: dataManager.livePrice != nil ? "LIVE" : "SNAPSHOT",
-                badgeColor: intentColor
+                badgeColor: intentColor,
+                stripKind: .timeframePrice
             )
             Spacer()
         }
@@ -782,19 +856,19 @@ struct TimeframePanelView: View {
     private var livePriceBadgeOverlay: some View {
         GeometryReader { geometry in
             if let overlayModel = livePriceOverlayModel {
-                let x = geometry.size.width - livePriceBadgeWidth / 2 - 2
+                let x = geometry.size.width - livePriceBadgeWidth / 2 - livePriceBadgeTrailingInset
 
                 Text(overlayModel.text)
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundColor(.black)
                     .frame(width: livePriceBadgeWidth, height: livePriceBadgeHeight)
                     .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
                             .fill(AppColors.statusHighlight90)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .stroke(AppColors.surfaceBlack62.opacity(0.35), lineWidth: 0.8)
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .stroke(AppColors.surfaceBlack62.opacity(0.38), lineWidth: 0.9)
                     )
                     .position(x: x, y: overlayModel.y)
                     .shadow(color: AppColors.surfaceBlack62.opacity(0.16), radius: 2, x: 0, y: 1)
@@ -803,7 +877,7 @@ struct TimeframePanelView: View {
         .allowsHitTesting(false)
     }
 
-    private func formatPrice(_ value: Double) -> String {
+    static func defaultPriceFormatter(_ value: Double) -> String {
         if value >= 1000 {
             return String(format: "%.2f", value)
         } else if value >= 1 {
@@ -813,67 +887,80 @@ struct TimeframePanelView: View {
         }
     }
 
+    private func formatPrice(_ value: Double) -> String {
+        priceFormatter(value)
+    }
+
     // MARK: - X-Axis Labels
 
     private var xAxisLabels: some View {
-        ZStack {
-            Canvas { context, size in
-                ChartXAxisLabelEngine.drawLabels(
-                    context: context,
-                    size: size,
-                    input: .init(
-                        candles: dataManager.candles,
-                        timeframe: dataManager.timeframe,
-                        totalOffset: totalOffset,
-                        totalCandleWidth: totalCandleWidth,
-                        actualCandleWidth: actualCandleWidth,
-                        width: size.width,
-                        timeZone: .current,
-                        locale: Locale(identifier: "en_US_POSIX"),
-                        minSpacing: 52
-                    ),
-                    style: .timeframePanel
-                )
-            }
-            .frame(height: 24)
-            .background(
-                LinearGradient(
-                    colors: [
-                        AppColors.statusInfo15,
-                        AppColors.xAxisBackground,
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(AppColors.statusInfo40)
-                    .frame(height: 1)
-                    .opacity(0.7)
-            }
+        let labelH = ChartPanelReserveCalculator.panelXAxisTimeLabelAreaHeight
+        let footH = ChartPanelReserveCalculator.panelXAxisLabelBottomFootHeight
 
-            if isBottomPanel, let overlayTimestamp = bottomAxisOverlayTimestamp,
-               let overlayX = xPosition(forTimestamp: overlayTimestamp) {
-                CrosshairTimeLabel(
-                    timestamp: overlayTimestamp,
-                    timeframe: dataManager.timeframe,
-                    timeZone: .current,
-                    style: bottomAxisOverlayStyle
+        return VStack(spacing: 0) {
+            ZStack {
+                Canvas { context, size in
+                    ChartXAxisLabelEngine.drawLabels(
+                        context: context,
+                        size: size,
+                        input: .init(
+                            candles: dataManager.candles,
+                            timeframe: dataManager.timeframe,
+                            totalOffset: totalOffset,
+                            totalCandleWidth: totalCandleWidth,
+                            actualCandleWidth: actualCandleWidth,
+                            width: size.width,
+                            timeZone: .current,
+                            locale: Locale(identifier: "en_US_POSIX"),
+                            minSpacing: 52
+                        ),
+                        style: .timeframePanel
+                    )
+                }
+                .frame(height: labelH)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            AppColors.timeframePanelAxisGradientTop,
+                            AppColors.timeframePanelAxisGradientBottom,
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
-                .position(
-                    x: CrosshairTimeLabel.clampedCenterX(
-                        rawX: overlayX,
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(AppColors.timeframePanelAxisHairline)
+                        .frame(height: 1)
+                }
+
+                if isBottomPanel, let overlayTimestamp = bottomAxisOverlayTimestamp,
+                   let overlayX = xPosition(forTimestamp: overlayTimestamp) {
+                    CrosshairTimeLabel(
                         timestamp: overlayTimestamp,
                         timeframe: dataManager.timeframe,
                         timeZone: .current,
-                        availableWidth: lastKnownChartWidth
-                    ),
-                    y: CrosshairTimeLabel.indicatorHeight * 0.5
-                )
+                        style: bottomAxisOverlayStyle
+                    )
+                    .position(
+                        x: CrosshairTimeLabel.clampedCenterX(
+                            rawX: overlayX,
+                            timestamp: overlayTimestamp,
+                            timeframe: dataManager.timeframe,
+                            timeZone: .current,
+                            availableWidth: lastKnownChartWidth
+                        ),
+                        y: CrosshairTimeLabel.indicatorHeight * 0.5
+                    )
+                }
             }
+            .frame(height: labelH)
+
+            Rectangle()
+                .fill(AppColors.timeframePanelAxisGradientBottom)
+                .frame(height: footH)
         }
-        .frame(height: 24)
+        .frame(height: ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
     }
 
     // MARK: - Helpers
@@ -898,29 +985,117 @@ struct TimeframePanelView: View {
         return (minPrice - padding, maxPrice + padding)
     }
 
-    private func yPosition(for price: Double, priceRange: (min: Double, max: Double), height: CGFloat, topPadding: CGFloat) -> CGFloat {
-        let normalized = (price - priceRange.min) / (priceRange.max - priceRange.min)
-        let baseY = topPadding + height * (1.0 - CGFloat(normalized))
-        let centerY = topPadding + height / 2
-        return centerY + (baseY - centerY) * gestureState.priceScale + gestureState.verticalPanOffset
-    }
-
-    private func price(atY y: CGFloat, priceRange: (min: Double, max: Double), height: CGFloat, topPadding: CGFloat) -> Double {
-        guard priceRange.max > priceRange.min, gestureState.priceScale > 0 else { return priceRange.min }
-        let centerY = topPadding + height / 2
-        let unscaledY = ((y - gestureState.verticalPanOffset - centerY) / gestureState.priceScale) + centerY
-        let normalized = 1.0 - ((unscaledY - topPadding) / height)
-        return priceRange.min + Double(normalized) * (priceRange.max - priceRange.min)
+    private func lockInitialPriceRangeIfNeeded() {
+        guard !dataManager.candles.isEmpty else {
+            lockedRawPriceRange = nil
+            return
+        }
+        guard lockedRawPriceRange == nil else { return }
+        lockedRawPriceRange = candlePriceRange(candles: dataManager.candles)
     }
 
     private func formatAxisPrice(_ price: Double) -> String {
-        if price >= 1000 {
-            return String(format: "%.0f", price)
-        } else if price >= 1 {
-            return String(format: "%.2f", price)
-        } else {
-            return String(format: "%.4f", price)
+        formatPrice(price)
+    }
+
+    private func dynamicPriceAxisLevels(for viewport: TimeframePanelViewport) -> [Double] {
+        let visibleMin = min(viewport.transformedTopPrice, viewport.transformedBottomPrice)
+        let visibleMax = max(viewport.transformedTopPrice, viewport.transformedBottomPrice)
+        let visibleRange = visibleMax - visibleMin
+        let step = sparseNicePriceStep(for: visibleRange)
+        guard step.isFinite, step > 0 else { return [] }
+
+        let startPrice = floor(visibleMin / step) * step
+        let endPrice = ceil(visibleMax / step) * step
+        guard startPrice.isFinite, endPrice.isFinite, startPrice <= endPrice else { return [] }
+
+        var levels: [Double] = []
+        var currentPrice = startPrice
+        var count = 0
+        while currentPrice <= endPrice && count < 40 {
+            levels.append(currentPrice)
+            currentPrice += step
+            count += 1
         }
+
+        guard levels.count > maxVisibleYAxisLabels else { return levels }
+        let stride = Int(ceil(Double(levels.count) / Double(maxVisibleYAxisLabels)))
+        return levels.enumerated().compactMap { index, level in
+            index.isMultiple(of: stride) ? level : nil
+        }
+    }
+
+    private func sparseNicePriceStep(for visibleRange: Double) -> Double {
+        guard visibleRange.isFinite, visibleRange > 0 else { return 1 }
+
+        let roughStep = visibleRange / targetYAxisIntervals
+        let magnitude = pow(10.0, floor(log10(roughStep)))
+        let normalized = roughStep / magnitude
+
+        let niceNormalized: Double
+        if normalized <= 1.0 {
+            niceNormalized = 1.0
+        } else if normalized <= 2.0 {
+            niceNormalized = 2.0
+        } else if normalized <= 2.5 {
+            niceNormalized = 2.5
+        } else if normalized <= 5.0 {
+            niceNormalized = 5.0
+        } else {
+            niceNormalized = 10.0
+        }
+
+        return niceNormalized * magnitude
+    }
+
+    private func drawDynamicYAxisLabels(
+        context: GraphicsContext,
+        size: CGSize,
+        viewport: TimeframePanelViewport
+    ) {
+        let x = max(2, min(size.width - 3, yAxisLabelWidth + 1))
+
+        for price in dynamicPriceAxisLevels(for: viewport) {
+            let y = viewport.yPosition(for: price)
+            guard y >= viewport.topPadding - 12, y <= viewport.contentBottomY + 12 else { continue }
+
+            context.draw(
+                Text(formatAxisPrice(price))
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .foregroundColor(AppColors.surfaceWhite66),
+                at: CGPoint(x: x, y: y),
+                anchor: .trailing
+            )
+        }
+    }
+
+    private func drawHorizontalGridLines(
+        context: GraphicsContext,
+        size: CGSize,
+        viewport: TimeframePanelViewport
+    ) {
+        let settings = ChartSettings.shared
+        guard settings.showGridLines else { return }
+
+        let plotEndX = max(0, size.width - yAxisOverlayWidth)
+        guard plotEndX > 0 else { return }
+
+        var path = Path()
+        var lineCount = 0
+        for price in dynamicPriceAxisLevels(for: viewport) {
+            let y = viewport.yPosition(for: price)
+            guard y >= -40, y <= size.height + 40 else { continue }
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: plotEndX, y: y))
+            lineCount += 1
+            if lineCount >= 80 { break }
+        }
+
+        context.stroke(
+            path,
+            with: .color(.gray.opacity(settings.gridOpacity * 0.75)),
+            lineWidth: 0.42
+        )
     }
 
     private func requestOlderCandlesIfNeeded(chartWidth: CGFloat) {

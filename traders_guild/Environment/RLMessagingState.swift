@@ -219,6 +219,7 @@ struct RLMessagingSheet: View {
     // Scroll tracking
     @State private var isNearBottom = true
     @State private var newMessageCount = 0
+    @State private var localSendScrollSignal = ChatLocalSendScrollSignal()
 
     // Optimistic sending — track pending message IDs for delivery status indicator
     @State private var pendingMessageIds: Set<UUID> = []
@@ -392,13 +393,22 @@ struct RLMessagingSheet: View {
                     isActionPanelVisible: actionPanelVisibility,
                     mentionCandidates: rightDrawerViewModel.guildMembers,
                     onMessageSent: { message in
+                        isNearBottom = true
+                        newMessageCount = 0
+                        localSendScrollSignal.commit()
                         chatroomMessages.append(message)
                     },
                     onPendingMessage: { pending in
+                        isNearBottom = true
+                        newMessageCount = 0
+                        localSendScrollSignal.commit()
                         pendingMessageIds.insert(pending.id)
                         chatroomMessages.append(pending)
                     },
                     onMessageConfirmed: { pendingId, confirmed in
+                        isNearBottom = true
+                        newMessageCount = 0
+                        localSendScrollSignal.commit()
                         pendingMessageIds.remove(pendingId)
                         if let idx = chatroomMessages.firstIndex(where: { $0.id == pendingId }) {
                             chatroomMessages[idx] = confirmed
@@ -418,13 +428,22 @@ struct RLMessagingSheet: View {
                     replyDraft: $replyDraft,
                     isActionPanelVisible: actionPanelVisibility,
                     onMessageSent: { message in
+                        isNearBottom = true
+                        newMessageCount = 0
+                        localSendScrollSignal.commit()
                         dmMessages.append(message)
                     },
                     onPendingMessage: { pending in
+                        isNearBottom = true
+                        newMessageCount = 0
+                        localSendScrollSignal.commit()
                         pendingMessageIds.insert(pending.id)
                         dmMessages.append(pending)
                     },
                     onMessageConfirmed: { pendingId, confirmed in
+                        isNearBottom = true
+                        newMessageCount = 0
+                        localSendScrollSignal.commit()
                         pendingMessageIds.remove(pendingId)
                         if let idx = dmMessages.firstIndex(where: { $0.id == pendingId }) {
                             dmMessages[idx] = confirmed
@@ -804,6 +823,9 @@ struct RLMessagingSheet: View {
                     scrollToBottom(proxy: proxy)
                 }
             }
+            .onChange(of: localSendScrollSignal.revision) { _, _ in
+                forceScrollToBottom(proxy: proxy)
+            }
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     scrollToBottom(proxy: proxy)
@@ -881,6 +903,17 @@ struct RLMessagingSheet: View {
     private func scrollToBottom(proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.2)) {
             proxy.scrollTo("bottomAnchor", anchor: .bottom)
+        }
+    }
+
+    private func forceScrollToBottom(proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            proxy.scrollTo("bottomAnchor", anchor: .bottom)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo("bottomAnchor", anchor: .bottom)
+            }
         }
     }
     

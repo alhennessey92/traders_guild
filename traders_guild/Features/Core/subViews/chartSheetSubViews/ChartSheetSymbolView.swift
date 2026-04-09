@@ -221,8 +221,8 @@ struct ChartSheetSymbolView: View {
                 .background(
                     LinearGradient(
                         colors: [
-                            symbol.primaryColorValue.opacity(0.35),
-                            symbol.secondaryColorValue.opacity(0.15)
+                            AppColors.symbolSheetHeroBlueGradientLeading,
+                            AppColors.symbolSheetHeroBlueGradientTrailing
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -230,7 +230,7 @@ struct ChartSheetSymbolView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(symbol.primaryColorValue.opacity(0.3), lineWidth: 1)
+                        .stroke(AppColors.symbolSheetHeroBlueStroke, lineWidth: 1)
                 )
                 .cornerRadius(14)
             }
@@ -1127,8 +1127,8 @@ struct SymbolListRow: View {
                 isSelected ?
                 LinearGradient(
                     colors: [
-                        symbol.primaryColorValue.opacity(0.25),
-                        symbol.secondaryColorValue.opacity(0.1)
+                        AppColors.symbolListRowSelectedBlueGradientLeading,
+                        AppColors.symbolListRowSelectedBlueGradientTrailing
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
@@ -1145,7 +1145,7 @@ struct SymbolListRow: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(
-                        isSelected ? symbol.primaryColorValue.opacity(0.4) : Color.clear,
+                        isSelected ? AppColors.symbolListRowSelectedBlueStroke : Color.clear,
                         lineWidth: 1
                     )
             )
@@ -1238,8 +1238,8 @@ struct GlobalSymbolListRow: View {
                     isSelected ?
                     LinearGradient(
                         colors: [
-                            symbol.primaryColorValue.opacity(0.25),
-                            symbol.secondaryColorValue.opacity(0.1)
+                            AppColors.symbolListRowSelectedBlueGradientLeading,
+                            AppColors.symbolListRowSelectedBlueGradientTrailing
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
@@ -1256,7 +1256,7 @@ struct GlobalSymbolListRow: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            isSelected ? symbol.primaryColorValue.opacity(0.4) : Color.clear,
+                            isSelected ? AppColors.symbolListRowSelectedBlueStroke : Color.clear,
                             lineWidth: 1
                         )
                 )

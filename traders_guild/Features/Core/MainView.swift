@@ -48,7 +48,7 @@ struct MainView: View {
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     @Environment(\.scenePhase) private var scenePhase
     /// Matches `ThemeManager` / `ChartBottomSheet` — forces the chart sheet subtree to rebuild on theme change (`.sheet` often skips `ObservableObject` updates).
-    @AppStorage("appTheme") private var appThemeStorage: AppTheme = .dark
+    @AppStorage("appTheme") private var appThemeStorage: AppTheme = .midGrey
 
     // MARK: - Chart State
     @StateObject private var chartControlVM = ChartControlViewModel()
@@ -171,23 +171,20 @@ struct MainView: View {
         timeframePanelManager.panels.map(\.currentHeight)
     }
 
-    private var expandedAuxiliaryPanelCount: Int {
-        let threshold = ChartPanelReserveCalculator.expandedPanelHeightThreshold
-        let expandedTimeframes = timeframePanelHeights.filter { $0 > threshold }.count
-        let expandedIndicators = indicatorPanelHeights.filter { $0 > threshold }.count
-        return expandedTimeframes + expandedIndicators
-    }
-
     private var chartFloatingOverlayClearance: CGFloat {
         guard chartPanelsTotalHeight > 0 else { return 0 }
-        switch expandedAuxiliaryPanelCount {
-        case 0:
-            return 8
-        case 1:
-            return 1
-        default:
-            return 0
+        return ChartPanelReserveCalculator.panelStackChartUniformGap
+    }
+
+    private var chartControlRowPanelReserve: CGFloat {
+        if chartPanelsTotalHeight > 0 {
+            let normalizedReserve = ChartPanelReserveCalculator.normalizedPanelReserve(
+                totalPanelReserve: chartPanelsTotalHeight,
+                bottomBoundaryLabelReserve: chartPanelsBottomLabelStripReserve
+            )
+            return normalizedReserve + ChartPanelReserveCalculator.panelStackChartUniformGap
         }
+        return ChartPanelReserveCalculator.mainChartControlRowBaselineClearance
     }
 
     private var chartPanelLayout: CombinedChartPanelLayout {
@@ -385,7 +382,8 @@ struct MainView: View {
                             indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count,
                             bottomAxisPanelIndex: bottomTimeframeAxisPanelIndex,
                             bottomAxisOverlayTimestamp: bottomAxisOverlayTimestamp,
-                            bottomAxisOverlayStyle: bottomAxisOverlayStyle
+                            bottomAxisOverlayStyle: bottomAxisOverlayStyle,
+                            formatPrice: { chartViewModel.dataManager.formatPrice($0) }
                         )
 
                         // Indicator panels
@@ -1078,7 +1076,8 @@ struct MainView: View {
             activeTimeframeLegendEntries: activeTimeframeLegendEntries,
             indicatorPanelBottomPadding: chartPanelsTotalHeight,
             panelBottomBoundaryLabelReserve: chartPanelsBottomLabelStripReserve,
-            floatingOverlayPanelClearance: chartFloatingOverlayClearance
+            floatingOverlayPanelClearance: chartFloatingOverlayClearance,
+            chartControlRowPanelReserve: chartControlRowPanelReserve
         )
     }
 
@@ -2113,6 +2112,7 @@ struct ChartBottomSheet: View {
     @State private var chatMessageText: String = ""
     @State private var chartReplyDraft: ChatReplyDraft? = nil
     @State private var isSendingChartMessage = false
+    @State private var localChartSendScrollSignal = ChatLocalSendScrollSignal()
     @State private var markerDetailTab: MarkerViewingTab = .general
     @State private var placementIndicatorSnapshot = PlacementIndicatorSnapshot()
 
@@ -2411,6 +2411,7 @@ struct ChartBottomSheet: View {
             )
             HapticFeedback.light.trigger()
             chartReplyDraft = nil
+            localChartSendScrollSignal.commit()
             return true
         } catch {
             rlAppState.showError(error, title: "Failed to Send Message", style: .toast)
@@ -2760,6 +2761,7 @@ struct ChartBottomSheet: View {
             selectedDetent: $selectedDetent,
             messageText: $chatMessageText,
             replyDraft: $chartReplyDraft,
+            localSendScrollRevision: localChartSendScrollSignal.revision,
             onBackgroundTap: {
                 chatSurfaceOverlayCoordinator.dismissAll()
                 UIApplication.shared.sendAction(

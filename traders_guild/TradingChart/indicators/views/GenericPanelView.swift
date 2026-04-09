@@ -97,9 +97,15 @@ struct GenericIndicatorPanelView: View {
 
             if !isCollapsed {
                 // Panel content area with pan gesture
-                panelContentArea
+                LinkedIndicatorPanelGestureSurface(
+                    gestureState: gestureState,
+                    candleCount: chartData.candles.count,
+                    baseCandleWidth: baseCandleWidth,
+                    candleSpacing: candleSpacing
+                ) {
+                    panelContentArea
+                }
                     .frame(height: panelHeight)
-                    .gesture(panGesture)
 
                 // X-axis labels only if this is the bottom panel
                 if isBottomPanel {
@@ -107,12 +113,6 @@ struct GenericIndicatorPanelView: View {
                 }
             }
         }
-        .overlay(
-            Rectangle()
-                .fill(AppColors.surfaceGray30)
-                .frame(height: 1),
-            alignment: .bottom
-        )
         .background(AppColors.chartPanelBackgroundMuted)
     }
 
@@ -156,27 +156,27 @@ struct GenericIndicatorPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(AppColors.panelHeaderBackground)
+                .fill(AppColors.chartPanelResizeStripBackground)
 
             // Capsule always centered
             Capsule()
-                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
+                .fill(isDraggingHandle ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
                 .frame(width: 36, height: 5)
 
             // Panel label left-aligned
             HStack(spacing: 4) {
                 (Text(panelTitleBase)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppColors.primaryForeground)
+                    .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
                  + Text("  Indicator")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(AppColors.surfaceWhite50))
+                    .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
                     .lineLimit(1)
 
                 if isCollapsed {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppColors.surfaceWhite80)
+                        .foregroundColor(AppColors.panelResizeHandleChevronForeground)
                 }
 
                 Spacer()
@@ -222,12 +222,6 @@ struct GenericIndicatorPanelView: View {
                 }
             }
         }
-        .overlay(
-            Rectangle()
-                .fill(AppColors.surfaceGray30)
-                .frame(height: 1),
-            alignment: .bottom
-        )
     }
 
     private func collapsePanel() {
@@ -253,8 +247,8 @@ struct GenericIndicatorPanelView: View {
         let _ = gestureState.crosshairActive
         
         return ZStack {
-            AppColors.chartPanelBackground
-            
+            AppColors.indicatorPanelPlotBackground
+
             Canvas { context, size in
                 drawPanel(context: context, size: size)
             }
@@ -294,7 +288,7 @@ struct GenericIndicatorPanelView: View {
     }
 
     private var activeGuideColor: Color {
-        gestureState.crosshairActive ? AppColors.surfaceWhite40 : AppColors.statusInfo60
+        gestureState.crosshairActive ? AppColors.crosshairGuideStroke : AppColors.statusInfo60
     }
     
     // MARK: - Y-Axis Labels Overlay
@@ -429,21 +423,31 @@ struct GenericIndicatorPanelView: View {
         let _ = gestureState.crosshairActive
         let _ = gestureState.crosshairX
         let _ = gestureState.markerPlacementGuide.isActive
-        
-        return ZStack {
-            Canvas { context, size in
-                drawXAxisLabels(context: context, size: size)
+
+        let labelH = ChartPanelReserveCalculator.panelXAxisTimeLabelAreaHeight
+        let footH = ChartPanelReserveCalculator.panelXAxisLabelBottomFootHeight
+
+        return VStack(spacing: 0) {
+            ZStack {
+                Canvas { context, size in
+                    drawXAxisLabels(context: context, size: size)
+                }
+                .frame(height: labelH)
+                .background(AppColors.xAxisBackground)
+
+                if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
+                    crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
+                } else if gestureState.markerPlacementGuide.isActive, let timestamp = gestureState.markerPlacementGuide.timestamp {
+                    crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.markerPlacementGuide.x)
+                }
             }
-            .frame(height: 24)
-            .background(AppColors.xAxisBackground)
-            
-            if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
-                crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
-            } else if gestureState.markerPlacementGuide.isActive, let timestamp = gestureState.markerPlacementGuide.timestamp {
-                crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.markerPlacementGuide.x)
-            }
+            .frame(height: labelH)
+
+            Rectangle()
+                .fill(AppColors.xAxisBackground)
+                .frame(height: footH)
         }
-        .frame(height: 24)
+        .frame(height: ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
     }
     
     @ViewBuilder

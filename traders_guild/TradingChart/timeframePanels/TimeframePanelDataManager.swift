@@ -20,6 +20,7 @@ class TimeframePanelDataManager: ObservableObject {
     @Published var livePrice: Double?
     @Published private(set) var isLoadingOlderCandles: Bool = false
     @Published private(set) var hasMoreHistoricalCandles: Bool = false
+    @Published private(set) var dataRevision: Int = 0
 
     let timeframe: RLChartTimeframe
     let ownerToken: String
@@ -30,7 +31,7 @@ class TimeframePanelDataManager: ObservableObject {
     private var cancellable: AnyCancellable?
     private var currentTickChannel: String?
     private var currentCandleChannel: String?
-    private var currentSymbolId: UUID?
+    @Published private(set) var currentSymbolId: UUID?
     private var currentGuildId: UUID?
     private var earliestHistoricalCandleTimestamp: Date?
     private let historicalPageSize: Int
@@ -70,6 +71,7 @@ class TimeframePanelDataManager: ObservableObject {
             livePrice = candles.last?.close
             earliestHistoricalCandleTimestamp = candles.first?.timestamp
             hasMoreHistoricalCandles = chartData.hasMoreCandles
+            dataRevision += 1
             print("[TimeframePanel] Loaded \(candles.count) candles for \(timeframe.shortName)")
 
             // Subscribe to real-time updates for this symbol/timeframe
@@ -80,6 +82,7 @@ class TimeframePanelDataManager: ObservableObject {
             candles = []
             earliestHistoricalCandleTimestamp = nil
             hasMoreHistoricalCandles = false
+            dataRevision += 1
         }
 
         isLoading = false

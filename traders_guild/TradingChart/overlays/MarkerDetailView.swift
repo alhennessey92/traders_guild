@@ -540,6 +540,7 @@ struct CommentsView: View {
     @State private var commentToReport: RLMarkerCommentDTO? = nil
     @State private var selectedProfileMember: RLGuildMemberDTO? = nil
     @State private var reactionReactorsState = ChatReactionReactorsState()
+    @State private var localSendScrollSignal = ChatLocalSendScrollSignal()
     
     @Binding var selectedDetent: PresentationDetent
     
@@ -645,6 +646,16 @@ struct CommentsView: View {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
                             }
+                        }
+                    }
+                }
+                .onChange(of: localSendScrollSignal.revision) { _, _ in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
                         }
                     }
                 }
@@ -783,6 +794,7 @@ struct CommentsView: View {
             )
             isSendingComment = false
             replyDraft = nil
+            localSendScrollSignal.commit()
         }
         return true
     }
@@ -815,6 +827,7 @@ struct CommentsView: View {
                     attachmentName: upload.attachmentName,
                     replyToMessageId: replyDraft?.messageId
                 )
+                localSendScrollSignal.commit()
                 isFirstMessage = false
             }
             replyDraft = nil
@@ -1337,7 +1350,7 @@ struct MarkerInfoContent: View {
                     if let pnl = outcome.pnl {
                         Text(String(format: "%+.2f%%", pnl))
                             .font(.system(size: 20, weight: .heavy, design: .monospaced))
-                            .foregroundColor(pnl >= 0 ? AppColors.statusPositive90 : AppColors.statusNegative85)
+                            .foregroundColor(pnl >= 0 ? AppColors.markerPositiveForeground : AppColors.statusNegative85)
                     }
                 }
 
@@ -1356,7 +1369,7 @@ struct MarkerInfoContent: View {
                             .font(.system(size: 14, weight: .heavy, design: .monospaced))
                             .foregroundColor(
                                 (outcome.guildRepDelta ?? 0) >= 0
-                                    ? AppColors.statusPositive90
+                                    ? AppColors.markerPositiveForeground
                                     : AppColors.statusNegative85
                             )
                     }
@@ -1393,7 +1406,7 @@ struct MarkerInfoContent: View {
         let resolvedNode: SetupTimelineNode? = {
             switch current {
             case .tpHit:
-                return SetupTimelineNode(state: .tpHit, icon: "checkmark.circle.fill", overrideLabel: "TP Hit", overrideColor: .green)
+                return SetupTimelineNode(state: .tpHit, icon: "checkmark.circle.fill", overrideLabel: "TP Hit", overrideColor: AppColors.markerPositiveForeground)
             case .slHit:
                 return SetupTimelineNode(state: .slHit, icon: "xmark.circle.fill", overrideLabel: "SL Hit", overrideColor: .red)
             case .expired:
@@ -1725,7 +1738,7 @@ struct LevelLadderCard: View {
             if let pct = percentFromEntry, let profit = isProfit {
                 Text(String(format: "%@%.2f%%", profit ? "+" : "-", pct))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(profit ? AppColors.statusPositive80 : AppColors.statusNegative80)
+                    .foregroundColor(profit ? AppColors.markerPositiveForegroundMuted : AppColors.statusNegative80)
                     .padding(.trailing, 4)
             }
 

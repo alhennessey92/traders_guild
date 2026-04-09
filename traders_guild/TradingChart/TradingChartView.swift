@@ -259,6 +259,8 @@ struct TradingChartView: View {
     var panelBottomBoundaryLabelReserve: CGFloat = 0
     /// Extra clearance for floating controls when multiple lower panels are expanded.
     var floatingOverlayPanelClearance: CGFloat = 0
+    /// Dedicated reserve for the bottom control row and current-price exclusion zone.
+    var chartControlRowPanelReserve: CGFloat = 0
 
     /// Current user/guild context for marker ownership and filtering.
     private let currentUserId: UUID
@@ -587,7 +589,8 @@ struct TradingChartView: View {
         activeTimeframeLegendEntries: [ActiveIndicatorLegendEntry] = [],
         indicatorPanelBottomPadding: CGFloat = 0,
         panelBottomBoundaryLabelReserve: CGFloat = 0,
-        floatingOverlayPanelClearance: CGFloat = 0
+        floatingOverlayPanelClearance: CGFloat = 0,
+        chartControlRowPanelReserve: CGFloat = 0
     ) {
         let resolvedMember = currentUserMember ?? RLGuildMemberDTO(
             membershipId: UUID(),
@@ -631,6 +634,7 @@ struct TradingChartView: View {
         self.indicatorPanelBottomPadding = indicatorPanelBottomPadding
         self.panelBottomBoundaryLabelReserve = panelBottomBoundaryLabelReserve
         self.floatingOverlayPanelClearance = floatingOverlayPanelClearance
+        self.chartControlRowPanelReserve = chartControlRowPanelReserve
     }
     
     // MARK: - Target Line Helpers
@@ -660,6 +664,24 @@ struct TradingChartView: View {
             return markerManager.markers.first(where: { $0.id == tappedId })
         }
         return nil
+    }
+
+    private func shouldAllowSelectedMarkerLevelEditing(_ marker: ChartMarkerUI) -> Bool {
+        guard !controlViewModel.isMarkerViewingMode,
+              !isMarkerPlacementMode,
+              !isInteractiveDrawingSessionActive,
+              marker.canEdit else {
+            return false
+        }
+
+        if marker.intent == .setup,
+           marker.trackingEnabled,
+           let trackingState = marker.trackingState,
+           trackingState != .draft {
+            return false
+        }
+
+        return true
     }
     
     /// Get preview marker data for price line display
@@ -1096,6 +1118,9 @@ struct TradingChartView: View {
                 )
             }
 
+            chartInfoBox(geometry: geometry)
+                .zIndex(50)
+
             // MARK: - On-Chart Placement Mode UI
             if isMarkerPlacementMode {
                 // Ghost preview: render placement components (levels, trendlines, zones)
@@ -1264,9 +1289,6 @@ struct TradingChartView: View {
                 .mask(alignment: .top) {
                     markerTopPriorityToolbarMask(geometry: geometry)
                 }
-
-            chartInfoBox(geometry: geometry)
-                .zIndex(50)
 
             xAxisOverlay(geometry: geometry)
 
@@ -1470,7 +1492,7 @@ struct TradingChartView: View {
     }
 
     private func priceIndicatorBottomExclusionHeight(geometry: GeometryProxy) -> CGFloat {
-        let panelPadding = indicatorPanelBottomPadding + floatingOverlayPanelClearance
+        let panelPadding = chartControlRowPanelReserve
         let controlsBottomPadding = geometry.size.height * 0.085 + 34 + panelPadding
         let controlRowHeight: CGFloat = 28
         return controlsBottomPadding + controlRowHeight
@@ -1479,6 +1501,7 @@ struct TradingChartView: View {
     @ViewBuilder
     private func draggableMarkerLineOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         if let marker = activeSelectedMarker,
+           shouldAllowSelectedMarkerLevelEditing(marker),
            marker.intent != .setup,
            !marker.levelComponents.isEmpty {
             ForEach(marker.levelComponents) { component in
@@ -1502,6 +1525,7 @@ struct TradingChartView: View {
     @ViewBuilder
     private func draggablePredictionLinesOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         if let marker = activeSelectedMarker,
+           shouldAllowSelectedMarkerLevelEditing(marker),
            marker.intent == .setup,
            marker.candleIndex >= 0,
            marker.candleIndex < chartData.candles.count {
@@ -1949,7 +1973,7 @@ struct TradingChartView: View {
     private func markerPlacementOverlay(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: geometry.size.height,
-            includeLabelStrip: !panelOwnsBottomXAxisStrip
+            includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
         )
         let plotWidth = max(0, geometry.size.width - yAxisWidth)
         let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
@@ -4972,6 +4996,9 @@ struct TradingChartView: View {
         panelBottomBoundaryLabelReserve > 0
     }
 
+    /// When a stacked panel owns time labels, the main chart still reserves this band so plot/masks don't jump when panels close.
+    private var mainChartLayoutAlwaysIncludesXAxisLabelStripHeight: Bool { true }
+
     private var yAxisPanelBackground: some View {
         Color.clear
     }
@@ -4987,6 +5014,10 @@ struct TradingChartView: View {
 
                 if shouldShowMainXAxisLabels {
                     xAxisLabelsCanvas(geometry: geometry)
+                } else {
+                    Rectangle()
+                        .fill(xAxisPanelBackground)
+                        .frame(height: ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
                 }
 
                 Rectangle()
@@ -5005,7 +5036,6 @@ struct TradingChartView: View {
                     xPosition: gestureState.markerPlacementGuide.x,
                     chartHeight: geometry.size.height,
                     timeframe: chartViewModel.currentTimeframe,
-                    showsMainXAxisLabels: shouldShowMainXAxisLabels,
                     timeZone: axisTimeZone
                 )
             }
@@ -5025,7 +5055,7 @@ struct TradingChartView: View {
             geometry.size.height
                 - xAxisReservedBandHeight(
                     chartHeight: geometry.size.height,
-                    includeLabelStrip: !panelOwnsBottomXAxisStrip
+                    includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
                 )
         )
 
@@ -5077,10 +5107,7 @@ struct TradingChartView: View {
             return AnyView(EmptyView())
         }
 
-        let timeLabelY = CrosshairTimeLabel.mainChartCenterY(
-            chartHeight: geometry.size.height,
-            showsMainXAxisLabels: !panelOwnsBottomXAxisStrip
-        )
+        let timeLabelY = CrosshairTimeLabel.mainChartCenterY(chartHeight: geometry.size.height)
         guard timeLabelY.isFinite else {
             return AnyView(EmptyView())
         }
@@ -5238,11 +5265,18 @@ struct TradingChartView: View {
     
     @ViewBuilder
     private func xAxisLabelsCanvas(geometry: GeometryProxy) -> some View {
-        Canvas { context, size in
-            drawXAxisLabels(context: context, size: size)
+        VStack(spacing: 0) {
+            Canvas { context, size in
+                drawXAxisLabels(context: context, size: size)
+            }
+            .frame(height: ChartPanelReserveCalculator.panelXAxisTimeLabelAreaHeight)
+            .background(xAxisPanelBackground)
+
+            Rectangle()
+                .fill(xAxisPanelBackground)
+                .frame(height: ChartPanelReserveCalculator.panelXAxisLabelBottomFootHeight)
         }
         .frame(height: ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
-        .background(xAxisPanelBackground)
     }
     
     private func drawXAxisLabels(context: GraphicsContext, size: CGSize) {
@@ -5301,7 +5335,7 @@ struct TradingChartView: View {
     private func plotAreaMask(geometry: GeometryProxy) -> some View {
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: geometry.size.height,
-            includeLabelStrip: !panelOwnsBottomXAxisStrip
+            includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
         )
         let plotWidth = max(0, geometry.size.width - yAxisWidth)
         let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
@@ -5347,7 +5381,7 @@ struct TradingChartView: View {
     private func priceLinesFullWidthMask(geometry: GeometryProxy) -> some View {
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: geometry.size.height,
-            includeLabelStrip: !panelOwnsBottomXAxisStrip
+            includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
         )
         let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
         let topInset = geometry.safeAreaInsets.top
@@ -5546,7 +5580,7 @@ struct TradingChartView: View {
     private func bottomInfoPanelsPadding(geometry: GeometryProxy) -> CGFloat {
         let xAxisReserve = xAxisReservedBandHeight(
             chartHeight: geometry.size.height,
-            includeLabelStrip: !panelOwnsBottomXAxisStrip
+            includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
         )
         let panelStackReserve = indicatorPanelBottomPadding + floatingOverlayPanelClearance
         let markerInfoGap: CGFloat = 5
@@ -6059,7 +6093,11 @@ struct TradingChartView: View {
             if let symbol = currentSymbol {
                 Image(systemName: symbol.effectiveIsMarketOpen ? "circle.fill" : "moon.fill")
                     .font(.system(size: symbol.effectiveIsMarketOpen ? 7 : 8, weight: .semibold))
-                    .foregroundColor(symbol.effectiveIsMarketOpen ? .green : AppColors.surfaceGray75)
+                    .foregroundColor(
+                        symbol.effectiveIsMarketOpen
+                            ? (ThemeManager.shared.currentTheme == .lightGrey ? AppColors.markerPositiveForeground : Color.green)
+                            : AppColors.surfaceGray75
+                    )
             }
         }
     }
@@ -6113,17 +6151,21 @@ struct TradingChartView: View {
                 Text(String(format: "%.2f%%", abs(changePercent)))
                     .font(.system(size: 10, weight: .medium))
             }
-            .foregroundColor(change >= 0 ? .green : .red)
+            .foregroundColor(
+                change >= 0
+                    ? (ThemeManager.shared.currentTheme == .lightGrey ? AppColors.markerPositiveForeground : Color.green)
+                    : Color.red
+            )
         }
     }
-    
+
     // MARK: - Chart Controls Box
     
     @ViewBuilder
     func chartControlsBox(geometry: GeometryProxy) -> some View {
         let bottomAreaHeight = geometry.size.height * 0.085 + 34
         let yAxisTrailingInset: CGFloat = yAxisWidth + 4
-        let panelPadding = indicatorPanelBottomPadding + floatingOverlayPanelClearance
+        let panelPadding = chartControlRowPanelReserve
 
         VStack {
             Spacer()
@@ -6150,17 +6192,18 @@ struct TradingChartView: View {
                                 Text(markerTypeFilterSummary)
                                     .font(.system(size: 10, weight: .semibold))
                             }
-                            .foregroundColor(AppColors.whiteText.opacity(0.9))
+                            .foregroundColor(AppColors.chartOverlayStripLabel)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
-                            .background(AppColors.surfaceWhite12)
+                            .background(AppColors.markerFilterPanelControlWell)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                         .buttonStyle(.plain)
                     }
+                    .colorScheme(.dark)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(AppColors.surfaceBlack50)
+                    .background(AppColors.markerFilterExpandedPanelBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .padding(.trailing, yAxisTrailingInset)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -6179,7 +6222,7 @@ struct TradingChartView: View {
                     ChartBottomControlButton(
                         title: isMarkerVisibilityPanelExpanded ? "Close" : "Markers",
                         icon: isMarkerVisibilityPanelExpanded ? "xmark.circle" : "eye",
-                        color: AppColors.surfaceWhite66,
+                        color: AppColors.chartBottomControlForeground,
                         isActive: isMarkerVisibilityPanelExpanded
                     ) {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -6191,7 +6234,7 @@ struct TradingChartView: View {
                     ChartBottomControlButton(
                         title: "Latest",
                         icon: "arrow.right.to.line",
-                        color: AppColors.surfaceWhite66
+                        color: AppColors.chartBottomControlForeground
                     ) {
                         controlViewModel.jumpToLatest()
                     }
@@ -6200,7 +6243,7 @@ struct TradingChartView: View {
                     // Chart settings (icon-only)
                     ChartBottomIconControlButton(
                         icon: "gearshape",
-                        color: AppColors.surfaceWhite66
+                        color: AppColors.chartBottomControlForeground
                     ) {
                         showChartSettingsSheet = true
                     }
@@ -6226,10 +6269,10 @@ struct TradingChartView: View {
             HStack(spacing: 5) {
                 Image(systemName: "calendar")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite66)
+                    .foregroundColor(AppColors.chartBottomControlForeground)
                 Text(labelText)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite66)
+                    .foregroundColor(AppColors.chartBottomControlForeground)
                     .lineLimit(1)
             }
             .fixedSize(horizontal: true, vertical: false)
@@ -6318,7 +6361,10 @@ struct TradingChartView: View {
     private func drawChart(context: GraphicsContext, size: CGSize) {
         var drawingContext = context
 
-        let xAxisBand = xAxisReservedBandHeight(chartHeight: size.height, includeLabelStrip: !panelOwnsBottomXAxisStrip)
+        let xAxisBand = xAxisReservedBandHeight(
+            chartHeight: size.height,
+            includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
+        )
         let plotRect = CGRect(x: 0, y: 0, width: max(0, size.width - yAxisWidth), height: max(0, size.height - xAxisBand))
         drawingContext.clip(to: Path(plotRect))
 
@@ -6373,7 +6419,7 @@ struct TradingChartView: View {
         var markerContext = context
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: size.height,
-            includeLabelStrip: !panelOwnsBottomXAxisStrip
+            includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
         )
         let plotRect = CGRect(
             x: 0,
@@ -6556,15 +6602,17 @@ struct TradingChartView: View {
             (CGFloat(candle.close - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) *
             scaledHeight - totalVerticalOffset
         
-        let candleColor = candle.close >= candle.open ? chartSettings.bullishCandleColor : chartSettings.bearishCandleColor
-        
+        let isLightGreyChart = ThemeManager.shared.currentTheme == .lightGrey
+        let bullishColor = isLightGreyChart ? AppColors.chartBullCandleLightGrey : chartSettings.bullishCandleColor
+        let candleColor = candle.close >= candle.open ? bullishColor : chartSettings.bearishCandleColor
+
         // Draw wick
         let wickPath = Path { path in
             path.move(to: CGPoint(x: x + actualCandleWidth / 2, y: highY))
             path.addLine(to: CGPoint(x: x + actualCandleWidth / 2, y: lowY))
         }
         context.stroke(wickPath, with: .color(candleColor), lineWidth: 1)
-        
+
         // Draw body
         let bodyRect = CGRect(
             x: x,
@@ -6572,16 +6620,17 @@ struct TradingChartView: View {
             width: actualCandleWidth,
             height: Swift.max(1, abs(closeY - openY))
         )
-        
+
         if candle.close >= candle.open {
             context.stroke(
                 Path(roundedRect: bodyRect, cornerRadius: 0),
                 with: .color(candleColor),
                 lineWidth: 1
             )
+            let bullFillOpacity: CGFloat = isLightGreyChart ? 1.0 : 0.3
             context.fill(
                 Path(roundedRect: bodyRect, cornerRadius: 0),
-                with: .color(candleColor.opacity(0.3))
+                with: .color(candleColor.opacity(bullFillOpacity))
             )
         } else {
             context.fill(
@@ -6675,10 +6724,10 @@ struct ChartBottomControlButton: View {
 
     static let cornerRadius: CGFloat = 8
     /// Must be computed: `static let` captures `AppColors` once and never updates when the user changes theme.
-    static var inactiveBackground: Color { AppColors.chartPanelBackgroundMuted.opacity(0.96) }
-    static var inactiveBorder: Color { AppColors.surfaceWhite14 }
-    static var activeBackground: Color { AppColors.surfaceWhite68 }
-    static var activeBorder: Color { AppColors.surfaceWhite24 }
+    static var inactiveBackground: Color { AppColors.chartBottomControlInactiveFill }
+    static var inactiveBorder: Color { AppColors.chartBottomControlBorder }
+    static var activeBackground: Color { AppColors.chartBottomControlActiveBackground }
+    static var activeBorder: Color { AppColors.chartBottomControlActiveBorder }
 
     var body: some View {
         Button(action: action) {

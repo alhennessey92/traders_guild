@@ -235,7 +235,7 @@ struct SignupEmailView: View {
                 }
             }
         }
-        .keyboardPinnedBottomInset {
+        .keyboardPinnedBottomInset(background: AnyView(AuthKeyboardFooterChrome())) {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
@@ -251,7 +251,7 @@ struct SignupEmailView: View {
                 .disabled(!isFormValid || isCheckingAvailability)
                 .opacity((isFormValid && !isCheckingAvailability) ? 1.0 : 0.5)
             }
-            .background(AppColors.sheetBackground)
+            .background(Color.clear)
         }
     }
 

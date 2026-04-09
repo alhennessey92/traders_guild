@@ -167,10 +167,10 @@ struct MarkerPlacementComponentsTab: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.whiteText.opacity(0.08))
+                    .fill(AppColors.componentsMirrorButtonFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                            .stroke(AppColors.componentsMirrorButtonStroke, lineWidth: 1)
                     )
             )
         }
@@ -293,10 +293,10 @@ struct MarkerPlacementComponentsTab: View {
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.whiteText.opacity(0.08))
+                .fill(AppColors.componentsOverviewChipFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.whiteText.opacity(0.09), lineWidth: 1)
+                        .stroke(AppColors.componentsOverviewChipStroke, lineWidth: 1)
                 )
         )
     }
@@ -310,7 +310,7 @@ struct MarkerPlacementComponentsTab: View {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite88)
+                    .foregroundColor(AppColors.componentsSectionHeaderIconForeground)
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(AppColors.greyText)
@@ -334,19 +334,19 @@ struct MarkerPlacementComponentsTab: View {
 
     private func rowCardBackground() -> some View {
         RoundedRectangle(cornerRadius: 10)
-            .fill(AppColors.whiteText.opacity(0.07))
+            .fill(AppColors.componentsRowCardFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                    .stroke(AppColors.componentsRowCardStroke, lineWidth: 1)
             )
     }
 
     private func sectionCardBackground() -> some View {
         RoundedRectangle(cornerRadius: 12)
-            .fill(AppColors.whiteText.opacity(0.05))
+            .fill(AppColors.componentsSectionCardFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                    .stroke(AppColors.componentsSectionCardStroke, lineWidth: 1)
             )
     }
 
@@ -371,9 +371,9 @@ struct MarkerPlacementComponentsTab: View {
             } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(AppColors.primaryForeground)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(AppColors.whiteText.opacity(0.08)))
+                    .background(Circle().fill(AppColors.componentsOverviewChipFill))
             }
             .buttonStyle(.plain)
         }

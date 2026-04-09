@@ -8,18 +8,27 @@
 
 import SwiftUI
 
+enum ChartPanelHeaderStripKind {
+    case indicator
+    /// Blue-tinted gradient strip (timeframe resize bar only).
+    case timeframe
+    /// Solid dark strip for live price + LIVE row (no blue wash).
+    case timeframePrice
+}
+
 struct IndicatorPanelHeaderRow: View {
     let title: String
     let valueText: String?
     let valueColor: Color
     let badgeText: String?
     let badgeColor: Color?
+    var stripKind: ChartPanelHeaderStripKind = .indicator
 
     var body: some View {
         HStack(spacing: 6) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(AppColors.surfaceWhite80)
+                .foregroundColor(AppColors.indicatorPanelHeaderTitle)
 
             if let valueText {
                 Text(valueText)
@@ -42,7 +51,26 @@ struct IndicatorPanelHeaderRow: View {
         .padding(.horizontal, 8)
         .padding(.top, 4)
         .padding(.bottom, 2)
-        .background(AppColors.panelHeaderBackground)
+        .background { headerStripBackground }
+    }
+
+    @ViewBuilder
+    private var headerStripBackground: some View {
+        switch stripKind {
+        case .indicator:
+            AppColors.indicatorPanelChromeStripBackground
+        case .timeframe:
+            LinearGradient(
+                colors: [
+                    AppColors.timeframePanelAxisGradientTop,
+                    AppColors.timeframePanelAxisGradientBottom,
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        case .timeframePrice:
+            AppColors.timeframePanelPriceHeaderBackground
+        }
     }
 }
 
@@ -108,9 +136,15 @@ struct RSIPanelView: View {
 
             if !isCollapsed {
                 // RSI content area with pan gesture
-                rsiContentArea
+                LinkedIndicatorPanelGestureSurface(
+                    gestureState: gestureState,
+                    candleCount: chartData.candles.count,
+                    baseCandleWidth: baseCandleWidth,
+                    candleSpacing: candleSpacing
+                ) {
+                    rsiContentArea
+                }
                     .frame(height: panelHeight)
-                    .gesture(panGesture)
 
                 // X-axis labels only if this is the bottom panel
                 if isBottomPanel {
@@ -118,12 +152,6 @@ struct RSIPanelView: View {
                 }
             }
         }
-        .overlay(
-            Rectangle()
-                .fill(AppColors.surfaceGray30)
-                .frame(height: 1),
-            alignment: .bottom
-        )
         .background(AppColors.chartPanelBackgroundMuted)
     }
 
@@ -167,27 +195,27 @@ struct RSIPanelView: View {
     private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(AppColors.panelHeaderBackground)
+                .fill(AppColors.chartPanelResizeStripBackground)
 
             // Capsule always centered
             Capsule()
-                .fill(isDraggingHandle ? AppColors.surfaceWhite80 : AppColors.surfaceGray50)
+                .fill(isDraggingHandle ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
                 .frame(width: 36, height: 5)
 
             // Panel label left-aligned
             HStack(spacing: 4) {
                 (Text(rsiConfig?.label ?? "RSI 14")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppColors.primaryForeground)
+                    .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
                  + Text("  Indicator")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(AppColors.surfaceWhite50))
+                    .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
                     .lineLimit(1)
 
                 if isCollapsed {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppColors.surfaceWhite80)
+                        .foregroundColor(AppColors.panelResizeHandleChevronForeground)
                 }
 
                 Spacer()
@@ -233,12 +261,6 @@ struct RSIPanelView: View {
                 }
             }
         }
-        .overlay(
-            Rectangle()
-                .fill(AppColors.surfaceGray30)
-                .frame(height: 1),
-            alignment: .bottom
-        )
     }
 
     private func collapsePanel() {
@@ -529,21 +551,31 @@ struct RSIPanelView: View {
         let _ = gestureState.crosshairActive
         let _ = gestureState.crosshairX
         let _ = gestureState.markerPlacementGuide.isActive
-        
-        return ZStack {
-            Canvas { context, size in
-                drawXAxisLabels(context: context, size: size)
+
+        let labelH = ChartPanelReserveCalculator.panelXAxisTimeLabelAreaHeight
+        let footH = ChartPanelReserveCalculator.panelXAxisLabelBottomFootHeight
+
+        return VStack(spacing: 0) {
+            ZStack {
+                Canvas { context, size in
+                    drawXAxisLabels(context: context, size: size)
+                }
+                .frame(height: labelH)
+                .background(AppColors.xAxisBackground)
+
+                if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
+                    crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
+                } else if gestureState.markerPlacementGuide.isActive, let timestamp = gestureState.markerPlacementGuide.timestamp {
+                    crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.markerPlacementGuide.x)
+                }
             }
-            .frame(height: 24)
-            .background(AppColors.xAxisBackground)
-            
-            if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
-                crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
-            } else if gestureState.markerPlacementGuide.isActive, let timestamp = gestureState.markerPlacementGuide.timestamp {
-                crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.markerPlacementGuide.x)
-            }
+            .frame(height: labelH)
+
+            Rectangle()
+                .fill(AppColors.xAxisBackground)
+                .frame(height: footH)
         }
-        .frame(height: 24)
+        .frame(height: ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
     }
     
     @ViewBuilder

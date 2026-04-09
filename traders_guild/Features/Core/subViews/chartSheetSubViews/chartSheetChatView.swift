@@ -23,6 +23,7 @@ struct ImprovedChartSheetChatView: View {
     // Message input state - shared with parent footer
     @Binding var messageText: String
     @Binding var replyDraft: ChatReplyDraft?
+    var localSendScrollRevision: Int = 0
     var onBackgroundTap: (() -> Void)? = nil
     
     @State private var showEditSheet = false
@@ -240,6 +241,16 @@ struct ImprovedChartSheetChatView: View {
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("bottomAnchor", anchor: .bottom)
+                    }
+                }
+            }
+            .onChange(of: localSendScrollRevision) { _, _ in
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo("bottomAnchor", anchor: .bottom)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo("bottomAnchor", anchor: .bottom)
                     }

@@ -153,7 +153,7 @@ struct MarkerPlacementGeneralTab: View {
                         .overlay(
                             Image(systemName: "arrow.2.circlepath")
                                 .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(AppColors.whiteText.opacity(0.9))
+                                .foregroundColor(AppColors.disclosureHeaderIconForeground)
                         )
                         .offset(x: 2, y: 2)
                 }
@@ -172,7 +172,7 @@ struct MarkerPlacementGeneralTab: View {
 
                 Image(systemName: isIntentPickerExpanded ? "chevron.up" : "chevron.down")
                     .font(.caption.weight(.bold))
-                    .foregroundColor(AppColors.whiteText.opacity(0.75))
+                    .foregroundColor(AppColors.disclosureChevronForeground)
             }
             .padding(12)
             .background(
@@ -180,7 +180,7 @@ struct MarkerPlacementGeneralTab: View {
                     colors: [
                         heroColor.opacity(0.32),
                         heroColor.opacity(0.15),
-                        AppColors.whiteText.opacity(0.06),
+                        AppColors.componentsScaffoldHeaderNeutralEndpoint,
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -230,7 +230,7 @@ struct MarkerPlacementGeneralTab: View {
                     subtitle: "Intent-specific fields",
                     icon: "list.bullet.clipboard",
                     tint: placementState.intent == .setup && placementState.trackingEnabled
-                        ? .green
+                        ? AppColors.markerPositiveForeground
                         : (placementState.intent == .alert
                             ? (placementState.alertSeverity?.color ?? placementState.intent.color)
                             : placementState.intent.color)
@@ -277,7 +277,7 @@ struct MarkerPlacementGeneralTab: View {
                             .font(.caption)
                     }
                 }
-                .tint(placementState.trackingEnabled ? .green : placementState.intent.color)
+                .tint(placementState.trackingEnabled ? AppColors.markerPositiveForeground : placementState.intent.color)
 
                 if placementState.trackingEnabled {
                     trackedSetupBanner
@@ -518,14 +518,14 @@ struct MarkerPlacementGeneralTab: View {
         HStack(spacing: 8) {
             Image(systemName: "scope")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(AppColors.statusPositive95)
+                .foregroundColor(AppColors.markerPositiveForeground)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Tracking Mode Active")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(AppColors.primaryForeground)
                 Text("Estimated reputation impact now shown")
                     .font(.caption2)
-                    .foregroundColor(AppColors.statusPositive85)
+                    .foregroundColor(AppColors.markerPositiveForegroundMuted)
             }
             Spacer(minLength: 0)
         }
@@ -533,10 +533,10 @@ struct MarkerPlacementGeneralTab: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.statusPositive14)
+                .fill(AppColors.markerPositiveFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.statusPositive35, lineWidth: 1)
+                        .stroke(AppColors.markerPositiveForeground.opacity(0.38), lineWidth: 1)
                 )
         )
     }
@@ -546,7 +546,7 @@ struct MarkerPlacementGeneralTab: View {
             trackedRepChip(
                 title: "Rep + (est)",
                 value: placementState.estimatedTrackingRepGain.map { "+\($0)" } ?? "—",
-                tint: .green
+                tint: AppColors.markerPositiveForeground
             )
             trackedRepChip(
                 title: "Rep - (est)",

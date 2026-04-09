@@ -22,6 +22,7 @@ class TimeframePanelGestureState: ObservableObject {
     // MARK: - Private
 
     private var accumulatedOffset: CGSize = .zero
+    private var bodyDragStartVerticalOffset: CGFloat = 0
     private var lastPinchScale: CGFloat = 1.0
     private var lastPricePinchScale: CGFloat = 1.0
 
@@ -29,6 +30,7 @@ class TimeframePanelGestureState: ObservableObject {
 
     func beginDrag() {
         accumulatedOffset = panOffset
+        bodyDragStartVerticalOffset = verticalPanOffset
     }
 
     func applyPan(translationX: CGFloat, chartWidth: CGFloat, candleCount: Int, candleWidth: CGFloat) {
@@ -43,6 +45,28 @@ class TimeframePanelGestureState: ObservableObject {
 
     func endDrag() {
         accumulatedOffset = panOffset
+    }
+
+    func applyBodyPan(
+        translationX: CGFloat,
+        translationY: CGFloat,
+        chartWidth: CGFloat,
+        candleCount: Int,
+        candleWidth: CGFloat,
+        panelHeight: CGFloat
+    ) {
+        applyPan(
+            translationX: translationX,
+            chartWidth: chartWidth,
+            candleCount: candleCount,
+            candleWidth: candleWidth
+        )
+
+        let proposedOffset = verticalPanOffset + translationY
+        let bodyLimit = max(24, panelHeight * 0.28)
+        let lowerBound = bodyDragStartVerticalOffset - bodyLimit
+        let upperBound = bodyDragStartVerticalOffset + bodyLimit
+        verticalPanOffset = min(upperBound, max(lowerBound, proposedOffset))
     }
 
     // MARK: - Pinch
@@ -102,6 +126,7 @@ class TimeframePanelGestureState: ObservableObject {
         priceScale = 1.0
         verticalPanOffset = 0
         accumulatedOffset = .zero
+        bodyDragStartVerticalOffset = 0
         lastPinchScale = 1.0
         lastPricePinchScale = 1.0
     }

@@ -40,7 +40,7 @@ enum AppTheme: String, CaseIterable, Codable {
 final class ThemeManager: ObservableObject {
     static let shared = ThemeManager()
 
-    @AppStorage("appTheme") var currentTheme: AppTheme = .dark {
+    @AppStorage("appTheme") var currentTheme: AppTheme = .midGrey {
         didSet {
             objectWillChange.send()
         }

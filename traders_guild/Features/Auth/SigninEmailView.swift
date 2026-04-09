@@ -98,7 +98,7 @@ struct SigninEmailView: View {
                         .foregroundColor(AppColors.fadedBackground)
                 }
             }
-            .keyboardPinnedBottomInset {
+            .keyboardPinnedBottomInset(background: AnyView(AuthKeyboardFooterChrome())) {
                 VStack(spacing: 0) {
                     Divider()
                         .frame(height: 1)
@@ -138,7 +138,7 @@ struct SigninEmailView: View {
                     }
                     .disabled(isLoggingIn)
                 }
-                .background(AppColors.sheetBackground)
+                .background(Color.clear)
             }
         }
     }

@@ -239,7 +239,17 @@ struct NotificationCard: View {
     }
 
     private var iconBadgeFillOpacity: Double {
-        showAsUnread ? 0.20 : 0.14
+        if ThemeManager.shared.currentTheme == .lightGrey {
+            return showAsUnread ? 0.32 : 0.24
+        }
+        return showAsUnread ? 0.20 : 0.14
+    }
+
+    private var notificationIconForeground: Color {
+        if ThemeManager.shared.currentTheme == .lightGrey {
+            return showAsUnread ? AppColors.primaryForeground : AppColors.primaryForeground.opacity(0.78)
+        }
+        return showAsUnread ? notificationColor : notificationColor.opacity(0.72)
     }
 
     private var titleColor: Color {
@@ -273,7 +283,7 @@ struct NotificationCard: View {
                     
                     Image(systemName: notificationIcon)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(showAsUnread ? notificationColor : notificationColor.opacity(0.72))
+                        .foregroundColor(notificationIconForeground)
                 }
                 
                 // Content

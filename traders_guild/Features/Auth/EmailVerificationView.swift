@@ -158,7 +158,7 @@ struct EmailVerificationView: View {
                 }
             }
         }
-        .keyboardPinnedBottomInset {
+        .keyboardPinnedBottomInset(background: AnyView(AuthKeyboardFooterChrome())) {
             VStack(spacing: 10) {
                 Divider()
                     .frame(height: 1)
@@ -205,7 +205,7 @@ struct EmailVerificationView: View {
             }
             .padding(.top, 10)
             .padding(.bottom, 10)
-            .background(AppColors.sheetBackground)
+            .background(Color.clear)
         }
         .onDisappear {
             codeFieldFocused = false

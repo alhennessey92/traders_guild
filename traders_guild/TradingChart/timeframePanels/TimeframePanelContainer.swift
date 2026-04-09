@@ -26,6 +26,7 @@ struct TimeframePanelContainer: View {
     var bottomAxisPanelIndex: Int? = nil
     var bottomAxisOverlayTimestamp: Date? = nil
     var bottomAxisOverlayStyle: CrosshairTimeLabelStyle = .standard
+    var formatPrice: (Double) -> String = TimeframePanelView.defaultPriceFormatter
 
     // MARK: - Computed
 
@@ -59,7 +60,8 @@ struct TimeframePanelContainer: View {
                         maxPanelHeight: adjustedMaxHeight,
                         isBottomPanel: bottomAxisPanelIndex == index,
                         bottomAxisOverlayTimestamp: bottomAxisOverlayTimestamp,
-                        bottomAxisOverlayStyle: bottomAxisOverlayStyle
+                        bottomAxisOverlayStyle: bottomAxisOverlayStyle,
+                        formatPrice: formatPrice
                     )
                 }
             }

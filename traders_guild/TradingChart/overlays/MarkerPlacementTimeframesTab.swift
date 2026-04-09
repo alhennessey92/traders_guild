@@ -186,8 +186,8 @@ struct MarkerPlacementTimeframesTab: View {
             if isActive {
                 statusBadge(
                     title: "ACTIVE",
-                    textColor: AppColors.statusPositive95,
-                    fillColor: AppColors.statusPositive20
+                    textColor: AppColors.markerPositiveForeground,
+                    fillColor: AppColors.markerPositiveFillStrong
                 )
             }
 
@@ -282,8 +282,8 @@ struct MarkerPlacementTimeframesTab: View {
                     if isActive {
                         statusBadge(
                             title: "ACTIVE",
-                            textColor: AppColors.statusPositive95,
-                            fillColor: AppColors.statusPositive20
+                            textColor: AppColors.markerPositiveForeground,
+                            fillColor: AppColors.markerPositiveFillStrong
                         )
                     }
                 }

@@ -13,7 +13,7 @@ struct AdminSheetBackground: View {
             Color.clear
                 .background(.ultraThinMaterial)
             AppColors.sheetBackground
-            StaticPatternView()
+            StaticPatternView(targetOpacity: AppColors.adminSheetPatternOpacity)
         }
         .ignoresSafeArea()
     }
@@ -220,12 +220,12 @@ struct AdminFooterActions: View {
         HStack(spacing: 10) {
             Button("Cancel", action: onCancel)
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.adminFooterCancelForeground)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(AppColors.surfaceWhite06)
+                        .fill(AppColors.adminFooterCancelBackground)
                 )
 
             Spacer()
@@ -235,17 +235,17 @@ struct AdminFooterActions: View {
                     if isSubmitting {
                         ProgressView()
                             .scaleEffect(0.75)
-                            .tint(.black)
+                            .tint(AppColors.adminFooterPrimaryForeground)
                     }
                     Text(primaryTitle)
                         .font(.subheadline.weight(.semibold))
                 }
-                .foregroundColor(.black)
+                .foregroundColor(AppColors.adminFooterPrimaryForeground)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(AppColors.whiteText)
+                        .fill(AppColors.adminFooterPrimaryBackground)
                 )
             }
             .disabled(primaryDisabled || isSubmitting)

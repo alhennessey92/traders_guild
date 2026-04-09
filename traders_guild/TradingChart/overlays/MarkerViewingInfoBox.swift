@@ -41,6 +41,50 @@ struct MarkerViewingInfoBox: View {
         )
     }
 
+    private var setupOutcome: SetupOutcome? {
+        guard marker.intent == .setup else { return nil }
+        return MarkerPredictionProgress.outcomeDescription(for: marker.marker)
+    }
+
+    private var setupRiskRewardText: String? {
+        let resolvedEntryPrice = marker.entryPrice ?? marker.horizontalLinePrice ?? marker.price
+        guard let targetPrice = marker.targetPrice,
+              let stopLossPrice = marker.stopLossPrice else {
+            return nil
+        }
+
+        let reward = abs(targetPrice - resolvedEntryPrice)
+        let risk = abs(resolvedEntryPrice - stopLossPrice)
+        guard risk > 0.000_000_1, reward > 0 else { return nil }
+        return String(format: "R:R %.2f", reward / risk)
+    }
+
+    private var setupResolvedDetailParts: [String] {
+        guard let outcome = setupOutcome else { return [] }
+        return [
+            outcome.triggerPrice.map(formatPrice),
+            outcome.triggeredAtFormatted
+        ].compactMap { $0 }
+    }
+
+    private var setupOutcomePnlText: String? {
+        guard let pnl = setupOutcome?.pnl else { return nil }
+        return pnl >= 0 ? String(format: "+%.2f%%", pnl) : String(format: "%.2f%%", pnl)
+    }
+
+    private var setupOutcomePnlColor: Color {
+        guard let pnl = setupOutcome?.pnl else { return AppColors.primaryForeground }
+        return pnl >= 0
+            ? AppColors.markerPositiveForeground
+            : AppColors.statusNegative85
+    }
+
+    private var setupOutcomeRepTint: Color {
+        (setupOutcome?.guildRepDelta ?? 0) >= 0
+            ? AppColors.markerPositiveForeground
+            : AppColors.statusNegative85
+    }
+
     private var reactionEmoji: String? {
         let trimmed = marker.selectedEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
@@ -84,7 +128,7 @@ struct MarkerViewingInfoBox: View {
             )
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(AppColors.surfaceWhite84)
+                .foregroundColor(AppColors.listRowChevronForeground)
         }
         .padding(.horizontal, 5)
         .padding(.vertical, 10)
@@ -109,7 +153,7 @@ struct MarkerViewingInfoBox: View {
                     .foregroundColor(AppColors.primaryForeground)
                 Text("Details")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(AppColors.surfaceWhite74)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
             }
 
             Spacer(minLength: 0)
@@ -120,21 +164,7 @@ struct MarkerViewingInfoBox: View {
     private var content: some View {
         switch marker.intent {
         case .setup:
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 6) {
-                    if let trackingState = marker.trackingState {
-                        TrackingStatePill(state: trackingState, size: .compact)
-                    }
-                    if let approachingStatus = setupApproachingStatus {
-                        ApproachingLevelChip(status: approachingStatus)
-                    }
-                }
-                if let setupLiveMetrics {
-                    UnifiedSetupProgressStrip(metrics: setupLiveMetrics, size: .compact)
-                } else {
-                    bodyText(nil, placeholder: "Setup levels unavailable.")
-                }
-            }
+            setupContent
 
         case .analysis:
             bodyText(marker.note, placeholder: "No analysis text provided.")
@@ -191,7 +221,7 @@ struct MarkerViewingInfoBox: View {
                         .font(.system(size: 22))
                     Text("Reaction selected")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite80)
+                        .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
                     Spacer(minLength: 0)
                 }
             } else {
@@ -201,6 +231,101 @@ struct MarkerViewingInfoBox: View {
         case .personal:
             bodyText(marker.note, placeholder: "Private marker.")
         }
+    }
+
+    @ViewBuilder
+    private var setupContent: some View {
+        if let outcome = setupOutcome {
+            resolvedSetupSummary(outcome)
+        } else {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 6) {
+                    if let trackingState = marker.trackingState {
+                        TrackingStatePill(state: trackingState, size: .compact)
+                    }
+                    if let approachingStatus = setupApproachingStatus {
+                        ApproachingLevelChip(status: approachingStatus)
+                    }
+                }
+                if let setupLiveMetrics {
+                    UnifiedSetupProgressStrip(metrics: setupLiveMetrics, size: .compact)
+                } else {
+                    bodyText(nil, placeholder: "Setup levels unavailable.")
+                }
+            }
+        }
+    }
+
+    private func resolvedSetupSummary(_ outcome: SetupOutcome) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                if let trackingState = marker.trackingState {
+                    TrackingStatePill(state: trackingState, size: .compact)
+                }
+                Spacer(minLength: 0)
+            }
+
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: outcome.displayIcon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(outcome.state.color)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(outcome.displayLabel)
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundColor(AppColors.primaryForeground)
+
+                    if !setupResolvedDetailParts.isEmpty {
+                        Text(setupResolvedDetailParts.joined(separator: " · "))
+                            .font(.system(size: 9.5, weight: .medium))
+                            .foregroundColor(AppColors.overlayPanelSecondaryText)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if let setupOutcomePnlText {
+                    Text(setupOutcomePnlText)
+                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                        .foregroundColor(setupOutcomePnlColor)
+                }
+            }
+
+            if setupRiskRewardText != nil || outcome.repChangeText != nil {
+                HStack(spacing: 8) {
+                    if let setupRiskRewardText {
+                        compactOutcomeStat(
+                            label: setupRiskRewardText,
+                            tint: AppColors.surfaceWhite70
+                        )
+                    }
+
+                    if let repText = outcome.repChangeText {
+                        compactOutcomeStat(
+                            label: "Rep \(repText)",
+                            tint: setupOutcomeRepTint
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func compactOutcomeStat(label: String, tint: Color) -> some View {
+        Text(label)
+            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+            .foregroundColor(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(AppColors.whiteText.opacity(0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                    )
+            )
     }
 
     private var pollContent: some View {
@@ -295,10 +420,10 @@ struct MarkerViewingInfoBox: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 9)
-                .fill(AppColors.surfaceWhite12)
+                .fill(AppColors.insetPanelBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 9)
-                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                        .stroke(AppColors.adaptiveOverlay18, lineWidth: 1)
                 )
         )
     }
@@ -307,7 +432,7 @@ struct MarkerViewingInfoBox: View {
         let value = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return Text(value.isEmpty ? placeholder : value)
             .font(.system(size: 10.5, weight: .medium))
-            .foregroundColor(value.isEmpty ? AppColors.surfaceWhite66 : AppColors.surfaceWhite92)
+            .foregroundColor(value.isEmpty ? AppColors.surfaceDetailTertiaryForeground : AppColors.surfaceDetailPrimaryForeground)
             .lineLimit(4)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
@@ -315,10 +440,10 @@ struct MarkerViewingInfoBox: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 9)
-                    .fill(AppColors.surfaceWhite12)
+                    .fill(AppColors.insetPanelBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: 9)
-                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                            .stroke(AppColors.adaptiveOverlay18, lineWidth: 1)
                     )
             )
     }
@@ -333,7 +458,7 @@ struct MarkerViewingInfoBox: View {
 
             Text(value.isEmpty ? placeholder : value)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundColor(value.isEmpty ? AppColors.surfaceWhite74 : AppColors.surfaceWhite96)
+                .foregroundColor(value.isEmpty ? AppColors.overlayPanelSecondaryText : AppColors.primaryForeground)
                 .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
         }

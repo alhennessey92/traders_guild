@@ -90,10 +90,7 @@ struct CrosshairView: View {
     /// Computed property for time label Y position
     /// Positioned on the x-axis at the bottom of the chart canvas
     private var timeLabelY: CGFloat {
-        CrosshairTimeLabel.mainChartCenterY(
-            chartHeight: chartSize.height,
-            showsMainXAxisLabels: showsTimeLabelOnMainXAxis
-        )
+        CrosshairTimeLabel.mainChartCenterY(chartHeight: chartSize.height)
     }
     
     var body: some View {
@@ -107,18 +104,18 @@ struct CrosshairView: View {
                     path.move(to: CGPoint(x: crosshairManager.position.x, y: 0))
                     path.addLine(to: CGPoint(x: crosshairManager.position.x, y: chartSize.height))
                 }
-                .stroke(AppColors.surfaceWhite40, style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
-                
+                .stroke(AppColors.crosshairGuideStroke, style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
+
                 // Horizontal line - thinner and more subtle
                 Path { path in
                     path.move(to: CGPoint(x: 0, y: crosshairManager.position.y))
                     path.addLine(to: CGPoint(x: chartSize.width, y: crosshairManager.position.y))
                 }
-                .stroke(AppColors.surfaceWhite40, style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
-                
+                .stroke(AppColors.crosshairGuideStroke, style: StrokeStyle(lineWidth: 0.5, dash: [4, 2]))
+
                 // Center dot - smaller
                 Circle()
-                    .fill(AppColors.systemWhite)
+                    .fill(AppColors.crosshairCenterDot)
                     .frame(width: 6, height: 6)
                     .position(crosshairManager.position)
                 
@@ -195,22 +192,17 @@ enum CrosshairTimeLabelStyle {
 
 struct CrosshairTimeLabel: View {
     static let indicatorHeight: CGFloat = 22
-    static let compactBandLift: CGFloat = 14
     static let stripBandInset: CGFloat = 6
 
-    static func mainChartCenterY(
-        chartHeight: CGFloat,
-        showsMainXAxisLabels: Bool
-    ) -> CGFloat {
+    /// Y center for the crosshair time chip on the main chart. Always accounts for the reserved x-axis label band
+    /// (whether the main chart draws times or a stacked panel does) so layout stays aligned with `xAxisOverlay`.
+    static func mainChartCenterY(chartHeight: CGFloat) -> CGFloat {
         let bottomAreaHeight = chartHeight * 0.085
-        if showsMainXAxisLabels {
-            return chartHeight
-                - bottomAreaHeight
-                - ChartPanelReserveCalculator.panelXAxisLabelStripHeight
-                + (indicatorHeight * 0.5)
-                - stripBandInset
-        }
-        return chartHeight - bottomAreaHeight + (indicatorHeight * 0.5) - compactBandLift
+        return chartHeight
+            - bottomAreaHeight
+            - ChartPanelReserveCalculator.panelXAxisLabelStripHeight
+            + (indicatorHeight * 0.5)
+            - stripBandInset
     }
 
     static func estimatedWidth(
@@ -263,9 +255,9 @@ struct CrosshairTimeLabel: View {
     private var backgroundColor: Color {
         switch style {
         case .standard:
-            return AppColors.surfaceWhite90
+            return AppColors.crosshairTimeLabelFill
         case .markerPlacement:
-            return AppColors.surfaceWhite94
+            return AppColors.crosshairTimeLabelFillMarkerPlacement
         }
     }
     
@@ -299,7 +291,11 @@ struct CrosshairInfoPopupCompact: View {
     let chartData: ChartDataManager
     var indicatorManager: IndicatorManager? = nil
     var timeframe: RLChartTimeframe = .h1
-    
+
+    private var crosshairSemanticGreen: Color {
+        ThemeManager.shared.currentTheme == .lightGrey ? AppColors.markerPositiveForeground : .green
+    }
+
     private var popupPosition: CGPoint {
         var x = position.x + 60
         var y = position.y - 50
@@ -471,12 +467,12 @@ struct CrosshairInfoPopupCompact: View {
                     // Time header - timeframe aware
                     Text(formatTimeForHeader(candle.timestamp))
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite70)
+                        .foregroundColor(AppColors.crosshairInfoPopupHeaderText)
 
                     if candle.isGapFill {
                         Text("No data")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(AppColors.surfaceWhite75)
+                            .foregroundColor(AppColors.crosshairText)
                     } else {
                         // OHLC in ultra-compact format
                         HStack(spacing: 6) {
@@ -485,8 +481,8 @@ struct CrosshairInfoPopupCompact: View {
                                 PriceRow(label: "L", value: chartData.formatPrice(candle.low), color: .red)
                             }
                             VStack(alignment: .leading, spacing: 0) {
-                                PriceRow(label: "H", value: chartData.formatPrice(candle.high), color: .green)
-                                PriceRow(label: "C", value: chartData.formatPrice(candle.close), color: candle.isBullish ? .green : .red)
+                                PriceRow(label: "H", value: chartData.formatPrice(candle.high), color: crosshairSemanticGreen)
+                                PriceRow(label: "C", value: chartData.formatPrice(candle.close), color: candle.isBullish ? crosshairSemanticGreen : .red)
                             }
                         }
 
@@ -494,13 +490,13 @@ struct CrosshairInfoPopupCompact: View {
                         if let volume = candle.volume {
                             Text("V:\(volume.formattedVolume)")
                                 .font(.system(size: 7))
-                                .foregroundColor(AppColors.surfaceWhite40)
+                                .foregroundColor(AppColors.crosshairInfoPopupMutedText)
                         }
 
                         // Indicator values section - more compact
                         if hasAnyIndicatorValues {
                             Rectangle()
-                                .fill(AppColors.surfaceWhite15)
+                                .fill(AppColors.crosshairInfoPopupDivider)
                                 .frame(height: 0.5)
                                 .padding(.vertical, 1)
 
@@ -513,7 +509,7 @@ struct CrosshairInfoPopupCompact: View {
                                             .frame(width: 5, height: 5)
                                         Text("\(ema.period)")
                                             .font(.system(size: 7, weight: .medium))
-                                            .foregroundColor(AppColors.surfaceWhite50)
+                                            .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                         Text(chartData.formatPrice(ema.value))
                                             .font(.system(size: 7, weight: .medium, design: .monospaced))
                                             .foregroundColor(ema.color)
@@ -529,7 +525,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("RSI")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(AppColors.surfaceWhite50)
+                                        .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                     Text(String(format: "%.0f", rsi))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(rsiColor(for: rsi))
@@ -544,7 +540,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("MACD")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(AppColors.surfaceWhite50)
+                                        .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                     Text(String(format: "%.4f", macd.macd))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(.cyan)
@@ -559,7 +555,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("Stoch")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(AppColors.surfaceWhite50)
+                                        .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                     Text(String(format: "%.0f/%.0f", stoch.k, stoch.d))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(stochColor(for: stoch.k))
@@ -574,7 +570,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("CCI")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(AppColors.surfaceWhite50)
+                                        .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                     Text(String(format: "%.0f", cci))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(cciColor(for: cci))
@@ -589,7 +585,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("%R")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(AppColors.surfaceWhite50)
+                                        .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                     Text(String(format: "%.0f", wr))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(williamsRColor(for: wr))
@@ -604,7 +600,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .frame(width: 5, height: 5)
                                     Text("ATR")
                                         .font(.system(size: 7, weight: .medium))
-                                        .foregroundColor(AppColors.surfaceWhite50)
+                                        .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                     Text(String(format: "%.4f", atr))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
                                         .foregroundColor(.red)
@@ -619,7 +615,7 @@ struct CrosshairInfoPopupCompact: View {
                         .fill(AppColors.infoBoxBackground)
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
-                                .stroke(AppColors.surfaceWhite15, lineWidth: 0.5)
+                                .stroke(AppColors.crosshairInfoPopupBorder, lineWidth: 0.5)
                         )
                 )
                 .fixedSize()  // Prevent expansion - use intrinsic size
@@ -633,40 +629,40 @@ struct CrosshairInfoPopupCompact: View {
         if value >= 70 {
             return .red  // Overbought
         } else if value <= 30 {
-            return .green  // Oversold
+            return crosshairSemanticGreen  // Oversold
         } else {
             return .purple  // Neutral
         }
     }
-    
+
     /// Color for Stochastic based on value
     private func stochColor(for value: Double) -> Color {
         if value >= 80 {
             return .red  // Overbought
         } else if value <= 20 {
-            return .green  // Oversold
+            return crosshairSemanticGreen  // Oversold
         } else {
             return .yellow  // Neutral
         }
     }
-    
+
     /// Color for CCI based on value
     private func cciColor(for value: Double) -> Color {
         if value >= 100 {
             return .red  // Overbought
         } else if value <= -100 {
-            return .green  // Oversold
+            return crosshairSemanticGreen  // Oversold
         } else {
             return .orange  // Neutral
         }
     }
-    
+
     /// Color for Williams %R based on value (inverted scale: 0 to -100)
     private func williamsRColor(for value: Double) -> Color {
         if value >= -20 {
             return .red  // Overbought (near 0)
         } else if value <= -80 {
-            return .green  // Oversold (near -100)
+            return crosshairSemanticGreen  // Oversold (near -100)
         } else {
             return .pink  // Neutral
         }
@@ -684,7 +680,7 @@ private struct PriceRow: View {
         HStack(spacing: 2) {
             Text(label)
                 .font(.system(size: 8, weight: .medium))
-                .foregroundColor(AppColors.surfaceWhite50)
+                .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                 .frame(width: 10, alignment: .leading)
             Text(value)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))

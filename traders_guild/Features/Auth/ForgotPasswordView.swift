@@ -148,7 +148,7 @@ struct ForgotPasswordView: View {
                 }
             }
         }
-        .keyboardPinnedBottomInset {
+        .keyboardPinnedBottomInset(background: AnyView(AuthKeyboardFooterChrome())) {
             forgotPasswordFooter
         }
         .onAppear {
@@ -335,7 +335,7 @@ struct ForgotPasswordView: View {
         }
         .padding(.top, 10)
         .padding(.bottom, 10)
-        .background(AppColors.sheetBackground)
+        .background(Color.clear)
     }
 
     private func submitForgotRequest() async {

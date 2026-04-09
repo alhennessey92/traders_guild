@@ -125,7 +125,7 @@ struct AppleProfileCompletionView: View {
                 }
             }
         }
-        .keyboardPinnedBottomInset {
+        .keyboardPinnedBottomInset(background: AnyView(AuthKeyboardFooterChrome())) {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
@@ -143,7 +143,7 @@ struct AppleProfileCompletionView: View {
                 .disabled(!isFormValid)
                 .opacity(isFormValid ? 1.0 : 0.5)
             }
-            .background(AppColors.sheetBackground)
+            .background(Color.clear)
         }
     }
 }

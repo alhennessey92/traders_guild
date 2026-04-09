@@ -176,7 +176,7 @@ struct SignupBasicsView: View {
             }
         }
         .interactiveDismissDisabled(rlAppState.accountCreatedDuringOnboarding)
-        .keyboardPinnedBottomInset {
+        .keyboardPinnedBottomInset(background: AnyView(AuthKeyboardFooterChrome())) {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
@@ -195,7 +195,7 @@ struct SignupBasicsView: View {
                     .padding(.trailing)
                 }
             }
-            .background(AppColors.sheetBackground)
+            .background(Color.clear)
         }
     }
 }
@@ -311,7 +311,7 @@ struct SignupInterestsView: View {
             }
         }
         .interactiveDismissDisabled(rlAppState.accountCreatedDuringOnboarding)
-        .keyboardPinnedBottomInset {
+        .keyboardPinnedBottomInset(background: AnyView(AuthKeyboardFooterChrome())) {
             VStack(spacing: 0) {
                 Divider()
                     .frame(height: 1)
@@ -346,7 +346,7 @@ struct SignupInterestsView: View {
                 }
                 .padding(.horizontal, 10)
             }
-            .background(AppColors.sheetBackground)
+            .background(Color.clear)
         }
         .onAppear {
             if selectedInterests.isEmpty, !data.selectedInterests.isEmpty {

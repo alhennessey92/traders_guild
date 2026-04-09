@@ -179,12 +179,14 @@ enum AppColors {
     static var adaptiveOverlay05: Color { overlayBase.opacity(0.05) }
     static var adaptiveOverlay08: Color { overlayBase.opacity(0.08) }
     static var adaptiveOverlay10: Color { overlayBase.opacity(0.1) }
+    static var adaptiveOverlay12: Color { overlayBase.opacity(0.12) }
     static var adaptiveOverlay15: Color { overlayBase.opacity(0.15) }
     static var adaptiveOverlay18: Color { overlayBase.opacity(0.18) }
     static var adaptiveOverlay20: Color { overlayBase.opacity(0.2) }
     static var adaptiveOverlay24: Color { overlayBase.opacity(0.24) }
     static var adaptiveOverlay30: Color { overlayBase.opacity(0.3) }
     static var adaptiveOverlay40: Color { overlayBase.opacity(0.4) }
+    static var adaptiveOverlay45: Color { overlayBase.opacity(0.45) }
     static var adaptiveOverlay50: Color { overlayBase.opacity(0.5) }
     static var adaptiveOverlay60: Color { overlayBase.opacity(0.6) }
     static var adaptiveOverlay70: Color { overlayBase.opacity(0.7) }
@@ -326,15 +328,21 @@ enum AppColors {
     static let statusInfo22 = systemBlue.opacity(0.22)
     static let statusInfo24 = systemBlue.opacity(0.24)
     static let statusInfo25 = systemBlue.opacity(0.25)
+    static let statusInfo35 = systemBlue.opacity(0.35)
     static let statusInfo40 = systemBlue.opacity(0.4)
     static let statusInfo45 = systemBlue.opacity(0.45)
     static let statusInfo50 = systemBlue.opacity(0.5)
     static let statusInfo52 = systemBlue.opacity(0.52)
+    static let statusInfo55 = systemBlue.opacity(0.55)
     static let statusInfo60 = systemBlue.opacity(0.6)
+    static let statusInfo62 = systemBlue.opacity(0.62)
+    static let statusInfo65 = systemBlue.opacity(0.65)
     static let statusInfo70 = systemBlue.opacity(0.7)
+    static let statusInfo75 = systemBlue.opacity(0.75)
     static let statusInfo80 = systemBlue.opacity(0.8)
     static let statusInfo85 = systemBlue.opacity(0.85)
     static let statusInfo90 = systemBlue.opacity(0.9)
+    static let statusInfo92 = systemBlue.opacity(0.92)
     static let statusInfo95 = systemBlue.opacity(0.95)
 
     static let statusWarning10 = systemOrange.opacity(0.1)
@@ -388,8 +396,20 @@ enum AppColors {
 
     // MARK: - Chart / Indicator Literal Tokens
 
-    static let chartTabGradientStart = Color(red: 0.20, green: 0.40, blue: 0.80)
-    static let chartTabGradientEnd = Color(red: 0.15, green: 0.25, blue: 0.50)
+    /// Primary blue tab gradient; lightGrey uses a lighter sky-navy so dark text stays legible.
+    static var chartTabGradientStart: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 0.50, green: 0.66, blue: 0.94)
+        case .midGrey, .dark: return Color(red: 0.20, green: 0.40, blue: 0.80)
+        }
+    }
+
+    static var chartTabGradientEnd: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 0.40, green: 0.55, blue: 0.86)
+        case .midGrey, .dark: return Color(red: 0.15, green: 0.25, blue: 0.50)
+        }
+    }
 
     // Orange gradient for active/selected tabs in specific contexts
     static let chartOrangeGradientStart = Color(red: 0.82, green: 0.42, blue: 0.12)
@@ -398,42 +418,166 @@ enum AppColors {
     // Green gradient for marker "Add" tab
     static let chartGreenGradientStart = Color(red: 0.14, green: 0.52, blue: 0.28)
     static let chartGreenGradientEnd = Color(red: 0.09, green: 0.36, blue: 0.18)
-    static let chartSubTabGradientStart = Color(red: 0.12, green: 0.18, blue: 0.38)
-    static let chartSubTabGradientEnd = Color(red: 0.08, green: 0.12, blue: 0.28)
-    static let chartDeepSubTabGradientStart = Color(red: 0.08, green: 0.12, blue: 0.25)
-    static let chartDeepSubTabGradientEnd = Color(red: 0.05, green: 0.08, blue: 0.18)
+
+    static var chartSubTabGradientStart: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 0.42, green: 0.58, blue: 0.90)
+        case .midGrey, .dark: return Color(red: 0.12, green: 0.18, blue: 0.38)
+        }
+    }
+
+    static var chartSubTabGradientEnd: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 0.32, green: 0.46, blue: 0.80)
+        case .midGrey, .dark: return Color(red: 0.08, green: 0.12, blue: 0.28)
+        }
+    }
+
+    static var chartDeepSubTabGradientStart: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 0.36, green: 0.50, blue: 0.84)
+        case .midGrey, .dark: return Color(red: 0.08, green: 0.12, blue: 0.25)
+        }
+    }
+
+    static var chartDeepSubTabGradientEnd: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 0.28, green: 0.40, blue: 0.74)
+        case .midGrey, .dark: return Color(red: 0.05, green: 0.08, blue: 0.18)
+        }
+    }
+
+    /// Bullish candle on light-grey chart (solid fill, higher contrast vs panel).
+    static var chartBullCandleLightGrey: Color {
+        Color(red: 28.0 / 255, green: 108.0 / 255, blue: 72.0 / 255)
+    }
+
+    /// Honeycomb strength for admin / chart-settings sheets only (lighter on lightGrey).
+    static var adminSheetPatternOpacity: Double { isLightGrey ? 0.020 : 0.02 }
+
+    /// Dashed crosshair / placement guide on chart canvas.
+    static var crosshairGuideStroke: Color {
+        isLightGrey ? adaptiveOverlay45 : surfaceWhite40
+    }
+
+    /// Crosshair OHLC compact popup — header and chrome text on `infoBoxBackground`.
+    static var crosshairInfoPopupHeaderText: Color {
+        isLightGrey ? secondaryForeground : surfaceWhite70
+    }
+
+    static var crosshairInfoPopupBodySecondaryText: Color {
+        isLightGrey ? secondaryForeground.opacity(0.88) : surfaceWhite50
+    }
+
+    static var crosshairInfoPopupMutedText: Color {
+        isLightGrey ? tgGrey : surfaceWhite40
+    }
+
+    static var crosshairInfoPopupDivider: Color {
+        isLightGrey ? adaptiveOverlay15 : surfaceWhite15
+    }
+
+    static var crosshairInfoPopupBorder: Color {
+        isLightGrey ? adaptiveOverlay22 : surfaceWhite15
+    }
+
+    private static var adaptiveOverlay22: Color { overlayBase.opacity(0.22) }
+
+    /// Crosshair time pill on x-axis (lightGrey: darker grey chip).
+    static var crosshairTimeLabelFill: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 148.0 / 255, green: 152.0 / 255, blue: 164.0 / 255).opacity(0.96)
+        case .midGrey, .dark: return surfaceWhite90
+        }
+    }
+
+    static var crosshairTimeLabelFillMarkerPlacement: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 140.0 / 255, green: 144.0 / 255, blue: 158.0 / 255).opacity(0.97)
+        case .midGrey, .dark: return surfaceWhite94
+        }
+    }
+
+    static var crosshairCenterDot: Color {
+        isLightGrey ? Color(red: 55.0 / 255, green: 58.0 / 255, blue: 68.0 / 255) : systemWhite
+    }
+
+    /// Marker flows: darker green on lightGrey for text and soft fills on pale chrome.
+    static var markerPositiveForeground: Color {
+        isLightGrey ? Color(red: 22.0 / 255, green: 88.0 / 255, blue: 54.0 / 255) : statusPositive90
+    }
+
+    static var markerPositiveForegroundMuted: Color {
+        isLightGrey ? Color(red: 28.0 / 255, green: 100.0 / 255, blue: 62.0 / 255).opacity(0.92) : statusPositive85
+    }
+
+    static var markerPositiveFill: Color {
+        isLightGrey ? Color(red: 22.0 / 255, green: 88.0 / 255, blue: 54.0 / 255).opacity(0.16) : statusPositive14
+    }
+
+    static var markerPositiveFillStrong: Color {
+        isLightGrey ? Color(red: 22.0 / 255, green: 88.0 / 255, blue: 54.0 / 255).opacity(0.26) : statusPositive20
+    }
+
+    /// Chart bottom control strip (Markers / Latest / settings): darker chrome on lightGrey.
+    static var chartBottomControlInactiveFill: Color {
+        switch theme {
+        case .lightGrey: return chartPanelBackgroundDeep.opacity(0.98)
+        case .midGrey, .dark: return chartPanelBackgroundMuted.opacity(0.96)
+        }
+    }
+
+    static var chartBottomControlBorder: Color {
+        isLightGrey ? adaptiveOverlay28 : surfaceWhite14
+    }
+
+    static var chartBottomControlForeground: Color {
+        isLightGrey ? primaryForeground.opacity(0.90) : surfaceWhite66
+    }
+
+    static var chartBottomControlActiveBackground: Color {
+        isLightGrey ? adaptiveOverlay16 : surfaceWhite68
+    }
+
+    static var chartBottomControlActiveBorder: Color {
+        isLightGrey ? adaptiveOverlay32 : surfaceWhite24
+    }
+
+    private static var adaptiveOverlay16: Color { overlayBase.opacity(0.16) }
+    private static var adaptiveOverlay28: Color { overlayBase.opacity(0.28) }
+    private static var adaptiveOverlay32: Color { overlayBase.opacity(0.32) }
 
     static var chartPanelBackground: Color {
         switch theme {
-        case .lightGrey: return Color(red: 202.0 / 255, green: 204.0 / 255, blue: 210.0 / 255)
+        case .lightGrey: return Color(red: 186.0 / 255, green: 189.0 / 255, blue: 198.0 / 255)
         case .midGrey:   return Color(red: 24.0 / 255, green: 28.0 / 255, blue: 40.0 / 255)
         case .dark:      return Color(red: 20.0 / 255, green: 20.0 / 255, blue: 28.0 / 255)
         }
     }
     static var chartPanelBackgroundMuted: Color {
         switch theme {
-        case .lightGrey: return Color(red: 199.0 / 255, green: 201.0 / 255, blue: 208.0 / 255)
+        case .lightGrey: return Color(red: 182.0 / 255, green: 185.0 / 255, blue: 194.0 / 255)
         case .midGrey:   return Color(red: 23.0 / 255, green: 27.0 / 255, blue: 38.0 / 255)
         case .dark:      return Color(red: 20.0 / 255, green: 20.0 / 255, blue: 26.0 / 255)
         }
     }
     static var chartPanelBackgroundInset: Color {
         switch theme {
-        case .lightGrey: return Color(red: 192.0 / 255, green: 194.0 / 255, blue: 202.0 / 255)
+        case .lightGrey: return Color(red: 176.0 / 255, green: 179.0 / 255, blue: 189.0 / 255)
         case .midGrey:   return Color(red: 22.0 / 255, green: 26.0 / 255, blue: 36.0 / 255)
         case .dark:      return Color(red: 18.0 / 255, green: 18.0 / 255, blue: 28.0 / 255)
         }
     }
     static var chartPanelBackgroundAlt: Color {
         switch theme {
-        case .lightGrey: return Color(red: 206.0 / 255, green: 208.0 / 255, blue: 214.0 / 255)
+        case .lightGrey: return Color(red: 194.0 / 255, green: 196.0 / 255, blue: 204.0 / 255)
         case .midGrey:   return Color(red: 26.0 / 255, green: 30.0 / 255, blue: 42.0 / 255)
         case .dark:      return Color(red: 25.0 / 255, green: 25.0 / 255, blue: 33.0 / 255)
         }
     }
     static var chartPanelBackgroundDeep: Color {
         switch theme {
-        case .lightGrey: return Color(red: 178.0 / 255, green: 181.0 / 255, blue: 190.0 / 255)
+        case .lightGrey: return Color(red: 152.0 / 255, green: 155.0 / 255, blue: 168.0 / 255)
         case .midGrey:   return Color(red: 18.0 / 255, green: 22.0 / 255, blue: 32.0 / 255)
         case .dark:      return Color(red: 10.0 / 255, green: 10.0 / 255, blue: 12.0 / 255)
         }
@@ -451,7 +595,7 @@ enum AppColors {
     /// Info box background (crosshair OHLCV popup). Blends with chart background.
     static var infoBoxBackground: Color {
         switch theme {
-        case .lightGrey: return Color(red: 170.0 / 255, green: 173.0 / 255, blue: 182.0 / 255).opacity(0.96)
+        case .lightGrey: return Color(red: 188.0 / 255, green: 191.0 / 255, blue: 200.0 / 255).opacity(0.97)
         case .midGrey:   return Color(red: 22.0 / 255, green: 26.0 / 255, blue: 38.0 / 255).opacity(0.94)
         case .dark:      return Color.black.opacity(0.85)
         }
@@ -460,19 +604,245 @@ enum AppColors {
     /// Panel header background (indicator & timeframe panels). Subtle darker strip.
     static var panelHeaderBackground: Color {
         switch theme {
-        case .lightGrey: return Color(red: 156.0 / 255, green: 159.0 / 255, blue: 171.0 / 255)
-        case .midGrey:   return Color(red: 18.0 / 255, green: 22.0 / 255, blue: 32.0 / 255)
+        case .lightGrey: return Color(red: 132.0 / 255, green: 136.0 / 255, blue: 150.0 / 255)
+        case .midGrey:   return Color(red: 28.0 / 255, green: 32.0 / 255, blue: 44.0 / 255)
         case .dark:      return Color(red: 16.0 / 255, green: 16.0 / 255, blue: 22.0 / 255)
         }
     }
 
-    /// X-axis bottom area background. Dark: pure black, MidGrey: very dark blue-grey, LightGrey: #9195A1.
+    /// X-axis bottom area background. Dark: pure black, MidGrey: very dark blue-grey, LightGrey: darker strip (readable vs plot wash).
     static var xAxisBackground: Color {
         switch theme {
-        case .lightGrey: return Color(red: 168.0 / 255, green: 171.0 / 255, blue: 182.0 / 255)
+        case .lightGrey: return Color(red: 108.0 / 255, green: 112.0 / 255, blue: 124.0 / 255)
         case .midGrey:   return Color(red: 14.0 / 255, green: 18.0 / 255, blue: 26.0 / 255)
         case .dark:      return Color.black
         }
+    }
+
+    // MARK: Chart overlay & panel chrome (theme audit 13–21)
+
+    /// Chart OHLC / overlay info panels. Lighter than `panelHeaderBackground` on light grey.
+    static var chartOverlayInfoPanelFill: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 200.0 / 255, green: 202.0 / 255, blue: 210.0 / 255).opacity(0.96)
+        case .midGrey:   return Color(red: 24.0 / 255, green: 28.0 / 255, blue: 40.0 / 255).opacity(0.94)
+        case .dark:      return surfaceBlack50.opacity(0.96)
+        }
+    }
+
+    /// Indicator panel plot canvas — stronger separation from the main chart wash on light grey.
+    static var indicatorPanelPlotBackground: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 138.0 / 255, green: 141.0 / 255, blue: 154.0 / 255)
+        case .midGrey, .dark: return chartPanelBackground
+        }
+    }
+
+    /// Inner value row + legacy chrome: dark strip (timeframe LIVE row, indicator header row) — matches main x-axis field.
+    static var indicatorPanelChromeStripBackground: Color { xAxisBackground }
+
+    /// Timeframe + indicator **pull tab** strip — same family as `panelHeaderBackground` / chatroom list row pills.
+    static var chartPanelResizeStripBackground: Color { panelHeaderBackground }
+
+    /// Solid strip behind timeframe live price / LIVE row (not the light blue x-axis area).
+    static var timeframePanelPriceHeaderBackground: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 82.0 / 255, green: 86.0 / 255, blue: 96.0 / 255)
+        case .midGrey: return xAxisBackground
+        case .dark: return Color.black
+        }
+    }
+
+    /// Timeframe panel x-axis strip only (stacked chart footer — not the grey resize tab).
+    static var timeframePanelAxisGradientTop: Color {
+        switch theme {
+        case .lightGrey:
+            return Color(red: 186.0 / 255, green: 210.0 / 255, blue: 246.0 / 255)
+        case .midGrey:
+            return Color(red: 34.0 / 255, green: 58.0 / 255, blue: 96.0 / 255)
+        case .dark:
+            return Color(red: 34.0 / 255, green: 52.0 / 255, blue: 86.0 / 255)
+        }
+    }
+
+    static var timeframePanelAxisGradientBottom: Color {
+        switch theme {
+        case .lightGrey:
+            return Color(red: 118.0 / 255, green: 156.0 / 255, blue: 214.0 / 255)
+        case .midGrey:
+            return Color(red: 14.0 / 255, green: 28.0 / 255, blue: 56.0 / 255)
+        case .dark:
+            return Color(red: 12.0 / 255, green: 20.0 / 255, blue: 36.0 / 255)
+        }
+    }
+
+    static var timeframePanelAxisHairline: Color {
+        switch theme {
+        case .lightGrey: return AppColors.statusInfo50.opacity(0.45)
+        case .midGrey:
+            return Color(red: 52.0 / 255, green: 86.0 / 255, blue: 138.0 / 255).opacity(0.55)
+        case .dark: return AppColors.statusInfo45.opacity(0.65)
+        }
+    }
+
+    /// Timeframe x-axis tick labels (blue tints on gradient strip).
+    static var timeframePanelAxisLabelPrimary: Color {
+        switch theme {
+        case .lightGrey: return AppColors.statusInfo85
+        case .midGrey, .dark: return AppColors.statusInfo92
+        }
+    }
+
+    static var timeframePanelAxisLabelSecondary: Color {
+        switch theme {
+        case .lightGrey: return AppColors.statusInfo62
+        case .midGrey, .dark: return AppColors.statusInfo75
+        }
+    }
+
+    /// Primary title on panel resize bars — ink on mid-grey header strip (chat list row tone).
+    static var panelResizeHandlePrimaryLabel: Color {
+        primaryForeground
+    }
+
+    /// Suffix label (“Timeframe” / “Indicator”) on panel resize bars.
+    static var panelResizeHandleSuffixForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.92) : surfaceWhite50
+    }
+
+    /// Chevron on panel resize bars when collapsed.
+    static var panelResizeHandleChevronForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.88) : surfaceWhite80
+    }
+
+    /// Center “pull” capsule on panel resize bars (light grey: white nub on darker strip).
+    static var panelResizeHandleCapsuleIdle: Color {
+        isLightGrey ? Color.white : surfaceGray50
+    }
+
+    static var panelResizeHandleCapsuleDragging: Color {
+        isLightGrey ? Color(white: 0.94) : surfaceWhite80
+    }
+
+    /// Primary label in `IndicatorPanelHeaderRow` (title text).
+    static var indicatorPanelHeaderTitle: Color {
+        isLightGrey ? Color.white.opacity(0.95) : surfaceWhite80
+    }
+
+    /// Live / snapshot price tint on timeframe header strip.
+    static var timeframePanelHeaderValueForeground: Color {
+        isLightGrey ? Color.white.opacity(0.96) : .white
+    }
+
+    /// Section icon in marker components placement cards (light grey: ink, not white).
+    static var componentsSectionHeaderIconForeground: Color {
+        isLightGrey ? secondaryForeground : surfaceWhite88
+    }
+
+    /// Components scaffold / overview neutral gradient end (replaces low-contrast white wash on light grey).
+    static var componentsScaffoldHeaderNeutralEndpoint: Color {
+        isLightGrey ? primaryForeground.opacity(0.14) : whiteText.opacity(0.06)
+    }
+
+    static var componentsScaffoldHeaderLeadingOpacity: Double {
+        isLightGrey ? 0.50 : 0.22
+    }
+
+    static var componentsScaffoldHeaderMidOpacity: Double {
+        isLightGrey ? 0.30 : 0.12
+    }
+
+    /// Overview / row / section fills for components UI (light grey: ink-tinted).
+    static var componentsOverviewChipFill: Color {
+        isLightGrey ? primaryForeground.opacity(0.16) : whiteText.opacity(0.08)
+    }
+
+    static var componentsOverviewChipStroke: Color {
+        isLightGrey ? primaryForeground.opacity(0.22) : whiteText.opacity(0.09)
+    }
+
+    static var componentsRowCardFill: Color {
+        isLightGrey ? primaryForeground.opacity(0.12) : whiteText.opacity(0.07)
+    }
+
+    static var componentsRowCardStroke: Color {
+        isLightGrey ? primaryForeground.opacity(0.16) : whiteText.opacity(0.08)
+    }
+
+    static var componentsSectionCardFill: Color {
+        isLightGrey ? primaryForeground.opacity(0.10) : whiteText.opacity(0.05)
+    }
+
+    static var componentsSectionCardStroke: Color {
+        isLightGrey ? primaryForeground.opacity(0.15) : whiteText.opacity(0.08)
+    }
+
+    static var componentsMirrorButtonFill: Color {
+        isLightGrey ? primaryForeground.opacity(0.12) : whiteText.opacity(0.08)
+    }
+
+    static var componentsMirrorButtonStroke: Color {
+        isLightGrey ? primaryForeground.opacity(0.18) : whiteText.opacity(0.1)
+    }
+
+    /// Disclosure row icons (leading) — light grey: secondary ink.
+    static var disclosureHeaderIconForeground: Color {
+        isLightGrey ? secondaryForeground.opacity(0.92) : surfaceWhite74
+    }
+
+    /// Chat composer attachment action sheet (light grey: nearer-opaque).
+    static var chatAttachmentActionPanelFill: Color {
+        switch theme {
+        case .lightGrey: return Color(red: 246.0 / 255, green: 247.0 / 255, blue: 249.0 / 255).opacity(0.98)
+        case .midGrey, .dark: return panelFillEmphasis
+        }
+    }
+
+    static var chatAttachmentActionPanelStroke: Color {
+        switch theme {
+        case .lightGrey: return standardSearchFieldStroke.opacity(0.95)
+        case .midGrey, .dark: return standardSearchFieldStroke.opacity(0.8)
+        }
+    }
+
+    /// Icons on chat attachment sheet (light grey: ink on pale sheet).
+    static var chatAttachmentActionIconForeground: Color {
+        isLightGrey ? primaryForeground : surfaceWhite92
+    }
+
+    static var chatAttachmentActionLabelForeground: Color {
+        isLightGrey ? primaryForeground.opacity(0.92) : surfaceWhite80
+    }
+
+    static var chatAttachmentIconWellFill: Color {
+        isLightGrey ? primaryForeground.opacity(0.12) : surfaceWhite14
+    }
+
+    static var chatAttachmentIconWellStroke: Color {
+        isLightGrey ? primaryForeground.opacity(0.20) : surfaceWhite24
+    }
+
+    /// Expanded marker visibility panel above chart x-axis (mid/light: align with overlay chrome; dark: high contrast).
+    static var markerFilterExpandedPanelBackground: Color {
+        switch theme {
+        case .lightGrey: return panelHeaderBackground.opacity(0.98)
+        case .midGrey:   return panelHeaderBackground.opacity(0.98)
+        case .dark:      return surfaceBlack50
+        }
+    }
+
+    /// Secondary control well inside marker filter panel (e.g. Intents button).
+    static var markerFilterPanelControlWell: Color {
+        switch theme {
+        case .lightGrey: return adaptiveOverlay12
+        case .midGrey:   return adaptiveOverlay12
+        case .dark:      return surfaceWhite12
+        }
+    }
+
+    /// Primary label on medium-dark chart overlay strips (`markerFilterExpandedPanelBackground`). Not `whiteText` (that is dark ink in lightGrey app chrome).
+    static var chartOverlayStripLabel: Color {
+        Color.white.opacity(0.92)
     }
 
     static let signupInterestBlue = Color(red: 0.4, green: 0.7, blue: 0.9)
@@ -497,11 +867,11 @@ enum AppColors {
     static let markerSelectedBorderWidth: CGFloat = 0.8
     static let markerUnselectedBorderWidth: CGFloat = 0.8
     static var markerNeutralFillTop: Color {
-        isLightGrey ? Color(red: 196.0 / 255, green: 198.0 / 255, blue: 205.0 / 255)
+        isLightGrey ? Color(red: 184.0 / 255, green: 187.0 / 255, blue: 196.0 / 255)
                     : Color(red: 34.0 / 255.0, green: 34.0 / 255.0, blue: 37.0 / 255.0)
     }
     static var markerNeutralFillBottom: Color {
-        isLightGrey ? Color(red: 156.0 / 255, green: 159.0 / 255, blue: 171.0 / 255)
+        isLightGrey ? Color(red: 132.0 / 255, green: 136.0 / 255, blue: 150.0 / 255)
                     : Color(red: 12.0 / 255.0, green: 12.0 / 255.0, blue: 14.0 / 255.0)
     }
     static let markerIconLight = Color(white: 0.72)
@@ -529,6 +899,11 @@ enum AppColors {
     static var crosshairText: Color {
         isLightGrey ? Color(red: 41.0 / 255, green: 43.0 / 255, blue: 50.0 / 255)
                     : Color.white
+    }
+
+    /// Subtitle / secondary line on `OverlayPanelChrome` panels (chart info, marker viewing).
+    static var overlayPanelSecondaryText: Color {
+        isLightGrey ? secondaryForeground : surfaceWhite74
     }
 
     // MARK: - Semantic Chart / Canvas Tokens
@@ -564,17 +939,17 @@ enum AppColors {
         isLightGrey ? secondaryForeground.opacity(0.92) : surfaceWhite70
     }
 
-    /// Marker placement bar pills on main chart (lightGrey: soft grey chrome vs plot).
+    /// Marker placement bar pills on main chart (lightGrey: darker grey chrome vs plot).
     static var placementBarSelectedFill: Color {
         switch theme {
-        case .lightGrey: return Color(red: 222.0 / 255, green: 224.0 / 255, blue: 230.0 / 255)
+        case .lightGrey: return Color(red: 168.0 / 255, green: 171.0 / 255, blue: 182.0 / 255)
         case .midGrey, .dark: return tgGradientBackground
         }
     }
 
     static var placementBarUnselectedFill: Color {
         switch theme {
-        case .lightGrey: return Color(red: 212.0 / 255, green: 214.0 / 255, blue: 221.0 / 255)
+        case .lightGrey: return Color(red: 158.0 / 255, green: 161.0 / 255, blue: 172.0 / 255)
         case .midGrey, .dark: return tgGradientBackgroundMid.opacity(0.9)
         }
     }
@@ -654,14 +1029,14 @@ enum AppColors {
     /// Chat / DM list row pill. Dark/Mid: white 3% / 10% pressed.
     static var messagingListRowFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.10)
+        case .lightGrey: return tgWhiteText.opacity(0.12)
         case .midGrey, .dark: return Color.white.opacity(0.10)
         }
     }
 
     static var messagingListRowFillPressed: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.12)
+        case .lightGrey: return tgWhiteText.opacity(0.14)
         case .midGrey, .dark: return Color.white.opacity(0.14)
         }
     }
@@ -669,14 +1044,14 @@ enum AppColors {
     /// Guild user list row. Dark/Mid: white 3% / 6% pressed.
     static var userListRowFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.10)
+        case .lightGrey: return tgWhiteText.opacity(0.12)
         case .midGrey, .dark: return Color.white.opacity(0.09)
         }
     }
 
     static var userListRowFillPressed: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.11)
+        case .lightGrey: return tgWhiteText.opacity(0.13)
         case .midGrey, .dark: return Color.white.opacity(0.12)
         }
     }
@@ -714,7 +1089,7 @@ enum AppColors {
     /// Symbol sheet timeframe section container. Dark/Mid: surfaceWhite05.
     static var symbolSheetGroupedPanelFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.16)
+        case .lightGrey: return tgWhiteText.opacity(0.18)
         case .midGrey, .dark: return surfaceWhite12
         }
     }
@@ -722,14 +1097,14 @@ enum AppColors {
     /// Unselected timeframe chip gradient. Dark/Mid: surfaceWhite10→05.
     static var timeframeChipUnselectedLeading: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.12)
+        case .lightGrey: return tgWhiteText.opacity(0.14)
         case .midGrey, .dark: return surfaceWhite10
         }
     }
 
     static var timeframeChipUnselectedTrailing: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.06)
+        case .lightGrey: return tgWhiteText.opacity(0.08)
         case .midGrey, .dark: return surfaceWhite05
         }
     }
@@ -737,14 +1112,14 @@ enum AppColors {
     /// Marker list capsule. Dark/Mid: surfaceWhite04 / surfaceWhite08 stroke.
     static var markerListCapsuleFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.07)
+        case .lightGrey: return tgWhiteText.opacity(0.09)
         case .midGrey, .dark: return surfaceWhite10
         }
     }
 
     static var markerListCapsuleStroke: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.11)
+        case .lightGrey: return tgWhiteText.opacity(0.13)
         case .midGrey, .dark: return surfaceWhite18
         }
     }
@@ -776,21 +1151,81 @@ enum AppColors {
 
     /// Neutral meta chip fill on marker rows (was surfaceWhite08).
     static var metaChipNeutralBackground: Color {
-        isLightGrey ? tgWhiteText.opacity(0.10) : surfaceWhite08
+        isLightGrey ? tgWhiteText.opacity(0.12) : surfaceWhite08
     }
 
     /// Symbol list row unselected gradient. Dark/Mid: surfaceWhite05→03.
     static var symbolListRowUnselectedLeading: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.08)
+        case .lightGrey: return tgWhiteText.opacity(0.17)
         case .midGrey, .dark: return surfaceWhite05
         }
     }
 
     static var symbolListRowUnselectedTrailing: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.04)
+        case .lightGrey: return tgWhiteText.opacity(0.11)
         case .midGrey, .dark: return surfaceWhite03
+        }
+    }
+
+    /// Symbol sheet hero — light → dark system blue (not symbol grey/secondary mix).
+    static var symbolSheetHeroBlueGradientLeading: Color {
+        switch theme {
+        case .lightGrey:
+            return Color(red: 206.0 / 255, green: 226.0 / 255, blue: 252.0 / 255)
+        case .midGrey:
+            return Color(red: 58.0 / 255, green: 92.0 / 255, blue: 142.0 / 255)
+        case .dark:
+            return Color(red: 44.0 / 255, green: 72.0 / 255, blue: 118.0 / 255)
+        }
+    }
+
+    static var symbolSheetHeroBlueGradientTrailing: Color {
+        switch theme {
+        case .lightGrey:
+            return Color(red: 86.0 / 255, green: 132.0 / 255, blue: 206.0 / 255)
+        case .midGrey:
+            return Color(red: 28.0 / 255, green: 52.0 / 255, blue: 96.0 / 255)
+        case .dark:
+            return Color(red: 22.0 / 255, green: 40.0 / 255, blue: 76.0 / 255)
+        }
+    }
+
+    static var symbolSheetHeroBlueStroke: Color {
+        switch theme {
+        case .lightGrey: return AppColors.statusInfo50
+        case .midGrey, .dark: return AppColors.statusInfo60
+        }
+    }
+
+    /// Selected watchlist row — same light→dark blue language, slightly deeper than hero.
+    static var symbolListRowSelectedBlueGradientLeading: Color {
+        switch theme {
+        case .lightGrey:
+            return Color(red: 188.0 / 255, green: 214.0 / 255, blue: 248.0 / 255)
+        case .midGrey:
+            return Color(red: 50.0 / 255, green: 82.0 / 255, blue: 132.0 / 255)
+        case .dark:
+            return Color(red: 40.0 / 255, green: 66.0 / 255, blue: 108.0 / 255)
+        }
+    }
+
+    static var symbolListRowSelectedBlueGradientTrailing: Color {
+        switch theme {
+        case .lightGrey:
+            return Color(red: 72.0 / 255, green: 118.0 / 255, blue: 198.0 / 255)
+        case .midGrey:
+            return Color(red: 24.0 / 255, green: 46.0 / 255, blue: 88.0 / 255)
+        case .dark:
+            return Color(red: 18.0 / 255, green: 36.0 / 255, blue: 72.0 / 255)
+        }
+    }
+
+    static var symbolListRowSelectedBlueStroke: Color {
+        switch theme {
+        case .lightGrey: return AppColors.statusInfo55
+        case .midGrey, .dark: return AppColors.statusInfo65
         }
     }
 
@@ -800,27 +1235,56 @@ enum AppColors {
     }
 
     static var symbolRowBadgeBackground: Color {
-        isLightGrey ? tgWhiteText.opacity(0.10) : surfaceWhite14
+        isLightGrey ? tgWhiteText.opacity(0.12) : surfaceWhite14
     }
 
     /// Symbol details expanded card. Dark/Mid: surfaceWhite08 fill / surfaceWhite12 stroke.
     static var symbolDetailCardFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.11)
+        case .lightGrey: return tgWhiteText.opacity(0.13)
         case .midGrey, .dark: return surfaceWhite16
         }
     }
 
     static var symbolDetailCardStroke: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.20)
+        case .lightGrey: return tgWhiteText.opacity(0.22)
         case .midGrey, .dark: return surfaceWhite24
         }
     }
 
-    /// Symbol details disclosure header capsule (matches search / disclosure strip).
-    static var symbolDetailsHeaderGradientLeading: Color { searchBarGradientLeading }
-    static var symbolDetailsHeaderGradientTrailing: Color { searchBarGradientTrailing }
+    /// Symbol details disclosure header capsule. Light grey: darker than search bar so it reads on white sheet.
+    static var symbolDetailsHeaderGradientLeading: Color {
+        switch theme {
+        case .lightGrey: return tgWhiteText.opacity(0.22)
+        case .midGrey, .dark: return searchBarGradientLeading
+        }
+    }
+
+    static var symbolDetailsHeaderGradientTrailing: Color {
+        switch theme {
+        case .lightGrey: return tgWhiteText.opacity(0.12)
+        case .midGrey, .dark: return searchBarGradientTrailing
+        }
+    }
+
+    // MARK: Admin sheet footer (light grey: cancel = filled dark, primary = light pill)
+
+    static var adminFooterCancelForeground: Color {
+        isLightGrey ? Color.white.opacity(0.96) : greyText
+    }
+
+    static var adminFooterCancelBackground: Color {
+        isLightGrey ? primaryForeground.opacity(0.88) : surfaceWhite06
+    }
+
+    static var adminFooterPrimaryForeground: Color {
+        isLightGrey ? primaryForeground : Color.black
+    }
+
+    static var adminFooterPrimaryBackground: Color {
+        isLightGrey ? Color.white : whiteText
+    }
 
     /// Chevrons / secondary chrome on sheet headers. Dark/Mid: white 50%; Light: mid grey.
     static var adaptiveAccessoryForeground: Color {
@@ -930,11 +1394,11 @@ enum AppColors {
 
     /// Discover-style search field (capsule fill + stroke). Light uses explicit fill; dark/mid keep gradient-leading as flat fallback.
     static var standardSearchFieldFill: Color {
-        isLightGrey ? tgWhiteText.opacity(0.10) : surfaceWhite16
+        isLightGrey ? tgWhiteText.opacity(0.12) : surfaceWhite16
     }
 
     static var standardSearchFieldStroke: Color {
-        isLightGrey ? tgWhiteText.opacity(0.24) : surfaceWhite24
+        isLightGrey ? tgWhiteText.opacity(0.26) : surfaceWhite24
     }
 
     static var standardSearchFieldAccessory: Color {
@@ -943,11 +1407,11 @@ enum AppColors {
 
     /// Unselected capsule tabs (UnifiedTabButton / UnifiedCategoryTabButton).
     static var tabPillUnselectedGradientLeading: Color {
-        isLightGrey ? tgWhiteText.opacity(0.14) : subtleSurfaceOverlay08
+        isLightGrey ? tgWhiteText.opacity(0.16) : subtleSurfaceOverlay08
     }
 
     static var tabPillUnselectedGradientTrailing: Color {
-        isLightGrey ? tgWhiteText.opacity(0.08) : subtleSurfaceOverlay04
+        isLightGrey ? tgWhiteText.opacity(0.10) : subtleSurfaceOverlay04
     }
 
     static var tabPillUnselectedLabel: Color {
@@ -981,7 +1445,7 @@ enum AppColors {
     /// Profile/settings inset blocks (was surfaceWhite03). Dark/Mid: unchanged.
     static var insetPanelBackground: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.09)
+        case .lightGrey: return tgWhiteText.opacity(0.11)
         case .midGrey, .dark: return surfaceWhite10
         }
     }
@@ -989,7 +1453,7 @@ enum AppColors {
     /// Stronger flat panel (was surfaceWhite10).
     static var panelFillEmphasis: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.16)
+        case .lightGrey: return tgWhiteText.opacity(0.18)
         case .midGrey, .dark: return surfaceWhite18
         }
     }
@@ -997,7 +1461,7 @@ enum AppColors {
     /// Stroke for attachment-draft rows in chat (was surfaceWhite10).
     static var linkedMarkerAttachmentStroke: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.14)
+        case .lightGrey: return tgWhiteText.opacity(0.16)
         case .midGrey, .dark: return surfaceWhite10
         }
     }
@@ -1005,14 +1469,14 @@ enum AppColors {
     /// Intent picker pills on marker detail (was systemWhite 5% / 11%).
     static var intentPickerPillFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.06)
+        case .lightGrey: return tgWhiteText.opacity(0.08)
         case .midGrey, .dark: return Color.white.opacity(0.05)
         }
     }
 
     static var intentPickerPillFillSelected: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.11)
+        case .lightGrey: return tgWhiteText.opacity(0.13)
         case .midGrey, .dark: return Color.white.opacity(0.11)
         }
     }
@@ -1020,21 +1484,21 @@ enum AppColors {
     /// Drawing line-style picker on chart (surfaceWhite04 / surfaceWhite12 selected).
     static var drawingStyleSwatchFill: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.07)
+        case .lightGrey: return tgWhiteText.opacity(0.09)
         case .midGrey, .dark: return surfaceWhite04
         }
     }
 
     static var drawingStyleSwatchFillSelected: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.14)
+        case .lightGrey: return tgWhiteText.opacity(0.16)
         case .midGrey, .dark: return surfaceWhite12
         }
     }
 
     static var drawingStyleSwatchStroke: Color {
         switch theme {
-        case .lightGrey: return tgWhiteText.opacity(0.18)
+        case .lightGrey: return tgWhiteText.opacity(0.20)
         case .midGrey, .dark: return surfaceWhite12
         }
     }
@@ -1048,8 +1512,8 @@ enum AppColors {
     static func contentCardFill(isUnread: Bool, isPressed: Bool) -> Color {
         switch theme {
         case .lightGrey:
-            if isUnread { return tgWhiteText.opacity(isPressed ? 0.13 : 0.10) }
-            return tgWhiteText.opacity(isPressed ? 0.10 : 0.07)
+            if isUnread { return tgWhiteText.opacity(isPressed ? 0.15 : 0.12) }
+            return tgWhiteText.opacity(isPressed ? 0.12 : 0.09)
         case .midGrey, .dark:
             if isUnread { return Color.white.opacity(isPressed ? 0.10 : 0.08) }
             return Color.white.opacity(isPressed ? 0.06 : 0.03)
@@ -1060,7 +1524,7 @@ enum AppColors {
     static func leaderboardRowFill(isTopRank: Bool, isPressed: Bool) -> Color {
         switch theme {
         case .lightGrey:
-            let base = isTopRank ? (isPressed ? 0.12 : 0.09) : (isPressed ? 0.10 : 0.07)
+            let base = isTopRank ? (isPressed ? 0.14 : 0.11) : (isPressed ? 0.12 : 0.09)
             return tgWhiteText.opacity(base)
         case .midGrey, .dark:
             return Color.white.opacity(isPressed ? 0.08 : (isTopRank ? 0.05 : 0.03))

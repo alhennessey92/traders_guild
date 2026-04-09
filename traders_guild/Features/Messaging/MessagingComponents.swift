@@ -156,6 +156,14 @@ struct ChatAttachmentDraft: Equatable, Identifiable {
     }
 }
 
+struct ChatLocalSendScrollSignal: Equatable {
+    private(set) var revision: Int = 0
+
+    mutating func commit() {
+        revision &+= 1
+    }
+}
+
 struct ChatMarkerFilter: Equatable {
     var symbolId: UUID? = nil
     var timeframe: String? = nil
@@ -948,10 +956,10 @@ struct ChatInputFooter: View {
         .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppColors.panelFillEmphasis)
+                .fill(AppColors.chatAttachmentActionPanelFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppColors.standardSearchFieldStroke.opacity(0.8), lineWidth: 1)
+                        .stroke(AppColors.chatAttachmentActionPanelStroke, lineWidth: 1)
                 )
         )
         .padding(.horizontal, 16)
@@ -966,21 +974,21 @@ struct ChatInputFooter: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 22))
-                    .foregroundColor(AppColors.surfaceWhite92)
+                    .foregroundColor(AppColors.chatAttachmentActionIconForeground)
                     .frame(width: 54, height: 54)
                     .background(
                         Circle()
-                            .fill(AppColors.surfaceWhite14)
+                            .fill(AppColors.chatAttachmentIconWellFill)
                             .overlay(
                                 Circle()
-                                    .stroke(AppColors.surfaceWhite24, lineWidth: 1)
+                                    .stroke(AppColors.chatAttachmentIconWellStroke, lineWidth: 1)
                             )
                     )
                     .clipShape(Circle())
 
                 Text(label)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(AppColors.surfaceWhite80)
+                    .foregroundColor(AppColors.chatAttachmentActionLabelForeground)
             }
             .frame(maxWidth: .infinity)
         }
@@ -1110,10 +1118,10 @@ struct ChatInputFooter: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.72))
+                .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.90))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                        .stroke(AppColors.surfaceWhite20, lineWidth: 1)
                 )
         )
     }
@@ -1171,13 +1179,13 @@ struct ChatInputFooter: View {
                     .frame(height: 76)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(AppColors.whiteText.opacity(0.1))
+                            .fill(AppColors.chartPanelBackgroundDeep.opacity(0.94))
                     )
                 }
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(AppColors.surfaceWhite20, lineWidth: 1)
+                    .stroke(AppColors.surfaceWhite24, lineWidth: 1)
             )
 
             Button {

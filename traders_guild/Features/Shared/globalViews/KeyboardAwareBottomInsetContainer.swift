@@ -157,3 +157,14 @@ struct KeyboardAwareBottomInsetContainer<Content: View, Footer: View>: View {
             }
     }
 }
+
+/// Material-backed footer background for auth onboarding keyboards (light grey: less flat than bare sheet).
+struct AuthKeyboardFooterChrome: View {
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+            AppColors.sheetBackground.opacity(ThemeManager.shared.currentTheme == .lightGrey ? 0.78 : 0.88)
+        }
+    }
+}

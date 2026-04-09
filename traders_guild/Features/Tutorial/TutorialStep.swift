@@ -35,8 +35,15 @@ enum TutorialStep: Int, CaseIterable, Codable {
     /// Extra padding added above the spotlight rect for steps that need a taller cutout.
     var spotlightExtraTopPadding: CGFloat {
         switch self {
-        case .chart: return 60
-        default:     return 0
+        case .chart:
+            return 60
+        case .timeframeLinking:
+            // Lift cutout so chart timeframe price header stays fully in the lit region (not under dimming).
+            return 220
+        case .markersIntro, .setupMarkers, .indicatorsDrawings, .chartSetupCopying, .linkingMarkersChat:
+            return 160
+        default:
+            return 0
         }
     }
 

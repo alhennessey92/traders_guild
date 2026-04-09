@@ -239,6 +239,28 @@ class ChartGestureState: ObservableObject {
         lastDragTime = nil
         lastDragTranslation = .zero
     }
+
+    func applyPriceScale(
+        proposedScale: CGFloat,
+        initialPriceScale: CGFloat,
+        initialVerticalOffset: CGFloat,
+        anchorY: CGFloat,
+        chartHeight: CGFloat,
+        minScale: CGFloat,
+        maxScale: CGFloat
+    ) {
+        let clampedScale = Swift.min(maxScale, Swift.max(minScale, proposedScale))
+        let safeInitialScale = max(initialPriceScale, 0.0001)
+        let scaleRatio = clampedScale / safeInitialScale
+        let proposedOffset = initialVerticalOffset * scaleRatio + anchorY * (1.0 - scaleRatio)
+
+        priceScale = clampedScale
+        verticalPanOffset = clampedVerticalOffset(
+            proposedOffset,
+            chartHeight: chartHeight,
+            priceScale: clampedScale
+        )
+    }
     
     // MARK: - Momentum Animation
     
@@ -315,6 +337,31 @@ class ChartGestureState: ObservableObject {
         panOffset = .zero
         verticalPanOffset = 0
         markerPlacementGuide = MarkerPlacementGuideState()
+    }
+
+    private func clampedVerticalOffset(
+        _ offset: CGFloat,
+        chartHeight: CGFloat,
+        priceScale: CGFloat
+    ) -> CGFloat {
+        let scaledHeight = chartHeight * priceScale
+        let baseMultiplier: CGFloat = 3.0
+
+        let zoomAdjustment: CGFloat
+        if priceScale < 0.5 {
+            zoomAdjustment = 4.0
+        } else if priceScale < 0.7 {
+            zoomAdjustment = 3.0
+        } else if priceScale < 0.9 {
+            zoomAdjustment = 2.0
+        } else if priceScale > 2.0 {
+            zoomAdjustment = 2.0
+        } else {
+            zoomAdjustment = 1.5
+        }
+
+        let verticalPadding = scaledHeight * baseMultiplier * zoomAdjustment
+        return Swift.min(verticalPadding, Swift.max(-verticalPadding, offset))
     }
     
     // MARK: - Navigation
@@ -446,6 +493,206 @@ extension ChartGestureState {
     }
 }
 
+struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
+    @ObservedObject var gestureState: ChartGestureState
+
+    let candleCount: Int
+    let baseCandleWidth: CGFloat
+    let candleSpacing: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    @State private var lastDragTranslation: CGSize = .zero
+    @State private var isYAxisGestureActive = false
+    @State private var isBodyPinchActive = false
+    @State private var initialCandleWidthScale: CGFloat = 1.0
+    @State private var initialHorizontalOffset: CGFloat = 0
+    @State private var pinchCenterX: CGFloat = 0
+    @State private var yAxisDragStart: CGFloat = 0
+    @State private var initialPriceScale: CGFloat = 1.0
+    @State private var initialVerticalOffset: CGFloat = 0
+
+    private let yAxisWidth: CGFloat = ChartAxisMetrics.yAxisLaneWidth
+    private let pinchSensitivity: CGFloat = 0.7
+    private let yAxisSensitivity: CGFloat = 0.7
+    private let panDragSensitivity: CGFloat = 0.78
+    private let panDragNoiseFloor: CGFloat = 0.16
+    private let minVerticalScale: CGFloat = 0.5
+    private let maxVerticalScale: CGFloat = 5.0
+    private let minHorizontalScale: CGFloat = 0.15
+    private let maxHorizontalScale: CGFloat = 3.0
+
+    var body: some View {
+        GeometryReader { geometry in
+            let chartWidth = max(1, geometry.size.width - yAxisWidth)
+            let panelHeight = max(1, geometry.size.height)
+
+            content()
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .contentShape(Rectangle())
+                .gesture(bodyPanGesture(chartWidth: chartWidth, panelHeight: panelHeight))
+                .simultaneousGesture(bodyPinchGesture(chartWidth: chartWidth))
+                .overlay(alignment: .trailing) {
+                    Color.clear
+                        .frame(width: yAxisWidth)
+                        .contentShape(Rectangle())
+                        .highPriorityGesture(yAxisDragGesture(panelHeight: panelHeight))
+                        .simultaneousGesture(yAxisPinchGesture(panelHeight: panelHeight))
+                }
+        }
+        .onDisappear {
+            lastDragTranslation = .zero
+            isYAxisGestureActive = false
+            isBodyPinchActive = false
+        }
+    }
+
+    private var totalCandleWidth: CGFloat {
+        baseCandleWidth * gestureState.candleWidthScale + candleSpacing
+    }
+
+    private func bodyPanGesture(chartWidth: CGFloat, panelHeight: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                guard !isYAxisGestureActive, !isBodyPinchActive else { return }
+
+                if lastDragTranslation == .zero {
+                    gestureState.beginDrag()
+                }
+
+                let incrementalX = value.translation.width - lastDragTranslation.width
+                let incrementalY = -(value.translation.height - lastDragTranslation.height)
+                let dampenedX = incrementalX * panDragSensitivity
+                let dampenedY = incrementalY * panDragSensitivity
+                lastDragTranslation = value.translation
+
+                guard abs(dampenedX) >= panDragNoiseFloor || abs(dampenedY) >= panDragNoiseFloor else {
+                    return
+                }
+
+                gestureState.applyPan(
+                    translation: CGSize(width: dampenedX, height: dampenedY),
+                    chartWidth: chartWidth,
+                    candleCount: candleCount,
+                    candleWidth: totalCandleWidth,
+                    chartHeight: panelHeight,
+                    priceScale: gestureState.priceScale,
+                    trackVelocity: true
+                )
+            }
+            .onEnded { _ in
+                gestureState.endDrag(
+                    chartWidth: chartWidth,
+                    candleCount: candleCount,
+                    candleWidth: totalCandleWidth,
+                    chartHeight: panelHeight,
+                    priceScale: gestureState.priceScale
+                )
+                lastDragTranslation = .zero
+            }
+    }
+
+    private func bodyPinchGesture(chartWidth: CGFloat) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                guard !isYAxisGestureActive else { return }
+
+                if !isBodyPinchActive {
+                    isBodyPinchActive = true
+                    initialCandleWidthScale = gestureState.candleWidthScale
+                    initialHorizontalOffset = gestureState.panOffset.width
+                    pinchCenterX = chartWidth * 0.5
+                }
+
+                let dampenedValue = 1.0 + (value - 1.0) * pinchSensitivity
+                let proposedScale = initialCandleWidthScale * dampenedValue
+                let clampedScale = min(maxHorizontalScale, max(minHorizontalScale, proposedScale))
+                let oldTotalWidth = baseCandleWidth * initialCandleWidthScale + candleSpacing
+                let newTotalWidth = baseCandleWidth * clampedScale + candleSpacing
+                let totalWidthRatio = newTotalWidth / max(oldTotalWidth, 0.0001)
+                let proposedOffset = initialHorizontalOffset * totalWidthRatio + pinchCenterX * (1.0 - totalWidthRatio)
+
+                gestureState.candleWidthScale = clampedScale
+                gestureState.panOffset.width = clampedHorizontalPanOffset(
+                    proposedOffset: proposedOffset,
+                    chartWidth: chartWidth,
+                    candleWidthScale: clampedScale
+                )
+            }
+            .onEnded { _ in
+                isBodyPinchActive = false
+            }
+    }
+
+    private func yAxisDragGesture(panelHeight: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if !isYAxisGestureActive {
+                    isYAxisGestureActive = true
+                    yAxisDragStart = value.startLocation.y
+                    initialPriceScale = gestureState.priceScale
+                    initialVerticalOffset = gestureState.verticalPanOffset
+                }
+
+                let dragDistance = value.location.y - yAxisDragStart
+                let scaleMultiplier = 1.0 - (dragDistance / 300.0) * yAxisSensitivity
+                let proposedScale = initialPriceScale * scaleMultiplier
+
+                gestureState.applyPriceScale(
+                    proposedScale: proposedScale,
+                    initialPriceScale: initialPriceScale,
+                    initialVerticalOffset: initialVerticalOffset,
+                    anchorY: panelHeight * 0.5,
+                    chartHeight: panelHeight,
+                    minScale: minVerticalScale,
+                    maxScale: maxVerticalScale
+                )
+            }
+            .onEnded { _ in
+                isYAxisGestureActive = false
+            }
+    }
+
+    private func yAxisPinchGesture(panelHeight: CGFloat) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                if !isYAxisGestureActive {
+                    isYAxisGestureActive = true
+                    initialPriceScale = gestureState.priceScale
+                    initialVerticalOffset = gestureState.verticalPanOffset
+                }
+
+                let dampenedValue = 1.0 + (value - 1.0) * (yAxisSensitivity * 0.7)
+                let proposedScale = initialPriceScale * dampenedValue
+
+                gestureState.applyPriceScale(
+                    proposedScale: proposedScale,
+                    initialPriceScale: initialPriceScale,
+                    initialVerticalOffset: initialVerticalOffset,
+                    anchorY: panelHeight * 0.5,
+                    chartHeight: panelHeight,
+                    minScale: minVerticalScale,
+                    maxScale: maxVerticalScale
+                )
+            }
+            .onEnded { _ in
+                isYAxisGestureActive = false
+            }
+    }
+
+    private func clampedHorizontalPanOffset(
+        proposedOffset: CGFloat,
+        chartWidth: CGFloat,
+        candleWidthScale: CGFloat
+    ) -> CGFloat {
+        let totalWidth = baseCandleWidth * candleWidthScale + candleSpacing
+        let totalContentWidth = CGFloat(candleCount) * totalWidth
+        let edgePadding = ChartGestureState.horizontalEdgePadding
+        let maxOffset = edgePadding
+        let minOffset = -(totalContentWidth - chartWidth + edgePadding)
+        return min(maxOffset, max(minOffset, proposedOffset))
+    }
+}
+
 // MARK: - Gesture Modifiers
 
 struct ChartGestureModifier: ViewModifier {
@@ -476,4 +723,3 @@ extension View {
         )
     }
 }
-

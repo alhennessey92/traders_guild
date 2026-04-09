@@ -190,7 +190,9 @@ enum ChartXAxisLabelEngine {
             case .indicatorPanel:
                 color = label.kind == .primary ? AppColors.surfaceWhite93 : AppColors.surfaceWhite78
             case .timeframePanel:
-                color = label.kind == .primary ? AppColors.statusInfo85 : AppColors.statusInfo60
+                color = label.kind == .primary
+                    ? AppColors.timeframePanelAxisLabelPrimary
+                    : AppColors.timeframePanelAxisLabelSecondary
             }
 
             let labelY: CGFloat = 12
@@ -631,15 +633,11 @@ struct MarkerXAxisTimeIndicator: View {
     let xPosition: CGFloat
     let chartHeight: CGFloat
     let timeframe: RLChartTimeframe
-    var showsMainXAxisLabels: Bool = true
     var timeZone: TimeZone = .current
     private let placementYOffset: CGFloat = 8
 
     private var timeLabelY: CGFloat {
-        CrosshairTimeLabel.mainChartCenterY(
-            chartHeight: chartHeight,
-            showsMainXAxisLabels: showsMainXAxisLabels
-        ) + placementYOffset
+        CrosshairTimeLabel.mainChartCenterY(chartHeight: chartHeight) + placementYOffset
     }
 
     var body: some View {
