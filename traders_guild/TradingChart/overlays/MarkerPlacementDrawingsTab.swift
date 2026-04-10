@@ -167,7 +167,11 @@ struct MarkerPlacementDrawingsTab: View {
 
             Text("\(placementState.drawingOverlayCount)/15")
                 .font(.caption.weight(.semibold))
-                .foregroundColor(placementState.drawingOverlayCount >= 15 ? .orange : .green)
+                .foregroundColor(
+                    placementState.drawingOverlayCount >= 15
+                        ? AppColors.chartOrangeGradientStart
+                        : AppColors.statusPositive
+                )
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .background(Capsule().fill(AppColors.whiteText.opacity(0.09)))

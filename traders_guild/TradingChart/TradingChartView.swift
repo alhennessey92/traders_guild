@@ -4406,19 +4406,16 @@ struct TradingChartView: View {
         guard let drawingState = activeInteractiveDrawingState else { return nil }
 
         let handleHitRadius: CGFloat
-        let noteHitRadius: CGFloat
         let emojiHitRadius: CGFloat
         let lineBodyHitRadius: CGFloat
 
         switch intent {
         case .reenterEditing:
             handleHitRadius = 18
-            noteHitRadius = 32
             emojiHitRadius = 28
             lineBodyHitRadius = 14
         case .maintainEditing:
             handleHitRadius = 18
-            noteHitRadius = 42
             emojiHitRadius = 36
             lineBodyHitRadius = 14
         }
@@ -4583,15 +4580,12 @@ struct TradingChartView: View {
                 }
 
             case .note(let payload):
-                guard
-                    let center = annotationCenter(
-                        for: .note(payload),
-                        coordinateSystem: coordinateSystem
-                    )
-                else {
-                    continue
-                }
-                if hypot(location.x - center.x, location.y - center.y) <= noteHitRadius {
+                let touchExpansion: CGFloat = intent == .maintainEditing ? 10 : 6
+                if noteAnnotationHitRect(
+                    for: payload,
+                    coordinateSystem: coordinateSystem,
+                    touchExpansion: touchExpansion
+                )?.contains(location) == true {
                     return .note(draft.id)
                 }
 
@@ -4664,10 +4658,11 @@ struct TradingChartView: View {
 
         switch draft.payload {
         case .note(let payload):
-            guard let center = annotationCenter(for: .note(payload), coordinateSystem: coordinateSystem) else {
-                return false
-            }
-            return hypot(location.x - center.x, location.y - center.y) <= 44
+            return noteAnnotationHitRect(
+                for: payload,
+                coordinateSystem: coordinateSystem,
+                touchExpansion: 8
+            )?.contains(location) == true
         case .reactionEmoji(let payload):
             guard let center = annotationCenter(for: .reactionEmoji(payload), coordinateSystem: coordinateSystem) else {
                 return false
@@ -4690,6 +4685,26 @@ struct TradingChartView: View {
         }
         let offset = annotationOffset(for: payload)
         return CGPoint(x: anchorPoint.x + offset.x, y: anchorPoint.y + offset.y)
+    }
+
+    private func noteAnnotationHitRect(
+        for payload: NotePayload,
+        coordinateSystem: ChartCoordinateSystem,
+        touchExpansion: CGFloat
+    ) -> CGRect? {
+        guard let center = annotationCenter(
+            for: .note(payload),
+            coordinateSystem: coordinateSystem
+        ) else {
+            return nil
+        }
+
+        return ChartAnnotationBubbleMetrics.hitRect(
+            center: center,
+            text: payload.text,
+            plotWidth: max(1, coordinateSystem.chartSize.width - yAxisWidth),
+            touchExpansion: touchExpansion
+        )
     }
 
     private func annotationAnchorPoint(
@@ -5704,7 +5719,6 @@ struct TradingChartView: View {
                                         foreground: AppColors.statusNegative85
                                     ) {
                                         drawingState.removeComponent(id: draft.id)
-                                        drawingState.commitDrawingAndExit()
                                     }
                                 }
                             }
@@ -5836,7 +5850,6 @@ struct TradingChartView: View {
                     foreground: AppColors.statusNegative85
                 ) {
                     drawingState.removeComponent(id: draft.id)
-                    drawingState.commitDrawingAndExit()
                 }
             }
 

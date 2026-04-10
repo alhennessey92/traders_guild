@@ -55,6 +55,7 @@ struct MainView: View {
     @StateObject private var chartDataManager = ChartDataManager()
     @StateObject private var chartViewModel: ChartViewModel
     @StateObject private var chartGestureState = ChartGestureState()
+    @StateObject private var indicatorPanelViewportStore = IndicatorPanelViewportStore()
     @StateObject private var placementState = MarkerPlacementState()
     @StateObject private var markerOverlayState = MarkerOverlayState()
     
@@ -89,6 +90,13 @@ struct MainView: View {
     @State private var williamsRPanelHeight: CGFloat = 120
     @State private var atrPanelHeight: CGFloat = 120
     @State private var volumePanelHeight: CGFloat = 120
+    @State private var rsiPanelExpandedHeight: CGFloat = 120
+    @State private var macdPanelExpandedHeight: CGFloat = 140
+    @State private var stochasticPanelExpandedHeight: CGFloat = 120
+    @State private var cciPanelExpandedHeight: CGFloat = 120
+    @State private var williamsRPanelExpandedHeight: CGFloat = 120
+    @State private var atrPanelExpandedHeight: CGFloat = 120
+    @State private var volumePanelExpandedHeight: CGFloat = 120
 
     // MARK: - Timeframe Panel State
     @StateObject private var timeframePanelManager = TimeframePanelManager()
@@ -177,14 +185,7 @@ struct MainView: View {
     }
 
     private var chartControlRowPanelReserve: CGFloat {
-        if chartPanelsTotalHeight > 0 {
-            let normalizedReserve = ChartPanelReserveCalculator.normalizedPanelReserve(
-                totalPanelReserve: chartPanelsTotalHeight,
-                bottomBoundaryLabelReserve: chartPanelsBottomLabelStripReserve
-            )
-            return normalizedReserve + ChartPanelReserveCalculator.panelStackChartUniformGap
-        }
-        return ChartPanelReserveCalculator.mainChartControlRowBaselineClearance
+        chartPanelLayout.controlRowReserve
     }
 
     private var chartPanelLayout: CombinedChartPanelLayout {
@@ -202,13 +203,12 @@ struct MainView: View {
         chartPanelLayout.bottomBoundaryLabelReserve
     }
 
-    private var bottomTimeframeAxisPanelIndex: Int? {
-        guard case .timeframe(let index) = chartPanelLayout.bottomOwner else { return nil }
-        return index
+    private var chartPanelsMainChartXAxisClearance: CGFloat {
+        chartPanelLayout.mainChartXAxisClearance
     }
 
-    private var bottomIndicatorAxisPanelIndex: Int? {
-        guard case .indicator(let index) = chartPanelLayout.bottomOwner else { return nil }
+    private var bottomTimeframeAxisPanelIndex: Int? {
+        guard case .timeframe(let index) = chartPanelLayout.bottomBoundaryOwner else { return nil }
         return index
     }
 
@@ -224,21 +224,6 @@ struct MainView: View {
 
     private var bottomAxisOverlayStyle: CrosshairTimeLabelStyle {
         chartGestureState.crosshairActive ? .standard : .markerPlacement
-    }
-
-    /// When the bottom panel is collapsed, lift the panel stack so it doesn't cover
-    /// the chart x-axis strip.
-    private var collapsedPanelXAxisClearance: CGFloat {
-        guard chartPanelsTotalHeight > 0 else { return 0 }
-        return chartPanelsBottomLabelStripReserve == 0
-            ? ChartPanelReserveCalculator.panelXAxisLabelStripHeight
-            : 0
-    }
-    
-    /// Bottom padding for controls that need to float above indicator panels
-    private var bottomControlsPadding: CGFloat {
-        // Base padding for minimized bottom sheet + indicator panels
-        return chartPanelsTotalHeight + 100
     }
 
     private var activeTimeframePanelSource: TimeframePanelSource {
@@ -304,6 +289,55 @@ struct MainView: View {
         }
     }
 
+    private func indicatorPanelExpandedHeight(for panelType: PanelIndicatorType) -> CGFloat {
+        switch panelType {
+        case .rsi:
+            return rsiPanelExpandedHeight
+        case .macd:
+            return macdPanelExpandedHeight
+        case .stochastic:
+            return stochasticPanelExpandedHeight
+        case .cci:
+            return cciPanelExpandedHeight
+        case .williamsR:
+            return williamsRPanelExpandedHeight
+        case .atr:
+            return atrPanelExpandedHeight
+        case .volume:
+            return volumePanelExpandedHeight
+        }
+    }
+
+    private func defaultIndicatorPanelHeight(for panelType: PanelIndicatorType) -> CGFloat {
+        panelType == .macd ? 140 : 120
+    }
+
+    private func setIndicatorPanelPresentation(_ state: ChartPanelPresentationState, for panelType: PanelIndicatorType) {
+        switch panelType {
+        case .rsi:
+            rsiPanelHeight = state.currentHeight
+            rsiPanelExpandedHeight = state.expandedHeight
+        case .macd:
+            macdPanelHeight = state.currentHeight
+            macdPanelExpandedHeight = state.expandedHeight
+        case .stochastic:
+            stochasticPanelHeight = state.currentHeight
+            stochasticPanelExpandedHeight = state.expandedHeight
+        case .cci:
+            cciPanelHeight = state.currentHeight
+            cciPanelExpandedHeight = state.expandedHeight
+        case .williamsR:
+            williamsRPanelHeight = state.currentHeight
+            williamsRPanelExpandedHeight = state.expandedHeight
+        case .atr:
+            atrPanelHeight = state.currentHeight
+            atrPanelExpandedHeight = state.expandedHeight
+        case .volume:
+            volumePanelHeight = state.currentHeight
+            volumePanelExpandedHeight = state.expandedHeight
+        }
+    }
+
     private func maxPanelHeight(for totalPanels: Int) -> CGFloat {
         if totalPanels >= 3 {
             return 140
@@ -314,18 +348,51 @@ struct MainView: View {
     private func clampIndicatorPanelHeights(totalPanels: Int) {
         let clampedMaxHeight = maxPanelHeight(for: totalPanels)
 
-        func clamped(_ height: CGFloat) -> CGFloat {
-            guard height > 0 else { return height }
-            return min(clampedMaxHeight, max(IndicatorManager.minPanelHeight, height))
+        for panelType in PanelIndicatorType.allCases {
+            setIndicatorPanelPresentation(
+                ChartPanelPresentationPolicy.clamped(
+                    currentHeight: indicatorPanelHeight(for: panelType),
+                    expandedHeight: indicatorPanelExpandedHeight(for: panelType),
+                    minHeight: IndicatorManager.minPanelHeight,
+                    maxHeight: clampedMaxHeight
+                ),
+                for: panelType
+            )
+        }
+    }
+
+    private func indicatorPanelTypes(from fingerprint: String) -> Set<PanelIndicatorType> {
+        Set(
+            fingerprint
+                .split(separator: "|")
+                .compactMap { PanelIndicatorType(rawValue: String($0)) }
+        )
+    }
+
+    private func reconcileIndicatorPanelPresentation(oldFingerprint: String, newFingerprint: String) {
+        let previouslyActive = indicatorPanelTypes(from: oldFingerprint)
+        let currentlyActive = chartViewModel.indicatorManager.activeIndicators.activePanelTypes
+        let totalPanels = timeframePanelManager.activePanelCount + currentlyActive.count
+        let clampedMaxHeight = maxPanelHeight(for: totalPanels)
+
+        for panelType in currentlyActive where !previouslyActive.contains(panelType) {
+            indicatorPanelViewportStore.reset(panelType)
+            guard ChartPanelReserveCalculator.isCollapsedPanelHeight(indicatorPanelHeight(for: panelType)) else {
+                continue
+            }
+            setIndicatorPanelPresentation(
+                ChartPanelPresentationPolicy.restoredActiveHeight(
+                    currentHeight: indicatorPanelHeight(for: panelType),
+                    expandedHeight: indicatorPanelExpandedHeight(for: panelType),
+                    defaultHeight: defaultIndicatorPanelHeight(for: panelType),
+                    minHeight: IndicatorManager.minPanelHeight,
+                    maxHeight: clampedMaxHeight
+                ),
+                for: panelType
+            )
         }
 
-        rsiPanelHeight = clamped(rsiPanelHeight)
-        macdPanelHeight = clamped(macdPanelHeight)
-        stochasticPanelHeight = clamped(stochasticPanelHeight)
-        cciPanelHeight = clamped(cciPanelHeight)
-        williamsRPanelHeight = clamped(williamsRPanelHeight)
-        atrPanelHeight = clamped(atrPanelHeight)
-        volumePanelHeight = clamped(volumePanelHeight)
+        clampChartPanelHeightsForCurrentMode()
     }
 
     private func clampChartPanelHeightsForCurrentMode() {
@@ -391,24 +458,31 @@ struct MainView: View {
                             indicatorManager: chartViewModel.indicatorManager,
                             chartData: chartViewModel.dataManager,
                             gestureState: chartGestureState,
+                            viewportStore: indicatorPanelViewportStore,
                             baseCandleWidth: 12,
                             candleSpacing: 4,
                             timeframe: chartViewModel.currentTimeframe,
                             timeframePanelCount: timeframePanelManager.activePanelCount,
-                            bottomAxisPanelIndex: bottomIndicatorAxisPanelIndex,
                             rsiPanelHeight: $rsiPanelHeight,
                             macdPanelHeight: $macdPanelHeight,
                             stochasticPanelHeight: $stochasticPanelHeight,
                             cciPanelHeight: $cciPanelHeight,
                             williamsRPanelHeight: $williamsRPanelHeight,
                             atrPanelHeight: $atrPanelHeight,
-                            volumePanelHeight: $volumePanelHeight
+                            volumePanelHeight: $volumePanelHeight,
+                            rsiPanelExpandedHeight: $rsiPanelExpandedHeight,
+                            macdPanelExpandedHeight: $macdPanelExpandedHeight,
+                            stochasticPanelExpandedHeight: $stochasticPanelExpandedHeight,
+                            cciPanelExpandedHeight: $cciPanelExpandedHeight,
+                            williamsRPanelExpandedHeight: $williamsRPanelExpandedHeight,
+                            atrPanelExpandedHeight: $atrPanelExpandedHeight,
+                            volumePanelExpandedHeight: $volumePanelExpandedHeight
                         )
                         // Keep bottom-sheet clearance. Mask only while an expanded bottom panel
                         // owns the x-axis strip; keep transparent when collapsed so controls remain visible.
                         Rectangle()
                             .fill(chartPanelsBottomLabelStripReserve > 0 ? AppColors.xAxisBackground : Color.clear)
-                            .frame(height: 100 + collapsedPanelXAxisClearance)
+                            .frame(height: 100 + chartPanelsMainChartXAxisClearance)
                             .allowsHitTesting(false)
                     }
                     .ignoresSafeArea(edges: .bottom)
@@ -684,8 +758,8 @@ struct MainView: View {
             .onChange(of: chartViewModel.chartTimeframeLinkManager.linkedTimeframes) { _, _ in
                 syncChartDefaultTimeframePanels()
             }
-            .onChange(of: indicatorPanelFingerprint) { _, _ in
-                clampChartPanelHeightsForCurrentMode()
+            .onChange(of: indicatorPanelFingerprint) { oldValue, newValue in
+                reconcileIndicatorPanelPresentation(oldFingerprint: oldValue, newFingerprint: newValue)
             }
             .onChange(of: placementTimeframeFingerprint) { _, _ in
                 guard chartControlVM.isMarkerPlacementMode else { return }

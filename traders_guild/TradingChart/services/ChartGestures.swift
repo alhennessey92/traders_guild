@@ -495,10 +495,12 @@ extension ChartGestureState {
 
 struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
     @ObservedObject var gestureState: ChartGestureState
+    @ObservedObject var verticalState: IndicatorPanelViewportState
 
     let candleCount: Int
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
+    let minVerticalScale: CGFloat
     @ViewBuilder let content: () -> Content
 
     @State private var lastDragTranslation: CGSize = .zero
@@ -516,7 +518,6 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
     private let yAxisSensitivity: CGFloat = 0.7
     private let panDragSensitivity: CGFloat = 0.78
     private let panDragNoiseFloor: CGFloat = 0.16
-    private let minVerticalScale: CGFloat = 0.5
     private let maxVerticalScale: CGFloat = 5.0
     private let minHorizontalScale: CGFloat = 0.15
     private let maxHorizontalScale: CGFloat = 3.0
@@ -560,7 +561,7 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
                 }
 
                 let incrementalX = value.translation.width - lastDragTranslation.width
-                let incrementalY = -(value.translation.height - lastDragTranslation.height)
+                let incrementalY = value.translation.height - lastDragTranslation.height
                 let dampenedX = incrementalX * panDragSensitivity
                 let dampenedY = incrementalY * panDragSensitivity
                 lastDragTranslation = value.translation
@@ -570,7 +571,7 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
                 }
 
                 gestureState.applyPan(
-                    translation: CGSize(width: dampenedX, height: dampenedY),
+                    translation: CGSize(width: dampenedX, height: 0),
                     chartWidth: chartWidth,
                     candleCount: candleCount,
                     candleWidth: totalCandleWidth,
@@ -578,6 +579,13 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
                     priceScale: gestureState.priceScale,
                     trackVelocity: true
                 )
+
+                if abs(dampenedY) >= panDragNoiseFloor {
+                    verticalState.applyBodyPan(
+                        translationY: dampenedY,
+                        panelHeight: panelHeight
+                    )
+                }
             }
             .onEnded { _ in
                 gestureState.endDrag(
@@ -629,20 +637,20 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
                 if !isYAxisGestureActive {
                     isYAxisGestureActive = true
                     yAxisDragStart = value.startLocation.y
-                    initialPriceScale = gestureState.priceScale
-                    initialVerticalOffset = gestureState.verticalPanOffset
+                    initialPriceScale = verticalState.priceScale
+                    initialVerticalOffset = verticalState.verticalPanOffset
                 }
 
                 let dragDistance = value.location.y - yAxisDragStart
                 let scaleMultiplier = 1.0 - (dragDistance / 300.0) * yAxisSensitivity
                 let proposedScale = initialPriceScale * scaleMultiplier
 
-                gestureState.applyPriceScale(
+                verticalState.applyPriceScale(
                     proposedScale: proposedScale,
                     initialPriceScale: initialPriceScale,
                     initialVerticalOffset: initialVerticalOffset,
                     anchorY: panelHeight * 0.5,
-                    chartHeight: panelHeight,
+                    panelHeight: panelHeight,
                     minScale: minVerticalScale,
                     maxScale: maxVerticalScale
                 )
@@ -657,19 +665,19 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
             .onChanged { value in
                 if !isYAxisGestureActive {
                     isYAxisGestureActive = true
-                    initialPriceScale = gestureState.priceScale
-                    initialVerticalOffset = gestureState.verticalPanOffset
+                    initialPriceScale = verticalState.priceScale
+                    initialVerticalOffset = verticalState.verticalPanOffset
                 }
 
                 let dampenedValue = 1.0 + (value - 1.0) * (yAxisSensitivity * 0.7)
                 let proposedScale = initialPriceScale * dampenedValue
 
-                gestureState.applyPriceScale(
+                verticalState.applyPriceScale(
                     proposedScale: proposedScale,
                     initialPriceScale: initialPriceScale,
                     initialVerticalOffset: initialVerticalOffset,
                     anchorY: panelHeight * 0.5,
-                    chartHeight: panelHeight,
+                    panelHeight: panelHeight,
                     minScale: minVerticalScale,
                     maxScale: maxVerticalScale
                 )

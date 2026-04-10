@@ -9,56 +9,66 @@
 
 import SwiftUI
 
-struct TimeframePanelView: View {
-    private struct TimeframePanelViewport {
-        let rawPriceRange: (min: Double, max: Double)
-        let topPadding: CGFloat
-        let bottomPadding: CGFloat
-        let panelHeight: CGFloat
-        let priceScale: CGFloat
-        let verticalPanOffset: CGFloat
+struct TimeframePanelPriceViewport {
+    let rawPriceRange: (min: Double, max: Double)
+    let topPadding: CGFloat
+    let bottomPadding: CGFloat
+    let visualHeight: CGFloat
+    let scaleBasisHeight: CGFloat
+    let priceScale: CGFloat
+    let verticalPanOffset: CGFloat
 
-        var drawableHeight: CGFloat {
-            max(1, panelHeight - topPadding - bottomPadding)
-        }
-
-        var contentBottomY: CGFloat {
-            panelHeight - bottomPadding
-        }
-
-        var contentCenterY: CGFloat {
-            topPadding + drawableHeight / 2
-        }
-
-        var transformedTopPrice: Double {
-            price(atY: topPadding)
-        }
-
-        var transformedMidPrice: Double {
-            price(atY: contentCenterY)
-        }
-
-        var transformedBottomPrice: Double {
-            price(atY: contentBottomY)
-        }
-
-        func yPosition(for price: Double) -> CGFloat {
-            let normalized = (price - rawPriceRange.min) / (rawPriceRange.max - rawPriceRange.min)
-            let baseY = topPadding + drawableHeight * (1.0 - CGFloat(normalized))
-            return contentCenterY + (baseY - contentCenterY) * priceScale + verticalPanOffset
-        }
-
-        func price(atY y: CGFloat) -> Double {
-            guard rawPriceRange.max > rawPriceRange.min, priceScale > 0 else {
-                return rawPriceRange.min
-            }
-
-            let unscaledY = ((y - verticalPanOffset - contentCenterY) / priceScale) + contentCenterY
-            let normalized = 1.0 - ((unscaledY - topPadding) / drawableHeight)
-            return rawPriceRange.min + Double(normalized) * (rawPriceRange.max - rawPriceRange.min)
-        }
+    var scaleDrawableHeight: CGFloat {
+        max(1, scaleBasisHeight - topPadding - bottomPadding)
     }
 
+    var visualDrawableHeight: CGFloat {
+        max(1, visualHeight - topPadding - bottomPadding)
+    }
+
+    var contentBottomY: CGFloat {
+        visualHeight - bottomPadding
+    }
+
+    var visualCenterY: CGFloat {
+        topPadding + visualDrawableHeight / 2
+    }
+
+    var scaleCenterY: CGFloat {
+        topPadding + scaleDrawableHeight / 2
+    }
+
+    var transformedTopPrice: Double {
+        price(atY: topPadding)
+    }
+
+    var transformedMidPrice: Double {
+        price(atY: visualCenterY)
+    }
+
+    var transformedBottomPrice: Double {
+        price(atY: contentBottomY)
+    }
+
+    func yPosition(for price: Double) -> CGFloat {
+        guard rawPriceRange.max > rawPriceRange.min else { return visualCenterY }
+        let normalized = (price - rawPriceRange.min) / (rawPriceRange.max - rawPriceRange.min)
+        let basisY = topPadding + scaleDrawableHeight * (1.0 - CGFloat(normalized))
+        return visualCenterY + (basisY - scaleCenterY) * priceScale + verticalPanOffset
+    }
+
+    func price(atY y: CGFloat) -> Double {
+        guard rawPriceRange.max > rawPriceRange.min, priceScale > 0 else {
+            return rawPriceRange.min
+        }
+
+        let unscaledY = ((y - verticalPanOffset - visualCenterY) / priceScale) + scaleCenterY
+        let normalized = 1.0 - ((unscaledY - topPadding) / scaleDrawableHeight)
+        return rawPriceRange.min + Double(normalized) * (rawPriceRange.max - rawPriceRange.min)
+    }
+}
+
+struct TimeframePanelView: View {
     // MARK: - Properties
 
     @ObservedObject var entry: TimeframePanelEntry
@@ -148,12 +158,13 @@ struct TimeframePanelView: View {
         4
     }
 
-    private var transformedViewport: TimeframePanelViewport {
-        TimeframePanelViewport(
+    private var transformedViewport: TimeframePanelPriceViewport {
+        TimeframePanelPriceViewport(
             rawPriceRange: lockedRawPriceRange ?? candlePriceRange(candles: dataManager.candles),
             topPadding: panelTopPadding,
             bottomPadding: panelBottomPadding,
-            panelHeight: panelHeight,
+            visualHeight: panelHeight,
+            scaleBasisHeight: entry.priceScaleBasisHeight,
             priceScale: gestureState.priceScale,
             verticalPanOffset: gestureState.verticalPanOffset
         )
@@ -398,37 +409,13 @@ struct TimeframePanelView: View {
     // MARK: - Resize Handle
 
     private var resizeHandleBar: some View {
-        ZStack {
-            Rectangle()
-                .fill(AppColors.chartPanelResizeStripBackground)
-
-            // Capsule always centered
-            Capsule()
-                .fill(isDraggingHandle ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
-                .frame(width: 36, height: 5)
-
-            // Panel label left-aligned
-            HStack(spacing: 4) {
-                (Text(dataManager.timeframe.shortName)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
-                 + Text("  Timeframe")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
-                    .lineLimit(1)
-
-                if isCollapsed {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppColors.panelResizeHandleChevronForeground)
-                }
-
-                Spacer()
-            }
-            .padding(.leading, 10)
-        }
-        .frame(height: 22)
-        .contentShape(Rectangle())
+        ChartPanelResizeHandleLabel(
+            primaryText: dataManager.timeframe.shortName,
+            suffixText: "Timeframe",
+            isCollapsed: isCollapsed,
+            isDragging: isDraggingHandle,
+            style: .timeframe
+        )
         .gesture(
             DragGesture(minimumDistance: 2, coordinateSpace: .global)
                 .onChanged { value in
@@ -462,12 +449,6 @@ struct TimeframePanelView: View {
                 }
             }
         }
-        .overlay(
-            Rectangle()
-                .fill(AppColors.surfaceGray30)
-                .frame(height: 1),
-            alignment: .bottom
-        )
     }
 
     private func collapsePanel() {
@@ -505,7 +486,7 @@ struct TimeframePanelView: View {
                 }
 
                 yAxisLabelsOverlay
-                panelHeaderOverlay
+                miniInfoOverlay
                 livePriceBadgeOverlay
             }
             .clipped()
@@ -730,7 +711,7 @@ struct TimeframePanelView: View {
         context: GraphicsContext,
         size: CGSize,
         candles: [RLCandleDTO],
-        viewport: TimeframePanelViewport
+        viewport: TimeframePanelPriceViewport
     ) {
         let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 1)
         let visibleEndIndex = min(
@@ -829,7 +810,7 @@ struct TimeframePanelView: View {
                 drawDynamicYAxisLabels(context: context, size: size, viewport: transformedViewport)
             }
             .frame(width: yAxisOverlayWidth)
-            .background(AppColors.chartPanelBackgroundDeep.opacity(0.92))
+            .background(AppColors.panelYAxisLaneBackground)
             .contentShape(Rectangle())
             .highPriorityGesture(yAxisDragGesture)
             .simultaneousGesture(yAxisPinchGesture)
@@ -838,19 +819,28 @@ struct TimeframePanelView: View {
 
     // MARK: - Panel Header
 
-    private var panelHeaderOverlay: some View {
-        VStack {
-            let latestPrice = dataManager.livePrice ?? dataManager.candles.last?.close
-            IndicatorPanelHeaderRow(
-                title: "",
-                valueText: latestPrice.map { formatPrice($0) },
-                valueColor: AppColors.timeframePanelHeaderValueForeground,
-                badgeText: dataManager.livePrice != nil ? "LIVE" : "SNAPSHOT",
-                badgeColor: intentColor,
-                stripKind: .timeframePrice
-            )
+    private var miniInfoOverlay: some View {
+        VStack(alignment: .leading) {
+            if let latestPrice = dataManager.livePrice ?? dataManager.candles.last?.close {
+                PanelMiniInfoOverlay(
+                    leadingBadge: PanelMiniInfoBadge(
+                        text: dataManager.livePrice != nil ? "LIVE" : "SNAPSHOT",
+                        color: intentColor.opacity(0.88)
+                    ),
+                    tokens: [
+                        PanelMiniInfoToken(
+                            label: nil,
+                            value: formatPrice(latestPrice),
+                            valueColor: AppColors.panelMiniInfoOverlayPrimaryText
+                        ),
+                    ]
+                )
+            }
             Spacer()
         }
+        .padding(.top, 6)
+        .padding(.leading, 8)
+        .allowsHitTesting(false)
     }
 
     private var livePriceBadgeOverlay: some View {
@@ -930,7 +920,7 @@ struct TimeframePanelView: View {
                 )
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(AppColors.timeframePanelAxisHairline)
+                        .fill(AppColors.timeframePanelAxisFrameBorder)
                         .frame(height: 1)
                 }
 
@@ -959,6 +949,11 @@ struct TimeframePanelView: View {
             Rectangle()
                 .fill(AppColors.timeframePanelAxisGradientBottom)
                 .frame(height: footH)
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppColors.timeframePanelAxisFrameBorder)
+                .frame(height: 1)
         }
         .frame(height: ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
     }
@@ -998,7 +993,7 @@ struct TimeframePanelView: View {
         formatPrice(price)
     }
 
-    private func dynamicPriceAxisLevels(for viewport: TimeframePanelViewport) -> [Double] {
+    private func dynamicPriceAxisLevels(for viewport: TimeframePanelPriceViewport) -> [Double] {
         let visibleMin = min(viewport.transformedTopPrice, viewport.transformedBottomPrice)
         let visibleMax = max(viewport.transformedTopPrice, viewport.transformedBottomPrice)
         let visibleRange = visibleMax - visibleMin
@@ -1051,7 +1046,7 @@ struct TimeframePanelView: View {
     private func drawDynamicYAxisLabels(
         context: GraphicsContext,
         size: CGSize,
-        viewport: TimeframePanelViewport
+        viewport: TimeframePanelPriceViewport
     ) {
         let x = max(2, min(size.width - 3, yAxisLabelWidth + 1))
 
@@ -1062,7 +1057,7 @@ struct TimeframePanelView: View {
             context.draw(
                 Text(formatAxisPrice(price))
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite66),
+                    .foregroundColor(AppColors.panelYAxisLaneText),
                 at: CGPoint(x: x, y: y),
                 anchor: .trailing
             )
@@ -1072,7 +1067,7 @@ struct TimeframePanelView: View {
     private func drawHorizontalGridLines(
         context: GraphicsContext,
         size: CGSize,
-        viewport: TimeframePanelViewport
+        viewport: TimeframePanelPriceViewport
     ) {
         let settings = ChartSettings.shared
         guard settings.showGridLines else { return }

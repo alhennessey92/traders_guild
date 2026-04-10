@@ -1102,25 +1102,44 @@ struct RLMessagingSheet: View {
         guard let guildId = appState.currentGuild?.id else { return }
         HapticFeedback.medium.trigger()
         do {
+            let outcome: ReportSubmissionOutcome
             switch target {
             case .chatroom(let message):
-                _ = try await appState.realApi.reportChatroomMessage(
+                outcome = try await appState.reportChatroomMessage(
                     guildId: guildId,
                     chatroomId: message.chatroomId,
                     messageId: message.id,
                     reason: reason
                 )
             case .dm(let message):
-                _ = try await appState.realApi.reportDMMessage(
+                outcome = try await appState.reportDMMessage(
                     guildId: guildId,
                     threadId: message.dmId,
                     messageId: message.id,
                     reason: reason
                 )
             }
-            appState.showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
+            applyReportReaction(to: target, outcome: outcome)
         } catch {
-            appState.showError(error, title: "Failed to Report", style: .toast)
+            return
+        }
+    }
+
+    private func applyReportReaction(
+        to target: MessagingReportTarget,
+        outcome: ReportSubmissionOutcome
+    ) {
+        switch target {
+        case .chatroom(let message):
+            guard let index = chatroomMessages.firstIndex(where: { $0.id == message.id }) else { return }
+            chatroomMessages[index].reactions = chatroomMessages[index].reactions.applyingReportReaction(
+                outcome: outcome
+            )
+        case .dm(let message):
+            guard let index = dmMessages.firstIndex(where: { $0.id == message.id }) else { return }
+            dmMessages[index].reactions = dmMessages[index].reactions.applyingReportReaction(
+                outcome: outcome
+            )
         }
     }
 

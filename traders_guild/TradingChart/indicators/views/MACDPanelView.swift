@@ -15,23 +15,20 @@ struct MACDPanelView: View {
     @ObservedObject var indicatorManager: IndicatorManager
     @ObservedObject var chartData: ChartDataManager
     @ObservedObject var gestureState: ChartGestureState
+    @ObservedObject var viewportState: IndicatorPanelViewportState
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
     
     var timeframe: RLChartTimeframe = .h1
     
     @Binding var panelHeight: CGFloat
+    @Binding var expandedPanelHeight: CGFloat
     var minPanelHeight: CGFloat = 80
     var maxPanelHeight: CGFloat = 250
-    var isBottomPanel: Bool = false
-    
     // MARK: - Private State
     
     @State private var isDraggingHandle = false
     @State private var dragStartHeight: CGFloat = 0
-    @State private var lastDragTranslation: CGSize = .zero
-    @State private var isCollapsed = false
-    @State private var expandedPanelHeight: CGFloat = 0
     
     // MARK: - Computed Properties
     
@@ -41,6 +38,18 @@ struct MACDPanelView: View {
     
     private var actualCandleWidth: CGFloat {
         baseCandleWidth * gestureState.candleWidthScale
+    }
+
+    private var panelTopPadding: CGFloat {
+        18
+    }
+
+    private var panelBottomPadding: CGFloat {
+        4
+    }
+
+    private var isCollapsed: Bool {
+        ChartPanelReserveCalculator.isCollapsedPanelHeight(panelHeight)
     }
     
     private var macdConfig: MACDConfig? {
@@ -58,6 +67,10 @@ struct MACDPanelView: View {
         return "MACD"
     }
 
+    private var zoomPolicy: IndicatorPanelZoomPolicy {
+        .visible(includeZero: true, symmetricAroundZero: true, minimumScale: 0.8)
+    }
+
     // MARK: - Body
     
     var body: some View {
@@ -67,91 +80,31 @@ struct MACDPanelView: View {
             if !isCollapsed {
                 LinkedIndicatorPanelGestureSurface(
                     gestureState: gestureState,
+                    verticalState: viewportState,
                     candleCount: chartData.candles.count,
                     baseCandleWidth: baseCandleWidth,
-                    candleSpacing: candleSpacing
+                    candleSpacing: candleSpacing,
+                    minVerticalScale: zoomPolicy.minimumScale
                 ) {
                     macdContentArea
                 }
                     .frame(height: panelHeight)
-
-                if isBottomPanel {
-                    xAxisLabels
-                }
             }
         }
         .background(AppColors.chartPanelBackgroundMuted)
-    }
-
-    // MARK: - Pan Gesture
-    
-    private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                if lastDragTranslation == .zero {
-                    gestureState.beginDrag()
-                }
-                
-                let incrementalX = value.translation.width - lastDragTranslation.width
-                
-                gestureState.applyPan(
-                    translation: CGSize(width: incrementalX, height: 0),
-                    chartWidth: UIScreen.main.bounds.width,
-                    candleCount: chartData.candles.count,
-                    candleWidth: totalCandleWidth,
-                    chartHeight: panelHeight,
-                    priceScale: 1.0,
-                    trackVelocity: true
-                )
-                
-                lastDragTranslation = value.translation
-            }
-            .onEnded { value in
-                gestureState.endDrag(
-                    chartWidth: UIScreen.main.bounds.width,
-                    candleCount: chartData.candles.count,
-                    candleWidth: totalCandleWidth,
-                    chartHeight: panelHeight,
-                    priceScale: 1.0
-                )
-                lastDragTranslation = .zero
-            }
+        .chartPanelBottomHairline()
     }
     
     // MARK: - Resize Handle
     
     private var resizeHandleBar: some View {
-        ZStack {
-            Rectangle()
-                .fill(AppColors.chartPanelResizeStripBackground)
-
-            // Capsule always centered
-            Capsule()
-                .fill(isDraggingHandle ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
-                .frame(width: 36, height: 5)
-
-            // Panel label left-aligned
-            HStack(spacing: 4) {
-                (Text(macdHeaderLabel)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
-                 + Text("  Indicator")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
-                    .lineLimit(1)
-
-                if isCollapsed {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppColors.panelResizeHandleChevronForeground)
-                }
-
-                Spacer()
-            }
-            .padding(.leading, 10)
-        }
-        .frame(height: 22)
-        .contentShape(Rectangle())
+        ChartPanelResizeHandleLabel(
+            primaryText: macdHeaderLabel,
+            suffixText: "Indicator",
+            isCollapsed: isCollapsed,
+            isDragging: isDraggingHandle,
+            style: .indicator
+        )
         .gesture(
             DragGesture(minimumDistance: 2, coordinateSpace: .global)
                 .onChanged { value in
@@ -193,16 +146,24 @@ struct MACDPanelView: View {
 
     private func collapsePanel() {
         guard !isCollapsed else { return }
-        expandedPanelHeight = max(minPanelHeight, panelHeight)
-        panelHeight = 0
-        isCollapsed = true
+        let nextState = ChartPanelPresentationPolicy.collapsed(
+            currentHeight: panelHeight,
+            expandedHeight: expandedPanelHeight,
+            minHeight: minPanelHeight
+        )
+        panelHeight = nextState.currentHeight
+        expandedPanelHeight = nextState.expandedHeight
     }
 
     private func expandPanel() {
         guard isCollapsed else { return }
-        let restoredHeight = expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight
-        panelHeight = min(maxPanelHeight, max(minPanelHeight, restoredHeight))
-        isCollapsed = false
+        let nextState = ChartPanelPresentationPolicy.expanded(
+            expandedHeight: expandedPanelHeight,
+            minHeight: minPanelHeight,
+            maxHeight: maxPanelHeight
+        )
+        panelHeight = nextState.currentHeight
+        expandedPanelHeight = nextState.expandedHeight
     }
     
     // MARK: - MACD Content
@@ -211,9 +172,11 @@ struct MACDPanelView: View {
         let _ = gestureState.panOffset.width
         let _ = gestureState.candleWidthScale
         let _ = gestureState.crosshairActive
+        let _ = viewportState.priceScale
+        let _ = viewportState.verticalPanOffset
         
         return ZStack {
-            AppColors.chartPanelBackground
+            AppColors.indicatorPanelPlotBackground
             
             Canvas { context, size in
                 drawMACDPanel(context: context, size: size)
@@ -225,7 +188,7 @@ struct MACDPanelView: View {
             
             yAxisLabelsOverlay
             currentMACDIndicator
-            panelHeaderOverlay
+            miniInfoOverlay
         }
         .clipped()
     }
@@ -241,51 +204,29 @@ struct MACDPanelView: View {
         )
 
         guard let config = macdConfig else { return }
-
-        let drawableHeight = size.height - 20
-        let topPadding: CGFloat = 18
-        let dataRange = macdDataRange
-        guard dataRange.max > dataRange.min else { return }
+        let viewport = transformedViewport(size: size)
+        guard viewport.rawValueRange.max > viewport.rawValueRange.min else { return }
 
         // Draw zero line
-        drawZeroLine(context: context, size: size, dataRange: dataRange, drawableHeight: drawableHeight, topPadding: topPadding)
+        drawZeroLine(context: context, size: size, viewport: viewport)
         
         // Draw histogram
         if config.showHistogram {
-            drawHistogram(context: context, size: size, config: config, dataRange: dataRange, drawableHeight: drawableHeight, topPadding: topPadding)
+            drawHistogram(context: context, size: size, config: config, viewport: viewport)
         }
         
         // Draw signal line (behind MACD)
         if config.showSignalLine {
-            drawSignalLine(context: context, size: size, config: config, dataRange: dataRange, drawableHeight: drawableHeight, topPadding: topPadding)
+            drawSignalLine(context: context, size: size, config: config, viewport: viewport)
         }
         
         // Draw MACD line (on top)
-        drawMACDLine(context: context, size: size, config: config, dataRange: dataRange, drawableHeight: drawableHeight, topPadding: topPadding)
+        drawMACDLine(context: context, size: size, config: config, viewport: viewport)
     }
     
-    private var macdDataRange: (min: Double, max: Double) {
-        let dataPoints = indicatorManager.macdData
-        guard !dataPoints.isEmpty else { return (-1, 1) }
-        
-        var minVal = Double.infinity
-        var maxVal = -Double.infinity
-        
-        for point in dataPoints {
-            minVal = min(minVal, point.macdLine, point.signalLine, point.histogram)
-            maxVal = max(maxVal, point.macdLine, point.signalLine, point.histogram)
-        }
-        
-        // Make symmetric around zero
-        let absMax = max(abs(minVal), abs(maxVal))
-        let padding = absMax * 0.1
-        
-        return (-absMax - padding, absMax + padding)
-    }
-    
-    private func drawZeroLine(context: GraphicsContext, size: CGSize, dataRange: (min: Double, max: Double), drawableHeight: CGFloat, topPadding: CGFloat) {
-        let zeroY = yPosition(for: 0, dataRange: dataRange, height: drawableHeight, topPadding: topPadding)
-        let lineEndX = size.width - 45
+    private func drawZeroLine(context: GraphicsContext, size: CGSize, viewport: IndicatorPanelViewport) {
+        let zeroY = viewport.yPosition(for: 0)
+        let lineEndX = plotEndX(totalWidth: size.width)
         
         var path = Path()
         path.move(to: CGPoint(x: 0, y: zeroY))
@@ -294,21 +235,14 @@ struct MACDPanelView: View {
         context.stroke(path, with: .color(AppColors.surfaceGray50), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
     }
     
-    private func drawHistogram(context: GraphicsContext, size: CGSize, config: MACDConfig, dataRange: (min: Double, max: Double), drawableHeight: CGFloat, topPadding: CGFloat) {
-        let dataPoints = indicatorManager.macdData
-        guard !dataPoints.isEmpty else { return }
-        
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
-        let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 10)
-        
-        let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
-        
-        let zeroY = yPosition(for: 0, dataRange: dataRange, height: drawableHeight, topPadding: topPadding)
+    private func drawHistogram(context: GraphicsContext, size: CGSize, config: MACDConfig, viewport: IndicatorPanelViewport) {
+        let visiblePoints = visibleMACDPoints(for: size.width)
+        let zeroY = viewport.yPosition(for: 0)
         let barWidth = actualCandleWidth * 0.6
         
         for point in visiblePoints {
             let x = xPosition(for: point.candleIndex)
-            let y = yPosition(for: point.histogram, dataRange: dataRange, height: drawableHeight, topPadding: topPadding)
+            let y = viewport.yPosition(for: point.histogram)
             
             guard x >= -barWidth && x <= size.width + barWidth else { continue }
             
@@ -327,14 +261,8 @@ struct MACDPanelView: View {
         }
     }
     
-    private func drawMACDLine(context: GraphicsContext, size: CGSize, config: MACDConfig, dataRange: (min: Double, max: Double), drawableHeight: CGFloat, topPadding: CGFloat) {
-        let dataPoints = indicatorManager.macdData
-        guard dataPoints.count >= 2 else { return }
-        
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
-        let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 10)
-        
-        let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
+    private func drawMACDLine(context: GraphicsContext, size: CGSize, config: MACDConfig, viewport: IndicatorPanelViewport) {
+        let visiblePoints = visibleMACDPoints(for: size.width)
         guard visiblePoints.count >= 2 else { return }
         
         var path = Path()
@@ -342,7 +270,7 @@ struct MACDPanelView: View {
         
         for point in visiblePoints {
             let x = xPosition(for: point.candleIndex)
-            let y = yPosition(for: point.macdLine, dataRange: dataRange, height: drawableHeight, topPadding: topPadding)
+            let y = viewport.yPosition(for: point.macdLine)
             
             guard x >= -50 && x <= size.width + 50 else { continue }
             
@@ -357,14 +285,8 @@ struct MACDPanelView: View {
         context.stroke(path, with: .color(config.color.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
     }
     
-    private func drawSignalLine(context: GraphicsContext, size: CGSize, config: MACDConfig, dataRange: (min: Double, max: Double), drawableHeight: CGFloat, topPadding: CGFloat) {
-        let dataPoints = indicatorManager.macdData
-        guard dataPoints.count >= 2 else { return }
-        
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
-        let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 10)
-        
-        let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
+    private func drawSignalLine(context: GraphicsContext, size: CGSize, config: MACDConfig, viewport: IndicatorPanelViewport) {
+        let visiblePoints = visibleMACDPoints(for: size.width)
         guard visiblePoints.count >= 2 else { return }
         
         var path = Path()
@@ -372,7 +294,7 @@ struct MACDPanelView: View {
         
         for point in visiblePoints {
             let x = xPosition(for: point.candleIndex)
-            let y = yPosition(for: point.signalLine, dataRange: dataRange, height: drawableHeight, topPadding: topPadding)
+            let y = viewport.yPosition(for: point.signalLine)
             
             guard x >= -50 && x <= size.width + 50 else { continue }
             
@@ -392,12 +314,42 @@ struct MACDPanelView: View {
     private func xPosition(for candleIndex: Int) -> CGFloat {
         CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
     }
-    
-    private func yPosition(for value: Double, dataRange: (min: Double, max: Double), height: CGFloat, topPadding: CGFloat) -> CGFloat {
-        let range = dataRange.max - dataRange.min
-        guard range > 0 else { return topPadding + height / 2 }
-        let normalized = (value - dataRange.min) / range
-        return topPadding + height * (1.0 - CGFloat(normalized))
+
+    private func transformedViewport(size: CGSize) -> IndicatorPanelViewport {
+        IndicatorPanelViewport(
+            rawValueRange: macdDataRange(for: size.width),
+            topPadding: panelTopPadding,
+            bottomPadding: panelBottomPadding,
+            visualHeight: size.height,
+            priceScale: viewportState.priceScale,
+            verticalPanOffset: viewportState.verticalPanOffset
+        )
+    }
+
+    private func plotEndX(totalWidth: CGFloat) -> CGFloat {
+        ChartAxisMetrics.plotWidth(totalWidth: totalWidth)
+    }
+
+    private func visibleMACDPoints(for totalWidth: CGFloat) -> [MACDDataPoint] {
+        let dataPoints = indicatorManager.macdData
+        guard !dataPoints.isEmpty else { return [] }
+
+        let plotWidth = plotEndX(totalWidth: totalWidth)
+        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
+        let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(plotWidth / totalCandleWidth) + 10)
+        return dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
+    }
+
+    private func macdDataRange(for totalWidth: CGFloat) -> (min: Double, max: Double) {
+        let visiblePoints = visibleMACDPoints(for: totalWidth)
+        let allPoints = indicatorManager.macdData
+        let visibleValues = visiblePoints.flatMap { [$0.macdLine, $0.signalLine, $0.histogram] }
+        let fallbackValues = allPoints.flatMap { [$0.macdLine, $0.signalLine, $0.histogram] }
+        return zoomPolicy.resolvedRange(
+            visibleValues: visibleValues,
+            fallbackValues: fallbackValues,
+            emphasisValues: [0]
+        )
     }
     
     // MARK: - Current Value Indicator
@@ -405,14 +357,12 @@ struct MACDPanelView: View {
     private var currentMACDIndicator: some View {
         GeometryReader { geometry in
             if let latestMACD = indicatorManager.latestMACD {
-                let dataRange = macdDataRange
-                let drawableHeight = geometry.size.height - 20
-                let topPadding: CGFloat = 18
-                let y = yPosition(for: latestMACD.macdLine, dataRange: dataRange, height: drawableHeight, topPadding: topPadding)
+                let viewport = transformedViewport(size: geometry.size)
+                let y = viewport.yPosition(for: latestMACD.macdLine)
                 
-                if y >= 0 && y <= geometry.size.height {
+                if y >= viewport.topPadding && y <= viewport.contentBottomY {
                     Canvas { context, size in
-                        let lineEndX = size.width - 45
+                        let lineEndX = plotEndX(totalWidth: size.width)
                         
                         let linePath = Path { path in
                             path.move(to: CGPoint(x: 0, y: y))
@@ -422,9 +372,7 @@ struct MACDPanelView: View {
                         let lineColor = latestMACD.macdLine >= 0 ? AppColors.statusPositive : AppColors.statusNegative
                         context.stroke(linePath, with: .color(lineColor.opacity(0.6)), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
                         
-                        // Price label
-                        let labelX = size.width - 22
-                        let labelRect = CGRect(x: labelX - 25, y: y - 9, width: 50, height: 18)
+                        let labelRect = CGRect(x: size.width - 55, y: y - 9, width: 50, height: 18)
                         let roundedPath = Path(roundedRect: labelRect, cornerRadius: 3)
                         context.fill(roundedPath, with: .color(lineColor))
                         
@@ -432,7 +380,7 @@ struct MACDPanelView: View {
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundColor(AppColors.onAccentForeground)
                         
-                        context.draw(text, at: CGPoint(x: labelX, y: y))
+                        context.draw(text, at: CGPoint(x: labelRect.midX, y: y))
                     }
                 }
             }
@@ -458,92 +406,68 @@ struct MACDPanelView: View {
     }
 
     private var activeGuideColor: Color {
-        gestureState.crosshairActive ? AppColors.surfaceWhite40 : AppColors.statusInfo60
+        gestureState.crosshairActive ? AppColors.crosshairGuideStroke : AppColors.statusInfo60
     }
     
     // MARK: - Y-Axis Labels
     
     private var yAxisLabelsOverlay: some View {
-        let dataRange = macdDataRange
-        
-        return HStack {
-            Spacer()
-            
-            VStack {
-                Text(formatMACDValue(dataRange.max * 0.7))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.chartAxisLabelSecondary)
-                
+        GeometryReader { geometry in
+            let viewport = transformedViewport(size: geometry.size)
+            HStack(spacing: 0) {
                 Spacer()
-                
-                Text("0")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.chartAxisLabelSecondary.opacity(0.85))
-                
-                Spacer()
-                
-                Text(formatMACDValue(dataRange.min * 0.7))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.chartAxisLabelSecondary)
+                IndicatorPanelYAxisLane(
+                    viewport: viewport,
+                    labels: viewport.dynamicLevels(emphasis: [0]).map { value in
+                        IndicatorPanelYAxisLabel(
+                            value: value,
+                            text: formatMACDValue(value),
+                            color: abs(value) < 0.000001
+                                ? AppColors.panelYAxisLaneText
+                                : AppColors.panelYAxisLaneText
+                        )
+                    }
+                )
             }
-            .frame(width: 42)
-            .padding(.top, 18)
-            .padding(.bottom, 4)
-            .padding(.trailing, 5)
-            .background(AppColors.chartPanelBackgroundDeep.opacity(0.92))
         }
     }
     
     // MARK: - Header
     
-    private var panelHeaderOverlay: some View {
-        VStack {
+    private var miniInfoOverlay: some View {
+        VStack(alignment: .leading) {
             if let latest = indicatorManager.latestMACD {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(macdConfig?.color.color ?? .cyan)
-                        .frame(width: 5, height: 5)
-                    Text(formatMACDValue(latest.macdLine))
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(macdConfig?.color.color ?? .cyan)
-
-                    Circle()
-                        .fill(macdConfig?.signalColor.color ?? .orange)
-                        .frame(width: 5, height: 5)
-                    Text(formatMACDValue(latest.signalLine))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(macdConfig?.signalColor.color ?? .orange)
-
-                    Text("H:")
-                        .font(.system(size: 9))
-                        .foregroundColor(AppColors.secondaryForeground)
-                    Text(formatMACDValue(latest.histogram))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(latest.isHistogramPositive ? .green : .red)
-
-                    if latest.crossoverType != .neutral {
-                        macdConditionBadge(crossover: latest.crossoverType)
-                    }
-
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
+                PanelMiniInfoOverlay(
+                    tokens: [
+                        PanelMiniInfoToken(
+                            label: "M",
+                            value: formatMACDValue(latest.macdLine),
+                            valueColor: macdConfig?.color.color ?? .cyan
+                        ),
+                        PanelMiniInfoToken(
+                            label: "S",
+                            value: formatMACDValue(latest.signalLine),
+                            valueColor: macdConfig?.signalColor.color ?? .orange
+                        ),
+                        PanelMiniInfoToken(
+                            label: "H",
+                            value: formatMACDValue(latest.histogram),
+                            valueColor: latest.isHistogramPositive ? AppColors.statusPositive : AppColors.statusNegative
+                        ),
+                    ],
+                    trailingBadge: latest.crossoverType == .neutral ? nil : macdConditionBadge(crossover: latest.crossoverType)
+                )
             }
 
             Spacer()
         }
+        .padding(.top, 6)
+        .padding(.leading, 8)
+        .allowsHitTesting(false)
     }
     
-    @ViewBuilder
-    private func macdConditionBadge(crossover: MACDCrossover) -> some View {
-        Text(crossover.label)
-            .font(.system(size: 8, weight: .bold))
-            .foregroundColor(AppColors.onAccentForeground)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(crossover.color.opacity(0.8))
-            .cornerRadius(3)
+    private func macdConditionBadge(crossover: MACDCrossover) -> PanelMiniInfoBadge {
+        PanelMiniInfoBadge(text: crossover.label, color: crossover.color.opacity(0.82))
     }
     
     private func formatMACDValue(_ value: Double) -> String {

@@ -34,6 +34,7 @@ final class TimeframePanelEntry: ObservableObject, Identifiable {
 
     @Published var currentHeight: CGFloat
     @Published var expandedHeight: CGFloat
+    @Published var priceScaleBasisHeight: CGFloat
     @Published var isCollapsed: Bool
 
     init(
@@ -54,6 +55,7 @@ final class TimeframePanelEntry: ObservableObject, Identifiable {
         self.gestureState = gestureState
         self.currentHeight = startCollapsed ? 0 : clampedHeight
         self.expandedHeight = clampedHeight
+        self.priceScaleBasisHeight = clampedHeight
         self.isCollapsed = startCollapsed
     }
 
@@ -63,6 +65,7 @@ final class TimeframePanelEntry: ObservableObject, Identifiable {
         let clampedHeight = max(TimeframePanelLayoutDefaults.minHeight, initialHeight)
         currentHeight = clampedHeight
         expandedHeight = clampedHeight
+        priceScaleBasisHeight = clampedHeight
         isCollapsed = false
     }
 

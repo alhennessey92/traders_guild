@@ -2,15 +2,14 @@
 //  RSIPanelView.swift
 //  traders_guild
 //
-//  UPDATED VERSION - Supports stacked panels with isBottomPanel parameter
-//  When isBottomPanel=false, X-axis labels are hidden (shown only on bottom panel)
+//  Updated stacked-panel version
 //
 
 import SwiftUI
 
 enum ChartPanelHeaderStripKind {
     case indicator
-    /// Blue-tinted gradient strip (timeframe resize bar only).
+    /// Grey gradient strip with blue frame (timeframe resize bar only; matches main chart x-axis).
     case timeframe
     /// Solid dark strip for live price + LIVE row (no blue wash).
     case timeframePrice
@@ -68,146 +67,43 @@ struct IndicatorPanelHeaderRow: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(AppColors.timeframePanelAxisFrameBorder)
+                    .frame(height: 1)
+            }
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(AppColors.timeframePanelAxisFrameBorder)
+                    .frame(height: 1)
+            }
         case .timeframePrice:
             AppColors.timeframePanelPriceHeaderBackground
         }
     }
 }
 
-// MARK: - RSI Panel View
+struct ChartPanelResizeHandleLabel: View {
+    let primaryText: String
+    let suffixText: String
+    let isCollapsed: Bool
+    let isDragging: Bool
+    var style: ChartPanelResizeHandleStyle = .indicator
 
-struct RSIPanelView: View {
-    
-    // MARK: - Properties
-    
-    @ObservedObject var indicatorManager: IndicatorManager
-    @ObservedObject var chartData: ChartDataManager
-    @ObservedObject var gestureState: ChartGestureState
-    let baseCandleWidth: CGFloat
-    let candleSpacing: CGFloat
-    
-    var timeframe: RLChartTimeframe = .h1
-    
-    // Panel height state
-    @Binding var panelHeight: CGFloat
-    var minPanelHeight: CGFloat = 80
-    var maxPanelHeight: CGFloat = 300
-    
-    /// NEW: Whether this is the bottom panel (shows X-axis labels)
-    /// When stacking multiple panels, only the bottom one shows the X-axis
-    var isBottomPanel: Bool = true
-    
-    // MARK: - Private State
-    
-    @State private var isDraggingHandle = false
-    @State private var dragStartHeight: CGFloat = 0
-    @State private var lastDragTranslation: CGSize = .zero
-    @State private var isCollapsed = false
-    @State private var expandedPanelHeight: CGFloat = 0
-    
-    // MARK: - Computed Properties
-    
-    private var totalCandleWidth: CGFloat {
-        baseCandleWidth * gestureState.candleWidthScale + candleSpacing
-    }
-    
-    private var actualCandleWidth: CGFloat {
-        baseCandleWidth * gestureState.candleWidthScale
-    }
-    
-    private var rsiConfig: RSIConfig? {
-        indicatorManager.activeIndicators.rsi
-    }
-    
-    private var totalOffset: CGFloat {
-        gestureState.panOffset.width
-    }
-
-    private var panelDisplayName: String {
-        (rsiConfig?.label ?? "RSI 14") + " Indicator"
-    }
-    
-    // MARK: - Body
-    
     var body: some View {
-        VStack(spacing: 0) {
-            // Resize handle
-            resizeHandleBar
-
-            if !isCollapsed {
-                // RSI content area with pan gesture
-                LinkedIndicatorPanelGestureSurface(
-                    gestureState: gestureState,
-                    candleCount: chartData.candles.count,
-                    baseCandleWidth: baseCandleWidth,
-                    candleSpacing: candleSpacing
-                ) {
-                    rsiContentArea
-                }
-                    .frame(height: panelHeight)
-
-                // X-axis labels only if this is the bottom panel
-                if isBottomPanel {
-                    xAxisLabels
-                }
-            }
-        }
-        .background(AppColors.chartPanelBackgroundMuted)
-    }
-
-    // MARK: - Pan Gesture
-    
-    private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                if lastDragTranslation == .zero {
-                    gestureState.beginDrag()
-                }
-                
-                let incrementalX = value.translation.width - lastDragTranslation.width
-                
-                gestureState.applyPan(
-                    translation: CGSize(width: incrementalX, height: 0),
-                    chartWidth: UIScreen.main.bounds.width,
-                    candleCount: chartData.candles.count,
-                    candleWidth: totalCandleWidth,
-                    chartHeight: panelHeight,
-                    priceScale: 1.0,
-                    trackVelocity: true
-                )
-                
-                lastDragTranslation = value.translation
-            }
-            .onEnded { value in
-                gestureState.endDrag(
-                    chartWidth: UIScreen.main.bounds.width,
-                    candleCount: chartData.candles.count,
-                    candleWidth: totalCandleWidth,
-                    chartHeight: panelHeight,
-                    priceScale: 1.0
-                )
-                lastDragTranslation = .zero
-            }
-    }
-    
-    // MARK: - Resize Handle
-    
-    private var resizeHandleBar: some View {
         ZStack {
             Rectangle()
-                .fill(AppColors.chartPanelResizeStripBackground)
+                .fill(backgroundFill)
 
-            // Capsule always centered
             Capsule()
-                .fill(isDraggingHandle ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
+                .fill(isDragging ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
                 .frame(width: 36, height: 5)
 
-            // Panel label left-aligned
             HStack(spacing: 4) {
-                (Text(rsiConfig?.label ?? "RSI 14")
+                (Text(primaryText)
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
-                 + Text("  Indicator")
+                 + Text("  \(suffixText)")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
                     .lineLimit(1)
@@ -222,8 +118,142 @@ struct RSIPanelView: View {
             }
             .padding(.leading, 10)
         }
-        .frame(height: 22)
+        .frame(height: ChartPanelReserveCalculator.panelResizeHandleHeight)
         .contentShape(Rectangle())
+        .chartPanelBottomHairline()
+    }
+
+    private var backgroundFill: Color {
+        switch style {
+        case .indicator:
+            return AppColors.indicatorPanelHandleBackground
+        case .timeframe:
+            return AppColors.timeframePanelHandleBackground
+        }
+    }
+}
+
+private struct ChartPanelBottomHairlineModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content.overlay(
+            Rectangle()
+                .fill(AppColors.surfaceGray30)
+                .frame(height: 1),
+            alignment: .bottom
+        )
+    }
+}
+
+extension View {
+    func chartPanelBottomHairline() -> some View {
+        modifier(ChartPanelBottomHairlineModifier())
+    }
+}
+
+// MARK: - RSI Panel View
+
+struct RSIPanelView: View {
+    
+    // MARK: - Properties
+    
+    @ObservedObject var indicatorManager: IndicatorManager
+    @ObservedObject var chartData: ChartDataManager
+    @ObservedObject var gestureState: ChartGestureState
+    @ObservedObject var viewportState: IndicatorPanelViewportState
+    let baseCandleWidth: CGFloat
+    let candleSpacing: CGFloat
+    
+    var timeframe: RLChartTimeframe = .h1
+    
+    // Panel height state
+    @Binding var panelHeight: CGFloat
+    @Binding var expandedPanelHeight: CGFloat
+    var minPanelHeight: CGFloat = 80
+    var maxPanelHeight: CGFloat = 300
+    
+    // MARK: - Private State
+    
+    @State private var isDraggingHandle = false
+    @State private var dragStartHeight: CGFloat = 0
+    
+    // MARK: - Computed Properties
+    
+    private var totalCandleWidth: CGFloat {
+        baseCandleWidth * gestureState.candleWidthScale + candleSpacing
+    }
+    
+    private var actualCandleWidth: CGFloat {
+        baseCandleWidth * gestureState.candleWidthScale
+    }
+
+    private var plotWidth: CGFloat {
+        ChartAxisMetrics.plotWidth(totalWidth: UIScreen.main.bounds.width)
+    }
+
+    private var panelTopPadding: CGFloat {
+        18
+    }
+
+    private var panelBottomPadding: CGFloat {
+        4
+    }
+
+    private var isCollapsed: Bool {
+        ChartPanelReserveCalculator.isCollapsedPanelHeight(panelHeight)
+    }
+    
+    private var rsiConfig: RSIConfig? {
+        indicatorManager.activeIndicators.rsi
+    }
+    
+    private var totalOffset: CGFloat {
+        gestureState.panOffset.width
+    }
+
+    private var panelDisplayName: String {
+        (rsiConfig?.label ?? "RSI 14") + " Indicator"
+    }
+
+    private var zoomPolicy: IndicatorPanelZoomPolicy {
+        .fixed(range: 0...100, minimumScale: 1.0)
+    }
+    
+    // MARK: - Body
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Resize handle
+            resizeHandleBar
+
+            if !isCollapsed {
+                // RSI content area with pan gesture
+                LinkedIndicatorPanelGestureSurface(
+                    gestureState: gestureState,
+                    verticalState: viewportState,
+                    candleCount: chartData.candles.count,
+                    baseCandleWidth: baseCandleWidth,
+                    candleSpacing: candleSpacing,
+                    minVerticalScale: zoomPolicy.minimumScale
+                ) {
+                    rsiContentArea
+                }
+                    .frame(height: panelHeight)
+            }
+        }
+        .background(AppColors.chartPanelBackgroundMuted)
+        .chartPanelBottomHairline()
+    }
+    
+    // MARK: - Resize Handle
+    
+    private var resizeHandleBar: some View {
+        ChartPanelResizeHandleLabel(
+            primaryText: rsiConfig?.label ?? "RSI 14",
+            suffixText: "Indicator",
+            isCollapsed: isCollapsed,
+            isDragging: isDraggingHandle,
+            style: .indicator
+        )
         .gesture(
             DragGesture(minimumDistance: 2, coordinateSpace: .global)
                 .onChanged { value in
@@ -265,16 +295,24 @@ struct RSIPanelView: View {
 
     private func collapsePanel() {
         guard !isCollapsed else { return }
-        expandedPanelHeight = max(minPanelHeight, panelHeight)
-        panelHeight = 0
-        isCollapsed = true
+        let nextState = ChartPanelPresentationPolicy.collapsed(
+            currentHeight: panelHeight,
+            expandedHeight: expandedPanelHeight,
+            minHeight: minPanelHeight
+        )
+        panelHeight = nextState.currentHeight
+        expandedPanelHeight = nextState.expandedHeight
     }
 
     private func expandPanel() {
         guard isCollapsed else { return }
-        let restoredHeight = expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight
-        panelHeight = min(maxPanelHeight, max(minPanelHeight, restoredHeight))
-        isCollapsed = false
+        let nextState = ChartPanelPresentationPolicy.expanded(
+            expandedHeight: expandedPanelHeight,
+            minHeight: minPanelHeight,
+            maxHeight: maxPanelHeight
+        )
+        panelHeight = nextState.currentHeight
+        expandedPanelHeight = nextState.expandedHeight
     }
     
     // MARK: - RSI Content
@@ -283,9 +321,11 @@ struct RSIPanelView: View {
         let _ = gestureState.panOffset.width
         let _ = gestureState.candleWidthScale
         let _ = gestureState.crosshairActive
+        let _ = viewportState.priceScale
+        let _ = viewportState.verticalPanOffset
         
         return ZStack {
-            AppColors.chartPanelBackground
+            AppColors.indicatorPanelPlotBackground
             
             Canvas { context, size in
                 drawRSIPanel(context: context, size: size)
@@ -297,7 +337,7 @@ struct RSIPanelView: View {
             
             yAxisLabelsOverlay
             currentRSIIndicator
-            panelHeaderOverlay
+            miniInfoOverlay
         }
         .clipped()
     }
@@ -320,7 +360,7 @@ struct RSIPanelView: View {
     }
 
     private var activeGuideColor: Color {
-        gestureState.crosshairActive ? AppColors.surfaceWhite40 : AppColors.statusInfo60
+        gestureState.crosshairActive ? AppColors.crosshairGuideStroke : AppColors.statusInfo60
     }
     
     // MARK: - Current RSI Indicator
@@ -329,12 +369,12 @@ struct RSIPanelView: View {
         GeometryReader { geometry in
             if let latestRSI = indicatorManager.latestRSI {
                 let rsiValue = latestRSI.value
-                let normalizedRSI = rsiValue / 100.0
-                let y = geometry.size.height * (1 - normalizedRSI)
+                let viewport = transformedViewport(height: geometry.size.height)
+                let y = viewport.yPosition(for: rsiValue)
                 
-                if y >= 0 && y <= geometry.size.height && !rsiValue.isNaN {
+                if y >= viewport.topPadding && y <= viewport.contentBottomY && !rsiValue.isNaN {
                     Canvas { context, size in
-                        let lineEndX = size.width - 30
+                        let lineEndX = plotEndX(totalWidth: size.width)
                         
                         let linePath = Path { path in
                             path.move(to: CGPoint(x: 0, y: y))
@@ -348,8 +388,12 @@ struct RSIPanelView: View {
                             style: StrokeStyle(lineWidth: 1, dash: [5, 3])
                         )
                         
-                        let labelX = size.width - 15
-                        let labelRect = CGRect(x: labelX - 20, y: y - 9, width: 40, height: 18)
+                        let labelRect = CGRect(
+                            x: size.width - 45,
+                            y: y - 9,
+                            width: 40,
+                            height: 18
+                        )
                         let roundedPath = Path(roundedRect: labelRect, cornerRadius: 3)
                         context.fill(roundedPath, with: .color(lineColor))
                         
@@ -357,7 +401,7 @@ struct RSIPanelView: View {
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundColor(AppColors.onAccentForeground)
                         
-                        context.draw(text, at: CGPoint(x: labelX, y: y))
+                        context.draw(text, at: CGPoint(x: labelRect.midX, y: y))
                     }
                 }
             }
@@ -378,53 +422,58 @@ struct RSIPanelView: View {
         }
     }
     
-    // MARK: - Panel Header
-    
-    private var panelHeaderOverlay: some View {
-        VStack {
+    private var miniInfoOverlay: some View {
+        VStack(alignment: .leading) {
             if let latest = indicatorManager.latestRSI {
                 let condition = rsiCondition(for: latest.value)
-                IndicatorPanelHeaderRow(
-                    title: "",
-                    valueText: String(format: "%.1f", latest.value),
-                    valueColor: condition.label.isEmpty ? AppColors.listCardBodyEmphasisText : condition.color,
-                    badgeText: condition.label.isEmpty ? nil : condition.label,
-                    badgeColor: condition.label.isEmpty ? nil : condition.color
+                PanelMiniInfoOverlay(
+                    tokens: [
+                        PanelMiniInfoToken(
+                            label: nil,
+                            value: String(format: "%.1f", latest.value),
+                            valueColor: condition.label.isEmpty ? AppColors.panelMiniInfoOverlayPrimaryText : condition.color
+                        ),
+                    ],
+                    trailingBadge: condition.label.isEmpty
+                        ? nil
+                        : PanelMiniInfoBadge(text: condition.label, color: condition.color.opacity(0.88))
                 )
             }
 
             Spacer()
         }
+        .padding(.top, 6)
+        .padding(.leading, 8)
+        .allowsHitTesting(false)
     }
     
     // MARK: - Y-Axis Labels
     
     private var yAxisLabelsOverlay: some View {
-        HStack {
-            Spacer()
-            
-            VStack {
-                Text(String(format: "%.0f", rsiConfig?.overboughtLevel ?? 70))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.statusNegative85)
-                
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
                 Spacer()
-                
-                Text("50")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.chartAxisLabelSecondary)
-                
-                Spacer()
-                
-                Text(String(format: "%.0f", rsiConfig?.oversoldLevel ?? 30))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.statusPositive85)
+                IndicatorPanelYAxisLane(
+                    viewport: transformedViewport(height: geometry.size.height),
+                    labels: [
+                        IndicatorPanelYAxisLabel(
+                            value: rsiConfig?.overboughtLevel ?? 70,
+                            text: String(format: "%.0f", rsiConfig?.overboughtLevel ?? 70),
+                            color: AppColors.statusNegative85
+                        ),
+                        IndicatorPanelYAxisLabel(
+                            value: 50,
+                            text: "50",
+                            color: AppColors.panelYAxisLaneText
+                        ),
+                        IndicatorPanelYAxisLabel(
+                            value: rsiConfig?.oversoldLevel ?? 30,
+                            text: String(format: "%.0f", rsiConfig?.oversoldLevel ?? 30),
+                            color: AppColors.statusPositive85
+                        ),
+                    ]
+                )
             }
-            .frame(width: 28)
-            .padding(.top, 18)
-            .padding(.bottom, 4)
-            .padding(.trailing, 5)
-            .background(AppColors.chartPanelBackgroundDeep.opacity(0.92))
         }
     }
     
@@ -440,22 +489,21 @@ struct RSIPanelView: View {
 
         guard let config = rsiConfig else { return }
 
-        let drawableHeight = size.height - 20
-        let topPadding: CGFloat = 18
+        let viewport = transformedViewport(height: size.height)
 
-        drawZones(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
-        drawReferenceLevels(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
-        drawRSILine(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
+        drawZones(context: context, size: size, config: config, viewport: viewport)
+        drawReferenceLevels(context: context, size: size, config: config, viewport: viewport)
+        drawRSILine(context: context, size: size, config: config, viewport: viewport)
     }
     
-    private func drawZones(context: GraphicsContext, size: CGSize, config: RSIConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
+    private func drawZones(context: GraphicsContext, size: CGSize, config: RSIConfig, viewport: IndicatorPanelViewport) {
         guard config.showLevels else { return }
         
-        let overboughtY = yPosition(for: config.overboughtLevel, height: drawableHeight, topPadding: topPadding)
-        let oversoldY = yPosition(for: config.oversoldLevel, height: drawableHeight, topPadding: topPadding)
-        let topY = yPosition(for: 100, height: drawableHeight, topPadding: topPadding)
-        let bottomY = yPosition(for: 0, height: drawableHeight, topPadding: topPadding)
-        let lineEndX = size.width - 30
+        let overboughtY = viewport.yPosition(for: config.overboughtLevel)
+        let oversoldY = viewport.yPosition(for: config.oversoldLevel)
+        let topY = viewport.yPosition(for: 100)
+        let bottomY = viewport.yPosition(for: 0)
+        let lineEndX = plotEndX(totalWidth: size.width)
         
         let overboughtZone = Path { p in
             p.addRect(CGRect(x: 0, y: topY, width: lineEndX, height: overboughtY - topY))
@@ -468,11 +516,11 @@ struct RSIPanelView: View {
         context.fill(oversoldZone, with: .color(AppColors.statusPositive08))
     }
     
-    private func drawReferenceLevels(context: GraphicsContext, size: CGSize, config: RSIConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
-        let overboughtY = yPosition(for: config.overboughtLevel, height: drawableHeight, topPadding: topPadding)
-        let oversoldY = yPosition(for: config.oversoldLevel, height: drawableHeight, topPadding: topPadding)
-        let middleY = yPosition(for: 50, height: drawableHeight, topPadding: topPadding)
-        let lineEndX = size.width - 30
+    private func drawReferenceLevels(context: GraphicsContext, size: CGSize, config: RSIConfig, viewport: IndicatorPanelViewport) {
+        let overboughtY = viewport.yPosition(for: config.overboughtLevel)
+        let oversoldY = viewport.yPosition(for: config.oversoldLevel)
+        let middleY = viewport.yPosition(for: 50)
+        let lineEndX = plotEndX(totalWidth: size.width)
         
         var path = Path()
         path.move(to: CGPoint(x: 0, y: overboughtY))
@@ -490,7 +538,7 @@ struct RSIPanelView: View {
         context.stroke(path, with: .color(AppColors.statusPositive40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
     }
     
-    private func drawRSILine(context: GraphicsContext, size: CGSize, config: RSIConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
+    private func drawRSILine(context: GraphicsContext, size: CGSize, config: RSIConfig, viewport: IndicatorPanelViewport) {
         let dataPoints = indicatorManager.rsiData
         guard dataPoints.count >= 2 else { return }
         
@@ -505,7 +553,7 @@ struct RSIPanelView: View {
         
         for point in visiblePoints {
             let x = xPosition(for: point.candleIndex)
-            let y = yPosition(for: point.value, height: drawableHeight, topPadding: topPadding)
+            let y = viewport.yPosition(for: point.value)
             
             guard x >= -50 && x <= size.width + 50 else { continue }
             
@@ -525,10 +573,20 @@ struct RSIPanelView: View {
     private func xPosition(for candleIndex: Int) -> CGFloat {
         CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
     }
-    
-    private func yPosition(for rsiValue: Double, height: CGFloat, topPadding: CGFloat) -> CGFloat {
-        let normalized = rsiValue / 100.0
-        return topPadding + height * (1.0 - CGFloat(normalized))
+
+    private func transformedViewport(height: CGFloat) -> IndicatorPanelViewport {
+        IndicatorPanelViewport(
+            rawValueRange: zoomPolicy.resolvedRange(visibleValues: [], fallbackValues: [], emphasisValues: []),
+            topPadding: panelTopPadding,
+            bottomPadding: panelBottomPadding,
+            visualHeight: height,
+            priceScale: viewportState.priceScale,
+            verticalPanOffset: viewportState.verticalPanOffset
+        )
+    }
+
+    private func plotEndX(totalWidth: CGFloat) -> CGFloat {
+        ChartAxisMetrics.plotWidth(totalWidth: totalWidth)
     }
     
     private func rsiValueColor(_ value: Double) -> Color {

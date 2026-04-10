@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct MarkerViewingGeneralTab: View {
+    @EnvironmentObject private var rlAppState: RLAppState
+    @State private var showReportReasonSheet: Bool = false
+
     let marker: ChartMarkerUI
     @ObservedObject var markerManager: MarkerManager
     let onClose: () -> Void
@@ -39,6 +42,10 @@ struct MarkerViewingGeneralTab: View {
         MarkerViewingComponentMetrics(marker: liveMarker)
     }
 
+    private var isReportedMarker: Bool {
+        rlAppState.hasReportedMarker(guildId: liveMarker.guildId, markerId: liveMarker.id)
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
@@ -53,6 +60,17 @@ struct MarkerViewingGeneralTab: View {
             .padding(.bottom, 22)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .sheet(isPresented: $showReportReasonSheet) {
+            ReportReasonSheet(
+                title: "Why are you reporting this marker?",
+                includeScam: false,
+                onReasonSelected: { reason in
+                    handleReport(reason: reason)
+                    showReportReasonSheet = false
+                },
+                onCancel: { showReportReasonSheet = false }
+            )
+        }
     }
 
     private var heroColor: Color {
@@ -303,9 +321,71 @@ struct MarkerViewingGeneralTab: View {
                 }
 
                 statsRow
+
+                if !liveMarker.isCurrentUserMarker {
+                    if isReportedMarker {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Reported")
+                                .font(.caption.weight(.semibold))
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundColor(AppColors.statusNegative95)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(AppColors.statusNegative35)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(AppColors.statusNegative70, lineWidth: 1)
+                                )
+                        )
+                    } else {
+                        Button {
+                            HapticFeedback.medium.trigger()
+                            showReportReasonSheet = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.system(size: 12, weight: .bold))
+                                Text("Report Marker")
+                                    .font(.caption.weight(.semibold))
+                                Spacer(minLength: 0)
+                            }
+                            .foregroundColor(AppColors.statusNegative92)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(AppColors.statusNegative20)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(AppColors.statusNegative40, lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
             .padding(12)
             .background(disclosureContentBackground())
+        }
+    }
+
+    private func handleReport(reason: String) {
+        Task {
+            do {
+                _ = try await rlAppState.reportMarker(
+                    guildId: liveMarker.guildId,
+                    markerId: liveMarker.id,
+                    reason: reason
+                )
+            } catch {
+                return
+            }
         }
     }
 

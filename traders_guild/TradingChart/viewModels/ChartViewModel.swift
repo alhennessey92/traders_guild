@@ -640,6 +640,7 @@ class ChartViewModel: ObservableObject {
         isSyncingChartDrawingPlacementFromManager = true
         defer { isSyncingChartDrawingPlacementFromManager = false }
 
+        let activeEditingDraftId = chartComponentsPlacementState.editingDrawingId
         let anchorTime = dataManager.candles.last?.timestamp ?? Date()
         let anchorPrice = dataManager.candles.last?.close ?? 0
         let normalizedDrawings = chartDrawingManager.drawings.map {
@@ -675,6 +676,10 @@ class ChartViewModel: ObservableObject {
             ChartDrawingBridge.markerDraft(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
         })
         chartComponentsPlacementState.components = nextComponents
+        if let activeEditingDraftId,
+           !nextComponents.contains(where: { $0.id == activeEditingDraftId }) {
+            chartComponentsPlacementState.commitDrawingAndExit()
+        }
     }
 
     private func applyChartDrawingPlacementToManager() {

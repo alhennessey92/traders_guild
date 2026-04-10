@@ -173,6 +173,20 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 57. When adding a annotation make the text box simpler on chart and allow to wrap text underneath when user enters new line
 
-58. Adjusting the timeframe panel height adjusts the candle height with it, should stay fixed, only thing that affects candle height in the timeframe panel is by sliding in the y axis
+58. [Fixed] Adjusting the timeframe panel height adjusts the candle height with it, should stay fixed, only thing that affects candle height in the timeframe panel is by sliding in the y axis
 
 59. When indicator panel is active x axis is great with good distance from x axis on main chart to bottom of indicator panel, but when closing the indicator panel the x axis time text jumps up slightly almost touching the bottom of the indicator panel, need to make sure that there is still a gap, like when open. Fine for timeframe panels so not sure of the difference
+
+
+
+
+60. Indicator panels need looking at they are still not behaving correctly. For some reason there’s a few bugs with it now and can happen when 1 or 2 active. Closing the panel causes the x axis times to jump up slightly removing the small gap in between. Sometimes when activating the panel the header is missing - have to swipe around a bit before it appears. When 2 are active closing the bottom causes the closed header to move below the main x axis. When viewing a marker and returning the header can sometimes disappear and it all looks a bit messed up. Timeframe panels are perfect so not sure how they differ maybe compare and see
+
+
+61. Bottom chart buttons sitting at different heights to top of panels depending on the configuration need to make them follow the top of the top most panel
+
+62. Need to add ability to report marker in general disclosure
+
+63. When reporting anything should send notification to both parties to see it was done.
+
+64. When reporting chat message should add report icon reaction to offending message

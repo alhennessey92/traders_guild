@@ -439,18 +439,18 @@ enum UnifiedTabTheme {
         case .accent:
             return AppColors.accentColor.opacity(0.4)
         case .componentsTabs:
-            return index == 0 ? Color.orange.opacity(0.4) : AppColors.statusInfo40
+            return index == 0 ? AppColors.chartOrangeGradientStart.opacity(0.42) : AppColors.statusInfo40
         case .markerNavigation:
             switch markerAccent(forTitle: tab.title) {
             case .blue:
                 return AppColors.statusInfo40
             case .orange:
-                return Color.orange.opacity(0.4)
+                return AppColors.chartOrangeGradientStart.opacity(0.42)
             case .green:
-                return AppColors.statusPositive40
+                return AppColors.chartGreenGradientStart.opacity(0.42)
             }
         case .markerPrimary:
-            if index == 0 { return AppColors.statusPositive40 }
+            if index == 0 { return AppColors.chartGreenGradientStart.opacity(0.42) }
             return AppColors.statusInfo40
         }
     }

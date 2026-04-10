@@ -1,5 +1,75 @@
 import SwiftUI
 
+struct ChartAnnotationBubbleMetrics {
+    static let maxWidth: CGFloat = 180
+    static let minWidth: CGFloat = 52
+    static let horizontalPadding: CGFloat = 8
+    static let verticalPadding: CGFloat = 6
+    static let cornerRadius: CGFloat = 7
+    static let fontSize: CGFloat = 11
+    static let lineHeight: CGFloat = 14
+    static let maxVisibleLines = 4
+
+    private static let sideInset: CGFloat = 16
+    private static let estimatedAverageCharacterWidth: CGFloat = 6.2
+
+    static func displayText(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Note" : text
+    }
+
+    static func maxBubbleWidth(plotWidth: CGFloat) -> CGFloat {
+        min(maxWidth, max(minWidth, plotWidth - sideInset))
+    }
+
+    static func visibleLineCount(for text: String, plotWidth: CGFloat) -> Int {
+        min(maxVisibleLines, max(1, estimatedWrappedLineCount(for: text, plotWidth: plotWidth)))
+    }
+
+    static func estimatedSize(for text: String, plotWidth: CGFloat) -> CGSize {
+        let display = displayText(text)
+        let maxTextWidth = max(1, maxBubbleWidth(plotWidth: plotWidth) - horizontalPadding * 2)
+        let longestLineWidth = display
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { CGFloat($0.count) * estimatedAverageCharacterWidth }
+            .max() ?? 0
+        let textWidth = min(maxTextWidth, max(estimatedAverageCharacterWidth * 4, longestLineWidth))
+        let visibleLines = CGFloat(visibleLineCount(for: display, plotWidth: plotWidth))
+
+        return CGSize(
+            width: ceil(textWidth + horizontalPadding * 2),
+            height: ceil(visibleLines * lineHeight + verticalPadding * 2)
+        )
+    }
+
+    static func hitRect(
+        center: CGPoint,
+        text: String,
+        plotWidth: CGFloat,
+        touchExpansion: CGFloat = 8
+    ) -> CGRect {
+        let size = estimatedSize(for: text, plotWidth: plotWidth)
+        return CGRect(
+            x: center.x - size.width / 2,
+            y: center.y - size.height / 2,
+            width: size.width,
+            height: size.height
+        ).insetBy(dx: -touchExpansion, dy: -touchExpansion)
+    }
+
+    private static func estimatedWrappedLineCount(for text: String, plotWidth: CGFloat) -> Int {
+        let display = displayText(text)
+        let maxTextWidth = max(1, maxBubbleWidth(plotWidth: plotWidth) - horizontalPadding * 2)
+
+        return display
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { total, line in
+                guard !line.isEmpty else { return total + 1 }
+                let rawLineWidth = CGFloat(line.count) * estimatedAverageCharacterWidth
+                return total + max(1, Int(ceil(rawLineWidth / maxTextWidth)))
+            }
+    }
+}
+
 struct GhostPreviewLayer: View {
     @ObservedObject var placementState: MarkerPlacementState
     let yForPrice: (Double) -> CGFloat?
@@ -487,28 +557,34 @@ struct GhostPreviewLayer: View {
     }
 
     private func annotationNoteView(text: String, isSelected: Bool) -> some View {
-        Text(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Note" : text)
-            .font(.system(size: 11, weight: .semibold))
+        Text(verbatim: ChartAnnotationBubbleMetrics.displayText(text))
+            .font(.system(size: ChartAnnotationBubbleMetrics.fontSize, weight: .semibold))
             .foregroundColor(AppColors.primaryForeground)
-            .lineLimit(2)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
+            .lineLimit(ChartAnnotationBubbleMetrics.maxVisibleLines)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(
+                maxWidth: ChartAnnotationBubbleMetrics.maxBubbleWidth(plotWidth: width),
+                alignment: .leading
+            )
+            .padding(.horizontal, ChartAnnotationBubbleMetrics.horizontalPadding)
+            .padding(.vertical, ChartAnnotationBubbleMetrics.verticalPadding)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.systemBlack.opacity(isSelected ? 0.82 : 0.7))
+                RoundedRectangle(cornerRadius: ChartAnnotationBubbleMetrics.cornerRadius)
+                    .fill(AppColors.systemBlack.opacity(isSelected ? 0.78 : 0.66))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: ChartAnnotationBubbleMetrics.cornerRadius)
                             .stroke(
-                                RLComponentType.textNote.color.opacity(isSelected ? 0.9 : 0.55),
-                                lineWidth: isSelected ? 1.4 : 1
+                                RLComponentType.textNote.color.opacity(isSelected ? 0.72 : 0.44),
+                                lineWidth: isSelected ? 1.2 : 0.8
                             )
                     )
             )
             .shadow(
-                color: RLComponentType.textNote.color.opacity(isSelected ? 0.35 : 0),
-                radius: isSelected ? 6 : 0,
+                color: AppColors.systemBlack.opacity(isSelected ? 0.22 : 0),
+                radius: isSelected ? 3 : 0,
                 x: 0,
-                y: 0
+                y: 1
             )
     }
 

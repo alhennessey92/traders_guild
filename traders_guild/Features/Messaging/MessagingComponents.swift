@@ -2993,12 +2993,11 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                     onVisibleReactionTap?()
                 } label: {
                     HStack(spacing: 3) {
-                        Text(reaction.emoji)
-                            .font(.caption)
+                        MessageReactionGlyph(reaction: reaction)
                         if reaction.count >= 2 {
                             Text("\(reaction.count)")
                                 .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(AppColors.surfaceWhite88)
+                                .foregroundColor(reaction.isReportReaction ? AppColors.statusNegative95 : AppColors.surfaceWhite88)
                         }
                     }
                     .padding(.horizontal, 5)
@@ -3006,16 +3005,20 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                     .background(
                         Capsule()
                             .fill(
-                                reaction.reactedByCurrentUser
-                                    ? AppColors.accentDarkColor
-                                    : AppColors.surfaceBlack85
+                                reaction.isReportReaction
+                                    ? AppColors.statusNegative35
+                                    : (reaction.reactedByCurrentUser
+                                        ? AppColors.accentDarkColor
+                                        : AppColors.surfaceBlack85)
                             )
                             .overlay(
                                 Capsule()
                                     .stroke(
-                                        reaction.reactedByCurrentUser
-                                            ? AppColors.accentColor.opacity(0.7)
-                                            : AppColors.surfaceWhite15,
+                                        reaction.isReportReaction
+                                            ? AppColors.statusNegative70
+                                            : (reaction.reactedByCurrentUser
+                                                ? AppColors.accentColor.opacity(0.7)
+                                                : AppColors.surfaceWhite15),
                                         lineWidth: 1
                                     )
                             )
@@ -3031,6 +3034,82 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
 extension RLMessageReactionDTO {
     var compactBubbleCountText: String? {
         count > 2 ? "\(count)" : nil
+    }
+}
+
+private struct MessageReactionGlyph: View {
+    private let emoji: String
+
+    init(reaction: RLMessageReactionDTO) {
+        self.emoji = reaction.emoji
+    }
+
+    init(emoji: String) {
+        self.emoji = emoji
+    }
+
+    private var isReportReaction: Bool {
+        emoji == ReportReactionSemantic.storedEmoji
+    }
+
+    var body: some View {
+        if isReportReaction {
+            Image(systemName: ReportReactionSemantic.iconName)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(AppColors.statusNegative95)
+        } else {
+            Text(emoji)
+                .font(.caption)
+        }
+    }
+}
+
+private struct ReactionTabChip: View {
+    let reaction: RLMessageReactionDTO
+    let isSelected: Bool
+    let action: () -> Void
+
+    private var countColor: Color {
+        if reaction.isReportReaction {
+            return AppColors.statusNegative95
+        }
+        return isSelected ? AppColors.whiteText : AppColors.surfaceWhite70
+    }
+
+    private var backgroundColor: Color {
+        if reaction.isReportReaction {
+            return isSelected ? AppColors.statusNegative40 : AppColors.statusNegative20
+        }
+        return isSelected ? AppColors.accentDarkColor : AppColors.surfaceWhite06
+    }
+
+    private var strokeColor: Color {
+        if reaction.isReportReaction {
+            return isSelected ? AppColors.statusNegative75 : AppColors.statusNegative55
+        }
+        return isSelected ? AppColors.accentColor.opacity(0.7) : AppColors.surfaceWhite12
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                MessageReactionGlyph(reaction: reaction)
+                Text("\(reaction.count)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(countColor)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(backgroundColor)
+                    .overlay(
+                        Capsule()
+                            .stroke(strokeColor, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -3382,29 +3461,13 @@ private struct ChatReactionReactorsCard: View {
                 HStack(spacing: 6) {
                     ForEach(reactions, id: \.emoji) { reaction in
                         let isSelected = activeEmoji == reaction.emoji
-                        Button {
+                        ReactionTabChip(
+                            reaction: reaction,
+                            isSelected: isSelected
+                        ) {
                             selectedEmoji = reaction.emoji
                             onSelectEmoji(reaction.emoji)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(reaction.emoji)
-                                    .font(.callout)
-                                Text("\(reaction.count)")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundColor(isSelected ? AppColors.whiteText : AppColors.surfaceWhite70)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(isSelected ? AppColors.accentDarkColor : AppColors.surfaceWhite06)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(isSelected ? AppColors.accentColor.opacity(0.7) : AppColors.surfaceWhite12, lineWidth: 1)
-                                    )
-                            )
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -3462,8 +3525,7 @@ private struct ChatReactionReactorsCard: View {
     private func reactorRow(_ reactor: RLGuildMemberDTO, emoji: String) -> some View {
         HStack(spacing: 10) {
             // Emoji indicator
-            Text(emoji)
-                .font(.caption)
+            MessageReactionGlyph(emoji: emoji)
 
             ChatAvatar(
                 initials: reactor.initials,

@@ -83,7 +83,7 @@ struct MarkerViewingComponentsTab: View {
             title: "Indicators",
             subtitle: "Attached studies and panel usage",
             icon: "waveform.path.ecg",
-            tint: Color(hex: "#F59E0B") ?? .orange,
+            tint: AppColors.markerViewingTintIndicator,
             countText: "\(indicatorComponents.count)"
         ) {
             VStack(spacing: 8) {
@@ -99,11 +99,11 @@ struct MarkerViewingComponentsTab: View {
                     HStack(spacing: 8) {
                         smallInfoBadge(
                             text: "Panel \(indicatorPanelCount)",
-                            tint: Color(hex: "#F97316") ?? .orange
+                            tint: AppColors.markerViewingTintIndicatorPanel
                         )
                         smallInfoBadge(
                             text: "Overlay \(indicatorOverlayCount)",
-                            tint: Color(hex: "#0EA5E9") ?? .cyan
+                            tint: AppColors.markerViewingTintIndicatorOverlay
                         )
                         Spacer(minLength: 0)
                     }
@@ -118,7 +118,7 @@ struct MarkerViewingComponentsTab: View {
             title: "Drawings",
             subtitle: "Trendline and zone coordinates",
             icon: "pencil.and.ruler",
-            tint: Color(hex: "#14B8A6") ?? .teal,
+            tint: AppColors.markerViewingTintDrawing,
             countText: "\(drawingComponents.count)"
         ) {
             VStack(spacing: 8) {
@@ -138,7 +138,7 @@ struct MarkerViewingComponentsTab: View {
             title: "Timeframes",
             subtitle: "Linked horizon context",
             icon: "clock.fill",
-            tint: Color(hex: "#38BDF8") ?? .cyan,
+            tint: AppColors.markerViewingTintTimeframe,
             countText: "\(timeframeComponents.count)"
         ) {
             VStack(spacing: 8) {
@@ -255,17 +255,17 @@ struct MarkerViewingComponentsTab: View {
         let panel = isPanelIndicator(indicatorName)
         let isPrimary = payload?.isPrimary == true
         let typeBadgeTint = panel
-            ? (Color(hex: "#F97316") ?? .orange)
-            : (Color(hex: "#0EA5E9") ?? .cyan)
+            ? AppColors.markerViewingTintIndicatorPanel
+            : AppColors.markerViewingTintIndicatorOverlay
 
         return HStack(spacing: 10) {
             Circle()
-                .fill((component.componentTypeEnum?.color ?? (Color(hex: "#F59E0B") ?? .orange)).opacity(0.2))
+                .fill((component.componentTypeEnum?.color ?? AppColors.markerViewingTintIndicator).opacity(0.2))
                 .frame(width: 24, height: 24)
                 .overlay(
                     Image(systemName: indicatorIcon(for: indicatorName))
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(component.componentTypeEnum?.color ?? .orange)
+                        .foregroundColor(component.componentTypeEnum?.color ?? AppColors.markerViewingTintIndicator)
                 )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -293,7 +293,7 @@ struct MarkerViewingComponentsTab: View {
                 if isPrimary {
                     Image(systemName: "star.fill")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Color(hex: "#FBBF24") ?? .yellow)
+                        .foregroundColor(AppColors.markerViewingTintPrimaryStar)
                 }
             }
         }

@@ -38,6 +38,50 @@ struct ChartComponentReactivityTests {
     }
 
     @Test
+    func chartComponentsAdapterClearsPlacementWorkflowWhenActiveHostDrawingIsRemoved() async throws {
+        let placementState = MarkerPlacementState()
+        let indicatorManager = IndicatorManager()
+        let drawingManager = ChartDrawingManager()
+        let timeframeLinkManager = ChartTimeframeLinkManager()
+        let anchorTime = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let inactiveId = drawingManager.addDrawing(type: .trendline, note: "Trend")
+        let activeId = drawingManager.addDrawing(type: .horizontalLine, note: "Liquidity")
+        let adapter = ChartComponentsAdapter(
+            placementState: placementState,
+            indicatorManager: indicatorManager,
+            drawingManager: drawingManager,
+            timeframeLinkManager: timeframeLinkManager,
+            currentChartTimeframe: .m5,
+            onSelectTimeframeAction: nil,
+            onRecalculate: {},
+            onBeginInteractiveDrawing: nil,
+            symbolId: nil,
+            anchorTime: anchorTime,
+            anchorPrice: 1.205
+        )
+        #expect(adapter.activeChartDrawings.map(\.id).contains(activeId))
+
+        placementState.beginEditingDrawing(activeId, tool: .horizontalLine)
+        #expect(placementState.drawingInteractionPhase == .editing)
+        #expect(placementState.editingDrawingId == activeId)
+
+        drawingManager.removeDrawing(id: inactiveId)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(placementState.drawingInteractionPhase == .editing)
+        #expect(placementState.editingDrawingId == activeId)
+
+        drawingManager.removeDrawing(id: activeId)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(placementState.drawingInteractionPhase == .idle)
+        #expect(placementState.editingDrawingId == nil)
+        #expect(placementState.activeTool == nil)
+        #expect(placementState.activeSubTool == nil)
+        #expect(!placementState.components.contains(where: { $0.id == activeId }))
+    }
+
+    @Test
     func chartComponentsAdapterRemovesCurrentlySelectedLinkedTimeframeImmediately() async throws {
         let placementState = MarkerPlacementState()
         let indicatorManager = IndicatorManager()

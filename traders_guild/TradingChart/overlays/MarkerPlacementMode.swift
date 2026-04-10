@@ -1026,10 +1026,17 @@ final class MarkerPlacementState: ObservableObject {
         let removedIDs = components
             .filter { $0.componentType == componentType }
             .map(\.id)
+        let shouldClearDrawingInteraction = shouldClearDrawingInteractionAfterRemoving(
+            ids: Set(removedIDs),
+            componentTypes: [componentType]
+        )
         components.removeAll { $0.componentType == componentType }
         for id in removedIDs {
             drawingColorOverrides.removeValue(forKey: id)
             emojiScaleOverrides.removeValue(forKey: id)
+        }
+        if shouldClearDrawingInteraction {
+            commitDrawingAndExit()
         }
     }
 
@@ -1038,9 +1045,16 @@ final class MarkerPlacementState: ObservableObject {
               draft.componentType != .anchor else {
             return
         }
+        let shouldClearDrawingInteraction = shouldClearDrawingInteractionAfterRemoving(
+            ids: [id],
+            componentTypes: [draft.componentType]
+        )
         components.removeAll { $0.id == id }
         drawingColorOverrides.removeValue(forKey: id)
         emojiScaleOverrides.removeValue(forKey: id)
+        if shouldClearDrawingInteraction {
+            commitDrawingAndExit()
+        }
     }
 
     func updateComponent(id: UUID, payload: MarkerComponentPayload) {
@@ -1466,8 +1480,14 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     func commitDrawingAndExit() {
+        let shouldClearTool =
+            drawingSession.isActive
+            || activeDrawingWorkflowTool != nil
+            || activeTool == .draw
+            || activeTool == .levels
+            || activeTool == .note
         drawingSession = .inactive
-        if activeTool == .draw || activeTool == .levels {
+        if shouldClearTool {
             activeTool = nil
             activeSubTool = nil
         }
@@ -2099,6 +2119,26 @@ final class MarkerPlacementState: ObservableObject {
             return intent != .reaction
         }
         return componentType.isDrawing || componentType == .textNote
+    }
+
+    private func shouldClearDrawingInteractionAfterRemoving(
+        ids removedIDs: Set<UUID>,
+        componentTypes removedComponentTypes: Set<RLComponentType>
+    ) -> Bool {
+        if let editingDrawingId, removedIDs.contains(editingDrawingId) {
+            return true
+        }
+
+        if let activeLevelType = activeLevelComponentTypeForCurrentSelection,
+           removedComponentTypes.contains(activeLevelType) {
+            return true
+        }
+
+        guard drawingSession.isActive,
+              let activeToolComponentType = activeDrawingWorkflowTool?.componentType else {
+            return false
+        }
+        return removedComponentTypes.contains(activeToolComponentType)
     }
 
     private func mergedDrawingAnnotationPayload(

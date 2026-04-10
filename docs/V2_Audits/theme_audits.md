@@ -54,3 +54,38 @@ Light grey theme
 
 
 21. All Themes - Panel header in midgrey needs adjustment color wise seems too similar to chart background. Perhaps the timeframe panel header should match the timeframe x axis blue coloring and for indicator panel make it black to match the x axis background - perform similar action to the other themes sticking to same background on respective x axis background in all the dark grey, mid grey and light grey themes
+
+
+
+
+
+New theme audits
+
+22. **[Done]** Mid-grey and dark grey timeframe x-axis: `timeframePanelAxisGradientTop/Bottom` are neutral dark greys; tick labels unchanged (`statusInfo*`); `timeframePanelAxisFrameBorder` frames the strip (top + bottom). `TimeframePanelView` + `RSIPanelView` timeframe strip updated.
+
+23. **[Done — pass 1]** Light grey: introduced canonical light-grey positive green (`themeAwareGreen`), theme-aware `statusPositive*`, unified marker greens, and systematic token updates below. Further screen-by-screen polish can continue using `AppColors` only.
+
+24. **[Done]** Light grey timeframe x-axis: grey gradient + blue frame lines (aligned with §22).
+
+25. **[Done]** Stronger `indicatorPanelPlotBackground` on light grey.
+
+26. **[Done]** `guildStatisticsCardBackground` / `guildStatisticsCardStroke` on statistics cards.
+
+27. **[Done]** `themeAwareGreen` drives `statusPositive` and ladders on light grey; statistics metrics use `statisticsMetric*` helpers; marker chrome uses the same family.
+
+28. **[Done]** Deeper `symbolSheetHeroBlueGradient*` and `symbolListRowSelectedBlueGradient*` on light grey (no near-white leading stop).
+
+29. **[Done]** `symbolDetailPersonalStarActive` for the Personal star in `ChartSheetSymbolView`.
+
+30. **[Done]** Darker `placementBarSelectedFill` / `placementBarUnselectedFill` (chart sheet / bottom bar chrome).
+
+31. **[Done]** Stronger guild switch selection: `guildSwitchRowSelectedFillOpacity` / `StrokeOpacity` increased on light grey.
+
+32. **[Done]** Tutorial step accents: `tutorialAccent*` + `signupInterestGreen` on light grey.
+
+33. **[Done]** Marker viewing Components tab: `markerViewingTint*` tokens; `componentsOverviewChipFill` strengthened.
+
+34. **[Done]** Lighter orange/green tab gradients on light grey: `chartOrangeGradient*` and `chartGreenGradient*`; `UnifiedTabTheme` borders use the same family.
+
+35. **[Done]** Tracking / marker flows use `markerPositiveForeground` → `themeAwareGreen` (same ladder as place-marker affordance).
+

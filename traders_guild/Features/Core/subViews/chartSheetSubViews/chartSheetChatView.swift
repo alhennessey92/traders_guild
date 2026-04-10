@@ -326,14 +326,14 @@ struct ImprovedChartSheetChatView: View {
         guard let guildId = rlAppState.currentGuild?.id else { return }
         HapticFeedback.medium.trigger()
         do {
-            _ = try await rlAppState.realApi.reportChartChatMessage(
+            let outcome = try await rlAppState.reportChartChatMessage(
                 guildId: guildId,
                 messageId: message.id,
                 reason: reason
             )
-            rlAppState.showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
+            chartChatManager.applyReportReaction(messageId: message.id, outcome: outcome)
         } catch {
-            rlAppState.showError(error, title: "Failed to Report", style: .toast)
+            return
         }
     }
 

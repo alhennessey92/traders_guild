@@ -271,6 +271,13 @@ class ChartChatManager: ObservableObject {
         }
     }
 
+    func applyReportReaction(messageId: UUID, outcome: ReportSubmissionOutcome) {
+        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        messages[index].reactions = messages[index].reactions.applyingReportReaction(
+            outcome: outcome
+        )
+    }
+
     func fetchReactionReactors(messageId: UUID, emoji: String) async throws -> RLMessageReactionReactorsDTO {
         guard let chat = activeChartChat else {
             throw APIError.badRequest("Chart chat is not available")

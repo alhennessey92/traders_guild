@@ -3,7 +3,6 @@
 //  traders_guild
 //
 //  Generic panel view that can display CCI, Williams %R, ATR, or Volume indicators
-//  Matches RSIPanelView structure exactly - crosshairs, Y-axis, pan gesture, x-axis
 //
 
 import SwiftUI
@@ -15,6 +14,7 @@ struct GenericIndicatorPanelView: View {
     @ObservedObject var indicatorManager: IndicatorManager
     @ObservedObject var chartData: ChartDataManager
     @ObservedObject var gestureState: ChartGestureState
+    @ObservedObject var viewportState: IndicatorPanelViewportState
     
     let panelType: PanelIndicatorType
     let baseCandleWidth: CGFloat
@@ -22,17 +22,14 @@ struct GenericIndicatorPanelView: View {
     var timeframe: RLChartTimeframe = .h1
     
     @Binding var panelHeight: CGFloat
+    @Binding var expandedPanelHeight: CGFloat
     let minPanelHeight: CGFloat
     let maxPanelHeight: CGFloat
-    var isBottomPanel: Bool = false
     
     // MARK: - Private State
     
     @State private var isDraggingHandle = false
     @State private var dragStartHeight: CGFloat = 0
-    @State private var lastDragTranslation: CGSize = .zero
-    @State private var isCollapsed = false
-    @State private var expandedPanelHeight: CGFloat = 0
     
     // MARK: - Computed Properties
     
@@ -42,6 +39,18 @@ struct GenericIndicatorPanelView: View {
     
     private var totalCandleWidth: CGFloat {
         actualCandleWidth + candleSpacing
+    }
+
+    private var panelTopPadding: CGFloat {
+        18
+    }
+
+    private var panelBottomPadding: CGFloat {
+        4
+    }
+
+    private var isCollapsed: Bool {
+        ChartPanelReserveCalculator.isCollapsedPanelHeight(panelHeight)
     }
     
     private var totalOffset: CGFloat {
@@ -87,6 +96,21 @@ struct GenericIndicatorPanelView: View {
     private var volumeConfig: VolumeConfig? {
         indicatorManager.activeIndicators.volume
     }
+
+    private var zoomPolicy: IndicatorPanelZoomPolicy {
+        switch panelType {
+        case .cci:
+            return .visible(includeZero: true, minimumScale: 0.8)
+        case .williamsR:
+            return .fixed(range: -100...0, minimumScale: 1.0)
+        case .atr:
+            return .visible(hardLowerBound: 0, includeZero: true, minimumScale: 0.8)
+        case .volume:
+            return .visible(hardLowerBound: 0, includeZero: true, minimumScale: 0.8)
+        default:
+            return .visible(minimumScale: 0.8)
+        }
+    }
     
     // MARK: - Body
     
@@ -99,92 +123,31 @@ struct GenericIndicatorPanelView: View {
                 // Panel content area with pan gesture
                 LinkedIndicatorPanelGestureSurface(
                     gestureState: gestureState,
+                    verticalState: viewportState,
                     candleCount: chartData.candles.count,
                     baseCandleWidth: baseCandleWidth,
-                    candleSpacing: candleSpacing
+                    candleSpacing: candleSpacing,
+                    minVerticalScale: zoomPolicy.minimumScale
                 ) {
                     panelContentArea
                 }
                     .frame(height: panelHeight)
-
-                // X-axis labels only if this is the bottom panel
-                if isBottomPanel {
-                    xAxisLabels
-                }
             }
         }
         .background(AppColors.chartPanelBackgroundMuted)
-    }
-
-    // MARK: - Pan Gesture
-    
-    private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                if lastDragTranslation == .zero {
-                    gestureState.beginDrag()
-                }
-                
-                let incrementalX = value.translation.width - lastDragTranslation.width
-                
-                gestureState.applyPan(
-                    translation: CGSize(width: incrementalX, height: 0),
-                    chartWidth: UIScreen.main.bounds.width,
-                    candleCount: chartData.candles.count,
-                    candleWidth: totalCandleWidth,
-                    chartHeight: panelHeight,
-                    priceScale: 1.0,
-                    trackVelocity: true
-                )
-                
-                lastDragTranslation = value.translation
-            }
-            .onEnded { value in
-                gestureState.endDrag(
-                    chartWidth: UIScreen.main.bounds.width,
-                    candleCount: chartData.candles.count,
-                    candleWidth: totalCandleWidth,
-                    chartHeight: panelHeight,
-                    priceScale: 1.0
-                )
-                lastDragTranslation = .zero
-            }
+        .chartPanelBottomHairline()
     }
     
     // MARK: - Resize Handle (matches RSIPanelView exactly)
     
     private var resizeHandleBar: some View {
-        ZStack {
-            Rectangle()
-                .fill(AppColors.chartPanelResizeStripBackground)
-
-            // Capsule always centered
-            Capsule()
-                .fill(isDraggingHandle ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
-                .frame(width: 36, height: 5)
-
-            // Panel label left-aligned
-            HStack(spacing: 4) {
-                (Text(panelTitleBase)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
-                 + Text("  Indicator")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
-                    .lineLimit(1)
-
-                if isCollapsed {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppColors.panelResizeHandleChevronForeground)
-                }
-
-                Spacer()
-            }
-            .padding(.leading, 10)
-        }
-        .frame(height: 22)
-        .contentShape(Rectangle())
+        ChartPanelResizeHandleLabel(
+            primaryText: panelTitleBase,
+            suffixText: "Indicator",
+            isCollapsed: isCollapsed,
+            isDragging: isDraggingHandle,
+            style: .indicator
+        )
         .gesture(
             DragGesture(minimumDistance: 2, coordinateSpace: .global)
                 .onChanged { value in
@@ -226,16 +189,24 @@ struct GenericIndicatorPanelView: View {
 
     private func collapsePanel() {
         guard !isCollapsed else { return }
-        expandedPanelHeight = max(minPanelHeight, panelHeight)
-        panelHeight = 0
-        isCollapsed = true
+        let nextState = ChartPanelPresentationPolicy.collapsed(
+            currentHeight: panelHeight,
+            expandedHeight: expandedPanelHeight,
+            minHeight: minPanelHeight
+        )
+        panelHeight = nextState.currentHeight
+        expandedPanelHeight = nextState.expandedHeight
     }
 
     private func expandPanel() {
         guard isCollapsed else { return }
-        let restoredHeight = expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight
-        panelHeight = min(maxPanelHeight, max(minPanelHeight, restoredHeight))
-        isCollapsed = false
+        let nextState = ChartPanelPresentationPolicy.expanded(
+            expandedHeight: expandedPanelHeight,
+            minHeight: minPanelHeight,
+            maxHeight: maxPanelHeight
+        )
+        panelHeight = nextState.currentHeight
+        expandedPanelHeight = nextState.expandedHeight
     }
     
     // MARK: - Panel Content Area
@@ -245,6 +216,8 @@ struct GenericIndicatorPanelView: View {
         let _ = gestureState.panOffset.width
         let _ = gestureState.candleWidthScale
         let _ = gestureState.crosshairActive
+        let _ = viewportState.priceScale
+        let _ = viewportState.verticalPanOffset
         
         return ZStack {
             AppColors.indicatorPanelPlotBackground
@@ -264,8 +237,7 @@ struct GenericIndicatorPanelView: View {
             // Current value indicator
             currentValueIndicator
             
-            // Panel header with label
-            panelHeaderOverlay
+            miniInfoOverlay
         }
         .clipped()
     }
@@ -295,18 +267,13 @@ struct GenericIndicatorPanelView: View {
     
     private var yAxisLabelsOverlay: some View {
         GeometryReader { geometry in
-            let yAxisValues = getYAxisValues()
-            let range = getValueRange()
-            
-            ForEach(yAxisValues, id: \.self) { value in
-                let y = yPosition(for: value, in: geometry.size.height, range: range)
-                
-                if y >= 0 && y <= geometry.size.height {
-                    Text(formatValue(value))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(AppColors.chartAxisLabelSecondary)
-                        .position(x: geometry.size.width - 20, y: y)
-                }
+            let viewport = transformedViewport(size: geometry.size)
+            HStack(spacing: 0) {
+                Spacer()
+                IndicatorPanelYAxisLane(
+                    viewport: viewport,
+                    labels: yAxisLabels(for: viewport)
+                )
             }
         }
     }
@@ -316,14 +283,14 @@ struct GenericIndicatorPanelView: View {
     private var currentValueIndicator: some View {
         GeometryReader { geometry in
             if let currentValue = getCurrentValue() {
-                let range = getValueRange()
-                let y = yPosition(for: currentValue, in: geometry.size.height, range: range)
+                let viewport = transformedViewport(size: geometry.size)
+                let y = viewport.yPosition(for: currentValue)
                 
-                if y >= 0 && y <= geometry.size.height {
+                if y >= viewport.topPadding && y <= viewport.contentBottomY {
                     // Dashed line to current value
                     Path { path in
                         path.move(to: CGPoint(x: 0, y: y))
-                        path.addLine(to: CGPoint(x: geometry.size.width - 40, y: y))
+                        path.addLine(to: CGPoint(x: plotEndX(totalWidth: geometry.size.width), y: y))
                     }
                     .stroke(lineColor.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
                     
@@ -335,65 +302,79 @@ struct GenericIndicatorPanelView: View {
                         .padding(.vertical, 2)
                         .background(lineColor.opacity(0.8))
                         .cornerRadius(3)
-                        .position(x: geometry.size.width - 20, y: y)
+                        .position(x: geometry.size.width - 24, y: y)
                 }
             }
         }
     }
     
-    // MARK: - Panel Header Overlay
-    
-    private var panelHeaderOverlay: some View {
-        VStack {
-            let headerState = panelHeaderState
-            IndicatorPanelHeaderRow(
-                title: "",
-                valueText: headerState.valueText,
-                valueColor: headerState.valueColor,
-                badgeText: headerState.badgeText,
-                badgeColor: headerState.badgeColor
-            )
+    private var miniInfoOverlay: some View {
+        VStack(alignment: .leading) {
+            let state = panelHeaderState
+            if !state.tokens.isEmpty || state.badge != nil {
+                PanelMiniInfoOverlay(
+                    tokens: state.tokens,
+                    trailingBadge: state.badge
+                )
+            }
             Spacer()
         }
+        .padding(.top, 6)
+        .padding(.leading, 8)
+        .allowsHitTesting(false)
     }
 
-    private var panelHeaderState: (valueText: String?, valueColor: Color, badgeText: String?, badgeColor: Color?) {
+    private var panelHeaderState: (tokens: [PanelMiniInfoToken], badge: PanelMiniInfoBadge?) {
         switch panelType {
         case .cci:
             guard let latest = indicatorManager.latestCCI else {
-                return (nil, AppColors.surfaceWhite90, nil, nil)
+                return ([], nil)
             }
             let condition = cciCondition(for: latest.value)
             return (
-                String(format: "%.1f", latest.value),
-                condition.label.isEmpty ? AppColors.surfaceWhite90 : condition.color,
-                condition.label.isEmpty ? nil : condition.label,
-                condition.label.isEmpty ? nil : condition.color
+                [
+                    PanelMiniInfoToken(
+                        label: nil,
+                        value: String(format: "%.1f", latest.value),
+                        valueColor: condition.label.isEmpty ? AppColors.panelMiniInfoOverlayPrimaryText : condition.color
+                    ),
+                ],
+                condition.label.isEmpty ? nil : PanelMiniInfoBadge(text: condition.label, color: condition.color.opacity(0.88))
             )
         case .williamsR:
             guard let latest = indicatorManager.latestWilliamsR else {
-                return (nil, AppColors.surfaceWhite90, nil, nil)
+                return ([], nil)
             }
             return (
-                String(format: "%.1f", latest.value),
-                AppColors.surfaceWhite90,
-                nil, nil
+                [
+                    PanelMiniInfoToken(
+                        label: nil,
+                        value: String(format: "%.1f", latest.value),
+                        valueColor: AppColors.panelMiniInfoOverlayPrimaryText
+                    ),
+                ],
+                nil
             )
         case .atr:
             guard let latest = indicatorManager.latestATR else {
-                return (nil, AppColors.surfaceWhite90, nil, nil)
+                return ([], nil)
             }
             let formatted = abs(latest.value) >= 1
                 ? String(format: "%.2f", latest.value)
                 : String(format: "%.4f", latest.value)
             return (
-                formatted,
-                AppColors.surfaceWhite90,
-                nil, nil
+                [
+                    PanelMiniInfoToken(
+                        label: nil,
+                        value: formatted,
+                        valueColor: AppColors.panelMiniInfoOverlayPrimaryText
+                    ),
+                ],
+                nil
             )
         case .volume:
             guard let latest = indicatorManager.volumeData.last else {
-                return (nil, AppColors.surfaceWhite90, nil, nil)
+                return ([], nil)
             }
             let condition = latest.condition
             let badgeColor = condition == .bullish
@@ -405,13 +386,17 @@ struct GenericIndicatorPanelView: View {
                     ? String(format: "%.1fK", latest.volume / 1_000)
                     : String(format: "%.0f", latest.volume)
             return (
-                formatted,
-                badgeColor,
-                condition.label,
-                badgeColor
+                [
+                    PanelMiniInfoToken(
+                        label: nil,
+                        value: formatted,
+                        valueColor: badgeColor
+                    ),
+                ],
+                PanelMiniInfoBadge(text: condition.label, color: badgeColor.opacity(0.88))
             )
         default:
-            return (nil, AppColors.surfaceWhite90, nil, nil)
+            return ([], nil)
         }
     }
     
@@ -500,15 +485,17 @@ struct GenericIndicatorPanelView: View {
             actualCandleWidth: actualCandleWidth
         )
 
+        let viewport = transformedViewport(size: size)
+
         switch panelType {
         case .cci:
-            drawCCI(context: context, size: size)
+            drawCCI(context: context, size: size, viewport: viewport)
         case .williamsR:
-            drawWilliamsR(context: context, size: size)
+            drawWilliamsR(context: context, size: size, viewport: viewport)
         case .atr:
-            drawATR(context: context, size: size)
+            drawATR(context: context, size: size, viewport: viewport)
         case .volume:
-            drawVolume(context: context, size: size)
+            drawVolume(context: context, size: size, viewport: viewport)
         default:
             break
         }
@@ -516,122 +503,113 @@ struct GenericIndicatorPanelView: View {
     
     // MARK: - CCI Drawing
     
-    private func drawCCI(context: GraphicsContext, size: CGSize) {
-        let data = indicatorManager.cciData
+    private func drawCCI(context: GraphicsContext, size: CGSize, viewport: IndicatorPanelViewport) {
+        let data = visibleCCIData(for: size.width)
         guard !data.isEmpty else { return }
         
         let config = indicatorManager.activeIndicators.cci
         let overbought = config?.overboughtLevel ?? 100
         let oversold = config?.oversoldLevel ?? -100
         
-        // Draw zones
-        drawOscillatorZones(context: context, size: size, overbought: overbought, oversold: oversold, midLine: 0, minValue: -200, maxValue: 200)
-        
-        // Draw CCI line
-        drawIndicatorLine(context: context, size: size, data: data.map { ($0.candleIndex, $0.value) }, minValue: -200, maxValue: 200, color: lineColor)
+        drawOscillatorZones(
+            context: context,
+            size: size,
+            viewport: viewport,
+            overbought: overbought,
+            oversold: oversold,
+            midLine: 0
+        )
+        drawIndicatorLine(
+            context: context,
+            size: size,
+            data: data.map { ($0.candleIndex, $0.value) },
+            viewport: viewport,
+            color: lineColor
+        )
     }
     
     // MARK: - Williams %R Drawing
     
-    private func drawWilliamsR(context: GraphicsContext, size: CGSize) {
-        let data = indicatorManager.williamsRData
+    private func drawWilliamsR(context: GraphicsContext, size: CGSize, viewport: IndicatorPanelViewport) {
+        let data = visibleWilliamsRData(for: size.width)
         guard !data.isEmpty else { return }
         
         let config = indicatorManager.activeIndicators.williamsR
         let overbought = config?.overboughtLevel ?? -20
         let oversold = config?.oversoldLevel ?? -80
         
-        // Williams %R is 0 to -100, overbought at -20, oversold at -80
-        drawOscillatorZones(context: context, size: size, overbought: overbought, oversold: oversold, midLine: -50, minValue: -100, maxValue: 0)
-        
-        // Draw Williams %R line
-        drawIndicatorLine(context: context, size: size, data: data.map { ($0.candleIndex, $0.value) }, minValue: -100, maxValue: 0, color: lineColor)
+        drawOscillatorZones(
+            context: context,
+            size: size,
+            viewport: viewport,
+            overbought: overbought,
+            oversold: oversold,
+            midLine: -50
+        )
+        drawIndicatorLine(
+            context: context,
+            size: size,
+            data: data.map { ($0.candleIndex, $0.value) },
+            viewport: viewport,
+            color: lineColor
+        )
     }
     
     // MARK: - ATR Drawing
     
-    private func drawATR(context: GraphicsContext, size: CGSize) {
-        let data = indicatorManager.atrData
+    private func drawATR(context: GraphicsContext, size: CGSize, viewport: IndicatorPanelViewport) {
+        let data = visibleATRData(for: size.width)
         guard !data.isEmpty else { return }
-        
-        let maxATR = data.map { $0.value }.max() ?? 1
-        let minATR: Double = 0
-        
-        // Draw horizontal grid lines
-        let gridColor = AppColors.surfaceGray20
-        for i in 1...3 {
-            let y = size.height * CGFloat(i) / 4
-            let gridPath = Path { path in
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: size.width - 50, y: y))
-            }
-            context.stroke(gridPath, with: .color(gridColor), lineWidth: 0.5)
-        }
-        
-        // Draw ATR line
-        drawIndicatorLine(context: context, size: size, data: data.map { ($0.candleIndex, $0.value) }, minValue: minATR, maxValue: maxATR * 1.1, color: lineColor)
+
+        drawHorizontalReferenceGridLines(context: context, size: size, viewport: viewport)
+        drawIndicatorLine(
+            context: context,
+            size: size,
+            data: data.map { ($0.candleIndex, $0.value) },
+            viewport: viewport,
+            color: lineColor
+        )
     }
     
     // MARK: - Volume Drawing
     
-    private func drawVolume(context: GraphicsContext, size: CGSize) {
-        let data = indicatorManager.volumeData
+    private func drawVolume(context: GraphicsContext, size: CGSize, viewport: IndicatorPanelViewport) {
+        let data = visibleVolumeData(for: size.width)
         guard !data.isEmpty else { return }
         
         let config = indicatorManager.activeIndicators.volume
         let bullColor = config?.bullishColor.color ?? .green
         let bearColor = config?.bearishColor.color ?? .red
         
-        let chartWidth = size.width - 50
-        let startOffset = totalOffset
-        
-        let firstVisibleIndex = max(0, Int(-startOffset / totalCandleWidth) - 1)
-        let visibleCandleCount = Int(chartWidth / totalCandleWidth) + 3
-        let lastVisibleIndex = min(data.count - 1, firstVisibleIndex + visibleCandleCount)
-        
-        guard firstVisibleIndex <= lastVisibleIndex else { return }
-        
-        // Find max volume in visible range
-        var maxVolume: Double = 0
-        for i in firstVisibleIndex...lastVisibleIndex {
-            if i < data.count {
-                maxVolume = max(maxVolume, data[i].volume)
-            }
-        }
-        
-        guard maxVolume > 0 else { return }
-        
-        // Draw volume bars
-        for i in firstVisibleIndex...lastVisibleIndex {
-            guard i < data.count else { continue }
-            let point = data[i]
-            let x = CGFloat(point.candleIndex) * totalCandleWidth + startOffset
-            
-            guard x + actualCandleWidth >= 0 && x <= chartWidth else { continue }
-            
-            let barHeight = CGFloat(point.volume / maxVolume) * size.height * 0.9
-            let barY = size.height - barHeight
-            
+        drawHorizontalReferenceGridLines(context: context, size: size, viewport: viewport)
+
+        let plotEndX = plotEndX(totalWidth: size.width)
+        let zeroY = viewport.yPosition(for: 0)
+
+        for point in data {
+            let x = CGFloat(point.candleIndex) * totalCandleWidth + totalOffset
+            guard x + actualCandleWidth >= 0 && x <= plotEndX else { continue }
+
+            let volumeY = viewport.yPosition(for: point.volume)
             let barRect = CGRect(
                 x: x + candleSpacing / 2,
-                y: barY,
+                y: min(volumeY, zeroY),
                 width: actualCandleWidth,
-                height: barHeight
+                height: max(1, abs(zeroY - volumeY))
             )
-            
+
             let barColor = point.isBullish ? bullColor : bearColor
             context.fill(Path(barRect), with: .color(barColor.opacity(0.7)))
         }
         
-        // Draw Volume MA if enabled
         if config?.showMA == true {
             var maPath = Path()
             var started = false
             
-            for i in firstVisibleIndex...lastVisibleIndex {
-                guard i < data.count, let ma = data[i].ma else { continue }
-                let x = CGFloat(data[i].candleIndex) * totalCandleWidth + startOffset + totalCandleWidth / 2
-                let y = size.height - CGFloat(ma / maxVolume) * size.height * 0.9
+            for point in data {
+                guard let ma = point.ma else { continue }
+                let x = CGFloat(point.candleIndex) * totalCandleWidth + totalOffset + totalCandleWidth / 2
+                let y = viewport.yPosition(for: ma)
                 
                 if !started {
                     maPath.move(to: CGPoint(x: x, y: y))
@@ -647,17 +625,20 @@ struct GenericIndicatorPanelView: View {
     
     // MARK: - Helper Drawing Functions
     
-    private func drawOscillatorZones(context: GraphicsContext, size: CGSize, overbought: Double, oversold: Double, midLine: Double, minValue: Double, maxValue: Double) {
-        let chartWidth = size.width - 50
-        let range = maxValue - minValue
-        
-        // Overbought zone
-        let obY = size.height * CGFloat((maxValue - overbought) / range)
+    private func drawOscillatorZones(
+        context: GraphicsContext,
+        size: CGSize,
+        viewport: IndicatorPanelViewport,
+        overbought: Double,
+        oversold: Double,
+        midLine: Double
+    ) {
+        let chartWidth = plotEndX(totalWidth: size.width)
+        let obY = viewport.yPosition(for: overbought)
         let obRect = CGRect(x: 0, y: 0, width: chartWidth, height: obY)
         context.fill(Path(obRect), with: .color(AppColors.statusNegative10))
         
-        // Oversold zone
-        let osY = size.height * CGFloat((maxValue - oversold) / range)
+        let osY = viewport.yPosition(for: oversold)
         let osRect = CGRect(x: 0, y: osY, width: chartWidth, height: size.height - osY)
         context.fill(Path(osRect), with: .color(AppColors.statusPositive10))
         
@@ -675,8 +656,7 @@ struct GenericIndicatorPanelView: View {
         }
         context.stroke(osPath, with: .color(AppColors.statusPositive50), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         
-        // Middle line
-        let midY = size.height * CGFloat((maxValue - midLine) / range)
+        let midY = viewport.yPosition(for: midLine)
         let midPath = Path { path in
             path.move(to: CGPoint(x: 0, y: midY))
             path.addLine(to: CGPoint(x: chartWidth, y: midY))
@@ -684,23 +664,45 @@ struct GenericIndicatorPanelView: View {
         context.stroke(midPath, with: .color(AppColors.surfaceGray30), lineWidth: 0.5)
     }
     
-    private func drawIndicatorLine(context: GraphicsContext, size: CGSize, data: [(candleIndex: Int, value: Double)], minValue: Double, maxValue: Double, color: Color) {
+    private func drawHorizontalReferenceGridLines(
+        context: GraphicsContext,
+        size: CGSize,
+        viewport: IndicatorPanelViewport
+    ) {
+        let plotWidth = plotEndX(totalWidth: size.width)
+        guard plotWidth > 0 else { return }
+
+        var path = Path()
+        for value in viewport.dynamicLevels(emphasis: emphasisValues) {
+            let y = viewport.yPosition(for: value)
+            guard y >= viewport.topPadding - 20, y <= viewport.contentBottomY + 20 else { continue }
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: plotWidth, y: y))
+        }
+
+        context.stroke(path, with: .color(AppColors.surfaceGray20), lineWidth: 0.5)
+    }
+
+    private func drawIndicatorLine(
+        context: GraphicsContext,
+        size: CGSize,
+        data: [(candleIndex: Int, value: Double)],
+        viewport: IndicatorPanelViewport,
+        color: Color
+    ) {
         guard !data.isEmpty else { return }
         
-        let chartWidth = size.width - 50
-        let startOffset = totalOffset
-        let range = maxValue - minValue
+        let chartWidth = plotEndX(totalWidth: size.width)
         
         var path = Path()
         var started = false
         
         for point in data {
-            let x = CGFloat(point.candleIndex) * totalCandleWidth + startOffset + totalCandleWidth / 2
+            let x = CGFloat(point.candleIndex) * totalCandleWidth + totalOffset + totalCandleWidth / 2
             
             guard x >= -totalCandleWidth && x <= chartWidth + totalCandleWidth else { continue }
             
-            let normalizedValue = (point.value - minValue) / range
-            let y = size.height * CGFloat(1 - normalizedValue)
+            let y = viewport.yPosition(for: point.value)
             
             if !started {
                 path.move(to: CGPoint(x: x, y: y))
@@ -715,47 +717,139 @@ struct GenericIndicatorPanelView: View {
     
     // MARK: - Value Helpers
     
-    private func getYAxisValues() -> [Double] {
+    private func transformedViewport(size: CGSize) -> IndicatorPanelViewport {
+        IndicatorPanelViewport(
+            rawValueRange: resolvedValueRange(totalWidth: size.width),
+            topPadding: panelTopPadding,
+            bottomPadding: panelBottomPadding,
+            visualHeight: size.height,
+            priceScale: viewportState.priceScale,
+            verticalPanOffset: viewportState.verticalPanOffset
+        )
+    }
+
+    private func plotEndX(totalWidth: CGFloat) -> CGFloat {
+        ChartAxisMetrics.plotWidth(totalWidth: totalWidth)
+    }
+
+    private func visibleIndexBounds(totalWidth: CGFloat) -> ClosedRange<Int>? {
+        guard !chartData.candles.isEmpty, totalCandleWidth > 0 else { return nil }
+        let plotWidth = plotEndX(totalWidth: totalWidth)
+        let start = max(0, Int(floor(-totalOffset / totalCandleWidth)) - 5)
+        let end = min(chartData.candles.count - 1, start + Int(ceil(plotWidth / totalCandleWidth)) + 10)
+        guard start <= end else { return nil }
+        return start...end
+    }
+
+    private func visibleCCIData(for totalWidth: CGFloat) -> [CCIDataPoint] {
+        guard let bounds = visibleIndexBounds(totalWidth: totalWidth) else { return [] }
+        return indicatorManager.cciData.filter { bounds.contains($0.candleIndex) }
+    }
+
+    private func visibleWilliamsRData(for totalWidth: CGFloat) -> [WilliamsRDataPoint] {
+        guard let bounds = visibleIndexBounds(totalWidth: totalWidth) else { return [] }
+        return indicatorManager.williamsRData.filter { bounds.contains($0.candleIndex) }
+    }
+
+    private func visibleATRData(for totalWidth: CGFloat) -> [ATRDataPoint] {
+        guard let bounds = visibleIndexBounds(totalWidth: totalWidth) else { return [] }
+        return indicatorManager.atrData.filter { bounds.contains($0.candleIndex) }
+    }
+
+    private func visibleVolumeData(for totalWidth: CGFloat) -> [VolumeDataPoint] {
+        guard let bounds = visibleIndexBounds(totalWidth: totalWidth) else { return [] }
+        return indicatorManager.volumeData.filter { bounds.contains($0.candleIndex) }
+    }
+
+    private var emphasisValues: [Double] {
         switch panelType {
         case .cci:
-            return [-200, -100, 0, 100, 200]
+            return [cciConfig?.overboughtLevel ?? 100, cciConfig?.oversoldLevel ?? -100, 0]
         case .williamsR:
-            return [-100, -80, -50, -20, 0]
-        case .atr:
-            if let maxATR = indicatorManager.atrData.map({ $0.value }).max() {
-                let step = maxATR / 4
-                return [0, step, step * 2, step * 3, maxATR]
-            }
-            return []
-        case .volume:
-            return []  // Volume doesn't show Y-axis values typically
+            return [
+                indicatorManager.activeIndicators.williamsR?.overboughtLevel ?? -20,
+                indicatorManager.activeIndicators.williamsR?.oversoldLevel ?? -80,
+                -50
+            ]
+        case .atr, .volume:
+            return [0]
         default:
-            return []
+            return [0]
         }
     }
-    
-    private func getValueRange() -> (min: Double, max: Double) {
+
+    private func resolvedValueRange(totalWidth: CGFloat) -> (min: Double, max: Double) {
         switch panelType {
         case .cci:
-            return (-200, 200)
+            return zoomPolicy.resolvedRange(
+                visibleValues: visibleCCIData(for: totalWidth).map(\.value),
+                fallbackValues: indicatorManager.cciData.map(\.value),
+                emphasisValues: emphasisValues
+            )
         case .williamsR:
-            return (-100, 0)
+            return zoomPolicy.resolvedRange(
+                visibleValues: visibleWilliamsRData(for: totalWidth).map(\.value),
+                fallbackValues: indicatorManager.williamsRData.map(\.value),
+                emphasisValues: emphasisValues
+            )
         case .atr:
-            let max = (indicatorManager.atrData.map { $0.value }.max() ?? 1) * 1.1
-            return (0, max)
+            return zoomPolicy.resolvedRange(
+                visibleValues: visibleATRData(for: totalWidth).map(\.value),
+                fallbackValues: indicatorManager.atrData.map(\.value),
+                emphasisValues: emphasisValues
+            )
         case .volume:
-            let max = (indicatorManager.volumeData.map { $0.volume }.max() ?? 1) * 1.1
-            return (0, max)
+            let visibleValues = visibleVolumeData(for: totalWidth).flatMap { point -> [Double] in
+                if let ma = point.ma {
+                    return [point.volume, ma]
+                }
+                return [point.volume]
+            }
+            let fallbackValues = indicatorManager.volumeData.flatMap { point -> [Double] in
+                if let ma = point.ma {
+                    return [point.volume, ma]
+                }
+                return [point.volume]
+            }
+            return zoomPolicy.resolvedRange(
+                visibleValues: visibleValues,
+                fallbackValues: fallbackValues,
+                emphasisValues: emphasisValues
+            )
         default:
             return (0, 100)
         }
     }
-    
-    private func yPosition(for value: Double, in height: CGFloat, range: (min: Double, max: Double)) -> CGFloat {
-        let normalizedValue = (value - range.min) / (range.max - range.min)
-        return height * CGFloat(1 - normalizedValue)
+
+    private func yAxisLabels(for viewport: IndicatorPanelViewport) -> [IndicatorPanelYAxisLabel] {
+        viewport.dynamicLevels(emphasis: emphasisValues).map { value in
+            IndicatorPanelYAxisLabel(
+                value: value,
+                text: formatValue(value),
+                color: axisLabelColor(for: value)
+            )
+        }
     }
-    
+
+    private func axisLabelColor(for value: Double) -> Color {
+        switch panelType {
+        case .cci:
+            let overbought = cciConfig?.overboughtLevel ?? 100
+            let oversold = cciConfig?.oversoldLevel ?? -100
+            if abs(value - overbought) < 0.5 { return AppColors.statusNegative85 }
+            if abs(value - oversold) < 0.5 { return AppColors.statusPositive85 }
+            return AppColors.panelYAxisLaneText
+        case .williamsR:
+            let overbought = indicatorManager.activeIndicators.williamsR?.overboughtLevel ?? -20
+            let oversold = indicatorManager.activeIndicators.williamsR?.oversoldLevel ?? -80
+            if abs(value - overbought) < 0.5 { return AppColors.statusNegative85 }
+            if abs(value - oversold) < 0.5 { return AppColors.statusPositive85 }
+            return AppColors.panelYAxisLaneText
+        default:
+            return AppColors.panelYAxisLaneText
+        }
+    }
+
     private func getCurrentValue() -> Double? {
         switch panelType {
         case .cci:

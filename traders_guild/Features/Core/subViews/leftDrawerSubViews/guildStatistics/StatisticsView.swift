@@ -33,7 +33,7 @@ struct StatisticsView: View {
             } else if let statistics = leftDrawerViewModel.statistics {
                 GuildStatsCard(title: "Snapshot", subtitle: "Guild rank and totals") {
                     StatMetricRow(label: "Guild Reputation", value: formatInt(guildReputationTotal), accent: AppColors.accentColor)
-                    StatMetricRow(label: "Guild Rank", value: statistics.guildRankDisplay, accent: .yellow)
+                    StatMetricRow(label: "Guild Rank", value: statistics.guildRankDisplay, accent: AppColors.statisticsMetricYellow)
                     StatMetricRow(label: "Total Predictions", value: statistics.totalPredictionsDisplay, accent: AppColors.whiteText)
                     StatMetricRow(label: "Member Count", value: "\(guildMemberCount)", accent: AppColors.whiteText)
                 }
@@ -44,17 +44,21 @@ struct StatisticsView: View {
                         ? Double(losses) / Double(statistics.totalPredictions)
                         : 0
 
-                    StatMetricRow(label: "Wins", value: formatInt(statistics.correctPredictions), accent: .green)
+                    StatMetricRow(label: "Wins", value: formatInt(statistics.correctPredictions), accent: AppColors.statisticsMetricGreen)
                     StatMetricRow(label: "Losses", value: formatInt(losses), accent: .red)
                     StatMetricRow(label: "Accuracy", value: statistics.averageAccuracyDisplay, accent: accuracyTint(statistics.averageAccuracy))
-                    StatMetricRow(label: "Error Rate", value: percent(errorRate), accent: .orange)
+                    StatMetricRow(label: "Error Rate", value: percent(errorRate), accent: AppColors.statisticsMetricOrange)
                 }
 
                 GuildStatsCard(title: "Weekly Momentum", subtitle: "Most recent guild movement") {
-                    StatMetricRow(label: "New Members", value: statistics.newMembersDisplay, accent: .mint)
+                    StatMetricRow(label: "New Members", value: statistics.newMembersDisplay, accent: AppColors.statisticsMetricMint)
                     StatMetricRow(label: "Active Users", value: statistics.activeUsersDisplay, accent: .blue)
                     StatMetricRow(label: "Predictions", value: statistics.predictionsMadeDisplay, accent: .purple)
-                    StatMetricRow(label: "Rep Earned", value: statistics.reputationEarnedDisplay, accent: statistics.reputationEarnedWeek >= 0 ? .green : .red)
+                    StatMetricRow(
+                        label: "Rep Earned",
+                        value: statistics.reputationEarnedDisplay,
+                        accent: statistics.reputationEarnedWeek >= 0 ? AppColors.statisticsMetricGreen : AppColors.statusNegative
+                    )
                 }
 
                 GuildStatsCard(title: "Derived Efficiency", subtitle: "Calculated from existing data") {
@@ -74,7 +78,11 @@ struct StatisticsView: View {
                     StatMetricRow(label: "Rep / Prediction", value: String(format: "%.2f", repPerPrediction), accent: AppColors.accentColor)
                     StatMetricRow(label: "Participation", value: percent(participationRatio), accent: .blue)
                     StatMetricRow(label: "Hit Rate", value: percent(hitRate), accent: accuracyTint(hitRate))
-                    StatMetricRow(label: "Predictions / Active User", value: String(format: "%.2f", predictionsPerActiveUser), accent: .orange)
+                    StatMetricRow(
+                        label: "Predictions / Active User",
+                        value: String(format: "%.2f", predictionsPerActiveUser),
+                        accent: AppColors.statisticsMetricOrange
+                    )
                 }
             }
         }
@@ -82,10 +90,10 @@ struct StatisticsView: View {
     }
 
     private func accuracyTint(_ accuracy: Double) -> Color {
-        if accuracy >= 0.7 { return .green }
-        if accuracy >= 0.5 { return .yellow }
-        if accuracy >= 0.35 { return .orange }
-        return .red
+        if accuracy >= 0.7 { return AppColors.statisticsMetricGreen }
+        if accuracy >= 0.5 { return AppColors.statisticsMetricYellow }
+        if accuracy >= 0.35 { return AppColors.statisticsMetricOrange }
+        return AppColors.statusNegative
     }
 
     private func percent(_ value: Double) -> String {
@@ -124,10 +132,10 @@ private struct GuildStatsCard<Content: View>: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.surfaceWhite06)
+                .fill(AppColors.guildStatisticsCardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(AppColors.surfaceWhite10, lineWidth: 1)
+                        .stroke(AppColors.guildStatisticsCardStroke, lineWidth: 1)
                 )
         )
     }

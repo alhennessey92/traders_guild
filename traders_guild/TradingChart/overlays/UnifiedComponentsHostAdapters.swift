@@ -244,6 +244,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         defer { isSyncingFromHost = false }
         refreshSnapshot()
 
+        let activeEditingDraftId = placementState.editingDrawingId
         let previousMirroredHostDrawingIDs = mirroredHostDrawingIDs
         let hostDrawingDrafts = drawingManager.activeDrawings.map { drawing in
             ChartDrawingBridge.markerDraft(
@@ -265,6 +266,10 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         nextComponents.append(contentsOf: preservedDrawingComponents)
         nextComponents.append(contentsOf: timeframeDraftsFromHost())
         placementState.components = nextComponents
+        if let activeEditingDraftId,
+           !nextComponents.contains(where: { $0.id == activeEditingDraftId }) {
+            placementState.commitDrawingAndExit()
+        }
     }
 
     private func applyToHostIfNeeded() {

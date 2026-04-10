@@ -352,7 +352,7 @@ struct ChartSheetSymbolView: View {
                     if isAddingToPersonal {
                         ProgressView()
                             .scaleEffect(0.6)
-                            .tint(inPersonal ? .yellow : AppColors.surfaceDetailSecondaryForeground)
+                            .tint(inPersonal ? AppColors.symbolDetailPersonalStarActive : AppColors.surfaceDetailSecondaryForeground)
                     } else {
                         Image(systemName: inPersonal ? "star.fill" : "star")
                             .font(.system(size: 12, weight: .semibold))
@@ -360,7 +360,7 @@ struct ChartSheetSymbolView: View {
                     Text("Personal")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(inPersonal ? .yellow : AppColors.surfaceDetailSecondaryForeground)
+                .foregroundColor(inPersonal ? AppColors.symbolDetailPersonalStarActive : AppColors.surfaceDetailSecondaryForeground)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(

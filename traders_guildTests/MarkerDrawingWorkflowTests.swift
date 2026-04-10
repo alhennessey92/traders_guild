@@ -235,4 +235,145 @@ struct MarkerDrawingWorkflowTests {
         #expect(state.activeTool == nil)
         #expect(state.activeSubTool == nil)
     }
+
+    @Test
+    func removingActiveDrawingDraftClearsWorkflowStateForLineTools() {
+        let tools: [MarkerDrawingWorkflowTool] = [.support, .resistance, .horizontalLine, .trendline]
+
+        for (index, tool) in tools.enumerated() {
+            let state = MarkerPlacementState()
+            let now = Date(timeIntervalSince1970: 1_700_000_000 + Double(index * 120))
+            state.reset(to: .analysis, anchorTime: now, anchorPrice: 1.24 + Double(index) * 0.01)
+
+            let survivorId = state.addDrawingOverlayComponent(
+                .drawingTrendline,
+                payload: makeTrendlinePayload(start: now, startPrice: 1.1, endPrice: 1.2)
+            )
+            #expect(survivorId != nil)
+
+            let activeId: UUID?
+            if tool == .trendline {
+                activeId = state.addDrawingOverlayComponent(
+                    .drawingTrendline,
+                    payload: makeTrendlinePayload(
+                        start: now.addingTimeInterval(300),
+                        startPrice: 1.3,
+                        endPrice: 1.4
+                    )
+                )
+                if let activeId {
+                    state.beginEditingDrawing(activeId, tool: .trendline)
+                }
+            } else {
+                activeId = state.activateImmediateHorizontalDrawing(tool: tool)
+            }
+
+            #expect(activeId != nil)
+            #expect(state.drawingInteractionPhase == .editing)
+            #expect(state.editingDrawingId == activeId)
+            #expect(state.activeDrawingWorkflowTool == tool)
+
+            if let activeId {
+                state.removeComponent(id: activeId)
+                #expect(!state.components.contains { $0.id == activeId })
+            }
+
+            #expect(state.drawingInteractionPhase == .idle)
+            #expect(state.editingDrawingId == nil)
+            #expect(state.activeDrawingDraft == nil)
+            #expect(state.activeTool == nil)
+            #expect(state.activeSubTool == nil)
+
+            if let survivorId {
+                #expect(state.components.contains { $0.id == survivorId })
+            }
+        }
+    }
+
+    @Test
+    func removingNonActiveDrawingDraftKeepsCurrentEditingSession() {
+        let state = MarkerPlacementState()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        state.reset(to: .analysis, anchorTime: now, anchorPrice: 1.2450)
+
+        let inactiveId = state.addDrawingOverlayComponent(
+            .drawingTrendline,
+            payload: makeTrendlinePayload(start: now, startPrice: 1.1, endPrice: 1.2)
+        )
+        let activeId = state.activateImmediateHorizontalDrawing(tool: .horizontalLine)
+
+        #expect(inactiveId != nil)
+        #expect(activeId != nil)
+        #expect(state.drawingInteractionPhase == .editing)
+        #expect(state.editingDrawingId == activeId)
+
+        if let inactiveId {
+            state.removeComponent(id: inactiveId)
+        }
+
+        #expect(state.drawingInteractionPhase == .editing)
+        #expect(state.editingDrawingId == activeId)
+        #expect(state.activeTool == .draw)
+        #expect(state.activeSubTool == MarkerToolOption.drawHorizontalLine.rawValue)
+
+        if let activeId {
+            #expect(state.components.contains { $0.id == activeId })
+        }
+    }
+
+    @Test
+    func chartDrawingManagerClearsWorkflowWhenActiveDrawingIsRemoved() {
+        let manager = ChartDrawingManager()
+        let inactiveId = manager.addDrawing(type: .trendline)
+        let activeId = manager.addDrawing(type: .horizontalLine)
+
+        manager.beginEditingDrawing(activeId)
+        #expect(manager.drawingInteractionPhase == .editing)
+        #expect(manager.editingDrawingId == activeId)
+        #expect(manager.activeDrawingType == .horizontalLine)
+
+        manager.removeDrawing(id: inactiveId)
+        #expect(manager.drawingInteractionPhase == .editing)
+        #expect(manager.editingDrawingId == activeId)
+        #expect(manager.activeDrawingType == .horizontalLine)
+
+        manager.removeDrawing(id: activeId)
+        #expect(manager.drawingInteractionPhase == .idle)
+        #expect(manager.editingDrawingId == nil)
+        #expect(manager.activeDrawingType == nil)
+        #expect(!manager.drawings.contains { $0.id == activeId })
+    }
+
+    @Test
+    func chartDrawingManagerClearsWorkflowWhenSetDrawingsDropsActiveDrawing() {
+        let manager = ChartDrawingManager()
+        let inactiveId = manager.addDrawing(type: .trendline)
+        let activeId = manager.addDrawing(type: .horizontalLine)
+        let survivor = manager.drawings.first { $0.id == inactiveId }
+
+        manager.beginEditingDrawing(activeId)
+        #expect(manager.drawingInteractionPhase == .editing)
+        #expect(manager.editingDrawingId == activeId)
+
+        manager.setDrawings(survivor.map { [$0] } ?? [])
+        #expect(manager.drawingInteractionPhase == .idle)
+        #expect(manager.editingDrawingId == nil)
+        #expect(manager.activeDrawingType == nil)
+        #expect(!manager.drawings.contains { $0.id == activeId })
+    }
+
+    private func makeTrendlinePayload(
+        start: Date,
+        startPrice: Double,
+        endPrice: Double
+    ) -> MarkerComponentPayload {
+        .drawingTrendline(
+            TrendlinePayload(
+                startTime: start,
+                startPrice: startPrice,
+                endTime: start.addingTimeInterval(60),
+                endPrice: endPrice
+            )
+        )
+    }
 }

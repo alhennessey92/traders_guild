@@ -203,6 +203,7 @@ class RLAppState: ObservableObject {
     @Published private(set) var biometricUnlockRequestID: UUID?
     @Published private(set) var runtimeFlags: RLRuntimeFlagsDTO = .disabled
     @Published private(set) var reportedUserStateVersion: Int = 0
+    @Published private(set) var reportedContentStateVersion: Int = 0
 
     /// Keeps auth/signup onboarding in ContentView even after auth tokens are issued.
     @Published var isOnboardingFlowActive: Bool = false
@@ -241,6 +242,7 @@ class RLAppState: ObservableObject {
     private var hasShownOfflineToastForCurrentEpisode = false
     private var pendingSignupWelcomeUserId: UUID?
     private let reportedUserStore = ReportedUserStore()
+    private let reportedContentStore = ReportedContentStore()
 
     @Published var notificationStats: RLNotificationStatsDTO? {
         didSet {
@@ -2477,6 +2479,7 @@ class RLAppState: ObservableObject {
         showSignupWelcomeCarousel = false
         runtimeFlags = .disabled
         reportedUserStateVersion = 0
+        reportedContentStateVersion = 0
         clearBiometricAppLock()
         pendingSignupWelcomeUserId = nil
         pendingPasswordResetToken = nil
@@ -2676,7 +2679,81 @@ class RLAppState: ObservableObject {
         reportedUserStateVersion += 1
     }
 
+    func hasReportedMarker(guildId: UUID, markerId: UUID) -> Bool {
+        hasReportedContent(
+            guildId: guildId,
+            contentId: markerId,
+            contentNamespace: .marker
+        )
+    }
+
+    func hasReportedChatroomMessage(guildId: UUID, messageId: UUID) -> Bool {
+        hasReportedContent(
+            guildId: guildId,
+            contentId: messageId,
+            contentNamespace: .chatroomMessage
+        )
+    }
+
+    func hasReportedDMMessage(guildId: UUID, messageId: UUID) -> Bool {
+        hasReportedContent(
+            guildId: guildId,
+            contentId: messageId,
+            contentNamespace: .dmMessage
+        )
+    }
+
+    func hasReportedChartChatMessage(guildId: UUID, messageId: UUID) -> Bool {
+        hasReportedContent(
+            guildId: guildId,
+            contentId: messageId,
+            contentNamespace: .chartChatMessage
+        )
+    }
+
+    private func hasReportedContent(
+        guildId: UUID,
+        contentId: UUID,
+        contentNamespace: ReportedContentNamespace
+    ) -> Bool {
+        guard let reporterUserId = currentUser?.id else { return false }
+        return reportedContentStore.isReported(
+            reporterUserId: reporterUserId,
+            guildId: guildId,
+            contentId: contentId,
+            namespace: AppConfig.sessionStorageNamespace,
+            contentNamespace: contentNamespace
+        )
+    }
+
+    private func markReportedContent(
+        guildId: UUID,
+        contentId: UUID,
+        contentNamespace: ReportedContentNamespace
+    ) {
+        guard let reporterUserId = currentUser?.id else { return }
+        reportedContentStore.markReported(
+            reporterUserId: reporterUserId,
+            guildId: guildId,
+            contentId: contentId,
+            namespace: AppConfig.sessionStorageNamespace,
+            contentNamespace: contentNamespace
+        )
+        reportedContentStateVersion += 1
+    }
+
     private func isDuplicateUserReportError(_ error: Error) -> Bool {
+        switch error {
+        case APIError.serverError(let statusCode, let detail):
+            return statusCode == 409 && detail.localizedCaseInsensitiveContains("already reported")
+        case APIError.badRequest(let detail):
+            return detail.localizedCaseInsensitiveContains("already reported")
+        default:
+            return false
+        }
+    }
+
+    private func isDuplicateContentReportError(_ error: Error) -> Bool {
         switch error {
         case APIError.serverError(let statusCode, let detail):
             return statusCode == 409 && detail.localizedCaseInsensitiveContains("already reported")
@@ -3835,6 +3912,142 @@ class RLAppState: ObservableObject {
                 return
             }
             showError(error, title: "Failed to Report User", style: .toast)
+            throw error
+        }
+    }
+
+    func reportChatroomMessage(
+        guildId: UUID,
+        chatroomId: UUID,
+        messageId: UUID,
+        reason: String
+    ) async throws -> ReportSubmissionOutcome {
+        do {
+            _ = try await realApi.reportChatroomMessage(
+                guildId: guildId,
+                chatroomId: chatroomId,
+                messageId: messageId,
+                reason: reason
+            )
+            markReportedContent(
+                guildId: guildId,
+                contentId: messageId,
+                contentNamespace: .chatroomMessage
+            )
+            showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
+            return .submitted
+        } catch {
+            if isDuplicateContentReportError(error) {
+                markReportedContent(
+                    guildId: guildId,
+                    contentId: messageId,
+                    contentNamespace: .chatroomMessage
+                )
+                showInfo("You already reported this message. Moderators will review it.")
+                return .alreadyReported
+            }
+            showError(error, title: "Failed to Report Message", style: .toast)
+            throw error
+        }
+    }
+
+    func reportDMMessage(
+        guildId: UUID,
+        threadId: UUID,
+        messageId: UUID,
+        reason: String
+    ) async throws -> ReportSubmissionOutcome {
+        do {
+            _ = try await realApi.reportDMMessage(
+                guildId: guildId,
+                threadId: threadId,
+                messageId: messageId,
+                reason: reason
+            )
+            markReportedContent(
+                guildId: guildId,
+                contentId: messageId,
+                contentNamespace: .dmMessage
+            )
+            showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
+            return .submitted
+        } catch {
+            if isDuplicateContentReportError(error) {
+                markReportedContent(
+                    guildId: guildId,
+                    contentId: messageId,
+                    contentNamespace: .dmMessage
+                )
+                showInfo("You already reported this message. Moderators will review it.")
+                return .alreadyReported
+            }
+            showError(error, title: "Failed to Report Message", style: .toast)
+            throw error
+        }
+    }
+
+    func reportChartChatMessage(
+        guildId: UUID,
+        messageId: UUID,
+        reason: String
+    ) async throws -> ReportSubmissionOutcome {
+        do {
+            _ = try await realApi.reportChartChatMessage(
+                guildId: guildId,
+                messageId: messageId,
+                reason: reason
+            )
+            markReportedContent(
+                guildId: guildId,
+                contentId: messageId,
+                contentNamespace: .chartChatMessage
+            )
+            showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
+            return .submitted
+        } catch {
+            if isDuplicateContentReportError(error) {
+                markReportedContent(
+                    guildId: guildId,
+                    contentId: messageId,
+                    contentNamespace: .chartChatMessage
+                )
+                showInfo("You already reported this message. Moderators will review it.")
+                return .alreadyReported
+            }
+            showError(error, title: "Failed to Report Message", style: .toast)
+            throw error
+        }
+    }
+
+    func reportMarker(
+        guildId: UUID,
+        markerId: UUID,
+        reason: String
+    ) async throws -> ReportSubmissionOutcome {
+        do {
+            _ = try await realApi.reportMarker(
+                guildId: guildId,
+                markerId: markerId,
+                reason: reason
+            )
+            markReportedContent(
+                guildId: guildId,
+                contentId: markerId,
+                contentNamespace: .marker
+            )
+            showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
+            return .submitted
+        } catch {
+            if isDuplicateContentReportError(error) {
+                markReportedContent(
+                    guildId: guildId,
+                    contentId: markerId,
+                    contentNamespace: .marker
+                )
+                showInfo("You already reported this marker. Moderators will review it.")
+                return .alreadyReported
+            }
+            showError(error, title: "Failed to Report Marker", style: .toast)
             throw error
         }
     }

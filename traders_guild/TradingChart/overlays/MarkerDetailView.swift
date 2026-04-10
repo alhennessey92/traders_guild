@@ -178,16 +178,14 @@ struct MarkerDetailView: View {
     private func handleReport(reason: String) {
         HapticFeedback.medium.trigger()
         Task {
-            guard let guildId = rlAppState.currentGuild?.id else { return }
             do {
-                _ = try await rlAppState.realApi.reportMarker(
-                    guildId: guildId,
+                _ = try await rlAppState.reportMarker(
+                    guildId: marker.guildId,
                     markerId: marker.id,
                     reason: reason
                 )
-                rlAppState.showSuccess(RLUserFacingCopy.text(.successReportSubmitted))
             } catch {
-                rlAppState.showError(error, title: "Failed to Report", style: .toast)
+                return
             }
         }
     }

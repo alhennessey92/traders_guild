@@ -15,23 +15,20 @@ struct StochasticPanelView: View {
     @ObservedObject var indicatorManager: IndicatorManager
     @ObservedObject var chartData: ChartDataManager
     @ObservedObject var gestureState: ChartGestureState
+    @ObservedObject var viewportState: IndicatorPanelViewportState
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
     
     var timeframe: RLChartTimeframe = .h1
     
     @Binding var panelHeight: CGFloat
+    @Binding var expandedPanelHeight: CGFloat
     var minPanelHeight: CGFloat = 80
     var maxPanelHeight: CGFloat = 250
-    var isBottomPanel: Bool = false
-    
     // MARK: - Private State
     
     @State private var isDraggingHandle = false
     @State private var dragStartHeight: CGFloat = 0
-    @State private var lastDragTranslation: CGSize = .zero
-    @State private var isCollapsed = false
-    @State private var expandedPanelHeight: CGFloat = 0
     
     // MARK: - Computed Properties
     
@@ -41,6 +38,18 @@ struct StochasticPanelView: View {
     
     private var actualCandleWidth: CGFloat {
         baseCandleWidth * gestureState.candleWidthScale
+    }
+
+    private var panelTopPadding: CGFloat {
+        18
+    }
+
+    private var panelBottomPadding: CGFloat {
+        4
+    }
+
+    private var isCollapsed: Bool {
+        ChartPanelReserveCalculator.isCollapsedPanelHeight(panelHeight)
     }
     
     private var stochConfig: StochasticConfig? {
@@ -58,6 +67,10 @@ struct StochasticPanelView: View {
         return "Stochastic"
     }
 
+    private var zoomPolicy: IndicatorPanelZoomPolicy {
+        .fixed(range: 0...100, minimumScale: 1.0)
+    }
+
     // MARK: - Body
     
     var body: some View {
@@ -67,91 +80,31 @@ struct StochasticPanelView: View {
             if !isCollapsed {
                 LinkedIndicatorPanelGestureSurface(
                     gestureState: gestureState,
+                    verticalState: viewportState,
                     candleCount: chartData.candles.count,
                     baseCandleWidth: baseCandleWidth,
-                    candleSpacing: candleSpacing
+                    candleSpacing: candleSpacing,
+                    minVerticalScale: zoomPolicy.minimumScale
                 ) {
                     stochasticContentArea
                 }
                     .frame(height: panelHeight)
-
-                if isBottomPanel {
-                    xAxisLabels
-                }
             }
         }
         .background(AppColors.chartPanelBackgroundMuted)
-    }
-
-    // MARK: - Pan Gesture
-    
-    private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                if lastDragTranslation == .zero {
-                    gestureState.beginDrag()
-                }
-                
-                let incrementalX = value.translation.width - lastDragTranslation.width
-                
-                gestureState.applyPan(
-                    translation: CGSize(width: incrementalX, height: 0),
-                    chartWidth: UIScreen.main.bounds.width,
-                    candleCount: chartData.candles.count,
-                    candleWidth: totalCandleWidth,
-                    chartHeight: panelHeight,
-                    priceScale: 1.0,
-                    trackVelocity: true
-                )
-                
-                lastDragTranslation = value.translation
-            }
-            .onEnded { value in
-                gestureState.endDrag(
-                    chartWidth: UIScreen.main.bounds.width,
-                    candleCount: chartData.candles.count,
-                    candleWidth: totalCandleWidth,
-                    chartHeight: panelHeight,
-                    priceScale: 1.0
-                )
-                lastDragTranslation = .zero
-            }
+        .chartPanelBottomHairline()
     }
     
     // MARK: - Resize Handle
     
     private var resizeHandleBar: some View {
-        ZStack {
-            Rectangle()
-                .fill(AppColors.chartPanelResizeStripBackground)
-
-            // Capsule always centered
-            Capsule()
-                .fill(isDraggingHandle ? AppColors.panelResizeHandleCapsuleDragging : AppColors.panelResizeHandleCapsuleIdle)
-                .frame(width: 36, height: 5)
-
-            // Panel label left-aligned
-            HStack(spacing: 4) {
-                (Text(stochHeaderLabel)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
-                 + Text("  Indicator")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
-                    .lineLimit(1)
-
-                if isCollapsed {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppColors.panelResizeHandleChevronForeground)
-                }
-
-                Spacer()
-            }
-            .padding(.leading, 10)
-        }
-        .frame(height: 22)
-        .contentShape(Rectangle())
+        ChartPanelResizeHandleLabel(
+            primaryText: stochHeaderLabel,
+            suffixText: "Indicator",
+            isCollapsed: isCollapsed,
+            isDragging: isDraggingHandle,
+            style: .indicator
+        )
         .gesture(
             DragGesture(minimumDistance: 2, coordinateSpace: .global)
                 .onChanged { value in
@@ -193,16 +146,24 @@ struct StochasticPanelView: View {
 
     private func collapsePanel() {
         guard !isCollapsed else { return }
-        expandedPanelHeight = max(minPanelHeight, panelHeight)
-        panelHeight = 0
-        isCollapsed = true
+        let nextState = ChartPanelPresentationPolicy.collapsed(
+            currentHeight: panelHeight,
+            expandedHeight: expandedPanelHeight,
+            minHeight: minPanelHeight
+        )
+        panelHeight = nextState.currentHeight
+        expandedPanelHeight = nextState.expandedHeight
     }
 
     private func expandPanel() {
         guard isCollapsed else { return }
-        let restoredHeight = expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight
-        panelHeight = min(maxPanelHeight, max(minPanelHeight, restoredHeight))
-        isCollapsed = false
+        let nextState = ChartPanelPresentationPolicy.expanded(
+            expandedHeight: expandedPanelHeight,
+            minHeight: minPanelHeight,
+            maxHeight: maxPanelHeight
+        )
+        panelHeight = nextState.currentHeight
+        expandedPanelHeight = nextState.expandedHeight
     }
     
     // MARK: - Stochastic Content
@@ -211,9 +172,11 @@ struct StochasticPanelView: View {
         let _ = gestureState.panOffset.width
         let _ = gestureState.candleWidthScale
         let _ = gestureState.crosshairActive
+        let _ = viewportState.priceScale
+        let _ = viewportState.verticalPanOffset
         
         return ZStack {
-            AppColors.chartPanelBackground
+            AppColors.indicatorPanelPlotBackground
             
             Canvas { context, size in
                 drawStochasticPanel(context: context, size: size)
@@ -225,7 +188,7 @@ struct StochasticPanelView: View {
             
             yAxisLabelsOverlay
             currentStochIndicator
-            panelHeaderOverlay
+            miniInfoOverlay
         }
         .clipped()
     }
@@ -242,23 +205,22 @@ struct StochasticPanelView: View {
 
         guard let config = stochConfig else { return }
 
-        let drawableHeight = size.height - 20
-        let topPadding: CGFloat = 18
+        let viewport = transformedViewport(height: size.height)
 
-        drawZones(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
-        drawReferenceLevels(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
-        drawDLine(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
-        drawKLine(context: context, size: size, config: config, drawableHeight: drawableHeight, topPadding: topPadding)
+        drawZones(context: context, size: size, config: config, viewport: viewport)
+        drawReferenceLevels(context: context, size: size, config: config, viewport: viewport)
+        drawDLine(context: context, size: size, config: config, viewport: viewport)
+        drawKLine(context: context, size: size, config: config, viewport: viewport)
     }
     
-    private func drawZones(context: GraphicsContext, size: CGSize, config: StochasticConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
+    private func drawZones(context: GraphicsContext, size: CGSize, config: StochasticConfig, viewport: IndicatorPanelViewport) {
         guard config.showLevels else { return }
         
-        let overboughtY = yPosition(for: config.overboughtLevel, height: drawableHeight, topPadding: topPadding)
-        let oversoldY = yPosition(for: config.oversoldLevel, height: drawableHeight, topPadding: topPadding)
-        let topY = yPosition(for: 100, height: drawableHeight, topPadding: topPadding)
-        let bottomY = yPosition(for: 0, height: drawableHeight, topPadding: topPadding)
-        let lineEndX = size.width - 45
+        let overboughtY = viewport.yPosition(for: config.overboughtLevel)
+        let oversoldY = viewport.yPosition(for: config.oversoldLevel)
+        let topY = viewport.yPosition(for: 100)
+        let bottomY = viewport.yPosition(for: 0)
+        let lineEndX = plotEndX(totalWidth: size.width)
         
         let overboughtZone = Path { p in
             p.addRect(CGRect(x: 0, y: topY, width: lineEndX, height: overboughtY - topY))
@@ -271,11 +233,11 @@ struct StochasticPanelView: View {
         context.fill(oversoldZone, with: .color(config.oversoldColor.color))
     }
     
-    private func drawReferenceLevels(context: GraphicsContext, size: CGSize, config: StochasticConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
-        let overboughtY = yPosition(for: config.overboughtLevel, height: drawableHeight, topPadding: topPadding)
-        let oversoldY = yPosition(for: config.oversoldLevel, height: drawableHeight, topPadding: topPadding)
-        let middleY = yPosition(for: 50, height: drawableHeight, topPadding: topPadding)
-        let lineEndX = size.width - 45
+    private func drawReferenceLevels(context: GraphicsContext, size: CGSize, config: StochasticConfig, viewport: IndicatorPanelViewport) {
+        let overboughtY = viewport.yPosition(for: config.overboughtLevel)
+        let oversoldY = viewport.yPosition(for: config.oversoldLevel)
+        let middleY = viewport.yPosition(for: 50)
+        let lineEndX = plotEndX(totalWidth: size.width)
         
         var path = Path()
         path.move(to: CGPoint(x: 0, y: overboughtY))
@@ -293,7 +255,7 @@ struct StochasticPanelView: View {
         context.stroke(path, with: .color(AppColors.statusPositive40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
     }
     
-    private func drawKLine(context: GraphicsContext, size: CGSize, config: StochasticConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
+    private func drawKLine(context: GraphicsContext, size: CGSize, config: StochasticConfig, viewport: IndicatorPanelViewport) {
         let dataPoints = indicatorManager.stochasticData
         guard dataPoints.count >= 2 else { return }
         
@@ -308,7 +270,7 @@ struct StochasticPanelView: View {
         
         for point in visiblePoints {
             let x = xPosition(for: point.candleIndex)
-            let y = yPosition(for: point.kValue, height: drawableHeight, topPadding: topPadding)
+            let y = viewport.yPosition(for: point.kValue)
             
             guard x >= -50 && x <= size.width + 50 else { continue }
             
@@ -323,7 +285,7 @@ struct StochasticPanelView: View {
         context.stroke(path, with: .color(config.color.color), style: StrokeStyle(lineWidth: config.lineWidth, lineCap: .round, lineJoin: .round))
     }
     
-    private func drawDLine(context: GraphicsContext, size: CGSize, config: StochasticConfig, drawableHeight: CGFloat, topPadding: CGFloat) {
+    private func drawDLine(context: GraphicsContext, size: CGSize, config: StochasticConfig, viewport: IndicatorPanelViewport) {
         let dataPoints = indicatorManager.stochasticData
         guard dataPoints.count >= 2 else { return }
         
@@ -338,7 +300,7 @@ struct StochasticPanelView: View {
         
         for point in visiblePoints {
             let x = xPosition(for: point.candleIndex)
-            let y = yPosition(for: point.dValue, height: drawableHeight, topPadding: topPadding)
+            let y = viewport.yPosition(for: point.dValue)
             
             guard x >= -50 && x <= size.width + 50 else { continue }
             
@@ -358,10 +320,20 @@ struct StochasticPanelView: View {
     private func xPosition(for candleIndex: Int) -> CGFloat {
         CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
     }
-    
-    private func yPosition(for stochValue: Double, height: CGFloat, topPadding: CGFloat) -> CGFloat {
-        let normalized = stochValue / 100.0
-        return topPadding + height * (1.0 - CGFloat(normalized))
+
+    private func transformedViewport(height: CGFloat) -> IndicatorPanelViewport {
+        IndicatorPanelViewport(
+            rawValueRange: zoomPolicy.resolvedRange(visibleValues: [], fallbackValues: [], emphasisValues: []),
+            topPadding: panelTopPadding,
+            bottomPadding: panelBottomPadding,
+            visualHeight: height,
+            priceScale: viewportState.priceScale,
+            verticalPanOffset: viewportState.verticalPanOffset
+        )
+    }
+
+    private func plotEndX(totalWidth: CGFloat) -> CGFloat {
+        ChartAxisMetrics.plotWidth(totalWidth: totalWidth)
     }
     
     // MARK: - Current Value Indicator
@@ -370,13 +342,12 @@ struct StochasticPanelView: View {
         GeometryReader { geometry in
             if let latestStoch = indicatorManager.latestStochastic {
                 let kValue = latestStoch.kValue
-                let drawableHeight = geometry.size.height - 20
-                let topPadding: CGFloat = 18
-                let y = yPosition(for: kValue, height: drawableHeight, topPadding: topPadding)
+                let viewport = transformedViewport(height: geometry.size.height)
+                let y = viewport.yPosition(for: kValue)
                 
-                if y >= 0 && y <= geometry.size.height && !kValue.isNaN {
+                if y >= viewport.topPadding && y <= viewport.contentBottomY && !kValue.isNaN {
                     Canvas { context, size in
-                        let lineEndX = size.width - 45
+                        let lineEndX = plotEndX(totalWidth: size.width)
                         
                         let linePath = Path { path in
                             path.move(to: CGPoint(x: 0, y: y))
@@ -386,8 +357,7 @@ struct StochasticPanelView: View {
                         let lineColor = stochIndicatorColor(for: kValue)
                         context.stroke(linePath, with: .color(lineColor.opacity(0.8)), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
                         
-                        let labelX = size.width - 22
-                        let labelRect = CGRect(x: labelX - 20, y: y - 9, width: 40, height: 18)
+                        let labelRect = CGRect(x: size.width - 45, y: y - 9, width: 40, height: 18)
                         let roundedPath = Path(roundedRect: labelRect, cornerRadius: 3)
                         context.fill(roundedPath, with: .color(lineColor))
                         
@@ -395,7 +365,7 @@ struct StochasticPanelView: View {
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundColor(AppColors.onAccentForeground)
                         
-                        context.draw(text, at: CGPoint(x: labelX, y: y))
+                        context.draw(text, at: CGPoint(x: labelRect.midX, y: y))
                     }
                 }
             }
@@ -430,94 +400,78 @@ struct StochasticPanelView: View {
     }
 
     private var activeGuideColor: Color {
-        gestureState.crosshairActive ? AppColors.surfaceWhite40 : AppColors.statusInfo60
+        gestureState.crosshairActive ? AppColors.crosshairGuideStroke : AppColors.statusInfo60
     }
     
     // MARK: - Y-Axis Labels
     
     private var yAxisLabelsOverlay: some View {
-        HStack {
-            Spacer()
-            
-            VStack {
-                Text(String(format: "%.0f", stochConfig?.overboughtLevel ?? 80))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.statusNegative85)
-                
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
                 Spacer()
-                
-                Text("50")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.surfaceWhite66)
-                
-                Spacer()
-                
-                Text(String(format: "%.0f", stochConfig?.oversoldLevel ?? 20))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(AppColors.statusPositive85)
+                IndicatorPanelYAxisLane(
+                    viewport: transformedViewport(height: geometry.size.height),
+                    labels: [
+                        IndicatorPanelYAxisLabel(
+                            value: stochConfig?.overboughtLevel ?? 80,
+                            text: String(format: "%.0f", stochConfig?.overboughtLevel ?? 80),
+                            color: AppColors.statusNegative85
+                        ),
+                        IndicatorPanelYAxisLabel(
+                            value: 50,
+                            text: "50",
+                            color: AppColors.panelYAxisLaneText
+                        ),
+                        IndicatorPanelYAxisLabel(
+                            value: stochConfig?.oversoldLevel ?? 20,
+                            text: String(format: "%.0f", stochConfig?.oversoldLevel ?? 20),
+                            color: AppColors.statusPositive85
+                        ),
+                    ]
+                )
             }
-            .frame(width: 28)
-            .padding(.top, 18)
-            .padding(.bottom, 4)
-            .padding(.trailing, 5)
-            .background(AppColors.chartPanelBackgroundDeep.opacity(0.92))
         }
     }
     
     // MARK: - Header
     
-    private var panelHeaderOverlay: some View {
-        VStack {
+    private var miniInfoOverlay: some View {
+        VStack(alignment: .leading) {
             if let latest = indicatorManager.latestStochastic {
-                HStack(spacing: 6) {
-                    Text("%K:")
-                        .font(.system(size: 9))
-                        .foregroundColor(AppColors.secondaryForeground)
-                    Text(String(format: "%.1f", latest.kValue))
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(stochConfig?.color.color ?? .yellow)
-
-                    Text("%D:")
-                        .font(.system(size: 9))
-                        .foregroundColor(AppColors.secondaryForeground)
-                    Text(String(format: "%.1f", latest.dValue))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(stochConfig?.dColor.color ?? .red)
-
-                    stochConditionBadge(value: latest.kValue)
-
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
+                PanelMiniInfoOverlay(
+                    tokens: [
+                        PanelMiniInfoToken(
+                            label: "%K",
+                            value: String(format: "%.1f", latest.kValue),
+                            valueColor: stochConfig?.color.color ?? .yellow
+                        ),
+                        PanelMiniInfoToken(
+                            label: "%D",
+                            value: String(format: "%.1f", latest.dValue),
+                            valueColor: stochConfig?.dColor.color ?? .red
+                        ),
+                    ],
+                    trailingBadge: stochConditionBadge(value: latest.kValue)
+                )
             }
 
             Spacer()
         }
+        .padding(.top, 6)
+        .padding(.leading, 8)
+        .allowsHitTesting(false)
     }
     
-    @ViewBuilder
-    private func stochConditionBadge(value: Double) -> some View {
+    private func stochConditionBadge(value: Double) -> PanelMiniInfoBadge? {
         let overbought = stochConfig?.overboughtLevel ?? 80
         let oversold = stochConfig?.oversoldLevel ?? 20
         
         if value >= overbought {
-            Text("OVERBOUGHT")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundColor(AppColors.onAccentForeground)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(AppColors.statusNegative80)
-                .cornerRadius(3)
+            return PanelMiniInfoBadge(text: "OVERBOUGHT", color: AppColors.statusNegative80)
         } else if value <= oversold {
-            Text("OVERSOLD")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundColor(AppColors.onAccentForeground)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(AppColors.statusPositive80)
-                .cornerRadius(3)
+            return PanelMiniInfoBadge(text: "OVERSOLD", color: AppColors.statusPositive80)
         }
+        return nil
     }
     
     // MARK: - X-Axis Labels

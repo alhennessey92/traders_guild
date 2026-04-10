@@ -174,18 +174,18 @@ enum TutorialStep: Int, CaseIterable, Codable {
         case .welcome:              return AppColors.accentColor
         case .guildInfo:            return AppColors.accentColor
         case .guildMenu:            return AppColors.signupInterestBlue
-        case .announcements:        return .orange
+        case .announcements:        return AppColors.tutorialAccentOrange
         case .events:               return AppColors.signupInterestGreen
-        case .leaderboard:          return .yellow
+        case .leaderboard:          return AppColors.tutorialAccentYellow
         case .chat:                 return AppColors.signupInterestBlue
         case .chart:                return AppColors.accentColor
         case .markersIntro:         return AppColors.signupInterestBlue
         case .setupMarkers:         return AppColors.signupInterestGreen
-        case .indicatorsDrawings:   return .purple
-        case .timeframeLinking:     return .cyan
-        case .chartSetupCopying:    return .orange
+        case .indicatorsDrawings:   return AppColors.tutorialAccentPurple
+        case .timeframeLinking:     return AppColors.tutorialAccentCyan
+        case .chartSetupCopying:    return AppColors.tutorialAccentOrange
         case .linkingMarkersChat:   return AppColors.signupInterestBlue
-        case .watchlists:           return .yellow
+        case .watchlists:           return AppColors.tutorialAccentYellow
         case .complete:             return AppColors.signupInterestGreen
         }
     }

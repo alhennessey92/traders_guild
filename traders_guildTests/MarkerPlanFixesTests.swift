@@ -479,15 +479,20 @@ struct MarkerPlanFixesTests {
     @Test
     func timeframePanelReserveIncludesAxisStripForEveryExpandedPanel() {
         let twoPanelReserve = ChartPanelReserveCalculator.timeframeStackReserve(panelHeights: [120, 130])
-        #expect(abs(twoPanelReserve - 342) < 0.0001)
+        let expectedReserve = CGFloat(120 + 130)
+            + CGFloat(2) * ChartPanelReserveCalculator.panelResizeHandleHeight
+            + CGFloat(2) * ChartPanelReserveCalculator.panelXAxisLabelStripHeight
+        #expect(abs(twoPanelReserve - expectedReserve) < 0.0001)
 
         let layout = ChartPanelReserveCalculator.combinedLayout(
             timeframePanelHeights: [120, 130],
             indicatorPanelHeights: []
         )
-        #expect(layout.bottomOwner == .timeframe(index: 1))
+        #expect(layout.indicatorAxisPanelIndex == nil)
+        #expect(layout.bottomBoundaryOwner == .timeframe(index: 1))
         #expect(layout.bottomBoundaryLabelReserve == 0)
-        #expect(abs(layout.totalReserve - 342) < 0.0001)
+        #expect(layout.mainChartXAxisClearance == ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
+        #expect(abs(layout.totalReserve - expectedReserve) < 0.0001)
     }
 
     @Test
@@ -504,6 +509,64 @@ struct MarkerPlanFixesTests {
         #expect(state.panOffset == xPan)
         #expect(state.verticalPanOffset > 0)
         #expect(state.priceScale > 1)
+    }
+
+    @Test
+    func annotationBubbleMetricsPreserveExplicitNewlinesAndWrapLongText() {
+        let multiline = "line 1\nline 2"
+        #expect(ChartAnnotationBubbleMetrics.visibleLineCount(for: multiline, plotWidth: 220) == 2)
+
+        let longText = "Watch for liquidity sweep confirmation before chasing this candle higher"
+        #expect(ChartAnnotationBubbleMetrics.visibleLineCount(for: longText, plotWidth: 120) > 1)
+        #expect(ChartAnnotationBubbleMetrics.maxBubbleWidth(plotWidth: 500) == ChartAnnotationBubbleMetrics.maxWidth)
+
+        let center = CGPoint(x: 100, y: 100)
+        let rect = ChartAnnotationBubbleMetrics.hitRect(
+            center: center,
+            text: multiline,
+            plotWidth: 220,
+            touchExpansion: 0
+        )
+        #expect(rect.contains(center))
+        #expect(rect.height >= ChartAnnotationBubbleMetrics.lineHeight * 2 + ChartAnnotationBubbleMetrics.verticalPadding * 2)
+    }
+
+    @Test
+    func timeframePriceViewportKeepsCandleHeightStableAcrossPanelResize() {
+        let smallPanel = TimeframePanelPriceViewport(
+            rawPriceRange: (min: 100, max: 200),
+            topPadding: 18,
+            bottomPadding: 4,
+            visualHeight: 80,
+            scaleBasisHeight: 140,
+            priceScale: 1,
+            verticalPanOffset: 0
+        )
+        let tallPanel = TimeframePanelPriceViewport(
+            rawPriceRange: (min: 100, max: 200),
+            topPadding: 18,
+            bottomPadding: 4,
+            visualHeight: 250,
+            scaleBasisHeight: 140,
+            priceScale: 1,
+            verticalPanOffset: 0
+        )
+        let scaledPanel = TimeframePanelPriceViewport(
+            rawPriceRange: (min: 100, max: 200),
+            topPadding: 18,
+            bottomPadding: 4,
+            visualHeight: 80,
+            scaleBasisHeight: 140,
+            priceScale: 1.6,
+            verticalPanOffset: 0
+        )
+
+        let smallBodyHeight = abs(smallPanel.yPosition(for: 130) - smallPanel.yPosition(for: 120))
+        let tallBodyHeight = abs(tallPanel.yPosition(for: 130) - tallPanel.yPosition(for: 120))
+        let scaledBodyHeight = abs(scaledPanel.yPosition(for: 130) - scaledPanel.yPosition(for: 120))
+
+        #expect(abs(smallBodyHeight - tallBodyHeight) < 0.0001)
+        #expect(scaledBodyHeight > smallBodyHeight)
     }
 
     @Test
@@ -1116,21 +1179,250 @@ struct MarkerPlanFixesTests {
 
     @Test
     func combinedPanelLayoutUsesLastExpandedPanelForBottomAxisOwnership() {
+        let handle = ChartPanelReserveCalculator.panelResizeHandleHeight
+        let strip = ChartPanelReserveCalculator.panelXAxisLabelStripHeight
+        let gap = ChartPanelReserveCalculator.panelStackChartUniformGap
+        let baseline = ChartPanelReserveCalculator.mainChartControlRowBaselineClearance
+        let controlBase = ChartPanelReserveCalculator.chartControlRowXAxisBaseOffset
+
+        func expectedControlReserve(totalReserve: CGFloat, mainChartClearance: CGFloat) -> CGFloat {
+            max(
+                0,
+                totalReserve
+                    + ChartPanelReserveCalculator.panelStackBottomSpacerClearance(
+                        mainChartXAxisClearance: mainChartClearance
+                    )
+                    + gap
+                    - controlBase
+            )
+        }
+
+        let noPanelsLayout = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [],
+            indicatorPanelHeights: []
+        )
+        #expect(noPanelsLayout.indicatorAxisPanelIndex == nil)
+        #expect(noPanelsLayout.bottomBoundaryOwner == nil)
+        #expect(noPanelsLayout.totalReserve == 0)
+        #expect(noPanelsLayout.bottomBoundaryLabelReserve == 0)
+        #expect(noPanelsLayout.mainChartXAxisClearance == 0)
+        #expect(noPanelsLayout.controlRowReserve == baseline)
+
+        let collapsedIndicatorLayout = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [],
+            indicatorPanelHeights: [0]
+        )
+        #expect(collapsedIndicatorLayout.indicatorAxisPanelIndex == nil)
+        #expect(collapsedIndicatorLayout.bottomBoundaryOwner == nil)
+        #expect(collapsedIndicatorLayout.totalReserve == handle)
+        #expect(collapsedIndicatorLayout.bottomBoundaryLabelReserve == 0)
+        #expect(collapsedIndicatorLayout.mainChartXAxisClearance == strip)
+        #expect(collapsedIndicatorLayout.controlRowReserve == expectedControlReserve(
+            totalReserve: handle,
+            mainChartClearance: strip
+        ))
+
+        let collapsedTimeframeLayout = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [0],
+            indicatorPanelHeights: []
+        )
+        #expect(collapsedTimeframeLayout.indicatorAxisPanelIndex == nil)
+        #expect(collapsedTimeframeLayout.bottomBoundaryOwner == nil)
+        #expect(collapsedTimeframeLayout.totalReserve == handle)
+        #expect(collapsedTimeframeLayout.bottomBoundaryLabelReserve == 0)
+        #expect(collapsedTimeframeLayout.mainChartXAxisClearance == strip)
+        #expect(collapsedTimeframeLayout.controlRowReserve == expectedControlReserve(
+            totalReserve: handle,
+            mainChartClearance: strip
+        ))
+
+        let oneExpandedIndicatorLayout = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [],
+            indicatorPanelHeights: [120]
+        )
+        let expectedOneExpandedIndicatorReserve = CGFloat(120) + handle
+        #expect(oneExpandedIndicatorLayout.indicatorAxisPanelIndex == nil)
+        #expect(oneExpandedIndicatorLayout.bottomBoundaryOwner == nil)
+        #expect(oneExpandedIndicatorLayout.bottomBoundaryLabelReserve == 0)
+        #expect(oneExpandedIndicatorLayout.mainChartXAxisClearance == strip)
+        #expect(abs(oneExpandedIndicatorLayout.totalReserve - expectedOneExpandedIndicatorReserve) < 0.0001)
+        #expect(abs(oneExpandedIndicatorLayout.controlRowReserve - expectedControlReserve(
+            totalReserve: expectedOneExpandedIndicatorReserve,
+            mainChartClearance: strip
+        )) < 0.0001)
+
+        let twoExpandedIndicatorsLayout = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [],
+            indicatorPanelHeights: [120, 130]
+        )
+        let expectedTwoExpandedIndicatorsReserve = CGFloat(120 + 130)
+            + CGFloat(2) * handle
+        #expect(twoExpandedIndicatorsLayout.indicatorAxisPanelIndex == nil)
+        #expect(twoExpandedIndicatorsLayout.bottomBoundaryOwner == nil)
+        #expect(twoExpandedIndicatorsLayout.bottomBoundaryLabelReserve == 0)
+        #expect(twoExpandedIndicatorsLayout.mainChartXAxisClearance == strip)
+        #expect(abs(twoExpandedIndicatorsLayout.totalReserve - expectedTwoExpandedIndicatorsReserve) < 0.0001)
+        #expect(abs(twoExpandedIndicatorsLayout.controlRowReserve - expectedControlReserve(
+            totalReserve: expectedTwoExpandedIndicatorsReserve,
+            mainChartClearance: strip
+        )) < 0.0001)
+
         let timeframeOwnedLayout = ChartPanelReserveCalculator.combinedLayout(
             timeframePanelHeights: [140],
             indicatorPanelHeights: [0]
         )
-        #expect(timeframeOwnedLayout.bottomOwner == .timeframe(index: 0))
+        let expectedTimeframeOwnedReserve = CGFloat(140)
+            + CGFloat(2) * handle
+            + strip
+        #expect(timeframeOwnedLayout.indicatorAxisPanelIndex == nil)
+        #expect(timeframeOwnedLayout.bottomBoundaryOwner == nil)
         #expect(timeframeOwnedLayout.bottomBoundaryLabelReserve == 0)
-        #expect(abs(timeframeOwnedLayout.totalReserve - 208) < 0.0001)
+        #expect(timeframeOwnedLayout.mainChartXAxisClearance == strip)
+        #expect(abs(timeframeOwnedLayout.totalReserve - expectedTimeframeOwnedReserve) < 0.0001)
+        #expect(abs(timeframeOwnedLayout.controlRowReserve - expectedControlReserve(
+            totalReserve: expectedTimeframeOwnedReserve,
+            mainChartClearance: strip
+        )) < 0.0001)
+
+        let timeframeAndExpandedIndicatorLayout = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [120],
+            indicatorPanelHeights: [130]
+        )
+        let expectedTimeframeAndExpandedIndicatorReserve = CGFloat(120 + 130)
+            + CGFloat(2) * handle
+            + strip
+        #expect(timeframeAndExpandedIndicatorLayout.indicatorAxisPanelIndex == nil)
+        #expect(timeframeAndExpandedIndicatorLayout.bottomBoundaryOwner == nil)
+        #expect(timeframeAndExpandedIndicatorLayout.bottomBoundaryLabelReserve == 0)
+        #expect(timeframeAndExpandedIndicatorLayout.mainChartXAxisClearance == strip)
+        #expect(abs(timeframeAndExpandedIndicatorLayout.totalReserve - expectedTimeframeAndExpandedIndicatorReserve) < 0.0001)
+        #expect(abs(timeframeAndExpandedIndicatorLayout.controlRowReserve - expectedControlReserve(
+            totalReserve: expectedTimeframeAndExpandedIndicatorReserve,
+            mainChartClearance: strip
+        )) < 0.0001)
 
         let indicatorOwnedLayout = ChartPanelReserveCalculator.combinedLayout(
             timeframePanelHeights: [120],
             indicatorPanelHeights: [0, 130, 0]
         )
-        #expect(indicatorOwnedLayout.bottomOwner == .indicator(index: 1))
-        #expect(indicatorOwnedLayout.bottomBoundaryLabelReserve == ChartPanelReserveCalculator.panelXAxisLabelStripHeight)
-        #expect(abs(indicatorOwnedLayout.totalReserve - 364) < 0.0001)
+        let expectedIndicatorOwnedReserve = CGFloat(120 + 130)
+            + CGFloat(4) * handle
+            + strip
+        #expect(indicatorOwnedLayout.indicatorAxisPanelIndex == nil)
+        #expect(indicatorOwnedLayout.bottomBoundaryOwner == nil)
+        #expect(indicatorOwnedLayout.bottomBoundaryLabelReserve == 0)
+        #expect(indicatorOwnedLayout.mainChartXAxisClearance == strip)
+        #expect(abs(indicatorOwnedLayout.totalReserve - expectedIndicatorOwnedReserve) < 0.0001)
+        #expect(abs(indicatorOwnedLayout.controlRowReserve - expectedControlReserve(
+            totalReserve: expectedIndicatorOwnedReserve,
+            mainChartClearance: strip
+        )) < 0.0001)
+    }
+
+    @Test
+    func combinedPanelLayoutCountsEveryCollapsedIndicatorHandle() {
+        let handle = ChartPanelReserveCalculator.panelResizeHandleHeight
+        let strip = ChartPanelReserveCalculator.panelXAxisLabelStripHeight
+        let gap = ChartPanelReserveCalculator.panelStackChartUniformGap
+        let controlBase = ChartPanelReserveCalculator.chartControlRowXAxisBaseOffset
+
+        func expectedControlReserve(totalReserve: CGFloat, mainChartClearance: CGFloat) -> CGFloat {
+            max(
+                0,
+                totalReserve
+                    + ChartPanelReserveCalculator.panelStackBottomSpacerClearance(
+                        mainChartXAxisClearance: mainChartClearance
+                    )
+                    + gap
+                    - controlBase
+            )
+        }
+
+        let topExpandedBottomCollapsed = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [],
+            indicatorPanelHeights: [120, 0]
+        )
+        let topExpandedBottomCollapsedReserve = CGFloat(120) + CGFloat(2) * handle
+        #expect(topExpandedBottomCollapsed.indicatorAxisPanelIndex == nil)
+        #expect(topExpandedBottomCollapsed.bottomBoundaryOwner == nil)
+        #expect(topExpandedBottomCollapsed.totalReserve == topExpandedBottomCollapsedReserve)
+        #expect(topExpandedBottomCollapsed.bottomBoundaryLabelReserve == 0)
+        #expect(topExpandedBottomCollapsed.mainChartXAxisClearance == strip)
+        #expect(topExpandedBottomCollapsed.controlRowReserve == expectedControlReserve(
+            totalReserve: topExpandedBottomCollapsedReserve,
+            mainChartClearance: strip
+        ))
+
+        let topCollapsedBottomExpanded = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [],
+            indicatorPanelHeights: [0, 120]
+        )
+        let topCollapsedBottomExpandedReserve = CGFloat(120) + CGFloat(2) * handle
+        #expect(topCollapsedBottomExpanded.indicatorAxisPanelIndex == nil)
+        #expect(topCollapsedBottomExpanded.bottomBoundaryOwner == nil)
+        #expect(topCollapsedBottomExpanded.totalReserve == topCollapsedBottomExpandedReserve)
+        #expect(topCollapsedBottomExpanded.bottomBoundaryLabelReserve == 0)
+        #expect(topCollapsedBottomExpanded.mainChartXAxisClearance == strip)
+        #expect(topCollapsedBottomExpanded.controlRowReserve == expectedControlReserve(
+            totalReserve: topCollapsedBottomExpandedReserve,
+            mainChartClearance: strip
+        ))
+
+        let allCollapsed = ChartPanelReserveCalculator.combinedLayout(
+            timeframePanelHeights: [],
+            indicatorPanelHeights: [0, 0]
+        )
+        #expect(allCollapsed.indicatorAxisPanelIndex == nil)
+        #expect(allCollapsed.bottomBoundaryOwner == nil)
+        #expect(allCollapsed.totalReserve == CGFloat(2) * handle)
+        #expect(allCollapsed.bottomBoundaryLabelReserve == 0)
+        #expect(allCollapsed.mainChartXAxisClearance == strip)
+        #expect(allCollapsed.controlRowReserve == expectedControlReserve(
+            totalReserve: CGFloat(2) * handle,
+            mainChartClearance: strip
+        ))
+    }
+
+    @Test
+    func indicatorPanelPresentationMatchesTimeframeCollapseRestoreRules() {
+        let collapsed = ChartPanelPresentationPolicy.collapsed(
+            currentHeight: 132,
+            expandedHeight: 90,
+            minHeight: 80
+        )
+        #expect(collapsed.currentHeight == 0)
+        #expect(collapsed.expandedHeight == 132)
+        #expect(collapsed.isCollapsed)
+
+        let expanded = ChartPanelPresentationPolicy.expanded(
+            expandedHeight: collapsed.expandedHeight,
+            minHeight: 80,
+            maxHeight: 120
+        )
+        #expect(expanded.currentHeight == 120)
+        #expect(expanded.expandedHeight == 120)
+        #expect(!expanded.isCollapsed)
+
+        let clampedCollapsed = ChartPanelPresentationPolicy.clamped(
+            currentHeight: 0,
+            expandedHeight: 180,
+            minHeight: 80,
+            maxHeight: 140
+        )
+        #expect(clampedCollapsed.currentHeight == 0)
+        #expect(clampedCollapsed.expandedHeight == 140)
+        #expect(clampedCollapsed.isCollapsed)
+
+        let newlyActive = ChartPanelPresentationPolicy.restoredActiveHeight(
+            currentHeight: 0,
+            expandedHeight: 0,
+            defaultHeight: 120,
+            minHeight: 80,
+            maxHeight: 140
+        )
+        #expect(newlyActive.currentHeight == 120)
+        #expect(newlyActive.expandedHeight == 120)
+        #expect(!newlyActive.isCollapsed)
     }
 
     @Test

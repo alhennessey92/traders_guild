@@ -225,12 +225,22 @@ final class ChartDrawingManager: ObservableObject {
     }
 
     func setDrawings(_ newDrawings: [ChartDrawing]) {
+        let activeDrawingWasRemoved = editingDrawingId.map { editingID in
+            !newDrawings.contains { $0.id == editingID }
+        } ?? false
         drawings = newDrawings
+        if activeDrawingWasRemoved {
+            commitDrawingAndExit()
+        }
         save()
     }
 
     func removeDrawing(id: UUID) {
+        let wasEditingRemovedDrawing = editingDrawingId == id
         drawings.removeAll { $0.id == id }
+        if wasEditingRemovedDrawing {
+            commitDrawingAndExit()
+        }
         save()
     }
 
